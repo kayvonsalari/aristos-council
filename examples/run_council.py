@@ -5,6 +5,7 @@ Usage:     python examples/run_council.py JNJ
 """
 
 import sys
+import textwrap
 from pathlib import Path
 
 from aristos_council.agents.runners import production_runners
@@ -12,6 +13,16 @@ from aristos_council.data.yfinance_adapter import YFinanceAdapter
 from aristos_council.graph import build_council
 from aristos_council.state import ResearchState
 from aristos_council.strategy.loader import load_strategy
+
+
+def block(text: str, indent: str = "      ") -> str:
+    """Wrap long prose to 90 cols with a hanging indent — full text, no cuts."""
+    return "\n".join(
+        textwrap.fill(line, width=90, initial_indent=indent,
+                      subsequent_indent=indent)
+        for line in text.splitlines() if line.strip()
+    )
+
 
 ticker = sys.argv[1] if len(sys.argv) > 1 else "JNJ"
 strategy = load_strategy(
@@ -23,22 +34,41 @@ result = ResearchState.model_validate(
     app.invoke(ResearchState(ticker=ticker, strategy_id=strategy.id))
 )
 
-print(f"\n=== Aristos Council verdict on {ticker} ===")
+print(f"\n=== Aristos Council verdict on {ticker} ===\n")
+
 for op in result.specialist_opinions:
-    print(f"  {op.specialist.value:12s} {op.stance.value:8s} "
-          f"conf={op.confidence:.2f}  {op.thesis[:80]}")
+    print(f"  {op.specialist.value.upper()}  —  {op.stance.value}  "
+          f"(confidence {op.confidence:.2f})")
+    print(block(op.thesis))
+    for fig in op.figures:
+        print(f"        · {fig.label}: {fig.value}"
+              f"{' ' + fig.unit if fig.unit else ''}  "
+              f"[{fig.provenance.tool_name} → {fig.provenance.field_path}]")
+    for c in op.caveats:
+        print(f"        ! caveat: {c}")
+    print()
+
 if result.critic_report:
-    print(f"\n  CRITIC (vs {result.critic_report.targets_stance.value}): "
-          f"{result.critic_report.counter_thesis[:120]}")
+    print(f"  CRITIC  —  arguing against the "
+          f"{result.critic_report.targets_stance.value} consensus")
+    print(block(result.critic_report.counter_thesis))
+    for w in result.critic_report.weaknesses_found:
+        print(f"        · weakness: {w}")
+    print()
+
 if result.decision:
     d = result.decision
-    print(f"\n  DECISION: {d.recommendation.value.upper()} "
+    print(f"  DECISION: {d.recommendation.value.upper()}  "
           f"(confidence {d.confidence:.2f})")
+    print(block(d.rationale))
     if d.dissent:
-        print(f"  Dissent: {', '.join(s.value for s in d.dissent)}")
+        print(f"\n      Dissent recorded: "
+              f"{', '.join(s.value for s in d.dissent)}")
+    print()
+
 if result.veto_flags:
-    print("\n  ⚠ HUMAN REVIEW REQUIRED:")
+    print("  ⚠ HUMAN REVIEW REQUIRED:")
     for f in result.veto_flags:
-        print(f"    - {f.trigger.value}: {f.detail}")
+        print(f"      - {f.trigger.value}: {f.detail}")
 else:
-    print("\n  No veto triggers — auto-proceed permitted.")
+    print("  No veto triggers — auto-proceed permitted.")
