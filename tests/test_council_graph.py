@@ -191,3 +191,23 @@ def test_conflict_and_flip_triggers_fire_together():
     assert VetoTrigger.LOW_CONFIDENCE in trig  # 0.5 < 0.6
     # dissent preserved on the decision
     assert state.decision.dissent == [SpecialistName.FUNDAMENTAL]
+
+
+def test_missing_call_id_is_violation_not_crash():
+    """Regression: live run crashed when the Risk specialist omitted call_id.
+    A missing call_id must parse fine, then be handled as a provenance
+    violation — figure dropped, error logged, data-quality veto fired."""
+    no_id_fig = FigureRef(label="eps", value=5.2, field_path="output.eps")
+    assert no_id_fig.call_id == ""  # parse-time tolerance
+
+    outs = [
+        SpecialistOutput(stance=Stance.BULLISH, confidence=0.8,
+                         thesis="up", figures=[no_id_fig]),
+        _bullish(), _bullish(), _bullish(),
+    ]
+    state = _run(outs, DecisionOutput(
+        recommendation=Recommendation.BUY, confidence=0.9, rationale="r"))
+
+    assert any("provenance violation" in e for e in state.errors)
+    assert state.opinion_for(SpecialistName.FUNDAMENTAL).figures == []
+    assert VetoTrigger.DATA_QUALITY in {f.trigger for f in state.veto_flags}
