@@ -17,8 +17,18 @@ class FigureRef(BaseModel):
     label: str
     value: float
     unit: str = ""
-    call_id: str = Field(description="ToolCall.call_id this number came from")
-    field_path: str = Field(description="Where in that tool output it was read")
+    # call_id/field_path are REQUIRED by policy but optional at parse time:
+    # if a model omits them, validation must not crash the run. The specialist
+    # node treats a missing/unknown call_id as a provenance violation — the
+    # figure is dropped, the violation is logged, and the data-quality veto
+    # fires. Crash-on-parse would punish the user; violation-and-flag is the
+    # designed behaviour.
+    call_id: str = Field(
+        default="", description="ToolCall.call_id this number came from"
+    )
+    field_path: str = Field(
+        default="", description="Where in that tool output it was read"
+    )
 
 
 class SpecialistOutput(BaseModel):
