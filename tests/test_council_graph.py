@@ -211,3 +211,23 @@ def test_missing_call_id_is_violation_not_crash():
     assert any("provenance violation" in e for e in state.errors)
     assert state.opinion_for(SpecialistName.FUNDAMENTAL).figures == []
     assert VetoTrigger.DATA_QUALITY in {f.trigger for f in state.veto_flags}
+
+
+def test_figures_as_json_string_is_coerced():
+    """Regression: live run crashed when the model returned `figures` as a
+    JSON string instead of a list. The schema must parse it back."""
+    out = SpecialistOutput(
+        stance=Stance.BULLISH, confidence=0.7, thesis="up",
+        figures='[{"label": "payout", "value": 0.5, "call_id": "abc", '
+                '"field_path": "output.payout_ratio"}]',
+    )
+    assert len(out.figures) == 1
+    assert out.figures[0].label == "payout"
+
+
+def test_unparseable_figures_string_degrades_to_empty():
+    out = SpecialistOutput(
+        stance=Stance.BULLISH, confidence=0.7, thesis="up",
+        figures="not json at all {{{",
+    )
+    assert out.figures == []
