@@ -8,9 +8,33 @@ violation and trips the data-quality veto.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import json
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator
 
 from ..state import Recommendation, SpecialistName, Stance
+
+
+def _coerce_json_list(v: Any) -> Any:
+    """Models sometimes return a list field as a JSON *string*. Parse it back.
+
+    Live-run regression: the Risk specialist returned figures as
+    '[\\n  {"label": ...}]' (a string), which pydantic rightly rejected as a
+    list — and crashed the run. Tolerance at parse time, strictness at
+    validation time: an unparseable string degrades to [] rather than killing
+    the council; the figure-provenance machinery then shows the opinion simply
+    carries no traceable figures.
+    """
+    if isinstance(v, str):
+        try:
+            parsed = json.loads(v)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+        return []
+    return v
 
 
 class FigureRef(BaseModel):
@@ -38,11 +62,18 @@ class SpecialistOutput(BaseModel):
     figures: list[FigureRef] = Field(default_factory=list)
     caveats: list[str] = Field(default_factory=list)
 
+    _coerce = field_validator("figures", "caveats", mode="before")(
+        _coerce_json_list
+    )
+
 
 class CriticOutput(BaseModel):
     counter_thesis: str
     weaknesses_found: list[str] = Field(default_factory=list)
     challenged_figures: list[str] = Field(default_factory=list)
+
+    _coerce = field_validator("weaknesses_found", "challenged_figures",
+                              mode="before")(_coerce_json_list)
 
 
 class DecisionOutput(BaseModel):
@@ -50,3 +81,5 @@ class DecisionOutput(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     rationale: str
     dissent: list[SpecialistName] = Field(default_factory=list)
+
+    _coerce = field_validator("dissent", mode="before")(_coerce_json_list)
