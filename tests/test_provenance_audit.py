@@ -318,3 +318,44 @@ def test_graph_audit_is_silent_on_clean_figures():
     assert state.provenance_audit["mismatch"] == 0
     assert state.provenance_audit["unresolvable"] == 0
     assert not any("provenance value mismatch" in e for e in state.errors)
+
+
+# --------------------------------------------------------------------------- #
+# Prompt-view aliases (live-run regression, JNJ June 2026: an agent cited
+# get_price_history → last_adj_close — a field that exists only in the prompt
+# summary, not the raw ledger object — and the audit flagged a correct value)
+# --------------------------------------------------------------------------- #
+def test_prompt_view_alias_resolves_summarized_price_fields():
+    from aristos_council.data.adapter import PriceBar, PriceHistory
+
+    bars = [PriceBar(day=date(2026, 1, 1), open=100, high=101, low=99,
+                     close=100 + i, adj_close=100 + i, volume=1000)
+            for i in range(5)]
+    state = ResearchState(ticker="FAKE", strategy_id=STRATEGY.id)
+    state.tool_calls.append(ToolCall(
+        call_id="ph1", tool_name="get_price_history",
+        inputs={}, output=PriceHistory(ticker="FAKE", bars=bars),
+    ))
+    state.specialist_opinions.append(SpecialistOpinion(
+        specialist=SpecialistName.FUNDAMENTAL, stance=Stance.BULLISH,
+        confidence=0.7, thesis="scripted", figures=[
+            _fig("Last Close Price", 104.0, "ph1", "last_adj_close",
+                 tool="get_price_history"),
+            _fig("Bars", 5.0, "ph1", "n_bars", tool="get_price_history"),
+            # wrong value through the alias must still be a mismatch
+            _fig("Wrong Close", 999.0, "ph1", "output.last_adj_close",
+                 tool="get_price_history"),
+        ],
+    ))
+    summary = audit_provenance(state).summary()
+    assert summary["verified"] == 2
+    assert summary["mismatch"] == 1
+    assert summary["unresolvable"] == 0
+
+
+def test_unresolvable_violation_text_names_the_path_not_a_value_mismatch():
+    report = audit_provenance(_state_with([
+        _fig("Ghost", 1.0, "screen1", "criteria[0].not_a_field"),
+    ]))
+    [v] = report.violations
+    assert v.violation_text().startswith("unresolvable provenance path")

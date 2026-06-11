@@ -223,8 +223,11 @@ class FigureFinding:
     note: str = ""
 
     def violation_text(self) -> str:
+        kind = ("unresolvable provenance path"
+                if self.status == UNRESOLVABLE
+                else "provenance value mismatch")
         return (
-            f"provenance value mismatch: {self.source} cited "
+            f"{kind}: {self.source} cited "
             f"'{self.label}'={self.cited!r} at {self.tool_name} → "
             f"{self.field_path} (call_id {self.call_id}) — {self.note}"
         )
@@ -259,6 +262,38 @@ class ProvenanceAuditReport:
         }
 
 
+# --------------------------------------------------------------------------- #
+# Prompt-view aliases
+# --------------------------------------------------------------------------- #
+# Some tool outputs are SUMMARIZED in prompts while the ledger keeps the raw
+# object (get_price_history: prompts see {n_bars, first_day, last_day,
+# last_adj_close, note}; the ledger holds PriceHistory with .bars). An agent
+# citing a summary field is citing honestly — the audit must resolve the path
+# against the same view the agent saw. Live-run regression, JNJ June 2026:
+# 'last_adj_close' flagged unresolvable on a perfectly correct citation.
+_PROMPT_VIEW_ALIASES: dict[tuple[str, str], object] = {
+    ("get_price_history", "n_bars"): lambda out: len(out.bars),
+    ("get_price_history", "first_day"): lambda out: out.bars[0].day if out.bars else None,
+    ("get_price_history", "last_day"): lambda out: out.bars[-1].day if out.bars else None,
+    ("get_price_history", "last_adj_close"): lambda out: out.bars[-1].adj_close if out.bars else None,
+}
+
+
+def _resolve_with_aliases(tool_name: str, output: object, path: str) -> object:
+    bare = (path or "").strip()
+    if bare.startswith("output."):
+        bare = bare[len("output."):]
+    alias = _PROMPT_VIEW_ALIASES.get((tool_name, bare))
+    if alias is not None:
+        try:
+            return alias(output)
+        except (AttributeError, IndexError, TypeError) as exc:
+            raise PathUnresolvable(
+                f"alias '{bare}' for {tool_name} failed: {exc}"
+            )
+    return resolve_field_path(output, path)
+
+
 def audit_provenance(state: ResearchState) -> ProvenanceAuditReport:
     """Verify every figure on the council record against the ledger."""
     report = ProvenanceAuditReport()
@@ -285,7 +320,7 @@ def audit_provenance(state: ResearchState) -> ProvenanceAuditReport:
                 ))
                 continue
             try:
-                actual = resolve_field_path(tc.output, path)
+                actual = _resolve_with_aliases(tc.tool_name, tc.output, path)
             except PathUnresolvable as exc:
                 report.findings.append(FigureFinding(
                     source=source, label=fig.label, cited=fig.value,
