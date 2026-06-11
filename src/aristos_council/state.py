@@ -53,10 +53,15 @@ class Figure(BaseModel):
     Specialists must wrap EVERY externally-derived number in a Figure. Prose
     like 'yield looks healthy' is fine unquantified; the moment a specialist
     writes '3.8%', that 3.8 must arrive as a Figure with provenance.
+
+    `value` may be None: citing a NULL field (e.g. years_dividend_growth
+    returned null from the provider) is legitimate, provenance-traceable
+    evidence of ABSENCE — the Risk specialist's bread and butter. What is
+    never allowed is a value (or a null) without a resolvable call_id.
     """
 
     label: str
-    value: float
+    value: Optional[float] = None
     unit: str = ""
     provenance: Provenance
 
