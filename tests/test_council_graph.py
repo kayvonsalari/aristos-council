@@ -452,3 +452,18 @@ def test_evidence_block_truncates_oversized_outputs():
     block = _evidence_block(state)
     assert "TRUNCATED FOR PROMPT" in block
     assert len(block) < MAX_TOOL_OUTPUT_CHARS * 2  # bounded
+
+
+def test_price_history_is_summarized_in_prompts_not_raw():
+    """Regression (T run): raw price bars exceeded the prompt size guard and
+    front-truncation showed agents only the oldest bars, creating a phantom
+    'price inconsistency'. Prompts must carry a compact, CURRENT summary."""
+    state, runners = _run_with_sentiment(None)
+    _, user = runners["specialist"].calls[0]
+    assert "raw bars omitted from prompt" in user
+    assert '"n_bars": 220' in user
+    assert "last_day" in user
+    # And the ledger still holds the full series for audit.
+    ph = next(tc for tc in state.tool_calls
+              if tc.tool_name == "get_price_history")
+    assert len(ph.output.bars) == 220

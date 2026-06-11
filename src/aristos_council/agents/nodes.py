@@ -205,8 +205,24 @@ def _evidence_block(state: ResearchState) -> str:
     """
     lines = []
     for tc in state.tool_calls:
+        output = tc.output
+        # Raw price bars never go into prompts: a ~270-bar series exceeds the
+        # size guard and front-truncation showed agents only the OLDEST slice
+        # (live-run regression, T: agents saw May–Aug 2025 bars, concluded the
+        # current snapshot price was "inconsistent"). The technical_snapshot is
+        # the curated view; the prompt gets a compact, current summary instead.
+        if tc.tool_name == "get_price_history" and tc.ok and output is not None:
+            bars = getattr(output, "bars", None) or []
+            output = {
+                "n_bars": len(bars),
+                "first_day": str(bars[0].day) if bars else None,
+                "last_day": str(bars[-1].day) if bars else None,
+                "last_adj_close": bars[-1].adj_close if bars else None,
+                "note": "raw bars omitted from prompt (full series in ledger); "
+                        "use technical_snapshot for derived price metrics",
+            }
         payload = {"call_id": tc.call_id, "tool": tc.tool_name,
-                   "ok": tc.ok, "error": tc.error, "output": tc.output}
+                   "ok": tc.ok, "error": tc.error, "output": output}
         line = json.dumps(payload, default=str)
         if len(line) > MAX_TOOL_OUTPUT_CHARS:
             payload["output"] = (
