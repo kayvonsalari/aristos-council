@@ -64,26 +64,37 @@ class ScreenResult:
 # Primitive tools (each independently unit-tested)
 # --------------------------------------------------------------------------- #
 def min_yield_criterion(
-    fundamentals: Fundamentals, *, min_yield: float
+    fundamentals: Fundamentals, *, min_yield: float,
+    last_close: float | None = None,
 ) -> CriterionResult:
-    """Dividend yield at or above the strategy floor.
+    """Dividend yield at or above the strategy floor (decimals: 0.025 == 2.5%).
 
-    `min_yield` and the observed yield are both decimals (0.025 == 2.5%).
+    UNITS LESSON (found live by the council's own Critic, NVDA run): provider
+    yield fields have ambiguous units — yfinance has shipped both 0.0254 and
+    2.54 for the same 2.54% yield over its versions, so the raw field is
+    untrustworthy by construction. We therefore DERIVE the yield from two
+    unambiguous inputs: annual dividend_per_share / last_close. The provider
+    field is never compared against the threshold; if the derivation inputs
+    are missing, the criterion is UNVERIFIABLE rather than silently trusted.
     """
-    y = fundamentals.dividend_yield
-    if y is None:
+    dps = fundamentals.dividend_per_share
+    if dps is not None and last_close is not None and last_close > 0:
+        derived = dps / last_close
         return CriterionResult(
             name="min_dividend_yield",
-            passed=None,
-            observed=None,
+            passed=derived >= min_yield,
+            observed=derived,
             threshold=min_yield,
-            note="dividend_yield unavailable from provider",
+            note="derived deterministically as dividend_per_share / last_close"
+                 " (provider yield field ignored: ambiguous units)",
         )
     return CriterionResult(
         name="min_dividend_yield",
-        passed=y >= min_yield,
-        observed=y,
+        passed=None,
+        observed=None,
         threshold=min_yield,
+        note="yield underivable: needs dividend_per_share and last_close; "
+             "provider yield field not used (ambiguous units)",
     )
 
 
@@ -223,14 +234,18 @@ def run_dividend_aristocrat_screen(
     max_payout: float,
     min_market_cap: float,
     min_growth_years: int,
+    last_close: float | None = None,
 ) -> ScreenResult:
     """Compose the primitives into the full aristocrat screen.
 
     Thresholds are injected by the caller (which reads them from the versioned
     strategy YAML), so this function holds no policy of its own — only math.
+    `last_close` enables deterministic yield derivation (see
+    min_yield_criterion).
     """
     criteria = [
-        min_yield_criterion(fundamentals, min_yield=min_yield),
+        min_yield_criterion(fundamentals, min_yield=min_yield,
+                            last_close=last_close),
         max_payout_criterion(fundamentals, max_payout=max_payout),
         min_market_cap_criterion(fundamentals, min_market_cap=min_market_cap),
         min_growth_streak_criterion(dividends, min_years=min_growth_years),

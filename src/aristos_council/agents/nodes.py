@@ -100,6 +100,8 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
 
         if fundamentals is not None:
             c = strategy.criteria
+            last_close = (prices.closes[-1]
+                          if prices is not None and prices.closes else None)
             screen = run_dividend_aristocrat_screen(
                 fundamentals,
                 dividends or [],
@@ -107,6 +109,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                 max_payout=c.max_payout_ratio,
                 min_market_cap=c.min_market_cap,
                 min_growth_years=c.min_dividend_growth_years,
+                last_close=last_close,
             )
             state.tool_calls.append(
                 ToolCall(

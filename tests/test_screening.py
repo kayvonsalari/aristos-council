@@ -31,27 +31,38 @@ def _fund(**kw) -> Fundamentals:
 
 
 # --------------------------------------------------------------------------- #
-# min_yield
+# min_yield — derived from DPS / price; provider field ignored (units bug
+# found live by the Critic on the NVDA run: percent-form 0.5 passed a
+# decimal threshold of 0.025)
 # --------------------------------------------------------------------------- #
-def test_yield_pass():
-    r = min_yield_criterion(_fund(dividend_yield=0.04), min_yield=0.025)
+def test_yield_derived_pass():
+    r = min_yield_criterion(_fund(dividend_per_share=4.0),
+                            min_yield=0.025, last_close=100.0)
     assert r.passed is True
-    assert r.observed == 0.04
+    assert abs(r.observed - 0.04) < 1e-12
+    assert "derived" in r.note
 
 
-def test_yield_fail():
-    r = min_yield_criterion(_fund(dividend_yield=0.01), min_yield=0.025)
+def test_yield_derived_fail_nvda_case():
+    # NVDA-like: $1.00 DPS on a $200 stock = 0.5% — must FAIL a 2.5% floor.
+    # The old provider-field comparison wrongly passed this.
+    r = min_yield_criterion(_fund(dividend_per_share=1.0,
+                                  dividend_yield=0.5),  # ambiguous field present
+                            min_yield=0.025, last_close=200.0)
     assert r.passed is False
+    assert abs(r.observed - 0.005) < 1e-12
 
 
-def test_yield_unverifiable_when_missing():
-    r = min_yield_criterion(_fund(dividend_yield=None), min_yield=0.025)
-    assert r.passed is None  # not False — distinct outcome
-    assert "unavailable" in r.note
+def test_yield_provider_field_alone_is_unverifiable():
+    # Provider yield present but no price: we refuse to trust it.
+    r = min_yield_criterion(_fund(dividend_yield=2.54), min_yield=0.025)
+    assert r.passed is None
+    assert "ambiguous units" in r.note
 
 
 def test_yield_boundary_is_inclusive():
-    r = min_yield_criterion(_fund(dividend_yield=0.025), min_yield=0.025)
+    r = min_yield_criterion(_fund(dividend_per_share=2.5),
+                            min_yield=0.025, last_close=100.0)
     assert r.passed is True
 
 
@@ -149,7 +160,7 @@ def test_growth_criterion_fail_when_streak_too_short():
 # aggregate screen
 # --------------------------------------------------------------------------- #
 def test_screen_flags_unverifiable_streak():
-    f = _fund(dividend_yield=0.04, payout_ratio=0.5, market_cap=2e10)
+    f = _fund(dividend_per_share=4.0, payout_ratio=0.5, market_cap=2e10)
     result = run_dividend_aristocrat_screen(
         f,
         dividends=[],  # forces streak unverifiable
@@ -157,6 +168,7 @@ def test_screen_flags_unverifiable_streak():
         max_payout=0.75,
         min_market_cap=1e10,
         min_growth_years=25,
+        last_close=100.0,
     )
     assert any("unverifiable:min_dividend_growth_streak" in fl for fl in result.flags)
     # The three quantified criteria evaluated and passed...
@@ -166,7 +178,7 @@ def test_screen_flags_unverifiable_streak():
 
 
 def test_screen_passes_all_evaluated_with_full_data():
-    f = _fund(dividend_yield=0.04, payout_ratio=0.5, market_cap=2e10)
+    f = _fund(dividend_per_share=4.0, payout_ratio=0.5, market_cap=2e10)
     divs = _annual_divs(1990, [1.0 + 0.1 * i for i in range(33)])  # long streak
     result = run_dividend_aristocrat_screen(
         f,
@@ -175,6 +187,7 @@ def test_screen_passes_all_evaluated_with_full_data():
         max_payout=0.75,
         min_market_cap=1e10,
         min_growth_years=25,
+        last_close=100.0,
     )
     assert result.flags == []
     assert result.passes_all_evaluated is True
