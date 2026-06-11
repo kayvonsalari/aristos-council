@@ -409,3 +409,46 @@ def test_sentiment_outage_degrades_not_crashes():
     assert state.decision is not None
     # and the data-quality veto fires
     assert VetoTrigger.DATA_QUALITY in {f.trigger for f in state.veto_flags}
+
+
+# --------------------------------------------------------------------------- #
+# Evidence size guards (live-run regression: NVDA news volume blew the
+# per-minute token limit because every prompt carried the full news list)
+# --------------------------------------------------------------------------- #
+class FloodSentimentAdapter(SentimentAdapter):
+    name = "flood"
+
+    def get_company_news(self, ticker, *, start, end):
+        return [NewsItem(published=date(2026, 6, 1 + i % 9),
+                         headline=f"headline {i}", source="wire")
+                for i in range(300)]
+
+    def get_recommendation_trends(self, ticker):
+        return [RecommendationTrend(period="2026-06-01", buy=10, hold=5)]
+
+
+def test_news_flood_is_capped_in_ledger_but_counted_fully():
+    state, runners = _run_with_sentiment(FloodSentimentAdapter())
+    news_tc = next(tc for tc in state.tool_calls
+                   if tc.tool_name == "get_company_news")
+    assert len(news_tc.output) == 60                       # capped in ledger
+    assert news_tc.inputs["total_items_fetched"] == 300    # honesty preserved
+    snap = next(tc for tc in state.tool_calls
+                if tc.tool_name == "sentiment_snapshot")
+    assert snap.output["news_count"] == 300                # count stays truthful
+
+
+def test_evidence_block_truncates_oversized_outputs():
+    from aristos_council.agents.nodes import (
+        MAX_TOOL_OUTPUT_CHARS,
+        _evidence_block,
+    )
+    from aristos_council.state import ToolCall
+    state = ResearchState(ticker="X", strategy_id=STRATEGY.id)
+    state.tool_calls.append(ToolCall(
+        call_id="big", tool_name="huge_tool",
+        output=["x" * 100] * 1000,   # far beyond the limit
+    ))
+    block = _evidence_block(state)
+    assert "TRUNCATED FOR PROMPT" in block
+    assert len(block) < MAX_TOOL_OUTPUT_CHARS * 2  # bounded

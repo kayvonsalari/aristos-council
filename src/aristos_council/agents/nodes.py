@@ -136,14 +136,32 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
         # deterministic aggregation land in the ledger like everything else.
         if sentiment_adapter is not None:
             news_start = today - timedelta(days=14)
-            news = log(
+
+            def _fetch_news_capped():
+                # High-coverage tickers (NVDA: 300+ items/fortnight) made the
+                # evidence block — and therefore EVERY agent prompt — grow
+                # unboundedly, blowing per-minute token limits (live-run
+                # regression). Keep the most recent MAX_NEWS_LOGGED items;
+                # record how many were fetched so nothing is hidden.
+                items = sentiment_adapter.get_company_news(
+                    state.ticker, start=news_start, end=today
+                )
+                items = sorted(items, key=lambda n: n.published, reverse=True)
+                return items
+
+            news_full = log(
                 "get_company_news",
                 {"ticker": state.ticker, "start": str(news_start),
-                 "end": str(today), "provider": sentiment_adapter.name},
-                lambda: sentiment_adapter.get_company_news(
-                    state.ticker, start=news_start, end=today
-                ),
+                 "end": str(today), "provider": sentiment_adapter.name,
+                 "logged_items_cap": MAX_NEWS_LOGGED},
+                _fetch_news_capped,
             )
+            news = news_full
+            if news_full is not None and len(news_full) > MAX_NEWS_LOGGED:
+                # Replace the logged output with the capped list (audit note
+                # in inputs above), keep the full list for the snapshot count.
+                state.tool_calls[-1].output = news_full[:MAX_NEWS_LOGGED]
+                state.tool_calls[-1].inputs["total_items_fetched"] = len(news_full)
             trends = log(
                 "get_recommendation_trends",
                 {"ticker": state.ticker, "provider": sentiment_adapter.name},
@@ -152,7 +170,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                 ),
             )
             if news is not None or trends is not None:
-                snap = sentiment_snapshot(news or [], trends or [])
+                snap = sentiment_snapshot(news or [], trends or [])  # full list: count stays truthful
                 state.tool_calls.append(
                     ToolCall(
                         call_id=_new_call_id(),
@@ -170,16 +188,31 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
 # --------------------------------------------------------------------------- #
 # shared helpers
 # --------------------------------------------------------------------------- #
+MAX_NEWS_LOGGED = 60
+MAX_TOOL_OUTPUT_CHARS = 12000  # per tool call, in prompts only — ledger keeps full output
+
+
 def _evidence_block(state: ResearchState) -> str:
+    """Serialize the ledger for prompts, with a per-call size guard.
+
+    The ledger itself is never truncated (it is the audit record); only the
+    prompt-facing serialization is. An oversized output is replaced by a
+    truncated string plus an explicit marker, so agents know they are seeing
+    a partial view and can say so in caveats.
+    """
     lines = []
     for tc in state.tool_calls:
-        lines.append(
-            json.dumps(
-                {"call_id": tc.call_id, "tool": tc.tool_name,
-                 "ok": tc.ok, "error": tc.error, "output": tc.output},
-                default=str,
+        payload = {"call_id": tc.call_id, "tool": tc.tool_name,
+                   "ok": tc.ok, "error": tc.error, "output": tc.output}
+        line = json.dumps(payload, default=str)
+        if len(line) > MAX_TOOL_OUTPUT_CHARS:
+            payload["output"] = (
+                json.dumps(tc.output, default=str)[:MAX_TOOL_OUTPUT_CHARS]
+                + f" ...[TRUNCATED FOR PROMPT — full output in ledger "
+                  f"call_id={tc.call_id}]"
             )
-        )
+            line = json.dumps(payload, default=str)
+        lines.append(line)
     return "\n".join(lines)
 
 

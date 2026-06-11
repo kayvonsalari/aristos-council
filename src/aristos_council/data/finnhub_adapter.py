@@ -35,7 +35,10 @@ class FinnhubAdapter(SentimentAdapter):
     name = "finnhub"
 
     def __init__(self, api_key: str | None = None, timeout: float = 15.0):
-        self._key = api_key or os.environ.get("FINNHUB_API_KEY")
+        # .strip(): stray whitespace pasted into an env var / notebook secret
+        # must not be able to cause a silent HTTP 401.
+        raw = api_key or os.environ.get("FINNHUB_API_KEY") or ""
+        self._key = raw.strip() or None
         self._timeout = timeout
         if not self._key:
             raise SentimentDataUnavailable("FINNHUB_API_KEY is not set")
