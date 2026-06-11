@@ -21,11 +21,23 @@ class TechnicalSnapshot:
     notes: list[str]
 
 
+def _finite(values: list[float]) -> bool:
+    return all(math.isfinite(v) for v in values)
+
+
 def sma(closes: list[float], window: int) -> float | None:
-    """Simple moving average of the LAST `window` closes; None if too short."""
+    """Simple moving average of the LAST `window` closes.
+
+    None if too short OR if the window contains non-finite values (NaN/inf) —
+    a NaN must surface as "metric unavailable", never as a NaN that silently
+    propagates into specialist evidence.
+    """
     if window <= 0 or len(closes) < window:
         return None
-    return sum(closes[-window:]) / window
+    tail = closes[-window:]
+    if not _finite(tail):
+        return None
+    return sum(tail) / window
 
 
 def pct_off_high(closes: list[float], lookback: int = 252) -> float | None:
@@ -36,6 +48,8 @@ def pct_off_high(closes: list[float], lookback: int = 252) -> float | None:
     if not closes:
         return None
     window = closes[-lookback:] if len(closes) > lookback else closes
+    if not _finite(window):
+        return None
     high = max(window)
     if high <= 0:
         return None
@@ -44,7 +58,7 @@ def pct_off_high(closes: list[float], lookback: int = 252) -> float | None:
 
 def annualized_volatility(closes: list[float], trading_days: int = 252) -> float | None:
     """Annualized stdev of daily log returns. None if <2 closes."""
-    if len(closes) < 2:
+    if len(closes) < 2 or not _finite(closes):
         return None
     rets = []
     for prev, cur in zip(closes[:-1], closes[1:]):

@@ -296,3 +296,39 @@ def test_system_user_split_structure():
     critic_sys, _ = runners["critic"].calls[0]
     assert "OPEN QUESTIONS" in critic_sys
     assert "may NOT state the suspected answer as a fact" in critic_sys
+
+
+def test_null_valued_figure_with_provenance_is_kept():
+    """Regression: live run crashed when Risk cited a NULL field (e.g.
+    years_dividend_growth=None). A null value with a valid call_id is
+    legitimate evidence of absence and must survive with provenance."""
+    probe = _run([_bullish()] * 4, DecisionOutput(
+        recommendation=Recommendation.HOLD, confidence=0.9, rationale="r"))
+    real_id = next(tc.call_id for tc in probe.tool_calls
+                   if tc.tool_name == "get_fundamentals")
+
+    null_fig = FigureRef(label="years_dividend_growth", value=None,
+                         call_id="will-be-replaced", field_path="output.years_dividend_growth")
+    # Parse-time tolerance is the schema-level assertion:
+    assert null_fig.value is None
+
+    # And the state-level Figure accepts None too:
+    from aristos_council.state import Figure, Provenance
+    fig = Figure(label="x", value=None,
+                 provenance=Provenance(tool_name="get_fundamentals",
+                                       call_id=real_id, field_path="f"))
+    assert fig.value is None
+
+
+def test_null_valued_figure_still_needs_valid_call_id():
+    bad = FigureRef(label="missing_field", value=None,
+                    call_id="nonexistent", field_path="x")
+    outs = [
+        SpecialistOutput(stance=Stance.BEARISH, confidence=0.6,
+                         thesis="data gaps", figures=[bad]),
+        _bullish(), _bullish(), _bullish(),
+    ]
+    state = _run(outs, DecisionOutput(
+        recommendation=Recommendation.HOLD, confidence=0.9, rationale="r"))
+    # Null value does not exempt the figure from provenance rules.
+    assert any("provenance violation" in e for e in state.errors)

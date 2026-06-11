@@ -42,3 +42,32 @@ def test_snapshot_notes_missing_smas():
     assert snap.sma_50 is None
     assert any("sma_50" in n for n in snap.notes)
     assert any("sma_200" in n for n in snap.notes)
+
+
+# --------------------------------------------------------------------------- #
+# Non-finite input handling (live-run regression 2026-06-11: yfinance returned
+# today's incomplete bar with NaN close; every snapshot metric became NaN and
+# the Technical specialist had to abstain)
+# --------------------------------------------------------------------------- #
+def test_sma_none_when_window_contains_nan():
+    closes = [10.0] * 49 + [float("nan")]
+    assert sma(closes, 50) is None
+
+
+def test_pct_off_high_none_with_nan():
+    assert pct_off_high([10.0, float("nan"), 9.0]) is None
+
+
+def test_volatility_none_with_nan():
+    assert annualized_volatility([10.0, float("nan"), 10.5]) is None
+
+
+def test_snapshot_degrades_to_notes_not_nan():
+    closes = [10.0] * 219 + [float("nan")]
+    snap = technical_snapshot(closes)
+    # No metric may be NaN — unavailable metrics must be None (which the
+    # gather/specialist layer surfaces as data-quality information).
+    import math as _m
+    for v in (snap.sma_50, snap.sma_200, snap.pct_off_52w_high,
+              snap.annualized_volatility):
+        assert v is None or _m.isfinite(v)

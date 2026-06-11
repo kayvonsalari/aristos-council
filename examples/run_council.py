@@ -49,11 +49,17 @@ for op in result.specialist_opinions:
     print()
 
 if result.critic_report:
-    print(f"  CRITIC  —  arguing against the "
-          f"{result.critic_report.targets_stance.value} consensus")
-    print(block(result.critic_report.counter_thesis))
-    for w in result.critic_report.weaknesses_found:
+    cr = result.critic_report
+    print(f"  CRITIC  —  arguing against the {cr.targets_stance.value} consensus")
+    print(block(cr.counter_thesis))
+    for fig in cr.figures:
+        print(f"        · {fig.label}: {fig.value}"
+              f"{' ' + fig.unit if fig.unit else ''}  "
+              f"[{fig.provenance.tool_name} → {fig.provenance.field_path}]")
+    for w in cr.weaknesses_found:
         print(f"        · weakness: {w}")
+    for q in cr.open_questions:
+        print(f"        ? open question (for human resolution): {q}")
     print()
 
 if result.decision:

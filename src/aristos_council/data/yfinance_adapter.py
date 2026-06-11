@@ -65,6 +65,17 @@ class YFinanceAdapter(MarketDataAdapter):
         if df is None or df.empty:
             raise DataUnavailable(f"No price history for {ticker} in range")
 
+        # Drop incomplete bars. yfinance includes the CURRENT day's row during
+        # (pre-)market hours with NaN prices; a NaN close then silently poisons
+        # every downstream average. (Live-run regression, 2026-06-11: the
+        # entire technical snapshot came back NaN and the Technical specialist
+        # had to abstain.)
+        df = df.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
+        if df.empty:
+            raise DataUnavailable(
+                f"Price history for {ticker} contained only incomplete bars"
+            )
+
         bars: list[PriceBar] = []
         for idx, row in df.iterrows():
             bars.append(
