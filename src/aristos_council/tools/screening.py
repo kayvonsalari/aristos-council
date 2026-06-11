@@ -180,9 +180,13 @@ def consecutive_dividend_growth_years(
         else:
             break
 
+    # Live-run lesson: 'treat as a floor' was ambiguous enough that two
+    # agents read it as 'could be shorter'. State the direction explicitly.
     note = (
         f"estimated from {len(years_sorted)} years of provider dividend data; "
-        "treat as a floor, not a verified aristocrat streak"
+        "this is a floor / LOWER BOUND — the true streak is AT LEAST this "
+        "many years (provider history simply ends here); it is NOT a verified "
+        "aristocrat count and the true streak may be LONGER, never shorter"
     )
     return streak, note
 
