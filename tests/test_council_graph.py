@@ -68,32 +68,33 @@ class FakeAdapter(MarketDataAdapter):
 
 
 class ScriptedSpecialistRunner:
-    """Returns a different scripted opinion per call, with figures citing a
-    REAL call_id captured from the prompt (the evidence block contains them)."""
+    """Returns a different scripted opinion per call; records (system, user)
+    pairs so tests can assert on prompt structure."""
 
     def __init__(self, outputs):
         self._outputs = list(outputs)
-        self.prompts: list[str] = []
+        self.calls: list[tuple[str, str]] = []
 
-    def invoke(self, prompt: str):
-        self.prompts.append(prompt)
+    def invoke(self, system: str, user: str):
+        self.calls.append((system, user))
         return self._outputs.pop(0)
 
 
 class StaticRunner:
     def __init__(self, output):
         self._output = output
-        self.prompts: list[str] = []
+        self.calls: list[tuple[str, str]] = []
 
-    def invoke(self, prompt: str):
-        self.prompts.append(prompt)
+    def invoke(self, system: str, user: str):
+        self.calls.append((system, user))
         return self._output
 
 
-def _run(specialist_outputs, decision_output, prior=None):
+def _run(specialist_outputs, decision_output, prior=None,
+         critic_output=None, return_runners=False):
     runners = {
         "specialist": ScriptedSpecialistRunner(specialist_outputs),
-        "critic": StaticRunner(CriticOutput(
+        "critic": StaticRunner(critic_output or CriticOutput(
             counter_thesis="Yield could be a trap if payout climbs.",
             weaknesses_found=["sentiment evidence missing"],
         )),
@@ -105,7 +106,8 @@ def _run(specialist_outputs, decision_output, prior=None):
     )
     result = app.invoke(init)
     # LangGraph returns a dict-shaped state; rehydrate for convenient asserts.
-    return ResearchState.model_validate(result)
+    state = ResearchState.model_validate(result)
+    return (state, runners) if return_runners else state
 
 
 def _bullish(conf=0.8):
@@ -231,3 +233,66 @@ def test_unparseable_figures_string_degrades_to_empty():
         figures="not json at all {{{",
     )
     assert out.figures == []
+
+
+# --------------------------------------------------------------------------- #
+# Critic provenance contract (added after the KO live run, where the Critic
+# smuggled an external share count and forbidden arithmetic into its strongest
+# argument and the Decision agent endorsed it)
+# --------------------------------------------------------------------------- #
+def test_critic_bogus_figure_is_violation():
+    critic_out = CriticOutput(
+        counter_thesis="The payout is worse than it looks.",
+        figures=[FigureRef(label="shares_outstanding", value=4.3e9,
+                           call_id="smuggled", field_path="nowhere")],
+    )
+    state = _run([_bullish()] * 4,
+                 DecisionOutput(recommendation=Recommendation.HOLD,
+                                confidence=0.9, rationale="r"),
+                 critic_output=critic_out)
+    assert any("provenance violation: critic" in e for e in state.errors)
+    assert state.critic_report.figures == []  # smuggled figure dropped
+    assert VetoTrigger.DATA_QUALITY in {f.trigger for f in state.veto_flags}
+
+
+def test_critic_open_questions_reach_decision_as_questions():
+    critic_out = CriticOutput(
+        counter_thesis="Coverage is unproven.",
+        open_questions=["Is the dividend covered by FCF once share count is known?"],
+    )
+    state, runners = _run([_bullish()] * 4,
+                          DecisionOutput(recommendation=Recommendation.HOLD,
+                                         confidence=0.9, rationale="r"),
+                          critic_output=critic_out, return_runners=True)
+    # carried into state
+    assert state.critic_report.open_questions == [
+        "Is the dividend covered by FCF once share count is known?"]
+    # surfaced to the Decision agent, explicitly labelled as not-facts
+    _, decision_user = runners["decision"].calls[0]
+    assert "OPEN QUESTIONS (unresolved, for human review — not facts)" in decision_user
+    assert "share count" in decision_user
+    # and the Decision SYSTEM message carries the not-evidence rule
+    decision_system, _ = runners["decision"].calls[0]
+    assert "OPEN QUESTIONS ARE NOT EVIDENCE" in decision_system
+
+
+def test_system_user_split_structure():
+    state, runners = _run([_bullish()] * 4,
+                          DecisionOutput(recommendation=Recommendation.BUY,
+                                         confidence=0.9, rationale="r"),
+                          return_runners=True)
+    # Specialist system message: stable content (role, rules, strategy) —
+    # and NO per-run evidence.
+    sys0, user0 = runners["specialist"].calls[0]
+    assert "FUNDAMENTAL specialist" in sys0
+    assert "HARD RULES" in sys0
+    assert "NO ARITHMETIC" in sys0
+    assert "EVIDENCE" not in sys0.replace("EVIDENCE ONLY", "")
+    # User message: per-run evidence, no rules.
+    assert "Ticker under review: FAKE" in user0
+    assert "call_id" in user0
+    assert "HARD RULES" not in user0
+    # Critic system message carries the open-questions contract.
+    critic_sys, _ = runners["critic"].calls[0]
+    assert "OPEN QUESTIONS" in critic_sys
+    assert "may NOT state the suspected answer as a fact" in critic_sys
