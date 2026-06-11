@@ -25,7 +25,15 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class Runner(Protocol[T]):
-    def invoke(self, prompt: str) -> T: ...
+    """A model behind a structured-output schema.
+
+    `system` carries the STABLE content (role, hard rules, strategy rationale)
+    — identical across runs, which models adhere to more reliably and which is
+    eligible for provider-side prompt caching. `user` carries the PER-RUN
+    content (ticker, evidence). Keep that split intact when implementing.
+    """
+
+    def invoke(self, system: str, user: str) -> T: ...
 
 
 _DEFAULTS = {
@@ -50,8 +58,8 @@ class LangChainRunner:
         )
         self._llm = init_chat_model(model_id).with_structured_output(schema)
 
-    def invoke(self, prompt: str):
-        return self._llm.invoke(prompt)
+    def invoke(self, system: str, user: str):
+        return self._llm.invoke([("system", system), ("user", user)])
 
 
 def production_runners() -> dict[str, "LangChainRunner"]:

@@ -7,6 +7,17 @@ Division of labour (the core guardrail, restated):
 - Specialist/Critic/Decision nodes call an LLM but may not compute anything.
   Numbers they cite must reference a ToolCall logged by `gather`; references
   are validated here and violations are recorded.
+
+Prompt architecture: every agent gets a SYSTEM message (stable: role, hard
+rules, strategy rationale — identical across runs, cache-friendly, and weighted
+more heavily for rule-adherence) and a USER message (per-run: ticker, evidence).
+
+Critic contract (added after the KO live run, where the Critic smuggled an
+external share count and forbidden arithmetic into its strongest argument and
+the Decision agent endorsed it): the Critic is provenance-bound exactly like
+specialists. Quantitative concerns it cannot support from the evidence go in
+`open_questions`, phrased as questions for a human — and the Decision agent is
+explicitly instructed those are unresolved questions, not evidence.
 """
 
 from __future__ import annotations
@@ -31,7 +42,7 @@ from ..state import (
 from ..strategy.loader import Strategy
 from ..tools.screening import run_dividend_aristocrat_screen
 from ..tools.technical import technical_snapshot
-from .schemas import CriticOutput, DecisionOutput, SpecialistOutput
+from .schemas import CriticOutput, DecisionOutput, FigureRef, SpecialistOutput
 
 
 def _new_call_id() -> str:
@@ -121,7 +132,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy):
 
 
 # --------------------------------------------------------------------------- #
-# evidence serialization for prompts
+# shared helpers
 # --------------------------------------------------------------------------- #
 def _evidence_block(state: ResearchState) -> str:
     lines = []
@@ -136,6 +147,54 @@ def _evidence_block(state: ResearchState) -> str:
     return "\n".join(lines)
 
 
+def _validated_figures(
+    state: ResearchState, source: str, refs: list[FigureRef]
+) -> list[Figure]:
+    """Resolve every cited figure against the tool-call ledger.
+
+    An unresolvable reference (missing or unknown call_id) is a provenance
+    violation: the figure is dropped, the violation is logged to state.errors,
+    and the data-quality veto will fire. Applies identically to specialists
+    and the Critic — nobody on the council gets to cite untraceable numbers.
+    """
+    figures: list[Figure] = []
+    for f in refs:
+        tc = state.tool_call_by_id(f.call_id) if f.call_id else None
+        if tc is None:
+            state.errors.append(
+                f"provenance violation: {source} cited '{f.label}'={f.value} "
+                f"with unknown call_id '{f.call_id or '<missing>'}'"
+            )
+            continue
+        figures.append(
+            Figure(label=f.label, value=f.value, unit=f.unit,
+                   provenance=Provenance(tool_name=tc.tool_name,
+                                         call_id=f.call_id,
+                                         field_path=f.field_path))
+        )
+    return figures
+
+
+_HARD_RULES = (
+    "HARD RULES — these override everything else:\n"
+    "1. NO ARITHMETIC. You may not add, multiply, divide, annualise, or "
+    "otherwise compute. All math was done by deterministic tools; you reason "
+    "about their outputs only.\n"
+    "2. EVIDENCE ONLY. You may not introduce outside knowledge (figures, "
+    "share counts, index membership, reputation) as if it were evidence. The "
+    "evidence block in the user message is the complete record before this "
+    "council.\n"
+    "3. PROVENANCE. Every number you cite goes in `figures` with the exact "
+    "call_id and field_path it came from, copied verbatim from the evidence. "
+    "Numbers without a valid call_id are discarded and flagged as violations.\n"
+    "4. CALIBRATION. Your confidence must reflect the completeness of the "
+    "evidence, not the strength of your conviction.\n"
+)
+
+
+# --------------------------------------------------------------------------- #
+# specialists
+# --------------------------------------------------------------------------- #
 _SPECIALIST_BRIEFS = {
     SpecialistName.FUNDAMENTAL:
         "You assess business quality and dividend durability: yield, payout "
@@ -153,48 +212,38 @@ _SPECIALIST_BRIEFS = {
 }
 
 
-def _specialist_prompt(state: ResearchState, who: SpecialistName,
-                       strategy: Strategy) -> str:
+def _specialist_system(who: SpecialistName, strategy: Strategy) -> str:
     return (
         f"You are the {who.value.upper()} specialist on an investment research "
-        f"council analysing {state.ticker} under the strategy "
-        f"'{strategy.name}' (id {strategy.id}).\n\n"
-        f"Strategy rationale:\n{strategy.rationale}\n\n"
+        f"council operating under the strategy '{strategy.name}' "
+        f"(id {strategy.id}).\n\n"
         f"Your brief: {_SPECIALIST_BRIEFS[who]}\n\n"
-        "HARD RULES:\n"
-        "- Do not perform arithmetic. Only cite numbers that appear verbatim in "
-        "the evidence below.\n"
-        "- Every number you cite goes in `figures`, with the exact call_id and "
-        "field_path it came from.\n"
-        "- If the evidence is insufficient for your domain, abstain.\n\n"
-        f"EVIDENCE (one JSON tool call per line):\n{_evidence_block(state)}\n"
+        f"{_HARD_RULES}\n"
+        "5. ABSTAIN rather than guess when the evidence is insufficient for "
+        "your domain.\n\n"
+        f"Strategy rationale:\n{strategy.rationale}\n"
+    )
+
+
+def _user_message(state: ResearchState) -> str:
+    return (
+        f"Ticker under review: {state.ticker}\n\n"
+        f"EVIDENCE (one JSON tool call per line — the complete record):\n"
+        f"{_evidence_block(state)}\n"
     )
 
 
 def make_specialist_node(who: SpecialistName, strategy: Strategy, runner):
+    system = _specialist_system(who, strategy)
+
     def specialist(state: ResearchState) -> ResearchState:
-        out: SpecialistOutput = runner.invoke(
-            _specialist_prompt(state, who, strategy)
-        )
-        figures: list[Figure] = []
-        for f in out.figures:
-            if state.tool_call_by_id(f.call_id) is None:
-                # Untraceable number: provenance violation, recorded loudly.
-                state.errors.append(
-                    f"provenance violation: {who.value} cited '{f.label}'="
-                    f"{f.value} with unknown call_id '{f.call_id}'"
-                )
-                continue
-            figures.append(
-                Figure(label=f.label, value=f.value, unit=f.unit,
-                       provenance=Provenance(
-                           tool_name=state.tool_call_by_id(f.call_id).tool_name,
-                           call_id=f.call_id, field_path=f.field_path))
-            )
+        out: SpecialistOutput = runner.invoke(system, _user_message(state))
         state.specialist_opinions.append(
             SpecialistOpinion(
                 specialist=who, stance=out.stance, confidence=out.confidence,
-                thesis=out.thesis, figures=figures, caveats=out.caveats,
+                thesis=out.thesis,
+                figures=_validated_figures(state, who.value, out.figures),
+                caveats=out.caveats,
             )
         )
         return state
@@ -203,7 +252,7 @@ def make_specialist_node(who: SpecialistName, strategy: Strategy, runner):
 
 
 # --------------------------------------------------------------------------- #
-# critic — argues the OPPOSITE of the emerging consensus
+# critic — argues the OPPOSITE of the emerging consensus, provenance-bound
 # --------------------------------------------------------------------------- #
 def consensus_stance(state: ResearchState) -> Stance:
     votes = [o.stance for o in state.specialist_opinions
@@ -219,7 +268,29 @@ def consensus_stance(state: ResearchState) -> Stance:
     return Stance.NEUTRAL
 
 
+def _critic_system(strategy: Strategy) -> str:
+    return (
+        "You are the CRITIC on an investment research council operating under "
+        f"the strategy '{strategy.name}' (id {strategy.id}). Your job is to "
+        "argue the strongest case AGAINST the emerging consensus before any "
+        "verdict — attack weak reasoning, mis-weighted figures, convenient "
+        "assumptions, and missing evidence. You do not vote.\n\n"
+        f"{_HARD_RULES}\n"
+        "5. OPEN QUESTIONS. When your concern is quantitative but the evidence "
+        "cannot support it — a computation you are not allowed to perform, a "
+        "figure that looks stale, data that is absent — put it in "
+        "`open_questions`, phrased as a question for human resolution (e.g. "
+        "'Is the dividend covered by free cash flow once the share count is "
+        "known?'). You may NOT state the suspected answer as a fact, estimate "
+        "the missing number, or perform the computation yourself. A sharp "
+        "unresolved question is more valuable to this council than a "
+        "fabricated certainty.\n"
+    )
+
+
 def make_critic_node(strategy: Strategy, runner):
+    system = _critic_system(strategy)
+
     def critic(state: ResearchState) -> ResearchState:
         target = consensus_stance(state)
         opinions = "\n".join(
@@ -227,21 +298,19 @@ def make_critic_node(strategy: Strategy, runner):
             f"(conf {o.confidence:.2f}) — {o.thesis}"
             for o in state.specialist_opinions
         )
-        prompt = (
-            f"You are the CRITIC on an investment research council analysing "
-            f"{state.ticker}. The emerging consensus is {target.value.upper()}. "
-            "Your job is to argue the strongest OPPOSITE case before any "
-            "verdict. Attack weak reasoning, mis-weighted figures, and missing "
-            "evidence. You do not vote.\n\n"
-            f"Specialist opinions:\n{opinions}\n\n"
-            f"EVIDENCE:\n{_evidence_block(state)}\n"
+        user = (
+            f"{_user_message(state)}\n"
+            f"The emerging consensus is {target.value.upper()}. Argue the "
+            f"opposite case.\n\nSpecialist opinions:\n{opinions}\n"
         )
-        out: CriticOutput = runner.invoke(prompt)
+        out: CriticOutput = runner.invoke(system, user)
         state.critic_report = CriticReport(
             targets_stance=target,
             counter_thesis=out.counter_thesis,
             weaknesses_found=out.weaknesses_found,
             challenged_figures=out.challenged_figures,
+            figures=_validated_figures(state, "critic", out.figures),
+            open_questions=out.open_questions,
         )
         return state
 
@@ -251,7 +320,28 @@ def make_critic_node(strategy: Strategy, runner):
 # --------------------------------------------------------------------------- #
 # decision — buy/hold/sell with confidence and dissent
 # --------------------------------------------------------------------------- #
+def _decision_system(strategy: Strategy) -> str:
+    return (
+        "You are the DECISION agent of an investment research council "
+        f"operating under the strategy '{strategy.name}' (id {strategy.id}). "
+        "Weigh the specialists AND the critic's counter-case, then issue "
+        "buy/hold/sell with a confidence in [0,1].\n\n"
+        f"{_HARD_RULES}\n"
+        "5. DISSENT. List every specialist whose stance your call overrides in "
+        "`dissent` — dissent must never be silently dropped.\n"
+        "6. OPEN QUESTIONS ARE NOT EVIDENCE. The critic's open_questions are "
+        "unresolved questions for a human, not established facts. They may "
+        "justify caution (a HOLD pending resolution, lower confidence) but you "
+        "must not cite them as if they were findings, and you must not treat a "
+        "suspected answer as a known one.\n"
+        f"7. POLICY. partial_pass_allows_hold="
+        f"{strategy.policy.partial_pass_allows_hold}.\n"
+    )
+
+
 def make_decision_node(strategy: Strategy, runner):
+    system = _decision_system(strategy)
+
     def decide(state: ResearchState) -> ResearchState:
         opinions = "\n".join(
             f"- {o.specialist.value}: {o.stance.value} "
@@ -259,22 +349,22 @@ def make_decision_node(strategy: Strategy, runner):
             f"| caveats: {'; '.join(o.caveats) or 'none'}"
             for o in state.specialist_opinions
         )
-        critic = (
-            f"{state.critic_report.counter_thesis}\n"
-            f"Weaknesses: {'; '.join(state.critic_report.weaknesses_found)}"
-            if state.critic_report else "no critic report"
-        )
-        prompt = (
-            f"You are the DECISION agent of an investment research council "
-            f"analysing {state.ticker} under strategy '{strategy.name}'. Weigh "
-            "the specialists AND the critic's counter-case, then issue "
-            "buy/hold/sell with a confidence in [0,1]. List every specialist "
-            "whose stance your call overrides in `dissent` — dissent must "
-            "never be silently dropped. Policy notes: "
-            f"partial_pass_allows_hold={strategy.policy.partial_pass_allows_hold}.\n\n"
+        if state.critic_report:
+            cr = state.critic_report
+            critic = (
+                f"{cr.counter_thesis}\n"
+                f"Weaknesses: {'; '.join(cr.weaknesses_found) or 'none'}\n"
+                f"OPEN QUESTIONS (unresolved, for human review — not facts):\n"
+                + ("\n".join(f"  ? {q}" for q in cr.open_questions)
+                   if cr.open_questions else "  none")
+            )
+        else:
+            critic = "no critic report"
+        user = (
+            f"{_user_message(state)}\n"
             f"Specialists:\n{opinions}\n\nCritic:\n{critic}\n"
         )
-        out: DecisionOutput = runner.invoke(prompt)
+        out: DecisionOutput = runner.invoke(system, user)
         state.decision = Decision(
             recommendation=out.recommendation,
             confidence=out.confidence,

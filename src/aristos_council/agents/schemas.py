@@ -71,8 +71,15 @@ class CriticOutput(BaseModel):
     counter_thesis: str
     weaknesses_found: list[str] = Field(default_factory=list)
     challenged_figures: list[str] = Field(default_factory=list)
+    # Same provenance contract as specialists: numbers the Critic cites must
+    # arrive here with a resolvable call_id, or they are violations.
+    figures: list[FigureRef] = Field(default_factory=list)
+    # Quantitative concerns the Critic could NOT support from the evidence,
+    # phrased as questions for human resolution — never asserted as facts.
+    open_questions: list[str] = Field(default_factory=list)
 
     _coerce = field_validator("weaknesses_found", "challenged_figures",
+                              "figures", "open_questions",
                               mode="before")(_coerce_json_list)
 
 
