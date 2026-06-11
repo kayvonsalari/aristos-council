@@ -18,26 +18,7 @@ Three principles drive the architecture:
 
 ## Architecture
 
-```
-                ┌─────────────────────────────────────────────┐
-                │              ResearchState (shared)          │
-                └─────────────────────────────────────────────┘
-                                    │
-        ┌───────────┬───────────────┼───────────────┬───────────┐
-        ▼           ▼               ▼               ▼           
-  Fundamental   Technical       Sentiment         Risk          (specialists
-   specialist   specialist      specialist     specialist        deliberate)
-        └───────────┴───────────────┼───────────────┴───────────┘
-                                    ▼
-                                 Critic            (argues the opposite case)
-                                    ▼
-                                Decision           (buy/hold/sell + confidence + dissent)
-                                    ▼
-                            Veto gate (human)      (triggers: low confidence,
-                                                    specialist conflict,
-                                                    data-quality flags,
-                                                    recommendation flip)
-```
+![Aristos Council — architecture & process flow](architecture.png)
 
 - **Orchestration:** LangGraph, with `ResearchState` threaded through every node.
 - **Strategy as config:** the investment thesis lives in versioned YAML + strategy docs in a RAG store — not in code. Changing strategy means adding a new versioned file, so past decisions stay reproducible. First strategy shipped: **dividend aristocrats**.
@@ -62,9 +43,9 @@ Three principles drive the architecture:
 
 **Phase 1 — data substrate (complete):** `ResearchState` schema with figure-level provenance, provider-agnostic adapter (yfinance + EODHD stub), deterministic screening tools, versioned strategy config + validating loader.
 
-**Phase 2 — the council (complete):** full LangGraph pipeline — deterministic `gather` node (the only node that touches data or math), four specialists with enforced figure provenance, Critic arguing the opposite case, Decision agent with recorded dissent, and a fully deterministic four-trigger human-veto gate. LLMs sit behind a `Runner` seam with env-configurable model tiers, so the entire graph is tested end-to-end with fakes — no API keys in CI.
+**Phase 2 — the council (complete):** full LangGraph pipeline — deterministic `gather` node (the only node that touches data or math), four specialists with enforced figure provenance, a provenance-bound Critic arguing the opposite case (unverifiable quantitative concerns become open questions for a human, never asserted facts), Decision agent with recorded dissent, and a fully deterministic four-trigger human-veto gate. LLMs sit behind a `Runner` seam with env-configurable model tiers, so the entire graph is tested end-to-end with fakes — no API keys in CI.
 
-46 unit tests, green on Python 3.11 and 3.12. Try it live: `python examples/run_council.py JNJ` (needs `pip install -e ".[yfinance,llm]"` and an Anthropic API key).
+52 unit tests, green on Python 3.11 and 3.12. Try it live: `python examples/run_council.py JNJ` (needs `pip install -e ".[yfinance,llm]"` and an Anthropic API key).
 
 **Next:** Finnhub sentiment feed (un-abstaining the Sentiment specialist), SEC EDGAR filings RAG for the Fundamental specialist, EODHD adapter, LangSmith tracing.
 
