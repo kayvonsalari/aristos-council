@@ -216,6 +216,12 @@ class ResearchState(BaseModel):
     critic_report: Optional[CriticReport] = None
     decision: Optional[Decision] = None
 
+    # --- audit ---
+    # Summary of the deep provenance audit (see audit/provenance.py): figure
+    # counts by status plus violation texts. Populated by the audit node,
+    # after decision and before veto. None if the audit hasn't run.
+    provenance_audit: Optional[dict] = None
+
     # --- gate ---
     veto_flags: list[VetoFlag] = Field(default_factory=list)
     human_reviewed: bool = False

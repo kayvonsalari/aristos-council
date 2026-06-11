@@ -22,6 +22,7 @@ from .agents.nodes import (
     make_specialist_node,
 )
 from .agents.veto import make_veto_node
+from .audit.provenance import make_audit_node
 from .data.adapter import MarketDataAdapter
 from .data.sentiment import SentimentAdapter
 from .state import ResearchState, SpecialistName
@@ -52,6 +53,7 @@ def build_council(
         )
     g.add_node("critic", make_critic_node(strategy, runners["critic"]))
     g.add_node("decision", make_decision_node(strategy, runners["decision"]))
+    g.add_node("audit", make_audit_node())
     g.add_node("veto", make_veto_node(strategy))
 
     g.set_entry_point("gather")
@@ -60,7 +62,8 @@ def build_council(
         g.add_edge(a.value, b.value)
     g.add_edge(SPECIALIST_ORDER[-1].value, "critic")
     g.add_edge("critic", "decision")
-    g.add_edge("decision", "veto")
+    g.add_edge("decision", "audit")
+    g.add_edge("audit", "veto")
     g.add_edge("veto", END)
 
     return g.compile()
