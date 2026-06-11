@@ -124,6 +124,13 @@ class CriticReport(BaseModel):
     `targets_stance` is the consensus the Critic argued against, so the Decision
     agent (and a human) can see what was being stress-tested. The Critic does not
     vote; it surfaces the strongest counter-case and any holes in the figures.
+
+    The Critic is bound by the SAME provenance contract as specialists: any
+    number it cites lands in `figures` with a resolvable ToolCall reference.
+    Quantitative concerns it cannot support from the evidence (missing share
+    count, suspected stale data, arithmetic it is not allowed to perform) go in
+    `open_questions`, phrased as questions for human resolution — they are
+    explicitly NOT evidence and the Decision agent must not treat them as such.
     """
 
     targets_stance: Stance
@@ -131,6 +138,10 @@ class CriticReport(BaseModel):
     weaknesses_found: list[str] = Field(default_factory=list)
     # Figures the Critic believes are mis-weighted, stale, or unsupported.
     challenged_figures: list[str] = Field(default_factory=list)
+    # Provenance-bound numbers the Critic cites in its counter-case.
+    figures: list[Figure] = Field(default_factory=list)
+    # Unverifiable quantitative concerns, phrased as questions for a human.
+    open_questions: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_utcnow)
 
 
