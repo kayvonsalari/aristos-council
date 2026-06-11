@@ -332,3 +332,80 @@ def test_null_valued_figure_still_needs_valid_call_id():
         recommendation=Recommendation.HOLD, confidence=0.9, rationale="r"))
     # Null value does not exempt the figure from provenance rules.
     assert any("provenance violation" in e for e in state.errors)
+
+
+# --------------------------------------------------------------------------- #
+# Sentiment integration (Finnhub via SentimentAdapter seam)
+# --------------------------------------------------------------------------- #
+from aristos_council.data.sentiment import (
+    NewsItem,
+    RecommendationTrend,
+    SentimentAdapter,
+    SentimentDataUnavailable,
+)
+
+
+class FakeSentimentAdapter(SentimentAdapter):
+    name = "fake-sentiment"
+
+    def get_company_news(self, ticker, *, start, end):
+        return [NewsItem(published=date(2026, 6, 10),
+                         headline="Fake Corp raises dividend", source="wire")]
+
+    def get_recommendation_trends(self, ticker):
+        return [RecommendationTrend(period="2026-06-01", strong_buy=3, buy=7,
+                                    hold=10, sell=2, strong_sell=0)]
+
+
+class BrokenSentimentAdapter(SentimentAdapter):
+    name = "broken"
+
+    def get_company_news(self, ticker, *, start, end):
+        raise SentimentDataUnavailable("simulated outage")
+
+    def get_recommendation_trends(self, ticker):
+        raise SentimentDataUnavailable("simulated outage")
+
+
+def _run_with_sentiment(adapter):
+    runners = {
+        "specialist": ScriptedSpecialistRunner([_bullish()] * 4),
+        "critic": StaticRunner(CriticOutput(counter_thesis="c")),
+        "decision": StaticRunner(DecisionOutput(
+            recommendation=Recommendation.BUY, confidence=0.9, rationale="r")),
+    }
+    app = build_council(FakeAdapter(), STRATEGY, runners,
+                        sentiment_adapter=adapter)
+    result = app.invoke(ResearchState(ticker="FAKE", strategy_id=STRATEGY.id))
+    return ResearchState.model_validate(result), runners
+
+
+def test_sentiment_evidence_lands_in_ledger_and_prompt():
+    state, runners = _run_with_sentiment(FakeSentimentAdapter())
+    names = {tc.tool_name for tc in state.tool_calls}
+    assert {"get_company_news", "get_recommendation_trends",
+            "sentiment_snapshot"} <= names
+    snap = next(tc for tc in state.tool_calls
+                if tc.tool_name == "sentiment_snapshot")
+    assert snap.output["bullish_ratio"] == 0.4545  # 10/22
+    # the specialists actually see it
+    _, user = runners["specialist"].calls[0]
+    assert "sentiment_snapshot" in user
+    assert "raises dividend" in user
+
+
+def test_no_sentiment_adapter_means_no_sentiment_evidence():
+    state, _ = _run_with_sentiment(None)
+    names = {tc.tool_name for tc in state.tool_calls}
+    assert "sentiment_snapshot" not in names  # pre-Finnhub behaviour preserved
+
+
+def test_sentiment_outage_degrades_not_crashes():
+    state, _ = _run_with_sentiment(BrokenSentimentAdapter())
+    # failures logged as failed tool calls + errors, run completed
+    failed = [tc for tc in state.tool_calls if not tc.ok]
+    assert len(failed) == 2
+    assert any("simulated outage" in e for e in state.errors)
+    assert state.decision is not None
+    # and the data-quality veto fires
+    assert VetoTrigger.DATA_QUALITY in {f.trigger for f in state.veto_flags}

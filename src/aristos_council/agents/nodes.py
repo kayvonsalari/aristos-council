@@ -28,6 +28,7 @@ from dataclasses import asdict
 from datetime import date, timedelta
 
 from ..data.adapter import DataUnavailable, MarketDataAdapter
+from ..data.sentiment import SentimentAdapter, SentimentDataUnavailable
 from ..state import (
     CriticReport,
     Decision,
@@ -41,6 +42,7 @@ from ..state import (
 )
 from ..strategy.loader import Strategy
 from ..tools.screening import run_dividend_aristocrat_screen
+from ..tools.sentiment_tools import sentiment_snapshot
 from ..tools.technical import technical_snapshot
 from .schemas import CriticOutput, DecisionOutput, FigureRef, SpecialistOutput
 
@@ -52,7 +54,8 @@ def _new_call_id() -> str:
 # --------------------------------------------------------------------------- #
 # gather — deterministic evidence collection
 # --------------------------------------------------------------------------- #
-def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy):
+def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
+                     sentiment_adapter: SentimentAdapter | None = None):
     def gather(state: ResearchState) -> ResearchState:
         today = date.today()
         lookback_start = today - timedelta(days=400)   # enough for SMA200
@@ -67,7 +70,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy):
                              inputs=inputs, output=output, ok=True)
                 )
                 return output
-            except DataUnavailable as exc:
+            except (DataUnavailable, SentimentDataUnavailable) as exc:
                 state.tool_calls.append(
                     ToolCall(call_id=call_id, tool_name=tool_name,
                              inputs=inputs, output=None, ok=False,
@@ -126,6 +129,39 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy):
                     output=asdict(snap),
                 )
             )
+
+        # Sentiment evidence is OPTIONAL by design: without an adapter the
+        # Sentiment specialist finds nothing and abstains (pre-Finnhub
+        # behaviour, preserved exactly). With one, two provider calls plus a
+        # deterministic aggregation land in the ledger like everything else.
+        if sentiment_adapter is not None:
+            news_start = today - timedelta(days=14)
+            news = log(
+                "get_company_news",
+                {"ticker": state.ticker, "start": str(news_start),
+                 "end": str(today), "provider": sentiment_adapter.name},
+                lambda: sentiment_adapter.get_company_news(
+                    state.ticker, start=news_start, end=today
+                ),
+            )
+            trends = log(
+                "get_recommendation_trends",
+                {"ticker": state.ticker, "provider": sentiment_adapter.name},
+                lambda: sentiment_adapter.get_recommendation_trends(
+                    state.ticker
+                ),
+            )
+            if news is not None or trends is not None:
+                snap = sentiment_snapshot(news or [], trends or [])
+                state.tool_calls.append(
+                    ToolCall(
+                        call_id=_new_call_id(),
+                        tool_name="sentiment_snapshot",
+                        inputs={"ticker": state.ticker,
+                                "news_window_days": 14},
+                        output=asdict(snap),
+                    )
+                )
         return state
 
     return gather
@@ -203,9 +239,15 @@ _SPECIALIST_BRIEFS = {
         "You assess price structure: trend vs SMA50/SMA200, distance from the "
         "52-week high, volatility. Lean on the technical_snapshot output.",
     SpecialistName.SENTIMENT:
-        "You assess news/market sentiment. If NO sentiment tool output exists "
-        "in the evidence, you MUST return stance=abstain with a caveat saying "
-        "sentiment data is not yet wired in. Do not improvise sentiment.",
+        "You assess news/market sentiment. Your evidence is the "
+        "sentiment_snapshot tool output (recent headline list, news volume, "
+        "analyst recommendation counts and bullish ratio) plus the raw "
+        "get_company_news / get_recommendation_trends calls. Interpreting the "
+        "TEXT of headlines is your job; counting is not — cite counts and "
+        "ratios only from the snapshot. If NO sentiment tool output exists in "
+        "the evidence, you MUST return stance=abstain with a caveat saying "
+        "sentiment data is unavailable. Do not improvise sentiment from price "
+        "action.",
     SpecialistName.RISK:
         "You assess downside: payout stretch, volatility, data-quality flags, "
         "anything unverifiable. You are the council's professional pessimist.",

@@ -23,6 +23,7 @@ from .agents.nodes import (
 )
 from .agents.veto import make_veto_node
 from .data.adapter import MarketDataAdapter
+from .data.sentiment import SentimentAdapter
 from .state import ResearchState, SpecialistName
 from .strategy.loader import Strategy
 
@@ -38,10 +39,12 @@ def build_council(
     adapter: MarketDataAdapter,
     strategy: Strategy,
     runners: dict,   # keys: "specialist", "critic", "decision"
+    sentiment_adapter: SentimentAdapter | None = None,
 ):
     g = StateGraph(ResearchState)
 
-    g.add_node("gather", make_gather_node(adapter, strategy))
+    g.add_node("gather",
+               make_gather_node(adapter, strategy, sentiment_adapter))
     for who in SPECIALIST_ORDER:
         g.add_node(
             who.value,

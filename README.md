@@ -32,7 +32,7 @@ Three principles drive the architecture:
 | Orchestration | LangGraph |
 | Market data (dev) | yfinance, behind a provider-agnostic adapter |
 | Market data (prod) | EODHD *(planned)* |
-| Sentiment | Finnhub (free tier) |
+| Sentiment | Finnhub (free tier) — company news + analyst recommendation trends, behind a provider-agnostic `SentimentAdapter` |
 | Filings | SEC EDGAR → RAG |
 | Vector store | ChromaDB |
 | LLM routing | `init_chat_model` (tiered) |
@@ -45,9 +45,11 @@ Three principles drive the architecture:
 
 **Phase 2 — the council (complete):** full LangGraph pipeline — deterministic `gather` node (the only node that touches data or math), four specialists with enforced figure provenance, a provenance-bound Critic arguing the opposite case (unverifiable quantitative concerns become open questions for a human, never asserted facts), Decision agent with recorded dissent, and a fully deterministic four-trigger human-veto gate. LLMs sit behind a `Runner` seam with env-configurable model tiers, so the entire graph is tested end-to-end with fakes — no API keys in CI.
 
-52 unit tests, green on Python 3.11 and 3.12. Try it live: `python examples/run_council.py JNJ` (needs `pip install -e ".[yfinance,llm]"` and an Anthropic API key).
+65 unit tests, green on Python 3.11 and 3.12. Try it live: `python examples/run_council.py JNJ` (needs `pip install -e ".[yfinance,llm]"` and an Anthropic API key).
 
-**Next:** Finnhub sentiment feed (un-abstaining the Sentiment specialist), SEC EDGAR filings RAG for the Fundamental specialist, EODHD adapter, LangSmith tracing.
+**Phase 3 — sentiment (complete):** Finnhub news + analyst recommendation trends behind a provider-agnostic `SentimentAdapter`, aggregated by a deterministic `sentiment_snapshot` tool. Without a `FINNHUB_API_KEY` the Sentiment specialist abstains exactly as before; a provider outage degrades to a data-quality veto flag, never a crash.
+
+**Next:** SEC EDGAR filings RAG for the Fundamental specialist, EODHD adapter, LangSmith tracing, nightly watchlist runs via GitHub Actions cron.
 
 ## A note on honesty
 

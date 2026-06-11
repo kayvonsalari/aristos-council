@@ -4,6 +4,7 @@ Requires:  pip install -e ".[yfinance,llm]"  and ANTHROPIC_API_KEY set.
 Usage:     python examples/run_council.py JNJ
 """
 
+import os
 import sys
 import textwrap
 from pathlib import Path
@@ -29,7 +30,16 @@ strategy = load_strategy(
     Path(__file__).resolve().parents[1] / "strategies" / "dividend_aristocrats_v1.yaml"
 )
 
-app = build_council(YFinanceAdapter(), strategy, production_runners())
+sentiment = None
+if os.environ.get("FINNHUB_API_KEY"):
+    from aristos_council.data.finnhub_adapter import FinnhubAdapter
+    sentiment = FinnhubAdapter()
+    print("(sentiment: Finnhub enabled)")
+else:
+    print("(sentiment: no FINNHUB_API_KEY — Sentiment specialist will abstain)")
+
+app = build_council(YFinanceAdapter(), strategy, production_runners(),
+                    sentiment_adapter=sentiment)
 result = ResearchState.model_validate(
     app.invoke(ResearchState(ticker=ticker, strategy_id=strategy.id))
 )
