@@ -1,0 +1,27 @@
+[
+  {
+    "ticker": "MO",
+    "run_at": "2026-06-12T12:40:59.613235Z",
+    "strategy_id": "dividend_aristocrats_v1",
+    "verdict": "hold",
+    "confidence": 0.52,
+    "stances": {
+      "fundamental": "bearish",
+      "technical": "bearish",
+      "sentiment": "bearish",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "low_confidence",
+      "majority_override"
+    ],
+    "provenance_audit": {
+      "figures_audited": 74,
+      "verified": 73,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 1,
+      "unit_scaled": 0
+    }
+  }
+]
