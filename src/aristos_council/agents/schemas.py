@@ -37,12 +37,21 @@ def _coerce_json_list(v: Any) -> Any:
     return v
 
 
+def _coerce_unit(v: Any) -> Any:
+    """A null/missing unit means 'unitless'. Live-run regression (MO): an agent
+    emitted figures with ``unit: null`` and the string-only field failed the
+    WHOLE SpecialistOutput, killing the run. Same posture as _coerce_json_list:
+    tolerate at parse time, coerce null -> '' rather than crash."""
+    return "" if v is None else v
+
+
 class FigureRef(BaseModel):
     label: str
     # Optional: a model may cite a NULL field as evidence of absence (live-run
     # regression: Risk cited years_dividend_growth=None and the float-only
     # schema crashed the run). Null + valid call_id = legitimate citation.
     value: float | None = None
+    # Tolerant: null/missing unit -> "" (unitless). See _coerce_unit.
     unit: str = ""
     # call_id/field_path are REQUIRED by policy but optional at parse time:
     # if a model omits them, validation must not crash the run. The specialist
@@ -56,6 +65,8 @@ class FigureRef(BaseModel):
     field_path: str = Field(
         default="", description="Where in that tool output it was read"
     )
+
+    _unitless = field_validator("unit", mode="before")(_coerce_unit)
 
 
 class SpecialistOutput(BaseModel):

@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 def _utcnow() -> datetime:
@@ -64,6 +64,14 @@ class Figure(BaseModel):
     value: Optional[float] = None
     unit: str = ""
     provenance: Provenance
+
+    # Tolerate a null/missing unit (== unitless): mirrors FigureRef so a figure
+    # carrying unit=None survives validation here too, with unit "". See the MO
+    # live-run regression in agents/schemas.py:_coerce_unit.
+    @field_validator("unit", mode="before")
+    @classmethod
+    def _unit_unitless_if_null(cls, v: Any) -> Any:
+        return "" if v is None else v
 
 
 # --------------------------------------------------------------------------- #

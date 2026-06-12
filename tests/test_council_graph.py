@@ -235,6 +235,54 @@ def test_unparseable_figures_string_degrades_to_empty():
     assert out.figures == []
 
 
+def test_figure_unit_null_is_coerced_to_unitless():
+    """Regression (MO live crash): an agent emitted figures with `unit: null`.
+    FigureRef.unit required a string, so the WHOLE SpecialistOutput failed to
+    validate and the run died. A null/missing unit must coerce to '' (unitless),
+    consistent with the schema's tolerate-at-parse philosophy."""
+    out = SpecialistOutput(
+        stance=Stance.BULLISH, confidence=0.7, thesis="up",
+        figures=[
+            {"label": "dividend_yield", "value": 0.084, "unit": None,
+             "call_id": "c1", "field_path": "metrics.dividend_yield"},
+            {"label": "payout_ratio", "value": 0.79, "unit": None,
+             "call_id": "c1", "field_path": "metrics.payout_ratio"},
+            # unit omitted entirely still defaults to "" (unchanged behaviour)
+            {"label": "market_cap", "value": 9.5e10,
+             "call_id": "c1", "field_path": "metrics.market_cap"},
+        ],
+    )
+    assert len(out.figures) == 3
+    assert all(f.unit == "" for f in out.figures)
+    # also via direct construction (before-validator runs either way)
+    assert FigureRef(label="x", value=1.0, unit=None).unit == ""
+
+
+def test_null_unit_figures_survive_validation_with_empty_unit():
+    """The null-unit figures must SURVIVE provenance validation (valid call_id)
+    and land as state Figures with unit '' — not be dropped."""
+    from aristos_council.agents.nodes import _validated_figures
+    from aristos_council.state import Figure, Provenance, ResearchState, ToolCall
+
+    state = ResearchState(ticker="MO", strategy_id=STRATEGY.id)
+    state.tool_calls.append(ToolCall(
+        call_id="c1", tool_name="run_dividend_aristocrat_screen",
+        output={"metrics": {"dividend_yield": 0.084, "payout_ratio": 0.79}}))
+    refs = [
+        FigureRef(label="dividend_yield", value=0.084, unit=None,
+                  call_id="c1", field_path="metrics.dividend_yield"),
+        FigureRef(label="payout_ratio", value=0.79, unit=None,
+                  call_id="c1", field_path="metrics.payout_ratio"),
+    ]
+    figures = _validated_figures(state, "fundamental", refs)
+    assert len(figures) == 2
+    assert all(f.unit == "" for f in figures)
+    # the state-level Figure tolerates a null unit directly too
+    assert Figure(label="x", value=1.0, unit=None,
+                  provenance=Provenance(tool_name="t", call_id="c1",
+                                        field_path="f")).unit == ""
+
+
 # --------------------------------------------------------------------------- #
 # Critic provenance contract (added after the KO live run, where the Critic
 # smuggled an external share count and forbidden arithmetic into its strongest
