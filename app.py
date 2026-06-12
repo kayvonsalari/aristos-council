@@ -21,7 +21,6 @@ writes the verdict log + full run report after it, mirroring run_council.py.
 from __future__ import annotations
 
 import base64
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -42,6 +41,11 @@ from aristos_council.persistence.verdicts import (
     load_latest,
     load_records,
     record_from_state,
+)
+from aristos_council.presentation import (
+    SCREEN_STATUS_HEX,
+    screen_table_rows,
+    strip_provenance,
 )
 from aristos_council.state import Stance
 from aristos_council.strategy.loader import Strategy, load_strategy
@@ -106,53 +110,6 @@ def _ts_header(dt: datetime) -> str:
 def _ts_compact(dt: datetime) -> str:
     """Compact local timestamp for dense labels — '12.06. 15:42'."""
     return _to_local(dt).strftime("%d.%m. %H:%M")
-
-
-# Provenance plumbing in PROSE: agents inline citations like
-# "(call_id: 8d39404e0e90, criteria[0].observed)" / "[call_id 1db8...]" and bare
-# field-path refs like "`criteria[0].passed = false`". The STORED text keeps
-# them (auditability); display strips them by default and the provenance toggle
-# shows the raw, unstripped text.
-#
-# Leading trims use [ \t] (NOT \s) so newlines are NEVER consumed — the stored
-# rationale's markdown structure (headers, lists, tables, blank lines) must
-# survive to st.markdown. The call_id paren handles one level of nested parens
-# (a quoted headline that itself contains '(...)').
-# Match a parenthetical/bracket that CONTAINS "call_id" anywhere — not only ones
-# that start with it (e.g. "(from run_..._screen, call_id: 452f…)"). One level
-# of nested parens is handled (a quoted headline with its own '(...)').
-_CALLID_PAREN_RE = re.compile(
-    r"[ \t]*\((?:[^()]|\([^()]*\))*call_id\b(?:[^()]|\([^()]*\))*\)"
-)
-_CALLID_BRACKET_RE = re.compile(r"[ \t]*\[[^\]]*call_id\b[^\]]*\]")
-# A field path: name[idx](.field)* with an optional '= <single token>' value
-# (token only, so prose after the value is never swallowed), optional backticks.
-_FIELDPATH_RE = re.compile(
-    r"`?\b[A-Za-z_]\w*\[-?\d+\](?:\.\w+)*(?:\s*=\s*[\w.%+-]+)?`?"
-)
-
-
-def strip_provenance(text: str) -> str:
-    """Remove inline call_id / field-path citations from prose for clean display.
-
-    Display-only: never applied to stored data. The provenance toggle bypasses
-    this and shows the raw text (call_ids and field references intact). Line
-    structure (newlines) is always preserved."""
-    if not text:
-        return text
-    out = _CALLID_PAREN_RE.sub("", text)
-    out = _CALLID_BRACKET_RE.sub("", out)
-    out = _FIELDPATH_RE.sub("", out)
-    # Clean up artifacts left by the removals, WITHOUT touching newlines.
-    out = re.sub(r"`\s*`", "", out)                  # empty backticks
-    out = re.sub(r"\([ \t]*\)", "", out)             # empty parens
-    out = re.sub(r":[ \t]*,", ":", out)              # "X: ," -> "X:"
-    out = re.sub(r"[ \t]+,", ",", out)               # " ," -> ","
-    out = re.sub(r",[ \t]*,", ",", out)              # ", ," -> ","
-    out = re.sub(r"[ \t]{2,}", " ", out)             # collapse runs of spaces
-    out = re.sub(r"[ \t]+([.,;:)])", r"\1", out)     # no space before punctuation
-    out = re.sub(r"[ \t]+\n", "\n", out)             # trailing spaces before EOL
-    return out.strip()
 
 
 def _prose(text: str, show_provenance: bool) -> str:
@@ -408,34 +365,19 @@ def _figures_table(figures, show_provenance: bool = False) -> None:
     st.dataframe(rows, hide_index=True, width="stretch")
 
 
-_SCREEN_STATUS = {True: "PASS", False: "FAIL", None: "NOT-EVAL"}
-# Status colors reuse the semantic palette: pass=green, fail=red, not-eval=amber.
-_SCREEN_STATUS_HEX = {"PASS": "#2E7D32", "FAIL": "#B23B3B", "NOT-EVAL": "#B8860B"}
-
-
-def _screen_table_rows(screen: dict | None) -> list[dict]:
-    """Map the structured screen result to display rows. Deterministic — the
-    four criteria are always a clean table regardless of LLM prose formatting."""
-    rows = []
-    for c in ((screen or {}).get("criteria") or []):
-        rows.append({
-            "Criterion": c.get("name"),
-            "Observed": c.get("observed"),
-            "Threshold": c.get("threshold"),
-            "Status": _SCREEN_STATUS.get(c.get("passed"), "NOT-EVAL"),
-        })
-    return rows
+# Back-compat alias for the shared helper (kept for tests / call sites).
+_screen_table_rows = screen_table_rows
 
 
 def _render_screen_table(screen: dict | None) -> None:
-    rows = _screen_table_rows(screen)
+    rows = screen_table_rows(screen)
     if not rows:
         return
     import pandas as pd
 
     df = pd.DataFrame(rows)
     styler = df.style.map(
-        lambda v: f"color: {_SCREEN_STATUS_HEX.get(v, '')}; font-weight: 600",
+        lambda v: f"color: {SCREEN_STATUS_HEX.get(v, '')}; font-weight: 600",
         subset=["Status"],
     )
     st.subheader("Screen results")
@@ -462,6 +404,29 @@ def _render_report_header(report: RunReport, sidebar_ticker: str | None) -> None
             )
 
 
+@st.cache_data(show_spinner=False)
+def _report_pdf_bytes(report_json: str) -> bytes:
+    """Generate the export PDF, cached by report content so it's built once."""
+    from aristos_council.export.report_pdf import render_report_pdf
+    return render_report_pdf(RunReport.model_validate_json(report_json))
+
+
+def _render_pdf_button(report: RunReport, run_uid: str, key_ns: str) -> None:
+    """An 'Export PDF' download button — a purpose-built A4 council record."""
+    try:
+        pdf = _report_pdf_bytes(report.model_dump_json())
+    except Exception as exc:  # missing ui extra, etc. — degrade, don't crash
+        st.caption(f"PDF export unavailable: {exc}")
+        return
+    st.download_button(
+        "⬇ Export PDF",
+        data=pdf,
+        file_name=f"{report.ticker}_{run_uid}.pdf",
+        mime="application/pdf",
+        key=f"pdf_{key_ns}_{report.ticker}_{run_uid}",
+    )
+
+
 def render_report(
     report: RunReport, sidebar_ticker: str | None = None, key_ns: str = "report"
 ) -> None:
@@ -469,15 +434,19 @@ def render_report(
     examples/run_council.py prints to the console appears here too."""
     _render_report_header(report, sidebar_ticker)
 
-    # Per-report provenance toggle (off by default): shows call_ids in the
-    # figures tables and the RAW, unstripped prose (inline citations intact).
     run_uid = _to_local(report.run_at).strftime("%Y%m%d%H%M%S")
-    show_prov = st.toggle(
-        "Show provenance details",
-        value=False,
-        key=f"prov_{key_ns}_{report.ticker}_{run_uid}",
-        help="Reveal call_ids and inline field references for auditing.",
-    )
+    ctrl_left, ctrl_right = st.columns([3, 1], vertical_alignment="center")
+    with ctrl_left:
+        # Per-report provenance toggle (off by default): shows call_ids in the
+        # figures tables and the RAW, unstripped prose (inline citations intact).
+        show_prov = st.toggle(
+            "Show provenance details",
+            value=False,
+            key=f"prov_{key_ns}_{report.ticker}_{run_uid}",
+            help="Reveal call_ids and inline field references for auditing.",
+        )
+    with ctrl_right:
+        _render_pdf_button(report, run_uid, key_ns)
 
     _render_verdict_banner(report)
 
