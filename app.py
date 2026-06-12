@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 from pydantic import ValidationError
 
+from aristos_council.data.adapter import DataUnavailable
 from aristos_council.persistence.reports import (
     RunReport,
     list_reports,
@@ -167,10 +168,34 @@ def run_council(ticker: str, strategy_path: Path) -> RunReport:
 
     result = ResearchState.model_validate(final)
 
+    # Friendly fail on a ticker the adapter couldn't supply (bad symbol,
+    # delisted). gather records adapter failures as failed tool calls rather
+    # than raising, so detect a failed CORE fundamentals fetch here and raise
+    # DataUnavailable — nothing meaningful was deliberated, so do NOT persist a
+    # degenerate verdict/report. The UI maps this to a friendly message.
+    fundamentals_tc = next(
+        (tc for tc in result.tool_calls if tc.tool_name == "get_fundamentals"),
+        None,
+    )
+    if fundamentals_tc is None or not fundamentals_tc.ok:
+        raise DataUnavailable(
+            fundamentals_tc.error if fundamentals_tc
+            else f"no fundamentals fetched for {ticker}"
+        )
+
     append_record(record_from_state(result), VERDICTS_DIR)
     report = report_from_state(result)
     save_report(report, REPORTS_DIR)
     return report
+
+
+def _friendly_error(exc: Exception, ticker: str) -> str | None:
+    """Map a run exception to a friendly UI message, or None to fall back to a
+    full traceback. DataUnavailable (bad/delisted ticker) is the expected,
+    user-actionable case; anything else is unexpected and shown in full."""
+    if isinstance(exc, DataUnavailable):
+        return f"No data found for {ticker} — check the symbol."
+    return None
 
 
 def _stage_label(chunk: dict) -> str:
@@ -544,7 +569,11 @@ def main() -> None:
             with st.spinner(f"Running the council on {ticker}…"):
                 report = run_council(ticker, selected_path)
         except Exception as exc:  # surface, don't crash the page
-            st.exception(exc)
+            friendly = _friendly_error(exc, ticker)
+            if friendly:
+                st.error(friendly)
+            else:
+                st.exception(exc)  # unexpected — show the full traceback
         else:
             st.session_state["last_report"] = report.model_dump(mode="json")
             st.session_state["run_complete_msg"] = (
