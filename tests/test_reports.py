@@ -171,6 +171,35 @@ def test_company_name_round_trips():
     assert again == r
 
 
+def test_screen_extracted_from_state():
+    s = _state()
+    s.tool_calls = [ToolCall(
+        call_id="s1", tool_name="run_dividend_aristocrat_screen",
+        output={"ticker": "MO", "flags": [],
+                "criteria": [{"name": "min_dividend_yield", "passed": True,
+                              "observed": 0.05, "threshold": 0.025}]})]
+    r = report_from_state(s)
+    assert r.screen["criteria"][0]["name"] == "min_dividend_yield"
+    assert r.screen["criteria"][0]["passed"] is True
+
+
+def test_screen_none_when_no_screen_call():
+    assert report_from_state(_state()).screen is None
+
+
+def test_screen_round_trips():
+    s = _state()
+    s.tool_calls = [ToolCall(
+        call_id="s1", tool_name="run_dividend_aristocrat_screen",
+        output={"ticker": "MO", "flags": [],
+                "criteria": [{"name": "max_payout_ratio", "passed": False,
+                              "observed": 0.9, "threshold": 0.75}]})]
+    r = report_from_state(s)
+    again = RunReport.model_validate(r.model_dump(mode="json"))
+    assert again == r
+    assert again.screen["criteria"][0]["passed"] is False
+
+
 def test_report_from_state_handles_empty_run():
     r = report_from_state(_state())
     assert r.specialist_opinions == []

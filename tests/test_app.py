@@ -8,6 +8,8 @@ exercised here (the UI rendering itself is integration-tested by running it).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("streamlit")
@@ -100,3 +102,81 @@ def test_verdict_hex_is_the_only_semantic_palette():
 def test_favicon_is_svg_data_uri():
     uri = app._favicon()
     assert uri.startswith("data:image/svg+xml;base64,")
+
+
+# --------------------------------------------------------------------------- #
+# Rendering fixes — tested against the REAL saved BRK-B and MO reports.
+# --------------------------------------------------------------------------- #
+import glob  # noqa: E402
+
+from aristos_council.persistence.reports import load_report  # noqa: E402
+
+_REPORTS = Path(__file__).resolve().parents[1] / "reports"
+
+
+def _saved(ticker):
+    return load_report(sorted(glob.glob(str(_REPORTS / ticker / "*.json")))[-1])
+
+
+def test_brkb_rationale_preserves_markdown_line_structure():
+    out = app._prose(_saved("BRK-B").decision.rationale, show_provenance=False)
+    # NOT flattened into one paragraph
+    assert out.count("\n") > 10
+    assert "**Strategy Mandate" in out
+    assert "\n\n**Screen Results**" in out          # bold "header" on its own line
+    assert "\n1. **min_dividend_yield**" in out      # numbered list survives
+    assert "\n2. **max_payout_ratio**" in out
+
+
+def test_brkb_field_paths_move_behind_provenance_toggle():
+    r = _saved("BRK-B")
+    default = app._prose(r.decision.rationale, show_provenance=False)
+    raw = app._prose(r.decision.rationale, show_provenance=True)
+    assert "criteria[0].passed" not in default       # stripped from default view
+    assert "call_id" not in default                  # and no call_id plumbing
+    assert "criteria[0].passed = false" in raw       # kept in the toggle view
+    # the plain statement around it survives
+    assert "observed 0.0 against a threshold of 0.025" in default
+
+
+def test_dollar_signs_escaped_so_currency_survives_markdown():
+    disp = app._render_prose(_saved("BRK-B").decision.rationale, False)
+    assert "\\$1.048 trillion" in disp               # escaped, not eaten
+    assert disp.count("$") == disp.count("\\$")       # every $ is escaped
+
+
+def test_mo_rationale_preserves_table_and_strips_inline_path():
+    r = _saved("MO")
+    out = app._prose(r.decision.rationale, show_provenance=False)
+    assert "| Criterion | Result | Observed | Threshold |" in out  # table header
+    assert "\n| min_dividend_yield |" in out                       # a table row
+    assert "criteria[1].passed" not in out                         # inline path gone
+    assert "call_id" not in out
+    disp = app._render_prose(r.decision.rationale, False)
+    assert disp.count("$") == disp.count("\\$")
+
+
+def test_available_tickers_lists_every_ticker_on_disk():
+    tickers = app._available_tickers(app.REPORTS_DIR)
+    assert tickers == sorted(tickers)                 # sorted
+    # all tickers with saved reports are browsable, regardless of the sidebar
+    assert {"BRK-B", "JNJ", "MO"} <= set(tickers)
+
+
+def test_screen_table_rows_map_pass_fail_noteval():
+    rows = app._screen_table_rows({"criteria": [
+        {"name": "min_dividend_yield", "passed": True, "observed": 0.05,
+         "threshold": 0.025},
+        {"name": "max_payout_ratio", "passed": False, "observed": 0.9,
+         "threshold": 0.75},
+        {"name": "min_market_cap", "passed": None, "observed": None,
+         "threshold": 1e10},
+    ]})
+    assert [r["Status"] for r in rows] == ["PASS", "FAIL", "NOT-EVAL"]
+    assert rows[0]["Criterion"] == "min_dividend_yield"
+    assert rows[2]["Observed"] is None
+
+
+def test_screen_table_rows_empty_when_no_screen():
+    assert app._screen_table_rows(None) == []
+    assert app._screen_table_rows({}) == []

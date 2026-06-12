@@ -55,6 +55,10 @@ class RunReport(BaseModel):
     # Company name if the run captured it (get_fundamentals.name). Optional and
     # default None so reports saved before this field round-trip unchanged.
     company_name: Optional[str] = None
+    # Structured dividend-aristocrat screen result ({criteria:[...], flags:[...]}),
+    # so the UI can render a deterministic criteria table regardless of how the
+    # LLM formatted its prose. Optional/default None for backward compatibility.
+    screen: Optional[dict] = None
     specialist_opinions: list[SpecialistOpinion] = Field(default_factory=list)
     critic_report: Optional[CriticReport] = None
     decision: Optional[Decision] = None
@@ -80,6 +84,25 @@ def _company_name_from_state(state: ResearchState) -> Optional[str]:
     return None
 
 
+def _screen_from_state(state: ResearchState) -> Optional[dict]:
+    """The structured dividend-aristocrat screen result, if the run produced one.
+
+    The screen tool logs ``asdict(ScreenResult)`` (a plain nested dict); read it
+    both as dict and dataclass to be robust to (de)serialisation.
+    """
+    from dataclasses import asdict, is_dataclass
+
+    for tc in state.tool_calls:
+        if (tc.tool_name == "run_dividend_aristocrat_screen"
+                and tc.ok and tc.output):
+            out = tc.output
+            if isinstance(out, dict):
+                return out
+            if is_dataclass(out):
+                return asdict(out)
+    return None
+
+
 def report_from_state(
     state: ResearchState, run_at: Optional[datetime] = None
 ) -> RunReport:
@@ -93,6 +116,7 @@ def report_from_state(
         run_at=run_at or state.as_of,
         strategy_id=state.strategy_id,
         company_name=_company_name_from_state(state),
+        screen=_screen_from_state(state),
         specialist_opinions=list(state.specialist_opinions),
         critic_report=state.critic_report,
         decision=state.decision,

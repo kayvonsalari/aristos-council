@@ -109,31 +109,66 @@ def _ts_compact(dt: datetime) -> str:
 
 
 # Provenance plumbing in PROSE: agents inline citations like
-# "(call_id: 8d39404e0e90, criteria[0].observed)" or "[call_id 1db8...]". The
-# STORED text keeps them (auditability); display strips them by default and the
-# provenance toggle shows the raw, unstripped text. Handles one level of nested
-# parens (a quoted headline that itself contains '(...)').
-_CALLID_PAREN_RE = re.compile(r"\s*\(\s*call_id\b(?:[^()]|\([^()]*\))*\)")
-_CALLID_BRACKET_RE = re.compile(r"\s*\[\s*call_id\b[^\]]*\]")
+# "(call_id: 8d39404e0e90, criteria[0].observed)" / "[call_id 1db8...]" and bare
+# field-path refs like "`criteria[0].passed = false`". The STORED text keeps
+# them (auditability); display strips them by default and the provenance toggle
+# shows the raw, unstripped text.
+#
+# Leading trims use [ \t] (NOT \s) so newlines are NEVER consumed — the stored
+# rationale's markdown structure (headers, lists, tables, blank lines) must
+# survive to st.markdown. The call_id paren handles one level of nested parens
+# (a quoted headline that itself contains '(...)').
+# Match a parenthetical/bracket that CONTAINS "call_id" anywhere — not only ones
+# that start with it (e.g. "(from run_..._screen, call_id: 452f…)"). One level
+# of nested parens is handled (a quoted headline with its own '(...)').
+_CALLID_PAREN_RE = re.compile(
+    r"[ \t]*\((?:[^()]|\([^()]*\))*call_id\b(?:[^()]|\([^()]*\))*\)"
+)
+_CALLID_BRACKET_RE = re.compile(r"[ \t]*\[[^\]]*call_id\b[^\]]*\]")
+# A field path: name[idx](.field)* with an optional '= <single token>' value
+# (token only, so prose after the value is never swallowed), optional backticks.
+_FIELDPATH_RE = re.compile(
+    r"`?\b[A-Za-z_]\w*\[-?\d+\](?:\.\w+)*(?:\s*=\s*[\w.%+-]+)?`?"
+)
 
 
 def strip_provenance(text: str) -> str:
-    """Remove inline call_id parentheticals from prose for clean display.
+    """Remove inline call_id / field-path citations from prose for clean display.
 
     Display-only: never applied to stored data. The provenance toggle bypasses
-    this and shows the raw text (call_ids and field references intact)."""
+    this and shows the raw text (call_ids and field references intact). Line
+    structure (newlines) is always preserved."""
     if not text:
         return text
     out = _CALLID_PAREN_RE.sub("", text)
     out = _CALLID_BRACKET_RE.sub("", out)
-    out = re.sub(r"\s{2,}", " ", out)            # collapse doubled spaces
-    out = re.sub(r"\s+([.,;:])", r"\1", out)     # no space before punctuation
+    out = _FIELDPATH_RE.sub("", out)
+    # Clean up artifacts left by the removals, WITHOUT touching newlines.
+    out = re.sub(r"`\s*`", "", out)                  # empty backticks
+    out = re.sub(r"\([ \t]*\)", "", out)             # empty parens
+    out = re.sub(r":[ \t]*,", ":", out)              # "X: ," -> "X:"
+    out = re.sub(r"[ \t]+,", ",", out)               # " ," -> ","
+    out = re.sub(r",[ \t]*,", ",", out)              # ", ," -> ","
+    out = re.sub(r"[ \t]{2,}", " ", out)             # collapse runs of spaces
+    out = re.sub(r"[ \t]+([.,;:)])", r"\1", out)     # no space before punctuation
+    out = re.sub(r"[ \t]+\n", "\n", out)             # trailing spaces before EOL
     return out.strip()
 
 
 def _prose(text: str, show_provenance: bool) -> str:
     """Prose for display: raw under the provenance toggle, stripped otherwise."""
     return text if show_provenance else strip_provenance(text)
+
+
+def _md(text: str) -> str:
+    """Escape '$' so st.markdown can't read currency as LaTeX math and eat it
+    ("$1.048 trillion" -> "`1.048 trillion"). Financial text must keep its $."""
+    return text.replace("$", "\\$") if text else text
+
+
+def _render_prose(text: str, show_provenance: bool) -> str:
+    """Display-ready prose: provenance-cleaned (unless toggled) and $-escaped."""
+    return _md(_prose(text, show_provenance))
 
 
 # Stance display helpers ------------------------------------------------------ #
@@ -332,6 +367,40 @@ def _figures_table(figures, show_provenance: bool = False) -> None:
     st.dataframe(rows, hide_index=True, use_container_width=True)
 
 
+_SCREEN_STATUS = {True: "PASS", False: "FAIL", None: "NOT-EVAL"}
+# Status colors reuse the semantic palette: pass=green, fail=red, not-eval=amber.
+_SCREEN_STATUS_HEX = {"PASS": "#2E7D32", "FAIL": "#B23B3B", "NOT-EVAL": "#B8860B"}
+
+
+def _screen_table_rows(screen: dict | None) -> list[dict]:
+    """Map the structured screen result to display rows. Deterministic — the
+    four criteria are always a clean table regardless of LLM prose formatting."""
+    rows = []
+    for c in ((screen or {}).get("criteria") or []):
+        rows.append({
+            "Criterion": c.get("name"),
+            "Observed": c.get("observed"),
+            "Threshold": c.get("threshold"),
+            "Status": _SCREEN_STATUS.get(c.get("passed"), "NOT-EVAL"),
+        })
+    return rows
+
+
+def _render_screen_table(screen: dict | None) -> None:
+    rows = _screen_table_rows(screen)
+    if not rows:
+        return
+    import pandas as pd
+
+    df = pd.DataFrame(rows)
+    styler = df.style.map(
+        lambda v: f"color: {_SCREEN_STATUS_HEX.get(v, '')}; font-weight: 600",
+        subset=["Status"],
+    )
+    st.subheader("Screen results")
+    st.dataframe(styler, hide_index=True, use_container_width=True)
+
+
 def _render_report_header(report: RunReport, sidebar_ticker: str | None) -> None:
     """Persistent identity header: ticker (large), company, strategy, timestamp.
 
@@ -382,12 +451,18 @@ def render_report(
     else:
         st.success("No veto triggers — auto-proceed permitted.")
 
-    # --- Decision -------------------------------------------------------- #
+    # --- Screen results (deterministic table, above the rationale) ------- #
     st.divider()
     st.caption(f"{report.ticker} · {_ts_header(report.run_at)}")  # stay oriented
+    _render_screen_table(report.screen)
+
+    # --- Decision -------------------------------------------------------- #
     if report.decision:
         st.subheader("Decision rationale")
-        st.markdown(_prose(report.decision.rationale, show_prov) or "_(no rationale)_")
+        st.markdown(
+            _render_prose(report.decision.rationale, show_prov)
+            or "_(no rationale)_"
+        )
         if report.decision.dissent:
             st.markdown(
                 "**Dissent recorded:** "
@@ -404,12 +479,12 @@ def render_report(
             f"{_stance_badge(op.stance)}  {op.specialist.value.title()} "
             f"· confidence {op.confidence:.2f}"
         ):
-            st.markdown(_prose(op.thesis, show_prov) or "_(no thesis)_")
+            st.markdown(_render_prose(op.thesis, show_prov) or "_(no thesis)_")
             _figures_table(op.figures, show_prov)
             if op.caveats:
                 st.markdown("**Caveats**")
                 for c in op.caveats:
-                    st.markdown(f"- ⚠ {_prose(c, show_prov)}")
+                    st.markdown(f"- ⚠ {_render_prose(c, show_prov)}")
 
     # --- Critic ---------------------------------------------------------- #
     if report.critic_report:
@@ -418,22 +493,24 @@ def render_report(
         st.subheader(
             f"Critic — arguing against the {cr.targets_stance.value} consensus"
         )
-        st.markdown(_prose(cr.counter_thesis, show_prov) or "_(no counter-thesis)_")
+        st.markdown(
+            _render_prose(cr.counter_thesis, show_prov) or "_(no counter-thesis)_"
+        )
         _figures_table(cr.figures, show_prov)
         if cr.challenged_figures:
             st.markdown("**Challenged figures** (cited by the council, contested)")
             for cf in cr.challenged_figures:
-                st.markdown(f"- {_prose(cf, show_prov)}")
+                st.markdown(f"- {_render_prose(cf, show_prov)}")
         if cr.weaknesses_found:
             st.markdown("**Weaknesses found**")
             for w in cr.weaknesses_found:
-                st.markdown(f"- {_prose(w, show_prov)}")
+                st.markdown(f"- {_render_prose(w, show_prov)}")
         if cr.open_questions:
             st.markdown(
                 "**Open questions** (for human resolution — not evidence)"
             )
             for q in cr.open_questions:
-                st.markdown(f"- {_prose(q, show_prov)}")
+                st.markdown(f"- {_render_prose(q, show_prov)}")
 
     # --- Audit (call_ids always — that is its job) ----------------------- #
     _render_provenance_panel(report.provenance_audit)
@@ -727,11 +804,13 @@ def main() -> None:
             else:
                 st.exception(exc)  # unexpected — show the full traceback
         else:
-            st.session_state["last_report"] = report.model_dump(mode="json")
             st.session_state["run_complete_msg"] = (
                 f"Run complete — verdict and full report saved for {ticker}."
             )
-            # re-arm the cost gate, then re-render with the fresh report on top
+            # Focus the browser on the just-completed run, re-arm the cost gate,
+            # and re-render. The run becomes the selected report — not a second
+            # copy pinned above the browser.
+            st.session_state["_focus_ticker"] = ticker
             st.session_state["_clear_cost_ack"] = True
             st.rerun()
 
@@ -752,33 +831,57 @@ def main() -> None:
         render_strategy_tab(selected_path)
 
 
+def _available_tickers(reports_dir: Path) -> list[str]:
+    """Tickers actually on record under reports/ (dirs holding ≥1 report), sorted.
+
+    This is the browser's scope — independent of the sidebar text field, so every
+    ticker with saved runs is reachable without editing the sidebar."""
+    if not reports_dir.exists():
+        return []
+    return sorted(
+        d.name for d in reports_dir.iterdir()
+        if d.is_dir() and any(d.glob("*.json"))
+    )
+
+
 def _report_tab(ticker: str) -> None:
-    """Show the latest run plus a browser for any past run of this ticker."""
-    past = list_reports(ticker, REPORTS_DIR)
-
-    last = st.session_state.get("last_report")
-    if last is not None:
-        st.caption("Most recent run from this session:")
-        render_report(RunReport.model_validate(last),
-                      sidebar_ticker=ticker, key_ns="latest")
-        st.divider()
-
-    if not past:
-        if last is None:
-            st.info(
-                f"No saved reports for {ticker} yet. Run a council from the "
-                "sidebar, or pick a ticker that has history."
-            )
+    """One report view. The past-run browser is scoped by its OWN ticker
+    selector (built from reports/ on disk), defaulting to the sidebar ticker but
+    navigable independently. A report is never rendered twice on the page."""
+    tickers = _available_tickers(REPORTS_DIR)
+    if not tickers:
+        st.info("No saved reports yet. Run a council from the sidebar.")
         return
 
-    st.markdown("#### Browse past runs")
-    # Load each past report once (newest first) for rich, verdict-bearing
-    # labels: 'MO · 12.06. 15:42 · HOLD 0.55'. Select by index so two runs that
-    # share a label can't collide.
-    reports = [load_report(p) for p in reversed(past)]
+    # Empty scope: the sidebar ticker has nothing on record — say what does.
+    if ticker not in tickers:
+        st.caption(
+            f"No reports for **{ticker}** yet. On record: {', '.join(tickers)}."
+        )
+
+    # Focus the just-completed run's ticker after a run; otherwise default to the
+    # sidebar ticker. The choice then persists independently of the sidebar.
+    focus = st.session_state.pop("_focus_ticker", None)
+    if focus in tickers:
+        st.session_state["browse_ticker"] = focus
+    if st.session_state.get("browse_ticker") not in tickers:
+        st.session_state["browse_ticker"] = (
+            ticker if ticker in tickers else tickers[0]
+        )
+    sel = st.selectbox(
+        f"Runs for · {len(tickers)} ticker(s) on record",
+        tickers, key="browse_ticker",
+    )
+
+    reports = [load_report(p) for p in reversed(list_reports(sel, REPORTS_DIR))]
+    if not reports:  # defensive — selector only lists tickers that have reports
+        st.info(f"No reports for {sel}. On record: {', '.join(tickers)}.")
+        return
+    # Rich, verdict-bearing labels; select by index so shared labels can't collide.
     pick = st.selectbox(
         "Run", range(len(reports)),
         format_func=lambda i: _run_label(reports[i]),
+        key=f"run_pick_{sel}",
     )
     chosen = reports[pick]
     st.caption(f"▶ Currently viewing: **{_run_label(chosen)}**")
