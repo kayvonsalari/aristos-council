@@ -47,7 +47,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
 - Colab: runtime only — council runs bill API credits via the key in Colab
   secrets. Default models: Haiku specialists, Sonnet critic/decision
   (validated config; do not silently change).
-- Local Python setup if needed: `pip install -e ".[test]"`.
+- Local Python setup if needed: `pip install -e ".[dev]"`.
 
 ## Current state (2026-06-11, end of Sprint 1)
 
