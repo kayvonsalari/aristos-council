@@ -52,6 +52,9 @@ class RunReport(BaseModel):
     ticker: str
     run_at: datetime
     strategy_id: str
+    # Company name if the run captured it (get_fundamentals.name). Optional and
+    # default None so reports saved before this field round-trip unchanged.
+    company_name: Optional[str] = None
     specialist_opinions: list[SpecialistOpinion] = Field(default_factory=list)
     critic_report: Optional[CriticReport] = None
     decision: Optional[Decision] = None
@@ -59,6 +62,22 @@ class RunReport(BaseModel):
     # FULL audit summary (counts AND violations/unit_scaled_notes prose) — the
     # reviewer-facing detail, kept verbatim unlike the verdict log's counts.
     provenance_audit: Optional[dict] = None
+
+
+def _company_name_from_state(state: ResearchState) -> Optional[str]:
+    """The company name from the get_fundamentals tool call, if the run got one.
+
+    The fundamentals output is a Fundamentals dataclass at runtime but may be a
+    plain dict after (de)serialisation, so read it both ways. Best-effort: any
+    miss simply yields None and the UI falls back to the ticker alone.
+    """
+    for tc in state.tool_calls:
+        if tc.tool_name == "get_fundamentals" and tc.ok and tc.output is not None:
+            out = tc.output
+            name = out.get("name") if isinstance(out, dict) else getattr(
+                out, "name", None)
+            return name or None
+    return None
 
 
 def report_from_state(
@@ -73,6 +92,7 @@ def report_from_state(
         ticker=state.ticker,
         run_at=run_at or state.as_of,
         strategy_id=state.strategy_id,
+        company_name=_company_name_from_state(state),
         specialist_opinions=list(state.specialist_opinions),
         critic_report=state.critic_report,
         decision=state.decision,

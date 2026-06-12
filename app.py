@@ -20,6 +20,7 @@ writes the verdict log + full run report after it, mirroring run_council.py.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -81,6 +82,44 @@ def _local_label_from_slug(stem: str) -> str:
     except ValueError:
         return stem  # unrecognised slug — show it raw rather than hide the run
     return _fmt_local(dt, "%Y-%m-%d %H:%M:%S")
+
+
+def _ts_header(dt: datetime) -> str:
+    """Identity-header timestamp: European dotted, local — '12.06.2026 15:42'."""
+    return _to_local(dt).strftime("%d.%m.%Y %H:%M")
+
+
+def _ts_compact(dt: datetime) -> str:
+    """Compact local timestamp for dense labels — '12.06. 15:42'."""
+    return _to_local(dt).strftime("%d.%m. %H:%M")
+
+
+# Provenance plumbing in PROSE: agents inline citations like
+# "(call_id: 8d39404e0e90, criteria[0].observed)" or "[call_id 1db8...]". The
+# STORED text keeps them (auditability); display strips them by default and the
+# provenance toggle shows the raw, unstripped text. Handles one level of nested
+# parens (a quoted headline that itself contains '(...)').
+_CALLID_PAREN_RE = re.compile(r"\s*\(\s*call_id\b(?:[^()]|\([^()]*\))*\)")
+_CALLID_BRACKET_RE = re.compile(r"\s*\[\s*call_id\b[^\]]*\]")
+
+
+def strip_provenance(text: str) -> str:
+    """Remove inline call_id parentheticals from prose for clean display.
+
+    Display-only: never applied to stored data. The provenance toggle bypasses
+    this and shows the raw text (call_ids and field references intact)."""
+    if not text:
+        return text
+    out = _CALLID_PAREN_RE.sub("", text)
+    out = _CALLID_BRACKET_RE.sub("", out)
+    out = re.sub(r"\s{2,}", " ", out)            # collapse doubled spaces
+    out = re.sub(r"\s+([.,;:])", r"\1", out)     # no space before punctuation
+    return out.strip()
+
+
+def _prose(text: str, show_provenance: bool) -> str:
+    """Prose for display: raw under the provenance toggle, stripped otherwise."""
+    return text if show_provenance else strip_provenance(text)
 
 
 # Stance display helpers ------------------------------------------------------ #
@@ -215,35 +254,74 @@ def _stage_label(chunk: dict) -> str:
 # --------------------------------------------------------------------------- #
 # Report rendering (shared by fresh runs and browsing past runs)
 # --------------------------------------------------------------------------- #
-def _figures_table(figures) -> None:
-    """Render provenance-bound figures as a table (label/value/unit/source).
+def _run_label(report: RunReport) -> str:
+    """Dense one-line label for the run selector: 'MO · 12.06. 15:42 · HOLD 0.55'."""
+    d = report.decision
+    verdict = f"{d.recommendation.value.upper()} {d.confidence:.2f}" if d else "—"
+    return f"{report.ticker} · {_ts_compact(report.run_at)} · {verdict}"
 
-    Mirrors what run_council.py prints per figure: the number AND where it came
-    from (tool -> field_path), so the UI is never a lossy view of the ledger.
-    Used for specialists AND the critic — both cite figures under the same
-    contract.
+
+def _figures_table(figures, show_provenance: bool = False) -> None:
+    """Render provenance-bound figures as a table.
+
+    Default columns are label / value / unit / source field / tool — the
+    auditable provenance a reader needs. The call_id (pure plumbing) is shown
+    only when the per-report provenance toggle is on. Mirrors run_council.py.
     """
     if not figures:
         return
-    st.dataframe(
-        [
-            {
-                "label": fig.label,
-                "value": fig.value,
-                "unit": fig.unit,
-                "tool": fig.provenance.tool_name,
-                "field_path": fig.provenance.field_path,
-            }
-            for fig in figures
-        ],
-        hide_index=True,
-        use_container_width=True,
-    )
+    rows = []
+    for fig in figures:
+        row = {
+            "label": fig.label,
+            "value": fig.value,
+            "unit": fig.unit,
+            "field": fig.provenance.field_path,
+            "tool": fig.provenance.tool_name,
+        }
+        if show_provenance:
+            row["call_id"] = fig.provenance.call_id
+        rows.append(row)
+    st.dataframe(rows, hide_index=True, use_container_width=True)
 
 
-def render_report(report: RunReport) -> None:
+def _render_report_header(report: RunReport, sidebar_ticker: str | None) -> None:
+    """Persistent identity header: ticker (large), company, strategy, timestamp.
+
+    Cannot scroll out of ambiguity — it sits at the top of every rendered
+    report, and ticker+timestamp are repeated as a caption above the decision.
+    """
+    name = f" — {report.company_name}" if report.company_name else ""
+    with st.container(border=True):
+        st.markdown(f"## {report.ticker}{name}")
+        st.caption(
+            f"{report.strategy_id} · {_ts_header(report.run_at)} · Europe/Berlin"
+        )
+        if sidebar_ticker and sidebar_ticker != report.ticker:
+            # Prevent wrong-company misreads when the sidebar has moved on.
+            st.caption(
+                f"⚠ Viewing **{report.ticker}** — sidebar is set to "
+                f"**{sidebar_ticker}**"
+            )
+
+
+def render_report(
+    report: RunReport, sidebar_ticker: str | None = None, key_ns: str = "report"
+) -> None:
     """Render a full run report. The deliberation is the product: everything
     examples/run_council.py prints to the console appears here too."""
+    _render_report_header(report, sidebar_ticker)
+
+    # Per-report provenance toggle (off by default): shows call_ids in the
+    # figures tables and the RAW, unstripped prose (inline citations intact).
+    run_uid = _to_local(report.run_at).strftime("%Y%m%d%H%M%S")
+    show_prov = st.toggle(
+        "Show provenance details",
+        value=False,
+        key=f"prov_{key_ns}_{report.ticker}_{run_uid}",
+        help="Reveal call_ids and inline field references for auditing.",
+    )
+
     _render_verdict_banner(report)
 
     # Human-review flags — prominent, directly under the banner.
@@ -257,11 +335,12 @@ def render_report(report: RunReport) -> None:
     else:
         st.success("No veto triggers — auto-proceed permitted.")
 
-    # Decision rationale — the headline conclusion, rendered IN FULL (markdown,
-    # not hidden in an expander), with dissent named explicitly.
+    # --- Decision -------------------------------------------------------- #
+    st.divider()
+    st.caption(f"{report.ticker} · {_ts_header(report.run_at)}")  # stay oriented
     if report.decision:
         st.subheader("Decision rationale")
-        st.markdown(report.decision.rationale or "_(no rationale)_")
+        st.markdown(_prose(report.decision.rationale, show_prov) or "_(no rationale)_")
         if report.decision.dissent:
             st.markdown(
                 "**Dissent recorded:** "
@@ -270,43 +349,46 @@ def render_report(report: RunReport) -> None:
         else:
             st.caption("No dissent recorded.")
 
+    # --- Specialists ----------------------------------------------------- #
     st.divider()
     st.subheader("Specialists")
     for op in report.specialist_opinions:
         with st.expander(
-            f"{op.specialist.value.title()} — {_stance_badge(op.stance)} "
+            f"{_stance_badge(op.stance)}  {op.specialist.value.title()} "
             f"· confidence {op.confidence:.2f}"
         ):
-            st.markdown(op.thesis or "_(no thesis)_")
-            _figures_table(op.figures)
+            st.markdown(_prose(op.thesis, show_prov) or "_(no thesis)_")
+            _figures_table(op.figures, show_prov)
             if op.caveats:
                 st.markdown("**Caveats**")
                 for c in op.caveats:
-                    st.markdown(f"- ⚠ {c}")
+                    st.markdown(f"- ⚠ {_prose(c, show_prov)}")
 
+    # --- Critic ---------------------------------------------------------- #
     if report.critic_report:
         cr = report.critic_report
         st.divider()
         st.subheader(
             f"Critic — arguing against the {cr.targets_stance.value} consensus"
         )
-        st.markdown(cr.counter_thesis or "_(no counter-thesis)_")
-        _figures_table(cr.figures)
+        st.markdown(_prose(cr.counter_thesis, show_prov) or "_(no counter-thesis)_")
+        _figures_table(cr.figures, show_prov)
         if cr.challenged_figures:
             st.markdown("**Challenged figures** (cited by the council, contested)")
             for cf in cr.challenged_figures:
-                st.markdown(f"- {cf}")
+                st.markdown(f"- {_prose(cf, show_prov)}")
         if cr.weaknesses_found:
             st.markdown("**Weaknesses found**")
             for w in cr.weaknesses_found:
-                st.markdown(f"- {w}")
+                st.markdown(f"- {_prose(w, show_prov)}")
         if cr.open_questions:
             st.markdown(
                 "**Open questions** (for human resolution — not evidence)"
             )
             for q in cr.open_questions:
-                st.markdown(f"- {q}")
+                st.markdown(f"- {_prose(q, show_prov)}")
 
+    # --- Audit (call_ids always — that is its job) ----------------------- #
     _render_provenance_panel(report.provenance_audit)
 
 
@@ -607,7 +689,8 @@ def _report_tab(ticker: str) -> None:
     last = st.session_state.get("last_report")
     if last is not None:
         st.caption("Most recent run from this session:")
-        render_report(RunReport.model_validate(last))
+        render_report(RunReport.model_validate(last),
+                      sidebar_ticker=ticker, key_ns="latest")
         st.divider()
 
     if not past:
@@ -619,11 +702,17 @@ def _report_tab(ticker: str) -> None:
         return
 
     st.markdown("#### Browse past runs")
-    # newest first in the picker; labels in Europe/Berlin (slugs are UTC)
-    labels = {_local_label_from_slug(p.stem): p for p in reversed(past)}
-    pick = st.selectbox("Run", list(labels.keys()))
-    if pick:
-        render_report(load_report(labels[pick]))
+    # Load each past report once (newest first) for rich, verdict-bearing
+    # labels: 'MO · 12.06. 15:42 · HOLD 0.55'. Select by index so two runs that
+    # share a label can't collide.
+    reports = [load_report(p) for p in reversed(past)]
+    pick = st.selectbox(
+        "Run", range(len(reports)),
+        format_func=lambda i: _run_label(reports[i]),
+    )
+    chosen = reports[pick]
+    st.caption(f"▶ Currently viewing: **{_run_label(chosen)}**")
+    render_report(chosen, sidebar_ticker=ticker, key_ns="browse")
 
 
 if __name__ == "__main__":

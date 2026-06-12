@@ -140,6 +140,37 @@ def test_report_from_state_captures_every_section():
         "provenance value mismatch: risk cited ..."]
 
 
+def test_company_name_extracted_from_fundamentals_object():
+    from aristos_council.data.adapter import Fundamentals
+    s = _state()
+    s.tool_calls = [ToolCall(call_id="f1", tool_name="get_fundamentals",
+                             output=Fundamentals(ticker="MO",
+                                                 name="Altria Group"))]
+    assert report_from_state(s).company_name == "Altria Group"
+
+
+def test_company_name_extracted_from_dict_output():
+    # after (de)serialisation the output may be a plain dict
+    s = _state()
+    s.tool_calls = [ToolCall(call_id="f1", tool_name="get_fundamentals",
+                             output={"ticker": "MO", "name": "Altria Group"})]
+    assert report_from_state(s).company_name == "Altria Group"
+
+
+def test_company_name_none_when_no_fundamentals_call():
+    assert report_from_state(_state()).company_name is None
+
+
+def test_company_name_round_trips():
+    s = _full_state()
+    s.tool_calls.append(ToolCall(call_id="f1", tool_name="get_fundamentals",
+                                 output={"name": "Johnson & Johnson"}))
+    r = report_from_state(s)
+    assert r.company_name == "Johnson & Johnson"
+    again = RunReport.model_validate(r.model_dump(mode="json"))
+    assert again == r
+
+
 def test_report_from_state_handles_empty_run():
     r = report_from_state(_state())
     assert r.specialist_opinions == []
