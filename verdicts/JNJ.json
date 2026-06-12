@@ -1,0 +1,26 @@
+[
+  {
+    "ticker": "JNJ",
+    "run_at": "2026-06-11T00:00:00Z",
+    "strategy_id": "dividend_aristocrats_v1",
+    "verdict": "hold",
+    "confidence": 0.62,
+    "stances": {
+      "fundamental": "bullish",
+      "technical": "bullish",
+      "sentiment": "bullish",
+      "risk": "neutral"
+    },
+    "veto_triggers": [
+      "data_quality"
+    ],
+    "provenance_audit": {
+      "figures_audited": 4,
+      "verified": 0,
+      "mismatch": 3,
+      "unresolvable": 1,
+      "unverifiable": 0,
+      "unit_scaled": 0
+    }
+  }
+]

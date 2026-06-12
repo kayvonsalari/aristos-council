@@ -36,8 +36,8 @@ LangGraph orchestration, Anthropic models, pydantic state.
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 90 tests
-   green as of 2026-06-11. New behavior ships with regression tests, ideally
+6. Tests run with `python -m pytest` (pythonpath=src configured). 108 tests
+   green as of 2026-06-12. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 
 ## Environment & billing split (important)
@@ -49,29 +49,43 @@ LangGraph orchestration, Anthropic models, pydantic state.
   (validated config; do not silently change).
 - Local Python setup if needed: `pip install -e ".[dev]"`.
 
-## Current state (2026-06-11, end of Sprint 1)
+## Current state (2026-06-12, end of Sprint 2)
 
-Deep provenance audit shipped and proven: first production run caught 3 live
-None-vs-False misquotes + 1 composite-path violation, zero false positives.
-Verdict history on JNJ: BUY 0.62 → BUY 0.65 → HOLD 0.62 on near-identical
-data — a live run-to-run inconsistency incident that motivates Sprint 2.
+Sprint 2 shipped (108 tests green): verdict persistence, the MAJORITY_OVERRIDE
+veto, and two prompt hard rules.
 
-## Sprint 2 (next build)
+- `verdicts/<TICKER>.json` — append-only history (persistence/verdicts.py):
+  run_at, strategy_id, verdict, confidence, per-specialist stances, veto
+  triggers fired, provenance audit counts. IO is at the edge: run_council
+  loads the latest prior record into prior_recommendation (so the existing
+  recommendation_flip veto can finally fire) and appends after the run; the
+  graph stays disk-free.
+- Fifth veto MAJORITY_OVERRIDE (agents/veto.py): fires when the Decision
+  verdict contradicts a STRICT (>50%) stance-majority of non-abstaining
+  specialists (bullish→buy, neutral→hold, bearish→sell). Ties/no-majority
+  silent; no confidence condition.
+- Prompt hard rules (agents/nodes.py, rule 3): one-figure-one-field_path (no
+  composite paths) and three-valued `passed` (null=NOT EVALUATED ≠ false).
 
-1. Verdict persistence: `verdicts/<TICKER>.json` — append per run: date,
-   verdict, confidence, per-specialist stances, veto flags. Load prior
-   verdict and pass as prior_recommendation so the existing
-   recommendation_flip veto trigger can finally fire.
-2. Fifth veto trigger: Decision verdict contradicts the stance-majority of
-   non-abstaining specialists → human review flag. (Would have fired on the
-   JNJ HOLD-vs-3-bullish run.)
-3. Prompt fixes: one-figure-one-field_path rule; passed=null semantics.
-   Test fixture: a JNJ rerun after this build should fire BOTH new signals.
+Recall the deep provenance audit (Sprint 1) first proved itself when the first
+production run caught 3 live None-vs-False misquotes + 1 composite-path
+violation, zero false positives.
+
+`verdicts/JNJ.json` is seeded with the 2026-06-11 HOLD 0.62 record (fundamental
+/technical/sentiment bullish, risk neutral). Verdict history on JNJ ran BUY 0.62
+→ BUY 0.65 → HOLD 0.62 on near-identical data — the run-to-run inconsistency
+that motivated this sprint. The seeded HOLD means the next live JNJ run should
+exercise BOTH new signals: recommendation_flip if the verdict moves off HOLD,
+and majority_override if the council stays 3-bullish under a HOLD.
+
+## Sprint 3 (next build)
+
+- Nightly watchlist: GitHub Actions cron, ~5 tickers, dated verdict JSONs,
+  cost logging. Requires Console auto-reload (user action). Verdict
+  persistence (Sprint 2) is the substrate this builds on.
 
 ## Backlog (in order)
 
-- Nightly watchlist: GitHub Actions cron, ~5 tickers, dated verdict JSONs,
-  cost logging. Requires Console auto-reload (user action).
 - EODHD adapter: replaces yfinance, fixes streak-floor undercounting.
 - EDGAR RAG: filings → balance sheet/debt data (the Critic's #1 recurring
   open question).
