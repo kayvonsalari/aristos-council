@@ -7,14 +7,22 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "langgraph>=0.2",
+    # Anthropic provider integration for init_chat_model. A hard dependency so
+    # cold-start Colab runtimes always have it — a base install left it missing
+    # and the live run died inside init_chat_model. Tests never import it (the
+    # runner imports lazily and tests inject FakeRunners), so this costs the
+    # test suite nothing but the install footprint.
+    "langchain-anthropic>=0.3",
 ]
 
 [project.optional-dependencies]
 # Dev-time market data provider (Phase 1). Kept optional so unit tests run
 # without network access or the yfinance dependency installed.
 yfinance = ["yfinance>=0.2.40"]
-# Real LLM runs (tiered models). Tests do NOT need this.
-llm = ["langchain>=0.3", "langchain-anthropic>=0.3"]
+# The LangChain framework half of real LLM runs (langchain.chat_models.
+# init_chat_model). The Anthropic provider integration is a hard dependency
+# above. Tests do NOT need this.
+llm = ["langchain>=0.3"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
