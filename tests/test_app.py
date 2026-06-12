@@ -86,3 +86,17 @@ def test_run_label_shape():
     assert "HOLD 0.55" in label
     # local time (Europe/Berlin = UTC+2 in June): 13:42 UTC -> 15:42
     assert "15:42" in label
+    # verdict color dot present (selector can't render hex)
+    assert app._VERDICT_DOT["HOLD"] in label
+
+
+def test_verdict_hex_is_the_only_semantic_palette():
+    assert app._verdict_hex("BUY") == "#2E7D32"
+    assert app._verdict_hex("hold") == "#B8860B"   # case-insensitive
+    assert app._verdict_hex("SELL") == "#B23B3B"
+    assert app._verdict_hex(None) == "#8A8A8A"     # neutral fallback
+
+
+def test_favicon_is_svg_data_uri():
+    uri = app._favicon()
+    assert uri.startswith("data:image/svg+xml;base64,")

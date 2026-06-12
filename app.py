@@ -20,6 +20,7 @@ writes the verdict log + full run report after it, mirroring run_council.py.
 
 from __future__ import annotations
 
+import base64
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,8 +55,21 @@ ROOT = Path(__file__).resolve().parent
 STRATEGIES_DIR = ROOT / "strategies"
 VERDICTS_DIR = ROOT / "verdicts"
 REPORTS_DIR = ROOT / "reports"
+ASSETS_DIR = ROOT / "assets"
+LOGO_PATH = ASSETS_DIR / "aristos_council_logo.svg"
 
 COMING_SOON = "Dividend + Growth — coming soon"
+
+# Verdict semantic colors — the ONLY semantic colors in the app (everything else
+# is the dark base + the single gold accent). Applied to the verdict banner, the
+# history verdict markers, and the run-selector labels, consistently.
+_VERDICT_HEX = {"BUY": "#2E7D32", "HOLD": "#B8860B", "SELL": "#B23B3B"}
+_VERDICT_DOT = {"BUY": "🟢", "HOLD": "🟡", "SELL": "🔴"}  # selectbox can't take hex
+GOLD = "#C9A227"  # the single accent
+
+
+def _verdict_hex(verdict: str | None) -> str:
+    return _VERDICT_HEX.get((verdict or "").upper(), "#8A8A8A")
 
 # Timestamps are STORED in UTC everywhere; the UI converts to this zone for
 # DISPLAY only. Storage and persisted records never change.
@@ -133,6 +147,34 @@ _STANCE_BADGE = {
 
 def _stance_badge(stance: Stance) -> str:
     return _STANCE_BADGE.get(stance, str(stance))
+
+
+def _logo_markup(px: int) -> str:
+    """Inline SVG logo sized to a px square, for the app header."""
+    return f'<div style="width:{px}px;height:{px}px">' \
+           f'{LOGO_PATH.read_text(encoding="utf-8")}</div>'
+
+
+def _favicon() -> str:
+    """SVG logo as a data URI for set_page_config (PIL can't open an SVG path,
+    so a file path would raise; a data URI is handed straight to the browser)."""
+    b64 = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+    return f"data:image/svg+xml;base64,{b64}"
+
+
+def _inject_chrome() -> None:
+    """Strip default Streamlit visual noise that survives theming."""
+    st.markdown(
+        """
+        <style>
+          [data-testid="stToolbar"] {visibility: hidden;}
+          [data-testid="stDecoration"] {display: none;}
+          #MainMenu {visibility: hidden;}
+          footer {visibility: hidden;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strategy]]:
@@ -255,9 +297,14 @@ def _stage_label(chunk: dict) -> str:
 # Report rendering (shared by fresh runs and browsing past runs)
 # --------------------------------------------------------------------------- #
 def _run_label(report: RunReport) -> str:
-    """Dense one-line label for the run selector: 'MO · 12.06. 15:42 · HOLD 0.55'."""
+    """Dense one-line label for the run selector, with a verdict color dot:
+    'MO · 12.06. 15:42 · 🟡 HOLD 0.55'."""
     d = report.decision
-    verdict = f"{d.recommendation.value.upper()} {d.confidence:.2f}" if d else "—"
+    if d:
+        v = d.recommendation.value.upper()
+        verdict = f"{_VERDICT_DOT.get(v, '')} {v} {d.confidence:.2f}".strip()
+    else:
+        verdict = "—"
     return f"{report.ticker} · {_ts_compact(report.run_at)} · {verdict}"
 
 
@@ -397,7 +444,14 @@ def _render_verdict_banner(report: RunReport) -> None:
     verdict = d.recommendation.value.upper() if d else "—"
     conf = f"{d.confidence:.2f}" if d else "—"
     col1, col2, col3 = st.columns([2, 1, 2])
-    col1.metric("Verdict", verdict)
+    # Verdict is the only colored value — its semantic color, nothing else.
+    col1.markdown(
+        "<div style='font-size:0.8rem;letter-spacing:0.08em;color:#9aa0aa'>"
+        "VERDICT</div>"
+        f"<div style='font-size:2.1rem;font-weight:700;line-height:1.1;"
+        f"color:{_verdict_hex(verdict)}'>{verdict}</div>",
+        unsafe_allow_html=True,
+    )
     col2.metric("Confidence", conf)
     col3.metric("Run", _fmt_local(report.run_at))
 
@@ -458,25 +512,30 @@ def render_history(ticker: str) -> None:
     x = alt.X("run_label:N", sort=run_order, title="Run",
               axis=alt.Axis(labelAngle=0))
     tooltip = ["run_label", "verdict", "confidence"]
+    verdict_scale = alt.Scale(domain=["BUY", "HOLD", "SELL"],
+                              range=["#2E7D32", "#B8860B", "#B23B3B"])
 
     # Verdict: a stepped categorical line with SELL/HOLD/BUY as labelled levels
-    # (BUY on top). Points carry the signal when there are only a few runs.
-    verdict_panel = (
-        alt.Chart(chart_df)
-        .mark_line(interpolate="step-after", point=alt.OverlayMarkDef(size=90))
-        .encode(
-            x=x,
-            y=alt.Y("verdict:N", sort=["BUY", "HOLD", "SELL"], title="Verdict",
-                    scale=alt.Scale(domain=["BUY", "HOLD", "SELL"])),
+    # (BUY on top). The line is the gold accent (continuous, not semantic); the
+    # markers carry each run's semantic verdict color and carry the signal when
+    # there are only a few runs.
+    base = alt.Chart(chart_df).encode(x=x)
+    y_verdict = alt.Y("verdict:N", sort=["BUY", "HOLD", "SELL"], title="Verdict",
+                      scale=alt.Scale(domain=["BUY", "HOLD", "SELL"]))
+    verdict_panel = alt.layer(
+        base.mark_line(interpolate="step-after", color=GOLD).encode(y=y_verdict),
+        base.mark_point(filled=True, size=120, opacity=1).encode(
+            y=y_verdict,
+            color=alt.Color("verdict:N", scale=verdict_scale, legend=None),
             tooltip=tooltip,
-        )
-        .properties(height=170, title="Verdict")
-    )
-    # Confidence: its own 0–1 axis, so verdict levels never read as a flat line
-    # pinned to the bottom of a shared scale.
+        ),
+    ).properties(height=170, title="Verdict")
+
+    # Confidence: its own 0–1 axis (so verdict levels never read as a flat line
+    # pinned to the bottom of a shared scale), in the gold accent — not semantic.
     confidence_panel = (
         alt.Chart(chart_df)
-        .mark_line(point=alt.OverlayMarkDef(size=90))
+        .mark_line(color=GOLD, point=alt.OverlayMarkDef(size=90, color=GOLD))
         .encode(
             x=x,
             y=alt.Y("confidence:Q", title="Confidence",
@@ -612,8 +671,19 @@ def render_strategy_tab(selected_path: Path | None) -> None:
 # Page
 # --------------------------------------------------------------------------- #
 def main() -> None:
-    st.set_page_config(page_title="Council Station", page_icon="🏛", layout="wide")
-    st.title("🏛 Council Station")
+    try:
+        st.set_page_config(page_title="Council Station", page_icon=_favicon(),
+                           layout="wide")
+    except Exception:  # data-URI favicon rejected — fall back to an emoji
+        st.set_page_config(page_title="Council Station", page_icon="🏛",
+                           layout="wide")
+    _inject_chrome()
+
+    col_logo, col_title = st.columns([1, 11], vertical_alignment="center")
+    with col_logo:
+        st.markdown(_logo_markup(52), unsafe_allow_html=True)
+    with col_title:
+        st.title("Council Station")
     st.caption("Local control room for the Aristos Council.")
 
     # --- sidebar: pick a ticker + strategy, gate the run on a cost ack ---

@@ -1,0 +1,19 @@
+# Council Station theme — institutional, restrained (Bloomberg-terminal register).
+# Dark base, off-white text, a single muted-gold accent. No gradients. The only
+# OTHER colors in the app are the three semantic verdict colors (BUY/HOLD/SELL),
+# applied in code — never decoratively.
+
+[theme]
+base = "dark"
+backgroundColor = "#0E1117"          # app background
+secondaryBackgroundColor = "#1A1F2B" # cards, sidebar, expanders
+textColor = "#E8E6E3"                # off-white
+primaryColor = "#C9A227"             # muted gold — the single accent
+font = "serif"                       # classical, institutional
+
+[client]
+# Hide the developer toolbar / deploy affordances — this is a local control room.
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
