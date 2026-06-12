@@ -15,11 +15,11 @@
       "data_quality"
     ],
     "provenance_audit": {
-      "figures_audited": 4,
-      "verified": 0,
+      "figures_audited": 63,
+      "verified": 58,
       "mismatch": 3,
       "unresolvable": 1,
-      "unverifiable": 0,
+      "unverifiable": 1,
       "unit_scaled": 0
     }
   }
