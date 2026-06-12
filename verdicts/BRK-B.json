@@ -1,0 +1,26 @@
+[
+  {
+    "ticker": "BRK-B",
+    "run_at": "2026-06-12T13:23:20.130674Z",
+    "strategy_id": "dividend_aristocrats_v1",
+    "verdict": "sell",
+    "confidence": 0.82,
+    "stances": {
+      "fundamental": "bearish",
+      "technical": "abstain",
+      "sentiment": "bearish",
+      "risk": "abstain"
+    },
+    "veto_triggers": [
+      "data_quality"
+    ],
+    "provenance_audit": {
+      "figures_audited": 67,
+      "verified": 64,
+      "mismatch": 0,
+      "unresolvable": 2,
+      "unverifiable": 1,
+      "unit_scaled": 0
+    }
+  }
+]
