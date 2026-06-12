@@ -38,7 +38,7 @@ from aristos_council.persistence.verdicts import (
     load_records,
     record_from_state,
 )
-from aristos_council.state import Recommendation, Stance
+from aristos_council.state import Stance
 from aristos_council.strategy.loader import Strategy, load_strategy
 from aristos_council.strategy.versioning import (
     bump_version,
@@ -53,15 +53,13 @@ REPORTS_DIR = ROOT / "reports"
 
 COMING_SOON = "Dividend + Growth — coming soon"
 
-# Stance / verdict display helpers -------------------------------------------- #
+# Stance display helpers ------------------------------------------------------ #
 _STANCE_BADGE = {
     Stance.BULLISH: "🟢 bullish",
     Stance.NEUTRAL: "🟡 neutral",
     Stance.BEARISH: "🔴 bearish",
     Stance.ABSTAIN: "⚪ abstain",
 }
-_VERDICT_SCORE = {Recommendation.SELL: -1, Recommendation.HOLD: 0,
-                  Recommendation.BUY: 1}
 
 
 def _stance_badge(stance: Stance) -> str:
@@ -301,21 +299,58 @@ def render_history(ticker: str) -> None:
         st.info(f"No verdict history for {ticker} yet.")
         return
 
+    import altair as alt
     import pandas as pd
 
-    st.subheader(f"{ticker} — verdict & confidence over time")
+    st.subheader(f"{ticker} — verdict & confidence across runs")
+    # Runs are sparse and irregular, so treat them as ordered discrete EVENTS
+    # (#1, #2, … with date labels), not a continuous time axis — a real time
+    # axis would render mostly empty space between clustered runs.
     chart_df = pd.DataFrame(
         [
             {
-                "run_at": r.run_at,
-                "verdict (sell -1 / hold 0 / buy 1)":
-                    _VERDICT_SCORE.get(r.verdict) if r.verdict else None,
+                "run_idx": i,
+                "run_label": f"#{i} · {r.run_at.strftime('%Y-%m-%d')}",
+                "verdict": r.verdict.value.upper() if r.verdict else None,
                 "confidence": r.confidence,
             }
-            for r in records
+            for i, r in enumerate(records, start=1)
         ]
-    ).set_index("run_at")
-    st.line_chart(chart_df)
+    )
+    run_order = chart_df["run_label"].tolist()  # already in chronological order
+    x = alt.X("run_label:N", sort=run_order, title="Run",
+              axis=alt.Axis(labelAngle=0))
+    tooltip = ["run_label", "verdict", "confidence"]
+
+    # Verdict: a stepped categorical line with SELL/HOLD/BUY as labelled levels
+    # (BUY on top). Points carry the signal when there are only a few runs.
+    verdict_panel = (
+        alt.Chart(chart_df)
+        .mark_line(interpolate="step-after", point=alt.OverlayMarkDef(size=90))
+        .encode(
+            x=x,
+            y=alt.Y("verdict:N", sort=["BUY", "HOLD", "SELL"], title="Verdict",
+                    scale=alt.Scale(domain=["BUY", "HOLD", "SELL"])),
+            tooltip=tooltip,
+        )
+        .properties(height=170, title="Verdict")
+    )
+    # Confidence: its own 0–1 axis, so verdict levels never read as a flat line
+    # pinned to the bottom of a shared scale.
+    confidence_panel = (
+        alt.Chart(chart_df)
+        .mark_line(point=alt.OverlayMarkDef(size=90))
+        .encode(
+            x=x,
+            y=alt.Y("confidence:Q", title="Confidence",
+                    scale=alt.Scale(domain=[0, 1])),
+            tooltip=tooltip,
+        )
+        .properties(height=170, title="Confidence")
+    )
+    chart = alt.vconcat(verdict_panel, confidence_panel).resolve_scale(
+        x="shared")
+    st.altair_chart(chart, use_container_width=True)
 
     st.subheader("Runs")
     runs_df = pd.DataFrame(
