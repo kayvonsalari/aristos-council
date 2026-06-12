@@ -60,6 +60,23 @@ def test_hard_rules_forbid_synthetic_figures():
     assert "without a FigureRef" in _HARD_RULES
 
 
+def test_hard_rules_require_non_empty_field_path():
+    assert "FIELD_PATH IS REQUIRED" in _HARD_RULES
+    assert "NON-EMPTY" in _HARD_RULES
+    # a figure that can't carry a valid path is described in prose, not emitted
+    assert "must not be emitted" in _HARD_RULES
+    assert "thesis prose" in _HARD_RULES
+
+
+def test_hard_rules_require_citing_the_originating_tool():
+    assert "CITE THE RIGHT TOOL" in _HARD_RULES
+    # call_id and tool_name must match the evidence line the value came from
+    assert "call_id and tool_name must match" in _HARD_RULES
+    # a screen criterion is cited as criteria[N].<field> on the screen tool
+    assert "criteria[N].<field>" in _HARD_RULES
+    assert "run_dividend_aristocrat_screen" in _HARD_RULES
+
+
 def test_every_agent_prompt_carries_the_new_rules():
     for prompt in _all_system_prompts():
         assert "ONE FIGURE = ONE FIELD_PATH" in prompt
@@ -70,3 +87,9 @@ def test_every_agent_prompt_carries_the_new_rules():
         # no figure without a backing ledger field
         assert "NO SYNTHETIC FIGURES" in prompt
         assert "without a FigureRef" in prompt
+        # field_path must be non-empty (else describe in prose)
+        assert "FIELD_PATH IS REQUIRED" in prompt
+        assert "must not be emitted" in prompt
+        # cite a field only on the tool that returned it; screen criteria path
+        assert "CITE THE RIGHT TOOL" in prompt
+        assert "criteria[N].<field>" in prompt
