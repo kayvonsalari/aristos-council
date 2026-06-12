@@ -29,6 +29,9 @@ llm = ["langchain>=0.3"]
 ui = [
     "streamlit>=1.30",
     "python-dotenv>=1.0",
+    # IANA tz database for zoneinfo — Windows has no system tz source, and the
+    # UI converts UTC timestamps to Europe/Berlin for display.
+    "tzdata",
 ]
 dev = [
     "pytest>=8.0",

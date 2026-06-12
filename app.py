@@ -20,7 +20,9 @@ writes the verdict log + full run report after it, mirroring run_council.py.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 from pydantic import ValidationError
@@ -52,6 +54,33 @@ VERDICTS_DIR = ROOT / "verdicts"
 REPORTS_DIR = ROOT / "reports"
 
 COMING_SOON = "Dividend + Growth — coming soon"
+
+# Timestamps are STORED in UTC everywhere; the UI converts to this zone for
+# DISPLAY only. Storage and persisted records never change.
+DISPLAY_TZ = ZoneInfo("Europe/Berlin")
+
+
+def _to_local(dt: datetime) -> datetime:
+    """A UTC-stored timestamp in the display timezone. Naive == UTC."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(DISPLAY_TZ)
+
+
+def _fmt_local(dt: datetime, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """Format a timestamp in the display timezone, tagged with its tz abbrev."""
+    return _to_local(dt).strftime(f"{fmt} %Z")
+
+
+def _local_label_from_slug(stem: str) -> str:
+    """Render a report filename slug (UTC, '%Y-%m-%dT%H-%M-%SZ') in local time."""
+    try:
+        dt = datetime.strptime(stem, "%Y-%m-%dT%H-%M-%SZ").replace(
+            tzinfo=timezone.utc)
+    except ValueError:
+        return stem  # unrecognised slug — show it raw rather than hide the run
+    return _fmt_local(dt, "%Y-%m-%d %H:%M:%S")
+
 
 # Stance display helpers ------------------------------------------------------ #
 _STANCE_BADGE = {
@@ -263,7 +292,7 @@ def _render_verdict_banner(report: RunReport) -> None:
     col1, col2, col3 = st.columns([2, 1, 2])
     col1.metric("Verdict", verdict)
     col2.metric("Confidence", conf)
-    col3.metric("Run", report.run_at.strftime("%Y-%m-%d %H:%M UTC"))
+    col3.metric("Run", _fmt_local(report.run_at))
 
 
 def _render_provenance_panel(audit: dict | None) -> None:
@@ -303,6 +332,7 @@ def render_history(ticker: str) -> None:
     import pandas as pd
 
     st.subheader(f"{ticker} — verdict & confidence across runs")
+    st.caption("Timestamps shown in Europe/Berlin (stored in UTC).")
     # Runs are sparse and irregular, so treat them as ordered discrete EVENTS
     # (#1, #2, … with date labels), not a continuous time axis — a real time
     # axis would render mostly empty space between clustered runs.
@@ -310,7 +340,7 @@ def render_history(ticker: str) -> None:
         [
             {
                 "run_idx": i,
-                "run_label": f"#{i} · {r.run_at.strftime('%Y-%m-%d')}",
+                "run_label": f"#{i} · {_to_local(r.run_at).strftime('%Y-%m-%d')}",
                 "verdict": r.verdict.value.upper() if r.verdict else None,
                 "confidence": r.confidence,
             }
@@ -356,7 +386,7 @@ def render_history(ticker: str) -> None:
     runs_df = pd.DataFrame(
         [
             {
-                "run_at": r.run_at,
+                "run (Europe/Berlin)": _fmt_local(r.run_at, "%Y-%m-%d %H:%M:%S"),
                 "verdict": r.verdict.value if r.verdict else "—",
                 "confidence": r.confidence,
                 "strategy": r.strategy_id,
@@ -364,7 +394,7 @@ def render_history(ticker: str) -> None:
             }
             for r in records
         ]
-    ).set_index("run_at")
+    ).set_index("run (Europe/Berlin)")
     st.dataframe(runs_df, use_container_width=True)
 
     st.subheader("Specialist stance across runs")
@@ -374,12 +404,12 @@ def render_history(ticker: str) -> None:
     )
     stance_rows = []
     for r in records:
-        row = {"run_at": r.run_at}
+        row = {"run (Europe/Berlin)": _fmt_local(r.run_at, "%Y-%m-%d %H:%M:%S")}
         for name, stance in r.stances.items():
             row[name] = stance.value if hasattr(stance, "value") else stance
         stance_rows.append(row)
     st.dataframe(
-        pd.DataFrame(stance_rows).set_index("run_at"),
+        pd.DataFrame(stance_rows).set_index("run (Europe/Berlin)"),
         use_container_width=True,
     )
 
@@ -560,8 +590,8 @@ def _report_tab(ticker: str) -> None:
         return
 
     st.markdown("#### Browse past runs")
-    # newest first in the picker
-    labels = {p.stem: p for p in reversed(past)}
+    # newest first in the picker; labels in Europe/Berlin (slugs are UTC)
+    labels = {_local_label_from_slug(p.stem): p for p in reversed(past)}
     pick = st.selectbox("Run", list(labels.keys()))
     if pick:
         render_report(load_report(labels[pick]))
