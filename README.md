@@ -90,11 +90,13 @@ Station's past-run browsing.
 
 **Phase 2 — the council (complete):** full LangGraph pipeline — deterministic `gather` node (the only node that touches data or math), four specialists with enforced figure provenance, a provenance-bound Critic arguing the opposite case (unverifiable quantitative concerns become open questions for a human, never asserted facts), Decision agent with recorded dissent, and a fully deterministic four-trigger human-veto gate. LLMs sit behind a `Runner` seam with env-configurable model tiers, so the entire graph is tested end-to-end with fakes — no API keys in CI.
 
-65 unit tests, green on Python 3.11 and 3.12. Try it live: `python examples/run_council.py JNJ` (needs `pip install -e ".[yfinance,llm]"` and an Anthropic API key).
-
 **Phase 3 — sentiment (complete):** Finnhub news + analyst recommendation trends behind a provider-agnostic `SentimentAdapter`, aggregated by a deterministic `sentiment_snapshot` tool. Without a `FINNHUB_API_KEY` the Sentiment specialist abstains exactly as before; a provider outage degrades to a data-quality veto flag, never a crash.
 
-**Next:** SEC EDGAR filings RAG for the Fundamental specialist, EODHD adapter, LangSmith tracing, nightly watchlist runs via GitHub Actions cron.
+**Phase 4 — audit, persistence & Council Station (current, Sprint 3):** a deep post-run **provenance audit** that resolves every cited figure's `field_path` against the tool-call ledger and feeds the data-quality veto; an append-only **verdict history** (`verdicts/`) powering the recommendation-flip and majority-override vetoes; full per-run **reports** (`reports/`); **strategy versioning** (edit-as-new-version, never mutating a published file); and **Council Station** — a local Streamlit UI to run the council, read the full deliberation, browse past runs across tickers, chart verdict/confidence history, and edit strategies. See `CLAUDE.md` for the sprint log.
+
+**161 unit tests**, green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
+
+**Next:** SEC EDGAR filings RAG for the Fundamental specialist, EODHD adapter (fixes the dividend-streak-floor undercount), LangSmith tracing, nightly watchlist runs via GitHub Actions cron.
 
 ## A note on honesty
 
