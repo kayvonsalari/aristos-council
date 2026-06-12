@@ -23,6 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import streamlit as st
+from pydantic import ValidationError
 
 from aristos_council.persistence.reports import (
     RunReport,
@@ -39,6 +40,11 @@ from aristos_council.persistence.verdicts import (
 )
 from aristos_council.state import Recommendation, Stance
 from aristos_council.strategy.loader import Strategy, load_strategy
+from aristos_council.strategy.versioning import (
+    bump_version,
+    make_new_version,
+    save_strategy,
+)
 
 ROOT = Path(__file__).resolve().parent
 STRATEGIES_DIR = ROOT / "strategies"
@@ -315,6 +321,93 @@ def render_history(ticker: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Strategy rendering (read-only form + edit-as-new-version)
+# --------------------------------------------------------------------------- #
+def render_strategy_tab(selected_path: Path | None) -> None:
+    if selected_path is None:
+        st.info("Pick a live strategy in the sidebar to view or version it.")
+        return
+
+    strategy = load_strategy(selected_path)
+    new_id, _ = bump_version(strategy)
+
+    st.subheader(f"{strategy.name} · {strategy.id}")
+    if strategy.description:
+        st.caption(strategy.description.strip())
+
+    edit = st.toggle("✏️ Edit as a new version", value=False, key="strat_edit")
+    if edit:
+        st.info(
+            f"Saving creates a NEW file `strategies/{new_id}.yaml`. The current "
+            "version is never modified — recorded verdicts reference their "
+            "strategy_id and must stay reproducible."
+        )
+    disabled = not edit
+
+    c = strategy.criteria
+    st.markdown("##### Screening thresholds")
+    col1, col2 = st.columns(2)
+    min_yield = col1.number_input(
+        "Min dividend yield (decimal, e.g. 0.025 = 2.5%)",
+        value=float(c.min_dividend_yield), min_value=0.0, max_value=1.0,
+        step=0.005, format="%.4f", disabled=disabled, key="c_yield")
+    max_payout = col2.number_input(
+        "Max payout ratio", value=float(c.max_payout_ratio), min_value=0.0,
+        step=0.05, format="%.2f", disabled=disabled, key="c_payout")
+    min_mcap = col1.number_input(
+        "Min market cap (USD)", value=float(c.min_market_cap), min_value=0.0,
+        step=1e9, format="%.0f", disabled=disabled, key="c_mcap")
+    min_years = col2.number_input(
+        "Min dividend growth years", value=int(c.min_dividend_growth_years),
+        min_value=0, step=1, disabled=disabled, key="c_years")
+
+    p = strategy.policy
+    st.markdown("##### Policy flags")
+    streak_block = st.checkbox(
+        "Unverifiable streak is blocking", value=p.unverifiable_streak_is_blocking,
+        disabled=disabled, key="p_streak")
+    partial_hold = st.checkbox(
+        "Partial pass allows HOLD", value=p.partial_pass_allows_hold,
+        disabled=disabled, key="p_partial")
+
+    st.markdown("##### Veto gate")
+    min_conf = st.number_input(
+        "Min confidence (below this, the run pauses for human review)",
+        value=float(strategy.veto.min_confidence), min_value=0.0, max_value=1.0,
+        step=0.05, format="%.2f", disabled=disabled, key="v_conf")
+
+    if not edit:
+        return
+
+    if st.button("💾 Save new version", type="primary", key="strat_save"):
+        updates = {
+            "criteria": {
+                "min_dividend_yield": min_yield,
+                "max_payout_ratio": max_payout,
+                "min_market_cap": min_mcap,
+                "min_dividend_growth_years": int(min_years),
+            },
+            "policy": {
+                "unverifiable_streak_is_blocking": streak_block,
+                "partial_pass_allows_hold": partial_hold,
+            },
+            "veto": {"min_confidence": min_conf},
+        }
+        try:
+            new = make_new_version(strategy, updates)
+            path = save_strategy(new, STRATEGIES_DIR)
+        except FileExistsError as exc:
+            st.error(str(exc))
+        except ValidationError as exc:
+            st.error(f"Invalid values — nothing was saved.\n\n{exc}")
+        else:
+            st.success(
+                f"Saved `{path.name}`. Pick it from the sidebar Strategy "
+                "dropdown to run a council under it."
+            )
+
+
+# --------------------------------------------------------------------------- #
 # Page
 # --------------------------------------------------------------------------- #
 def main() -> None:
@@ -355,13 +448,17 @@ def main() -> None:
         except Exception as exc:  # surface, don't crash the page
             st.exception(exc)
 
-    tab_report, tab_history = st.tabs(["Report", "History"])
+    tab_report, tab_history, tab_strategy = st.tabs(
+        ["Report", "History", "Strategy"])
 
     with tab_report:
         _report_tab(ticker)
 
     with tab_history:
         render_history(ticker)
+
+    with tab_strategy:
+        render_strategy_tab(selected_path)
 
 
 def _report_tab(ticker: str) -> None:
