@@ -163,9 +163,38 @@ def _stage_label(chunk: dict) -> str:
 # --------------------------------------------------------------------------- #
 # Report rendering (shared by fresh runs and browsing past runs)
 # --------------------------------------------------------------------------- #
+def _figures_table(figures) -> None:
+    """Render provenance-bound figures as a table (label/value/unit/source).
+
+    Mirrors what run_council.py prints per figure: the number AND where it came
+    from (tool -> field_path), so the UI is never a lossy view of the ledger.
+    Used for specialists AND the critic — both cite figures under the same
+    contract.
+    """
+    if not figures:
+        return
+    st.dataframe(
+        [
+            {
+                "label": fig.label,
+                "value": fig.value,
+                "unit": fig.unit,
+                "tool": fig.provenance.tool_name,
+                "field_path": fig.provenance.field_path,
+            }
+            for fig in figures
+        ],
+        hide_index=True,
+        use_container_width=True,
+    )
+
+
 def render_report(report: RunReport) -> None:
+    """Render a full run report. The deliberation is the product: everything
+    examples/run_council.py prints to the console appears here too."""
     _render_verdict_banner(report)
 
+    # Human-review flags — prominent, directly under the banner.
     if report.veto_flags:
         st.error(
             "**⚠ Human review required** — "
@@ -176,6 +205,19 @@ def render_report(report: RunReport) -> None:
     else:
         st.success("No veto triggers — auto-proceed permitted.")
 
+    # Decision rationale — the headline conclusion, rendered IN FULL (markdown,
+    # not hidden in an expander), with dissent named explicitly.
+    if report.decision:
+        st.subheader("Decision rationale")
+        st.markdown(report.decision.rationale or "_(no rationale)_")
+        if report.decision.dissent:
+            st.markdown(
+                "**Dissent recorded:** "
+                + ", ".join(s.value for s in report.decision.dissent)
+            )
+        else:
+            st.caption("No dissent recorded.")
+
     st.divider()
     st.subheader("Specialists")
     for op in report.specialist_opinions:
@@ -184,49 +226,36 @@ def render_report(report: RunReport) -> None:
             f"· confidence {op.confidence:.2f}"
         ):
             st.markdown(op.thesis or "_(no thesis)_")
-            if op.figures:
-                st.dataframe(
-                    [
-                        {
-                            "label": fig.label,
-                            "value": fig.value,
-                            "unit": fig.unit,
-                            "tool": fig.provenance.tool_name,
-                            "field_path": fig.provenance.field_path,
-                        }
-                        for fig in op.figures
-                    ],
-                    hide_index=True,
-                    use_container_width=True,
-                )
-            for c in op.caveats:
-                st.caption(f"⚠ {c}")
+            _figures_table(op.figures)
+            if op.caveats:
+                st.markdown("**Caveats**")
+                for c in op.caveats:
+                    st.markdown(f"- ⚠ {c}")
 
     if report.critic_report:
         cr = report.critic_report
         st.divider()
-        st.subheader(f"Critic — arguing against the {cr.targets_stance.value} consensus")
+        st.subheader(
+            f"Critic — arguing against the {cr.targets_stance.value} consensus"
+        )
         st.markdown(cr.counter_thesis or "_(no counter-thesis)_")
+        _figures_table(cr.figures)
+        if cr.challenged_figures:
+            st.markdown("**Challenged figures** (cited by the council, contested)")
+            for cf in cr.challenged_figures:
+                st.markdown(f"- {cf}")
         if cr.weaknesses_found:
             st.markdown("**Weaknesses found**")
             for w in cr.weaknesses_found:
                 st.markdown(f"- {w}")
         if cr.open_questions:
-            st.markdown("**Open questions** (for human resolution — not evidence)")
+            st.markdown(
+                "**Open questions** (for human resolution — not evidence)"
+            )
             for q in cr.open_questions:
                 st.markdown(f"- {q}")
 
     _render_provenance_panel(report.provenance_audit)
-
-    if report.decision:
-        st.divider()
-        st.subheader("Decision rationale")
-        st.markdown(report.decision.rationale or "_(no rationale)_")
-        if report.decision.dissent:
-            st.caption(
-                "Dissent recorded: "
-                + ", ".join(s.value for s in report.decision.dissent)
-            )
 
 
 def _render_verdict_banner(report: RunReport) -> None:
@@ -430,7 +459,13 @@ def main() -> None:
             selected_path = dict((l, p) for l, p, _ in options)[choice]
 
         st.divider()
-        ack = st.checkbox("I understand an API run costs real credits.")
+        # Cost gate. Cleared BEFORE the widget renders, so it starts unchecked
+        # each session AND re-arms after every run — each API run requires a
+        # fresh acknowledgement, never a leftover tick.
+        if st.session_state.pop("_clear_cost_ack", False):
+            st.session_state["cost_ack"] = False
+        ack = st.checkbox(
+            "I understand an API run costs real credits.", key="cost_ack")
         run_clicked = st.button(
             "▶ Run council",
             type="primary",
@@ -443,10 +478,20 @@ def main() -> None:
         try:
             with st.spinner(f"Running the council on {ticker}…"):
                 report = run_council(ticker, selected_path)
-            st.session_state["last_report"] = report.model_dump(mode="json")
-            st.success(f"Run complete — verdict and full report saved for {ticker}.")
         except Exception as exc:  # surface, don't crash the page
             st.exception(exc)
+        else:
+            st.session_state["last_report"] = report.model_dump(mode="json")
+            st.session_state["run_complete_msg"] = (
+                f"Run complete — verdict and full report saved for {ticker}."
+            )
+            # re-arm the cost gate, then re-render with the fresh report on top
+            st.session_state["_clear_cost_ack"] = True
+            st.rerun()
+
+    pending = st.session_state.pop("run_complete_msg", None)
+    if pending:
+        st.success(pending)
 
     tab_report, tab_history, tab_strategy = st.tabs(
         ["Report", "History", "Strategy"])
