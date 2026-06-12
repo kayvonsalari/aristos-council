@@ -97,3 +97,83 @@ def test_no_flip_when_same():
     s.decision = _decision(rec=Recommendation.BUY)
     make_veto_node(STRATEGY)(s)
     assert VetoTrigger.RECOMMENDATION_FLIP not in triggers(s)
+
+
+# --- trigger 5: MAJORITY_OVERRIDE --------------------------------------- #
+# Stance->verdict mapping: bullish->buy, neutral->hold, bearish->sell.
+# Strict majority (>50% of non-abstaining specialists) that disagrees with the
+# Decision verdict fires; ties / no-majority are silent. Motivated by the JNJ
+# HOLD-vs-3-bullish live run.
+
+def test_majority_override_fires_on_hold_vs_bullish_majority():
+    s = _state()
+    s.specialist_opinions = [
+        _opinion(SpecialistName.FUNDAMENTAL, Stance.BULLISH),
+        _opinion(SpecialistName.TECHNICAL, Stance.BULLISH),
+        _opinion(SpecialistName.SENTIMENT, Stance.BULLISH),
+        _opinion(SpecialistName.RISK, Stance.NEUTRAL),
+    ]
+    s.decision = _decision(rec=Recommendation.HOLD)
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.MAJORITY_OVERRIDE in triggers(s)
+    flag = next(f for f in s.veto_flags
+                if f.trigger == VetoTrigger.MAJORITY_OVERRIDE)
+    assert flag.detail == (
+        "decision hold vs majority buy (3 bullish / 1 neutral / 0 bearish)"
+    )
+
+
+def test_majority_override_silent_without_strict_majority():
+    # 2 bullish / 1 neutral / 1 bearish — no stance exceeds 50% of 4 voters.
+    s = _state()
+    s.specialist_opinions = [
+        _opinion(SpecialistName.FUNDAMENTAL, Stance.BULLISH),
+        _opinion(SpecialistName.TECHNICAL, Stance.BULLISH),
+        _opinion(SpecialistName.SENTIMENT, Stance.NEUTRAL),
+        _opinion(SpecialistName.RISK, Stance.BEARISH),
+    ]
+    s.decision = _decision(rec=Recommendation.HOLD)
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.MAJORITY_OVERRIDE not in triggers(s)
+
+
+def test_majority_override_silent_when_decision_aligned():
+    s = _state()
+    s.specialist_opinions = [
+        _opinion(SpecialistName.FUNDAMENTAL, Stance.BULLISH),
+        _opinion(SpecialistName.TECHNICAL, Stance.BULLISH),
+        _opinion(SpecialistName.SENTIMENT, Stance.BULLISH),
+        _opinion(SpecialistName.RISK, Stance.NEUTRAL),
+    ]
+    s.decision = _decision(rec=Recommendation.BUY)  # matches the majority
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.MAJORITY_OVERRIDE not in triggers(s)
+
+
+def test_majority_override_excludes_abstains():
+    # 2 bullish + 2 abstain -> 2 voters, both bullish -> strict majority buy.
+    s = _state()
+    s.specialist_opinions = [
+        _opinion(SpecialistName.FUNDAMENTAL, Stance.BULLISH),
+        _opinion(SpecialistName.TECHNICAL, Stance.BULLISH),
+        _opinion(SpecialistName.SENTIMENT, Stance.ABSTAIN),
+        _opinion(SpecialistName.RISK, Stance.ABSTAIN),
+    ]
+    s.decision = _decision(rec=Recommendation.SELL)
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.MAJORITY_OVERRIDE in triggers(s)
+    flag = next(f for f in s.veto_flags
+                if f.trigger == VetoTrigger.MAJORITY_OVERRIDE)
+    assert flag.detail == (
+        "decision sell vs majority buy (2 bullish / 0 neutral / 0 bearish)"
+    )
+
+
+def test_majority_override_silent_when_no_voters():
+    s = _state()
+    s.specialist_opinions = [
+        _opinion(SpecialistName.SENTIMENT, Stance.ABSTAIN),
+    ]
+    s.decision = _decision(rec=Recommendation.BUY)
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.MAJORITY_OVERRIDE not in triggers(s)

@@ -7,17 +7,27 @@ gets to look. The four triggers from the project spec:
                          provenance violations, or a specialist abstaining
                          for lack of data
 4. RECOMMENDATION_FLIP   recommendation differs from the prior run's
+5. MAJORITY_OVERRIDE     decision verdict contradicts the strict stance-majority
+                         of non-abstaining specialists
 """
 
 from __future__ import annotations
 
 from ..state import (
+    Recommendation,
     ResearchState,
     Stance,
     VetoFlag,
     VetoTrigger,
 )
 from ..strategy.loader import Strategy
+
+# Specialist stance -> the verdict it implies, for the MAJORITY_OVERRIDE check.
+_STANCE_VERDICT = {
+    Stance.BULLISH: Recommendation.BUY,
+    Stance.NEUTRAL: Recommendation.HOLD,
+    Stance.BEARISH: Recommendation.SELL,
+}
 
 
 def make_veto_node(strategy: Strategy):
@@ -66,6 +76,33 @@ def make_veto_node(strategy: Strategy):
                 detail=f"{state.prior_recommendation.value} -> "
                        f"{state.decision.recommendation.value}",
             ))
+
+        # 5 — majority override: the Decision verdict contradicts a STRICT
+        # majority (>50%) of the non-abstaining specialists' implied verdicts.
+        # No confidence condition; a tie or no-majority is silent.
+        if state.decision is not None:
+            voting = [o for o in state.specialist_opinions
+                      if o.stance != Stance.ABSTAIN]
+            bulls = sum(o.stance == Stance.BULLISH for o in voting)
+            neutrals = sum(o.stance == Stance.NEUTRAL for o in voting)
+            bears = sum(o.stance == Stance.BEARISH for o in voting)
+            majority_stance = None
+            for stance, count in ((Stance.BULLISH, bulls),
+                                  (Stance.NEUTRAL, neutrals),
+                                  (Stance.BEARISH, bears)):
+                if count * 2 > len(voting):   # strict >50%, so at most one wins
+                    majority_stance = stance
+                    break
+            if majority_stance is not None:
+                majority_verdict = _STANCE_VERDICT[majority_stance]
+                if state.decision.recommendation != majority_verdict:
+                    flags.append(VetoFlag(
+                        trigger=VetoTrigger.MAJORITY_OVERRIDE,
+                        detail=f"decision {state.decision.recommendation.value} "
+                               f"vs majority {majority_verdict.value} "
+                               f"({bulls} bullish / {neutrals} neutral / "
+                               f"{bears} bearish)",
+                    ))
 
         state.veto_flags.extend(flags)
         return state

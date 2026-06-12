@@ -177,6 +177,9 @@ class VetoTrigger(str, Enum):
     SPECIALIST_CONFLICT = "specialist_conflict"
     DATA_QUALITY = "data_quality"
     RECOMMENDATION_FLIP = "recommendation_flip"
+    # Decision verdict contradicts the strict stance-majority of non-abstaining
+    # specialists (e.g. a HOLD over a 3-bullish council). See agents/veto.py.
+    MAJORITY_OVERRIDE = "majority_override"
 
 
 class VetoFlag(BaseModel):
