@@ -198,7 +198,9 @@ def _favicon() -> str:
 
 
 def _inject_chrome() -> None:
-    """Strip default Streamlit visual noise that survives theming."""
+    """Strip default Streamlit visual noise, and a print stylesheet so a report
+    prints / exports to PDF legibly: light scheme, chrome hidden, expanders
+    forced open, verdict colors darkened for paper."""
     st.markdown(
         """
         <style>
@@ -206,6 +208,43 @@ def _inject_chrome() -> None:
           [data-testid="stDecoration"] {display: none;}
           #MainMenu {visibility: hidden;}
           footer {visibility: hidden;}
+
+          @media print {
+            @page { margin: 1.5cm; }
+            /* Light scheme for paper: white bg, near-black text (theme text is
+               off-white and would be invisible on white). */
+            html, body, .stApp, [data-testid="stAppViewContainer"],
+            [data-testid="stHeader"], [data-testid="stMain"] {
+              background: #ffffff !important;
+            }
+            [data-testid="stMain"], [data-testid="stMain"] * {
+              color: #1a1a1a !important;
+            }
+            /* Hide non-record chrome: sidebar, toolbar, toggles, menus. */
+            [data-testid="stSidebar"], [data-testid="stToolbar"],
+            [data-testid="stHeader"], [data-testid="stDecoration"],
+            [data-testid="stToggle"], #MainMenu, footer, header {
+              display: none !important;
+            }
+            /* Force expanders open so specialist content is never clipped
+               (covers native <details> and the div-based container). */
+            details:not([open]) > *:not(summary),
+            [data-testid="stExpanderDetails"] {
+              display: block !important; height: auto !important;
+              max-height: none !important; overflow: visible !important;
+              visibility: visible !important;
+            }
+            details > * { content-visibility: visible !important; }
+            /* Verdict colors darkened for paper (override inline color: the
+               !important + extra specificity beats the inline style). */
+            [data-testid="stMain"] .verdict-buy  { color: #1B5E20 !important; }
+            [data-testid="stMain"] .verdict-hold { color: #6B4F00 !important; }
+            [data-testid="stMain"] .verdict-sell { color: #8B1A1A !important; }
+            /* Don't clip content into a scroll region. */
+            .stApp, [data-testid="stMain"], .block-container {
+              overflow: visible !important; height: auto !important;
+            }
+          }
         </style>
         """,
         unsafe_allow_html=True,
@@ -520,13 +559,15 @@ def _render_verdict_banner(report: RunReport) -> None:
     d = report.decision
     verdict = d.recommendation.value.upper() if d else "—"
     conf = f"{d.confidence:.2f}" if d else "—"
+    # Class lets the print stylesheet darken the verdict color for paper.
+    vclass = f"verdict-{d.recommendation.value}" if d else "verdict-none"
     col1, col2, col3 = st.columns([2, 1, 2])
     # Verdict is the only colored value — its semantic color, nothing else.
     col1.markdown(
         "<div style='font-size:0.8rem;letter-spacing:0.08em;color:#9aa0aa'>"
         "VERDICT</div>"
-        f"<div style='font-size:2.1rem;font-weight:700;line-height:1.1;"
-        f"color:{_verdict_hex(verdict)}'>{verdict}</div>",
+        f"<div class='{vclass}' style='font-size:2.1rem;font-weight:700;"
+        f"line-height:1.1;color:{_verdict_hex(verdict)}'>{verdict}</div>",
         unsafe_allow_html=True,
     )
     col2.metric("Confidence", conf)
