@@ -1,0 +1,394 @@
+"""Council Station — a local Streamlit UI over the Aristos Council.
+
+Launch:
+    pip install -e ".[ui,yfinance,llm]"
+    streamlit run app.py
+
+Browsing past runs needs only ".[ui]". LAUNCHING a council additionally needs
+the runtime deps (".[yfinance,llm]") and the API keys it reads from the
+environment or a local .env (ANTHROPIC_API_KEY, optionally FINNHUB_API_KEY).
+
+Billing note: a council run bills real API credits — this app is meant to run
+on a machine that holds the runtime keys, NEVER inside the subscription-only
+Claude Code dev environment. The sidebar gates every run behind an explicit
+cost acknowledgement for exactly this reason.
+
+The council itself is imported and invoked IN-PROCESS (not shelled out), and the
+graph stays disk-free: this edge loads the prior verdict before the run and
+writes the verdict log + full run report after it, mirroring run_council.py.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import streamlit as st
+
+from aristos_council.persistence.reports import (
+    RunReport,
+    list_reports,
+    load_report,
+    report_from_state,
+    save_report,
+)
+from aristos_council.persistence.verdicts import (
+    append_record,
+    load_latest,
+    load_records,
+    record_from_state,
+)
+from aristos_council.state import Recommendation, Stance
+from aristos_council.strategy.loader import Strategy, load_strategy
+
+ROOT = Path(__file__).resolve().parent
+STRATEGIES_DIR = ROOT / "strategies"
+VERDICTS_DIR = ROOT / "verdicts"
+REPORTS_DIR = ROOT / "reports"
+
+COMING_SOON = "Dividend + Growth — coming soon"
+
+# Stance / verdict display helpers -------------------------------------------- #
+_STANCE_BADGE = {
+    Stance.BULLISH: "🟢 bullish",
+    Stance.NEUTRAL: "🟡 neutral",
+    Stance.BEARISH: "🔴 bearish",
+    Stance.ABSTAIN: "⚪ abstain",
+}
+_VERDICT_SCORE = {Recommendation.SELL: -1, Recommendation.HOLD: 0,
+                  Recommendation.BUY: 1}
+
+
+def _stance_badge(stance: Stance) -> str:
+    return _STANCE_BADGE.get(stance, str(stance))
+
+
+def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strategy]]:
+    """Every loadable strategy YAML as (label, path, strategy), id-sorted.
+
+    Invalid YAMLs are skipped silently here — the loader is the gatekeeper, and a
+    half-written file shouldn't break the picker.
+    """
+    out: list[tuple[str, Path, Strategy]] = []
+    for p in sorted(strategies_dir.glob("*.yaml")):
+        try:
+            s = load_strategy(p)
+        except Exception:
+            continue
+        out.append((f"{s.name} (live) · {s.id}", p, s))
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Running the council in-process
+# --------------------------------------------------------------------------- #
+def run_council(ticker: str, strategy_path: Path) -> RunReport:
+    """Invoke the council for one ticker and persist both sinks at the edge.
+
+    Runtime imports (yfinance/langchain) are lazy so merely browsing past runs
+    never requires the runtime extras to be installed.
+    """
+    import os
+
+    from dotenv import load_dotenv
+
+    load_dotenv(ROOT / ".env")  # no-op if absent; never overrides real env vars
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY is not set. Put it in the environment or a "
+            "local .env before running the council."
+        )
+
+    from aristos_council.agents.runners import production_runners
+    from aristos_council.data.yfinance_adapter import YFinanceAdapter
+    from aristos_council.graph import build_council
+    from aristos_council.state import ResearchState
+
+    strategy = load_strategy(strategy_path)
+
+    sentiment = None
+    if os.environ.get("FINNHUB_API_KEY"):
+        from aristos_council.data.finnhub_adapter import FinnhubAdapter
+        sentiment = FinnhubAdapter()
+
+    app = build_council(YFinanceAdapter(), strategy, production_runners(),
+                        sentiment_adapter=sentiment)
+
+    prior = load_latest(ticker, VERDICTS_DIR)
+    initial = ResearchState(
+        ticker=ticker,
+        strategy_id=strategy.id,
+        prior_recommendation=prior.verdict if prior else None,
+    )
+
+    # Stream the graph so the UI can show per-stage progress for free: each
+    # "values" chunk is the full state after a node, which we label by what it
+    # has populated so far.
+    progress = st.progress(0.0, text="Gathering evidence…")
+    final: dict | None = None
+    STAGES = 7  # gather + 4 specialists + critic + decision (audit/veto are fast)
+    for i, chunk in enumerate(app.stream(initial, stream_mode="values"), start=1):
+        final = chunk
+        progress.progress(min(i / STAGES, 1.0), text=_stage_label(chunk))
+    progress.progress(1.0, text="Done.")
+
+    result = ResearchState.model_validate(final)
+
+    append_record(record_from_state(result), VERDICTS_DIR)
+    report = report_from_state(result)
+    save_report(report, REPORTS_DIR)
+    return report
+
+
+def _stage_label(chunk: dict) -> str:
+    """A human progress label derived from how far the state has filled in."""
+    if chunk.get("decision"):
+        return "Decision issued — auditing…"
+    if chunk.get("critic_report"):
+        return "Critic deliberating…"
+    ops = chunk.get("specialist_opinions") or []
+    if ops:
+        return f"{len(ops)} of 4 specialists reported…"
+    if chunk.get("tool_calls"):
+        return "Evidence gathered — specialists deliberating…"
+    return "Gathering evidence…"
+
+
+# --------------------------------------------------------------------------- #
+# Report rendering (shared by fresh runs and browsing past runs)
+# --------------------------------------------------------------------------- #
+def render_report(report: RunReport) -> None:
+    _render_verdict_banner(report)
+
+    if report.veto_flags:
+        st.error(
+            "**⚠ Human review required** — "
+            f"{len(report.veto_flags)} veto trigger(s) fired."
+        )
+        for f in report.veto_flags:
+            st.markdown(f"- **{f.trigger.value}** — {f.detail}")
+    else:
+        st.success("No veto triggers — auto-proceed permitted.")
+
+    st.divider()
+    st.subheader("Specialists")
+    for op in report.specialist_opinions:
+        with st.expander(
+            f"{op.specialist.value.title()} — {_stance_badge(op.stance)} "
+            f"· confidence {op.confidence:.2f}"
+        ):
+            st.markdown(op.thesis or "_(no thesis)_")
+            if op.figures:
+                st.dataframe(
+                    [
+                        {
+                            "label": fig.label,
+                            "value": fig.value,
+                            "unit": fig.unit,
+                            "tool": fig.provenance.tool_name,
+                            "field_path": fig.provenance.field_path,
+                        }
+                        for fig in op.figures
+                    ],
+                    hide_index=True,
+                    use_container_width=True,
+                )
+            for c in op.caveats:
+                st.caption(f"⚠ {c}")
+
+    if report.critic_report:
+        cr = report.critic_report
+        st.divider()
+        st.subheader(f"Critic — arguing against the {cr.targets_stance.value} consensus")
+        st.markdown(cr.counter_thesis or "_(no counter-thesis)_")
+        if cr.weaknesses_found:
+            st.markdown("**Weaknesses found**")
+            for w in cr.weaknesses_found:
+                st.markdown(f"- {w}")
+        if cr.open_questions:
+            st.markdown("**Open questions** (for human resolution — not evidence)")
+            for q in cr.open_questions:
+                st.markdown(f"- {q}")
+
+    _render_provenance_panel(report.provenance_audit)
+
+    if report.decision:
+        st.divider()
+        st.subheader("Decision rationale")
+        st.markdown(report.decision.rationale or "_(no rationale)_")
+        if report.decision.dissent:
+            st.caption(
+                "Dissent recorded: "
+                + ", ".join(s.value for s in report.decision.dissent)
+            )
+
+
+def _render_verdict_banner(report: RunReport) -> None:
+    d = report.decision
+    verdict = d.recommendation.value.upper() if d else "—"
+    conf = f"{d.confidence:.2f}" if d else "—"
+    col1, col2, col3 = st.columns([2, 1, 2])
+    col1.metric("Verdict", verdict)
+    col2.metric("Confidence", conf)
+    col3.metric("Run", report.run_at.strftime("%Y-%m-%d %H:%M UTC"))
+
+
+def _render_provenance_panel(audit: dict | None) -> None:
+    if not audit:
+        return
+    st.divider()
+    st.subheader("Provenance audit")
+    cols = st.columns(6)
+    for col, key in zip(
+        cols,
+        ("figures_audited", "verified", "mismatch",
+         "unresolvable", "unverifiable", "unit_scaled"),
+    ):
+        col.metric(key.replace("_", " "), audit.get(key, 0))
+    violations = audit.get("violations") or []
+    if violations:
+        st.markdown("**Violations** (feed the DATA_QUALITY veto)")
+        for v in violations:
+            st.markdown(f"- {v}")
+    notes = audit.get("unit_scaled_notes") or []
+    if notes:
+        st.markdown("**Unit-scaled notes** (reported, not veto-firing)")
+        for n in notes:
+            st.markdown(f"- {n}")
+
+
+# --------------------------------------------------------------------------- #
+# History rendering
+# --------------------------------------------------------------------------- #
+def render_history(ticker: str) -> None:
+    records = load_records(ticker, VERDICTS_DIR)
+    if not records:
+        st.info(f"No verdict history for {ticker} yet.")
+        return
+
+    import pandas as pd
+
+    st.subheader(f"{ticker} — verdict & confidence over time")
+    chart_df = pd.DataFrame(
+        [
+            {
+                "run_at": r.run_at,
+                "verdict (sell -1 / hold 0 / buy 1)":
+                    _VERDICT_SCORE.get(r.verdict) if r.verdict else None,
+                "confidence": r.confidence,
+            }
+            for r in records
+        ]
+    ).set_index("run_at")
+    st.line_chart(chart_df)
+
+    st.subheader("Runs")
+    runs_df = pd.DataFrame(
+        [
+            {
+                "run_at": r.run_at,
+                "verdict": r.verdict.value if r.verdict else "—",
+                "confidence": r.confidence,
+                "strategy": r.strategy_id,
+                "vetoes": ", ".join(t.value for t in r.veto_triggers) or "—",
+            }
+            for r in records
+        ]
+    ).set_index("run_at")
+    st.dataframe(runs_df, use_container_width=True)
+
+    st.subheader("Specialist stance across runs")
+    st.caption(
+        "Reads down a column to spot drift — e.g. whether Technical has been "
+        "sliding toward neutral run over run."
+    )
+    stance_rows = []
+    for r in records:
+        row = {"run_at": r.run_at}
+        for name, stance in r.stances.items():
+            row[name] = stance.value if hasattr(stance, "value") else stance
+        stance_rows.append(row)
+    st.dataframe(
+        pd.DataFrame(stance_rows).set_index("run_at"),
+        use_container_width=True,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Page
+# --------------------------------------------------------------------------- #
+def main() -> None:
+    st.set_page_config(page_title="Council Station", page_icon="🏛", layout="wide")
+    st.title("🏛 Council Station")
+    st.caption("Local control room for the Aristos Council.")
+
+    # --- sidebar: pick a ticker + strategy, gate the run on a cost ack ---
+    with st.sidebar:
+        st.header("Run a council")
+        ticker = st.text_input("Ticker", value="JNJ").strip().upper()
+
+        options = list_strategy_options(STRATEGIES_DIR)
+        labels = [label for label, _, _ in options]
+        choice = st.selectbox("Strategy", labels + [COMING_SOON])
+        if choice == COMING_SOON:
+            st.info("This strategy isn't available yet.")
+            selected_path = None
+        else:
+            selected_path = dict((l, p) for l, p, _ in options)[choice]
+
+        st.divider()
+        ack = st.checkbox("I understand an API run costs real credits.")
+        run_clicked = st.button(
+            "▶ Run council",
+            type="primary",
+            disabled=not (ack and ticker and selected_path is not None),
+        )
+        if not ack:
+            st.caption("Acknowledge the cost to enable the Run button.")
+
+    if run_clicked and selected_path is not None:
+        try:
+            with st.spinner(f"Running the council on {ticker}…"):
+                report = run_council(ticker, selected_path)
+            st.session_state["last_report"] = report.model_dump(mode="json")
+            st.success(f"Run complete — verdict and full report saved for {ticker}.")
+        except Exception as exc:  # surface, don't crash the page
+            st.exception(exc)
+
+    tab_report, tab_history = st.tabs(["Report", "History"])
+
+    with tab_report:
+        _report_tab(ticker)
+
+    with tab_history:
+        render_history(ticker)
+
+
+def _report_tab(ticker: str) -> None:
+    """Show the latest run plus a browser for any past run of this ticker."""
+    past = list_reports(ticker, REPORTS_DIR)
+
+    last = st.session_state.get("last_report")
+    if last is not None:
+        st.caption("Most recent run from this session:")
+        render_report(RunReport.model_validate(last))
+        st.divider()
+
+    if not past:
+        if last is None:
+            st.info(
+                f"No saved reports for {ticker} yet. Run a council from the "
+                "sidebar, or pick a ticker that has history."
+            )
+        return
+
+    st.markdown("#### Browse past runs")
+    # newest first in the picker
+    labels = {p.stem: p for p in reversed(past)}
+    pick = st.selectbox("Run", list(labels.keys()))
+    if pick:
+        render_report(load_report(labels[pick]))
+
+
+if __name__ == "__main__":
+    main()

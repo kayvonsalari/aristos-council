@@ -23,6 +23,13 @@ yfinance = ["yfinance>=0.2.40"]
 # init_chat_model). The Anthropic provider integration is a hard dependency
 # above. Tests do NOT need this.
 llm = ["langchain>=0.3"]
+# Council Station — the local Streamlit UI (app.py). Browsing past runs needs
+# only this group; LAUNCHING a council additionally needs ".[yfinance,llm]"
+# (and the runtime API keys), so the full install is ".[ui,yfinance,llm]".
+ui = [
+    "streamlit>=1.30",
+    "python-dotenv>=1.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
