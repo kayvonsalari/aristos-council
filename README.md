@@ -25,6 +25,51 @@ Three principles drive the architecture:
 - **Data behind an adapter:** every tool talks to a provider-agnostic `MarketDataAdapter`, never a vendor SDK. Develops on yfinance; swaps to EODHD with a one-line change.
 - **Observability:** LangSmith tracing; tiered models via `init_chat_model`.
 
+## Project structure
+
+```
+aristos-council/
+├── app.py                        # Council Station — local Streamlit UI (Sprint 3)
+├── src/aristos_council/
+│   ├── state.py                  # ResearchState + Figure/Provenance/veto types — the schema contract
+│   ├── graph.py                  # LangGraph wiring: gather → specialists → critic → decision → audit → veto
+│   ├── agents/                   # the deliberators (LLM-backed, behind a Runner seam)
+│   │   ├── nodes.py              # gather + specialist/critic/decision nodes, prompts, figure validation
+│   │   ├── runners.py            # model seam: tiered Runner protocol + LangChain impl
+│   │   ├── schemas.py            # structured-output schemas (tolerant parsing)
+│   │   └── veto.py               # deterministic five-trigger human-veto gate
+│   ├── audit/                    # deep provenance audit (Sprint 1)
+│   │   └── provenance.py         # resolve every cited figure's field_path against the ledger
+│   ├── data/                     # provider-agnostic market & sentiment data
+│   │   ├── adapter.py            # MarketDataAdapter interface + DTOs + DataUnavailable
+│   │   ├── yfinance_adapter.py   # dev market-data provider
+│   │   ├── eodhd_adapter.py      # planned market-data provider (stub)
+│   │   ├── sentiment.py          # SentimentAdapter interface + DTOs
+│   │   └── finnhub_adapter.py    # sentiment provider (news + analyst trends)
+│   ├── persistence/              # IO-at-the-edge sinks (Sprint 2–3)
+│   │   ├── verdicts.py           # append-only verdict log feeding the vetoes (Sprint 2)
+│   │   └── reports.py            # full per-run deliberation for the UI (Sprint 3)
+│   ├── strategy/                 # strategy config
+│   │   ├── loader.py             # validated strategy YAML loader
+│   │   └── versioning.py         # edit-as-new-version; never mutates published files (Sprint 3)
+│   └── tools/                    # deterministic tools — ALL arithmetic lives here
+│       ├── screening.py          # dividend-aristocrat screen math
+│       ├── technical.py          # price / technical snapshot
+│       └── sentiment_tools.py    # sentiment aggregation
+├── strategies/                   # versioned strategy YAMLs (dividend_aristocrats_v1.yaml)
+├── verdicts/                     # committed run data — append-only verdict history per ticker
+├── reports/                      # committed run data — full per-run reports (<TICKER>/<run_at>.json)
+├── assets/                       # brand mark (SVG logo)
+├── .streamlit/                   # Council Station theme (config.toml)
+├── examples/run_council.py       # CLI entrypoint (single council run)
+├── tests/                        # pytest suite
+└── CLAUDE.md                     # working agreement + sprint log for contributors
+```
+
+Run artifacts under `verdicts/` and `reports/` are checked in as project data: the
+verdict history feeds the recommendation-flip veto, and the reports back Council
+Station's past-run browsing.
+
 ## Stack
 
 | Concern | Choice |
@@ -55,29 +100,28 @@ Three principles drive the architecture:
 
 The yfinance development provider cannot verify the canonical 25-year dividend-growth streak — its history is too short. The screen does **not** paper over this: the streak criterion returns *unverifiable* (distinct from pass or fail) and trips the data-quality veto by design. Confirming that streak is one of the concrete reasons EODHD is the planned upgrade.
 
-## Layout
-
-```
-src/aristos_council/
-  state.py              # ResearchState + provenance/veto types
-  data/
-    adapter.py          # MarketDataAdapter interface + normalized DTOs
-    yfinance_adapter.py  # Phase 1 dev provider
-    eodhd_adapter.py    # Phase 2 stub
-  tools/
-    screening.py        # deterministic, unit-tested screen math
-  strategy/
-    loader.py           # validated strategy loader
-strategies/
-  dividend_aristocrats_v1.yaml
-tests/                  # pytest
-```
-
 ## Running
+
+Run the tests:
 
 ```bash
 pip install -e ".[dev]"
 pytest
+```
+
+Launch **Council Station** (the local Streamlit UI):
+
+```bash
+pip install -e ".[ui,yfinance,llm]"
+streamlit run app.py
+```
+
+Browsing saved runs needs only `.[ui]`; launching a council from the UI bills API credits and additionally needs the runtime extras above plus `ANTHROPIC_API_KEY` (and optionally `FINNHUB_API_KEY`) in the environment or a local `.env`.
+
+Or run a single council from the CLI:
+
+```bash
+python examples/run_council.py JNJ
 ```
 
 ---
