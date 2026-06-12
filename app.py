@@ -364,7 +364,7 @@ def _figures_table(figures, show_provenance: bool = False) -> None:
         if show_provenance:
             row["call_id"] = fig.provenance.call_id
         rows.append(row)
-    st.dataframe(rows, hide_index=True, use_container_width=True)
+    st.dataframe(rows, hide_index=True, width="stretch")
 
 
 _SCREEN_STATUS = {True: "PASS", False: "FAIL", None: "NOT-EVAL"}
@@ -398,7 +398,7 @@ def _render_screen_table(screen: dict | None) -> None:
         subset=["Status"],
     )
     st.subheader("Screen results")
-    st.dataframe(styler, hide_index=True, use_container_width=True)
+    st.dataframe(styler, hide_index=True, width="stretch")
 
 
 def _render_report_header(report: RunReport, sidebar_ticker: str | None) -> None:
@@ -623,7 +623,7 @@ def render_history(ticker: str) -> None:
     )
     chart = alt.vconcat(verdict_panel, confidence_panel).resolve_scale(
         x="shared")
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
     st.subheader("Runs")
     runs_df = pd.DataFrame(
@@ -638,7 +638,7 @@ def render_history(ticker: str) -> None:
             for r in records
         ]
     ).set_index("run (Europe/Berlin)")
-    st.dataframe(runs_df, use_container_width=True)
+    st.dataframe(runs_df, width="stretch")
 
     st.subheader("Specialist stance across runs")
     st.caption(
@@ -653,7 +653,7 @@ def render_history(ticker: str) -> None:
         stance_rows.append(row)
     st.dataframe(
         pd.DataFrame(stance_rows).set_index("run (Europe/Berlin)"),
-        use_container_width=True,
+        width="stretch",
     )
 
 
