@@ -12,8 +12,15 @@ from pathlib import Path
 from aristos_council.agents.runners import production_runners
 from aristos_council.data.yfinance_adapter import YFinanceAdapter
 from aristos_council.graph import build_council
+from aristos_council.persistence.verdicts import (
+    append_record,
+    load_latest,
+    record_from_state,
+)
 from aristos_council.state import ResearchState
 from aristos_council.strategy.loader import load_strategy
+
+VERDICTS_DIR = Path(__file__).resolve().parents[1] / "verdicts"
 
 
 def block(text: str, indent: str = "      ") -> str:
@@ -40,8 +47,19 @@ else:
 
 app = build_council(YFinanceAdapter(), strategy, production_runners(),
                     sentiment_adapter=sentiment)
+
+# IO at the edge: load the prior verdict (if any) so the recommendation_flip
+# veto has something to compare against, then run the (disk-free) graph.
+prior = load_latest(ticker, VERDICTS_DIR)
+if prior is not None:
+    print(f"(prior verdict: {prior.verdict.value.upper() if prior.verdict else 'n/a'} "
+          f"@ {prior.run_at.date()})")
 result = ResearchState.model_validate(
-    app.invoke(ResearchState(ticker=ticker, strategy_id=strategy.id))
+    app.invoke(ResearchState(
+        ticker=ticker,
+        strategy_id=strategy.id,
+        prior_recommendation=prior.verdict if prior else None,
+    ))
 )
 
 print(f"\n=== Aristos Council verdict on {ticker} ===\n")
@@ -101,3 +119,7 @@ if result.veto_flags:
         print(f"      - {f.trigger.value}: {f.detail}")
 else:
     print("  No veto triggers — auto-proceed permitted.")
+
+# Append this run to the append-only history (IO at the edge, after the run).
+saved = append_record(record_from_state(result), VERDICTS_DIR)
+print(f"\n  verdict recorded -> {saved}")
