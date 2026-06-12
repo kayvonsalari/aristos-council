@@ -56,6 +56,11 @@ LangGraph orchestration, Anthropic models, pydantic state.
   secrets. Default models: Haiku specialists, Sonnet critic/decision
   (validated config; do not silently change).
 - Local Python setup if needed: `pip install -e ".[dev]"`.
+- Run artifacts are PROJECT DATA, committed (not gitignored): `verdicts/
+  <TICKER>.json` and `reports/<TICKER>/<run_at>.json` are checked in after each
+  session. The verdict history feeds the recommendation_flip veto; the reports
+  back Council Station's past-run browsing. Timestamps are stored in UTC; the
+  UI converts to Europe/Berlin for display only.
 - Council Station (the local Streamlit UI): `pip install -e ".[ui,yfinance,llm]"`
   then `streamlit run app.py`. Browsing past runs needs only `.[ui]`; LAUNCHING
   a council from the UI bills credits and needs the runtime extras + keys

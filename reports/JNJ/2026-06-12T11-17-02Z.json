@@ -1,0 +1,927 @@
+{
+  "ticker": "JNJ",
+  "run_at": "2026-06-12T11:17:02.820551Z",
+  "strategy_id": "dividend_aristocrats_v1",
+  "specialist_opinions": [
+    {
+      "specialist": "fundamental",
+      "stance": "bullish",
+      "confidence": 0.82,
+      "thesis": "JNJ exhibits the hallmark characteristics of a true dividend aristocrat: an exceptionally long documented growth streak, a sustainable payout ratio well below the 75% threshold, and a multi-billion-dollar market cap that provides stability and scale. \n\nThe dividend history shows uninterrupted quarter-over-quarter increases spanning at least 39 years (the documented floor from the screen; the true streak is likely older). Quarterly dividends have risen from $0.021875 in Q3 1986 to $1.30 by Q2 2026, demonstrating disciplined capital allocation across multiple market cycles, recessions, and industry transitions.\n\nThe payout ratio of 60.25% sits comfortably within aristocrat parameters, providing a substantial cushion before stress. Free cash flow of $12.5 billion and a market cap of $574 billion underpin the credibility of that dividend.\n\nThe single material constraint is the current yield of 2.25%, which falls below the 2.5% screen threshold. However, this is not a disqualification: low yield paired with conservative payout and long growth history is the classic signature of a mature, financially strong aristocrat. Yield compression reflects the market's confidence in earnings durability and capital returns. A reacceleration in dividend growth or multiple expansion would restore the high-yield aristocrat profile.\n\nRecent news shows active M&A (Firefly Bio acquisition for $1 billion to strengthen oncology), pipeline wins (IMAAVY in rare blood disorders, nipocalimab in myasthenia gravis), and geographic expansion. Analyst sentiment remains strongly bullish (68% bullish vs. 0% bearish), and the stock trades near recent highs. These dynamics support confidence in the underlying dividend trajectory.\n\nCaveat: The year_dividend_growth field in fundamentals was null, preventing direct validation of near-term growth expectations. However, the dividend history itself is unambiguous and dated.",
+      "figures": [
+        {
+          "label": "Market cap",
+          "value": 573712039936.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "output.market_cap"
+          }
+        },
+        {
+          "label": "Dividend yield (observed, below threshold)",
+          "value": 0.02248982485973189,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "output.criteria[0].observed"
+          }
+        },
+        {
+          "label": "Dividend yield threshold (min)",
+          "value": 0.025,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "output.criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Payout ratio (observed)",
+          "value": 0.6025,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "output.criteria[1].observed"
+          }
+        },
+        {
+          "label": "Payout ratio threshold (max)",
+          "value": 0.75,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "output.criteria[1].threshold"
+          }
+        },
+        {
+          "label": "Min market cap threshold",
+          "value": 10000000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "output.criteria[2].threshold"
+          }
+        },
+        {
+          "label": "Dividend growth streak (observed, floor)",
+          "value": 39.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "output.criteria[3].observed"
+          }
+        },
+        {
+          "label": "Dividend growth streak threshold (min)",
+          "value": 25.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "output.criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 12511375360.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "output.free_cash_flow"
+          }
+        },
+        {
+          "label": "Dividend per share (current)",
+          "value": 5.36,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "output.dividend_per_share"
+          }
+        },
+        {
+          "label": "EPS",
+          "value": 8.63,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "output.eps"
+          }
+        },
+        {
+          "label": "PE ratio",
+          "value": 27.616453,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "output.pe_ratio"
+          }
+        },
+        {
+          "label": "Earliest quarterly dividend (1986 Q3)",
+          "value": 0.021875,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "6df75d94d177",
+            "field_path": "output[0].amount"
+          }
+        },
+        {
+          "label": "Most recent quarterly dividend (2026 Q2)",
+          "value": 1.3,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "6df75d94d177",
+            "field_path": "output[164].amount"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio (68%)",
+          "value": 0.6774,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "7a6b65f9f86d",
+            "field_path": "output[0].bullish_ratio"
+          }
+        },
+        {
+          "label": "Total analyst count",
+          "value": 31.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "f6b561afdfb8",
+            "field_path": "output.analysts_total"
+          }
+        }
+      ],
+      "caveats": [
+        "Yield falls short of the 2.5% minimum threshold; this reflects mature valuation, not dividend weakness, but remains a screen failure.",
+        "The year_dividend_growth field was null, preventing validation of forward-looking growth assumptions.",
+        "The dividend streak of 39 years is a documented floor based on available history; the true streak is at least this long, likely longer, but cannot be verified beyond the ledger's historical record.",
+        "Analyst sentiment is heavily bullish, but this reflects market momentum and recent pipeline wins, not a fundamental review of dividend durability per se."
+      ],
+      "created_at": "2026-06-12T11:17:22.283675Z"
+    },
+    {
+      "specialist": "technical",
+      "stance": "bullish",
+      "confidence": 0.72,
+      "thesis": "JNJ presents a technically sound setup for a dividend aristocrat: price is above both SMA50 and SMA200, only 3.6% below the 52-week high, and volatility remains moderate at 17%. The 39-year confirmed dividend growth streak (with very high probability of longer history, per screen notes) is a structural strength. However, the payout ratio of 60.25% is sustainable but leaves no exceptional margin for growth acceleration, and critically, the observed dividend yield of 2.25% falls below the 2.5% threshold, failing the minimum yield criterion. This shortfall reflects the stock's valuation premium: at a P/E of 27.6x and with price near recent highs, the yield cushion is thin. Analysts remain overwhelmingly bullish (68%), and the recent pipeline wins (Firefly Bio acquisition, IMAAVY approval in rare diseases) support continued dividend growth trajectory, but the current entry point does not offer the yield/valuation margin typical of true aristocrat opportunities. The technicals are clean, but the fundamental tension between stretched valuation and modest yield argues for restraint.",
+      "figures": [
+        {
+          "label": "Last Close",
+          "value": 238.33,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5b0fcd6c3c4f",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "SMA 50",
+          "value": 230.06,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5b0fcd6c3c4f",
+            "field_path": "sma_50"
+          }
+        },
+        {
+          "label": "SMA 200",
+          "value": 212.11,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5b0fcd6c3c4f",
+            "field_path": "sma_200"
+          }
+        },
+        {
+          "label": "Distance from 52-Week High (%)",
+          "value": -0.0356,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5b0fcd6c3c4f",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized Volatility",
+          "value": 0.17,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5b0fcd6c3c4f",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Dividend Yield (observed)",
+          "value": 0.02249,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": ""
+          }
+        },
+        {
+          "label": "Dividend Yield (threshold)",
+          "value": 0.025,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": ""
+          }
+        },
+        {
+          "label": "Min Dividend Yield Criterion Passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Payout Ratio (observed)",
+          "value": 0.6025,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": ""
+          }
+        },
+        {
+          "label": "Payout Ratio (threshold)",
+          "value": 0.75,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": ""
+          }
+        },
+        {
+          "label": "Max Payout Ratio Criterion Passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "Dividend Growth Streak (years, lower bound)",
+          "value": 39.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": ""
+          }
+        },
+        {
+          "label": "Min Dividend Growth Streak Criterion Passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "P/E Ratio",
+          "value": 27.616,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": ""
+          }
+        },
+        {
+          "label": "Analyst Bullish Ratio (latest period)",
+          "value": 0.6774,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "f6b561afdfb8",
+            "field_path": "bullish_ratio"
+          }
+        }
+      ],
+      "caveats": [
+        "Dividend yield criterion FAILED (2.25% observed vs 2.5% threshold); this is a disqualifying screen result under strict criteria but does not negate the long dividend growth record.",
+        "Dividend growth streak of 39 years is a floor\u2014true streak is AT LEAST this many years and likely longer; provider history does not resolve earlier data.",
+        "Technicals show price strength relative to moving averages and modest distance from 52-week high, but do not independently validate dividend safety or payout sustainability.",
+        "P/E of 27.6x indicates market is pricing in continued earnings or dividend growth; valuation risk if growth expectations slip.",
+        "No separate forward guidance, earnings forecast, or FCF growth rate provided; payout ratio assessment relies on trailing EPS/DPS only.",
+        "Recent M&A (Firefly Bio, $1B oncology bet) and pipeline wins cited in news but not quantified in earnings/FCF impact; news sentiment is bullish but not a provenance-verified financial metric."
+      ],
+      "created_at": "2026-06-12T11:17:35.436207Z"
+    },
+    {
+      "specialist": "sentiment",
+      "stance": "bullish",
+      "confidence": 0.78,
+      "thesis": "JNJ exhibits strong positive sentiment across recent headlines and analyst recommendations despite falling short on the dividend yield criterion. The sentiment data shows a bullish_ratio of 0.6774 (21 bullish vs. 0 bearish), with a total of 31 analysts rated across June 2026. Recent news volume (151 headlines) concentrates heavily on clinical and M&A success: strong late-stage results for IMAAVY in rare blood disorders, a $1 billion strategic acquisition of Firefly Bio to expand the oncology pipeline, regulatory wins (MHRA authorization for nipocalimab, NICE approval for Darzalex), and expansion into rare disease and specialty care. These pipeline achievements are consistent with the aristocrat thesis\u2014disciplined capital deployment toward sustainable, higher-margin therapeutic franchises signals confidence in durable earnings growth. JNJ's dividend growth streak of at least 39 years (call_id 8d39404e0e90, criteria[3].observed) and sustainable payout ratio of 0.6025 (call_id f53d7013627c, payout_ratio) reinforce the durability signal. However, the min_dividend_yield criterion failed: observed 0.02248982485973189 versus threshold 0.025 (call_id 8d39404e0e90, criteria[0]). This yield shortfall reflects JNJ's premium valuation (PE 27.62; call_id f53d7013627c) and suggests market confidence in growth rather than income dominance. The hold count of 10 analysts (call_id f6b561afdfb8, hold_count) signals some valuation caution, which is prudent given the stretched multiple. The recent share price momentum mentioned in headlines (call_id 11a7564d5ce2, item 2: \"Assessing Johnson & Johnson (JNJ) Valuation After Recent Share Price Momentum\") and stock rising 3.6% off 52-week highs (call_id 5b0fcd6c3c4f, pct_off_52w_high -0.035642680653902525) reinforces near-term bullish momentum, though sentiment confidence is tempered by the yield miss and elevated valuation multiples that leave margin for disappointment.",
+      "figures": [
+        {
+          "label": "Bullish analyst count (Jun 2026)",
+          "value": 21.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "f6b561afdfb8",
+            "field_path": "bullish_count"
+          }
+        },
+        {
+          "label": "Total analysts rated (Jun 2026)",
+          "value": 31.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "f6b561afdfb8",
+            "field_path": "analysts_total"
+          }
+        },
+        {
+          "label": "Bullish ratio",
+          "value": 0.6774,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "f6b561afdfb8",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Bearish analyst count (Jun 2026)",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "f6b561afdfb8",
+            "field_path": "bearish_count"
+          }
+        },
+        {
+          "label": "Hold count (Jun 2026)",
+          "value": 10.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "f6b561afdfb8",
+            "field_path": "hold_count"
+          }
+        },
+        {
+          "label": "Recent news volume (151 headlines)",
+          "value": 151.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "f6b561afdfb8",
+            "field_path": "news_count"
+          }
+        },
+        {
+          "label": "Dividend yield (observed)",
+          "value": 0.02248982485973189,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Dividend yield (threshold)",
+          "value": 0.025,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Min dividend yield criterion passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Payout ratio (observed)",
+          "value": 0.6025,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "payout_ratio"
+          }
+        },
+        {
+          "label": "Dividend growth streak (observed years, lower bound)",
+          "value": 39.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Dividend growth streak (threshold)",
+          "value": 25.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Min dividend growth streak criterion passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "P/E ratio",
+          "value": 27.616453,
+          "unit": "",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.035642680653902525,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5b0fcd6c3c4f",
+            "field_path": "pct_off_52w_high"
+          }
+        }
+      ],
+      "caveats": [
+        "Dividend yield falls below the 2.5% screen threshold, flagging valuation risk; yield miss is material for dividend-focused strategies.",
+        "Hold count (10 analysts) indicates non-trivial valuation caution; bullish sentiment does not reflect universal conviction.",
+        "P/E of 27.6\u00d7 is elevated and leaves little room for earnings misses; sentiment momentum may prove fragile if pipeline setbacks occur.",
+        "Dividend growth streak of 39 years is a lower bound only\u2014true streak may be longer but data history ends at 1986."
+      ],
+      "created_at": "2026-06-12T11:17:49.242171Z"
+    },
+    {
+      "specialist": "risk",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "JNJ flunks the core yield screen and shows payout stress that contradicts the aristocrat thesis. While the 39-year dividend growth streak is impressive and the 60.25% payout ratio passes the max threshold, the combination of sub-target yield and elevated valuation in a premium healthcare environment raises material sustainability risks. The 2.25% yield\u2014below the 2.5% threshold\u2014reflects a stock priced aggressively relative to current earnings (PE 27.6x), leaving limited margin for error in a sector facing competitive and regulatory headwinds (talc litigation, patent cliffs, pricing pressure). The dividend history confirms mechanical consistency back to 1986, but near-zero yield cushion and annualized volatility of 17.0% create vulnerability: any earnings stumble would force either rapid payout growth unsustainable in mature pharma, or a dividend cut that would destroy aristocrat credibility. The screen noted the yield failure explicitly and flagged it as a hard rejection. News sentiment is superficially bullish (68% analyst bullish ratio), but this reflects recent oncology pipeline wins and M&A activity, not underlying dividend safety. For a strategy predicated on yield + payout sustainability, JNJ's low yield and premium valuation are disqualifying red flags.",
+      "figures": [
+        {
+          "label": "Dividend yield (observed vs. threshold)",
+          "value": 0.02249,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Minimum dividend yield threshold",
+          "value": 0.025,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Yield screen result",
+          "value": 0.0,
+          "unit": "binary (false=0.0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Payout ratio (observed)",
+          "value": 0.6025,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "Maximum payout ratio threshold",
+          "value": 0.75,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "Payout ratio screen result",
+          "value": 1.0,
+          "unit": "binary (true=1.0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "Dividend growth streak (years, lower bound)",
+          "value": 39.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Minimum growth streak threshold",
+          "value": 25.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Growth streak screen result",
+          "value": 1.0,
+          "unit": "binary (true=1.0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "8d39404e0e90",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "PE ratio",
+          "value": 27.616,
+          "unit": "multiple",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "output.pe_ratio"
+          }
+        },
+        {
+          "label": "EPS",
+          "value": 8.63,
+          "unit": "USD per share",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "output.eps"
+          }
+        },
+        {
+          "label": "Dividend per share",
+          "value": 5.36,
+          "unit": "USD per share",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "f53d7013627c",
+            "field_path": "output.dividend_per_share"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.17,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5b0fcd6c3c4f",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Last close price",
+          "value": 238.33,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5b0fcd6c3c4f",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio",
+          "value": 0.6774,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "f6b561afdfb8",
+            "field_path": "bullish_ratio"
+          }
+        }
+      ],
+      "caveats": [
+        "Yield calculation is deterministic (dividend_per_share \u00f7 last_close) and correctly rejects JNJ; however, the failure margin is tight (2.25% vs. 2.5%), leaving no room for valuation compression before dividend safety becomes acute.",
+        "The 39-year growth streak is a floor and likely understates true tenure (data ends at 1986 start), but this does not offset the yield and valuation concerns\u2014consistency is not the same as safety.",
+        "The payout ratio of 60.25% is healthy in isolation but offers limited buffer: at current earnings and stock price, any earnings decline >5% would force either acceleration beyond sustainable growth rates or a dividend cut.",
+        "Analyst sentiment (68% bullish) is backward-looking, reflecting recent pipeline wins and the Firefly Bio ($1B) acquisition announcement; it does not validate dividend sustainability under stress scenarios.",
+        "Talc litigation ($32M verdict on 2026-06-10) is a disclosed legal tail risk. Single verdict is not portfolio-ending, but class-action exposure remains material and unquantified in the ledger.",
+        "News volume (151 headlines in sentiment snapshot) is high and mostly positive, but headline sentiment is not a substitute for fundamental payout analysis. M&A and pipeline announcements boost near-term tone without addressing yield weakness.",
+        "No data on debt, interest coverage, or cash flow relative to dividend burden; free cash flow of $12.5B is noted but unpaired with total debt or growth capex requirements, limiting stress-test credibility."
+      ],
+      "created_at": "2026-06-12T11:18:05.214471Z"
+    }
+  ],
+  "critic_report": {
+    "targets_stance": "bullish",
+    "counter_thesis": "The bullish consensus is built on three pillars \u2014 a long dividend streak, a manageable payout ratio, and recent pipeline momentum \u2014 while treating the single hard screen failure as a minor footnote. This is backwards: for the Dividend Aristocrats strategy, the yield criterion IS the entry gate, and JNJ fails it. Worse, the consensus rationalises away that failure with arguments that introduce risk rather than mitigate it. Here is the strongest case against buying JNJ today under this strategy.\n\n**1. The strategy's yield screen is failed \u2014 not borderline, and not waivable.**\nThe minimum yield criterion is evaluated and explicitly failed (passed = false), with an observed yield of ~2.25% against a 2.5% threshold. This is not a data gap or a rounding artefact; it is the screen's own deterministic computation. Every bullish specialist acknowledges this failure but then argues around it using qualitative language (\"yield compression reflects market confidence,\" \"pipeline wins support dividend trajectory\"). Those arguments may be valid for a growth strategy, but the Dividend Aristocrats strategy id dividend_aristocrats_v1 is predicated on income floor + consistency. A stock that cannot clear the yield hurdle is, by strategy definition, not eligible \u2014 regardless of how long the streak is.\n\n**2. The payout ratio cushion is not as comfortable as claimed.**\nAt 60.25%, the payout ratio passes the 75% ceiling, but it is not conservative. Combined with a failed yield (meaning the per-share dividend is already high relative to the stock price), there is a compressive dynamic: to restore yield eligibility without a price decline, management would need to raise the dividend faster than earnings grow, which pushes the payout ratio further toward the ceiling. The evidence provides no forward earnings growth rate, no guidance data, and no decomposition of how the EPS of $8.63 will evolve. The fundamental specialist's confidence (0.82) that payout is \"sustainable\" rests on a static snapshot, not a trajectory.\n\n**3. years_dividend_growth is null \u2014 the growth streak is unverified by the fundamentals tool.**\nThe screen estimates a 39-year floor from dividend payment dates, but explicitly flags this as a LOWER BOUND derived from provider data availability, not a verified aristocrat count. The fundamentals tool returns years_dividend_growth = null \u2014 meaning the primary data source for that figure is absent. The consensus treats 39 years as near-certain and \"very likely longer,\" but the evidence record only permits stating it is AT LEAST 39 years. A null in the verification field for the strategy's single most important qualification is a material data gap, not a technicality.\n\n**4. Talc litigation is an unquantified, ongoing liability with fresh adverse verdicts.**\nThe evidence contains an explicit headline: \"Johnson & Johnson Hit with $32 Million Verdict in Los Angeles Asbestos Trial\" (June 10, 2026) and \"Talc Verdict Tests Johnson & Johnson Balance Of Legal Risk And Growth.\" None of the bullish specialists quantifies this liability or its cumulative exposure. A $32M individual verdict may seem small against a $574B market cap, but a pattern of adverse verdicts signals ongoing exposure that no figure in the evidence can bound. For a dividend safety thesis, unquantified contingent liabilities are structural risks that the free cash flow figure alone cannot address \u2014 the evidence provides no litigation reserve data, no total outstanding claims count, and no settlement trajectory.\n\n**5. M&A acceleration raises capital allocation risk, not just pipeline optionality.**\nThe consensus treats the $1 billion Firefly Bio acquisition and other M&A as unambiguously positive for dividend durability. But capital deployed into acquisitions is capital not retained as financial buffer. The evidence gives no data on total M&A spend in the trailing period, debt levels, or balance sheet leverage. A company simultaneously paying $5.36/share in dividends, pursuing active M&A, and defending ongoing litigation is running multiple competing claims on free cash flow. The $12.5B FCF figure is a single-period snapshot with no visibility into future allocation.\n\n**6. Valuation premium limits the entry proposition for income investors.**\nAt a P/E of 27.6x and with the stock within 3.6% of its 52-week high, the yield is structurally suppressed by price, not by a temporary dislocation. For a Dividend Aristocrats strategy investor who requires a 2.5% yield floor, the stock can only satisfy that criterion through either a price decline or a dividend increase. The evidence provides no forward dividend guidance and no near-term catalyst that would lift the per-share dividend fast enough to close the gap without compressing the payout headroom further.\n\n**7. Analyst consensus is skewed and provides false precision.**\nThe 68% bullish ratio sounds impressive, but the evidence shows zero bearish analysts out of 31 rated. In healthcare research, zero bearish ratings on a mega-cap is a red flag for coverage bias, not genuine consensus. The hold count of 10 (32% of the panel) represents meaningful reservation that the bullish framing of \"0% bearish\" obscures. The strategy should not use an analyst distribution with no short side as a confirmatory signal.",
+    "weaknesses_found": [
+      "The bullish consensus treats a hard strategy screen failure (min_dividend_yield passed = false) as a minor caveat rather than an eligibility disqualifier, undermining the entire Dividend Aristocrats strategy logic.",
+      "years_dividend_growth is null in the fundamentals tool \u2014 the 39-year streak is a screen-estimated lower bound, not a verified figure \u2014 yet the consensus presents it as near-certain fact.",
+      "The payout ratio of 60.25% is framed as 'comfortable cushion' but is not low; it constrains the pace at which dividends can be raised to restore yield eligibility without breaching the 75% ceiling.",
+      "Ongoing talc litigation with a fresh $32M verdict is acknowledged in headlines but quantified by none of the bullish specialists; FCF is cited as if it fully absorbs unlimited contingent liabilities.",
+      "Active M&A spending ($1B+ on Firefly Bio, additional pipeline deals) competes with dividend obligations on the same FCF pool, but no capital allocation priority evidence is in the record.",
+      "The 0% bearish analyst count is treated as a bullish signal rather than flagged as a potential coverage bias artefact that removes the lower tail from risk assessment.",
+      "Price near 52-week highs suppresses yield structurally, not temporarily \u2014 yet the consensus implies yield restoration is imminent without citing any forward dividend guidance.",
+      "No balance sheet data (debt levels, leverage ratios, litigation reserves) is in the evidence; the FCF figure is used as a proxy for total financial health without supporting context."
+    ],
+    "challenged_figures": [
+      "Dividend growth streak of 39 years (cited as confirmed fact; evidence only supports it as a lower bound floor \u2014 call_id 8d39404e0e90, criteria[3] note explicitly says 'floor / LOWER BOUND')",
+      "Free cash flow of $12.5B as a dividend safety anchor (single-period figure; no evidence on litigation reserves, debt service, or M&A cash outflows competing against it)",
+      "68% bullish analyst ratio as confirmatory signal (zero bearish ratings out of 31 is a distributional anomaly consistent with coverage bias, not genuine consensus)"
+    ],
+    "figures": [
+      {
+        "label": "Min dividend yield criterion \u2014 FAILED",
+        "value": 0.0,
+        "unit": "boolean (false)",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "8d39404e0e90",
+          "field_path": "criteria[0].passed"
+        }
+      },
+      {
+        "label": "Observed dividend yield at screen",
+        "value": 0.02248982485973189,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "8d39404e0e90",
+          "field_path": "criteria[0].observed"
+        }
+      },
+      {
+        "label": "Yield threshold required by screen",
+        "value": 0.025,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "8d39404e0e90",
+          "field_path": "criteria[0].threshold"
+        }
+      },
+      {
+        "label": "Payout ratio (observed)",
+        "value": 0.6025,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "8d39404e0e90",
+          "field_path": "criteria[1].observed"
+        }
+      },
+      {
+        "label": "Max payout ratio threshold",
+        "value": 0.75,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "8d39404e0e90",
+          "field_path": "criteria[1].threshold"
+        }
+      },
+      {
+        "label": "Dividend growth streak \u2014 estimated lower bound from screen",
+        "value": 39.0,
+        "unit": "years",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "8d39404e0e90",
+          "field_path": "criteria[3].observed"
+        }
+      },
+      {
+        "label": "years_dividend_growth in fundamentals \u2014 NULL (not verified by primary data source)",
+        "value": null,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "f53d7013627c",
+          "field_path": "years_dividend_growth"
+        }
+      },
+      {
+        "label": "EPS",
+        "value": 8.63,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "f53d7013627c",
+          "field_path": "eps"
+        }
+      },
+      {
+        "label": "P/E ratio",
+        "value": 27.616453,
+        "unit": "x",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "f53d7013627c",
+          "field_path": "pe_ratio"
+        }
+      },
+      {
+        "label": "Free cash flow (single-period snapshot)",
+        "value": 12511375360.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "f53d7013627c",
+          "field_path": "free_cash_flow"
+        }
+      },
+      {
+        "label": "Dividend per share",
+        "value": 5.36,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "f53d7013627c",
+          "field_path": "dividend_per_share"
+        }
+      },
+      {
+        "label": "Stock price \u2014 within 3.6% of 52-week high (yield suppressed by price)",
+        "value": -0.035642680653902525,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "5b0fcd6c3c4f",
+          "field_path": "pct_off_52w_high"
+        }
+      },
+      {
+        "label": "Annualised volatility",
+        "value": 0.1700055830819274,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "5b0fcd6c3c4f",
+          "field_path": "annualized_volatility"
+        }
+      },
+      {
+        "label": "Analysts with hold rating (current period)",
+        "value": 10.0,
+        "unit": "count",
+        "provenance": {
+          "tool_name": "get_recommendation_trends",
+          "call_id": "7a6b65f9f86d",
+          "field_path": "output[0].hold"
+        }
+      },
+      {
+        "label": "Analysts with zero bearish/sell ratings (current period)",
+        "value": 0.0,
+        "unit": "count",
+        "provenance": {
+          "tool_name": "get_recommendation_trends",
+          "call_id": "7a6b65f9f86d",
+          "field_path": "output[0].sell"
+        }
+      },
+      {
+        "label": "Bullish analyst ratio",
+        "value": 0.6774,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "f6b561afdfb8",
+          "field_path": "bullish_ratio"
+        }
+      },
+      {
+        "label": "Total analysts rated",
+        "value": 31.0,
+        "unit": "count",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "f6b561afdfb8",
+          "field_path": "analysts_total"
+        }
+      }
+    ],
+    "open_questions": [
+      "What is the total outstanding talc/asbestos litigation exposure and current reserve balance? A $32M individual verdict cannot be extrapolated to total liability without this figure.",
+      "What is JNJ's current net debt or leverage ratio? The evidence provides FCF and market cap but no balance sheet data; leverage materially affects dividend sustainability under stress.",
+      "What is the forward dividend growth rate guidance, if any? Without it, it is impossible to evaluate whether the yield gap to the 2.5% threshold closes through dividend increases or only through a price decline.",
+      "What is total cash deployed in M&A over the trailing twelve months? The $1B Firefly Bio deal is one headline figure; the full capital allocation picture is absent from the evidence.",
+      "Has the dividend growth streak been independently verified against a source other than the payment history used to estimate the 39-year floor? The fundamentals tool returned null for years_dividend_growth.",
+      "What is the effective tax and litigation drag on reported FCF? If litigation settlements are cash-settled and not already deducted, the $12.5B FCF figure overstates distributable free cash."
+    ],
+    "created_at": "2026-06-12T11:19:07.572622Z"
+  },
+  "decision": {
+    "recommendation": "hold",
+    "confidence": 0.62,
+    "rationale": "\n**Summary:** JNJ is a structurally strong dividend compounder with an extraordinary documented growth streak and sound payout metrics, but it fails the strategy's minimum yield criterion \u2014 a hard eligibility gate under Dividend Aristocrats v1. The evidence supports a HOLD rather than a buy or sell, for the following reasons:\n\n---\n\n**Screen Outcome: 3 of 4 criteria passed, 1 failed (yield)**\n\nThe min_dividend_yield criterion is explicitly evaluated and failed: observed yield of ~2.25% against a 2.5% threshold (call_id: 8d39404e0e90, criteria[0].passed = false; observed = 0.02248982485973189; threshold = 0.025). This is not a rounding artefact \u2014 it is the screen's own deterministic computation. Under the Dividend Aristocrats strategy, yield is an income-floor requirement. Failing it means JNJ does not currently meet full eligibility for a new buy.\n\nThe three passing criteria are:\n- max_payout_ratio: observed 0.6025 vs. threshold 0.75 \u2014 passed (call_id: 8d39404e0e90, criteria[1].passed = true)\n- min_market_cap: observed $573.7B vs. $10B threshold \u2014 passed (call_id: 8d39404e0e90, criteria[2].passed = true)\n- min_dividend_growth_streak: observed 39 years (floor) vs. 25-year threshold \u2014 passed (call_id: 8d39404e0e90, criteria[3].passed = true)\n\n---\n\n**Why Not Sell**\n\nThe critic's strongest arguments are legitimate concerns, but they do not constitute evidence of deteriorating dividend safety sufficient to warrant a sell under this strategy's partial-pass logic. Three core strengths remain intact:\n\n1. **Dividend growth streak**: 39 years is the documented floor (a lower bound, not a ceiling); the dividend history shows uninterrupted per-share increases from $0.021875 in 1986 (call_id: 6df75d94d177, output[0].amount) to $1.34 at the most recent event (call_id: 6df75d94d177, output[-1].amount). This is the strategy's single most important qualification and it is met \u2014 emphatically.\n\n2. **Payout ratio**: 0.6025 provides meaningful coverage headroom below the 75% ceiling (call_id: f53d7013627c, payout_ratio). The critic is correct that this is not a \"low\" ratio, but it is well within the pass threshold and paired with substantial FCF of $12.51B (call_id: f53d7013627c, free_cash_flow).\n\n3. **Technical posture**: Price is above both SMA50 ($230.06) and SMA200 ($212.11), and only 3.56% off the 52-week high (call_id: 5b0fcd6c3c4f; sma_50 = 230.06069885253908; sma_200 = 212.11210304260254; pct_off_52w_high = -0.035642680653902525). Annualized volatility is moderate at 17.0% (call_id: 5b0fcd6c3c4f, annualized_volatility = 0.1700055830819274). This is not a technically deteriorating stock.\n\n---\n\n**Why Not Buy**\n\nThe yield failure is not a minor caveat \u2014 it is the strategy's income-floor gate. The observed yield (2.25%) is structurally suppressed by the current premium valuation, with P/E at 27.62x (call_id: f53d7013627c, pe_ratio = 27.616453) and the stock near 52-week highs. Without forward dividend guidance (years_dividend_growth is null: call_id: f53d7013627c, years_dividend_growth = null), there is no evidence in the record that the yield gap will close through dividend increases rather than a price correction. The strategy's policy allows partial-pass holds; it does not permit waiving hard screen failures for a buy.\n\nAdditional unresolved concerns that reduce conviction for a buy:\n- Talc litigation: a $32M verdict was reported on 2026-06-10 (call_id: 11a7564d5ce2, headline index 28). Total litigation exposure and reserve balances are absent from the evidence \u2014 these are open questions, not established facts, but their absence limits FCF stress-test credibility.\n- Active M&A ($1B+ Firefly Bio acquisition: call_id: 11a7564d5ce2, headline index 38/43) creates competing claims on the FCF pool; no balance sheet leverage data is available to assess capacity.\n- years_dividend_growth = null in the fundamentals tool (call_id: f53d7013627c, years_dividend_growth = null) means the streak figure is screen-estimated, not independently verified through that data source.\n\n---\n\n**Sentiment and Analyst Context**\n\nAnalyst sentiment is broadly constructive: 21 bullish, 0 bearish, 10 hold out of 31 total (call_id: f6b561afdfb8; bullish_count = 21; bearish_count = 0; hold_count = 10; bullish_ratio = 0.6774). The critic's point about zero bearish ratings as a potential coverage-bias artefact is noted; it moderates \u2014 but does not reverse \u2014 the bullish signal.\n\n---\n\n**Overriding Dissent**\n\nThe risk specialist (bearish, 0.72 confidence) argued for an outright sell based on the yield screen failure and litigation/valuation concerns. I override this: the evidence does not support selling a stock with a 39-year dividend growth floor, passing payout ratio, strong FCF, and sound technicals. The yield failure warrants exclusion from new buys, not disposition of existing positions. The strategy's partial_pass_allows_hold policy directly applies here.\n\n---\n\n**Confidence Calibration**\n\nConfidence is set at 0.62 \u2014 above the midpoint to reflect genuine evidence quality and the strength of JNJ's long-term dividend record, but moderated by: (a) one hard screen failure; (b) null value on years_dividend_growth in fundamentals; (c) unquantified litigation exposure; (d) no forward dividend or earnings guidance in the evidence; and (e) no balance sheet leverage data. The evidence record, while substantial, has meaningful gaps that prevent high confidence.\n",
+    "dissent": [
+      "risk"
+    ],
+    "created_at": "2026-06-12T11:19:41.812469Z"
+  },
+  "veto_flags": [
+    {
+      "trigger": "specialist_conflict",
+      "detail": "at least one bullish and one bearish specialist",
+      "created_at": "2026-06-12T11:19:41.820730Z"
+    },
+    {
+      "trigger": "data_quality",
+      "detail": "unresolvable provenance path: fundamental cited 'Most recent quarterly dividend (2026 Q2)'=1.3 at get_dividend_history \u2192 output[164].amount (call_id 6df75d94d177) \u2014 index [164] out of range at 'output[164]' in 'output[164].amount'; unresolvable provenance path: fundamental cited 'Analyst bullish ratio (68%)'=0.6774 at get_recommendation_trends \u2192 output[0].bullish_ratio (call_id 7a6b65f9f86d) \u2014 'bullish_ratio' not found at segment 1 of 'output[0].bullish_ratio'; unresolvable provenance path: technical cited 'Dividend Yield (observed)'=0.02249 at run_dividend_aristocrat_screen \u2192  (call_id 8d39404e0e90) \u2014 empty field_path; unresolvable provenance path: technical cited 'Dividend Yield (threshold)'=0.025 at run_dividend_aristocrat_screen \u2192  (call_id 8d39404e0e90) \u2014 empty field_path; unresolvable provenance path: technical cited 'Payout Ratio (observed)'=0.6025 at run_dividend_aristocrat_screen \u2192  (call_id 8d39404e0e90) \u2014 empty field_path; unresolvable provenance path: technical cited 'Payout Ratio (threshold)'=0.75 at run_dividend_aristocrat_screen \u2192  (call_id 8d39404e0e90) \u2014 empty field_path; ...",
+      "created_at": "2026-06-12T11:19:41.820749Z"
+    },
+    {
+      "trigger": "majority_override",
+      "detail": "decision hold vs majority buy (3 bullish / 0 neutral / 1 bearish)",
+      "created_at": "2026-06-12T11:19:41.820768Z"
+    }
+  ],
+  "provenance_audit": {
+    "figures_audited": 78,
+    "verified": 70,
+    "mismatch": 0,
+    "unresolvable": 8,
+    "unverifiable": 0,
+    "unit_scaled": 0,
+    "violations": [
+      "unresolvable provenance path: fundamental cited 'Most recent quarterly dividend (2026 Q2)'=1.3 at get_dividend_history \u2192 output[164].amount (call_id 6df75d94d177) \u2014 index [164] out of range at 'output[164]' in 'output[164].amount'",
+      "unresolvable provenance path: fundamental cited 'Analyst bullish ratio (68%)'=0.6774 at get_recommendation_trends \u2192 output[0].bullish_ratio (call_id 7a6b65f9f86d) \u2014 'bullish_ratio' not found at segment 1 of 'output[0].bullish_ratio'",
+      "unresolvable provenance path: technical cited 'Dividend Yield (observed)'=0.02249 at run_dividend_aristocrat_screen \u2192  (call_id 8d39404e0e90) \u2014 empty field_path",
+      "unresolvable provenance path: technical cited 'Dividend Yield (threshold)'=0.025 at run_dividend_aristocrat_screen \u2192  (call_id 8d39404e0e90) \u2014 empty field_path",
+      "unresolvable provenance path: technical cited 'Payout Ratio (observed)'=0.6025 at run_dividend_aristocrat_screen \u2192  (call_id 8d39404e0e90) \u2014 empty field_path",
+      "unresolvable provenance path: technical cited 'Payout Ratio (threshold)'=0.75 at run_dividend_aristocrat_screen \u2192  (call_id 8d39404e0e90) \u2014 empty field_path",
+      "unresolvable provenance path: technical cited 'Dividend Growth Streak (years, lower bound)'=39.0 at run_dividend_aristocrat_screen \u2192  (call_id 8d39404e0e90) \u2014 empty field_path",
+      "unresolvable provenance path: technical cited 'P/E Ratio'=27.616 at get_fundamentals \u2192  (call_id f53d7013627c) \u2014 empty field_path"
+    ],
+    "unit_scaled_notes": []
+  }
+}
