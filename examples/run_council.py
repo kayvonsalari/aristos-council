@@ -12,6 +12,7 @@ from pathlib import Path
 from aristos_council.agents.runners import production_runners
 from aristos_council.data.yfinance_adapter import YFinanceAdapter
 from aristos_council.graph import build_council
+from aristos_council.persistence.reports import report_from_state, save_report
 from aristos_council.persistence.verdicts import (
     append_record,
     load_latest,
@@ -20,7 +21,9 @@ from aristos_council.persistence.verdicts import (
 from aristos_council.state import ResearchState
 from aristos_council.strategy.loader import load_strategy
 
-VERDICTS_DIR = Path(__file__).resolve().parents[1] / "verdicts"
+ROOT = Path(__file__).resolve().parents[1]
+VERDICTS_DIR = ROOT / "verdicts"
+REPORTS_DIR = ROOT / "reports"
 
 
 def block(text: str, indent: str = "      ") -> str:
@@ -120,6 +123,9 @@ if result.veto_flags:
 else:
     print("  No veto triggers — auto-proceed permitted.")
 
-# Append this run to the append-only history (IO at the edge, after the run).
+# Persist the run (IO at the edge, after the run): the thin verdict log for the
+# next run's vetoes, and the full report for Council Station to re-render later.
 saved = append_record(record_from_state(result), VERDICTS_DIR)
 print(f"\n  verdict recorded -> {saved}")
+report_saved = save_report(report_from_state(result), REPORTS_DIR)
+print(f"  full report saved -> {report_saved}")
