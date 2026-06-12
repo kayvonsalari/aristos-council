@@ -54,8 +54,11 @@ def test_yield_derived_fail_nvda_case():
 
 
 def test_yield_provider_field_alone_is_unverifiable():
-    # Provider yield present but no price: we refuse to trust it.
-    r = min_yield_criterion(_fund(dividend_yield=2.54), min_yield=0.025)
+    # A PAYING company (dps present) but no price: we refuse to trust the
+    # provider yield field, so the criterion is unverifiable — NOT a no-dividend
+    # FAIL (that path needs dps zero/null).
+    r = min_yield_criterion(_fund(dividend_per_share=2.0, dividend_yield=2.54),
+                            min_yield=0.025)
     assert r.passed is None
     assert "ambiguous units" in r.note
 
@@ -69,25 +72,57 @@ def test_yield_boundary_is_inclusive():
 # --------------------------------------------------------------------------- #
 # max_payout
 # --------------------------------------------------------------------------- #
+# These exercise the payout logic itself, so they need a CURRENT dividend
+# present (dps > 0); without one the criterion short-circuits to NOT-EVAL (see
+# the no-current-dividend tests below).
 def test_payout_pass():
-    r = max_payout_criterion(_fund(payout_ratio=0.5), max_payout=0.75)
+    r = max_payout_criterion(_fund(payout_ratio=0.5, dividend_per_share=2.0),
+                             max_payout=0.75)
     assert r.passed is True
 
 
 def test_payout_fail_over_ceiling():
-    r = max_payout_criterion(_fund(payout_ratio=0.9), max_payout=0.75)
+    r = max_payout_criterion(_fund(payout_ratio=0.9, dividend_per_share=2.0),
+                             max_payout=0.75)
     assert r.passed is False
 
 
 def test_negative_payout_is_fail_not_unverifiable():
-    r = max_payout_criterion(_fund(payout_ratio=-0.2), max_payout=0.75)
+    r = max_payout_criterion(_fund(payout_ratio=-0.2, dividend_per_share=2.0),
+                             max_payout=0.75)
     assert r.passed is False
     assert "negative" in r.note
 
 
 def test_payout_unverifiable_when_missing():
-    r = max_payout_criterion(_fund(payout_ratio=None), max_payout=0.75)
+    # Paying company, but the provider didn't supply the ratio: unverifiable.
+    r = max_payout_criterion(_fund(payout_ratio=None, dividend_per_share=2.0),
+                             max_payout=0.75)
     assert r.passed is None
+
+
+# --------------------------------------------------------------------------- #
+# No CURRENT dividend — a determination, not a data gap (Tier 0 stress basket).
+# Zero or null dividend_per_share: yield FAILs ("no current dividend"); payout
+# is NOT-EVAL (nothing to sustain — a 0.0:PASS would mislead). Holds whether
+# history is empty (BRK-B/AMZN/ARM) or non-empty-but-suspended (INTC).
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("dps", [0.0, None])
+def test_no_current_dividend_yield_fails(dps):
+    r = min_yield_criterion(_fund(dividend_per_share=dps),
+                            min_yield=0.025, last_close=100.0)
+    assert r.passed is False                 # evaluated-and-failed, not None
+    assert r.observed == 0.0
+    assert "no current dividend" in r.note
+
+
+@pytest.mark.parametrize("dps", [0.0, None])
+def test_no_current_dividend_payout_not_evaluated(dps):
+    # Even a reported 0.0 payout must NOT pass — it would read as "sustainable".
+    r = max_payout_criterion(_fund(dividend_per_share=dps, payout_ratio=0.0),
+                             max_payout=0.75)
+    assert r.passed is None                  # NOT-EVAL, not a misleading PASS
+    assert "no current dividend" in r.note
 
 
 # --------------------------------------------------------------------------- #
@@ -175,6 +210,47 @@ def test_screen_flags_unverifiable_streak():
     assert all(c.passed for c in result.evaluated)
     # ...but the screen is NOT a clean all-pass because the streak is unproven.
     assert len(result.unverifiable) == 1
+
+
+def _screen(fund, dividends):
+    return run_dividend_aristocrat_screen(
+        fund, dividends=dividends,
+        min_yield=0.025, max_payout=0.75, min_market_cap=1e10,
+        min_growth_years=25, last_close=100.0,
+    )
+
+
+def _criterion(result, name):
+    return next(c for c in result.criteria if c.name == name)
+
+
+@pytest.mark.parametrize("dps", [0.0, None])
+def test_no_dividend_empty_history_brkb_amzn_arm(dps):
+    # Never-payer: no current dividend AND no dividend history at all.
+    f = _fund(dividend_per_share=dps, payout_ratio=0.0, market_cap=2e10)
+    result = _screen(f, dividends=[])
+    yld = _criterion(result, "min_dividend_yield")
+    pay = _criterion(result, "max_payout_ratio")
+    assert yld.passed is False and "no current dividend" in yld.note
+    assert pay.passed is None and "no current dividend" in pay.note
+
+
+@pytest.mark.parametrize("dps", [0.0, None])
+def test_no_dividend_suspended_long_history_intc(dps):
+    # Suspended payer: no CURRENT dividend, but a long PAST history (INTC-shape,
+    # 128 quarterly events). The determination must be identical to the
+    # empty-history case — it depends on current DPS, not on history.
+    past = [
+        DividendEvent(ex_date=date(1992 + i // 4, 3 * (i % 4) + 1, 1),
+                      amount=0.10 + 0.001 * i)
+        for i in range(128)
+    ]
+    f = _fund(dividend_per_share=dps, payout_ratio=0.0, market_cap=2e10)
+    result = _screen(f, dividends=past)
+    yld = _criterion(result, "min_dividend_yield")
+    pay = _criterion(result, "max_payout_ratio")
+    assert yld.passed is False and "no current dividend" in yld.note
+    assert pay.passed is None and "no current dividend" in pay.note
 
 
 def test_screen_passes_all_evaluated_with_full_data():

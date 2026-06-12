@@ -63,22 +63,50 @@ class ScreenResult:
 # --------------------------------------------------------------------------- #
 # Primitive tools (each independently unit-tested)
 # --------------------------------------------------------------------------- #
+def _has_current_dividend(fundamentals: Fundamentals) -> bool:
+    """True iff the company pays a dividend RIGHT NOW (positive current DPS).
+
+    Zero or null ``dividend_per_share`` is treated as 'no current dividend' — a
+    DETERMINATION, not a data gap. This holds regardless of dividend HISTORY:
+    a never-payer (BRK-B, AMZN, ARM — empty history) and a suspended payer
+    (INTC — long past history) are the same 'no current dividend' state today.
+    History is judged separately by the growth-streak criterion.
+    """
+    dps = fundamentals.dividend_per_share
+    return dps is not None and dps > 0
+
+
 def min_yield_criterion(
     fundamentals: Fundamentals, *, min_yield: float,
     last_close: float | None = None,
 ) -> CriterionResult:
     """Dividend yield at or above the strategy floor (decimals: 0.025 == 2.5%).
 
+    NO CURRENT DIVIDEND is a FAIL, not a data gap (Tier 0 stress basket): a
+    non-payer (zero or null dividend_per_share) categorically cannot meet a
+    minimum yield, so the criterion is evaluated-and-FAILED with an explicit
+    note — distinct from UNVERIFIABLE (which means 'could not be evaluated').
+
     UNITS LESSON (found live by the council's own Critic, NVDA run): provider
     yield fields have ambiguous units — yfinance has shipped both 0.0254 and
     2.54 for the same 2.54% yield over its versions, so the raw field is
     untrustworthy by construction. We therefore DERIVE the yield from two
     unambiguous inputs: annual dividend_per_share / last_close. The provider
-    field is never compared against the threshold; if the derivation inputs
-    are missing, the criterion is UNVERIFIABLE rather than silently trusted.
+    field is never compared against the threshold; if a paying company's price
+    is missing, the criterion is UNVERIFIABLE rather than silently trusted.
     """
     dps = fundamentals.dividend_per_share
-    if dps is not None and last_close is not None and last_close > 0:
+    if dps is None or dps <= 0:
+        return CriterionResult(
+            name="min_dividend_yield",
+            passed=False,
+            observed=0.0,
+            threshold=min_yield,
+            note="no current dividend (dividend_per_share is "
+                 + ("null" if dps is None else "zero")
+                 + "): a non-payer cannot meet the minimum yield",
+        )
+    if last_close is not None and last_close > 0:
         derived = dps / last_close
         return CriterionResult(
             name="min_dividend_yield",
@@ -93,8 +121,8 @@ def min_yield_criterion(
         passed=None,
         observed=None,
         threshold=min_yield,
-        note="yield underivable: needs dividend_per_share and last_close; "
-             "provider yield field not used (ambiguous units)",
+        note="yield underivable: dividend_per_share present but last_close "
+             "missing; provider yield field not used (ambiguous units)",
     )
 
 
@@ -103,11 +131,25 @@ def max_payout_criterion(
 ) -> CriterionResult:
     """Payout ratio at or below the sustainability ceiling.
 
+    NO CURRENT DIVIDEND -> NOT EVALUATED (Tier 0 stress basket): there is no
+    payout to sustain, and a provider-reported 0.0 payout would otherwise PASS
+    the ceiling and read as 'sustainable', which is misleading for a non-payer.
+    So this is passed=None, not a (false) PASS.
+
     A payout ratio above the ceiling means dividends may be funded beyond
     earnings — the opposite of aristocrat-grade durability. Negative payout
     (negative earnings) is treated as a FAIL, not unverifiable, because it is a
     meaningful signal, with an explanatory note.
     """
+    if not _has_current_dividend(fundamentals):
+        return CriterionResult(
+            name="max_payout_ratio",
+            passed=None,
+            observed=None,
+            threshold=max_payout,
+            note="not evaluated: no current dividend, so there is no payout "
+                 "to sustain (a reported 0.0 payout would PASS misleadingly)",
+        )
     p = fundamentals.payout_ratio
     if p is None:
         return CriterionResult(
