@@ -284,7 +284,12 @@ _HARD_RULES = (
     "are distinct claims: cite false (0.0) for a failed criterion, and cite "
     "null ONLY when the ledger value is null. Citing null/None for a criterion "
     "whose ledger value is false is a provenance violation — it claims 'could "
-    "not be evaluated' where the truth is 'evaluated-and-failed'.\n"
+    "not be evaluated' where the truth is 'evaluated-and-failed'. "
+    "FIELD_PATH IS PATH-ONLY: a field_path contains ONLY the path expression — "
+    "no spaces, commentary, or parentheses. If you want to note context, put it "
+    "in the `label`, never in the field_path. NO SYNTHETIC FIGURES: if no "
+    "single ledger field contains the number, do not cite it as a figure — "
+    "describe it in your thesis without a FigureRef instead.\n"
     "4. CALIBRATION. Your confidence must reflect the completeness of the "
     "evidence, not the strength of your conviction.\n"
 )

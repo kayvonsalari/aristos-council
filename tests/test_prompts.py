@@ -48,7 +48,25 @@ def test_hard_rules_explain_three_valued_passed():
     assert "provenance violation" in low   # citing null for a false field
 
 
+def test_hard_rules_require_path_only_field_path():
+    assert "FIELD_PATH IS PATH-ONLY" in _HARD_RULES
+    assert "no spaces, commentary, or parentheses" in _HARD_RULES
+    # context goes in the label, not the path
+    assert "label" in _HARD_RULES
+
+
+def test_hard_rules_forbid_synthetic_figures():
+    assert "NO SYNTHETIC FIGURES" in _HARD_RULES
+    assert "without a FigureRef" in _HARD_RULES
+
+
 def test_every_agent_prompt_carries_the_new_rules():
     for prompt in _all_system_prompts():
         assert "ONE FIGURE = ONE FIELD_PATH" in prompt
         assert "NOT EVALUATED" in prompt
+        # field_path is path-only (no spaces/commentary/parentheses)
+        assert "FIELD_PATH IS PATH-ONLY" in prompt
+        assert "no spaces, commentary, or parentheses" in prompt
+        # no figure without a backing ledger field
+        assert "NO SYNTHETIC FIGURES" in prompt
+        assert "without a FigureRef" in prompt
