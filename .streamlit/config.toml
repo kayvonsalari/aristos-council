@@ -4,7 +4,7 @@
 # applied in code — never decoratively.
 
 [theme]
-base = "dark"
+base = "light"
 backgroundColor = "#0E1117"          # app background
 secondaryBackgroundColor = "#1A1F2B" # cards, sidebar, expanders
 textColor = "#E8E6E3"                # off-white
@@ -12,8 +12,11 @@ primaryColor = "#C9A227"             # muted gold — the single accent
 font = "serif"                       # classical, institutional
 
 [client]
-# Hide the developer toolbar / deploy affordances — this is a local control room.
-toolbarMode = "minimal"
+# "viewer" keeps user controls — the sidebar collapse/expand toggle and the
+# Settings menu (incl. the theme switch) — while hiding developer affordances
+# (Deploy, Rerun, Clear cache). "minimal" hid the sidebar toggle and theme
+# switch, so it is NOT used.
+toolbarMode = "viewer"
 
 [browser]
 gatherUsageStats = false

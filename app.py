@@ -198,15 +198,17 @@ def _favicon() -> str:
 
 
 def _inject_chrome() -> None:
-    """Strip default Streamlit visual noise, and a print stylesheet so a report
-    prints / exports to PDF legibly: light scheme, chrome hidden, expanders
-    forced open, verdict colors darkened for paper."""
+    """Strip a little cosmetic Streamlit noise, and a print stylesheet so a
+    report prints / exports to PDF legibly.
+
+    SCREEN hides are deliberately surgical — ONLY the footer and the colored top
+    decoration bar, both non-interactive. We must NOT hide the toolbar/menu on
+    screen: that took out the sidebar collapse/expand control and the Settings
+    menu (theme switch). Aggressive chrome-hiding lives in @media print only."""
     st.markdown(
         """
         <style>
-          [data-testid="stToolbar"] {visibility: hidden;}
           [data-testid="stDecoration"] {display: none;}
-          #MainMenu {visibility: hidden;}
           footer {visibility: hidden;}
 
           @media print {
