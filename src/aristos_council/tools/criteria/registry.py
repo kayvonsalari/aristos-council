@@ -88,8 +88,14 @@ class Criterion:
     fn: Callable[[Evidence, float], CriterionResult]
     label: str                     # human display label, e.g. "Minimum dividend yield"
     params: tuple[ParamSpec, ...]  # parameters a strategy sets (threshold, flags)
-    # Evidence fields that must be available for this criterion to evaluate.
+    # Evidence kinds (fundamentals / dividends / last_close) that must be
+    # available for this criterion to evaluate.
     requires: tuple[str, ...] = ()
+    # Specific Fundamentals fields this criterion's reasoning relates to. Used to
+    # SCOPE the agent evidence packet (Sprint 4D): only the active strategy's
+    # consumed fields (plus a fixed core) are rendered, so dividend fields don't
+    # leak into growth runs. Display-only — the ledger keeps the full object.
+    fundamentals_fields: tuple[str, ...] = ()
 
     @property
     def threshold_param(self) -> ParamSpec | None:
@@ -190,6 +196,7 @@ _CRITERIA: tuple[Criterion, ...] = (
                           default=0.025),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
+        fundamentals_fields=("dividend_per_share", "dividend_yield"),
     ),
     Criterion(
         "max_payout_ratio", _max_payout_ratio,
@@ -198,6 +205,7 @@ _CRITERIA: tuple[Criterion, ...] = (
                           default=0.75),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
+        fundamentals_fields=("payout_ratio", "dividend_per_share"),
     ),
     Criterion(
         "min_market_cap", _min_market_cap,
@@ -206,6 +214,7 @@ _CRITERIA: tuple[Criterion, ...] = (
                           default=10_000_000_000),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
+        fundamentals_fields=("market_cap",),
     ),
     Criterion(
         "min_dividend_growth_streak", _min_dividend_growth_streak,
@@ -214,6 +223,7 @@ _CRITERIA: tuple[Criterion, ...] = (
                           default=25),
                 _UNVERIFIABLE_BLOCKS),
         requires=("dividends",),
+        fundamentals_fields=("years_dividend_growth",),
     ),
     # --- Growth / quality criteria (Sprint 4B) ---
     Criterion(
@@ -225,6 +235,7 @@ _CRITERIA: tuple[Criterion, ...] = (
                           default=0.10),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
+        fundamentals_fields=("total_revenue",),
     ),
     Criterion(
         "min_roic", _min_roic,
@@ -233,6 +244,8 @@ _CRITERIA: tuple[Criterion, ...] = (
                           default=0.12),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
+        fundamentals_fields=("operating_income", "ebit", "tax_provision",
+                             "pretax_income", "invested_capital"),
     ),
     Criterion(
         "max_peg_ratio", _max_peg_ratio,
@@ -241,8 +254,22 @@ _CRITERIA: tuple[Criterion, ...] = (
                           default=2.0),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
+        fundamentals_fields=("total_revenue", "pe_ratio"),
     ),
 )
+
+
+def consumed_fundamentals_fields(selections) -> set[str]:
+    """Union of the Fundamentals fields the selected criteria relate to.
+
+    Used to scope the agent evidence packet to the active strategy (Sprint 4D).
+    Unknown selections are ignored (the loader already validated names)."""
+    out: set[str] = set()
+    for sel in selections:
+        crit = REGISTRY.get(sel.name)
+        if crit is not None:
+            out.update(crit.fundamentals_fields)
+    return out
 
 REGISTRY: dict[str, Criterion] = {c.name: c for c in _CRITERIA}
 

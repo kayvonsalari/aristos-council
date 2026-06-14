@@ -497,7 +497,7 @@ def test_evidence_block_truncates_oversized_outputs():
         call_id="big", tool_name="huge_tool",
         output=["x" * 100] * 1000,   # far beyond the limit
     ))
-    block = _evidence_block(state)
+    block = _evidence_block(state, STRATEGY)
     assert "TRUNCATED FOR PROMPT" in block
     assert len(block) < MAX_TOOL_OUTPUT_CHARS * 2  # bounded
 

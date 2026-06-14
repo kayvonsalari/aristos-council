@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, fields as dataclass_fields
 from datetime import date, timedelta
 
 from ..data.adapter import DataUnavailable, MarketDataAdapter
@@ -41,7 +41,11 @@ from ..state import (
     ToolCall,
 )
 from ..strategy.loader import Strategy
-from ..tools.criteria.registry import Evidence, run_screen
+from ..tools.criteria.registry import (
+    Evidence,
+    consumed_fundamentals_fields,
+    run_screen,
+)
 from ..tools.sentiment_tools import sentiment_snapshot
 from ..tools.technical import technical_snapshot
 from .schemas import CriticOutput, DecisionOutput, FigureRef, SpecialistOutput
@@ -201,18 +205,49 @@ MAX_TOOL_OUTPUT_CHARS = 12000  # per tool call, in prompts only — ledger keeps
 _SCREEN_LEDGER_TOOL = "run_dividend_aristocrat_screen"
 _SCREEN_DISPLAY_TOOL = "run_screen"
 
+# Fundamentals fields always shown in the agent evidence, regardless of strategy
+# (identity + universally-relevant context). The active strategy's criteria add
+# their own consumed fields on top (see _scoped_fundamentals). last_close is not
+# a Fundamentals field — it reaches agents via the get_price_history evidence.
+_CORE_FUNDAMENTALS_FIELDS = (
+    "ticker", "name", "market_cap", "pe_ratio", "free_cash_flow", "eps",
+)
 
-def _evidence_block(state: ResearchState) -> str:
+
+def _scoped_fundamentals(output: object, allowed: set[str]) -> dict:
+    """Render a Fundamentals object/dict as a dict of only the allowed fields.
+
+    Display-only scoping (Sprint 4D): the full object stays in the ledger for the
+    audit; agents see only the active strategy's relevant fields, so dividend
+    fields don't frame growth runs. Order follows the dataclass declaration.
+    """
+    if isinstance(output, dict):
+        return {k: v for k, v in output.items() if k in allowed}
+    names = [f.name for f in dataclass_fields(type(output))]
+    return {n: getattr(output, n) for n in names if n in allowed}
+
+
+def _evidence_block(state: ResearchState, strategy: Strategy) -> str:
     """Serialize the ledger for prompts, with a per-call size guard.
 
     The ledger itself is never truncated (it is the audit record); only the
     prompt-facing serialization is. An oversized output is replaced by a
     truncated string plus an explicit marker, so agents know they are seeing
     a partial view and can say so in caveats.
+
+    Strategy-scoped (Sprint 4D): the screen shows a neutral tool label, and the
+    fundamentals are scoped to the active strategy's consumed fields plus a core.
     """
+    allowed_fundamentals = (
+        set(_CORE_FUNDAMENTALS_FIELDS)
+        | consumed_fundamentals_fields(strategy.criteria)
+    )
     lines = []
     for tc in state.tool_calls:
         output = tc.output
+        # Fundamentals: render only the fields the active strategy cares about.
+        if tc.tool_name == "get_fundamentals" and tc.ok and output is not None:
+            output = _scoped_fundamentals(output, allowed_fundamentals)
         # Raw price bars never go into prompts: a ~270-bar series exceeds the
         # size guard and front-truncation showed agents only the OLDEST slice
         # (live-run regression, T: agents saw May–Aug 2025 bars, concluded the
@@ -353,11 +388,11 @@ def _specialist_system(who: SpecialistName, strategy: Strategy) -> str:
     )
 
 
-def _user_message(state: ResearchState) -> str:
+def _user_message(state: ResearchState, strategy: Strategy) -> str:
     return (
         f"Ticker under review: {state.ticker}\n\n"
         f"EVIDENCE (one JSON tool call per line — the complete record):\n"
-        f"{_evidence_block(state)}\n"
+        f"{_evidence_block(state, strategy)}\n"
     )
 
 
@@ -365,7 +400,7 @@ def make_specialist_node(who: SpecialistName, strategy: Strategy, runner):
     system = _specialist_system(who, strategy)
 
     def specialist(state: ResearchState) -> ResearchState:
-        out: SpecialistOutput = runner.invoke(system, _user_message(state))
+        out: SpecialistOutput = runner.invoke(system, _user_message(state, strategy))
         state.specialist_opinions.append(
             SpecialistOpinion(
                 specialist=who, stance=out.stance, confidence=out.confidence,
@@ -427,7 +462,7 @@ def make_critic_node(strategy: Strategy, runner):
             for o in state.specialist_opinions
         )
         user = (
-            f"{_user_message(state)}\n"
+            f"{_user_message(state, strategy)}\n"
             f"The emerging consensus is {target.value.upper()}. Argue the "
             f"opposite case.\n\nSpecialist opinions:\n{opinions}\n"
         )
@@ -489,7 +524,7 @@ def make_decision_node(strategy: Strategy, runner):
         else:
             critic = "no critic report"
         user = (
-            f"{_user_message(state)}\n"
+            f"{_user_message(state, strategy)}\n"
             f"Specialists:\n{opinions}\n\nCritic:\n{critic}\n"
         )
         out: DecisionOutput = runner.invoke(system, user)

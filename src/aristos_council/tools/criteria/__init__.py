@@ -11,6 +11,7 @@ from .registry import (  # noqa: F401
     CriterionSelection,
     Evidence,
     ParamSpec,
+    consumed_fundamentals_fields,
     run_screen,
     validate_selections,
 )
