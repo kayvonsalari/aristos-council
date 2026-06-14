@@ -3,8 +3,9 @@
 # Strategy: Dividend Aristocrats (v1)
 #
 # This file is the SINGLE source of policy for the dividend-aristocrat screen.
-# Deterministic tools hold no thresholds of their own; they receive these
-# values at call time. Changing strategy = editing/adding a versioned YAML,
+# A strategy SELECTS criteria from the registry (tools/criteria/registry.py) by
+# name and parameterises their thresholds — the screen runner holds no
+# strategy-specific logic. Changing strategy = editing/adding a versioned YAML,
 # never editing tool code. Bump the version (new file, e.g. _v2) rather than
 # mutating a published strategy, so historical decisions remain reproducible.
 #
@@ -23,21 +24,25 @@ description: >
   Dividend Aristocrats index, adapted for single-name research rather than index
   membership.
 
-# --- Screening thresholds (consumed by tools/screening.py) ---
-# All ratios are decimals: 0.025 == 2.5%.
+# --- Screening criteria (selected from the registry by name) ---
+# All ratios are decimals: 0.025 == 2.5%. Order is the screen's presentation
+# order. Thresholds are validated against each criterion's registry bounds.
 criteria:
-  min_dividend_yield: 0.025        # floor; avoids near-zero-yield names
-  max_payout_ratio: 0.75           # ceiling; >0.75 questions sustainability
-  min_market_cap: 10000000000      # 10B USD; large-cap durability proxy
-  min_dividend_growth_years: 25    # canonical aristocrat streak
+  - name: min_dividend_yield        # floor; avoids near-zero-yield names
+    threshold: 0.025
+  - name: max_payout_ratio          # ceiling; >0.75 questions sustainability
+    threshold: 0.75
+  - name: min_market_cap            # 10B USD; large-cap durability proxy
+    threshold: 10000000000
+  - name: min_dividend_growth_streak  # canonical aristocrat streak
+    threshold: 25
+    # When the streak is UNVERIFIABLE on the current provider (yfinance can't
+    # confirm 25y), treat it as blocking rather than auto-passing. (Successor to
+    # the old policy.unverifiable_streak_is_blocking; per-criterion now.)
+    unverifiable_blocks: true
 
 # --- How conflicts and edge cases are intended to be handled ---
-# These are read by the human-gate / decision logic and surfaced in RAG so the
-# reasoning is consistent and auditable.
 policy:
-  # When the growth-streak criterion is UNVERIFIABLE on the current provider
-  # (yfinance can't confirm 25y), do NOT auto-pass. Force a data-quality flag.
-  unverifiable_streak_is_blocking: true
   # A name failing on yield alone but strong elsewhere may still warrant a HOLD
   # discussion rather than an outright SELL — left to the council, not the screen.
   partial_pass_allows_hold: true

@@ -1,4 +1,8 @@
-"""Tests for the strategy loader and the shipped dividend_aristocrats_v1.yaml."""
+"""Tests for the strategy loader and the shipped dividend_aristocrats_v1.yaml.
+
+A strategy selects criteria from the registry by name + threshold; the loader
+validates those selections up front (unknown name / out-of-range / empty).
+"""
 
 from __future__ import annotations
 
@@ -10,15 +14,30 @@ from aristos_council.strategy.loader import Strategy, load_strategy
 
 STRATEGY_DIR = Path(__file__).resolve().parents[1] / "strategies"
 
+_VALID_CRITERIA = (
+    "criteria:\n"
+    "  - name: min_dividend_yield\n"
+    "    threshold: 0.025\n"
+)
+
 
 def test_loads_shipped_v1():
     s = load_strategy(STRATEGY_DIR / "dividend_aristocrats_v1.yaml")
     assert isinstance(s, Strategy)
     assert s.id == "dividend_aristocrats_v1"
     assert s.version == 1
-    assert s.criteria.min_dividend_growth_years == 25
-    assert s.criteria.min_dividend_yield == 0.025
-    assert s.policy.unverifiable_streak_is_blocking is True
+    # criteria are an ordered list selected by registry name
+    assert [c.name for c in s.criteria] == [
+        "min_dividend_yield", "max_payout_ratio",
+        "min_market_cap", "min_dividend_growth_streak",
+    ]
+    by = {c.name: c for c in s.criteria}
+    assert by["min_dividend_yield"].threshold == 0.025
+    assert by["min_market_cap"].threshold == 10_000_000_000
+    assert by["min_dividend_growth_streak"].threshold == 25
+    assert by["min_dividend_growth_streak"].unverifiable_blocks is True
+    assert s.policy.partial_pass_allows_hold is True
+    assert s.veto.min_confidence == 0.6
 
 
 def test_missing_file_raises():
@@ -31,29 +50,43 @@ def test_id_must_encode_version(tmp_path):
     bad.write_text(
         "id: dividend_aristocrats\n"
         "name: X\n"
-        "version: 1\n"
-        "criteria:\n"
-        "  min_dividend_yield: 0.02\n"
-        "  max_payout_ratio: 0.75\n"
-        "  min_market_cap: 1\n"
-        "  min_dividend_growth_years: 25\n",
+        "version: 1\n" + _VALID_CRITERIA,
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="must encode a version"):
         load_strategy(bad)
 
 
-def test_out_of_range_yield_rejected(tmp_path):
+def test_out_of_range_threshold_rejected(tmp_path):
     bad = tmp_path / "bad_v1.yaml"
     bad.write_text(
-        "id: bad_v1\n"
-        "name: X\n"
-        "version: 1\n"
+        "id: bad_v1\nname: X\nversion: 1\n"
         "criteria:\n"
-        "  min_dividend_yield: 1.5\n"  # >1.0 invalid for a decimal yield
-        "  max_payout_ratio: 0.75\n"
-        "  min_market_cap: 1\n"
-        "  min_dividend_growth_years: 25\n",
+        "  - name: min_dividend_yield\n"
+        "    threshold: 1.5\n",          # >1.0 invalid for a decimal yield
+        encoding="utf-8",
+    )
+    with pytest.raises(Exception, match="out of range"):
+        load_strategy(bad)
+
+
+def test_unknown_criterion_rejected(tmp_path):
+    bad = tmp_path / "bad_v1.yaml"
+    bad.write_text(
+        "id: bad_v1\nname: X\nversion: 1\n"
+        "criteria:\n"
+        "  - name: ebitda_coverage\n"    # not in the registry
+        "    threshold: 3.0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(Exception, match="unknown criterion"):
+        load_strategy(bad)
+
+
+def test_empty_criteria_rejected(tmp_path):
+    bad = tmp_path / "bad_v1.yaml"
+    bad.write_text(
+        "id: bad_v1\nname: X\nversion: 1\ncriteria: []\n",
         encoding="utf-8",
     )
     with pytest.raises(Exception):

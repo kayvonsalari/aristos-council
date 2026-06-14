@@ -41,7 +41,7 @@ from ..state import (
     ToolCall,
 )
 from ..strategy.loader import Strategy
-from ..tools.screening import run_dividend_aristocrat_screen
+from ..tools.criteria.registry import Evidence, run_screen
 from ..tools.sentiment_tools import sentiment_snapshot
 from ..tools.technical import technical_snapshot
 from .schemas import CriticOutput, DecisionOutput, FigureRef, SpecialistOutput
@@ -99,17 +99,17 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
         )
 
         if fundamentals is not None:
-            c = strategy.criteria
             last_close = (prices.closes[-1]
                           if prices is not None and prices.closes else None)
-            screen = run_dividend_aristocrat_screen(
-                fundamentals,
-                dividends or [],
-                min_yield=c.min_dividend_yield,
-                max_payout=c.max_payout_ratio,
-                min_market_cap=c.min_market_cap,
-                min_growth_years=c.min_dividend_growth_years,
-                last_close=last_close,
+            # Generic, registry-driven screen: the strategy's selected criteria
+            # run against the gathered evidence. Logged under the historical
+            # tool_name so the ledger/audit/reports are unchanged.
+            screen = run_screen(
+                strategy.criteria,
+                Evidence(fundamentals=fundamentals,
+                         dividends=dividends or [],
+                         last_close=last_close),
+                ticker=state.ticker,
             )
             state.tool_calls.append(
                 ToolCall(

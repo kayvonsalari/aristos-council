@@ -693,30 +693,32 @@ def render_strategy_tab(selected_path: Path | None) -> None:
         )
     disabled = not edit
 
-    c = strategy.criteria
-    st.markdown("##### Screening thresholds")
-    col1, col2 = st.columns(2)
-    min_yield = col1.number_input(
-        "Min dividend yield (decimal, e.g. 0.025 = 2.5%)",
-        value=float(c.min_dividend_yield), min_value=0.0, max_value=1.0,
-        step=0.005, format="%.4f", disabled=disabled, key="c_yield")
-    max_payout = col2.number_input(
-        "Max payout ratio", value=float(c.max_payout_ratio), min_value=0.0,
-        step=0.05, format="%.2f", disabled=disabled, key="c_payout")
-    min_mcap = col1.number_input(
-        "Min market cap (USD)", value=float(c.min_market_cap), min_value=0.0,
-        step=1e9, format="%.0f", disabled=disabled, key="c_mcap")
-    min_years = col2.number_input(
-        "Min dividend growth years", value=int(c.min_dividend_growth_years),
-        min_value=0, step=1, disabled=disabled, key="c_years")
+    # Criteria are selected from the registry by name; render a threshold (and
+    # the unverifiable-blocks flag) per selected criterion, generically.
+    st.markdown("##### Criteria")
+    edited: list[dict] = []
+    for spec in strategy.criteria:
+        col1, col2 = st.columns([2, 1])
+        threshold = col1.number_input(
+            spec.name,
+            value=float(spec.threshold),
+            min_value=0.0,
+            **_threshold_step_format(spec.threshold),
+            disabled=disabled,
+            key=f"c_thr_{spec.name}",
+        )
+        blocks = col2.checkbox(
+            "unverifiable blocks",
+            value=spec.unverifiable_blocks,
+            disabled=disabled,
+            key=f"c_unv_{spec.name}",
+        )
+        edited.append({"name": spec.name, "threshold": threshold,
+                       "unverifiable_blocks": blocks})
 
-    p = strategy.policy
-    st.markdown("##### Policy flags")
-    streak_block = st.checkbox(
-        "Unverifiable streak is blocking", value=p.unverifiable_streak_is_blocking,
-        disabled=disabled, key="p_streak")
+    st.markdown("##### Policy")
     partial_hold = st.checkbox(
-        "Partial pass allows HOLD", value=p.partial_pass_allows_hold,
+        "Partial pass allows HOLD", value=strategy.policy.partial_pass_allows_hold,
         disabled=disabled, key="p_partial")
 
     st.markdown("##### Veto gate")
@@ -730,16 +732,8 @@ def render_strategy_tab(selected_path: Path | None) -> None:
 
     if st.button("💾 Save new version", type="primary", key="strat_save"):
         updates = {
-            "criteria": {
-                "min_dividend_yield": min_yield,
-                "max_payout_ratio": max_payout,
-                "min_market_cap": min_mcap,
-                "min_dividend_growth_years": int(min_years),
-            },
-            "policy": {
-                "unverifiable_streak_is_blocking": streak_block,
-                "partial_pass_allows_hold": partial_hold,
-            },
+            "criteria": edited,
+            "policy": {"partial_pass_allows_hold": partial_hold},
             "veto": {"min_confidence": min_conf},
         }
         try:
@@ -754,6 +748,16 @@ def render_strategy_tab(selected_path: Path | None) -> None:
                 f"Saved `{path.name}`. Pick it from the sidebar Strategy "
                 "dropdown to run a council under it."
             )
+
+
+def _threshold_step_format(value: float) -> dict:
+    """Sensible number_input step/format for a threshold's magnitude (cosmetic):
+    tiny decimals (yields), mid ratios, and large integers (market cap)."""
+    if value >= 1_000:
+        return {"step": 1e9, "format": "%.0f"}
+    if value < 1:
+        return {"step": 0.005, "format": "%.4f"}
+    return {"step": 1.0, "format": "%.2f"}
 
 
 # --------------------------------------------------------------------------- #

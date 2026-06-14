@@ -2,8 +2,12 @@
 
 Loads a versioned strategy YAML into a validated object. A malformed or
 incomplete strategy is a hard failure here, at load time — never a silent
-default that would corrupt every downstream screen. The validated `criteria`
-are what get injected into the deterministic screening tools.
+default that would corrupt every downstream screen.
+
+A strategy SELECTS criteria from the registry by name and parameterizes their
+thresholds (Sprint 4A). The loader validates those selections UP FRONT against
+the registry (tools/criteria/registry.py): unknown criterion names, out-of-range
+thresholds, and required-but-unavailable evidence are rejected at load time.
 """
 
 from __future__ import annotations
@@ -11,18 +15,27 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from ..tools.criteria.registry import validate_selections
 
 
-class ScreenCriteria(BaseModel):
-    min_dividend_yield: float = Field(ge=0.0, le=1.0)
-    max_payout_ratio: float = Field(ge=0.0)
-    min_market_cap: float = Field(ge=0.0)
-    min_dividend_growth_years: int = Field(ge=0)
+class CriterionSpec(BaseModel):
+    """One criterion a strategy selects from the registry, with its threshold.
+
+    ``unverifiable_blocks`` records whether an UNVERIFIABLE (passed=null) result
+    for this criterion should count as blocking for the human gate — the
+    per-criterion successor to the old strategy-wide
+    ``unverifiable_streak_is_blocking`` flag. (Metadata in 4A; no logic consumes
+    it yet, exactly as before.)
+    """
+
+    name: str
+    threshold: float = Field(ge=0.0)
+    unverifiable_blocks: bool = False
 
 
 class StrategyPolicy(BaseModel):
-    unverifiable_streak_is_blocking: bool = True
     partial_pass_allows_hold: bool = True
 
 
@@ -37,7 +50,7 @@ class Strategy(BaseModel):
     name: str
     version: int = Field(ge=1)
     description: str = ""
-    criteria: ScreenCriteria
+    criteria: list[CriterionSpec] = Field(min_length=1)
     policy: StrategyPolicy = Field(default_factory=StrategyPolicy)
     veto: VetoPolicy = Field(default_factory=VetoPolicy)
     rationale: str = ""
@@ -53,6 +66,15 @@ class Strategy(BaseModel):
                 f"strategy id '{v}' must encode a version, e.g. '..._v1'"
             )
         return v
+
+    @model_validator(mode="after")
+    def _criteria_resolve_against_registry(self) -> "Strategy":
+        # Fail fast: every selected criterion must be a known registry name with
+        # an in-range threshold whose required evidence the run can supply.
+        problems = validate_selections(self.criteria)
+        if problems:
+            raise ValueError("invalid criteria: " + "; ".join(problems))
+        return self
 
 
 def load_strategy(path: str | Path) -> Strategy:
