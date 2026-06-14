@@ -159,14 +159,14 @@ def _inject_chrome() -> None:
     """Strip a little cosmetic Streamlit noise, and a print stylesheet so a
     report prints / exports to PDF legibly.
 
-    SCREEN hides are deliberately surgical — ONLY the footer and the colored top
-    decoration bar, both non-interactive. We must NOT hide the toolbar/menu on
-    screen: that took out the sidebar collapse/expand control and the Settings
-    menu (theme switch). Aggressive chrome-hiding lives in @media print only."""
+    SCREEN hides are deliberately surgical — ONLY the footer, which is not a
+    control. We must NEVER hide the toolbar / hamburger menu (Settings + theme
+    switch) or the sidebar collapse/expand toggle on screen: a past
+    chrome-strip took those out. Aggressive chrome-hiding lives in @media print
+    only, where there is no interaction to lose."""
     st.markdown(
         """
         <style>
-          [data-testid="stDecoration"] {display: none;}
           footer {visibility: hidden;}
 
           @media print {

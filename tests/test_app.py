@@ -184,6 +184,28 @@ def _markdown_blob(at) -> str:
     return "\n".join(m.value for m in at.markdown if isinstance(m.value, str))
 
 
+def test_screen_chrome_css_hides_no_interactive_controls():
+    # The on-screen <style> must not hide the toolbar/hamburger menu or the
+    # sidebar collapse/expand toggle — only footer. (Aggressive hides are
+    # allowed inside @media print, which is excluded here.)
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    blob = _markdown_blob(at)
+    screen_css = blob.split("@media print")[0]   # on-screen rules only
+    for selector in ("stToolbar", "MainMenu", "stSidebar",
+                     "stSidebarCollapse", "collapsedControl"):
+        assert selector not in screen_css, selector
+    assert "footer" in screen_css                # footer hide is fine
+
+
+def test_toolbar_mode_keeps_controls_reachable():
+    # config.toml must not use "minimal" (which hides the menu + sidebar toggle).
+    import tomllib
+    cfg = tomllib.loads(
+        (_APP.parent / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert cfg["client"]["toolbarMode"] == "viewer"
+
+
 def test_human_number_formats_large_thresholds():
     assert app._human_number(10_000_000_000) == "10,000,000,000 ($10B)"
     assert app._human_number(5_000_000_000) == "5,000,000,000 ($5B)"
