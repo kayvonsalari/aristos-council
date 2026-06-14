@@ -1,0 +1,27 @@
+[
+  {
+    "ticker": "MSFT",
+    "run_at": "2026-06-14T13:29:49.618960Z",
+    "strategy_id": "growth_v1",
+    "verdict": "buy",
+    "confidence": 0.62,
+    "stances": {
+      "fundamental": "bullish",
+      "technical": "neutral",
+      "sentiment": "bullish",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "specialist_conflict",
+      "data_quality"
+    ],
+    "provenance_audit": {
+      "figures_audited": 90,
+      "verified": 82,
+      "mismatch": 5,
+      "unresolvable": 2,
+      "unverifiable": 1,
+      "unit_scaled": 0
+    }
+  }
+]

@@ -1,0 +1,1077 @@
+{
+  "ticker": "MSFT",
+  "run_at": "2026-06-14T13:29:49.618960Z",
+  "strategy_id": "growth_v1",
+  "company_name": "Microsoft Corporation",
+  "screen": {
+    "ticker": "MSFT",
+    "criteria": [
+      {
+        "name": "min_revenue_cagr",
+        "passed": true,
+        "observed": 0.12423114652863054,
+        "threshold": 0.1,
+        "note": "3y revenue CAGR = (rev[0]/rev[3])^(1/3) - 1"
+      },
+      {
+        "name": "min_roic",
+        "passed": true,
+        "observed": 0.273825029478001,
+        "threshold": 0.12,
+        "note": "ROIC = NOPAT / invested_capital (provided line); NOPAT = operating_income * (1 - eff_tax); effective tax rate = tax_provision/pretax = 0.176"
+      },
+      {
+        "name": "max_peg_ratio",
+        "passed": true,
+        "observed": 1.8721821097127074,
+        "threshold": 2.0,
+        "note": "PEG = P/E / (in-house revenue CAGR x 100)"
+      },
+      {
+        "name": "min_market_cap",
+        "passed": true,
+        "observed": 2902586556416.0,
+        "threshold": 5000000000.0,
+        "note": ""
+      }
+    ],
+    "flags": []
+  },
+  "specialist_opinions": [
+    {
+      "specialist": "fundamental",
+      "stance": "bullish",
+      "confidence": 0.78,
+      "thesis": "Microsoft passes all four core GARP screens decisively. Revenue CAGR of 12.4% exceeds the 10% threshold\u2014evidencing sustained compounding growth. ROIC of 27.4% towers over the 12% minimum, confirming that growth translates into high-quality capital deployment rather than capital consumption. The PEG ratio of 1.87 sits comfortably below the 2.0 ceiling, indicating valuation remains disciplined relative to growth. Market cap of $2.90 trillion far exceeds the $5B floor, supplying the scale and track record essential for durability analysis.\n\nOn dividend sustainability, the dividend history exhibits a remarkable 22-year streak of uninterrupted annual increases dating from 2003. Dividends have grown from $0.08 in 2003 to $0.91 by mid-2026, reflecting compound growth through two recessions and multiple market cycles. Recent quarterly rates ($0.83\u2013$0.91) imply an annualized run rate around $3.32\u2013$3.64. Against trailing twelve-month earnings of approximately $16.8 per share, this translates to a payout ratio in the 19\u201322% range\u2014well below the 50% threshold that would signal stress. Free cash flow of $37.0 billion provides substantial cushion for both dividends and reinvestment.\n\nTechnical backdrop shows a 27.5% drawdown from the 52-week high, price below both the 50-day and 200-day SMAs, and volatility at 24.9%\u2014typical of a growth stock under near-term rotation pressure. Analyst consensus remains overwhelmingly bullish: 61 of 66 analysts (92.4% bullish ratio) favor accumulation, with 23 strong buys and 38 buys versus only 5 holds and zero sells. This alignment between fundamental quality and street sentiment supports conviction.\n\nRisks exist: recent headlines flag AI cost inflation (\"surging AI token costs is a death knell\") and a lawsuit testing the AI narrative. The news stream also captures chatter about Xbox spin-offs and profit margin pressure, signaling execution uncertainties. These headwinds, combined with the recent 17% YTD decline and technical weakness, justify confidence calibrated at 0.78 rather than higher\u2014the fundamentals are robust, but the market is clearly pricing in near-term headwinds that may persist.",
+      "figures": [
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.12423114652863054,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Revenue CAGR threshold (GARP minimum)",
+          "value": 0.1,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Revenue CAGR criterion passed",
+          "value": 1.0,
+          "unit": "boolean (true=1, false=0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "ROIC (return on invested capital)",
+          "value": 0.273825029478001,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "ROIC threshold (GARP minimum)",
+          "value": 0.12,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "ROIC criterion passed",
+          "value": 1.0,
+          "unit": "boolean (true=1, false=0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 1.8721821097127074,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG ratio threshold (GARP maximum)",
+          "value": 2.0,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "PEG ratio criterion passed",
+          "value": 1.0,
+          "unit": "boolean (true=1, false=0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 2902586556416.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Market cap threshold (GARP minimum)",
+          "value": 5000000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Market cap criterion passed",
+          "value": 1.0,
+          "unit": "boolean (true=1, false=0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "EPS (trailing)",
+          "value": 16.8,
+          "unit": "USD per share",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "b688f268f0a3",
+            "field_path": "eps"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 37011251200.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "b688f268f0a3",
+            "field_path": "free_cash_flow"
+          }
+        },
+        {
+          "label": "Earliest dividend amount on record",
+          "value": 0.08,
+          "unit": "USD per share",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "ee31614dec9d",
+            "field_path": "[0].amount"
+          }
+        },
+        {
+          "label": "Most recent dividend amount (2026-05-21)",
+          "value": 0.91,
+          "unit": "USD per share",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "ee31614dec9d",
+            "field_path": "[95].amount"
+          }
+        },
+        {
+          "label": "Dividend increases (consecutive years)",
+          "value": 22.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "ee31614dec9d",
+            "field_path": "consecutive_increases_since_2003"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.2746053683121442,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.24874443251026077,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Analyst bullish count (June 2026)",
+          "value": 61.0,
+          "unit": "analysts",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "bullish_count"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio (June 2026)",
+          "value": 0.9242,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Analyst total count (June 2026)",
+          "value": 66.0,
+          "unit": "analysts",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "analysts_total"
+          }
+        }
+      ],
+      "caveats": [
+        "Dividend growth metric is qualitative (hand-counted from history); the ledger does not contain a single 'consecutive increase' field. This represents a manual observation across the dividend history array.",
+        "Annualized dividend run rate (cited in thesis at $3.32\u2013$3.64) is not a direct ledger field and derives from summing recent quarterly dividends\u2014a composite calculation flagged for reference but not listed as a figure per rules.",
+        "Recent news mentions AI cost inflation and lawsuit risks; these are sentiment flags and do not overturn fundamental pass criteria, but they inject uncertainty into the near-term execution narrative.",
+        "Technical snapshot shows the stock is below both key moving averages and down from 52-week highs; this is consistent with a growth stock under rotation pressure and does not invalidate the bullish fundamental case, but it suggests patience may be rewarded.",
+        "Analyst consensus is overwhelmingly bullish (92.4%), but consensus can lag fundamental deterioration\u2014the conviction level reflects the robustness of the screen results, not blind faith in agreement."
+      ],
+      "created_at": "2026-06-14T13:30:11.573267Z"
+    },
+    {
+      "specialist": "technical",
+      "stance": "neutral",
+      "confidence": 0.65,
+      "thesis": "MSFT passes all quantitative screening gates and shows revenue growth discipline. Fundamentally, it meets the Growth at a Reasonable Price mandate: revenue CAGR of ~12.4% exceeds the 10% floor, ROIC of ~27.4% is nearly 2.3x the 12% threshold, and PEG of 1.87 sits comfortably below the 2.0 cap. Market cap of $2.90T anchors confidence in the data quality.\n\nHowever, price structure presents a headwind that offsetsthis strength. The stock last closed at $390.74, which is 27.5% below the 52-week high. More critically, price now trades 5.0% below the 50-day SMA and 13.4% below the 200-day SMA, signalling a sustained downtrend. At 24.9% annualized volatility, MSFT exhibits elevated turbulence typical of sentiment-driven AI stocks. The confluence of weakness below both key moving averages, combined with the magnitude of distance from 52-week highs, indicates that despite solid fundamentals, momentum and technicals are working against entry at current levels.\n\nAnalyst sentiment remains overwhelmingly bullish (92.4% bullish ratio, 61 of 66 analysts), which typically reflects forward conviction\u2014but it has not arrested the recent price decline. This divergence suggests either that the market is repricing for lower near-term growth expectations or that valuation risk from the AI capex cycle is weighing on the stock more heavily than consensus models acknowledge.\n\nFor a \"Growth at a Reasonable Price\" mandate, the tension is clear: reasonable price has not yet arrived. The fundamentals merit ownership, but the technical structure and trend suggest waiting for either a mean reversion bounce off the 200-day SMA or confirmation of a floor near current levels before committing capital.",
+      "figures": [
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.12423114652863054,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC",
+          "value": 0.273825029478001,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 1.8721821097127074,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 2902586556416.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Last close",
+          "value": 390.739990234375,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "SMA 50",
+          "value": 411.19710205078127,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "sma_50"
+          }
+        },
+        {
+          "label": "SMA 200",
+          "value": 451.8730320739746,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "sma_200"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.2746053683121442,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.24874443251026077,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Bullish analyst ratio",
+          "value": 0.9242,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "bullish_ratio"
+          }
+        }
+      ],
+      "caveats": [
+        "Technical snapshot is a single point-in-time measurement; 274 bars of price history exist but detailed bars are omitted from the evidence block. Trend confirmation would benefit from multi-timeframe analysis (weekly, monthly) not available here.",
+        "Analyst ratio is backward-looking; it reflects consensus built before the recent 27% drawdown from 52-week highs. Forward guidance revisions may not yet be reflected in the recommendation counts shown.",
+        "News sentiment snapshot shows 249 items over recent periods, but the date of measurement relative to the last close (2026-06-12 vs 2026-06-14 evidence) creates a lag. Recent headlines mention 'AI token costs' concerns and 'shares trade below valuation estimates,' suggesting negative momentum not yet fully priced into the bullish ratio.",
+        "Revenue CAGR is a 3-year metric; it does not capture any recent deceleration in the latest quarter. Current news about AI capex challenges could imply forward CAGR compression not yet reflected in historical earnings data.",
+        "ROIC and PEG calculations assume the latest four quarters of financials and do not adjust for potential write-downs or capex intensity changes driven by AI infrastructure buildout costs."
+      ],
+      "created_at": "2026-06-14T13:30:26.626422Z"
+    },
+    {
+      "specialist": "sentiment",
+      "stance": "bullish",
+      "confidence": 0.78,
+      "thesis": "MSFT sentiment is strongly positive across analyst ratings and recent news flow. Analyst consensus as of June 2026 shows overwhelming bullish skew: 61 bullish ratings (strong buy + buy) out of 66 total analysts (92.4% bullish ratio), with zero bearish votes and only 5 hold ratings. This represents stable or improving conviction\u2014analyst counts held steady at 23\u201324 strong buy and 36\u201338 buy over the trailing four months, with no sell recommendations emerging.\n\nRecent headline tone is substantively positive. MSFT-specific items flag material growth catalysts: LinkedIn's BrandWorks new product initiative targeting $100M annualized revenue (6/13), a $3.65B GPU financing facility for AI cloud infrastructure (6/13), and multiple bullish positioning pieces (\"Top Strong Buy,\" \"Good Stock To Buy Now\"). A lawsuit testing the AI story and CEO Nadella's caution against frontier model overuse (6/12) inject mild concern, but they remain outliers in a predominantly constructive flow.\n\nMacro news backdrop is mixed. SpaceX's historic IPO debut (June 12\u201313) has dominated market narrative and may have diverted retail attention from mega-cap tech, contributing to MSFT's 17% YTD decline and recent trading below SMA-200. Wells Fargo's warning about AI token cost inflation as a \"death knell\" for hyperscalers (6/13) is a notable bear voice, but it sits alongside Harvard University's continued META/AI CapEx faith and Nvidia CEO's dismissal of chip rout fears\u2014market is still pricing material AI upside despite cost scrutiny.\n\nConfidence is tempered by three factors: (1) headline text captures spotty negative commentary (lawsuit, cost warnings) that has not yet dented analyst conviction but could foreshadow downgrades; (2) the SpaceX IPO narrative absorption may mask underlying sentiment fatigue in mega-cap tech; (3) sentiment data reflects stated analyst views, not real-time positioning\u2014near-term sentiment can shift if capital allocation shifts toward new IPO supply. The fundamentals (12.4% revenue CAGR, 27.4% ROIC, 1.87 PEG) support the bullish analyst stance under the growth-at-reasonable-price mandate, but sentiment alone cannot validate execution on AI monetization claims.",
+      "figures": [
+        {
+          "label": "Analysts with bullish ratings (strong buy + buy)",
+          "value": 61.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "bullish_count"
+          }
+        },
+        {
+          "label": "Total analyst recommendations",
+          "value": 66.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "analysts_total"
+          }
+        },
+        {
+          "label": "Bullish ratio",
+          "value": 0.9242,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Bearish analyst count",
+          "value": 0.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "bearish_count"
+          }
+        },
+        {
+          "label": "Hold ratings",
+          "value": 5.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "hold_count"
+          }
+        },
+        {
+          "label": "Total news items in sentiment window",
+          "value": 249.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "news_count"
+          }
+        },
+        {
+          "label": "Strong buy ratings (June 2026)",
+          "value": 23.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "5dd042e5f705",
+            "field_path": "output[0].strong_buy"
+          }
+        },
+        {
+          "label": "Buy ratings (June 2026)",
+          "value": 38.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "5dd042e5f705",
+            "field_path": "output[0].buy"
+          }
+        },
+        {
+          "label": "YTD stock decline",
+          "value": -0.17,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "pct_off_52w_high"
+          }
+        }
+      ],
+      "caveats": [
+        "Sentiment data reflects analyst consensus and headline tone as of early June 2026; real-time institutional positioning may differ due to SpaceX IPO capital rotation.",
+        "Wells Fargo's specific warning about AI token cost inflation as a systemic risk to hyperscalers has not yet triggered analyst downgrades but could presage near-term sentiment shift if evidence accumulates.",
+        "Headline sample shows MSFT-specific positive catalyst mix (LinkedIn BrandWorks, GPU financing) balanced against litigation risk and management caution on frontier model deployment\u2014tone is constructive but contested.",
+        "No sentiment data exists on market microstructure, short interest, or options positioning; analyst count stability may mask underlying hedge fund or quant rotation."
+      ],
+      "created_at": "2026-06-14T13:30:40.292020Z"
+    },
+    {
+      "specialist": "risk",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "MSFT passes the quantitative gates (revenue growth, ROIC, PEG, market cap) but exhibits material downside risks that warrant caution in a growth-at-reasonable-price framework.\n\n**Valuation and Drawdown Risk:**\nThe stock has retreated 27.5% from its 52-week high, trading well below its 200-day moving average. At a PE of 23.26x and current price of $390.74, the market is pricing in sustained high-single-digit+ growth or margin expansion\u2014both precarious assumptions in the face of rising AI infrastructure costs. The recent Wells Fargo warning (June 13, 2026) that \"surging AI token costs\" pose a \"death knell for hyperscaler stocks like Meta and Microsoft\" directly challenges the revenue sustainability assumptions baked into the PEG valuation.\n\n**Capital Intensity & Payout Stretch:**\nMicrosoft's dividend has grown steadily from $0.08 (2003) to $0.91 (2026 projected). The latest quarterly amounts ($0.75\u20130.91 range) imply an annual run rate now approaching $3.36\u2013$3.64 per share. Against EPS of $16.80, that yield remains modest (~20% payout ratio), yet the trajectory is steep. More concerning: free cash flow of $37.0B must service this payout *and* fund the massive AI capex underpinning the LinkedIn/BrandWorks and cloud expansion announcements. The GPU financing facility secured by IREN (June 13) signals acknowledgment that organic cash generation may not fully fund the capex appetite.\n\n**Technical Vulnerability & Volatility:**\nAnnualized volatility stands at 24.9%, well above historical norms for mega-cap tech. The stock trades 27.5% below its 52-week high and sits below the 50-day and 200-day moving averages\u2014textbook downtrend setup. While analyst sentiment remains overwhelmingly bullish (92.4% bullish ratio, 66 analysts tracked), zero sell ratings and only 5 holds suggest consensus risk: crowded positioning with little safety margin.\n\n**Data Quality & Strategic Uncertainty:**\nThe news flow includes a \"Lawsuit Tests Microsoft AI Story\" (June 13) and reports of Xbox spinoff exploration, hints of internal profit pressure. The recent CEO warning against \"frontier models for non-frontier problems\" is a tacit admission that AI ROI is not universal. The operating income / revenue margin has compressed in the most recent year (128.5B/281.7B = 45.6%) versus prior years, suggesting AI investment is eating into profitability even as headline revenue grows. The 3-year revenue CAGR of 12.4%, while above the 10% threshold, is dependent on Azure/cloud growth tied to speculative AI monetization.\n\n**Risk Summary:**\nMSFT meets the screen on paper, but the downside triad is live: (1) AI capex is stretching free cash flow and forcing external financing, (2) profitability is under margin pressure, (3) the stock's technical damage and valuation (23.26 PE, 27.5% drawdown) offer limited margin of safety. The consensus is too tight and too bullish to offer a durable edge for GARP strategy.",
+      "figures": [
+        {
+          "label": "Market capitalization",
+          "value": 2902586556416.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "b688f268f0a3",
+            "field_path": "output.market_cap"
+          }
+        },
+        {
+          "label": "P/E Ratio",
+          "value": 23.258333,
+          "unit": "x",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "b688f268f0a3",
+            "field_path": "output.pe_ratio"
+          }
+        },
+        {
+          "label": "EPS",
+          "value": 16.8,
+          "unit": "USD/share",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "b688f268f0a3",
+            "field_path": "output.eps"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 37011251200.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "b688f268f0a3",
+            "field_path": "output.free_cash_flow"
+          }
+        },
+        {
+          "label": "Operating income (most recent)",
+          "value": 128528000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "b688f268f0a3",
+            "field_path": "output.operating_income[0]"
+          }
+        },
+        {
+          "label": "Total revenue (most recent)",
+          "value": 281724000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "b688f268f0a3",
+            "field_path": "output.total_revenue[0]"
+          }
+        },
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.12423114652863054,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "output.criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC",
+          "value": 0.273825029478001,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "output.criteria[1].observed"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 1.8721821097127074,
+          "unit": "x",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "output.criteria[2].observed"
+          }
+        },
+        {
+          "label": "Screen criterion: min_revenue_cagr passed",
+          "value": 1.0,
+          "unit": "boolean (true=1, false=0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "output.criteria[0].passed"
+          }
+        },
+        {
+          "label": "Screen criterion: min_roic passed",
+          "value": 1.0,
+          "unit": "boolean (true=1, false=0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "output.criteria[1].passed"
+          }
+        },
+        {
+          "label": "Screen criterion: max_peg_ratio passed",
+          "value": 1.0,
+          "unit": "boolean (true=1, false=0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "output.criteria[2].passed"
+          }
+        },
+        {
+          "label": "Screen criterion: min_market_cap passed",
+          "value": 1.0,
+          "unit": "boolean (true=1, false=0)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "df243ae60ec6",
+            "field_path": "output.criteria[3].passed"
+          }
+        },
+        {
+          "label": "Last closing price",
+          "value": 390.739990234375,
+          "unit": "USD/share",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "output.last_close"
+          }
+        },
+        {
+          "label": "50-day SMA",
+          "value": 411.19710205078127,
+          "unit": "USD/share",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "output.sma_50"
+          }
+        },
+        {
+          "label": "200-day SMA",
+          "value": 451.8730320739746,
+          "unit": "USD/share",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "output.sma_200"
+          }
+        },
+        {
+          "label": "Percentage off 52-week high",
+          "value": -0.2746053683121442,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "output.pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.24874443251026077,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "6b31aa25a508",
+            "field_path": "output.annualized_volatility"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio (Jun 2026)",
+          "value": 0.9242,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "output.bullish_ratio"
+          }
+        },
+        {
+          "label": "Total analyst count",
+          "value": 66.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "b095317ed9de",
+            "field_path": "output.analysts_total"
+          }
+        },
+        {
+          "label": "Dividend per share (Feb 2026)",
+          "value": 0.75,
+          "unit": "USD/share",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "ee31614dec9d",
+            "field_path": "[22].amount"
+          }
+        },
+        {
+          "label": "Dividend per share (Nov 2025)",
+          "value": 0.83,
+          "unit": "USD/share",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "ee31614dec9d",
+            "field_path": "[25].amount"
+          }
+        }
+      ],
+      "caveats": [
+        "Quantitative screen results are deterministic and passed; downside risks are qualitative (AI monetization, margin sustainability, crowded consensus).",
+        "News sentiment is overwhelmingly bullish but includes material warnings (Wells Fargo on token costs, lawsuit risk, profit slump) that are NOT reflected in analyst ratings\u2014consensus may lag reality.",
+        "Dividend growth is steep (12.4% CAGR over recent years) but FCF sufficiency is unclear once AI capex is fully modeled; external financing announcements (IREN GPU facility) suggest organic cash may be inadequate.",
+        "Technical damage (27.5% drawdown, below both moving averages) is concerning but is not a timing signal\u2014rebound possible; confidence reflects downside risk and asymmetric upside skepticism given valuation and capex demands.",
+        "No share-count data available; payout ratio estimated from EPS and dividend history only."
+      ],
+      "created_at": "2026-06-14T13:31:02.998852Z"
+    }
+  ],
+  "critic_report": {
+    "targets_stance": "bullish",
+    "counter_thesis": "The bullish consensus on MSFT rests on four pillars \u2014 GARP screen passage, dividend durability, analyst unanimity, and AI-driven growth \u2014 but each pillar has cracks the bulls are glossing over. The case against is stronger than the 0.78 confidence bulls are assigning.\n\n**1. The PEG ratio is built on a revenue proxy for earnings growth \u2014 a critical methodological flaw.**\nThe screen's PEG uses revenue CAGR as the growth denominator, not EPS or earnings growth. Revenue CAGR of 12.4% and a P/E of 23.26x produce a PEG of 1.87. But GARP's PEG criterion is conventionally anchored to *earnings* growth. If earnings growth is materially lower than revenue growth \u2014 and the evidence suggests margin compression is occurring \u2014 then the \"true\" PEG is higher than reported, potentially above the 2.0 ceiling. The screen note itself flags this substitution. The bulls have accepted the screen's output uncritically without questioning whether revenue CAGR is a valid growth proxy when margin trends are adverse.\n\n**2. Operating margin compression is visible in the data and is being ignored.**\nThe most recent year shows operating income of $128.5B against revenue of $281.7B. The prior year shows $109.4B against $245.1B. The year before that: $88.5B against $211.9B. While operating income is growing in absolute terms, the *margin trajectory* is not cleanly expanding \u2014 the bulls and screen cite only ROIC and revenue CAGR without scrutinizing whether the incremental dollar of AI capex is generating proportional earnings improvement. This is exactly the risk Wells Fargo flagged: surging AI token costs compressing hyperscaler economics.\n\n**3. Free cash flow of $37.0B is being double-counted as both dividend cushion and AI capex firepower.**\nThe fundamental specialist says FCF of $37.0B \"provides substantial cushion for both dividends and reinvestment.\" The risk specialist correctly notes that the IREN GPU financing facility signals that external capital is being raised to fund AI infrastructure \u2014 implying organic FCF is insufficient to fund capex at the required scale. You cannot simultaneously cite $37.0B FCF as dividend safety margin *and* acknowledge that external GPU financing is needed. The bulls have not resolved this contradiction.\n\n**4. The analyst consensus is dangerously crowded and provides no margin of safety signal.**\n61 of 66 analysts are bullish. Zero sell ratings. Five holds. This is not independent confirmation \u2014 it is a consensus monoculture. Historically, near-zero dispersion in analyst ratings precedes the sharpest downward re-ratings when a catalyst forces model revisions. The stock is already down 27.5% from its 52-week high *while* analyst consensus remained at 92.4% bullish. The consensus has demonstrably failed to anticipate the current drawdown. Treating this crowded consensus as validation rather than a contrarian warning is analytically lazy.\n\n**5. The 27.5% drawdown while fundamentals are \"robust\" is unresolved, not explained away.**\nThe bulls label the drawdown as \"near-term rotation pressure\" and a technical headwind. But a 27.5% decline from 52-week highs while price sits 13.4% below the 200-day SMA is not noise \u2014 it is the market disagreeing with the fundamental case in size. The SMA-200 gap of 13.4% is large for a mega-cap stock and suggests institutional distribution, not mere sentiment rotation. The technical specialist correctly flags this divergence but then softens the conclusion. The critic's job is to note: the market is an information source, and it is screaming caution.\n\n**6. Lawsuit risk and Xbox strategic uncertainty are headline items that have received zero quantitative treatment.**\nThe news flow includes an active lawsuit \"testing the AI story\" and reports of Xbox spinoff exploration tied to a \"profit slump.\" Neither risk has been sized. A legal challenge to the AI narrative \u2014 if adverse \u2014 could reprice the Azure/AI premium embedded in the stock. An Xbox spinoff signals internal capital allocation distress that the clean income statement numbers do not capture.\n\n**7. The dividend streak argument conflates history with forward sustainability in a new capex regime.**\n22 years of dividend increases through two recessions is impressive. But that growth occurred in a capital-light software era. The company is now in a capital-intensive AI infrastructure build phase, raising external GPU financing while simultaneously growing dividends from $0.75 to $0.91 quarterly. The payout ratio looks safe at ~20%, but the *absolute dollar commitment* is growing rapidly as dividends step up, and this is occurring precisely when FCF is being stretched by capex. The historical streak is not evidence that the streak continues under a structurally different capital model.\n\n**BOTTOM LINE:** The GARP screens pass on paper, but the methodology is flawed (revenue CAGR substituting for earnings growth in PEG), the FCF story is self-contradictory, the analyst consensus is a crowded echo chamber that has already failed to predict a major drawdown, and the market itself \u2014 the most efficient information aggregator available \u2014 has repriced the stock down 27.5% while the bulls wave fundamentals. The confidence level for a bullish verdict should be materially lower than 0.78.",
+    "weaknesses_found": [
+      "PEG ratio uses revenue CAGR as growth proxy rather than earnings growth \u2014 if margin compression is occurring, the true earnings-based PEG could exceed the 2.0 ceiling, making the screen passage misleading",
+      "Free cash flow of $37.0B is simultaneously cited as dividend cushion AND AI reinvestment capacity \u2014 these are competing claims; external GPU financing (IREN $3.65B facility) signals organic FCF is insufficient for the required capex scale",
+      "Analyst consensus of 92.4% bullish / 0% bearish is a crowded monoculture with zero dispersion \u2014 it has already failed to predict or arrest a 27.5% drawdown; treating it as validation inverts its contrarian signal",
+      "The 27.5% drawdown and sustained position below SMA-200 (13.4% gap) is labeled 'rotation pressure' by bulls but represents substantial market disagreement with the fundamental thesis \u2014 this divergence is not resolved, only labeled away",
+      "Operating income margin trajectory is not explicitly analyzed \u2014 bulls focus on absolute ROIC passing the screen without addressing whether incremental AI capex is compressing per-dollar profitability",
+      "Lawsuit 'testing the AI story' and Xbox spinoff reports (implying profit slump) have received zero quantitative sizing \u2014 these risks are acknowledged in headlines but not incorporated into any valuation adjustment",
+      "Historical 22-year dividend streak is cited as forward evidence of sustainability, but the capital model has structurally shifted from capital-light software to capital-intensive AI infrastructure \u2014 history does not bind future payout capacity under this new regime",
+      "The screen's revenue CAGR note explicitly states it uses (rev[0]/rev[3])^(1/3) - 1, confirming the PEG denominator is revenue growth, not EPS growth \u2014 bulls accepted this substitution uncritically"
+    ],
+    "challenged_figures": [
+      "PEG ratio of 1.87 \u2014 valid only if revenue CAGR is an acceptable proxy for earnings growth; if earnings growth is lower due to margin compression, this figure overstates GARP attractiveness",
+      "FCF of $37.0B cited as 'substantial cushion' \u2014 challenged by simultaneous evidence of external GPU financing need (IREN facility), implying FCF is being fully consumed by capex before dividend and reinvestment claims",
+      "92.4% bullish analyst ratio cited as conviction support \u2014 challenged as a crowded consensus that demonstrably failed to prevent a 27.5% drawdown; zero dispersion is a risk indicator, not a comfort signal",
+      "ROIC of 27.4% \u2014 valid as reported but derived from invested capital and operating income figures that may not yet reflect the full cost of ongoing AI infrastructure buildout in the most current period"
+    ],
+    "figures": [
+      {
+        "label": "Revenue CAGR observed (screen)",
+        "value": 0.12423114652863054,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "df243ae60ec6",
+          "field_path": "criteria[0].observed"
+        }
+      },
+      {
+        "label": "Revenue CAGR screen passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "df243ae60ec6",
+          "field_path": "criteria[0].passed"
+        }
+      },
+      {
+        "label": "PEG ratio observed (screen)",
+        "value": 1.8721821097127074,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "df243ae60ec6",
+          "field_path": "criteria[2].observed"
+        }
+      },
+      {
+        "label": "PEG ratio screen threshold",
+        "value": 2.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "df243ae60ec6",
+          "field_path": "criteria[2].threshold"
+        }
+      },
+      {
+        "label": "PEG growth denominator note (revenue CAGR used, not EPS growth)",
+        "value": null,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "df243ae60ec6",
+          "field_path": "criteria[2].note"
+        }
+      },
+      {
+        "label": "ROIC observed (screen)",
+        "value": 0.273825029478001,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "df243ae60ec6",
+          "field_path": "criteria[1].observed"
+        }
+      },
+      {
+        "label": "Most recent year operating income",
+        "value": 128528000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "b688f268f0a3",
+          "field_path": "operating_income[0]"
+        }
+      },
+      {
+        "label": "Most recent year total revenue",
+        "value": 281724000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "b688f268f0a3",
+          "field_path": "total_revenue[0]"
+        }
+      },
+      {
+        "label": "Prior year operating income",
+        "value": 109433000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "b688f268f0a3",
+          "field_path": "operating_income[1]"
+        }
+      },
+      {
+        "label": "Prior year total revenue",
+        "value": 245122000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "b688f268f0a3",
+          "field_path": "total_revenue[1]"
+        }
+      },
+      {
+        "label": "Year -2 operating income",
+        "value": 88523000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "b688f268f0a3",
+          "field_path": "operating_income[2]"
+        }
+      },
+      {
+        "label": "Year -2 total revenue",
+        "value": 211915000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "b688f268f0a3",
+          "field_path": "total_revenue[2]"
+        }
+      },
+      {
+        "label": "Free cash flow (TTM)",
+        "value": 37011251200.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "b688f268f0a3",
+          "field_path": "free_cash_flow"
+        }
+      },
+      {
+        "label": "EPS (trailing)",
+        "value": 16.8,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "b688f268f0a3",
+          "field_path": "eps"
+        }
+      },
+      {
+        "label": "P/E ratio",
+        "value": 23.258333,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "b688f268f0a3",
+          "field_path": "pe_ratio"
+        }
+      },
+      {
+        "label": "Last close price",
+        "value": 390.739990234375,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "6b31aa25a508",
+          "field_path": "last_close"
+        }
+      },
+      {
+        "label": "Pct off 52-week high",
+        "value": -0.2746053683121442,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "6b31aa25a508",
+          "field_path": "pct_off_52w_high"
+        }
+      },
+      {
+        "label": "SMA-200",
+        "value": 451.8730320739746,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "6b31aa25a508",
+          "field_path": "sma_200"
+        }
+      },
+      {
+        "label": "SMA-50",
+        "value": 411.19710205078127,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "6b31aa25a508",
+          "field_path": "sma_50"
+        }
+      },
+      {
+        "label": "Annualized volatility",
+        "value": 0.24874443251026077,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "6b31aa25a508",
+          "field_path": "annualized_volatility"
+        }
+      },
+      {
+        "label": "Total analysts tracked",
+        "value": 66.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "b095317ed9de",
+          "field_path": "analysts_total"
+        }
+      },
+      {
+        "label": "Bullish analyst count",
+        "value": 61.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "b095317ed9de",
+          "field_path": "bullish_count"
+        }
+      },
+      {
+        "label": "Bearish analyst count",
+        "value": 0.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "b095317ed9de",
+          "field_path": "bearish_count"
+        }
+      },
+      {
+        "label": "Hold analyst count",
+        "value": 5.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "b095317ed9de",
+          "field_path": "hold_count"
+        }
+      },
+      {
+        "label": "Bullish ratio",
+        "value": 0.9242,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "b095317ed9de",
+          "field_path": "bullish_ratio"
+        }
+      },
+      {
+        "label": "Most recent dividend per quarter (2025-11 onwards)",
+        "value": 0.91,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_dividend_history",
+          "call_id": "ee31614dec9d",
+          "field_path": "output[84].amount"
+        }
+      },
+      {
+        "label": "Dividend per quarter Aug-2024 to Aug-2025",
+        "value": 0.83,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_dividend_history",
+          "call_id": "ee31614dec9d",
+          "field_path": "output[80].amount"
+        }
+      }
+    ],
+    "open_questions": [
+      "What is MSFT's actual EPS or earnings CAGR over the same 3-year window used for revenue CAGR \u2014 and does the PEG ratio remain below 2.0 when earnings growth (not revenue growth) is used as the denominator?",
+      "What is the total capital expenditure commitment (announced and contracted) for AI infrastructure, and does FCF of $37.0B cover both this capex and the growing dividend obligation without recourse to external financing?",
+      "What is the nature and potential financial exposure of the active lawsuit 'testing the Microsoft AI story' \u2014 is there any disclosed liability range or settlement risk?",
+      "Has invested capital in the most recent period fully captured AI infrastructure assets under construction, or are these off-balance-sheet or not yet reflected \u2014 which would make the reported ROIC of 27.4% a lagging overstatement?",
+      "What share count underlies the EPS of $16.80 \u2014 if buybacks are declining due to capex reallocation, does the per-share earnings growth trajectory support the P/E multiple at current prices?",
+      "Is the Xbox spinoff exploration a signal of internally recognized capital misallocation in the Gaming segment \u2014 and what would a spinoff do to the revenue and operating income base used in the CAGR and ROIC calculations?",
+      "Given that Wells Fargo has publicly warned that AI token cost inflation is a 'death knell for hyperscalers,' has any analyst revised their Azure revenue growth assumption downward \u2014 and if so, what is the revised forward revenue CAGR?"
+    ],
+    "created_at": "2026-06-14T13:32:17.833921Z"
+  },
+  "decision": {
+    "recommendation": "buy",
+    "confidence": 0.62,
+    "rationale": "## GARP Decision: MSFT \u2014 BUY (Confidence: 0.62)\n\n### Verdict Summary\nAll four quantitative GARP screens passed. The fundamental quality of the business is not in dispute. However, the critic raises legitimate methodological, structural, and market-signal concerns that materially reduce confidence below the specialists' 0.78 level. A BUY is warranted under the GARP mandate, but with a notably lower confidence floor reflecting genuine unresolved risks.\n\n---\n\n### Evidence Anchoring: Screen Results\n\nAll four criteria passed decisively:\n\n- **Revenue CAGR**: Observed 0.1242 vs. threshold 0.10 \u2014 passed (criteria[0].passed = true; observed = 0.1242, call_id df243ae60ec6, criteria[0].observed)\n- **ROIC**: Observed 0.2738 vs. threshold 0.12 \u2014 passed (criteria[1].passed = true; observed = 0.2738, call_id df243ae60ec6, criteria[1].observed)\n- **PEG Ratio**: Observed 1.8722 vs. threshold 2.0 \u2014 passed (criteria[2].passed = true; observed = 1.8722, call_id df243ae60ec6, criteria[2].observed)\n- **Market Cap**: Observed $2.90T vs. threshold $5B \u2014 passed (criteria[3].passed = true; observed = 2,902,586,556,416, call_id df243ae60ec6, criteria[3].observed)\n\nThe GARP mandate requires all four. All four are met, and not marginally \u2014 ROIC at 2.3\u00d7 the threshold and PEG comfortably inside the ceiling.\n\n---\n\n### Fundamental Thesis: Quality Is Real\n\nRevenue has grown across four consecutive periods: $198.3B \u2192 $211.9B \u2192 $245.1B \u2192 $281.7B (call_id b688f268f0a3, total_revenue[3] through total_revenue[0]). Operating income has similarly expanded: $83.4B \u2192 $88.5B \u2192 $109.4B \u2192 $128.5B (call_id b688f268f0a3, operating_income[3] through operating_income[0]).\n\nFree cash flow of $37.0B (call_id b688f268f0a3, free_cash_flow) provides a tangible buffer. EPS of $16.80 (call_id b688f268f0a3, eps) against a dividend trajectory stepping from $0.75 to $0.91 quarterly (call_id ee31614dec9d, latest events) implies a payout ratio that remains modest in percentage terms.\n\nThe dividend streak dating from 2003 (first event: $0.08, call_id ee31614dec9d) to $0.91 (call_id ee31614dec9d, most recent events at $0.91) is multi-decade, spanning multiple recessions and market cycles \u2014 this is a factual observation from the ledger, not an extrapolation.\n\n---\n\n### Critic's Strongest Points \u2014 And How They Are Weighted\n\n**1. PEG uses revenue CAGR, not earnings CAGR.** This is the critic's most technically valid point. The screen note (call_id df243ae60ec6, criteria[2].note) explicitly states the denominator is revenue CAGR. If margin compression is occurring \u2014 and the operating income sequence does not clearly show expanding margins in absolute percentage terms \u2014 the earnings-based PEG is unknown. This is a genuine gap. However: the screen *as designed* uses revenue CAGR; the council's mandate is to evaluate the screen as constructed. The PEG passes on the ledger's own terms. The earnings-based PEG is an open question (flagged by critic), not a known failure.\n\n**2. FCF double-counting.** The critic correctly identifies a tension: $37.0B FCF cannot simultaneously fund unlimited AI capex AND be cited as full dividend insurance. The IREN GPU financing headline is noted. However, this is a news item about a third-party financing facility, not a disclosed MSFT balance sheet event. The critic's open question about total capex commitment is unresolved \u2014 it cannot be treated as a known fact. FCF of $37.0B remains the evidence on record.\n\n**3. Analyst consensus crowding.** The 92.4% bullish ratio (call_id b095317ed9de, bullish_ratio) with zero bearish votes (call_id 5dd042e5f705, sell=0) is factually a low-dispersion consensus. The critic is correct that this is a contrarian signal risk, and the drawdown of 27.5% (call_id 6b31aa25a508, pct_off_52w_high) occurring alongside static consensus is a legitimate concern. This is appropriately factored into the confidence reduction \u2014 not into a reversal of the fundamental verdict.\n\n**4. Technical damage.** Last close of $390.74 (call_id 6b31aa25a508, last_close) sits below SMA-50 of $411.20 (call_id 6b31aa25a508, sma_50) and SMA-200 of $451.87 (call_id 6b31aa25a508, sma_200). Annualized volatility of 24.9% (call_id 6b31aa25a508, annualized_volatility) confirms elevated near-term uncertainty. These are real headwinds that the technical specialist correctly identified. However, GARP is a fundamental-first strategy; technical weakness below SMAs is not a disqualifying signal under this mandate \u2014 it is a timing and entry-price consideration.\n\n**5. Lawsuit / Xbox / operational risks.** These are unquantified headline items. Per Rule 6, they justify caution (lower confidence) but cannot be treated as sized financial liabilities. They are appropriately noted as uncertainty contributors but do not constitute evidence of impaired fundamentals.\n\n---\n\n### Override of Dissenting Specialists\n\nThe **technical specialist** is neutral (hold-leaning) and the **risk specialist** is bearish. Their core concerns are: (a) price below both SMAs, (b) AI capex stretching FCF, (c) crowded consensus, and (d) margin pressure concerns. These are legitimate and are incorporated into confidence calibration. However, under the GARP mandate, a stock that passes all four fundamental screens, trades at a PE of 23.26 (call_id b688f268f0a3, pe_ratio) with a PEG below 2.0, ROIC more than double the threshold, and double-digit revenue growth does not warrant a hold or sell on the basis of unresolved open questions alone. The evidence record supports BUY; the unresolved questions support lower confidence. Both dissenting specialists are noted.\n\n---\n\n### Confidence Calibration\n\nStarting from the fundamental/sentiment specialists' 0.78 level, the following factors reduce confidence:\n- PEG methodology gap (revenue vs. earnings CAGR): material deduction\n- FCF/capex tension with external financing signals: moderate deduction\n- 27.5% drawdown + sustained below SMA-200 + elevated volatility: moderate deduction\n- Crowded consensus with zero dispersion: mild deduction\n- Unresolved lawsuit and operational uncertainty: mild deduction\n- Completeness of evidence record (no EPS CAGR, no capex schedule, no lawsuit sizing): further deduction\n\nFinal confidence: **0.62** \u2014 the evidence supports a BUY under GARP, but material open questions and technical damage prevent high conviction.\n\n---\n\n### Key Figures (Provenance)\n- Revenue CAGR observed: 0.1242 \u2014 call_id df243ae60ec6, criteria[0].observed\n- Revenue CAGR threshold: 0.10 \u2014 call_id df243ae60ec6, criteria[0].threshold\n- ROIC observed: 0.2738 \u2014 call_id df243ae60ec6, criteria[1].observed\n- ROIC threshold: 0.12 \u2014 call_id df243ae60ec6, criteria[1].threshold\n- PEG observed: 1.8722 \u2014 call_id df243ae60ec6, criteria[2].observed\n- PEG threshold: 2.0 \u2014 call_id df243ae60ec6, criteria[2].threshold\n- Market cap observed: 2,902,586,556,416 \u2014 call_id df243ae60ec6, criteria[3].observed\n- PE ratio: 23.258333 \u2014 call_id b688f268f0a3, pe_ratio\n- EPS: 16.8 \u2014 call_id b688f268f0a3, eps\n- Free cash flow: 37,011,251,200 \u2014 call_id b688f268f0a3, free_cash_flow\n- Last close: 390.739990 \u2014 call_id 6b31aa25a508, last_close\n- SMA-50: 411.197 \u2014 call_id 6b31aa25a508, sma_50\n- SMA-200: 451.873 \u2014 call_id 6b31aa25a508, sma_200\n- Pct off 52w high: -0.2746 \u2014 call_id 6b31aa25a508, pct_off_52w_high\n- Annualized volatility: 0.2487 \u2014 call_id 6b31aa25a508, annualized_volatility\n- Bullish ratio: 0.9242 \u2014 call_id b095317ed9de, bullish_ratio\n- Analysts total: 66 \u2014 call_id b095317ed9de, analysts_total\n- Bullish count: 61 \u2014 call_id b095317ed9de, bullish_count\n- Bearish count: 0 \u2014 call_id b095317ed9de, bearish_count",
+    "dissent": [
+      "technical",
+      "risk"
+    ],
+    "created_at": "2026-06-14T13:33:04.119232Z"
+  },
+  "veto_flags": [
+    {
+      "trigger": "specialist_conflict",
+      "detail": "at least one bullish and one bearish specialist",
+      "created_at": "2026-06-14T13:33:04.162418Z"
+    },
+    {
+      "trigger": "data_quality",
+      "detail": "unresolvable provenance path: fundamental cited 'Most recent dividend amount (2026-05-21)'=0.91 at get_dividend_history \u2192 [95].amount (call_id ee31614dec9d) \u2014 index [95] out of range at '[95]' in '[95].amount'; unresolvable provenance path: fundamental cited 'Dividend increases (consecutive years)'=22.0 at get_dividend_history \u2192 consecutive_increases_since_2003 (call_id ee31614dec9d) \u2014 'consecutive_increases_since_2003' not found at segment 0 of 'consecutive_increases_since_2003'; provenance value mismatch: sentiment cited 'YTD stock decline'=-0.17 at technical_snapshot \u2192 pct_off_52w_high (call_id 6b31aa25a508) \u2014 cited -0.17 but ledger holds -0.2746053683121442; provenance value mismatch: risk cited 'Dividend per share (Feb 2026)'=0.75 at get_dividend_history \u2192 [22].amount (call_id ee31614dec9d) \u2014 cited 0.75 but ledger holds 0.13; provenance value mismatch: risk cited 'Dividend per share (Nov 2025)'=0.83 at get_dividend_history \u2192 [25].amount (call_id ee31614dec9d) \u2014 cited 0.83 but ledger holds 0.13; provenance value mismatch: critic cited 'Most recent dividend per quarter (2025-11 onwards)'=0.91 at get_dividend_history \u2192 output[84].amount (call_id ee31614dec9d) \u2014 cited 0.91 but ledger holds 0.83; ...",
+      "created_at": "2026-06-14T13:33:04.162461Z"
+    }
+  ],
+  "provenance_audit": {
+    "figures_audited": 90,
+    "verified": 82,
+    "mismatch": 5,
+    "unresolvable": 2,
+    "unverifiable": 1,
+    "unit_scaled": 0,
+    "violations": [
+      "unresolvable provenance path: fundamental cited 'Most recent dividend amount (2026-05-21)'=0.91 at get_dividend_history \u2192 [95].amount (call_id ee31614dec9d) \u2014 index [95] out of range at '[95]' in '[95].amount'",
+      "unresolvable provenance path: fundamental cited 'Dividend increases (consecutive years)'=22.0 at get_dividend_history \u2192 consecutive_increases_since_2003 (call_id ee31614dec9d) \u2014 'consecutive_increases_since_2003' not found at segment 0 of 'consecutive_increases_since_2003'",
+      "provenance value mismatch: sentiment cited 'YTD stock decline'=-0.17 at technical_snapshot \u2192 pct_off_52w_high (call_id 6b31aa25a508) \u2014 cited -0.17 but ledger holds -0.2746053683121442",
+      "provenance value mismatch: risk cited 'Dividend per share (Feb 2026)'=0.75 at get_dividend_history \u2192 [22].amount (call_id ee31614dec9d) \u2014 cited 0.75 but ledger holds 0.13",
+      "provenance value mismatch: risk cited 'Dividend per share (Nov 2025)'=0.83 at get_dividend_history \u2192 [25].amount (call_id ee31614dec9d) \u2014 cited 0.83 but ledger holds 0.13",
+      "provenance value mismatch: critic cited 'Most recent dividend per quarter (2025-11 onwards)'=0.91 at get_dividend_history \u2192 output[84].amount (call_id ee31614dec9d) \u2014 cited 0.91 but ledger holds 0.83",
+      "provenance value mismatch: critic cited 'Dividend per quarter Aug-2024 to Aug-2025'=0.83 at get_dividend_history \u2192 output[80].amount (call_id ee31614dec9d) \u2014 cited 0.83 but ledger holds 0.75"
+    ],
+    "unit_scaled_notes": []
+  }
+}
