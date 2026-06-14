@@ -43,7 +43,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 185 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 187 tests
    green as of 2026-06-14. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
@@ -79,11 +79,18 @@ and parameterize them. There is NO dividend-specific logic in the runner.
   under the historical tool_name `run_dividend_aristocrat_screen`, so the
   ledger/audit/reports are unchanged.
 
+Each criterion also **self-describes** for a future generic UI: a human `label`
+and a `params` spec (per parameter: name, type float/int/bool, bounds, step;
+policy flags are bool). This metadata is declared and tested in 4A but read by no
+UI yet — it's the hook the dynamic Strategy tab will render off in 4B (today's
+tab still renders generically via a heuristic).
+
 **To add a criterion**: write the pure `fn(Evidence, threshold)` (math here or in
 `tools/screening.py`, never in an agent), add one `Criterion(...)` entry to
-`_CRITERIA` declaring its name + required evidence + threshold bounds, then any
-strategy can select it by name — no runner changes. (Adding criteria is Sprint
-4B; 4A was the refactor only.)
+`_CRITERIA` declaring its name, `label`, `params` (param specs incl. the
+threshold's bounds/step), and required evidence — then any strategy can select it
+by name, and a UI can render its inputs, with no runner or UI changes. (Adding
+criteria is Sprint 4B; 4A was the refactor only.)
 
 **Safety net**: `tests/test_criteria_registry.py` pins `run_screen` ==
 the original `run_dividend_aristocrat_screen` field-for-field across JNJ/MO/

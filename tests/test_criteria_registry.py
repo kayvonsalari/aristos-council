@@ -116,6 +116,31 @@ def test_each_criterion_declares_required_evidence():
     assert REGISTRY["min_dividend_growth_streak"].requires == ("dividends",)
 
 
+def test_every_criterion_self_describes_label_and_param_spec():
+    """The hook the dynamic Strategy tab (4B) reads: each criterion exposes a
+    human label and a param spec a UI can render without strategy-specific code."""
+    for name, crit in REGISTRY.items():
+        assert isinstance(crit.label, str) and crit.label, name
+        assert crit.params, name                      # at least one parameter
+        for p in crit.params:                         # each param fully described
+            assert p.name and p.type in ("float", "int", "bool"), (name, p)
+            if p.type in ("float", "int"):
+                assert p.min is not None and p.step is not None, (name, p)
+        # the numeric threshold is declared with type + bounds/step
+        tp = crit.threshold_param
+        assert tp is not None and tp.type in ("float", "int"), name
+        assert tp.min is not None and tp.step is not None, name
+        # policy flags are declared as bool (the unverifiable-blocks flag)
+        assert any(p.name == "unverifiable_blocks" and p.type == "bool"
+                   for p in crit.params), name
+
+
+def test_threshold_param_bounds_match_known_criteria():
+    # yield is a decimal in [0, 1]; the streak is an integer parameter
+    assert REGISTRY["min_dividend_yield"].threshold_param.max == 1.0
+    assert REGISTRY["min_dividend_growth_streak"].threshold_param.type == "int"
+
+
 def test_validate_ok_for_dividend_strategy():
     assert validate_selections(DIVIDEND) == []
 

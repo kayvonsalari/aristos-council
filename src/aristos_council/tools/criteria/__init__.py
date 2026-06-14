@@ -10,6 +10,7 @@ from .registry import (  # noqa: F401
     Criterion,
     CriterionSelection,
     Evidence,
+    ParamSpec,
     run_screen,
     validate_selections,
 )

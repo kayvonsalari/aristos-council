@@ -59,16 +59,36 @@ class Evidence:
 
 
 @dataclass(frozen=True)
+class ParamSpec:
+    """Self-description of a parameter a strategy sets for a criterion.
+
+    Enough for a UI to render the right input widget per parameter WITHOUT any
+    strategy-specific code: name, type, and (for numerics) sensible bounds/step.
+    Declared in 4A (and tested); the dynamic Strategy tab reads it in 4B.
+    """
+
+    name: str
+    type: str                      # "float" | "int" | "bool"
+    min: float | None = None       # numeric lower bound (inclusive)
+    max: float | None = None       # numeric upper bound (inclusive); None = ∞
+    step: float | None = None      # UI step for numerics
+
+
+@dataclass(frozen=True)
 class Criterion:
-    """A registered screen criterion: a named pure function plus its contract."""
+    """A registered screen criterion: a named pure function plus its contract
+    and self-description (display label + parameter specs)."""
 
     name: str
     fn: Callable[[Evidence, float], CriterionResult]
+    label: str                     # human display label, e.g. "Minimum dividend yield"
+    params: tuple[ParamSpec, ...]  # parameters a strategy sets (threshold, flags)
     # Evidence fields that must be available for this criterion to evaluate.
     requires: tuple[str, ...] = ()
-    # Inclusive threshold bounds (None = unbounded above).
-    threshold_min: float = 0.0
-    threshold_max: float | None = None
+
+    @property
+    def threshold_param(self) -> ParamSpec | None:
+        return next((p for p in self.params if p.name == "threshold"), None)
 
 
 @dataclass(frozen=True)
@@ -103,15 +123,39 @@ def _min_dividend_growth_streak(ev: Evidence, threshold: float) -> CriterionResu
     return min_growth_streak_criterion(ev.dividends, min_years=int(threshold))
 
 
+# Every criterion exposes a per-criterion "unverifiable blocks" bool (the
+# successor to the old strategy-wide unverifiable_streak_is_blocking flag).
+_UNVERIFIABLE_BLOCKS = ParamSpec("unverifiable_blocks", type="bool")
+
 _CRITERIA: tuple[Criterion, ...] = (
-    Criterion("min_dividend_yield", _min_dividend_yield,
-              requires=("fundamentals",), threshold_min=0.0, threshold_max=1.0),
-    Criterion("max_payout_ratio", _max_payout_ratio,
-              requires=("fundamentals",), threshold_min=0.0),
-    Criterion("min_market_cap", _min_market_cap,
-              requires=("fundamentals",), threshold_min=0.0),
-    Criterion("min_dividend_growth_streak", _min_dividend_growth_streak,
-              requires=("dividends",), threshold_min=0.0),
+    Criterion(
+        "min_dividend_yield", _min_dividend_yield,
+        label="Minimum dividend yield",
+        params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.005),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+    ),
+    Criterion(
+        "max_payout_ratio", _max_payout_ratio,
+        label="Maximum payout ratio",
+        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.05),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+    ),
+    Criterion(
+        "min_market_cap", _min_market_cap,
+        label="Minimum market cap (USD)",
+        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=1e9),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+    ),
+    Criterion(
+        "min_dividend_growth_streak", _min_dividend_growth_streak,
+        label="Minimum dividend-growth streak (years)",
+        params=(ParamSpec("threshold", "int", min=0.0, max=None, step=1.0),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("dividends",),
+    ),
 )
 
 REGISTRY: dict[str, Criterion] = {c.name: c for c in _CRITERIA}
@@ -140,13 +184,16 @@ def validate_selections(
         if crit is None:
             problems.append(f"unknown criterion '{sel.name}'")
             continue
-        if sel.threshold < crit.threshold_min or (
-            crit.threshold_max is not None and sel.threshold > crit.threshold_max
+        tp = crit.threshold_param
+        if tp is not None and (
+            (tp.min is not None and sel.threshold < tp.min)
+            or (tp.max is not None and sel.threshold > tp.max)
         ):
-            hi = "∞" if crit.threshold_max is None else crit.threshold_max
+            lo = "-∞" if tp.min is None else tp.min
+            hi = "∞" if tp.max is None else tp.max
             problems.append(
                 f"{sel.name} threshold {sel.threshold} out of range "
-                f"[{crit.threshold_min}, {hi}]"
+                f"[{lo}, {hi}]"
             )
         missing = [r for r in crit.requires if r not in avail]
         if missing:
