@@ -43,7 +43,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 211 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 223 tests
    green as of 2026-06-14. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
@@ -101,11 +101,27 @@ default; policy flags are bool). This metadata is declared and tested but read b
 no UI yet — it's the hook the dynamic Strategy tab will render off in 4C (today's
 tab still renders generically via a heuristic).
 
+**Strategy-scoped evidence (Sprint 4D)**: agents are handed a strategy-scoped
+evidence packet so dividend framing can't leak into growth runs (live leak on
+NVDA/ASML). Two display-only changes in `agents/nodes.py:_evidence_block` —
+the ledger is never altered:
+- The screen tool shows a neutral label `run_screen`; the STORED tool_name
+  stays `run_dividend_aristocrat_screen` (rule 4 / audit / saved reports match
+  on it).
+- `get_fundamentals` renders only the fields the active strategy's criteria
+  relate to (each criterion's `fundamentals_fields`) plus a fixed core
+  (ticker, name, market_cap, pe_ratio, free_cash_flow, eps). So a growth run
+  surfaces revenue/ROIC fields and NOT dividend ones. (Residual: dividend
+  HISTORY is still fetched/rendered on growth runs — scoping tool *selection*
+  by strategy is future work.) Specialist prompt roles are unchanged — the
+  generic prompts adapt to the evidence shape.
+
 **To add a criterion**: write the pure `fn(Evidence, threshold)` (math here or in
 `tools/screening.py`, never in an agent), add one `Criterion(...)` entry to
 `_CRITERIA` declaring its name, `label`, `params` (param specs incl. the
-threshold's bounds/step/default), and required evidence — then any strategy can
-select it by name, and a UI can render its inputs, with no runner or UI changes.
+threshold's bounds/step/default), required evidence, and `fundamentals_fields`
+(what to surface in the evidence) — then any strategy can select it by name, a UI
+can render its inputs, and the evidence scopes correctly, with no runner changes.
 
 **Safety net**: `tests/test_criteria_registry.py` pins `run_screen` ==
 the original `run_dividend_aristocrat_screen` field-for-field across JNJ/MO/
@@ -203,6 +219,16 @@ yfinance sufficient). Data layer extended with annual income/balance series on
 short-history edges covered; `strategies/growth_v1.yaml` assembled. Growth is
 NOT yet selectable in the UI (hidden via `_DROPDOWN_HIDDEN_STRATEGY_IDS`).
 Council prompts/agents untouched. 211 tests green.
+
+## Sprint 4D (shipped 2026-06-14)
+
+Strategy-scoped evidence — root-cause fix for dividend framing leaking into
+growth runs (live on NVDA/ASML). The screen shows a neutral `run_screen` label
+to agents (stored tool_name unchanged), and `get_fundamentals` is rendered
+scoped to the active strategy's criteria + a fixed core, so growth runs no
+longer see dividend fields. Display-only; ledger/audit untouched. Prompts not
+modified. `examples/run_council.py` also gained a strategy argument (id or YAML
+path) so growth_v1 can be run from the CLI. 223 tests green.
 
 ## Sprint 4C (next build)
 
