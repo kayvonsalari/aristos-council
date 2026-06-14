@@ -194,6 +194,13 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
 MAX_NEWS_LOGGED = 60
 MAX_TOOL_OUTPUT_CHARS = 12000  # per tool call, in prompts only — ledger keeps full output
 
+# The screen's STORED ledger tool_name — the provenance audit, _PROMPT_VIEW_ALIASES,
+# and every saved report match on this, so it never changes. Agents instead SEE a
+# strategy-neutral label, so a tool literally named after "dividend aristocrats"
+# can't frame a growth run (live leak on NVDA/ASML). Display ≠ identity.
+_SCREEN_LEDGER_TOOL = "run_dividend_aristocrat_screen"
+_SCREEN_DISPLAY_TOOL = "run_screen"
+
 
 def _evidence_block(state: ResearchState) -> str:
     """Serialize the ledger for prompts, with a per-call size guard.
@@ -221,7 +228,11 @@ def _evidence_block(state: ResearchState) -> str:
                 "note": "raw bars omitted from prompt (full series in ledger); "
                         "use technical_snapshot for derived price metrics",
             }
-        payload = {"call_id": tc.call_id, "tool": tc.tool_name,
+        # Agent-facing tool label is strategy-neutral; the stored tc.tool_name
+        # (used by the audit) is untouched.
+        display_tool = (_SCREEN_DISPLAY_TOOL
+                        if tc.tool_name == _SCREEN_LEDGER_TOOL else tc.tool_name)
+        payload = {"call_id": tc.call_id, "tool": display_tool,
                    "ok": tc.ok, "error": tc.error, "output": output}
         line = json.dumps(payload, default=str)
         if len(line) > MAX_TOOL_OUTPUT_CHARS:
