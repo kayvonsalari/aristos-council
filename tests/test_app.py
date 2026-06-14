@@ -156,11 +156,25 @@ def test_mo_rationale_preserves_table_and_strips_inline_path():
     assert disp.count("$") == disp.count("\\$")
 
 
-def test_growth_strategy_hidden_from_dropdown_until_4c():
-    # growth_v1.yaml exists on disk (4B) but must NOT be selectable yet (4C).
-    ids = [s.id for _, _, s in app.list_strategy_options(app.STRATEGIES_DIR)]
+def test_dropdown_lists_all_live_strategies():
+    # 4C: growth_v1 is lit up — every live strategy is selectable.
+    options = app.list_strategy_options(app.STRATEGIES_DIR)
+    ids = [s.id for _, _, s in options]
     assert "dividend_aristocrats_v1" in ids
-    assert "growth_v1" not in ids
+    assert "growth_v1" in ids
+
+
+def test_selecting_growth_routes_the_growth_strategy_path():
+    # The label->path map (what the sidebar selectbox drives) must route the
+    # growth label to growth_v1.yaml, which loads the growth strategy.
+    from aristos_council.strategy.loader import load_strategy
+
+    options = app.list_strategy_options(app.STRATEGIES_DIR)
+    label_to_path = {label: path for label, path, _ in options}
+    growth_label = next(label for label, _, s in options if s.id == "growth_v1")
+    path = label_to_path[growth_label]
+    assert path.name == "growth_v1.yaml"
+    assert load_strategy(path).id == "growth_v1"
 
 
 def test_available_tickers_lists_every_ticker_on_disk():

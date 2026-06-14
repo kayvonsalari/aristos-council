@@ -62,8 +62,6 @@ REPORTS_DIR = ROOT / "reports"
 ASSETS_DIR = ROOT / "assets"
 LOGO_PATH = ASSETS_DIR / "aristos_council_logo.svg"
 
-COMING_SOON = "Dividend + Growth — coming soon"
-
 # Verdict semantic colors — the ONLY semantic colors in the app (everything else
 # is the dark base + the single gold accent). Applied to the verdict banner, the
 # history verdict markers, and the run-selector labels, consistently.
@@ -210,17 +208,11 @@ def _inject_chrome() -> None:
     )
 
 
-# Strategies that exist on disk but are NOT yet exposed in the sidebar dropdown.
-# growth_v1 ships in Sprint 4B (criteria + strategy); 4C lights it up here and
-# adds the dynamic Strategy tab. Until then it stays behind "coming soon".
-_DROPDOWN_HIDDEN_STRATEGY_IDS = {"growth_v1"}
-
-
 def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strategy]]:
-    """Loadable, currently-selectable strategy YAMLs as (label, path, strategy).
+    """Every loadable strategy YAML as (label, path, strategy), id-sorted.
 
-    Invalid YAMLs are skipped silently (the loader is the gatekeeper); strategies
-    in _DROPDOWN_HIDDEN_STRATEGY_IDS are present on disk but not yet selectable.
+    All live strategies are selectable (Sprint 4C lit up growth_v1). Invalid
+    YAMLs are skipped silently — the loader is the gatekeeper.
     """
     out: list[tuple[str, Path, Strategy]] = []
     for p in sorted(strategies_dir.glob("*.yaml")):
@@ -228,9 +220,7 @@ def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strateg
             s = load_strategy(p)
         except Exception:
             continue
-        if s.id in _DROPDOWN_HIDDEN_STRATEGY_IDS:
-            continue
-        out.append((f"{s.name} (live) · {s.id}", p, s))
+        out.append((f"{s.name} · {s.id}", p, s))
     return out
 
 
@@ -793,13 +783,13 @@ def main() -> None:
         ticker = st.text_input("Ticker", value="JNJ").strip().upper()
 
         options = list_strategy_options(STRATEGIES_DIR)
-        labels = [label for label, _, _ in options]
-        choice = st.selectbox("Strategy", labels + [COMING_SOON])
-        if choice == COMING_SOON:
-            st.info("This strategy isn't available yet.")
-            selected_path = None
-        else:
+        if options:
+            labels = [label for label, _, _ in options]
+            choice = st.selectbox("Strategy", labels)
             selected_path = dict((l, p) for l, p, _ in options)[choice]
+        else:  # no strategy files at all — nothing to run
+            st.error("No strategies found in strategies/.")
+            selected_path = None
 
         st.divider()
         # Cost gate. Cleared BEFORE the widget renders, so it starts unchecked
