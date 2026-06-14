@@ -19,6 +19,9 @@ LangGraph orchestration, Anthropic models, pydantic state.
   compares values. Violations feed the DATA_QUALITY veto.
 - `src/aristos_council/tools/` — deterministic tools (screen, technical &
   sentiment snapshots). ALL arithmetic happens here, never in agents.
+- `src/aristos_council/tools/criteria/registry.py` — the criterion registry:
+  named pure screen criteria + the generic `run_screen` runner that strategies
+  drive by name (see "Criterion registry" below).
 - `strategies/dividend_aristocrats_v1.yaml` — the active strategy.
 - `src/aristos_council/persistence/` — IO-at-the-edge sinks: verdicts.py (thin
   append-only log for the next run's vetoes) and reports.py (full per-run
@@ -40,13 +43,53 @@ LangGraph orchestration, Anthropic models, pydantic state.
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 126 tests
-   green as of 2026-06-12. New behavior ships with regression tests, ideally
+6. Tests run with `python -m pytest` (pythonpath=src configured). 185 tests
+   green as of 2026-06-14. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
    a new `<id>_v<n+1>.yaml` and refuses to overwrite — recorded verdicts and
    run reports reference their `strategy_id` and must stay reproducible
    (strategy/versioning.py).
+
+## Criterion registry (how the screen works, Sprint 4A)
+
+The screen is a registry of named, pure criterion functions; strategies select
+and parameterize them. There is NO dividend-specific logic in the runner.
+
+- A **criterion** (`tools/criteria/registry.py`) is a pure deterministic
+  function `fn(Evidence, threshold) -> CriterionResult` with a name, a tuple of
+  required `Evidence` fields, and threshold bounds. `Evidence` bundles the
+  gathered inputs (fundamentals, dividends, last_close). Three-valued `passed`
+  (rule 3) and the streak floor (rule 5) are preserved exactly.
+- A **strategy** lists criteria by registry name with thresholds (YAML):
+  ```
+  criteria:
+    - name: min_dividend_yield
+      threshold: 0.025
+    - name: min_dividend_growth_streak
+      threshold: 25
+      unverifiable_blocks: true   # per-criterion successor to the old
+                                  # policy.unverifiable_streak_is_blocking
+  ```
+  The loader validates every selection against the registry UP FRONT
+  (`validate_selections`): unknown name, out-of-range threshold, or
+  required-but-unavailable evidence → `ValidationError` at load.
+- `run_screen(strategy.criteria, evidence, ticker=...)` runs each and assembles
+  the `ScreenResult` (+ `unverifiable:<name>:<note>` flags). `gather` logs it
+  under the historical tool_name `run_dividend_aristocrat_screen`, so the
+  ledger/audit/reports are unchanged.
+
+**To add a criterion**: write the pure `fn(Evidence, threshold)` (math here or in
+`tools/screening.py`, never in an agent), add one `Criterion(...)` entry to
+`_CRITERIA` declaring its name + required evidence + threshold bounds, then any
+strategy can select it by name — no runner changes. (Adding criteria is Sprint
+4B; 4A was the refactor only.)
+
+**Safety net**: `tests/test_criteria_registry.py` pins `run_screen` ==
+the original `run_dividend_aristocrat_screen` field-for-field across JNJ/MO/
+BRK-B/O shapes. `run_dividend_aristocrat_screen` is retained unchanged as that
+reference; if you touch criterion math, that equivalence test must be updated
+deliberately.
 
 ## Environment & billing split (important)
 
@@ -119,8 +162,21 @@ that motivated this sprint. The seeded HOLD means the next live JNJ run should
 exercise BOTH new signals: recommendation_flip if the verdict moves off HOLD,
 and majority_override if the council stays 3-bullish under a HOLD.
 
-## Sprint 4 (next build)
+## Sprint 4A (shipped 2026-06-14)
 
+Criterion registry refactor — architecture only, NO new criteria, NO behavior
+change. The hardcoded `run_dividend_aristocrat_screen` is generalized into a
+registry of named criterion functions that strategies select by name (see
+"Criterion registry" above). Screen output is byte-identical (equivalence test).
+The four dividend criteria are registered unchanged; the strategy YAML moved to
+a criteria list. `run_dividend_aristocrat_screen` is kept as the equivalence
+reference. 185 tests green.
+
+## Sprint 4B (next build)
+
+- New criteria on the registry substrate (e.g. growth/quality), new strategies
+  selecting them — now a matter of registering a pure function + a YAML, no
+  runner changes.
 - Nightly watchlist: GitHub Actions cron, ~5 tickers, dated verdict JSONs,
   cost logging. Requires Console auto-reload (user action). Verdict
   persistence (Sprint 2) is the substrate this builds on.
