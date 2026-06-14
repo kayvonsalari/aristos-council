@@ -19,6 +19,7 @@ from aristos_council.tools.criteria.registry import (
     Criterion,
     CriterionSelection,
     Evidence,
+    required_evidence,
     run_screen,
     validate_selections,
 )
@@ -158,6 +159,19 @@ def test_validate_flags_out_of_range_threshold():
     # yield must be in [0, 1]
     problems = validate_selections([CriterionSelection("min_dividend_yield", 1.5)])
     assert any("out of range" in p for p in problems)
+
+
+def test_required_evidence_dividend_needs_dividends_growth_does_not():
+    # drives strategy-scoped tool selection (4E)
+    assert "dividends" in required_evidence(DIVIDEND)        # has growth-streak
+    growth = [
+        CriterionSelection("min_revenue_cagr", 0.10),
+        CriterionSelection("min_roic", 0.12),
+        CriterionSelection("max_peg_ratio", 2.0),
+        CriterionSelection("min_market_cap", 5_000_000_000),
+    ]
+    assert "dividends" not in required_evidence(growth)
+    assert "fundamentals" in required_evidence(growth)
 
 
 def test_validate_flags_missing_evidence():

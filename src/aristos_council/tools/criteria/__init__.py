@@ -12,6 +12,7 @@ from .registry import (  # noqa: F401
     Evidence,
     ParamSpec,
     consumed_fundamentals_fields,
+    required_evidence,
     run_screen,
     validate_selections,
 )

@@ -91,7 +91,7 @@ class StaticRunner:
 
 
 def _run(specialist_outputs, decision_output, prior=None,
-         critic_output=None, return_runners=False):
+         critic_output=None, return_runners=False, strategy=STRATEGY):
     runners = {
         "specialist": ScriptedSpecialistRunner(specialist_outputs),
         "critic": StaticRunner(critic_output or CriticOutput(
@@ -100,9 +100,9 @@ def _run(specialist_outputs, decision_output, prior=None,
         )),
         "decision": StaticRunner(decision_output),
     }
-    app = build_council(FakeAdapter(), STRATEGY, runners)
+    app = build_council(FakeAdapter(), strategy, runners)
     init = ResearchState(
-        ticker="FAKE", strategy_id=STRATEGY.id, prior_recommendation=prior
+        ticker="FAKE", strategy_id=strategy.id, prior_recommendation=prior
     )
     result = app.invoke(init)
     # LangGraph returns a dict-shaped state; rehydrate for convenient asserts.
@@ -141,6 +141,34 @@ def test_full_council_run_clean():
     # the sentiment abstention (honest: no data) trips DATA_QUALITY — by design
     assert {f.trigger for f in state.veto_flags} == {VetoTrigger.DATA_QUALITY}
     assert state.requires_human_review is True
+
+
+def test_growth_run_skips_dividend_history_tool():
+    """Sprint 4E: a growth strategy needs no dividend history, so gather must
+    NOT invoke get_dividend_history and the evidence must carry no dividend
+    events (root cause of the live MSFT dividend-citation violations)."""
+    growth = load_strategy(
+        Path(__file__).resolve().parents[1] / "strategies" / "growth_v1.yaml")
+    state, runners = _run([_bullish()] * 4,
+                          DecisionOutput(recommendation=Recommendation.HOLD,
+                                         confidence=0.7, rationale="r"),
+                          strategy=growth, return_runners=True)
+    names = {tc.tool_name for tc in state.tool_calls}
+    assert "get_dividend_history" not in names          # tool not invoked
+    assert {"get_fundamentals", "get_price_history"} <= names  # core still runs
+    # the agent never sees dividend history
+    _, user0 = runners["specialist"].calls[0]
+    assert "get_dividend_history" not in user0
+
+
+def test_dividend_run_still_calls_dividend_history_tool():
+    """Regression: the dividend strategy is unchanged — it still gathers
+    dividend history."""
+    state = _run([_bullish()] * 4,
+                 DecisionOutput(recommendation=Recommendation.HOLD,
+                                confidence=0.9, rationale="r"))  # default STRATEGY
+    names = {tc.tool_name for tc in state.tool_calls}
+    assert "get_dividend_history" in names
 
 
 def test_provenance_violation_is_caught_and_flagged():

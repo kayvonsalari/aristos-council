@@ -44,6 +44,7 @@ from ..strategy.loader import Strategy
 from ..tools.criteria.registry import (
     Evidence,
     consumed_fundamentals_fields,
+    required_evidence,
     run_screen,
 )
 from ..tools.sentiment_tools import sentiment_snapshot
@@ -87,13 +88,20 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
             "get_fundamentals", {"ticker": state.ticker},
             lambda: adapter.get_fundamentals(state.ticker),
         )
-        dividends = log(
-            "get_dividend_history",
-            {"ticker": state.ticker, "start": str(div_start), "end": str(today)},
-            lambda: adapter.get_dividend_history(
-                state.ticker, start=div_start, end=today
-            ),
-        )
+        # Strategy-scoped tool selection (Sprint 4E): only fetch dividend history
+        # when the active strategy actually needs it. A growth run never sees
+        # dividend events, so agents can't weave dividend narratives / cite
+        # dividend figures on a non-dividend stock (live leak, MSFT growth run).
+        dividends = None
+        if "dividends" in required_evidence(strategy.criteria):
+            dividends = log(
+                "get_dividend_history",
+                {"ticker": state.ticker, "start": str(div_start),
+                 "end": str(today)},
+                lambda: adapter.get_dividend_history(
+                    state.ticker, start=div_start, end=today
+                ),
+            )
         prices = log(
             "get_price_history",
             {"ticker": state.ticker, "start": str(lookback_start), "end": str(today)},

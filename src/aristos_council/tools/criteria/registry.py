@@ -271,6 +271,21 @@ def consumed_fundamentals_fields(selections) -> set[str]:
             out.update(crit.fundamentals_fields)
     return out
 
+
+def required_evidence(selections) -> set[str]:
+    """Union of the Evidence KINDS the selected criteria require.
+
+    Drives strategy-scoped tool selection (Sprint 4E): gather only invokes a
+    data-gathering tool when the active strategy actually needs its evidence —
+    e.g. get_dividend_history runs only when some criterion requires
+    'dividends'. Unknown selections are ignored (the loader validated names)."""
+    out: set[str] = set()
+    for sel in selections:
+        crit = REGISTRY.get(sel.name)
+        if crit is not None:
+            out.update(crit.requires)
+    return out
+
 REGISTRY: dict[str, Criterion] = {c.name: c for c in _CRITERIA}
 
 # Evidence kinds the gather pipeline supplies to every screen (values may be
