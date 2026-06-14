@@ -49,6 +49,7 @@ from aristos_council.presentation import (
 )
 from aristos_council.state import Stance
 from aristos_council.strategy.loader import Strategy, load_strategy
+from aristos_council.tools.criteria.registry import REGISTRY
 from aristos_council.strategy.versioning import (
     bump_version,
     make_new_version,
@@ -670,9 +671,91 @@ def render_history(ticker: str) -> None:
 # --------------------------------------------------------------------------- #
 # Strategy rendering (read-only form + edit-as-new-version)
 # --------------------------------------------------------------------------- #
+# CriterionSpec carries exactly these per-criterion params; the rest a criterion
+# declares (e.g. min_revenue_cagr's `years`) are registry defaults the strategy
+# can't yet override, so they render read-only.
+_PERSISTABLE_PARAMS = {"threshold", "unverifiable_blocks"}
+
+
+def _human_number(value) -> str | None:
+    """Readable form for large thresholds (raw ints like 1e10 are unreadable).
+
+    None for values that don't need it (small decimals/integers)."""
+    n = float(value)
+    if abs(n) < 1000:
+        return None
+    commas = f"{n:,.0f}"
+    if abs(n) >= 1e9:
+        return f"{commas} (${n / 1e9:.0f}B)"
+    if abs(n) >= 1e6:
+        return f"{commas} (${n / 1e6:.0f}M)"
+    return commas
+
+
+def _param_input_kwargs(param, value) -> dict:
+    """st.number_input kwargs for a criterion ParamSpec (type/bounds/step)."""
+    kw: dict = {}
+    if param.type == "int":
+        kw["value"] = int(value)
+        if param.min is not None:
+            kw["min_value"] = int(param.min)
+        if param.max is not None:
+            kw["max_value"] = int(param.max)
+        kw["step"] = int(param.step or 1)
+    else:
+        kw["value"] = float(value)
+        if param.min is not None:
+            kw["min_value"] = float(param.min)
+        if param.max is not None:
+            kw["max_value"] = float(param.max)
+        step = float(param.step) if param.step else 0.01
+        kw["step"] = step
+        kw["format"] = "%.4f" if step < 0.01 else ("%.2f" if step < 1 else "%.0f")
+    return kw
+
+
+def _render_criterion(spec, edit: bool, sid: str) -> dict:
+    """Render one criterion's editable params from its registry metadata.
+
+    Generic — no per-criterion branches. Returns the persistable params to save.
+    """
+    crit = REGISTRY.get(spec.name)
+    label = crit.label if crit else spec.name
+    params = crit.params if crit else ()
+    st.markdown(f"**{label}**  ·  `{spec.name}`")
+
+    current = {"threshold": spec.threshold,
+               "unverifiable_blocks": spec.unverifiable_blocks}
+    saved = {"threshold": spec.threshold,
+             "unverifiable_blocks": spec.unverifiable_blocks}
+
+    cols = st.columns(len(params)) if params else [st]
+    for col, param in zip(cols, params):
+        value = current.get(param.name, param.default)
+        persistable = param.name in _PERSISTABLE_PARAMS
+        disabled = not edit or not persistable
+        # strategy-scoped key: two strategies can share a criterion name
+        # (both have min_market_cap), so switching must not reuse widgets.
+        key = f"c_{sid}_{spec.name}_{param.name}"
+        if param.type == "bool":
+            out = col.checkbox(param.name.replace("_", " "), value=bool(value),
+                               disabled=disabled, key=key)
+        else:
+            out = col.number_input(param.name, disabled=disabled, key=key,
+                                   **_param_input_kwargs(param, value))
+            human = _human_number(out)
+            if human:
+                col.caption(f"= {human}")
+            if not persistable:
+                col.caption("criterion default (not strategy-configurable)")
+        if persistable:
+            saved[param.name] = out
+    return {"name": spec.name, **saved}
+
+
 def render_strategy_tab(selected_path: Path | None) -> None:
     if selected_path is None:
-        st.info("Pick a live strategy in the sidebar to view or version it.")
+        st.info("Pick a strategy in the sidebar to view or version it.")
         return
 
     strategy = load_strategy(selected_path)
@@ -682,53 +765,38 @@ def render_strategy_tab(selected_path: Path | None) -> None:
     if strategy.description:
         st.caption(strategy.description.strip())
 
-    edit = st.toggle("✏️ Edit as a new version", value=False, key="strat_edit")
+    # Strategy-scoped widget keys: switching the dropdown re-renders the form for
+    # the newly selected strategy, pre-filled from its YAML.
+    sid = strategy.id
+    edit = st.toggle("✏️ Edit as a new version", value=False,
+                     key=f"strat_edit_{sid}")
     if edit:
         st.info(
             f"Saving creates a NEW file `strategies/{new_id}.yaml`. The current "
             "version is never modified — recorded verdicts reference their "
             "strategy_id and must stay reproducible."
         )
-    disabled = not edit
 
-    # Criteria are selected from the registry by name; render a threshold (and
-    # the unverifiable-blocks flag) per selected criterion, generically.
+    # Criteria — rendered generically from each criterion's registry metadata.
     st.markdown("##### Criteria")
-    edited: list[dict] = []
-    for spec in strategy.criteria:
-        col1, col2 = st.columns([2, 1])
-        threshold = col1.number_input(
-            spec.name,
-            value=float(spec.threshold),
-            min_value=0.0,
-            **_threshold_step_format(spec.threshold),
-            disabled=disabled,
-            key=f"c_thr_{spec.name}",
-        )
-        blocks = col2.checkbox(
-            "unverifiable blocks",
-            value=spec.unverifiable_blocks,
-            disabled=disabled,
-            key=f"c_unv_{spec.name}",
-        )
-        edited.append({"name": spec.name, "threshold": threshold,
-                       "unverifiable_blocks": blocks})
+    edited = [_render_criterion(spec, edit, sid) for spec in strategy.criteria]
 
     st.markdown("##### Policy")
     partial_hold = st.checkbox(
-        "Partial pass allows HOLD", value=strategy.policy.partial_pass_allows_hold,
-        disabled=disabled, key="p_partial")
+        "Partial pass allows HOLD",
+        value=strategy.policy.partial_pass_allows_hold,
+        disabled=not edit, key=f"p_partial_{sid}")
 
     st.markdown("##### Veto gate")
     min_conf = st.number_input(
         "Min confidence (below this, the run pauses for human review)",
         value=float(strategy.veto.min_confidence), min_value=0.0, max_value=1.0,
-        step=0.05, format="%.2f", disabled=disabled, key="v_conf")
+        step=0.05, format="%.2f", disabled=not edit, key=f"v_conf_{sid}")
 
     if not edit:
         return
 
-    if st.button("💾 Save new version", type="primary", key="strat_save"):
+    if st.button("💾 Save new version", type="primary", key=f"strat_save_{sid}"):
         updates = {
             "criteria": edited,
             "policy": {"partial_pass_allows_hold": partial_hold},
@@ -746,16 +814,6 @@ def render_strategy_tab(selected_path: Path | None) -> None:
                 f"Saved `{path.name}`. Pick it from the sidebar Strategy "
                 "dropdown to run a council under it."
             )
-
-
-def _threshold_step_format(value: float) -> dict:
-    """Sensible number_input step/format for a threshold's magnitude (cosmetic):
-    tiny decimals (yields), mid ratios, and large integers (market cap)."""
-    if value >= 1_000:
-        return {"step": 1e9, "format": "%.0f"}
-    if value < 1:
-        return {"step": 0.005, "format": "%.4f"}
-    return {"step": 1.0, "format": "%.2f"}
 
 
 # --------------------------------------------------------------------------- #

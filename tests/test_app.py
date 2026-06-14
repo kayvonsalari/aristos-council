@@ -164,6 +164,45 @@ def test_dropdown_lists_all_live_strategies():
     assert "growth_v1" in ids
 
 
+_APP = Path(__file__).resolve().parents[1] / "app.py"
+
+
+def _markdown_blob(at) -> str:
+    return "\n".join(m.value for m in at.markdown if isinstance(m.value, str))
+
+
+def test_human_number_formats_large_thresholds():
+    assert app._human_number(10_000_000_000) == "10,000,000,000 ($10B)"
+    assert app._human_number(5_000_000_000) == "5,000,000,000 ($5B)"
+    assert app._human_number(0.025) is None          # small values: no humanizing
+    assert app._human_number(25) is None
+
+
+def test_strategy_tab_renders_dividend_criteria_by_default():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    blob = _markdown_blob(at)
+    assert "Minimum dividend yield" in blob           # registry label rendered
+    assert "Minimum revenue CAGR" not in blob
+
+
+def test_strategy_tab_switches_to_growth_criteria_generically():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    sb = next(s for s in at.selectbox if s.label == "Strategy")
+    growth_label = next(o for o in sb.options if "growth_v1" in o)
+    sb.set_value(growth_label)
+    at.run()
+    assert not at.exception
+    blob = _markdown_blob(at)
+    # dividend and growth declare different criteria -> the form re-renders with
+    # different fields automatically, no strategy-specific UI code.
+    assert "Minimum revenue CAGR" in blob
+    assert "Minimum ROIC" in blob
+    assert "Minimum dividend yield" not in blob
+
+
 def test_selecting_growth_routes_the_growth_strategy_path():
     # The label->path map (what the sidebar selectbox drives) must route the
     # growth label to growth_v1.yaml, which loads the growth strategy.
