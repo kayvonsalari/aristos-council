@@ -43,7 +43,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 228 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 235 tests
    green as of 2026-06-14. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
@@ -113,10 +113,16 @@ the ledger is never altered:
 - `get_fundamentals` renders only the fields the active strategy's criteria
   relate to (each criterion's `fundamentals_fields`) plus a fixed core
   (ticker, name, market_cap, pe_ratio, free_cash_flow, eps). So a growth run
-  surfaces revenue/ROIC fields and NOT dividend ones. (Residual: dividend
-  HISTORY is still fetched/rendered on growth runs — scoping tool *selection*
-  by strategy is future work.) Specialist prompt roles are unchanged — the
-  generic prompts adapt to the evidence shape.
+  surfaces revenue/ROIC fields and NOT dividend ones. Specialist prompt roles
+  are unchanged — the generic prompts adapt to the evidence shape.
+
+**Strategy-scoped tool selection (Sprint 4E)**: completing the 4D fix, `gather`
+only invokes a data-gathering tool when the active strategy needs its evidence.
+`registry.required_evidence(strategy.criteria)` (union of each criterion's
+`requires`) gates the call: a growth run does NOT call `get_dividend_history`
+(no dividend events in the packet at all), a dividend run still does. Core tools
+(fundamentals, technical, sentiment) are always called. This closed the live
+MSFT growth leak (dividend-citation provenance violations).
 
 **To add a criterion**: write the pure `fn(Evidence, threshold)` (math here or in
 `tools/screening.py`, never in an agent), add one `Criterion(...)` entry to
@@ -242,13 +248,19 @@ strategy-specific UI — so switching the dropdown re-renders the right fields, 
 big-number thresholds get a readable caption. `examples/run_council.py` also
 takes a strategy arg (Sprint 4B follow-on). 228 tests green.
 
-## Sprint 4E (next build)
+## Sprint 4E (shipped 2026-06-14)
+
+Strategy-scoped tool selection — closed the 4D residual. `gather` gates
+data-gathering tools on `registry.required_evidence(strategy.criteria)`: a growth
+run no longer calls `get_dividend_history` (no dividend events in the packet), a
+dividend run is unchanged. Fixed the live MSFT dividend-citation violations.
+235 tests green.
+
+## Sprint 4F (next build)
 
 - Nightly watchlist: GitHub Actions cron, ~5 tickers, dated verdict JSONs,
   cost logging. Requires Console auto-reload (user action). Verdict
   persistence (Sprint 2) is the substrate this builds on.
-- Residual from 4D: get_dividend_history is still fetched/rendered on growth
-  runs — scope tool *selection* by strategy.
 
 ## Backlog (in order)
 
