@@ -43,7 +43,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 187 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 211 tests
    green as of 2026-06-14. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
@@ -82,18 +82,30 @@ and parameterize them. There is NO dividend-specific logic in the runner.
   under the historical tool_name `run_dividend_aristocrat_screen`, so the
   ledger/audit/reports are unchanged.
 
+**Registered criteria** (`_CRITERIA` in registry.py):
+- Dividend (4A): `min_dividend_yield`, `max_payout_ratio`, `min_market_cap`,
+  `min_dividend_growth_streak`.
+- Growth/quality (4B): `min_revenue_cagr` (in-house revenue CAGR over a 3y
+  window), `min_roic` (NOPAT / PROVIDED invested_capital — not reconstructed
+  from debt+equity, so negative-equity names stay sane), `max_peg_ratio` (P/E ÷
+  in-house CAGR×100 — auditable, no provider forward estimate). All three
+  degrade to NOT-EVAL on short history / negative earnings / missing inputs.
+  They read the annual series on `Fundamentals` (total_revenue,
+  operating_income, ebit, tax_provision, pretax_income, invested_capital),
+  sourced newest-first from yfinance financials/balance_sheet (Sprint 4B; NO
+  EODHD — yfinance confirmed sufficient).
+
 Each criterion also **self-describes** for a future generic UI: a human `label`
-and a `params` spec (per parameter: name, type float/int/bool, bounds, step;
-policy flags are bool). This metadata is declared and tested in 4A but read by no
-UI yet — it's the hook the dynamic Strategy tab will render off in 4B (today's
+and a `params` spec (per parameter: name, type float/int/bool, bounds, step,
+default; policy flags are bool). This metadata is declared and tested but read by
+no UI yet — it's the hook the dynamic Strategy tab will render off in 4C (today's
 tab still renders generically via a heuristic).
 
 **To add a criterion**: write the pure `fn(Evidence, threshold)` (math here or in
 `tools/screening.py`, never in an agent), add one `Criterion(...)` entry to
 `_CRITERIA` declaring its name, `label`, `params` (param specs incl. the
-threshold's bounds/step), and required evidence — then any strategy can select it
-by name, and a UI can render its inputs, with no runner or UI changes. (Adding
-criteria is Sprint 4B; 4A was the refactor only.)
+threshold's bounds/step/default), and required evidence — then any strategy can
+select it by name, and a UI can render its inputs, with no runner or UI changes.
 
 **Safety net**: `tests/test_criteria_registry.py` pins `run_screen` ==
 the original `run_dividend_aristocrat_screen` field-for-field across JNJ/MO/
@@ -182,11 +194,21 @@ The four dividend criteria are registered unchanged; the strategy YAML moved to
 a criteria list. `run_dividend_aristocrat_screen` is kept as the equivalence
 reference. 185 tests green.
 
-## Sprint 4B (next build)
+## Sprint 4B (shipped 2026-06-14)
 
-- New criteria on the registry substrate (e.g. growth/quality), new strategies
-  selecting them — now a matter of registering a pure function + a YAML, no
-  runner changes.
+Growth criteria + growth strategy on the 4A registry substrate (NO EODHD —
+yfinance sufficient). Data layer extended with annual income/balance series on
+`Fundamentals`; three new registry criteria (`min_revenue_cagr`, `min_roic`,
+`max_peg_ratio`) with the MO negative-equity / AMZN negative-income /
+short-history edges covered; `strategies/growth_v1.yaml` assembled. Growth is
+NOT yet selectable in the UI (hidden via `_DROPDOWN_HIDDEN_STRATEGY_IDS`).
+Council prompts/agents untouched. 211 tests green.
+
+## Sprint 4C (next build)
+
+- Light up growth in the UI: remove the dropdown hide, wire the "coming soon"
+  entry to growth_v1, and build the dynamic Strategy tab that renders inputs
+  off each criterion's self-describing `params` spec (no per-criterion UI code).
 - Nightly watchlist: GitHub Actions cron, ~5 tickers, dated verdict JSONs,
   cost logging. Requires Console auto-reload (user action). Verdict
   persistence (Sprint 2) is the substrate this builds on.
