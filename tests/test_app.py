@@ -156,6 +156,19 @@ def test_mo_rationale_preserves_table_and_strips_inline_path():
     assert disp.count("$") == disp.count("\\$")
 
 
+def test_strategy_dir_is_absolute_and_anchored_to_the_app_file():
+    assert app.STRATEGIES_DIR.is_absolute()
+    assert app.STRATEGIES_DIR == app.ROOT / "strategies"
+    assert app.ROOT == _APP.parent
+
+
+def test_strategy_discovery_is_cwd_independent(monkeypatch, tmp_path):
+    # Launch cwd must not matter: both strategies are found from anywhere.
+    monkeypatch.chdir(tmp_path)
+    ids = [s.id for _, _, s in app.list_strategy_options(app.STRATEGIES_DIR)]
+    assert {"dividend_aristocrats_v1", "growth_v1"} <= set(ids)
+
+
 def test_dropdown_lists_all_live_strategies():
     # 4C: growth_v1 is lit up — every live strategy is selectable.
     options = app.list_strategy_options(app.STRATEGIES_DIR)

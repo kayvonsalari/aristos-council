@@ -56,6 +56,8 @@ from aristos_council.strategy.versioning import (
     save_strategy,
 )
 
+# Anchor all data dirs to the APP FILE's location (resolved to absolute at import),
+# never the launch cwd — so discovery works no matter where streamlit is started.
 ROOT = Path(__file__).resolve().parent
 STRATEGIES_DIR = ROOT / "strategies"
 VERDICTS_DIR = ROOT / "verdicts"
@@ -845,8 +847,8 @@ def main() -> None:
             labels = [label for label, _, _ in options]
             choice = st.selectbox("Strategy", labels)
             selected_path = dict((l, p) for l, p, _ in options)[choice]
-        else:  # no strategy files at all — nothing to run
-            st.error("No strategies found in strategies/.")
+        else:  # no loadable strategy files — show the absolute path searched
+            st.error(f"No strategies found under {STRATEGIES_DIR}")
             selected_path = None
 
         st.divider()
