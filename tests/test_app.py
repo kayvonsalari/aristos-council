@@ -203,6 +203,24 @@ def test_strategy_tab_switches_to_growth_criteria_generically():
     assert "Minimum dividend yield" not in blob
 
 
+def test_growth_run_is_triggerable_and_reports_browsable_under_growth():
+    # End-to-end UI check without a real API call: selecting growth + a ticker +
+    # the cost ack makes the Run button live (run_council would receive the
+    # growth path — see the routing test), and the report browser still works
+    # (it is strategy-independent, so any saved ticker is browsable).
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    sb = next(s for s in at.selectbox if s.label == "Strategy")
+    sb.set_value(next(o for o in sb.options if "growth_v1" in o))
+    next(t for t in at.text_input if t.label == "Ticker").set_value("JNJ")
+    next(c for c in at.checkbox if "costs real credits" in c.label).set_value(True)
+    at.run()
+    assert not at.exception
+    run_btn = next(b for b in at.button if "Run council" in b.label)
+    assert run_btn.disabled is False                  # growth run is triggerable
+    assert any(s.label.startswith("Runs for") for s in at.selectbox)  # browsable
+
+
 def test_selecting_growth_routes_the_growth_strategy_path():
     # The label->path map (what the sidebar selectbox drives) must route the
     # growth label to growth_v1.yaml, which loads the growth strategy.
