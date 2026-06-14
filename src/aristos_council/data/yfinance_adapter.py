@@ -95,8 +95,9 @@ class YFinanceAdapter(MarketDataAdapter):
     def get_fundamentals(self, ticker: str) -> Fundamentals:
         import yfinance as yf
 
+        tk = yf.Ticker(ticker)
         try:
-            info = yf.Ticker(ticker).info
+            info = tk.info
         except Exception as exc:
             raise DataUnavailable(
                 f"yfinance fundamentals failed for {ticker}: {exc}"
@@ -104,6 +105,18 @@ class YFinanceAdapter(MarketDataAdapter):
 
         if not info:
             raise DataUnavailable(f"No fundamentals for {ticker}")
+
+        # Annual statements are best-effort: absence/parse failure -> empty
+        # series -> the growth criteria return NOT-EVAL, never a crash. A
+        # missing statement must NOT fail the whole fundamentals fetch.
+        try:
+            income = tk.financials
+        except Exception:
+            income = None
+        try:
+            balance = tk.balance_sheet
+        except Exception:
+            balance = None
 
         return Fundamentals(
             ticker=ticker,
@@ -118,6 +131,13 @@ class YFinanceAdapter(MarketDataAdapter):
             # yfinance does not expose consecutive-growth-years. Left None on
             # purpose; the screen estimates it from dividend history and flags.
             years_dividend_growth=None,
+            # Annual series, newest-first, NaN/empty dropped (Sprint 4B).
+            total_revenue=_annual_series(income, "Total Revenue"),
+            operating_income=_annual_series(income, "Operating Income"),
+            ebit=_annual_series(income, "EBIT"),
+            tax_provision=_annual_series(income, "Tax Provision"),
+            pretax_income=_annual_series(income, "Pretax Income"),
+            invested_capital=_annual_series(balance, "Invested Capital"),
         )
 
     # ------------------------------------------------------------------ #
@@ -148,6 +168,39 @@ def _as_float(value: object) -> float | None:
     if value is None:
         return None
     try:
-        return float(value)  # type: ignore[arg-type]
+        f = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
+    # yfinance uses NaN for missing cells; treat NaN as absent.
+    return None if f != f else f
+
+
+def _annual_series(df: object, label: str) -> list[float]:
+    """A NEWEST-FIRST list of clean annual values for one statement row.
+
+    yfinance income-statement / balance-sheet frames are indexed by line-item
+    label with columns per fiscal year. We pull the row, order columns
+    newest-first, coerce to float, and DROP NaN cells (which also drops the
+    trailing all-NaN column yfinance sometimes appends). Missing frame or label
+    -> empty list. Pure and provider-shaped, so it's unit-testable without a
+    network: pass any DataFrame-like with `.empty`, `.index`, `.loc`.
+    """
+    try:
+        if df is None or df.empty or label not in df.index:
+            return []
+        row = df.loc[label]
+        # Be defensive about column order: sort by column key (fiscal date)
+        # descending so the series is newest-first regardless of provider order.
+        try:
+            row = row.sort_index(ascending=False)
+        except Exception:
+            pass
+        out: list[float] = []
+        for v in row.tolist():
+            f = _as_float(v)
+            if f is not None:
+                out.append(f)
+        return out
+    except Exception:
+        # Never let a statement-shape surprise break the fundamentals fetch.
+        return []

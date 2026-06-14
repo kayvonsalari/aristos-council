@@ -81,6 +81,18 @@ class Fundamentals:
     # Most free providers DON'T supply this; see adapter notes.
     years_dividend_growth: int | None = None
 
+    # --- Annual income-statement & balance-sheet series (Sprint 4B) --------- #
+    # NEWEST-FIRST lists of clean annual values (NaN years and the trailing
+    # empty column dropped by the adapter). Empty when the provider has none —
+    # a criterion with insufficient series returns NOT-EVAL, never crashes.
+    # Growth/quality criteria read these (revenue CAGR, ROIC, PEG).
+    total_revenue: list[float] = field(default_factory=list)
+    operating_income: list[float] = field(default_factory=list)
+    ebit: list[float] = field(default_factory=list)
+    tax_provision: list[float] = field(default_factory=list)
+    pretax_income: list[float] = field(default_factory=list)
+    invested_capital: list[float] = field(default_factory=list)
+
 
 @dataclass(frozen=True)
 class DividendEvent:
