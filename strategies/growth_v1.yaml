@@ -1,0 +1,59 @@
+# Aristos Council — Investment Strategy Config
+# =============================================
+# Strategy: Growth at a Reasonable Price (v1)
+#
+# Selects growth/quality criteria from the registry (tools/criteria/registry.py)
+# by name, reusing the shared min_market_cap criterion. The screen runner holds
+# no strategy-specific logic. Bump the version (new file) rather than mutating a
+# published strategy, so historical decisions remain reproducible.
+#
+# Not yet wired into the UI dropdown (that's Sprint 4C); selectable via the
+# loader/runner today.
+
+id: growth_v1
+name: Growth at a Reasonable Price
+version: 1
+
+description: >
+  Quality-growth strategy: durable top-line compounding (revenue CAGR) bought at
+  a sane price (PEG), with capital efficiency (ROIC) as the quality gate, scoped
+  to mid/large caps. The mirror image of the income screen — growth and
+  efficiency over yield and payout durability.
+
+# --- Screening criteria (selected from the registry by name) ---
+# Thresholds are pinned here for reproducibility; bounds are validated against
+# each criterion's registry ParamSpec at load.
+criteria:
+  - name: min_revenue_cagr          # durable top-line growth (in-house 3y CAGR)
+    threshold: 0.10
+  - name: min_roic                  # capital efficiency / quality gate
+    threshold: 0.12
+  - name: max_peg_ratio             # growth at a reasonable price
+    threshold: 2.0
+  - name: min_market_cap            # 5B USD; mid/large-cap scope (reused)
+    threshold: 5000000000
+
+# --- How conflicts and edge cases are intended to be handled ---
+policy:
+  # A name strong on growth/quality but failing one leg may still warrant a HOLD
+  # discussion rather than an outright SELL — left to the council, not the screen.
+  partial_pass_allows_hold: true
+
+# --- Human-veto gate thresholds (consumed by agents/veto.py) ---
+veto:
+  min_confidence: 0.6   # decisions below this confidence pause for human review
+
+rationale: >
+  Great businesses compound revenue at high incremental returns on capital; the
+  discipline is refusing to overpay for that growth. Revenue CAGR evidences the
+  compounding, ROIC evidences that growth creates value rather than just
+  consuming capital, and PEG keeps valuation honest relative to the growth on
+  offer. Market cap scopes the screen to names with enough history to judge.
+
+notes: >
+  All three growth criteria degrade to NOT-EVAL rather than guessing when the
+  yfinance statements are too short or earnings are negative: revenue CAGR needs
+  enough clean annual points; ROIC needs a provided invested_capital line and
+  computes a real (possibly negative) value off it; PEG needs positive earnings
+  and positive in-house growth. The council should refuse to assert a growth
+  thesis it cannot evidence.

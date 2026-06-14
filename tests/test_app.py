@@ -156,6 +156,13 @@ def test_mo_rationale_preserves_table_and_strips_inline_path():
     assert disp.count("$") == disp.count("\\$")
 
 
+def test_growth_strategy_hidden_from_dropdown_until_4c():
+    # growth_v1.yaml exists on disk (4B) but must NOT be selectable yet (4C).
+    ids = [s.id for _, _, s in app.list_strategy_options(app.STRATEGIES_DIR)]
+    assert "dividend_aristocrats_v1" in ids
+    assert "growth_v1" not in ids
+
+
 def test_available_tickers_lists_every_ticker_on_disk():
     tickers = app._available_tickers(app.REPORTS_DIR)
     assert tickers == sorted(tickers)                 # sorted

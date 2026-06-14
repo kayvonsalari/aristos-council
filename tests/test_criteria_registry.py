@@ -247,3 +247,26 @@ def test_peg_not_eval_on_zero_growth():
     f = _fund("FLAT", total_revenue=[100.0, 100.0, 100.0, 100.0], pe_ratio=20.0)
     r = _crit("max_peg_ratio", f, 2.0)
     assert r.passed is None
+
+
+def test_growth_v1_screen_end_to_end():
+    """Load growth_v1 and screen a GARP-quality fixture through run_screen."""
+    from pathlib import Path
+
+    from aristos_council.strategy.loader import load_strategy
+
+    strat = load_strategy(
+        Path(__file__).resolve().parents[1] / "strategies" / "growth_v1.yaml")
+    garp = _fund("GARP", market_cap=5e10, pe_ratio=25.0,
+                 total_revenue=[146.0, 121.0, 110.0, 100.0],     # ~13.5% CAGR
+                 operating_income=[30000.0], tax_provision=[6000.0],
+                 pretax_income=[25000.0], invested_capital=[120000.0])
+    result = run_screen(
+        strat.criteria,
+        Evidence(fundamentals=garp, dividends=[], last_close=200.0),
+        ticker="GARP",
+    )
+    assert [c.name for c in result.criteria] == [
+        "min_revenue_cagr", "min_roic", "max_peg_ratio", "min_market_cap"]
+    assert all(c.passed for c in result.criteria)   # GARP-quality passes all
+    assert result.flags == []

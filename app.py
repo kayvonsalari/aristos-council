@@ -210,17 +210,25 @@ def _inject_chrome() -> None:
     )
 
 
-def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strategy]]:
-    """Every loadable strategy YAML as (label, path, strategy), id-sorted.
+# Strategies that exist on disk but are NOT yet exposed in the sidebar dropdown.
+# growth_v1 ships in Sprint 4B (criteria + strategy); 4C lights it up here and
+# adds the dynamic Strategy tab. Until then it stays behind "coming soon".
+_DROPDOWN_HIDDEN_STRATEGY_IDS = {"growth_v1"}
 
-    Invalid YAMLs are skipped silently here — the loader is the gatekeeper, and a
-    half-written file shouldn't break the picker.
+
+def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strategy]]:
+    """Loadable, currently-selectable strategy YAMLs as (label, path, strategy).
+
+    Invalid YAMLs are skipped silently (the loader is the gatekeeper); strategies
+    in _DROPDOWN_HIDDEN_STRATEGY_IDS are present on disk but not yet selectable.
     """
     out: list[tuple[str, Path, Strategy]] = []
     for p in sorted(strategies_dir.glob("*.yaml")):
         try:
             s = load_strategy(p)
         except Exception:
+            continue
+        if s.id in _DROPDOWN_HIDDEN_STRATEGY_IDS:
             continue
         out.append((f"{s.name} (live) · {s.id}", p, s))
     return out
