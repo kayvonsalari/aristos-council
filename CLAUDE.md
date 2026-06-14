@@ -50,6 +50,9 @@ LangGraph orchestration, Anthropic models, pydantic state.
    a new `<id>_v<n+1>.yaml` and refuses to overwrite — recorded verdicts and
    run reports reference their `strategy_id` and must stay reproducible
    (strategy/versioning.py).
+   - One deliberate exemption: the Sprint 4A registry migration rewrote
+     `dividend_aristocrats_v1.yaml` in place (same `strategy_id`, screen output
+     byte-identical — proven by the equivalence test; see the 4A.2 commit).
 
 ## Criterion registry (how the screen works, Sprint 4A)
 
