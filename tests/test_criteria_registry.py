@@ -103,10 +103,13 @@ def test_equivalent_to_legacy_screen(fund, divs, last_close):
 # --------------------------------------------------------------------------- #
 # Registry contents + validation
 # --------------------------------------------------------------------------- #
-def test_registry_holds_the_four_dividend_criteria():
+def test_registry_holds_dividend_and_growth_criteria():
     assert set(REGISTRY) == {
+        # dividend (4A)
         "min_dividend_yield", "max_payout_ratio",
         "min_market_cap", "min_dividend_growth_streak",
+        # growth / quality (4B)
+        "min_revenue_cagr", "min_roic", "max_peg_ratio",
     }
     assert all(isinstance(c, Criterion) for c in REGISTRY.values())
 
@@ -126,10 +129,11 @@ def test_every_criterion_self_describes_label_and_param_spec():
             assert p.name and p.type in ("float", "int", "bool"), (name, p)
             if p.type in ("float", "int"):
                 assert p.min is not None and p.step is not None, (name, p)
-        # the numeric threshold is declared with type + bounds/step
+        # the numeric threshold is declared with type + bounds/step + default
         tp = crit.threshold_param
         assert tp is not None and tp.type in ("float", "int"), name
         assert tp.min is not None and tp.step is not None, name
+        assert tp.default is not None, name           # UI pre-fill value
         # policy flags are declared as bool (the unverifiable-blocks flag)
         assert any(p.name == "unverifiable_blocks" and p.type == "bool"
                    for p in crit.params), name
@@ -168,3 +172,78 @@ def test_validate_flags_missing_evidence():
 def test_run_screen_raises_on_unknown_criterion():
     with pytest.raises(KeyError):
         run_screen([CriterionSelection("nope", 1.0)], Evidence(), ticker="X")
+
+
+# --------------------------------------------------------------------------- #
+# Growth / quality criteria (4B) — behavior + the edge cases the probe surfaced.
+# Run each criterion through its registered function for clarity.
+# --------------------------------------------------------------------------- #
+def _crit(name, fund, threshold):
+    return REGISTRY[name].fn(Evidence(fundamentals=fund), threshold)
+
+
+def test_revenue_cagr_passes_and_fails_around_threshold():
+    # 3y CAGR from [146,121,110,100]: (1.46)^(1/3)-1 ~ 0.1346
+    f = _fund("GRW", total_revenue=[146.0, 121.0, 110.0, 100.0])
+    assert _crit("min_revenue_cagr", f, 0.10).passed is True
+    assert _crit("min_revenue_cagr", f, 0.20).passed is False
+    obs = _crit("min_revenue_cagr", f, 0.10).observed
+    assert abs(obs - 0.1346) < 0.01
+
+
+def test_revenue_cagr_not_eval_on_short_history():
+    # fewer than years+1 (=4) clean points -> NOT-EVAL, no crash
+    f = _fund("SHORT", total_revenue=[120.0, 100.0])
+    r = _crit("min_revenue_cagr", f, 0.10)
+    assert r.passed is None and r.observed is None
+    assert "insufficient revenue history" in r.note
+
+
+def test_roic_uses_provided_invested_capital_for_negative_equity():
+    # MO-shape: negative book equity, but a sane PROVIDED invested_capital line.
+    # ROIC must compute off invested_capital (not debt+equity) and stay sane.
+    mo = _fund("MO", operating_income=[12000.0], tax_provision=[2500.0],
+               pretax_income=[10000.0], invested_capital=[30000.0])
+    r = _crit("min_roic", mo, 0.12)
+    assert r.passed is not None              # evaluated, not crashed
+    assert r.observed is not None and r.observed > 0   # sane positive ROIC
+
+
+def test_roic_fails_on_negative_nopat():
+    # AMZN-2022-shape: negative operating income -> negative NOPAT -> ROIC<0 FAIL
+    amzn = _fund("AMZN", operating_income=[-2000.0], tax_provision=[0.0],
+                 pretax_income=[-3000.0], invested_capital=[150000.0])
+    r = _crit("min_roic", amzn, 0.12)
+    assert r.passed is False                 # a determination, not NOT-EVAL
+    assert r.observed < 0
+
+
+def test_roic_not_eval_on_missing_invested_capital():
+    f = _fund("NOIC", operating_income=[1000.0], tax_provision=[200.0],
+              pretax_income=[800.0], invested_capital=[])
+    r = _crit("min_roic", f, 0.12)
+    assert r.passed is None
+    assert "invested_capital" in r.note
+
+
+def test_peg_not_eval_on_negative_earnings():
+    # AMZN-2022-shape: no positive P/E -> PEG NOT-EVAL (even with revenue growth)
+    amzn = _fund("AMZN", total_revenue=[146.0, 121.0, 110.0, 100.0], pe_ratio=None)
+    r = _crit("max_peg_ratio", amzn, 2.0)
+    assert r.passed is None
+    assert "P/E" in r.note
+
+
+def test_peg_evaluates_with_pe_and_growth():
+    # PE 25, 3y CAGR ~0.1346 -> PEG = 25/13.46 ~ 1.86 -> passes <= 2.0
+    f = _fund("GARP", total_revenue=[146.0, 121.0, 110.0, 100.0], pe_ratio=25.0)
+    r = _crit("max_peg_ratio", f, 2.0)
+    assert r.passed is True
+    assert abs(r.observed - 1.86) < 0.1
+
+
+def test_peg_not_eval_on_zero_growth():
+    # flat revenue -> CAGR 0 -> PEG undefined -> NOT-EVAL
+    f = _fund("FLAT", total_revenue=[100.0, 100.0, 100.0, 100.0], pe_ratio=20.0)
+    r = _crit("max_peg_ratio", f, 2.0)
+    assert r.passed is None

@@ -266,6 +266,87 @@ def min_growth_streak_criterion(
 
 
 # --------------------------------------------------------------------------- #
+# Growth / quality primitives (Sprint 4B) — pure math, NOT-EVAL on missing data
+# --------------------------------------------------------------------------- #
+def revenue_cagr(
+    revenue: list[float], years: int
+) -> tuple[float | None, str]:
+    """Compound annual growth rate over ``years`` from a NEWEST-FIRST series.
+
+    CAGR = (rev[0] / rev[years]) ** (1/years) - 1. Returns (None, note) when it
+    cannot be computed honestly: fewer than ``years``+1 clean annual points, or
+    a non-positive endpoint (a negative/zero base destroys the ratio; a
+    fractional power of a negative would also go complex).
+    """
+    if years < 1:
+        return None, "years must be >= 1"
+    if len(revenue) < years + 1:
+        return None, (f"insufficient revenue history: need {years + 1} annual "
+                      f"points, have {len(revenue)}")
+    latest, base = revenue[0], revenue[years]
+    if base <= 0 or latest <= 0:
+        return None, (f"revenue non-positive at an endpoint (base={base}, "
+                      f"latest={latest}); CAGR undefined")
+    cagr = (latest / base) ** (1.0 / years) - 1.0
+    return cagr, f"{years}y revenue CAGR = (rev[0]/rev[{years}])^(1/{years}) - 1"
+
+
+def nopat_roic(
+    operating_income: float | None,
+    tax_provision: float | None,
+    pretax_income: float | None,
+    invested_capital: float | None,
+) -> tuple[float | None, str]:
+    """Return on invested capital from the PROVIDED invested_capital line.
+
+    NOPAT = operating_income * (1 - effective_tax_rate); ROIC = NOPAT /
+    invested_capital. We use the provider's invested_capital line directly and
+    do NOT reconstruct it from debt+equity — negative-equity names (e.g. MO)
+    break that reconstruction while their provided invested_capital is sane.
+
+    A negative NOPAT yields a negative ROIC — a real determination (the
+    criterion will FAIL it), not an error. Returns (None, note) only when ROIC
+    is genuinely undefined: missing/zero invested_capital, or missing operating
+    income. Effective tax rate is tax_provision/pretax_income clamped to [0,1];
+    if tax data is unusable it falls back to 0 (NOPAT = operating income).
+    """
+    if invested_capital is None or invested_capital == 0:
+        return None, "invested_capital missing or zero; ROIC undefined"
+    if operating_income is None:
+        return None, "operating_income missing; NOPAT undefined"
+    eff_tax = 0.0
+    tax_note = "no usable tax data; effective tax rate assumed 0"
+    if (tax_provision is not None and pretax_income is not None
+            and pretax_income > 0):
+        eff_tax = min(max(tax_provision / pretax_income, 0.0), 1.0)
+        tax_note = f"effective tax rate = tax_provision/pretax = {eff_tax:.3f}"
+    nopat = operating_income * (1.0 - eff_tax)
+    roic = nopat / invested_capital
+    return roic, (
+        "ROIC = NOPAT / invested_capital (provided line); "
+        f"NOPAT = operating_income * (1 - eff_tax); {tax_note}"
+    )
+
+
+def peg_ratio(
+    pe_ratio: float | None, growth_rate: float | None
+) -> tuple[float | None, str]:
+    """PEG = P/E / (growth_rate * 100), with ``growth_rate`` a decimal CAGR.
+
+    Returns (None, note) when PEG is undefined: no positive P/E (negative or
+    missing earnings) or a non-positive growth rate. The caller supplies the
+    in-house revenue CAGR as ``growth_rate`` — never a provider forward estimate
+    — so the figure stays auditable.
+    """
+    if pe_ratio is None or pe_ratio <= 0:
+        return None, "no positive P/E (negative or missing earnings); PEG undefined"
+    if growth_rate is None or growth_rate <= 0:
+        return None, "growth rate <= 0 or unavailable; PEG undefined"
+    peg = pe_ratio / (growth_rate * 100.0)
+    return peg, "PEG = P/E / (in-house revenue CAGR x 100)"
+
+
+# --------------------------------------------------------------------------- #
 # Aggregate screen
 # --------------------------------------------------------------------------- #
 def run_dividend_aristocrat_screen(

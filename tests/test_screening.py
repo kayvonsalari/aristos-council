@@ -20,6 +20,9 @@ from aristos_council.tools.screening import (
     min_growth_streak_criterion,
     min_market_cap_criterion,
     min_yield_criterion,
+    nopat_roic,
+    peg_ratio,
+    revenue_cagr,
     run_dividend_aristocrat_screen,
 )
 
@@ -267,3 +270,53 @@ def test_screen_passes_all_evaluated_with_full_data():
     )
     assert result.flags == []
     assert result.passes_all_evaluated is True
+
+
+# --------------------------------------------------------------------------- #
+# Growth / quality primitives (Sprint 4B) — pure math + NOT-EVAL edges
+# --------------------------------------------------------------------------- #
+def test_revenue_cagr_basic():
+    cagr, note = revenue_cagr([146.0, 121.0, 110.0, 100.0], 3)
+    assert abs(cagr - 0.1346) < 1e-3
+    cagr2, _ = revenue_cagr([110.0, 100.0], 1)   # 1-year = simple growth
+    assert abs(cagr2 - 0.10) < 1e-9
+
+
+def test_revenue_cagr_not_eval_short_or_nonpositive():
+    assert revenue_cagr([120.0, 100.0], 3)[0] is None        # too few points
+    assert revenue_cagr([130.0, 110.0, 100.0, 0.0], 3)[0] is None    # base 0
+    assert revenue_cagr([130.0, 110.0, 100.0, -5.0], 3)[0] is None   # base <0
+
+
+def test_nopat_roic_basic_and_tax():
+    # op 100, eff tax = 20/100 = 0.2 -> NOPAT 80 -> ROIC 80/400 = 0.20
+    roic, note = nopat_roic(100.0, 20.0, 100.0, 400.0)
+    assert abs(roic - 0.20) < 1e-9
+    assert "effective tax rate" in note
+
+
+def test_nopat_roic_negative_nopat_is_a_value_not_an_error():
+    roic, _ = nopat_roic(-50.0, 0.0, -60.0, 400.0)   # negative op income
+    assert roic is not None and roic < 0
+
+
+def test_nopat_roic_not_eval_on_missing_invested_capital():
+    assert nopat_roic(100.0, 20.0, 100.0, None)[0] is None
+    assert nopat_roic(100.0, 20.0, 100.0, 0.0)[0] is None
+    assert nopat_roic(None, 20.0, 100.0, 400.0)[0] is None  # missing op income
+
+
+def test_nopat_roic_falls_back_when_tax_unusable():
+    # no usable pretax -> eff tax 0 -> NOPAT = op income
+    roic, note = nopat_roic(100.0, None, None, 400.0)
+    assert abs(roic - 0.25) < 1e-9
+    assert "assumed 0" in note
+
+
+def test_peg_ratio_basic_and_undefined():
+    peg, _ = peg_ratio(25.0, 0.1346)
+    assert abs(peg - 1.857) < 1e-2
+    assert peg_ratio(None, 0.10)[0] is None      # no PE
+    assert peg_ratio(-5.0, 0.10)[0] is None      # negative PE
+    assert peg_ratio(25.0, 0.0)[0] is None       # zero growth
+    assert peg_ratio(25.0, -0.05)[0] is None     # negative growth

@@ -39,6 +39,9 @@ from ..screening import (
     min_growth_streak_criterion,
     min_market_cap_criterion,
     min_yield_criterion,
+    nopat_roic,
+    peg_ratio,
+    revenue_cagr,
 )
 
 
@@ -72,6 +75,8 @@ class ParamSpec:
     min: float | None = None       # numeric lower bound (inclusive)
     max: float | None = None       # numeric upper bound (inclusive); None = ∞
     step: float | None = None      # UI step for numerics
+    default: object = None          # default value (UI pre-fill; also the
+                                    # source for params not set by a strategy)
 
 
 @dataclass(frozen=True)
@@ -123,38 +128,119 @@ def _min_dividend_growth_streak(ev: Evidence, threshold: float) -> CriterionResu
     return min_growth_streak_criterion(ev.dividends, min_years=int(threshold))
 
 
+# --- Growth / quality criteria (Sprint 4B) ------------------------------- #
+# In-house revenue-CAGR window. Single source of truth: the years ParamSpec
+# default below references it, and both the CAGR and PEG criteria compute over
+# it (years is not yet a per-strategy YAML param — that's a 4C UI concern).
+_REVENUE_CAGR_YEARS = 3
+
+
+def _latest(series: list[float]):
+    return series[0] if series else None
+
+
+def _min_revenue_cagr(ev: Evidence, threshold: float) -> CriterionResult:
+    revenue = ev.fundamentals.total_revenue if ev.fundamentals else []
+    cagr, note = revenue_cagr(revenue, _REVENUE_CAGR_YEARS)
+    if cagr is None:
+        return CriterionResult(name="min_revenue_cagr", passed=None,
+                               observed=None, threshold=threshold, note=note)
+    return CriterionResult(name="min_revenue_cagr", passed=cagr >= threshold,
+                           observed=cagr, threshold=threshold, note=note)
+
+
+def _min_roic(ev: Evidence, threshold: float) -> CriterionResult:
+    f = ev.fundamentals
+    if f is None:
+        return CriterionResult(name="min_roic", passed=None, observed=None,
+                               threshold=threshold, note="no fundamentals")
+    roic, note = nopat_roic(_latest(f.operating_income),
+                            _latest(f.tax_provision),
+                            _latest(f.pretax_income),
+                            _latest(f.invested_capital))
+    if roic is None:
+        return CriterionResult(name="min_roic", passed=None, observed=None,
+                               threshold=threshold, note=note)
+    return CriterionResult(name="min_roic", passed=roic >= threshold,
+                           observed=roic, threshold=threshold, note=note)
+
+
+def _max_peg_ratio(ev: Evidence, threshold: float) -> CriterionResult:
+    f = ev.fundamentals
+    revenue = f.total_revenue if f else []
+    cagr, _ = revenue_cagr(revenue, _REVENUE_CAGR_YEARS)   # same in-house CAGR
+    peg, note = peg_ratio(f.pe_ratio if f else None, cagr)
+    if peg is None:
+        return CriterionResult(name="max_peg_ratio", passed=None, observed=None,
+                               threshold=threshold, note=note)
+    return CriterionResult(name="max_peg_ratio", passed=peg <= threshold,
+                           observed=peg, threshold=threshold, note=note)
+
+
 # Every criterion exposes a per-criterion "unverifiable blocks" bool (the
 # successor to the old strategy-wide unverifiable_streak_is_blocking flag).
-_UNVERIFIABLE_BLOCKS = ParamSpec("unverifiable_blocks", type="bool")
+_UNVERIFIABLE_BLOCKS = ParamSpec("unverifiable_blocks", type="bool", default=False)
 
 _CRITERIA: tuple[Criterion, ...] = (
+    # --- Dividend criteria (Sprint 4A) ---
     Criterion(
         "min_dividend_yield", _min_dividend_yield,
         label="Minimum dividend yield",
-        params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.005),
+        params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.005,
+                          default=0.025),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
     ),
     Criterion(
         "max_payout_ratio", _max_payout_ratio,
         label="Maximum payout ratio",
-        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.05),
+        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.05,
+                          default=0.75),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
     ),
     Criterion(
         "min_market_cap", _min_market_cap,
         label="Minimum market cap (USD)",
-        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=1e9),
+        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=1e9,
+                          default=10_000_000_000),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
     ),
     Criterion(
         "min_dividend_growth_streak", _min_dividend_growth_streak,
         label="Minimum dividend-growth streak (years)",
-        params=(ParamSpec("threshold", "int", min=0.0, max=None, step=1.0),
+        params=(ParamSpec("threshold", "int", min=0.0, max=None, step=1.0,
+                          default=25),
                 _UNVERIFIABLE_BLOCKS),
         requires=("dividends",),
+    ),
+    # --- Growth / quality criteria (Sprint 4B) ---
+    Criterion(
+        "min_revenue_cagr", _min_revenue_cagr,
+        label="Minimum revenue CAGR",
+        params=(ParamSpec("years", "int", min=1, max=None, step=1.0,
+                          default=_REVENUE_CAGR_YEARS),
+                ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.01,
+                          default=0.10),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+    ),
+    Criterion(
+        "min_roic", _min_roic,
+        label="Minimum ROIC",
+        params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.01,
+                          default=0.12),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+    ),
+    Criterion(
+        "max_peg_ratio", _max_peg_ratio,
+        label="Maximum PEG ratio",
+        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.1,
+                          default=2.0),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
     ),
 )
 
