@@ -141,6 +141,41 @@ def test_market_cap_fail():
     assert r.passed is False
 
 
+# --- Foreign-listing currency safety (honest abstention, no FX) ----------- #
+def test_market_cap_not_eval_for_non_usd_listing_sk_hynix():
+    # SK Hynix (000660.KS): 1.69e15 KRW would PASS a 1e10 USD floor for the
+    # WRONG reason. A non-USD listing must ABSTAIN (NOT-EVAL), not silently pass.
+    r = min_market_cap_criterion(
+        _fund(market_cap=1.69e15, currency="KRW"), min_market_cap=1e10)
+    assert r.passed is None                  # NOT-EVAL, not a (false) PASS
+    assert r.observed is None
+    assert "KRW" in r.note and "not USD" in r.note and "no fx" in r.note.lower()
+
+
+def test_market_cap_usd_currency_unchanged():
+    # An explicit USD currency evaluates exactly as before (no abstention).
+    r = min_market_cap_criterion(
+        _fund(market_cap=2e10, currency="USD"), min_market_cap=1e10)
+    assert r.passed is True
+
+
+def test_market_cap_missing_currency_evaluates_normally():
+    # No currency reported (the pre-currency-field case) must NOT abstain —
+    # otherwise every USD record predating the field would turn NOT-EVAL.
+    r = min_market_cap_criterion(_fund(market_cap=2e10), min_market_cap=1e10)
+    assert r.passed is True
+
+
+def test_dividend_yield_is_currency_invariant():
+    # Yield = dps/last_close is a dimensionless ratio: a KRW payer evaluates
+    # normally (we must NOT over-abstain on currency-invariant criteria).
+    r = min_yield_criterion(
+        _fund(dividend_per_share=68_640.0, currency="KRW"),   # 3% of 2.288M KRW
+        min_yield=0.025, last_close=2_288_000.0)
+    assert r.passed is True
+    assert abs(r.observed - 0.03) < 1e-9
+
+
 # --------------------------------------------------------------------------- #
 # dividend growth streak
 # --------------------------------------------------------------------------- #

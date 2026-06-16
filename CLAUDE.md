@@ -45,7 +45,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 243 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 251 tests
    green as of 2026-06-16. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
@@ -55,6 +55,17 @@ LangGraph orchestration, Anthropic models, pydantic state.
    - One deliberate exemption: the Sprint 4A registry migration rewrote
      `dividend_aristocrats_v1.yaml` in place (same `strategy_id`, screen output
      byte-identical — proven by the equivalence test; see the 4A.2 commit).
+8. Foreign-listing currency safety: criteria that compare an ABSOLUTE money
+   amount against a USD-denominated threshold (today only `min_market_cap`)
+   must NOT-EVAL with a note when `Fundamentals.currency` is a known non-USD
+   currency — never silently pass/fail (SK Hynix's 1.69e15 KRW cap would "pass"
+   a 1e10 USD floor for the wrong reason). Honest abstention only — NO FX
+   conversion, consistent with insufficient-history handling. A MISSING currency
+   evaluates normally (don't manufacture abstention from absent data). Ratio
+   criteria (yield, payout, revenue CAGR, ROIC, PEG) are currency-INVARIANT and
+   evaluate normally regardless. The guard lives in the screening primitive
+   (`_non_usd_currency` in tools/screening.py), so `run_screen` stays equivalent
+   to `run_dividend_aristocrat_screen`.
 
 ## Criterion registry (how the screen works, Sprint 4A)
 

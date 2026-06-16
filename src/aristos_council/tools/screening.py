@@ -20,6 +20,28 @@ from dataclasses import dataclass
 
 from ..data.adapter import DividendEvent, Fundamentals
 
+# Absolute-money screen thresholds (min_market_cap) are USD-denominated. A non-
+# USD listing makes that comparison meaningless (SK Hynix's 1.69e15 KRW market
+# cap would "pass" a 1e10 USD floor for the wrong reason). We ABSTAIN — return
+# NOT-EVAL with a note — rather than apply FX, consistent with how insufficient
+# history is handled. Ratio criteria (yield, payout, CAGR, ROIC, PEG) are
+# currency-INVARIANT and never consult this.
+USD = "USD"
+
+
+def _non_usd_currency(fundamentals: Fundamentals) -> str | None:
+    """Return the listing currency iff it's a KNOWN non-USD currency, else None.
+
+    None means 'evaluate normally': either the listing IS USD, or the provider
+    reported no currency at all. A missing currency must NOT manufacture a
+    foreign-listing abstention — that would N/E every USD record predating the
+    field. Only absolute-money-vs-USD criteria call this.
+    """
+    cur = (fundamentals.currency or "").strip().upper()
+    if not cur or cur == USD:
+        return None
+    return cur
+
 
 # --------------------------------------------------------------------------- #
 # Primitive results
@@ -107,6 +129,9 @@ def min_yield_criterion(
                  + "): a non-payer cannot meet the minimum yield",
         )
     if last_close is not None and last_close > 0:
+        # Currency-INVARIANT: dps and last_close share the listing currency, so
+        # the ratio is dimensionless — a KRW payer's yield is as valid as a USD
+        # one. No currency guard here (unlike min_market_cap's USD threshold).
         derived = dps / last_close
         return CriterionResult(
             name="min_dividend_yield",
@@ -178,6 +203,19 @@ def max_payout_criterion(
 def min_market_cap_criterion(
     fundamentals: Fundamentals, *, min_market_cap: float
 ) -> CriterionResult:
+    # Currency safety FIRST: the threshold is USD; a non-USD market cap can't be
+    # compared against it without FX, so abstain honestly (no silent pass/fail).
+    cur = _non_usd_currency(fundamentals)
+    if cur is not None:
+        return CriterionResult(
+            name="min_market_cap",
+            passed=None,
+            observed=None,
+            threshold=min_market_cap,
+            note=f"not evaluated: market cap is in {cur}, not USD, and the "
+                 "threshold is USD-denominated; no FX conversion is applied "
+                 "(honest abstention, not a silent pass/fail)",
+        )
     mc = fundamentals.market_cap
     if mc is None:
         return CriterionResult(

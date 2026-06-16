@@ -122,6 +122,11 @@ class YFinanceAdapter(MarketDataAdapter):
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
             market_cap=_as_float(info.get("marketCap")),
+            # Currencies drive honest abstention on USD-denominated thresholds
+            # (a non-USD listing makes min_market_cap meaningless). Strings, not
+            # floats; normalize empty/missing to None.
+            currency=(info.get("currency") or None),
+            financial_currency=(info.get("financialCurrency") or None),
             dividend_yield=_as_float(info.get("dividendYield")),
             dividend_per_share=_as_float(info.get("dividendRate")),
             payout_ratio=_as_float(info.get("payoutRatio")),

@@ -71,6 +71,15 @@ class Fundamentals:
     ticker: str
     name: str | None = None
     market_cap: float | None = None
+    # Listing/price currency (yfinance info 'currency') and the financial-
+    # statements currency ('financialCurrency'). market_cap, last_close, and
+    # dividend_per_share are all denominated in `currency`. A non-USD `currency`
+    # makes USD-denominated absolute thresholds (min_market_cap) meaningless, so
+    # those criteria honestly ABSTAIN rather than convert (no FX). None means the
+    # provider didn't report it — treated as USD/unknown (evaluate normally), so
+    # records predating this field are unaffected.
+    currency: str | None = None
+    financial_currency: str | None = None
     dividend_yield: float | None = None          # decimal, e.g. 0.038 = 3.8%
     dividend_per_share: float | None = None
     payout_ratio: float | None = None            # decimal

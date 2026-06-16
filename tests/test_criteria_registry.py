@@ -263,6 +263,43 @@ def test_peg_not_eval_on_zero_growth():
     assert r.passed is None
 
 
+def test_non_usd_listing_abstains_market_cap_but_ratios_still_evaluate():
+    """SK Hynix shape (KRW listing) through run_screen: the USD-denominated
+    min_market_cap must NOT-EVAL with a currency note, while currency-invariant
+    ratio criteria (revenue_cagr, roic) evaluate normally."""
+    hynix = _fund(
+        "000660.KS", currency="KRW", financial_currency="KRW",
+        market_cap=1.69e15,                                  # KRW, not USD
+        total_revenue=[146.0, 121.0, 110.0, 100.0],          # ratio -> invariant
+        operating_income=[30000.0], tax_provision=[6000.0],
+        pretax_income=[25000.0], invested_capital=[120000.0])
+    selections = [
+        CriterionSelection("min_market_cap", 10_000_000_000),
+        CriterionSelection("min_revenue_cagr", 0.10),
+        CriterionSelection("min_roic", 0.12),
+    ]
+    result = run_screen(selections, Evidence(fundamentals=hynix),
+                        ticker="000660.KS")
+    by = {c.name: c for c in result.criteria}
+    mc = by["min_market_cap"]
+    assert mc.passed is None and mc.observed is None         # honest abstention
+    assert "KRW" in mc.note and "not USD" in mc.note
+    assert any("unverifiable:min_market_cap" in fl for fl in result.flags)
+    # ratios are currency-invariant -> they evaluate, not abstain
+    assert by["min_revenue_cagr"].passed is True
+    assert by["min_roic"].passed is not None
+
+
+def test_usd_listing_market_cap_unchanged_through_run_screen():
+    # A USD-currency name screens exactly as an un-tagged one (regression guard).
+    usd = _fund("AAA", currency="USD", market_cap=2e10)
+    untagged = _fund("AAA", market_cap=2e10)
+    sel = [CriterionSelection("min_market_cap", 1e10)]
+    a = run_screen(sel, Evidence(fundamentals=usd), ticker="AAA").criteria[0]
+    b = run_screen(sel, Evidence(fundamentals=untagged), ticker="AAA").criteria[0]
+    assert a.passed is True and b.passed is True
+
+
 def test_growth_v1_screen_end_to_end():
     """Load growth_v1 and screen a GARP-quality fixture through run_screen."""
     from pathlib import Path
