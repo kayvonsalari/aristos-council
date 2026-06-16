@@ -244,12 +244,14 @@ def test_screen_chrome_css_keeps_controls_reachable():
     assert "Sidebar" in screen_css                        # sidebar toggle kept
 
 
-def test_toolbar_mode_keeps_controls_reachable():
-    # config.toml must not use "minimal" (which hides the menu + sidebar toggle).
+def test_toolbar_mode_keeps_menu_reachable():
+    # The ⋮ menu is gated server-side by toolbarMode: "viewer"/"minimal" hide it
+    # entirely (no CSS restores it). Only "auto" (localhost) / "developer" render
+    # the menu + its Settings/theme switch, so config.toml must use one of those.
     import tomllib
     cfg = tomllib.loads(
         (_APP.parent / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
-    assert cfg["client"]["toolbarMode"] == "viewer"
+    assert cfg["client"]["toolbarMode"] in ("auto", "developer")
 
 
 def test_human_number_formats_large_thresholds():

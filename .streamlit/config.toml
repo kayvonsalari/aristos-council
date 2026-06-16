@@ -12,11 +12,14 @@ primaryColor = "#C9A227"             # muted gold — the single accent
 font = "serif"                       # classical, institutional
 
 [client]
-# "viewer" keeps user controls — the sidebar collapse/expand toggle and the
-# Settings menu (incl. the theme switch) — while hiding developer affordances
-# (Deploy, Rerun, Clear cache). "minimal" hid the sidebar toggle and theme
-# switch, so it is NOT used.
-toolbarMode = "viewer"
+# toolbarMode gates the top-right ⋮ menu SERVER-SIDE (no CSS can restore it):
+#   "viewer"/"minimal" -> the toolbar menu is hidden entirely (this was the bug:
+#     "viewer" does NOT keep a Settings menu, contrary to the old note here).
+#   "auto" (default)   -> shows the full menu (Settings/theme included) on
+#     localhost / for the developer; hides dev options for deployed viewers.
+#   "developer"        -> always shows the full menu.
+# We run locally, so "auto" makes the ⋮ menu (and its theme switch) reachable.
+toolbarMode = "auto"
 
 [browser]
 gatherUsageStats = false
