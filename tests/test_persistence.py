@@ -8,7 +8,9 @@ recommendation_flip veto.
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
+from aristos_council.agents.veto import make_veto_node
 from aristos_council.persistence.verdicts import (
     VerdictRecord,
     append_record,
@@ -17,6 +19,7 @@ from aristos_council.persistence.verdicts import (
     record_from_state,
     verdict_path,
 )
+from aristos_council.strategy.loader import load_strategy
 from aristos_council.state import (
     Decision,
     Recommendation,
@@ -149,3 +152,67 @@ def test_record_model_is_validatable_from_dump():
     rec = record_from_state(_full_state())
     again = VerdictRecord.model_validate(rec.model_dump(mode="json"))
     assert again == rec
+
+
+# --------------------------------------------------------------------------- #
+# recommendation_flip keys on ticker+strategy (Build batch — logic fix)
+# --------------------------------------------------------------------------- #
+STRATEGY_DIR = Path(__file__).resolve().parents[1] / "strategies"
+GROWTH = load_strategy(STRATEGY_DIR / "growth_v1.yaml")
+
+
+def _msft(strategy_id, verdict, day):
+    return VerdictRecord(
+        ticker="MSFT", run_at=datetime(2026, 6, day, tzinfo=timezone.utc),
+        strategy_id=strategy_id, verdict=verdict, confidence=0.7, stances={})
+
+
+def _flip_fired(prior_verdict, decision_verdict) -> bool:
+    state = _state(
+        prior_recommendation=prior_verdict,
+        decision=Decision(recommendation=decision_verdict, confidence=0.7,
+                          rationale="r"),
+    )
+    make_veto_node(GROWTH)(state)
+    return VetoTrigger.RECOMMENDATION_FLIP in {f.trigger for f in state.veto_flags}
+
+
+def test_load_latest_filters_by_strategy(tmp_path):
+    append_record(_msft("growth_v1", Recommendation.BUY, 1), tmp_path)
+    append_record(_msft("dividend_aristocrats_v1", Recommendation.HOLD, 2), tmp_path)
+    # latest OVERALL is the dividend HOLD (last appended)...
+    assert load_latest("MSFT", tmp_path).verdict == Recommendation.HOLD
+    # ...but per-strategy lookups never cross strategies
+    assert load_latest("MSFT", tmp_path,
+                       strategy_id="growth_v1").verdict == Recommendation.BUY
+    assert load_latest("MSFT", tmp_path,
+                       strategy_id="dividend_aristocrats_v1").verdict == Recommendation.HOLD
+    assert load_latest("MSFT", tmp_path, strategy_id="no_such_v1") is None
+
+
+def test_no_false_flip_across_strategies(tmp_path):
+    # MSFT: a dividend HOLD then a growth BUY (the committed MSFT shape).
+    append_record(_msft("dividend_aristocrats_v1", Recommendation.HOLD, 1), tmp_path)
+    append_record(_msft("growth_v1", Recommendation.BUY, 2), tmp_path)
+    prior = load_latest("MSFT", tmp_path, strategy_id="growth_v1")
+    assert prior.verdict == Recommendation.BUY            # growth prior, not HOLD
+    # a fresh growth BUY run: prior BUY == decision BUY -> NO flip (the bug was
+    # comparing growth BUY against the dividend HOLD)
+    assert _flip_fired(prior.verdict, Recommendation.BUY) is False
+
+
+def test_genuine_flip_same_strategy(tmp_path):
+    append_record(_msft("growth_v1", Recommendation.BUY, 1), tmp_path)
+    prior = load_latest("MSFT", tmp_path, strategy_id="growth_v1")
+    # same strategy, real verdict change BUY -> SELL -> flip fires
+    assert _flip_fired(prior.verdict, Recommendation.SELL) is True
+
+
+def test_saved_msft_growth_prior_is_not_dividend_hold():
+    # Against the committed verdicts/MSFT.json: growth latest is BUY, dividend
+    # latest is HOLD — the growth run must key off BUY, never the dividend HOLD.
+    vd = Path(__file__).resolve().parents[1] / "verdicts"
+    g = load_latest("MSFT", vd, strategy_id="growth_v1")
+    d = load_latest("MSFT", vd, strategy_id="dividend_aristocrats_v1")
+    assert g is not None and g.verdict == Recommendation.BUY
+    assert d is not None and d.verdict == Recommendation.HOLD

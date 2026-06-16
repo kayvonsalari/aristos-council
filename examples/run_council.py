@@ -119,9 +119,9 @@ def main(argv: list[str] | None = None) -> None:
     app = build_council(YFinanceAdapter(), strategy, production_runners(),
                         sentiment_adapter=sentiment)
 
-    # IO at the edge: load the prior verdict (if any) so the recommendation_flip
-    # veto has something to compare against, then run the (disk-free) graph.
-    prior = load_latest(ticker, VERDICTS_DIR)
+    # IO at the edge: load the prior verdict for the same ticker AND strategy
+    # (recommendation_flip key) so the veto never flips across strategies.
+    prior = load_latest(ticker, VERDICTS_DIR, strategy_id=strategy.id)
     if prior is not None:
         print(f"(prior verdict: "
               f"{prior.verdict.value.upper() if prior.verdict else 'n/a'} "

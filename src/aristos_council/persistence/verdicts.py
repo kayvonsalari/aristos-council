@@ -124,9 +124,19 @@ def load_records(ticker: str, verdicts_dir: Path) -> list[VerdictRecord]:
     return [VerdictRecord.model_validate(r) for r in raw]
 
 
-def load_latest(ticker: str, verdicts_dir: Path) -> Optional[VerdictRecord]:
-    """The most recent record for a ticker, or None if there is no history."""
+def load_latest(
+    ticker: str, verdicts_dir: Path, strategy_id: Optional[str] = None
+) -> Optional[VerdictRecord]:
+    """The most recent record for a ticker, or None if there is no history.
+
+    When ``strategy_id`` is given, only records under that strategy are
+    considered — so the recommendation_flip veto compares a run against the
+    prior verdict for the same ticker AND strategy, never across strategies
+    (a growth BUY must not register as a flip against a dividend HOLD).
+    """
     records = load_records(ticker, verdicts_dir)
+    if strategy_id is not None:
+        records = [r for r in records if r.strategy_id == strategy_id]
     return records[-1] if records else None
 
 

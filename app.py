@@ -263,7 +263,8 @@ def run_council(ticker: str, strategy_path: Path) -> RunReport:
     app = build_council(YFinanceAdapter(), strategy, production_runners(),
                         sentiment_adapter=sentiment)
 
-    prior = load_latest(ticker, VERDICTS_DIR)
+    # Prior verdict for the SAME ticker AND strategy (recommendation_flip key).
+    prior = load_latest(ticker, VERDICTS_DIR, strategy_id=strategy.id)
     initial = ResearchState(
         ticker=ticker,
         strategy_id=strategy.id,
