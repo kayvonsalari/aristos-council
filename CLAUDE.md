@@ -25,7 +25,9 @@ LangGraph orchestration, Anthropic models, pydantic state.
 - `strategies/dividend_aristocrats_v1.yaml` — the active strategy.
 - `src/aristos_council/persistence/` — IO-at-the-edge sinks: verdicts.py (thin
   append-only log for the next run's vetoes) and reports.py (full per-run
-  deliberation for the UI to re-render).
+  deliberation for the UI to re-render). `load_latest` takes a `strategy_id` so
+  the recommendation_flip veto compares within the SAME ticker+strategy (a
+  growth BUY never flips against a dividend HOLD).
 - `examples/run_council.py` — the demo entrypoint (run in Colab, not here).
 - `app.py` — Council Station, the local Streamlit UI (`streamlit run app.py`).
 
@@ -43,8 +45,8 @@ LangGraph orchestration, Anthropic models, pydantic state.
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 235 tests
-   green as of 2026-06-14. New behavior ships with regression tests, ideally
+6. Tests run with `python -m pytest` (pythonpath=src configured). 243 tests
+   green as of 2026-06-16. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
    a new `<id>_v<n+1>.yaml` and refuses to overwrite — recorded verdicts and

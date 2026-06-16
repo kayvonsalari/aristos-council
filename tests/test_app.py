@@ -184,18 +184,64 @@ def _markdown_blob(at) -> str:
     return "\n".join(m.value for m in at.markdown if isinstance(m.value, str))
 
 
-def test_screen_chrome_css_hides_no_interactive_controls():
-    # The on-screen <style> must not hide the toolbar/hamburger menu or the
-    # sidebar collapse/expand toggle — only footer. (Aggressive hides are
-    # allowed inside @media print, which is excluded here.)
+_MSFT_PRE_4E = _REPORTS / "MSFT" / "2026-06-14T13-29-49Z.json"
+
+
+def test_bare_callid_in_key_figures_block_is_stripped():
+    # The Decision rationale's "Key Figures (Provenance)" block uses bare
+    # "call_id <hex>, <field>" — must be stripped from displayed prose.
+    rat = load_report(_MSFT_PRE_4E).decision.rationale
+    assert "call_id" in rat                       # present in the raw/toggle view
+    out = app.strip_provenance(rat)
+    assert "call_id" not in out                   # gone from the default view
+    assert "0.1242" in out                        # the observed value survives
+
+
+def test_data_quality_summary_line():
+    audit = load_report(_MSFT_PRE_4E).provenance_audit
+    assert app._dq_summary(audit) == \
+        "7 provenance issues: 5 mismatches, 2 unresolvable"
+
+
+def test_data_quality_violations_grouped_by_tool():
+    audit = load_report(_MSFT_PRE_4E).provenance_audit
+    groups = app._group_violations(audit["violations"])
+    # every violation is accounted for, and repeats collapse into fewer lines
+    assert sum(len(items) for _, items in groups) == 7
+    assert len(groups) < 7
+    # headers are "<count> <kind> citing <tool>"
+    assert all(h.split()[0].isdigit() for h, _ in groups)
+
+
+def test_data_quality_banner_renders_summary_with_expander():
+    # Integration: browsing the pre-4E MSFT run, the data_quality flag shows the
+    # one-line summary and a "Show provenance issues" expander (not a raw dump).
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=90).run()
+    next(s for s in at.selectbox if s.label.startswith("Runs for")).set_value("MSFT")
+    at.run()
+    run_sel = next(s for s in at.selectbox if s.label == "Run")
+    run_sel.set_value(len(run_sel.options) - 1)      # oldest = pre-4E (7 issues)
+    at.run()
+    assert not at.exception
+    assert "7 provenance issues" in _markdown_blob(at)
+    assert any(e.label == "Show provenance issues" for e in at.expander)
+
+
+def test_screen_chrome_css_keeps_controls_reachable():
+    # On screen the ONLY hide is the footer; the menu + sidebar toggle are
+    # explicitly forced visible (never hidden). Aggressive hides are allowed
+    # inside @media print, which is excluded here.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     blob = _markdown_blob(at)
     screen_css = blob.split("@media print")[0]   # on-screen rules only
-    for selector in ("stToolbar", "MainMenu", "stSidebar",
-                     "stSidebarCollapse", "collapsedControl"):
-        assert selector not in screen_css, selector
-    assert "footer" in screen_css                # footer hide is fine
+    assert "footer {visibility: hidden;}" in screen_css   # footer hide is fine
+    assert "display: none" not in screen_css              # nothing else hidden
+    # controls are explicitly forced visible
+    assert "visibility: visible !important;" in screen_css
+    assert "#MainMenu" in screen_css                      # menu kept reachable
+    assert "Sidebar" in screen_css                        # sidebar toggle kept
 
 
 def test_toolbar_mode_keeps_controls_reachable():

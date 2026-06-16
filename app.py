@@ -167,7 +167,17 @@ def _inject_chrome() -> None:
     st.markdown(
         """
         <style>
+          /* On screen we hide ONLY the footer (not a control). */
           footer {visibility: hidden;}
+          /* Defensive: NEVER let theming / a stale stylesheet hide the user
+             controls. Force the top-right menu and the sidebar collapse/expand
+             toggle visible, whatever else is on the page. */
+          [data-testid="stToolbar"], [data-testid="stMainMenu"], #MainMenu,
+          [data-testid="stSidebarCollapseButton"],
+          [data-testid="stSidebarCollapsedControl"],
+          [data-testid="stExpandSidebarButton"] {
+            visibility: visible !important;
+          }
 
           @media print {
             @page { margin: 1.5cm; }
@@ -429,6 +439,56 @@ def _render_pdf_button(report: RunReport, run_uid: str, key_ns: str) -> None:
     )
 
 
+def _plural(kind: str, n: int) -> str:
+    if n == 1:
+        return kind
+    return kind + "es" if kind == "mismatch" else kind + "s"
+
+
+def _dq_summary(audit: dict) -> str:
+    """One-line data-quality summary from the provenance audit counts, e.g.
+    '7 provenance issues: 5 mismatches, 2 unresolvable'."""
+    n = len(audit.get("violations") or [])
+    cats = []
+    if audit.get("mismatch"):
+        cats.append(f"{audit['mismatch']} {_plural('mismatch', audit['mismatch'])}")
+    if audit.get("unresolvable"):
+        cats.append(f"{audit['unresolvable']} unresolvable")
+    base = f"{n} provenance issue{'' if n == 1 else 's'}"
+    return base + (": " + ", ".join(cats) if cats else "")
+
+
+def _violation_tool(v: str) -> str:
+    """The tool a violation cites, parsed from '... at <tool> -> <field> ...'."""
+    arrow = v.find(" → ")           # ' -> ' (unicode arrow used in the text)
+    if arrow == -1:
+        return "?"
+    before = v[:arrow]
+    at = before.rfind(" at ")
+    return before[at + 4:].strip() if at != -1 else "?"
+
+
+def _group_violations(violations: list[str]) -> list[tuple[str, list[str]]]:
+    """Group violations by (kind, cited tool) so repeats collapse, e.g.
+    '4 mismatches citing get_dividend_history'. Returns (header, items)."""
+    groups: dict[tuple[str, str], list[str]] = {}
+    order: list[tuple[str, str]] = []
+    for v in violations:
+        kind = "unresolvable path" if v.lower().startswith("unresolvable") \
+            else "mismatch"
+        key = (kind, _violation_tool(v))
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(v)
+    out = []
+    for kind, tool in order:
+        items = groups[(kind, tool)]
+        out.append((f"{len(items)} {_plural(kind, len(items))} citing {tool}",
+                    items))
+    return out
+
+
 def render_report(
     report: RunReport, sidebar_ticker: str | None = None, key_ns: str = "report"
 ) -> None:
@@ -458,8 +518,19 @@ def render_report(
             "**⚠ Human review required** — "
             f"{len(report.veto_flags)} veto trigger(s) fired."
         )
+        audit = report.provenance_audit or {}
         for f in report.veto_flags:
-            st.markdown(f"- **{f.trigger.value}** — {f.detail}")
+            # data_quality: a one-line summary + grouped full list in an expander,
+            # instead of dumping the raw violation text inline.
+            if f.trigger.value == "data_quality" and audit.get("violations"):
+                st.markdown(f"- **data_quality** — {_dq_summary(audit)}")
+                with st.expander("Show provenance issues"):
+                    for header, items in _group_violations(audit["violations"]):
+                        st.markdown(f"**{header}**")
+                        for it in items:
+                            st.markdown(f"- {it}")
+            else:
+                st.markdown(f"- **{f.trigger.value}** — {f.detail}")
     else:
         st.success("No veto triggers — auto-proceed permitted.")
 

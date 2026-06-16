@@ -19,6 +19,14 @@ _CALLID_PAREN_RE = re.compile(
     r"[ \t]*\((?:[^()]|\([^()]*\))*call_id\b(?:[^()]|\([^()]*\))*\)"
 )
 _CALLID_BRACKET_RE = re.compile(r"[ \t]*\[[^\]]*call_id\b[^\]]*\]")
+# BARE call_id citations with no surrounding parens/brackets — the "Key Figures
+# (Provenance)" list format: "... observed: 0.1242 — call_id df243ae60ec6,
+# criteria[0].observed". Strip the (optional) leading separator (— : ; , -),
+# "call_id", the id token, and an optional trailing ", <field_path>".
+_CALLID_BARE_RE = re.compile(
+    r"[ \t]*(?:[—–:;,\-][ \t]*)?"
+    r"call_id\b\s*:?\s*\w+(?:\s*,\s*[\w\[\].%+\-]+)?"
+)
 # A field path: name[idx](.field)* with an optional '= <single token>' value
 # (token only, so prose after the value is never swallowed), optional backticks.
 _FIELDPATH_RE = re.compile(
@@ -34,6 +42,7 @@ def strip_provenance(text: str) -> str:
         return text
     out = _CALLID_PAREN_RE.sub("", text)
     out = _CALLID_BRACKET_RE.sub("", out)
+    out = _CALLID_BARE_RE.sub("", out)
     out = _FIELDPATH_RE.sub("", out)
     # Clean up artifacts left by the removals, WITHOUT touching newlines.
     out = re.sub(r"`\s*`", "", out)                  # empty backticks
