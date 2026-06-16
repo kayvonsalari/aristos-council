@@ -50,15 +50,25 @@ def _plain(text: str) -> str:
 def _figures_html(figures) -> str:
     if not figures:
         return ""
-    body = "".join(
-        f"<tr><td>{_esc(f.label)}</td><td>{_esc(f.value)}</td>"
-        f"<td>{_esc(f.unit)}</td><td>{_esc(f.provenance.field_path)}</td>"
-        f"<td>{_esc(f.provenance.tool_name)}</td></tr>"
-        for f in figures
+    body = ""
+    for i, f in enumerate(figures):
+        cls = "odd" if i % 2 else "even"
+        body += (
+            f"<tr class='{cls}'><td>{_esc(f.label)}</td><td>{_esc(f.value)}</td>"
+            f"<td>{_esc(f.unit)}</td><td>{_esc(f.provenance.field_path)}</td>"
+            f"<td>{_esc(f.provenance.tool_name)}</td></tr>"
+        )
+    # Column widths drive xhtml2pdf's fixed layout (reportlab colWidths); long
+    # field/tool strings wrap inside their cell instead of bleeding across.
+    return (
+        "<table class='grid'>"
+        "<thead><tr>"
+        "<th width='26%'>label</th><th width='13%'>value</th>"
+        "<th width='10%'>unit</th><th width='29%'>field</th>"
+        "<th width='22%'>tool</th>"
+        "</tr></thead>"
+        f"<tbody>{body}</tbody></table>"
     )
-    return ("<table><thead><tr><th>label</th><th>value</th><th>unit</th>"
-            "<th>field</th><th>tool</th></tr></thead>"
-            f"<tbody>{body}</tbody></table>")
 
 
 def _screen_html(screen) -> str:
@@ -66,16 +76,20 @@ def _screen_html(screen) -> str:
     if not rows:
         return ""
     body = ""
-    for r in rows:
+    for i, r in enumerate(rows):
         color = SCREEN_STATUS_HEX.get(r["Status"], "#1a1a1a")
+        cls = "odd" if i % 2 else "even"
         body += (
-            f"<tr><td>{_esc(r['Criterion'])}</td><td>{_esc(r['Observed'])}</td>"
-            f"<td>{_esc(r['Threshold'])}</td>"
+            f"<tr class='{cls}'><td>{_esc(r['Criterion'])}</td>"
+            f"<td>{_esc(r['Observed'])}</td><td>{_esc(r['Threshold'])}</td>"
             f"<td style='color:{color};font-weight:bold'>{_esc(r['Status'])}</td>"
             "</tr>"
         )
-    return ("<h2>Screen results</h2><table><thead><tr><th>Criterion</th>"
-            "<th>Observed</th><th>Threshold</th><th>Status</th></tr></thead>"
+    return ("<h2>Screen results</h2>"
+            "<table class='grid'><thead><tr>"
+            "<th width='40%'>Criterion</th><th width='22%'>Observed</th>"
+            "<th width='22%'>Threshold</th><th width='16%'>Status</th>"
+            "</tr></thead>"
             f"<tbody>{body}</tbody></table>")
 
 
@@ -194,10 +208,19 @@ def report_to_html(report: RunReport) -> str:
       .flags {{ color: #8B1A1A; font-weight: bold; }}
       .ok {{ color: #1B5E20; }}
       table {{ border-collapse: collapse; width: 100%; margin: 6pt 0; }}
-      th, td {{ border: 1px solid #cccccc; padding: 3pt 5pt; text-align: left;
+      th, td {{ border: 0.75pt solid #888888; padding: 3pt 5pt; text-align: left;
                font-size: 9pt; vertical-align: top; }}
-      th {{ background-color: #f0f0f0; }}
-      table.plain, table.plain td {{ border: none; padding: 0; }}
+      th {{ background-color: #dddddd; font-weight: bold; }}
+      /* The five-/four-column data tables: fixed columns (widths set per <th>),
+         compact, zebra-striped, and long field/tool strings wrap in-cell. */
+      table.grid {{ table-layout: fixed; }}
+      table.grid th, table.grid td {{
+        font-size: 8pt; padding: 2pt 4pt;
+        word-wrap: break-word; word-break: break-all; overflow-wrap: break-word;
+      }}
+      table.grid tr.odd td {{ background-color: #f4f4f4; }}
+      table.plain, table.plain th, table.plain td {{
+        border: none; padding: 0; background: none; font-size: 10pt; }}
       .footer {{ color: #777777; font-size: 8pt; text-align: center; }}
     </style></head><body>
       {''.join(p for p in parts if p)}

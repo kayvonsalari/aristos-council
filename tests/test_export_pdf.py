@@ -98,6 +98,35 @@ def test_status_colors_present_in_html():
     assert "#2E7D32" in h and "#B23B3B" in h and "#B8860B" in h  # PASS/FAIL/N-E
 
 
+def test_data_tables_render_as_fixed_grid_not_collapsed():
+    """The figures/screen tables must use the fixed-layout grid: explicit
+    column widths (so xhtml2pdf sets reportlab colWidths), zebra rows, and the
+    CSS that wraps long field/tool strings in-cell instead of bleeding across
+    columns. Regression for the collapsed-columns PDF bug."""
+    h = report_to_html(_report())
+    # both data tables carry the grid class (generic markdown tables do not)
+    assert h.count("<table class='grid'>") == 2          # screen + figures
+    # fixed-layout + in-cell wrapping CSS is present
+    assert "table.grid { table-layout: fixed; }" in h
+    assert "word-break: break-all" in h
+    assert "table.grid tr.odd td" in h                   # zebra striping
+    # figures columns: label widest, value/unit narrow, widths sum to 100%
+    for w in ("26%", "13%", "10%", "29%", "22%"):
+        assert f"width='{w}'" in h
+    # screen columns: criterion widest
+    assert "width='40%'" in h and "width='16%'" in h
+    # header rows live in <thead> so xhtml2pdf repeats them across page breaks
+    assert "<thead><tr>" in h
+
+
+def test_long_field_and_tool_strings_survive_into_grid_cells():
+    """Long tool/field strings must reach their cells verbatim (the fixed-width
+    column + word-break wraps them, but the text is never truncated)."""
+    h = report_to_html(_report())
+    assert "run_dividend_aristocrat_screen" in h         # 30-char tool name
+    assert "criteria[1].observed" in h
+
+
 def test_render_report_pdf_produces_pdf_bytes():
     pdf = render_report_pdf(_report())
     assert pdf[:4] == b"%PDF"
