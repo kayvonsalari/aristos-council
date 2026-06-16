@@ -23,5 +23,57 @@
       "unverifiable": 1,
       "unit_scaled": 0
     }
+  },
+  {
+    "ticker": "MSFT",
+    "run_at": "2026-06-14T13:50:30.815380Z",
+    "strategy_id": "dividend_aristocrats_v1",
+    "verdict": "hold",
+    "confidence": 0.52,
+    "stances": {
+      "fundamental": "bearish",
+      "technical": "bearish",
+      "sentiment": "bullish",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "low_confidence",
+      "specialist_conflict",
+      "recommendation_flip",
+      "majority_override"
+    ],
+    "provenance_audit": {
+      "figures_audited": 78,
+      "verified": 76,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 0,
+      "unit_scaled": 2
+    }
+  },
+  {
+    "ticker": "MSFT",
+    "run_at": "2026-06-14T13:54:56.860488Z",
+    "strategy_id": "growth_v1",
+    "verdict": "buy",
+    "confidence": 0.62,
+    "stances": {
+      "fundamental": "bullish",
+      "technical": "bearish",
+      "sentiment": "bullish",
+      "risk": "neutral"
+    },
+    "veto_triggers": [
+      "specialist_conflict",
+      "recommendation_flip"
+    ],
+    "provenance_audit": {
+      "figures_audited": 72,
+      "verified": 69,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 3,
+      "unit_scaled": 0
+    }
   }
 ]
