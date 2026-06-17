@@ -13,7 +13,17 @@ LangGraph orchestration, Anthropic models, pydantic state.
 - `src/aristos_council/graph.py` — node wiring:
   gather → specialists → critic → decision → audit → veto.
 - `src/aristos_council/agents/nodes.py` — gather (tool calls + evidence
-  block), specialist/critic/decision nodes, shallow figure validation.
+  block), specialist/critic/decision nodes, shallow figure validation. The
+  decision node applies the deterministic disposition gate AFTER the LLM verdict.
+- `src/aristos_council/agents/disposition.py` — the deterministic disposition
+  ceiling (is_gating build): `disposition_ceiling(screen_criteria, gating_names)`
+  returns SELL if any criterion the strategy marks `is_gating` is a CONFIRMED
+  fail (`passed is False`; NOT-EVAL/null does not cap), else None. The decision
+  node caps the LLM's verdict to it and records the override on `Decision`
+  (`original_recommendation`, `gate_override_applied`, `gating_criterion_fired`).
+  This is CODE, not a prompt: `partial_pass_allows_hold` was a soft hint and
+  proved evadable (T/MSFT/ASML/ARM overrode screen fails on Critic input-quality
+  arguments).
 - `src/aristos_council/audit/provenance.py` — deep provenance audit
   (post-run): resolves every cited figure's field_path against the ledger and
   compares values. Violations feed the DATA_QUALITY veto.
@@ -63,7 +73,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    genuine cutters still break (T 2022 cut, INTC suspension -> streak 0). The
    remaining undercount is DATA DEPTH only (the parked EODHD adapter), not the
    method.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 267 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 278 tests
    green as of 2026-06-16. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes

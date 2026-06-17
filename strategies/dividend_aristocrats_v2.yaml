@@ -1,0 +1,75 @@
+# Aristos Council — Investment Strategy Config
+# =============================================
+# Strategy: Dividend Aristocrats (v2)
+#
+# v2 == v1 plus a DETERMINISTIC disposition gate on the growth streak. The only
+# substantive change from v1 is `is_gating: true` on min_dividend_growth_streak:
+# a CONFIRMED fail (passed is False) of that criterion caps the verdict at SELL
+# in code (agents/disposition.py + the decision node), regardless of what the LLM
+# Decision agent argues. Everything else — criteria, thresholds, order, prose —
+# matches v1.
+#
+# Note `partial_pass_allows_hold: true` is left ON DELIBERATELY: the soft prompt
+# flag proved evadable (the agent overrode screen failures anyway), so v2 keeps
+# the flag permissive to demonstrate that the deterministic gate, not the flag,
+# is what enforces the SELL ceiling.
+#
+# Published strategies are immutable (bump the version, never mutate). The prose
+# `rationale`/`notes` are also indexed into the RAG store as strategy docs.
+
+id: dividend_aristocrats_v2
+name: Dividend Aristocrats
+version: 2
+
+description: >
+  Conservative income strategy targeting large, financially durable companies
+  with a long, unbroken record of growing dividends. Prioritises sustainability
+  of the payout over headline yield. Modelled on the spirit of the S&P 500
+  Dividend Aristocrats index, adapted for single-name research rather than index
+  membership.
+
+# --- Screening criteria (selected from the registry by name) ---
+# All ratios are decimals: 0.025 == 2.5%. Order is the screen's presentation
+# order. Thresholds are validated against each criterion's registry bounds.
+criteria:
+  - name: min_dividend_yield        # floor; avoids near-zero-yield names
+    threshold: 0.025
+  - name: max_payout_ratio          # ceiling; >0.75 questions sustainability
+    threshold: 0.75
+  - name: min_market_cap            # 10B USD; large-cap durability proxy
+    threshold: 10000000000
+  - name: min_dividend_growth_streak  # canonical aristocrat streak
+    threshold: 25
+    # When the streak is UNVERIFIABLE on the current provider (yfinance can't
+    # confirm 25y), treat it as blocking rather than auto-passing. (Successor to
+    # the old policy.unverifiable_streak_is_blocking; per-criterion now.)
+    unverifiable_blocks: true
+    # GATING (v2): a confirmed streak FAIL (passed is False) caps the disposition
+    # at SELL deterministically — the LLM cannot raise it. Only this criterion is
+    # gating; the three financial criteria are not.
+    is_gating: true
+
+# --- How conflicts and edge cases are intended to be handled ---
+policy:
+  # Left permissive ON PURPOSE (see header): the deterministic is_gating ceiling,
+  # not this soft flag, is what enforces the SELL ceiling on a streak fail.
+  partial_pass_allows_hold: true
+
+# --- Human-veto gate thresholds (consumed by agents/veto.py) ---
+veto:
+  min_confidence: 0.6   # decisions below this confidence pause for human review
+
+rationale: >
+  The aristocrat thesis is that a multi-decade record of rising dividends is a
+  hard-to-fake signal of disciplined capital allocation and earnings durability.
+  Yield is necessary but not sufficient: a high yield paired with a stretched
+  payout ratio is a warning, not an attraction. The screen therefore weights
+  payout sustainability and the growth streak above raw yield.
+
+notes: >
+  v2 makes the growth streak DISPOSITIVE: a confirmed failure caps the verdict at
+  SELL in code, because the streak is the defining aristocrat test and prompt-level
+  control over it proved evadable. The streak floor still cannot be fully verified
+  on the yfinance development provider (short history); EODHD (longer history) is
+  the separate data-depth fix. The council should refuse to assert — or to rate
+  above SELL — an aristocrat whose streak it cannot evidence.

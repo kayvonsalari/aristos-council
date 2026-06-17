@@ -28,11 +28,20 @@ class CriterionSpec(BaseModel):
     per-criterion successor to the old strategy-wide
     ``unverifiable_streak_is_blocking`` flag. (Metadata in 4A; no logic consumes
     it yet, exactly as before.)
+
+    ``is_gating`` (is_gating build): if True, a CONFIRMED fail (passed is False)
+    of this criterion caps the final disposition at SELL deterministically, in
+    code — the LLM Decision agent cannot raise it. Default False, so every
+    existing strategy is unaffected. Unlike ``unverifiable_blocks`` this IS wired
+    to behaviour (see agents/disposition.py + the decision node). It is a
+    committed YAML strategy property, deliberately NOT exposed as a UI-editable
+    per-run knob.
     """
 
     name: str
     threshold: float = Field(ge=0.0)
     unverifiable_blocks: bool = False
+    is_gating: bool = False
 
 
 class StrategyPolicy(BaseModel):

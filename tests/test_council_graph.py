@@ -543,3 +543,70 @@ def test_price_history_is_summarized_in_prompts_not_raw():
     ph = next(tc for tc in state.tool_calls
               if tc.tool_name == "get_price_history")
     assert len(ph.output.bars) == 220
+
+
+# --------------------------------------------------------------------------- #
+# Deterministic disposition gate (is_gating build) — end to end in the graph.
+# The gate must override the LLM verdict on a confirmed gating-criterion fail,
+# regardless of partial_pass_allows_hold (v2 keeps the flag True on purpose).
+# --------------------------------------------------------------------------- #
+V2 = load_strategy(
+    Path(__file__).resolve().parents[1] / "strategies" / "dividend_aristocrats_v2.yaml"
+)
+
+
+class ShortStreakAdapter(FakeAdapter):
+    """Same as FakeAdapter but only ~6 rising dividend years, so the streak
+    criterion is a CONFIRMED fail (streak ~4 < 25), firing the v2 gate."""
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return [
+            DividendEvent(ex_date=date(2018 + i, 6, 1), amount=1.0 + 0.1 * i)
+            for i in range(6)
+        ]
+
+
+def _run_gate(strategy, decision_rec):
+    runners = {
+        "specialist": ScriptedSpecialistRunner([_bullish()] * 4),
+        "critic": StaticRunner(CriticOutput(counter_thesis="c")),
+        "decision": StaticRunner(DecisionOutput(
+            recommendation=decision_rec, confidence=0.9, rationale="r")),
+    }
+    app = build_council(ShortStreakAdapter(), strategy, runners)
+    result = app.invoke(ResearchState(ticker="FAKE", strategy_id=strategy.id))
+    return ResearchState.model_validate(result)
+
+
+def test_gate_caps_buy_at_sell_on_streak_fail():
+    d = _run_gate(V2, Recommendation.BUY).decision
+    assert d.recommendation == Recommendation.SELL          # capped by the gate
+    assert d.original_recommendation == Recommendation.BUY   # LLM pre-gate verdict
+    assert d.gate_override_applied is True
+    assert d.gating_criterion_fired == "min_dividend_growth_streak"
+
+
+def test_gate_caps_hold_at_sell_on_streak_fail():
+    d = _run_gate(V2, Recommendation.HOLD).decision
+    assert d.recommendation == Recommendation.SELL
+    assert d.original_recommendation == Recommendation.HOLD
+    assert d.gate_override_applied is True
+    assert d.gating_criterion_fired == "min_dividend_growth_streak"
+
+
+def test_gate_leaves_sell_unchanged():
+    # LLM already at the ceiling -> no override; metadata records the no-op.
+    d = _run_gate(V2, Recommendation.SELL).decision
+    assert d.recommendation == Recommendation.SELL
+    assert d.gate_override_applied is False
+    assert d.original_recommendation == Recommendation.SELL
+
+
+def test_v1_no_gate_keeps_llm_verdict_on_same_failing_streak():
+    # Identical failing streak under v1 (no is_gating) -> the LLM verdict stands,
+    # proving the default-off field leaves v1 behaviour unchanged. (partial_pass
+    # is True in BOTH; only is_gating differs.)
+    d = _run_gate(STRATEGY, Recommendation.BUY).decision
+    assert d.recommendation == Recommendation.BUY           # NOT capped
+    assert d.gate_override_applied is False
+    assert d.original_recommendation == Recommendation.BUY

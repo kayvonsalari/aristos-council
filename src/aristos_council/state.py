@@ -176,6 +176,14 @@ class Decision(BaseModel):
     dissent: list[SpecialistName] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_utcnow)
 
+    # --- Deterministic disposition-gate audit (is_gating build) -------------- #
+    # `recommendation` is the FINAL verdict (post-gate). These record whether the
+    # gate overrode the LLM and why, so the override is auditable. All optional /
+    # default so previously-stored verdicts still parse.
+    original_recommendation: Optional[Recommendation] = None  # LLM pre-gate verdict
+    gate_override_applied: bool = False
+    gating_criterion_fired: Optional[str] = None              # the criterion that capped
+
 
 # --------------------------------------------------------------------------- #
 # Veto gate

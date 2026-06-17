@@ -49,11 +49,27 @@ from ..tools.criteria.registry import (
 )
 from ..tools.sentiment_tools import sentiment_snapshot
 from ..tools.technical import technical_snapshot
+from .disposition import (
+    disposition_ceiling,
+    exceeds_ceiling,
+    failed_gating_criteria,
+)
 from .schemas import CriticOutput, DecisionOutput, FigureRef, SpecialistOutput
 
 
 def _new_call_id() -> str:
     return uuid.uuid4().hex[:12]
+
+
+def _screen_criteria(state: ResearchState) -> list:
+    """The screen's per-criterion results (name + three-valued passed) from the
+    ledger, for the deterministic disposition gate. Empty if no screen ran."""
+    for tc in state.tool_calls:
+        if tc.tool_name == _SCREEN_LEDGER_TOOL and tc.output:
+            out = tc.output
+            crits = out.get("criteria") if isinstance(out, dict) else None
+            return crits or []
+    return []
 
 
 # --------------------------------------------------------------------------- #
@@ -536,11 +552,33 @@ def make_decision_node(strategy: Strategy, runner):
             f"Specialists:\n{opinions}\n\nCritic:\n{critic}\n"
         )
         out: DecisionOutput = runner.invoke(system, user)
+
+        # DETERMINISTIC disposition ceiling — authoritative over the LLM. A
+        # confirmed fail of a gating criterion caps the verdict at SELL no matter
+        # what the agent decided (partial_pass_allows_hold is only a soft hint and
+        # proved evadable; this is the enforcement). Default-off: a strategy with
+        # no is_gating criteria behaves exactly as before.
+        final_rec = out.recommendation
+        gate_applied = False
+        fired_name = None
+        gating = {c.name for c in strategy.criteria if getattr(c, "is_gating", False)}
+        if gating:
+            screen = _screen_criteria(state)
+            ceiling = disposition_ceiling(screen, gating)
+            if ceiling is not None and exceeds_ceiling(out.recommendation, ceiling):
+                final_rec = ceiling
+                gate_applied = True
+                failed = failed_gating_criteria(screen, gating)
+                fired_name = failed[0] if failed else None
+
         state.decision = Decision(
-            recommendation=out.recommendation,
+            recommendation=final_rec,
             confidence=out.confidence,
             rationale=out.rationale,
             dissent=out.dissent,
+            original_recommendation=out.recommendation,
+            gate_override_applied=gate_applied,
+            gating_criterion_fired=fired_name,
         )
         return state
 
