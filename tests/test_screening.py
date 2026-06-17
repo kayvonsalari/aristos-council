@@ -14,7 +14,7 @@ from datetime import date
 import pytest
 
 from aristos_council.data.adapter import DividendEvent, Fundamentals
-from aristos_council.data.yfinance_adapter import _dividend_per_share
+from aristos_council.data.yfinance_adapter import _dividend_per_share, _payout_ratio
 from aristos_council.tools.screening import (
     consecutive_dividend_growth_years,
     max_payout_criterion,
@@ -375,6 +375,49 @@ def test_recovered_dps_yields_a_real_value_end_to_end():
                             min_yield=0.025, last_close=155.0)
     assert r.passed is True
     assert abs(r.observed - 5.2 / 155.0) < 1e-9
+
+
+# --------------------------------------------------------------------------- #
+# Adapter payout_ratio fallback (same summaryDetail gap): derive from
+# dividend_per_share / trailingEps when the provider payoutRatio is None.
+# --------------------------------------------------------------------------- #
+def test_payout_falls_back_to_dps_over_eps_when_provider_missing():
+    # JNJ-shape: payoutRatio absent, dps recovered + eps present -> derive.
+    pr = _payout_ratio({"payoutRatio": None, "trailingEps": 8.63},
+                       dividend_per_share=5.2)
+    assert abs(pr - 5.2 / 8.63) < 1e-9                  # ~0.60
+
+
+def test_payout_prefers_provider_field_when_present():
+    # KO/MSFT/ASML shape: provider payoutRatio present -> used as-is, NO derive.
+    assert _payout_ratio({"payoutRatio": 0.6478, "trailingEps": 3.18},
+                         dividend_per_share=2.12) == 0.6478
+
+
+def test_payout_not_eval_when_eps_nonpositive_or_missing():
+    # Can't compute honestly: no eps, or non-positive eps (negative earnings).
+    assert _payout_ratio({"payoutRatio": None}, dividend_per_share=5.2) is None
+    assert _payout_ratio({"payoutRatio": None, "trailingEps": -0.6},
+                         dividend_per_share=5.2) is None      # INTC-like neg eps
+    assert _payout_ratio({"payoutRatio": None, "trailingEps": 0.0},
+                         dividend_per_share=5.2) is None
+
+
+def test_payout_not_eval_when_dps_missing():
+    # No dividend figure to compute from -> NOT-EVAL (never a phantom value).
+    assert _payout_ratio({"payoutRatio": None, "trailingEps": 8.63},
+                         dividend_per_share=None) is None
+
+
+def test_derived_payout_evaluates_in_criterion_end_to_end():
+    # JNJ-shape through the criterion: provider field absent but derived payout
+    # 0.60 <= 0.75 ceiling -> PASS (was NOT-EVAL before this fix).
+    pr = _payout_ratio({"payoutRatio": None, "trailingEps": 8.63},
+                       dividend_per_share=5.2)
+    r = max_payout_criterion(_fund(dividend_per_share=5.2, payout_ratio=pr),
+                             max_payout=0.75)
+    assert r.passed is True
+    assert abs(r.observed - 5.2 / 8.63) < 1e-9
 
 
 # --------------------------------------------------------------------------- #

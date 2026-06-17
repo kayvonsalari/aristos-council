@@ -118,6 +118,9 @@ class YFinanceAdapter(MarketDataAdapter):
         except Exception:
             balance = None
 
+        # Recovered DPS, reused for the payout derivation below (same source the
+        # screen sees), so dividend yield AND payout survive the summaryDetail gap.
+        dps = _dividend_per_share(info)
         return Fundamentals(
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
@@ -128,8 +131,8 @@ class YFinanceAdapter(MarketDataAdapter):
             currency=(info.get("currency") or None),
             financial_currency=(info.get("financialCurrency") or None),
             dividend_yield=_as_float(info.get("dividendYield")),
-            dividend_per_share=_dividend_per_share(info),
-            payout_ratio=_as_float(info.get("payoutRatio")),
+            dividend_per_share=dps,
+            payout_ratio=_payout_ratio(info, dps),
             eps=_as_float(info.get("trailingEps")),
             pe_ratio=_as_float(info.get("trailingPE")),
             free_cash_flow=_as_float(info.get("freeCashflow")),
@@ -184,6 +187,27 @@ def _dividend_per_share(info: dict) -> float | None:
     if forward is not None:
         return forward
     return _as_float(info.get("trailingAnnualDividendRate"))
+
+
+def _payout_ratio(info: dict, dividend_per_share: float | None) -> float | None:
+    """Payout ratio, resilient to yfinance's flaky `info`.
+
+    The provider `payoutRatio` sits in the SAME summaryDetail block that drops
+    `dividendRate` (None for PG/JNJ/MO/T/MMM in one call), so when it's missing
+    we DERIVE it as dividend_per_share / trailingEps — the same recovered DPS the
+    screen uses, over the populated trailing EPS. Honest NOT-EVAL (None) only on
+    a true gap: no DPS, or non-positive EPS (negative/zero earnings -> the ratio
+    is undefined/meaningless, so we abstain rather than fabricate). A genuine
+    non-payer (DPS 0) derives to 0.0, but the payout criterion already short-
+    circuits dps<=0 to NOT-EVAL, so that value is never the deciding figure.
+    """
+    provider = _as_float(info.get("payoutRatio"))
+    if provider is not None:
+        return provider
+    eps = _as_float(info.get("trailingEps"))
+    if dividend_per_share is None or eps is None or eps <= 0:
+        return None
+    return dividend_per_share / eps
 
 
 def _as_float(value: object) -> float | None:
