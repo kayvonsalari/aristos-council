@@ -39,13 +39,20 @@ LangGraph orchestration, Anthropic models, pydantic state.
    provenance violations.
 3. `passed` on screen criteria is true/false/null; null means NOT EVALUATED,
    false means evaluated-and-failed. Agents conflating these was a
-   10-occurrence live bug class; the audit now catches it.
+   10-occurrence live bug class; the audit now catches it. The SAME null≠false
+   discipline applies to inputs: a MISSING figure is NOT-EVAL, never a phantom
+   FAIL. (Live: yfinance's `dividendRate` came back None for genuine payers
+   PG/JNJ/MO/T/MMM — empty summaryDetail block — and `min_yield_criterion`
+   treated null dps as a 0/FAIL. Fixed two ways: the adapter falls back
+   `dividendRate -> trailingAnnualDividendRate` for `dividend_per_share`, and
+   the criterion now NOT-EVALs a null dps while still FAILing a genuine zero,
+   e.g. INTC's suspended `trailingAnnualDividendRate == 0`.)
 4. Prompt-side summarization of ledger objects requires an entry in
    `_PROMPT_VIEW_ALIASES` (audit/provenance.py), or honest citations get
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 254 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 259 tests
    green as of 2026-06-16. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes

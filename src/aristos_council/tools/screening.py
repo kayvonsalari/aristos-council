@@ -86,13 +86,12 @@ class ScreenResult:
 # Primitive tools (each independently unit-tested)
 # --------------------------------------------------------------------------- #
 def _has_current_dividend(fundamentals: Fundamentals) -> bool:
-    """True iff the company pays a dividend RIGHT NOW (positive current DPS).
+    """True iff the company pays a positive current dividend (DPS > 0).
 
-    Zero or null ``dividend_per_share`` is treated as 'no current dividend' — a
-    DETERMINATION, not a data gap. This holds regardless of dividend HISTORY:
-    a never-payer (BRK-B, AMZN, ARM — empty history) and a suspended payer
-    (INTC — long past history) are the same 'no current dividend' state today.
-    History is judged separately by the growth-streak criterion.
+    A ZERO DPS is a determination (suspended/never-pays). A NULL DPS is a DATA
+    GAP, NOT a determination (hard rule 3) — callers must distinguish the two
+    BEFORE consulting this predicate (which returns False for both). History is
+    judged separately by the growth-streak criterion.
     """
     dps = fundamentals.dividend_per_share
     return dps is not None and dps > 0
@@ -104,10 +103,15 @@ def min_yield_criterion(
 ) -> CriterionResult:
     """Dividend yield at or above the strategy floor (decimals: 0.025 == 2.5%).
 
-    NO CURRENT DIVIDEND is a FAIL, not a data gap (Tier 0 stress basket): a
-    non-payer (zero or null dividend_per_share) categorically cannot meet a
-    minimum yield, so the criterion is evaluated-and-FAILED with an explicit
-    note — distinct from UNVERIFIABLE (which means 'could not be evaluated').
+    NULL vs ZERO dividend_per_share are DIFFERENT outcomes (hard rule 3):
+    - null (None) is a DATA GAP -> NOT EVALUATED. A missing figure must never
+      become a phantom FAIL. (Live bug: yfinance's summaryDetail block can come
+      back empty for genuine payers — PG/JNJ/MO/T/MMM — so dividendRate arrives
+      None; the adapter now falls back to trailingAnnualDividendRate, but if
+      EVEN THAT is absent we abstain rather than fabricate a zero.)
+    - zero (<= 0) is a GENUINE non-payer -> FAIL, observed 0.0. A real 0 (e.g.
+      a suspended dividend, INTC: trailingAnnualDividendRate == 0) categorically
+      cannot meet a minimum yield.
 
     UNITS LESSON (found live by the council's own Critic, NVDA run): provider
     yield fields have ambiguous units — yfinance has shipped both 0.0254 and
@@ -118,15 +122,23 @@ def min_yield_criterion(
     is missing, the criterion is UNVERIFIABLE rather than silently trusted.
     """
     dps = fundamentals.dividend_per_share
-    if dps is None or dps <= 0:
+    if dps is None:
+        return CriterionResult(
+            name="min_dividend_yield",
+            passed=None,
+            observed=None,
+            threshold=min_yield,
+            note="NOT EVALUATED: dividend figure unavailable "
+                 "(dividend_per_share is null) — a data gap, not a non-payer",
+        )
+    if dps <= 0:
         return CriterionResult(
             name="min_dividend_yield",
             passed=False,
             observed=0.0,
             threshold=min_yield,
-            note="no current dividend (dividend_per_share is "
-                 + ("null" if dps is None else "zero")
-                 + "): a non-payer cannot meet the minimum yield",
+            note="no current dividend (dividend_per_share is zero): "
+                 "a non-payer cannot meet the minimum yield",
         )
     if last_close is not None and last_close > 0:
         # Currency-INVARIANT: dps and last_close share the listing currency, so
@@ -165,7 +177,20 @@ def max_payout_criterion(
     earnings — the opposite of aristocrat-grade durability. Negative payout
     (negative earnings) is treated as a FAIL, not unverifiable, because it is a
     meaningful signal, with an explanatory note.
+
+    NULL vs ZERO dividend_per_share both yield NOT EVALUATED here (there is no
+    sustainable-payout judgement to make either way), but with DISTINCT notes
+    (hard rule 3): null is a data gap; zero is a genuine non-payer.
     """
+    if fundamentals.dividend_per_share is None:
+        return CriterionResult(
+            name="max_payout_ratio",
+            passed=None,
+            observed=None,
+            threshold=max_payout,
+            note="not evaluated: dividend figure unavailable "
+                 "(dividend_per_share is null) — a data gap",
+        )
     if not _has_current_dividend(fundamentals):
         return CriterionResult(
             name="max_payout_ratio",

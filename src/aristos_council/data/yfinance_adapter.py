@@ -128,7 +128,7 @@ class YFinanceAdapter(MarketDataAdapter):
             currency=(info.get("currency") or None),
             financial_currency=(info.get("financialCurrency") or None),
             dividend_yield=_as_float(info.get("dividendYield")),
-            dividend_per_share=_as_float(info.get("dividendRate")),
+            dividend_per_share=_dividend_per_share(info),
             payout_ratio=_as_float(info.get("payoutRatio")),
             eps=_as_float(info.get("trailingEps")),
             pe_ratio=_as_float(info.get("trailingPE")),
@@ -167,6 +167,23 @@ class YFinanceAdapter(MarketDataAdapter):
             if start <= d <= end:
                 events.append(DividendEvent(ex_date=d, amount=float(amount)))
         return events
+
+
+def _dividend_per_share(info: dict) -> float | None:
+    """Annual dividend per share, resilient to yfinance's flaky `info`.
+
+    The forward `dividendRate` lives in the summaryDetail block, which yfinance
+    frequently returns EMPTY for genuine payers (PG/JNJ/MO/T/MMM observed as
+    None in a single call while KO/MSFT/ASML came back populated). When it's
+    missing, fall back to `trailingAnnualDividendRate`, which the same calls
+    populated for all five. A true non-payer's trailing rate is an explicit 0
+    (INTC, post-suspension), preserved as 0.0 — a real determination, distinct
+    from None (no figure at all, which the screen treats as NOT-EVAL, not FAIL).
+    """
+    forward = _as_float(info.get("dividendRate"))
+    if forward is not None:
+        return forward
+    return _as_float(info.get("trailingAnnualDividendRate"))
 
 
 def _as_float(value: object) -> float | None:

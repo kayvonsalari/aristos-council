@@ -14,6 +14,7 @@ from datetime import date
 import pytest
 
 from aristos_council.data.adapter import DividendEvent, Fundamentals
+from aristos_council.data.yfinance_adapter import _dividend_per_share
 from aristos_council.tools.screening import (
     consecutive_dividend_growth_years,
     max_payout_criterion,
@@ -105,27 +106,43 @@ def test_payout_unverifiable_when_missing():
 
 
 # --------------------------------------------------------------------------- #
-# No CURRENT dividend — a determination, not a data gap (Tier 0 stress basket).
-# Zero or null dividend_per_share: yield FAILs ("no current dividend"); payout
-# is NOT-EVAL (nothing to sustain — a 0.0:PASS would mislead). Holds whether
-# history is empty (BRK-B/AMZN/ARM) or non-empty-but-suspended (INTC).
+# NULL vs ZERO dividend_per_share are DIFFERENT outcomes (hard rule 3):
+#   - ZERO (genuine non-payer, e.g. a suspended dividend): yield FAILs
+#     ("no current dividend"); payout NOT-EVAL (nothing to sustain — a
+#     0.0:PASS would mislead).
+#   - NULL (data gap, figure unavailable): BOTH NOT-EVAL. A missing figure must
+#     NEVER become a phantom FAIL (the yfinance dividendRate-absent live bug).
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("dps", [0.0, None])
-def test_no_current_dividend_yield_fails(dps):
-    r = min_yield_criterion(_fund(dividend_per_share=dps),
+def test_genuine_zero_dividend_yield_fails():
+    r = min_yield_criterion(_fund(dividend_per_share=0.0),
                             min_yield=0.025, last_close=100.0)
     assert r.passed is False                 # evaluated-and-failed, not None
     assert r.observed == 0.0
     assert "no current dividend" in r.note
 
 
-@pytest.mark.parametrize("dps", [0.0, None])
-def test_no_current_dividend_payout_not_evaluated(dps):
-    # Even a reported 0.0 payout must NOT pass — it would read as "sustainable".
-    r = max_payout_criterion(_fund(dividend_per_share=dps, payout_ratio=0.0),
+def test_null_dividend_figure_yield_is_not_eval_not_fail():
+    # The phantom-FAIL bug: a MISSING figure must be NOT-EVAL, never a FAIL.
+    r = min_yield_criterion(_fund(dividend_per_share=None),
+                            min_yield=0.025, last_close=100.0)
+    assert r.passed is None                  # NOT-EVAL, not False
+    assert r.observed is None                # no fabricated 0.0
+    assert "unavailable" in r.note and "data gap" in r.note
+
+
+def test_genuine_zero_dividend_payout_not_evaluated():
+    # A reported 0.0 payout must NOT pass — it would read as "sustainable".
+    r = max_payout_criterion(_fund(dividend_per_share=0.0, payout_ratio=0.0),
                              max_payout=0.75)
     assert r.passed is None                  # NOT-EVAL, not a misleading PASS
     assert "no current dividend" in r.note
+
+
+def test_null_dividend_figure_payout_is_not_eval_with_data_gap_note():
+    r = max_payout_criterion(_fund(dividend_per_share=None, payout_ratio=0.0),
+                             max_payout=0.75)
+    assert r.passed is None
+    assert "unavailable" in r.note           # data-gap note, distinct from zero
 
 
 # --------------------------------------------------------------------------- #
@@ -262,10 +279,9 @@ def _criterion(result, name):
     return next(c for c in result.criteria if c.name == name)
 
 
-@pytest.mark.parametrize("dps", [0.0, None])
-def test_no_dividend_empty_history_brkb_amzn_arm(dps):
-    # Never-payer: no current dividend AND no dividend history at all.
-    f = _fund(dividend_per_share=dps, payout_ratio=0.0, market_cap=2e10)
+def test_genuine_zero_no_history_brkb_amzn_arm():
+    # Genuine non-payer (explicit ZERO current DPS) AND no dividend history.
+    f = _fund(dividend_per_share=0.0, payout_ratio=0.0, market_cap=2e10)
     result = _screen(f, dividends=[])
     yld = _criterion(result, "min_dividend_yield")
     pay = _criterion(result, "max_payout_ratio")
@@ -273,17 +289,27 @@ def test_no_dividend_empty_history_brkb_amzn_arm(dps):
     assert pay.passed is None and "no current dividend" in pay.note
 
 
-@pytest.mark.parametrize("dps", [0.0, None])
-def test_no_dividend_suspended_long_history_intc(dps):
-    # Suspended payer: no CURRENT dividend, but a long PAST history (INTC-shape,
-    # 128 quarterly events). The determination must be identical to the
-    # empty-history case — it depends on current DPS, not on history.
+def test_null_dividend_figure_is_not_eval_regardless_of_history():
+    # Figure unavailable (data gap): yield NOT-EVAL (NOT a phantom FAIL) and
+    # payout NOT-EVAL — independent of dividend history.
+    f = _fund(dividend_per_share=None, payout_ratio=0.0, market_cap=2e10)
+    result = _screen(f, dividends=[])
+    yld = _criterion(result, "min_dividend_yield")
+    pay = _criterion(result, "max_payout_ratio")
+    assert yld.passed is None and yld.observed is None
+    assert pay.passed is None
+
+
+def test_suspended_dividend_intc_genuine_zero_fails():
+    # Suspended payer (INTC-shape): explicit ZERO current DPS but a long PAST
+    # history (128 quarterly events). Genuine non-payer today -> yield FAILs,
+    # payout NOT-EVAL. The determination depends on current DPS, not history.
     past = [
         DividendEvent(ex_date=date(1992 + i // 4, 3 * (i % 4) + 1, 1),
                       amount=0.10 + 0.001 * i)
         for i in range(128)
     ]
-    f = _fund(dividend_per_share=dps, payout_ratio=0.0, market_cap=2e10)
+    f = _fund(dividend_per_share=0.0, payout_ratio=0.0, market_cap=2e10)
     result = _screen(f, dividends=past)
     yld = _criterion(result, "min_dividend_yield")
     pay = _criterion(result, "max_payout_ratio")
@@ -305,6 +331,50 @@ def test_screen_passes_all_evaluated_with_full_data():
     )
     assert result.flags == []
     assert result.passes_all_evaluated is True
+
+
+# --------------------------------------------------------------------------- #
+# Adapter dividend_per_share fallback (PART B): yfinance's forward dividendRate
+# is often absent for genuine payers (PG/JNJ/MO/T/MMM observed None in one call
+# while KO/MSFT/ASML were populated); fall back to trailingAnnualDividendRate.
+# --------------------------------------------------------------------------- #
+def test_dps_falls_back_to_trailing_when_forward_missing():
+    # JNJ/PG/MO/T/MMM shape: dividendRate absent, trailing populated -> recover.
+    assert _dividend_per_share({"trailingAnnualDividendRate": 5.2}) == 5.2
+    assert _dividend_per_share(
+        {"dividendRate": None, "trailingAnnualDividendRate": 4.227}) == 4.227
+
+
+def test_dps_prefers_forward_when_present():
+    # KO/MSFT/ASML shape: forward present -> used as-is, NO fallback (unchanged).
+    assert _dividend_per_share(
+        {"dividendRate": 2.12, "trailingAnnualDividendRate": 2.06}) == 2.12
+    assert _dividend_per_share({"dividendRate": 3.64}) == 3.64
+
+
+def test_dps_intc_suspension_is_zero_not_none():
+    # INTC shape: forward absent, trailing explicit 0 -> 0.0 (genuine non-payer,
+    # the screen FAILs it), NOT None (which would NOT-EVAL).
+    assert _dividend_per_share(
+        {"dividendRate": None, "trailingAnnualDividendRate": 0}) == 0.0
+
+
+def test_dps_none_when_both_absent():
+    # No figure anywhere -> None (screen NOT-EVALs, never phantom-FAILs).
+    assert _dividend_per_share({}) is None
+    assert _dividend_per_share(
+        {"dividendRate": None, "trailingAnnualDividendRate": None}) is None
+
+
+def test_recovered_dps_yields_a_real_value_end_to_end():
+    # JNJ-shape: dividendRate None recovered to 5.2 via trailing; at a ~$155
+    # close the derived yield is a real ~3.4%, evaluated normally (not a FAIL).
+    dps = _dividend_per_share({"dividendRate": None,
+                               "trailingAnnualDividendRate": 5.2})
+    r = min_yield_criterion(_fund(dividend_per_share=dps),
+                            min_yield=0.025, last_close=155.0)
+    assert r.passed is True
+    assert abs(r.observed - 5.2 / 155.0) < 1e-9
 
 
 # --------------------------------------------------------------------------- #
