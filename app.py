@@ -796,9 +796,11 @@ _PARAM_LABELS = {
 }
 _PARAM_HELP = {
     "unverifiable_blocks":
-        "If this criterion can't be evaluated (NOT-EVAL), count it as FAILING "
-        "for the human-review gate instead of letting it pass silently. "
-        "Per-criterion — distinct from the strategy-level Policy flag below.",
+        "Marks whether a NOT-EVAL (couldn't-be-evaluated) result for this "
+        "criterion should count as disqualifying for this strategy. Not yet "
+        "active: today every NOT-EVAL result escalates to human review "
+        "regardless of this setting — this per-criterion control is reserved "
+        "for upcoming strategy-disposition logic.",
     "years":
         "Look-back window for the in-house revenue CAGR (shared by the revenue "
         "and PEG criteria). Fixed in code; not strategy-configurable yet.",
