@@ -246,6 +246,58 @@ def test_growth_criterion_fail_when_streak_too_short():
     assert r.observed == 4.0
 
 
+# --- Per-payment-rate counting: immune to ex-date timing (hard-rule-5 fix) -- #
+def _quarterly(start_year, n_years, base_rate, step, extra_exdate_year=None):
+    """n_years of 4 quarterly payments at a per-payment rate rising `step`/yr;
+    optionally an EXTRA 5th ex-date in `extra_exdate_year` — the calendar-boundary
+    artifact (an extra payment landing in one calendar year, as PG's 2002 did)."""
+    evs = []
+    for y in range(n_years):
+        year = start_year + y
+        rate = base_rate + step * y
+        for m in (2, 5, 8, 11):
+            evs.append(DividendEvent(ex_date=date(year, m, 1), amount=rate))
+        if year == extra_exdate_year:
+            evs.append(DividendEvent(ex_date=date(year, 12, 15), amount=rate))
+    return evs
+
+
+def test_calendar_boundary_extra_exdate_does_not_false_break():
+    # PG-2002 shape: 30 rising years, ONE year gets a 5th ex-date. The
+    # per-payment-rate method must NOT read the next year as a cut.
+    evs = _quarterly(1990, 30, 0.20, 0.01, extra_exdate_year=2002)
+    streak, note = consecutive_dividend_growth_years(evs)
+    assert streak >= 25                          # clears the aristocrat threshold
+    assert streak == 28                          # full count (30y, latest dropped)
+    assert "per-payment" in note and "floor" in note
+    # the artifact year's SUM really does exceed the next year's, so the OLD
+    # calendar-year-sum method WOULD have false-broken here:
+    sum_2002 = sum(e.amount for e in evs if e.ex_date.year == 2002)
+    sum_2003 = sum(e.amount for e in evs if e.ex_date.year == 2003)
+    assert sum_2002 > sum_2003
+
+
+def test_genuine_per_payment_cut_still_breaks():
+    # T-shape: rising for years, then a REAL per-payment cut to a lower flat
+    # rate. The drop must break the streak — the fix must not paper over cuts.
+    rising = _quarterly(2000, 22, 0.40, 0.01)               # 2000..2021 rising
+    cut = _quarterly(2022, 4, 0.2775, 0.0)                  # 2022..2025 flat, lower
+    streak, _ = consecutive_dividend_growth_years(rising + cut)
+    # latest (2025) dropped; 2024 vs 2023 both 0.2775 -> not increasing -> break
+    assert streak == 0
+
+
+def test_single_year_real_decrease_breaks_at_the_cut():
+    # A genuine one-year per-payment decrease mid-history breaks the count there,
+    # independent of ex-date counts (rate, not sum).
+    evs = (_quarterly(2010, 5, 0.50, 0.05)                  # 2010..2014 rising
+           + _quarterly(2015, 4, 0.40, 0.05))              # 2015 CUT then rising
+    streak, _ = consecutive_dividend_growth_years(evs)
+    # complete years end 2017 (2018 dropped). 2017>2016>2015 up; 2015(0.40)
+    # < 2014(0.70) -> break. Two increases (2016,2017) since the cut.
+    assert streak == 2
+
+
 # --------------------------------------------------------------------------- #
 # aggregate screen
 # --------------------------------------------------------------------------- #

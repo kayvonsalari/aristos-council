@@ -266,32 +266,45 @@ def consecutive_dividend_growth_years(
     Returns (years, note). Years is None when there isn't enough clean annual
     data to judge.
 
-    Method: sum dividend amounts per calendar year, then walk from the most
-    recent COMPLETE year backwards counting strictly-increasing annual totals.
+    Method: compare the PER-PAYMENT dividend RATE year over year — the MEDIAN of
+    each calendar year's payments — walking from the most recent COMPLETE year
+    backwards, counting strictly-increasing years. We do NOT sum per calendar
+    year: the count of ex-dates landing in a calendar year is not constant
+    (payment timing drifts), so a year with an extra ex-date inflates the SUM and
+    makes the next normal year read as a false CUT. (Live false-fail: PG's 2002
+    had 5 ex-dates -> 2003's normal 4-payment year looked like a decrease and
+    broke a genuine 68-year streak at 22; the median per-payment rate is immune
+    to ex-date count, recovering PG to ~38 while T's 2022 cut and INTC's
+    suspension — real per-payment drops — still break correctly.)
 
     Honesty caveat (returned in `note`): on yfinance the dividend history is
-    often too short or irregular to verify the canonical 25-year aristocrat
-    streak. This function does not lie about that — it reports what the series
-    supports and flags the limitation. EODHD's longer history is the real fix.
+    often too short to verify the canonical 25-year aristocrat streak. This
+    function does not lie about that — it reports what the series supports and
+    flags the limitation. EODHD's longer history is the real depth fix; this fix
+    is about the COUNTING method, not the data source.
     """
     if not dividends:
         return None, "no dividend events available"
 
-    by_year: dict[int, float] = {}
-    for ev in dividends:
-        by_year[ev.ex_date.year] = by_year.get(ev.ex_date.year, 0.0) + ev.amount
+    # Per-payment RATE per year = median of that year's payments (robust to the
+    # ex-date COUNT and to one-off special dividends), NOT the calendar-year sum.
+    from statistics import median
 
-    years_sorted = sorted(by_year)
-    # Drop the latest year if it looks partial relative to history depth — we
-    # can't know it's complete, so excluding it avoids a false "cut" signal.
+    payments_by_year: dict[int, list[float]] = {}
+    for ev in dividends:
+        payments_by_year.setdefault(ev.ex_date.year, []).append(ev.amount)
+    rate_by_year = {y: median(p) for y, p in payments_by_year.items()}
+
+    years_sorted = sorted(rate_by_year)
     if len(years_sorted) < 2:
         return None, "insufficient annual dividend history (<2 years)"
 
-    # Walk most-recent-complete backwards.
-    complete_years = years_sorted[:-1] if len(years_sorted) >= 2 else years_sorted
+    # Drop the latest year (possibly partial / pre-raise) and walk back, counting
+    # strictly-increasing per-payment rates.
+    complete_years = years_sorted[:-1]
     streak = 0
     for i in range(len(complete_years) - 1, 0, -1):
-        if by_year[complete_years[i]] > by_year[complete_years[i - 1]]:
+        if rate_by_year[complete_years[i]] > rate_by_year[complete_years[i - 1]]:
             streak += 1
         else:
             break
@@ -299,10 +312,11 @@ def consecutive_dividend_growth_years(
     # Live-run lesson: 'treat as a floor' was ambiguous enough that two
     # agents read it as 'could be shorter'. State the direction explicitly.
     note = (
-        f"estimated from {len(years_sorted)} years of provider dividend data; "
-        "this is a floor / LOWER BOUND — the true streak is AT LEAST this "
-        "many years (provider history simply ends here); it is NOT a verified "
-        "aristocrat count and the true streak may be LONGER, never shorter"
+        f"estimated from {len(years_sorted)} years of provider dividend data "
+        "by per-payment rate (median), immune to ex-date timing; this is a "
+        "floor / LOWER BOUND — the true streak is AT LEAST this many years "
+        "(provider history simply ends here); it is NOT a verified aristocrat "
+        "count and the true streak may be LONGER, never shorter"
     )
     return streak, note
 

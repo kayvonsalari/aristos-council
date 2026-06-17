@@ -53,9 +53,17 @@ LangGraph orchestration, Anthropic models, pydantic state.
 4. Prompt-side summarization of ledger objects requires an entry in
    `_PROMPT_VIEW_ALIASES` (audit/provenance.py), or honest citations get
    flagged as unresolvable.
-5. The streak figure from the screen is a FLOOR (provider data undercounts:
-   ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 264 tests
+5. The streak figure from the screen is a FLOOR (yfinance history starts
+   ~1986, so a true 68-yr streak reads as ~39). Never present it as verified;
+   the true streak may be LONGER, never shorter. The COUNTING method compares
+   the per-payment dividend RATE (median of each year's payments) year over
+   year — NOT the calendar-year SUM, which false-broke on ex-date timing (PG's
+   2002 had 5 ex-dates -> 2003 looked like a cut -> genuine 68-yr aristocrat
+   FAILed at 22). Per-payment counting recovers PG to 38 and KO to 39 while
+   genuine cutters still break (T 2022 cut, INTC suspension -> streak 0). The
+   remaining undercount is DATA DEPTH only (the parked EODHD adapter), not the
+   method.
+6. Tests run with `python -m pytest` (pythonpath=src configured). 267 tests
    green as of 2026-06-16. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
