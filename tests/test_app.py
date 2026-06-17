@@ -357,10 +357,11 @@ def test_strategy_tab_has_distinct_criteria_policy_and_veto_sections():
     assert any("Partial pass allows HOLD" in c.label for c in at.checkbox)
 
 
-def test_peg_cagr_window_surfaced_as_locked_even_in_edit_mode():
-    # The PEG criterion's in-house CAGR window was a HIDDEN verdict input; it is
-    # now shown read-only/locked (disabled + 🔒) alongside the revenue-CAGR one,
-    # and stays locked even when editing (it is not strategy-configurable).
+def test_cagr_window_shown_once_and_locked_even_in_edit_mode():
+    # The shared in-house CAGR window (used by BOTH revenue CAGR and PEG) is
+    # surfaced EXACTLY ONCE, read-only/locked (disabled + 🔒), and stays locked
+    # even when editing (it is not strategy-configurable). It is not duplicated
+    # under max_peg_ratio — PEG reuses the same window, not its own.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     sb = next(s for s in at.selectbox if s.label == "Strategy")
@@ -370,9 +371,9 @@ def test_peg_cagr_window_surfaced_as_locked_even_in_edit_mode():
     at.run()
     assert not at.exception
     windows = [n for n in at.number_input if "CAGR window" in n.label]
-    assert len(windows) == 2                          # revenue_cagr + max_peg_ratio
-    assert all(n.disabled for n in windows)           # locked even in edit mode
-    assert all("🔒" in n.label for n in windows)
+    assert len(windows) == 1                           # ONE shared window, not two
+    assert windows[0].disabled                         # locked even in edit mode
+    assert "🔒" in windows[0].label
     # contrast: an editable threshold IS enabled in edit mode
     thresholds = [n for n in at.number_input if n.label.startswith("Threshold")]
     assert thresholds and any(not n.disabled for n in thresholds)

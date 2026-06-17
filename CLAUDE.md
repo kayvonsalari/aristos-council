@@ -270,10 +270,10 @@ confused with the per-criterion `unverifiable_blocks` boxes — its behavior is
 unchanged: still only a Decision-agent prompt hint, `nodes.py`), and
 **Veto gate** (min_confidence). Locked params (not strategy-configurable) are
 SHOWN but disabled + tagged 🔒, so no verdict-affecting input is invisible.
-This surfaced one previously-HIDDEN input: `max_peg_ratio` divides P/E by the
-same in-house revenue-CAGR window the revenue criterion uses; it now declares a
-DISPLAY-ONLY read-only `years` ParamSpec (the function still reads the module
-constant `_REVENUE_CAGR_YEARS`, so no math changed).
+The in-house revenue-CAGR window (`_REVENUE_CAGR_YEARS`, read by BOTH
+`_min_revenue_cagr` and `_max_peg_ratio` — one source of truth, can never
+diverge) is surfaced ONCE, read-only, under `min_revenue_cagr`; PEG reuses the
+same window, so it is NOT a PEG parameter and is not shown redundantly there.
 
 ## Sprint 4E (shipped 2026-06-14)
 

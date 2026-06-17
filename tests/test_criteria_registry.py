@@ -300,6 +300,29 @@ def test_usd_listing_market_cap_unchanged_through_run_screen():
     assert a.passed is True and b.passed is True
 
 
+def test_peg_and_revenue_cagr_share_one_cagr_window():
+    # PEG is defined as P/E / (revenue CAGR x 100), where that CAGR is the SAME
+    # in-house window min_revenue_cagr uses. Both criteria read the one module
+    # constant _REVENUE_CAGR_YEARS, so the windows can never diverge. Pin it
+    # behaviourally: the revenue-CAGR observed and the CAGR implied by the PEG
+    # denominator are identical, and both match an independent CAGR over that
+    # window.
+    from aristos_council.tools.criteria.registry import _REVENUE_CAGR_YEARS
+    from aristos_council.tools.screening import revenue_cagr
+
+    revenue = [200.0, 170.0, 150.0, 120.0, 100.0]   # > window + 1 clean points
+    pe = 25.0
+    f = _fund("GARP", total_revenue=revenue, pe_ratio=pe)
+
+    cagr_obs = _crit("min_revenue_cagr", f, 0.0).observed
+    peg_obs = _crit("max_peg_ratio", f, 100.0).observed
+
+    cagr_ref, _ = revenue_cagr(revenue, _REVENUE_CAGR_YEARS)   # independent calc
+    assert abs(cagr_obs - cagr_ref) < 1e-12                    # same window
+    # PEG denominator is exactly that same CAGR (PEG = PE / (CAGR x 100))
+    assert abs(peg_obs - pe / (cagr_ref * 100.0)) < 1e-12
+
+
 def test_growth_v1_screen_end_to_end():
     """Load growth_v1 and screen a GARP-quality fixture through run_screen."""
     from pathlib import Path
