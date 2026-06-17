@@ -220,12 +220,20 @@ class ResearchState(BaseModel):
     ticker: str
     strategy_id: str = Field(
         description="Which versioned strategy YAML governs this run, "
-        "e.g. 'dividend_aristocrats_v1'."
+        "e.g. 'dividend_aristocrats_v1'. Stays the BASE id even when this run "
+        "applied ephemeral overrides (the delta is in applied_overrides)."
     )
     as_of: datetime = Field(default_factory=_utcnow)
     # Recommendation from the previous run for this ticker (if any) — used by
     # the veto gate to detect a RECOMMENDATION_FLIP.
     prior_recommendation: Optional[Recommendation] = None
+    # Ephemeral per-run disposition overrides applied on top of the base strategy
+    # (e.g. {"partial_pass_allows_hold": false,
+    #        "criteria.min_dividend_growth_streak.is_gating": true}). Empty for a
+    # default run. A non-empty value means the run was an EXPERIMENT: it does not
+    # fire recommendation_flip and is never the flip baseline (see veto.py /
+    # verdicts.load_latest).
+    applied_overrides: dict = Field(default_factory=dict)
 
     # --- evidence substrate ---
     tool_calls: list[ToolCall] = Field(default_factory=list)

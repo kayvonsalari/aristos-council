@@ -119,6 +119,16 @@ def report_to_html(report: RunReport) -> str:
         "</tr></table>"
     )
 
+    # Override banner: a run that changed a setting must never be mistaken for a
+    # default run (the reproducibility analog of the immutability guarantee).
+    if report.applied_overrides:
+        ovr = "; ".join(f"{k}={_esc(v)}"
+                        for k, v in report.applied_overrides.items())
+        parts.append(
+            "<p class='flags'>&#9888; OVERRIDES THIS RUN "
+            f"(not strategy defaults): {ovr}</p>"
+        )
+
     # Human-review flags
     if report.veto_flags:
         parts.append(

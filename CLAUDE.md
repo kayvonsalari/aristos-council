@@ -32,6 +32,14 @@ LangGraph orchestration, Anthropic models, pydantic state.
 - `src/aristos_council/tools/criteria/registry.py` — the criterion registry:
   named pure screen criteria + the generic `run_screen` runner that strategies
   drive by name (see "Criterion registry" below).
+- `src/aristos_council/strategy/overrides.py` — EPHEMERAL per-run overrides:
+  `effective_strategy(base, partial_pass_allows_hold=, is_gating=)` returns a deep
+  copy with disposition settings changed for ONE run (base never mutated);
+  `applied_overrides(base, effective)` is the flat delta vs the file. The sidebar
+  "Run overrides (this run only)" expander drives it; the delta is stamped on the
+  report/verdict/PDF. Strategy FILES stay immutable — this is the throwaway path
+  that replaces "Save new version just to test a setting". An override run does
+  NOT fire recommendation_flip and is NOT the flip baseline (it's an experiment).
 - `strategies/dividend_aristocrats_v1.yaml` — the active strategy.
 - `src/aristos_council/persistence/` — IO-at-the-edge sinks: verdicts.py (thin
   append-only log for the next run's vetoes) and reports.py (full per-run
@@ -73,7 +81,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    genuine cutters still break (T 2022 cut, INTC suspension -> streak 0). The
    remaining undercount is DATA DEPTH only (the parked EODHD adapter), not the
    method.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 278 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 290 tests
    green as of 2026-06-16. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes

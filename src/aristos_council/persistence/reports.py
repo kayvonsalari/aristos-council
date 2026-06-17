@@ -51,7 +51,12 @@ class RunReport(BaseModel):
 
     ticker: str
     run_at: datetime
-    strategy_id: str
+    strategy_id: str  # the BASE strategy id (unchanged even under overrides)
+    # Ephemeral per-run overrides applied on top of the base strategy (the delta
+    # vs the YAML; empty for a default run). Recorded so an overridden run is
+    # reproducible and never mistaken for a default one. Optional/default for
+    # backward compatibility with reports saved before this field.
+    applied_overrides: dict = Field(default_factory=dict)
     # Company name if the run captured it (get_fundamentals.name). Optional and
     # default None so reports saved before this field round-trip unchanged.
     company_name: Optional[str] = None
@@ -115,6 +120,7 @@ def report_from_state(
         ticker=state.ticker,
         run_at=run_at or state.as_of,
         strategy_id=state.strategy_id,
+        applied_overrides=dict(state.applied_overrides),
         company_name=_company_name_from_state(state),
         screen=_screen_from_state(state),
         specialist_opinions=list(state.specialist_opinions),

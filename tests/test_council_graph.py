@@ -32,6 +32,7 @@ from aristos_council.state import (
     VetoTrigger,
 )
 from aristos_council.strategy.loader import load_strategy
+from aristos_council.strategy.overrides import applied_overrides, effective_strategy
 
 STRATEGY = load_strategy(
     Path(__file__).resolve().parents[1] / "strategies" / "dividend_aristocrats_v1.yaml"
@@ -610,3 +611,30 @@ def test_v1_no_gate_keeps_llm_verdict_on_same_failing_streak():
     assert d.recommendation == Recommendation.BUY           # NOT capped
     assert d.gate_override_applied is False
     assert d.original_recommendation == Recommendation.BUY
+
+
+def test_ephemeral_override_gates_v1_at_runtime_without_a_v2_file():
+    # The whole point: take v1 (NO gating), apply a per-run is_gating override on
+    # the streak, run a streak-failing ticker with an LLM BUY -> the gate caps
+    # SELL. Gated behaviour with NO separate strategy file, and the run records
+    # exactly what differed.
+    eff = effective_strategy(STRATEGY,
+                             is_gating={"min_dividend_growth_streak": True})
+    delta = applied_overrides(STRATEGY, eff)
+    runners = {
+        "specialist": ScriptedSpecialistRunner([_bullish()] * 4),
+        "critic": StaticRunner(CriticOutput(counter_thesis="c")),
+        "decision": StaticRunner(DecisionOutput(
+            recommendation=Recommendation.BUY, confidence=0.9, rationale="r")),
+    }
+    app = build_council(ShortStreakAdapter(), eff, runners)
+    state = ResearchState.model_validate(app.invoke(ResearchState(
+        ticker="FAKE", strategy_id=STRATEGY.id, applied_overrides=delta)))
+    d = state.decision
+    assert d.recommendation == Recommendation.SELL          # override drove the gate
+    assert d.original_recommendation == Recommendation.BUY
+    assert d.gate_override_applied is True
+    assert d.gating_criterion_fired == "min_dividend_growth_streak"
+    # the delta rides through for the report/verdict
+    assert state.applied_overrides == {
+        "criteria.min_dividend_growth_streak.is_gating": True}

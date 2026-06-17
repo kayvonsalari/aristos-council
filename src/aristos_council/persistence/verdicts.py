@@ -69,6 +69,10 @@ class VerdictRecord(BaseModel):
     veto_triggers: list[VetoTrigger] = Field(default_factory=list)
     # provenance audit COUNTS only (no violation prose)
     provenance_audit: Optional[dict] = None
+    # Ephemeral per-run overrides applied on top of the base strategy (empty for a
+    # default run). A non-empty value marks this as an EXPERIMENT run, which
+    # load_latest never returns as the flip baseline.
+    applied_overrides: dict = Field(default_factory=dict)
 
 
 def _audit_counts(provenance_audit: Optional[dict]) -> Optional[dict]:
@@ -107,6 +111,7 @@ def record_from_state(
         },
         veto_triggers=triggers,
         provenance_audit=_audit_counts(state.provenance_audit),
+        applied_overrides=dict(state.applied_overrides),
     )
 
 
@@ -133,10 +138,16 @@ def load_latest(
     considered — so the recommendation_flip veto compares a run against the
     prior verdict for the same ticker AND strategy, never across strategies
     (a growth BUY must not register as a flip against a dividend HOLD).
+
+    OVERRIDE (experiment) runs — records with a non-empty ``applied_overrides`` —
+    are SKIPPED: they are never the flip baseline a future default run compares
+    against. They remain in the append-only history (auditable), just not as the
+    strategy's "official last verdict" for this purpose.
     """
     records = load_records(ticker, verdicts_dir)
     if strategy_id is not None:
         records = [r for r in records if r.strategy_id == strategy_id]
+    records = [r for r in records if not r.applied_overrides]
     return records[-1] if records else None
 
 

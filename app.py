@@ -49,6 +49,7 @@ from aristos_council.presentation import (
 )
 from aristos_council.state import Stance
 from aristos_council.strategy.loader import Strategy, load_strategy
+from aristos_council.strategy.overrides import applied_overrides, effective_strategy
 from aristos_council.tools.criteria.registry import REGISTRY
 from aristos_council.strategy.versioning import (
     bump_version,
@@ -240,8 +241,15 @@ def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strateg
 # --------------------------------------------------------------------------- #
 # Running the council in-process
 # --------------------------------------------------------------------------- #
-def run_council(ticker: str, strategy_path: Path) -> RunReport:
+def run_council(ticker: str, strategy_path: Path,
+                overrides: dict | None = None) -> RunReport:
     """Invoke the council for one ticker and persist both sinks at the edge.
+
+    ``overrides`` (optional) carries ephemeral per-run disposition settings —
+    ``{"partial_pass_allows_hold": bool, "is_gating": {criterion_name: bool}}`` —
+    applied IN MEMORY on top of the immutable YAML strategy for THIS run only. The
+    file is never modified; the delta vs the file is recorded on the verdict and
+    report. None/empty ⇒ a pure-defaults run (byte-identical to before).
 
     Runtime imports (yfinance/langchain) are lazy so merely browsing past runs
     never requires the runtime extras to be installed.
@@ -263,7 +271,15 @@ def run_council(ticker: str, strategy_path: Path) -> RunReport:
     from aristos_council.graph import build_council
     from aristos_council.state import ResearchState
 
-    strategy = load_strategy(strategy_path)
+    base = load_strategy(strategy_path)
+    # Apply ephemeral per-run overrides in memory; the on-disk YAML is untouched.
+    overrides = overrides or {}
+    strategy = effective_strategy(
+        base,
+        partial_pass_allows_hold=overrides.get("partial_pass_allows_hold"),
+        is_gating=overrides.get("is_gating"),
+    )
+    delta = applied_overrides(base, strategy)   # what actually differs vs the file
 
     sentiment = None
     if os.environ.get("FINNHUB_API_KEY"):
@@ -274,11 +290,14 @@ def run_council(ticker: str, strategy_path: Path) -> RunReport:
                         sentiment_adapter=sentiment)
 
     # Prior verdict for the SAME ticker AND strategy (recommendation_flip key).
-    prior = load_latest(ticker, VERDICTS_DIR, strategy_id=strategy.id)
+    # load_latest skips prior OVERRIDE runs, so an experiment never becomes the
+    # baseline; and a non-empty delta suppresses this run's own flip firing.
+    prior = load_latest(ticker, VERDICTS_DIR, strategy_id=base.id)
     initial = ResearchState(
         ticker=ticker,
-        strategy_id=strategy.id,
+        strategy_id=base.id,                     # always the BASE id
         prior_recommendation=prior.verdict if prior else None,
+        applied_overrides=delta,
     )
 
     # Stream the graph so the UI can show per-stage progress for free: each
@@ -511,6 +530,12 @@ def render_report(
         _render_pdf_button(report, run_uid, key_ns)
 
     _render_verdict_banner(report)
+
+    # Override stamp: a run that changed a setting must not read as a default run.
+    if report.applied_overrides:
+        ovr = "; ".join(f"`{k}` = {v}"
+                        for k, v in report.applied_overrides.items())
+        st.warning(f"⚠ **Overrides this run** (not strategy defaults): {ovr}")
 
     # Human-review flags — prominent, directly under the banner.
     if report.veto_flags:
@@ -866,6 +891,43 @@ def _render_criterion(spec, edit: bool, sid: str) -> dict:
     return {"name": spec.name, **saved}
 
 
+def _run_overrides(strategy: Strategy) -> dict:
+    """Sidebar controls for EPHEMERAL per-run disposition overrides — applied to
+    THIS run only and recorded on the report, never written to the strategy file.
+
+    Returns ``{"partial_pass_allows_hold": bool, "is_gating": {name: bool}}`` with
+    the current control values; the run records only what actually differs from
+    the file (so leaving everything at its default is a no-op). Deliberately NOT
+    part of Save-new-version / _PERSISTABLE_PARAMS — this controls a run, not the
+    file."""
+    sid = strategy.id
+    with st.expander("⚙️ Run overrides — this run only", expanded=False):
+        st.caption("Applied to THIS run only and stamped on the report. The "
+                   "strategy file is never modified.")
+        if st.button("↺ Reset to strategy defaults", key=f"ovr_reset_{sid}"):
+            for k in ([f"ovr_partial_{sid}"]
+                      + [f"ovr_gate_{sid}_{c.name}" for c in strategy.criteria]):
+                st.session_state.pop(k, None)
+            st.rerun()
+        partial = st.checkbox(
+            "Partial pass allows HOLD",
+            value=strategy.policy.partial_pass_allows_hold,
+            key=f"ovr_partial_{sid}",
+            help="Soft policy hint to the Decision agent (this run only).")
+        st.caption("Gating — a confirmed fail caps the verdict at SELL:")
+        is_gating: dict[str, bool] = {}
+        for c in strategy.criteria:
+            crit = REGISTRY.get(c.name)
+            label = crit.label if crit else c.name
+            is_gating[c.name] = st.checkbox(
+                f"{label} · gating",
+                value=c.is_gating,
+                key=f"ovr_gate_{sid}_{c.name}",
+                help="Deterministic SELL ceiling on a confirmed fail (this run "
+                     "only).")
+    return {"partial_pass_allows_hold": partial, "is_gating": is_gating}
+
+
 def render_strategy_tab(selected_path: Path | None) -> None:
     if selected_path is None:
         st.info("Pick a strategy in the sidebar to view or version it.")
@@ -986,10 +1048,13 @@ def main() -> None:
         if options:
             labels = [label for label, _, _ in options]
             choice = st.selectbox("Strategy", labels)
-            selected_path = dict((l, p) for l, p, _ in options)[choice]
+            by_label = {label: (p, s) for label, p, s in options}
+            selected_path, selected_strategy = by_label[choice]
+            run_overrides = _run_overrides(selected_strategy)
         else:  # no loadable strategy files — show the absolute path searched
             st.error(f"No strategies found under {STRATEGIES_DIR}")
             selected_path = None
+            run_overrides = {}
 
         st.divider()
         # Cost gate. Cleared BEFORE the widget renders, so it starts unchecked
@@ -1010,7 +1075,7 @@ def main() -> None:
     if run_clicked and selected_path is not None:
         try:
             with st.spinner(f"Running the council on {ticker}…"):
-                report = run_council(ticker, selected_path)
+                report = run_council(ticker, selected_path, run_overrides)
         except Exception as exc:  # surface, don't crash the page
             friendly = _friendly_error(exc, ticker)
             if friendly:

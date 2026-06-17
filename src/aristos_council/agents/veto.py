@@ -67,8 +67,14 @@ def make_veto_node(strategy: Strategy):
                 detail="; ".join(dq[:6]) + ("; ..." if len(dq) > 6 else ""),
             ))
 
-        # 4 — recommendation flip
-        if (state.prior_recommendation is not None
+        # 4 — recommendation flip. An OVERRIDE run is an experiment: any verdict
+        # change is an artifact of the changed setting, not market instability, so
+        # it must NOT fire the flip veto (that would pollute the one signal whose
+        # job is catching genuine verdict instability). Override runs are also not
+        # the flip baseline (verdicts.load_latest skips them), so a later default
+        # run never compares against an experiment either.
+        if (not state.applied_overrides
+                and state.prior_recommendation is not None
                 and state.decision is not None
                 and state.decision.recommendation != state.prior_recommendation):
             flags.append(VetoFlag(

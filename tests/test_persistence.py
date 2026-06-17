@@ -216,3 +216,40 @@ def test_saved_msft_growth_prior_is_not_dividend_hold():
     d = load_latest("MSFT", vd, strategy_id="dividend_aristocrats_v1")
     assert g is not None and g.verdict == Recommendation.BUY
     assert d is not None and d.verdict == Recommendation.HOLD
+
+
+# --------------------------------------------------------------------------- #
+# Ephemeral override runs: not a flip, and not the flip baseline
+# --------------------------------------------------------------------------- #
+def test_override_run_does_not_fire_recommendation_flip():
+    # The SAME verdict change (HOLD -> SELL) vs a prior fires flip for a DEFAULT
+    # run but must NOT fire for an override run — the change is an artifact of the
+    # setting, not market instability.
+    default_state = _state(
+        prior_recommendation=Recommendation.HOLD,
+        decision=Decision(recommendation=Recommendation.SELL, confidence=0.7,
+                          rationale="r"))
+    make_veto_node(GROWTH)(default_state)
+    assert VetoTrigger.RECOMMENDATION_FLIP in {
+        f.trigger for f in default_state.veto_flags}          # control: fires
+
+    override_state = _state(
+        prior_recommendation=Recommendation.HOLD,
+        decision=Decision(recommendation=Recommendation.SELL, confidence=0.7,
+                          rationale="r"),
+        applied_overrides={"criteria.min_dividend_growth_streak.is_gating": True})
+    make_veto_node(GROWTH)(override_state)
+    assert VetoTrigger.RECOMMENDATION_FLIP not in {
+        f.trigger for f in override_state.veto_flags}          # suppressed
+
+
+def test_load_latest_skips_override_runs_as_flip_baseline(tmp_path):
+    append_record(_msft("growth_v1", Recommendation.BUY, 1), tmp_path)   # default
+    ovr = _msft("growth_v1", Recommendation.SELL, 2)
+    ovr.applied_overrides = {"criteria.min_dividend_growth_streak.is_gating": True}
+    append_record(ovr, tmp_path)                                          # experiment
+    # the experiment IS recorded (append-only history keeps both) ...
+    assert len(load_records("MSFT", tmp_path)) == 2
+    # ... but the flip baseline is the last DEFAULT verdict, never the override.
+    assert load_latest("MSFT", tmp_path,
+                       strategy_id="growth_v1").verdict == Recommendation.BUY
