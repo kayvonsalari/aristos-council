@@ -252,6 +252,13 @@ _CRITERIA: tuple[Criterion, ...] = (
         label="Maximum PEG ratio",
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.1,
                           default=2.0),
+                # DISPLAY-ONLY: PEG divides P/E by the SAME in-house revenue CAGR
+                # window the revenue criterion uses (_REVENUE_CAGR_YEARS). Declared
+                # here so the window is visible (read-only) in the UI instead of
+                # being a hidden verdict input; _max_peg_ratio still reads the
+                # module constant, so this changes no math.
+                ParamSpec("years", "int", min=1, max=None, step=1.0,
+                          default=_REVENUE_CAGR_YEARS),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("total_revenue", "pe_ratio"),

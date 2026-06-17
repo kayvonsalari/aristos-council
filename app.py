@@ -788,10 +788,36 @@ def _param_input_kwargs(param, value) -> dict:
     return kw
 
 
-def _render_criterion(spec, edit: bool, sid: str) -> dict:
-    """Render one criterion's editable params from its registry metadata.
+# Friendlier labels + help for the generic criterion renderer (display-only).
+_PARAM_LABELS = {
+    "threshold": "Threshold",
+    "years": "CAGR window (years)",
+    "unverifiable_blocks": "Unverifiable result blocks",
+}
+_PARAM_HELP = {
+    "unverifiable_blocks":
+        "If this criterion can't be evaluated (NOT-EVAL), count it as FAILING "
+        "for the human-review gate instead of letting it pass silently. "
+        "Per-criterion — distinct from the strategy-level Policy flag below.",
+    "years":
+        "Look-back window for the in-house revenue CAGR (shared by the revenue "
+        "and PEG criteria). Fixed in code; not strategy-configurable yet.",
+}
 
-    Generic — no per-criterion branches. Returns the persistable params to save.
+
+def _param_label(param) -> str:
+    return _PARAM_LABELS.get(param.name, param.name.replace("_", " ").title())
+
+
+def _render_criterion(spec, edit: bool, sid: str) -> dict:
+    """Render one criterion's params from its registry metadata.
+
+    Generic — no per-criterion branches. Numeric params share a row; the
+    bool (unverifiable-blocks) gets its OWN line so it never reads as a
+    threshold nor blurs into the strategy-level Policy checkbox (different
+    section). Locked params (not strategy-configurable, e.g. the CAGR window)
+    are still SHOWN, but disabled and tagged 🔒 so nothing verdict-affecting is
+    invisible. Returns the persistable params to save.
     """
     crit = REGISTRY.get(spec.name)
     label = crit.label if crit else spec.name
@@ -803,25 +829,36 @@ def _render_criterion(spec, edit: bool, sid: str) -> dict:
     saved = {"threshold": spec.threshold,
              "unverifiable_blocks": spec.unverifiable_blocks}
 
-    cols = st.columns(len(params)) if params else [st]
-    for col, param in zip(cols, params):
+    numeric = [p for p in params if p.type in ("int", "float")]
+    bools = [p for p in params if p.type == "bool"]
+
+    # strategy-scoped widget keys: two strategies can share a criterion name
+    # (both have min_market_cap), so switching must not reuse widgets.
+    for col, param in zip(st.columns(len(numeric)), numeric):
         value = current.get(param.name, param.default)
         persistable = param.name in _PERSISTABLE_PARAMS
         disabled = not edit or not persistable
-        # strategy-scoped key: two strategies can share a criterion name
-        # (both have min_market_cap), so switching must not reuse widgets.
         key = f"c_{sid}_{spec.name}_{param.name}"
-        if param.type == "bool":
-            out = col.checkbox(param.name.replace("_", " "), value=bool(value),
-                               disabled=disabled, key=key)
-        else:
-            out = col.number_input(param.name, disabled=disabled, key=key,
-                                   **_param_input_kwargs(param, value))
-            human = _human_number(out)
-            if human:
-                col.caption(f"= {human}")
-            if not persistable:
-                col.caption("criterion default (not strategy-configurable)")
+        lbl = _param_label(param) + ("  🔒" if not persistable else "")
+        out = col.number_input(lbl, disabled=disabled, key=key,
+                               help=_PARAM_HELP.get(param.name),
+                               **_param_input_kwargs(param, value))
+        human = _human_number(out)
+        if human:
+            col.caption(f"= {human}")
+        if not persistable:
+            col.caption("🔒 fixed — not configurable")
+        if persistable:
+            saved[param.name] = out
+
+    # The per-criterion bool on its own full-width line, clearly labelled.
+    for param in bools:
+        value = current.get(param.name, param.default)
+        persistable = param.name in _PERSISTABLE_PARAMS
+        key = f"c_{sid}_{spec.name}_{param.name}"
+        out = st.checkbox(_param_label(param), value=bool(value),
+                          disabled=not edit or not persistable, key=key,
+                          help=_PARAM_HELP.get(param.name))
         if persistable:
             saved[param.name] = out
     return {"name": spec.name, **saved}
@@ -834,14 +871,18 @@ def render_strategy_tab(selected_path: Path | None) -> None:
 
     strategy = load_strategy(selected_path)
     new_id, _ = bump_version(strategy)
+    # Strategy-scoped widget keys: switching the dropdown re-renders the whole
+    # tab for the newly selected strategy, pre-filled from its YAML. One
+    # strategy on screen at a time — never both.
+    sid = strategy.id
 
-    st.subheader(f"{strategy.name} · {strategy.id}")
+    # 1 — prominent header: which ruleset is on screen (changes with dropdown).
+    st.subheader(f"📋 Viewing: {strategy.name} ({strategy.id})")
+    st.caption(f"Version {strategy.version} · one strategy at a time — switch "
+               "in the sidebar to view another.")
     if strategy.description:
         st.caption(strategy.description.strip())
 
-    # Strategy-scoped widget keys: switching the dropdown re-renders the form for
-    # the newly selected strategy, pre-filled from its YAML.
-    sid = strategy.id
     edit = st.toggle("✏️ Edit as a new version", value=False,
                      key=f"strat_edit_{sid}")
     if edit:
@@ -851,21 +892,38 @@ def render_strategy_tab(selected_path: Path | None) -> None:
             "strategy_id and must stay reproducible."
         )
 
-    # Criteria — rendered generically from each criterion's registry metadata.
-    st.markdown("##### Criteria")
-    edited = [_render_criterion(spec, edit, sid) for spec in strategy.criteria]
+    # 2 — three visually distinct, boxed sections (not a flat stack).
+    # CRITERIA — editable thresholds, generic from registry metadata.
+    with st.container(border=True):
+        st.markdown("### 🎯 Criteria")
+        st.caption("The screen's thresholds. 🔒 marks values fixed in code — "
+                   "shown for transparency, not editable here.")
+        edited = [_render_criterion(spec, edit, sid)
+                  for spec in strategy.criteria]
 
-    st.markdown("##### Policy")
-    partial_hold = st.checkbox(
-        "Partial pass allows HOLD",
-        value=strategy.policy.partial_pass_allows_hold,
-        disabled=not edit, key=f"p_partial_{sid}")
+    # POLICY — strategy-level conflict handling. Lifted out of the criteria wall
+    # so it's not confused with the per-criterion "unverifiable blocks" boxes.
+    with st.container(border=True):
+        st.markdown("### ⚖️ Policy")
+        st.caption("Strategy-level conflict handling — NOT a per-criterion "
+                   "setting.")
+        partial_hold = st.checkbox(
+            "Partial pass allows HOLD",
+            value=strategy.policy.partial_pass_allows_hold,
+            disabled=not edit, key=f"p_partial_{sid}",
+            help="When a stock passes some but not all criteria, allow the "
+                 "council to weigh a HOLD rather than an outright SELL. "
+                 "Advisory to the Decision agent.")
 
-    st.markdown("##### Veto gate")
-    min_conf = st.number_input(
-        "Min confidence (below this, the run pauses for human review)",
-        value=float(strategy.veto.min_confidence), min_value=0.0, max_value=1.0,
-        step=0.05, format="%.2f", disabled=not edit, key=f"v_conf_{sid}")
+    # VETO GATE — the deterministic human-review threshold.
+    with st.container(border=True):
+        st.markdown("### 🚦 Veto gate")
+        st.caption("Deterministic human-review trigger.")
+        min_conf = st.number_input(
+            "Min confidence (below this, the run pauses for human review)",
+            value=float(strategy.veto.min_confidence), min_value=0.0,
+            max_value=1.0, step=0.05, format="%.2f", disabled=not edit,
+            key=f"v_conf_{sid}")
 
     if not edit:
         return

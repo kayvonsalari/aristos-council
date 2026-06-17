@@ -45,7 +45,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    flagged as unresolvable.
 5. The streak figure from the screen is a FLOOR (provider data undercounts:
    ADP/KMB/MO measured 3-of-10 false fails). Never present it as verified.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 251 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 254 tests
    green as of 2026-06-16. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
@@ -260,6 +260,20 @@ generically from the criterion registry (label + ParamSpec per criterion) — no
 strategy-specific UI — so switching the dropdown re-renders the right fields, and
 big-number thresholds get a readable caption. `examples/run_council.py` also
 takes a strategy arg (Sprint 4B follow-on). 228 tests green.
+
+**Strategy tab cleanup (visual/structural only, no verdict-logic change):** the
+tab shows ONE strategy at a time (the sidebar selection) under a prominent
+`📋 Viewing: <name> (<id>)` header, split into three boxed sections —
+**Criteria** (generic, editable thresholds), **Policy** (the lone
+`partial_pass_allows_hold` checkbox, lifted into its own card so it isn't
+confused with the per-criterion `unverifiable_blocks` boxes — its behavior is
+unchanged: still only a Decision-agent prompt hint, `nodes.py`), and
+**Veto gate** (min_confidence). Locked params (not strategy-configurable) are
+SHOWN but disabled + tagged 🔒, so no verdict-affecting input is invisible.
+This surfaced one previously-HIDDEN input: `max_peg_ratio` divides P/E by the
+same in-house revenue-CAGR window the revenue criterion uses; it now declares a
+DISPLAY-ONLY read-only `years` ParamSpec (the function still reads the module
+constant `_REVENUE_CAGR_YEARS`, so no math changed).
 
 ## Sprint 4E (shipped 2026-06-14)
 

@@ -317,6 +317,67 @@ def test_selecting_growth_routes_the_growth_strategy_path():
     assert load_strategy(path).id == "growth_v1"
 
 
+# --------------------------------------------------------------------------- #
+# Strategy tab cleanup: one strategy at a time, distinct sections, locked params
+# --------------------------------------------------------------------------- #
+def _strategy_tab_text(at) -> str:
+    """All textual output (headings, markdown, captions) — for asserting the
+    tab's structure regardless of which element type carries each string."""
+    parts = []
+    for attr in ("title", "header", "subheader", "markdown", "caption"):
+        for el in getattr(at, attr, []):
+            v = getattr(el, "value", None)
+            if isinstance(v, str):
+                parts.append(v)
+    return "\n".join(parts)
+
+
+def test_strategy_tab_header_names_selected_strategy_and_switches():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    assert "Viewing: Dividend Aristocrats (dividend_aristocrats_v1)" \
+        in _strategy_tab_text(at)
+    # switching the dropdown swaps the WHOLE tab to the other strategy
+    sb = next(s for s in at.selectbox if s.label == "Strategy")
+    sb.set_value(next(o for o in sb.options if "growth_v1" in o))
+    at.run()
+    assert not at.exception
+    txt = _strategy_tab_text(at)
+    assert "Viewing: Growth at a Reasonable Price (growth_v1)" in txt
+    assert "Dividend Aristocrats (dividend_aristocrats_v1)" not in txt  # not both
+
+
+def test_strategy_tab_has_distinct_criteria_policy_and_veto_sections():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    txt = _strategy_tab_text(at)
+    assert "Criteria" in txt and "Policy" in txt and "Veto gate" in txt
+    # the Policy flag lives in its own section as a checkbox, not a criterion box
+    assert any("Partial pass allows HOLD" in c.label for c in at.checkbox)
+
+
+def test_peg_cagr_window_surfaced_as_locked_even_in_edit_mode():
+    # The PEG criterion's in-house CAGR window was a HIDDEN verdict input; it is
+    # now shown read-only/locked (disabled + 🔒) alongside the revenue-CAGR one,
+    # and stays locked even when editing (it is not strategy-configurable).
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    sb = next(s for s in at.selectbox if s.label == "Strategy")
+    sb.set_value(next(o for o in sb.options if "growth_v1" in o))
+    at.run()
+    next(t for t in at.toggle if "Edit as a new version" in t.label).set_value(True)
+    at.run()
+    assert not at.exception
+    windows = [n for n in at.number_input if "CAGR window" in n.label]
+    assert len(windows) == 2                          # revenue_cagr + max_peg_ratio
+    assert all(n.disabled for n in windows)           # locked even in edit mode
+    assert all("🔒" in n.label for n in windows)
+    # contrast: an editable threshold IS enabled in edit mode
+    thresholds = [n for n in at.number_input if n.label.startswith("Threshold")]
+    assert thresholds and any(not n.disabled for n in thresholds)
+
+
 def test_available_tickers_lists_every_ticker_on_disk():
     tickers = app._available_tickers(app.REPORTS_DIR)
     assert tickers == sorted(tickers)                 # sorted
