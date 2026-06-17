@@ -894,7 +894,7 @@ def render_strategy_tab(selected_path: Path | None) -> None:
             "strategy_id and must stay reproducible."
         )
 
-    # 2 — three visually distinct, boxed sections (not a flat stack).
+    # 2 — the screen's criteria, in their own card.
     # CRITERIA — editable thresholds, generic from registry metadata.
     with st.container(border=True):
         st.markdown("### 🎯 Criteria")
@@ -903,29 +903,37 @@ def render_strategy_tab(selected_path: Path | None) -> None:
         edited = [_render_criterion(spec, edit, sid)
                   for spec in strategy.criteria]
 
-    # POLICY — strategy-level conflict handling. Lifted out of the criteria wall
-    # so it's not confused with the per-criterion "unverifiable blocks" boxes.
-    with st.container(border=True):
-        st.markdown("### ⚖️ Policy")
-        st.caption("Strategy-level conflict handling — NOT a per-criterion "
-                   "setting.")
-        partial_hold = st.checkbox(
-            "Partial pass allows HOLD",
-            value=strategy.policy.partial_pass_allows_hold,
-            disabled=not edit, key=f"p_partial_{sid}",
-            help="When a stock passes some but not all criteria, allow the "
-                 "council to weigh a HOLD rather than an outright SELL. "
-                 "Advisory to the Decision agent.")
+    # 3 — strategy-level settings, set APART from the criteria stack: a hard
+    # divider then a labelled two-card row, so Policy / Veto gate read as a
+    # distinct settings zone and never as trailing criteria. The Policy checkbox
+    # in particular sits in its own card, unmistakably separate from the
+    # per-criterion "unverifiable blocks" boxes above.
+    st.divider()
+    st.markdown("#### Strategy settings")
+    col_policy, col_veto = st.columns(2)
 
-    # VETO GATE — the deterministic human-review threshold.
-    with st.container(border=True):
-        st.markdown("### 🚦 Veto gate")
-        st.caption("Deterministic human-review trigger.")
-        min_conf = st.number_input(
-            "Min confidence (below this, the run pauses for human review)",
-            value=float(strategy.veto.min_confidence), min_value=0.0,
-            max_value=1.0, step=0.05, format="%.2f", disabled=not edit,
-            key=f"v_conf_{sid}")
+    with col_policy:
+        with st.container(border=True):
+            st.markdown("### ⚖️ Policy")
+            st.caption("Strategy-level conflict handling — NOT a per-criterion "
+                       "setting.")
+            partial_hold = st.checkbox(
+                "Partial pass allows HOLD",
+                value=strategy.policy.partial_pass_allows_hold,
+                disabled=not edit, key=f"p_partial_{sid}",
+                help="When a stock passes some but not all criteria, allow the "
+                     "council to weigh a HOLD rather than an outright SELL. "
+                     "Advisory to the Decision agent.")
+
+    with col_veto:
+        with st.container(border=True):
+            st.markdown("### 🚦 Veto gate")
+            st.caption("Deterministic human-review trigger.")
+            min_conf = st.number_input(
+                "Min confidence (below this, the run pauses for human review)",
+                value=float(strategy.veto.min_confidence), min_value=0.0,
+                max_value=1.0, step=0.05, format="%.2f", disabled=not edit,
+                key=f"v_conf_{sid}")
 
     if not edit:
         return
