@@ -1,0 +1,24 @@
+[
+  {
+    "ticker": "KO",
+    "run_at": "2026-06-17T11:50:58.256303Z",
+    "strategy_id": "dividend_aristocrats_v1",
+    "verdict": "buy",
+    "confidence": 0.72,
+    "stances": {
+      "fundamental": "bullish",
+      "technical": "bullish",
+      "sentiment": "bullish",
+      "risk": "neutral"
+    },
+    "veto_triggers": [],
+    "provenance_audit": {
+      "figures_audited": 80,
+      "verified": 79,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 1,
+      "unit_scaled": 0
+    }
+  }
+]

@@ -1,0 +1,104 @@
+[
+  {
+    "ticker": "T",
+    "run_at": "2026-06-17T11:56:19.374863Z",
+    "strategy_id": "dividend_aristocrats_v1",
+    "verdict": "hold",
+    "confidence": 0.55,
+    "stances": {
+      "fundamental": "bearish",
+      "technical": "bearish",
+      "sentiment": "neutral",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "low_confidence",
+      "data_quality",
+      "majority_override"
+    ],
+    "provenance_audit": {
+      "figures_audited": 89,
+      "verified": 85,
+      "mismatch": 2,
+      "unresolvable": 2,
+      "unverifiable": 0,
+      "unit_scaled": 0
+    },
+    "applied_overrides": {}
+  },
+  {
+    "ticker": "T",
+    "run_at": "2026-06-17T13:05:48.134460Z",
+    "strategy_id": "dividend_aristocrats_v2",
+    "verdict": "sell",
+    "confidence": 0.71,
+    "stances": {
+      "fundamental": "bearish",
+      "technical": "bearish",
+      "sentiment": "neutral",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "data_quality"
+    ],
+    "provenance_audit": {
+      "figures_audited": 85,
+      "verified": 82,
+      "mismatch": 0,
+      "unresolvable": 3,
+      "unverifiable": 0,
+      "unit_scaled": 0
+    },
+    "applied_overrides": {}
+  },
+  {
+    "ticker": "T",
+    "run_at": "2026-06-17T14:10:47.298114Z",
+    "strategy_id": "dividend_aristocrats_v2",
+    "verdict": "sell",
+    "confidence": 0.68,
+    "stances": {
+      "fundamental": "bearish",
+      "technical": "bearish",
+      "sentiment": "bearish",
+      "risk": "bearish"
+    },
+    "veto_triggers": [],
+    "provenance_audit": {
+      "figures_audited": 70,
+      "verified": 70,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 0,
+      "unit_scaled": 0
+    },
+    "applied_overrides": {}
+  },
+  {
+    "ticker": "T",
+    "run_at": "2026-06-17T14:53:24.818575Z",
+    "strategy_id": "dividend_aristocrats_v1",
+    "verdict": "sell",
+    "confidence": 0.62,
+    "stances": {
+      "fundamental": "bearish",
+      "technical": "bearish",
+      "sentiment": "bearish",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "data_quality"
+    ],
+    "provenance_audit": {
+      "figures_audited": 95,
+      "verified": 90,
+      "mismatch": 1,
+      "unresolvable": 4,
+      "unverifiable": 0,
+      "unit_scaled": 0
+    },
+    "applied_overrides": {
+      "criteria.min_dividend_growth_streak.is_gating": true
+    }
+  }
+]

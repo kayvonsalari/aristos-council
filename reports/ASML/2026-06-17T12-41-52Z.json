@@ -1,0 +1,855 @@
+{
+  "ticker": "ASML",
+  "run_at": "2026-06-17T12:41:52.988089Z",
+  "strategy_id": "growth_v2",
+  "company_name": "ASML Holding N.V.",
+  "screen": {
+    "ticker": "ASML",
+    "criteria": [
+      {
+        "name": "min_revenue_cagr",
+        "passed": true,
+        "observed": 0.15551134263329014,
+        "threshold": 0.1,
+        "note": "3y revenue CAGR = (rev[0]/rev[3])^(1/3) - 1"
+      },
+      {
+        "name": "min_roic",
+        "passed": true,
+        "observed": 0.38771998617663495,
+        "threshold": 0.12,
+        "note": "ROIC = NOPAT / invested_capital (provided line); NOPAT = operating_income * (1 - eff_tax); effective tax rate = tax_provision/pretax = 0.177"
+      },
+      {
+        "name": "max_peg_ratio",
+        "passed": false,
+        "observed": 3.874326269696955,
+        "threshold": 2.0,
+        "note": "PEG = P/E / (in-house revenue CAGR x 100)"
+      },
+      {
+        "name": "min_market_cap",
+        "passed": true,
+        "observed": 695251107840.0,
+        "threshold": 5000000000.0,
+        "note": ""
+      }
+    ],
+    "flags": []
+  },
+  "specialist_opinions": [
+    {
+      "specialist": "fundamental",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "ASML is a high-quality business with strong growth and exceptional returns on capital, but is priced in a way that violates the GARP discipline.\n\n**Business Quality: Excellent.** ASML demonstrates the hallmark of a compounder: revenue CAGR of 15.6% over three years substantially exceeds the 10% screen threshold, and ROIC of 38.8% is in the elite range\u2014over three times the 12% minimum. The company's dominance in EUV lithography tools, reflected in analyst recommendations (80.95% bullish) and recent news intensity around Elon Musk's interest, underscores a durable competitive moat. Market cap of $695.3 billion easily clears the $5 billion threshold for analytical sufficiency.\n\n**Valuation: Excessively High.** The critical problem lies in the PEG ratio, which failed the screen at 3.87 against a 2.0 threshold. This means ASML is trading at roughly 1.9x the price-to-growth ratio the strategy permits. With a P/E of 60.25 paired against a revenue CAGR of only 15.6%, investors are paying $60 of market cap for every $1 of annual earnings to capture growth that, however durable, does not justify that multiple under GARP principles. The company's recent 36% surge in three months and position as Europe's most valuable stock reflect sentiment-driven valuation expansion disconnected from fundamentals. Even exceptional business quality cannot offset paying nearly twice the disciplined valuation cap.\n\n**Dividend Durability: Not Assessed.** The evidence contains no dividend data (yield, payout ratio, or coverage metrics), so durability cannot be evaluated. Free cash flow of $8.24 billion against pretax income of $11.41 billion suggests some capacity for shareholder returns, but without explicit dividend metrics, this remains speculative.\n\n**Conclusion:** ASML fails the Growth at a Reasonable Price screen on valuation despite passing all quality gates. The investment thesis would require belief that revenue growth will accelerate well beyond the 15.6% achieved, or that ROIC will expand further\u2014both high-bar claims unsupported by trailing evidence. Under the GARP mandate, the stock should be avoided or sold until the PEG ratio falls below 2.0.",
+      "figures": [
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.15551134263329014,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Min revenue CAGR screen: passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "ROIC (Return on Invested Capital)",
+          "value": 0.38771998617663495,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "Min ROIC screen: passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 3.874326269696955,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "Max PEG ratio screen: passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 695251107840.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Min market cap screen: passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "P/E ratio",
+          "value": 60.250168,
+          "unit": "",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "c4495bbdee55",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 8243274752.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "c4495bbdee55",
+            "field_path": "free_cash_flow"
+          }
+        },
+        {
+          "label": "Pretax income",
+          "value": 11406100000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "c4495bbdee55",
+            "field_path": "pretax_income[0]"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio",
+          "value": 0.8095,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "bullish_ratio"
+          }
+        }
+      ],
+      "caveats": [
+        "Dividend yield, payout ratio, and coverage metrics are absent from the evidence; dividend durability cannot be assessed.",
+        "Revenue growth assumptions beyond the 3-year trailing period are not evaluated; the investment case would require forward growth acceleration unsupported by historical data.",
+        "Recent valuation expansion (36% in 3 months, Musk Terafab news) appears sentiment-driven; no shift in underlying business metrics justifies the PEG overshoot.",
+        "The PEG screen failure is deterministic and non-negotiable under GARP discipline; a 1.9x multiple to the threshold cannot be rationalized by quality alone."
+      ],
+      "created_at": "2026-06-17T12:42:08.588675Z"
+    },
+    {
+      "specialist": "technical",
+      "stance": "bearish",
+      "confidence": 0.78,
+      "thesis": "ASML fails the discipline of \"Growth at a Reasonable Price\" on valuation grounds. While the company demonstrates compelling fundamentals\u2014a 15.6% revenue CAGR and exceptional 38.8% ROIC\u2014the stock is priced well beyond what our PEG framework permits.\n\nThe PEG ratio of 3.87\u00d7 exceeds our 2.0 threshold, meaning the market is paying roughly 1.9\u00d7 more per unit of growth than the strategy allows. At a PE of 60.3\u00d7, the stock is substantially above market norms even for high-growth semiconductor equipment. \n\nTechnically, the picture is mixed but tilted unfavorably. The price of 1,803.89 sits only 5.0% below the 52-week high, signaling the stock is near peak valuation territory. More concerning, it trades 44.2% above the SMA50 (1,557.71) and 43.8% above the SMA200 (1,252.73)\u2014a steep distance from both intermediate and long-term moving averages that suggests either a speculative surge or extreme valuation decoupling from trend-established support. The annualized volatility of 41.4% reflects heightened risk as the market re-prices growth expectations around Musk's Terafab commentary and AI sentiment shifts.\n\nNews flow is undeniably bullish and dominated by positive headlines (81% analyst bullish ratio), but this enthusiasm\u2014evident in the 36% three-month surge\u2014appears already reflected in the price. The stock's proximity to its 52-week high and elevated multiple relative to growth leave minimal margin of safety for the GARP investor.\n\nFor a strategy that disciplines growth through valuation rigor, ASML at current levels violates the \"reasonable price\" leg of the thesis. A repricing downward toward the SMA50 or below would be necessary to restore an acceptable risk-reward; until then, the stock is overvalued relative to its growth profile.",
+      "figures": [
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.15551134263329014,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC",
+          "value": 0.38771998617663495,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "PEG ratio (observed)",
+          "value": 3.874326269696955,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG ratio threshold (max)",
+          "value": 2.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "PE ratio",
+          "value": 60.250168,
+          "unit": "",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "c4495bbdee55",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Last close",
+          "value": 1803.8900146484375,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "b26fe4a71794",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.050324281805130155,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "b26fe4a71794",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "SMA 50",
+          "value": 1557.7072241210938,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "b26fe4a71794",
+            "field_path": "sma_50"
+          }
+        },
+        {
+          "label": "SMA 200",
+          "value": 1252.7284692382811,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "b26fe4a71794",
+            "field_path": "sma_200"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.41444495870810877,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "b26fe4a71794",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio",
+          "value": 0.8095,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "PEG screen criterion passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].passed"
+          }
+        }
+      ],
+      "caveats": [
+        "News sentiment is overwhelmingly bullish and may continue to drive price action upward in the near term, despite technical and valuation headwinds.",
+        "ASML's monopolistic position in EUV lithography and potential strategic relationships (Terafab) could justify premium multiples in a scenario where AI/semiconductor growth accelerates beyond consensus; this thesis does not account for such upside surprises.",
+        "Volatility of 41.4% introduces significant two-way risk; mean reversion could occur sharply in either direction given the extended distance from both SMA50 and SMA200."
+      ],
+      "created_at": "2026-06-17T12:42:22.618182Z"
+    },
+    {
+      "specialist": "sentiment",
+      "stance": "bullish",
+      "confidence": 0.72,
+      "thesis": "ASML sentiment is distinctly bullish, driven by recent high-profile catalysts and strong analyst positioning. The headline texture reveals three layers of positive momentum: (1) **Elon Musk/Terafab narrative**: Multiple headlines frame ASML as central to Musk's $119B semiconductor ambitions, with characterizations like \"The Greatest Company in Europe\" and direct engagement from Musk himself at ASML events. This has created sustained attention since early June. (2) **Valuation reset language**: Counterintuitively, headlines acknowledge ASML trades at \"expensive\" or \"richest valuation\" yet simultaneously argue this is justified\u2014\"Surges 36% in 3 Months: Should Investors Buy the Stock?\" and \"ASML Could Soar Higher in 12 Months\" frame strength as continuation-worthy despite multiple expansion. (3) **Analyst consensus**: The snapshot reports 34 bullish out of 42 total analysts (bullish_ratio 0.8095), with only 2 bearish and 6 hold recommendations. This 80.95% bullish skew is robust and unchanged across the last four months shown (all periods report 34 bullish / 42 total). Buyback activity is also noted, a minor positive signal of management confidence.\n\nHowever, sentiment enthusiasm sits uncomfortably with valuation reality. The PEG ratio of 3.87x has failed the growth_v2 screen (threshold 2.0x). Headline ambivalence appears in pieces like \"Expensive, Rare, But Still Worth Buying,\" \"ASML: Three Risks The Market Is Completely Ignoring,\" and \"Elon Musk Needs ASML for Terafab. You Don't Need ASML Stock in Your Portfolio\"\u2014these articles acknowledge the tension between fundamentals (stellar growth, market dominance) and price. Recent headlines also signal skepticism (\"The Rally May Be Overdone,\" warnings of SpaceX IPO sell-off contagion). The stock sits only 5% below its 52-week high despite recent 36% gains in 3 months, suggesting limited downside protection in sentiment risk. \n\nConfidence is calibrated at 0.72 rather than higher because (1) sentiment data is complete and coherent, but (2) the bullish sentiment directly conflicts with the disciplined valuation signal from the PEG screen, which is core to the growth_v2 strategy. This creates a structural tension: headlines and analysts are bullish, but market price has outpaced justified growth risk premium. The Musk catalyst is powerful but binary/speculative in nature.",
+      "figures": [
+        {
+          "label": "Bullish analyst count",
+          "value": 34.0,
+          "unit": "recommendations",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "bullish_count"
+          }
+        },
+        {
+          "label": "Total analyst count",
+          "value": 42.0,
+          "unit": "recommendations",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "analysts_total"
+          }
+        },
+        {
+          "label": "Bullish ratio",
+          "value": 0.8095,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Bearish analyst count",
+          "value": 2.0,
+          "unit": "recommendations",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "bearish_count"
+          }
+        },
+        {
+          "label": "Hold analyst count",
+          "value": 6.0,
+          "unit": "recommendations",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "hold_count"
+          }
+        },
+        {
+          "label": "Recent news volume",
+          "value": 101.0,
+          "unit": "articles",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "news_count"
+          }
+        },
+        {
+          "label": "PEG ratio (failed screen)",
+          "value": 3.874326269696955,
+          "unit": "x",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG ratio threshold",
+          "value": 2.0,
+          "unit": "x",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "PEG screen passed",
+          "value": 0.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.050324281805130155,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "b26fe4a71794",
+            "field_path": "pct_off_52w_high"
+          }
+        }
+      ],
+      "caveats": [
+        "Sentiment is bullish but directly contradicts valuation discipline required by growth_v2 strategy; PEG ratio failed screen at 3.87x vs 2.0x threshold.",
+        "Elon Musk/Terafab narrative is a powerful but speculative catalyst; sentiment may not persist if deal negotiations stall or fail.",
+        "Stock near 52-week highs (5% below) limits downside protection; sentiment enthusiasm may be backward-looking after 36% 3-month rally.",
+        "Analyst consensus is uniform and static (unchanged for 4 months); lacks evidence of recent conviction shift or fresh conviction.",
+        "Multiple bullish headlines acknowledge valuation tension explicitly ('Expensive, Rare, But Still Worth Buying'), indicating sentiment is not na\u00efve to the PEG problem."
+      ],
+      "created_at": "2026-06-17T12:42:36.794356Z"
+    },
+    {
+      "specialist": "risk",
+      "stance": "bearish",
+      "confidence": 0.78,
+      "thesis": "ASML fails the core discipline of the strategy: valuation discipline. While the company demonstrates exceptional operational performance\u2014strong revenue growth and extraordinary capital efficiency\u2014the PEG screen explicitly rejects it, and the price action, sentiment environment, and momentum create acute downside risk.\n\n**Core Valuation Failure:**\nThe PEG ratio of 3.87\u00d7 exceeds the 2.0\u00d7 threshold by 94%, indicating the market is pricing in substantially more growth than the fundamentals support or paying excessive multiples for the growth delivered. At a P/E of 60.25\u00d7, the stock is priced for perfection.\n\n**Momentum and Sentiment Extremes:**\nPrice action is euphoric: the stock surged 36% in 3 months and is only 5.0% below its 52-week high despite recent weakness. Analyst sentiment is lopsided\u201481% bullish (34 of 42 analysts)\u2014with minimal dissent (only 2 bears, 6 holds). This uniformity itself is a risk flag: consensus bullishness leaves no margin for disappointment. The news cycle is dominated by Elon Musk narratives (Terafab deal speculation) rather than operational metrics, suggesting sentiment is sentiment-driven rather than fundamentals-anchored.\n\n**Volatility and Drawdown Risk:**\nAnnualized volatility stands at 41.4%, placing ASML in the top quartile of risk among large-cap equities. At current valuations, a 20\u201330% correction is plausible on any miss in forward guidance, geopolitical disruption (China export controls loom), or rotation out of momentum trades. The 275-bar price history shows the stock has already experienced sharp reversals.\n\n**Unverifiable Upside Drivers:**\nThe recent rally is partially underpinned by unconfirmed Terafab discussions\u2014a speculative event outside the historical financials. The Mistral AI stake mentioned in headlines has no quantification in the evidence and cannot be modeled into fair value. This creates tail risk: if the deal stalls or terms disappoint, the stock has no valuation anchor below current levels.\n\n**Growth vs. Valuation Calibration:**\nRevenue CAGR of 15.5% and ROIC of 38.8% are both stellar and well above threshold, but a 60\u00d7 P/E on 15% growth is indefensible under a \"growth at reasonable price\" framework. The threshold for max PEG of 2.0 exists precisely to prevent overpaying for growth, and ASML's breach signals the market has abandoned price discipline in favor of narrative.\n\n**Payout and Capital Allocation Opacity:**\nThe buyback mentioned in recent news provides no forward-looking context on shareholder returns or capital allocation priorities. Without visibility into the magnitude and timing of buybacks, and given the stretched valuation, it is unclear whether management is deploying capital at sensible prices or buying back stock at the top of the cycle.\n\n**Recommendation Trend Stickiness:**\nAnalyst recommendations have been flat for four consecutive months (8 strong buy, 26 buy in June and May, with only marginal April-to-May changes), suggesting no new fundamental catalyst has emerged to justify the recent price surge. This disconnect between valuation reality and price momentum is a classic late-cycle behavior.\n\n**Risk Summary:**\nASML is a best-in-class business at a worst-in-class price. The failure of the PEG screen is not a minor miss\u2014it is a 94% overage that encodes the exact scenario the strategy avoids: paying up for growth quality at a point when the market has already fully and excessively priced it in. The combination of extreme sentiment, high volatility, and momentum-driven price action makes this a high-probability mean-reversion candidate.",
+      "figures": [
+        {
+          "label": "P/E Ratio",
+          "value": 60.250168,
+          "unit": "x",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "c4495bbdee55",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "PEG Ratio (observed)",
+          "value": 3.874326269696955,
+          "unit": "x",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG Ratio threshold (max)",
+          "value": 2.0,
+          "unit": "x",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "PEG screen result",
+          "value": 0.0,
+          "unit": "pass/fail",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "3-year Revenue CAGR",
+          "value": 0.15551134263329014,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC (Return on Invested Capital)",
+          "value": 0.38771998617663495,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "d61edb7773eb",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.41444495870810877,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "b26fe4a71794",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Percentage off 52-week high",
+          "value": -0.050324281805130155,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "b26fe4a71794",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio",
+          "value": 0.8095,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Analyst bullish count",
+          "value": 34.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "bullish_count"
+          }
+        },
+        {
+          "label": "Analyst bearish count",
+          "value": 2.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "bearish_count"
+          }
+        },
+        {
+          "label": "Total analyst count",
+          "value": 42.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "0df4bdfffa89",
+            "field_path": "analysts_total"
+          }
+        },
+        {
+          "label": "Last close price",
+          "value": 1803.8900146484375,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "b26fe4a71794",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 695251107840.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "c4495bbdee55",
+            "field_path": "market_cap"
+          }
+        }
+      ],
+      "caveats": [
+        "Price history spans only 275 bars (~13 months); insufficient to assess full-cycle behavior or cyclical downside in semiconductor equipment.",
+        "Terafab deal terms and probability are unquantified in the evidence; recent rally may be entirely speculative and revert sharply on deal failure or delay.",
+        "Mistral AI stake valuation and ownership percentage are not reported; cannot assess contribution to ASML intrinsic value or tail-risk upside.",
+        "Forward revenue and earnings guidance are absent; cannot evaluate whether the 15.5% historical CAGR is sustainable or inflating due to cyclical peak.",
+        "Buyback program details (timing, tranches, price thresholds) not disclosed; unable to assess capital allocation discipline at current valuations.",
+        "Geopolitical risk (EU/China export controls, Taiwan dependence, US policy shifts) is mentioned in headlines but not quantified; downside tail could be severe if access restrictions accelerate.",
+        "Analyst consensus has been flat for four months despite 36% YTD rally; potential for consensus to revise downward sharply if sentiment reverses."
+      ],
+      "created_at": "2026-06-17T12:42:58.442806Z"
+    }
+  ],
+  "critic_report": {
+    "targets_stance": "bearish",
+    "counter_thesis": "The emerging bearish consensus rests on a single screen failure \u2014 the PEG ratio \u2014 and then projects that failure into a sweeping conclusion. A rigorous GARP critic must press hard on five structural weaknesses in that consensus before this council accepts it as verdict.\n\n**1. The PEG denominator is the wrong growth rate \u2014 and the screen itself acknowledges this.**\n\nThe PEG is computed using the *in-house revenue CAGR* as the growth proxy, not earnings growth. GARP PEG ratios are conventionally anchored to earnings (EPS) growth, not top-line revenue growth. Revenue and earnings do not grow at identical rates; a business expanding margins will show faster earnings growth than revenue growth. The screen note explicitly labels its method: \"PEG = P/E / (in-house revenue CAGR x 100).\" If ASML's earnings are growing faster than its revenue \u2014 which is entirely plausible given operating leverage, as operating income grew from ~$6.5B to ~$11.3B over the same period the revenue data covers \u2014 then the true PEG is materially lower than 3.87\u00d7. The consensus has accepted a methodologically non-standard PEG computation as if it were authoritative. This is a critical reasoning flaw.\n\n**2. The ROIC signal is being drastically under-weighted relative to the valuation signal.**\n\nROIC of 38.8% is not merely \"above threshold\" \u2014 it is more than three times the 12% minimum. Under GARP theory, a company that earns returns on capital far above its cost of capital creates value for every dollar reinvested. The higher the ROIC, the more the market is justified in paying a premium to book value and earnings. A 60\u00d7 P/E on a 38.8% ROIC business is categorically different from a 60\u00d7 P/E on a 12% ROIC business. The consensus conflates valuation multiples across very different quality levels. No analysis in the evidence attempts to adjust the \"reasonable price\" threshold for ROIC quality. If the GARP framework is calibrated for median-quality businesses, its PEG thresholds may be systematically too tight for elite-ROIC compounders.\n\n**3. The free cash flow figure is being ignored entirely.**\n\nFree cash flow of $8.24B is in evidence but receives no analytical weight in the bearish case. A P/E of 60\u00d7 on accounting earnings may look severe, but earnings include non-cash charges and accounting conventions. The relationship between free cash flow and market cap \u2014 the cash yield \u2014 is a separate, equally important GARP lens that the consensus has simply omitted. If FCF conversion is high, the effective cash-based multiple is lower than the P/E implies. The consensus has no answer to this because it never asked the question.\n\n**4. Revenue growth is accelerating, not decelerating.**\n\nTotal revenue figures show: $21.2B \u2192 $27.6B \u2192 $28.3B \u2192 $32.7B. The most recent year is the highest by a material margin, suggesting the growth rate has not stalled. The 3-year CAGR of 15.6% is a blended average that may understate the current trajectory. The bearish consensus treats 15.6% as a ceiling; the evidence is at least equally consistent with reading it as a floor. Analyst consensus at 80.95% bullish \u2014 stable across four consecutive periods \u2014 reflects practitioner conviction that growth is durable. Dismissing this as \"herd behavior\" requires evidence of deterioration that is absent from the record.\n\n**5. The Terafab/catalyst risk is being framed purely as downside when it is structurally asymmetric.**\n\nThe bearish case treats Musk's Terafab interest as a \"speculative\" risk and source of downside. But the risk is asymmetric: if the Terafab discussions are real and result in large equipment orders, the revenue CAGR denominator in the PEG would expand, and the PEG failure would self-correct through fundamental improvement rather than price decline. The bearish case implicitly assumes the catalyst resolves negatively without any evidential basis for that assumption. Equally, the news flow is 101 items deep with sustained institutional analyst engagement \u2014 this is not a thin rumor but a multi-week, sourced narrative involving the ASML CEO characterizing Musk as \"very serious.\"\n\n**Summary of the challenge:**\n\nThe consensus is built on one failed screen criterion, computed using a non-standard PEG methodology, applied without ROIC adjustment, while ignoring FCF yield, ignoring an accelerating revenue trajectory, and treating speculative catalysts as pure downside. The \"reasonable price\" judgment is not obviously wrong \u2014 ASML is expensive \u2014 but the strength of the bearish conclusion (72\u201378% confidence) is far higher than the evidentiary base supports. A more defensible conclusion is: *ASML is richly valued under one specific, methodologically contested metric; on quality and growth momentum metrics it is exceptional; and the margin-of-safety question is genuinely open rather than closed.*",
+    "weaknesses_found": [
+      "PEG denominator uses revenue CAGR, not earnings growth \u2014 the screen note explicitly flags this non-standard methodology, but the consensus treats the 3.87\u00d7 figure as if it were a conventional, authoritative PEG computation.",
+      "ROIC of 38.8% \u2014 more than 3\u00d7 the minimum threshold \u2014 is consistently under-weighted. High ROIC compounders theoretically justify higher multiples; the consensus applies a flat PEG threshold without ROIC quality adjustment.",
+      "Free cash flow of $8.24B is entirely absent from the valuation analysis. The cash-based yield relative to market cap is a material GARP input that no specialist computed or discussed.",
+      "Revenue trajectory is accelerating (oldest year $21.2B to most recent $32.7B), yet the consensus treats the 15.6% CAGR as a growth ceiling rather than a potentially conservative floor.",
+      "The Terafab/Musk catalyst is framed only as speculative downside risk, but it is structurally asymmetric: a positive resolution would expand the earnings and revenue base, mechanically improving the PEG ratio.",
+      "Analyst consensus flatness over four months (34 bullish, stable) is characterized as evidence of no new catalyst, when it equally supports the interpretation of durable, unconditional conviction rather than stale inertia.",
+      "The SMA distances are cited as signals of 'extreme decoupling' without any evidence in the record that this distance predicts mean reversion on any specific time horizon for this security or its peer group."
+    ],
+    "challenged_figures": [
+      "PEG ratio of 3.87\u00d7 cited as definitive valuation failure without acknowledging the non-standard revenue-CAGR denominator",
+      "Annualized volatility of 41.4% cited as top-quartile risk without cross-sectional benchmark data in evidence",
+      "94% PEG overage framing treats a methodologically contested computation as a precise, authoritative breach",
+      "SMA distance cited as 'extreme valuation decoupling' without evidence this distance is mean-reverting on the relevant time horizon",
+      "Analyst consensus flatness over four months framed as 'no new catalyst' when it equally signals stable conviction"
+    ],
+    "figures": [
+      {
+        "label": "PEG ratio \u2014 FAILED screen criterion (non-standard revenue-CAGR denominator)",
+        "value": 3.874326269696955,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "d61edb7773eb",
+          "field_path": "criteria[2].observed"
+        }
+      },
+      {
+        "label": "PEG screen threshold",
+        "value": 2.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "d61edb7773eb",
+          "field_path": "criteria[2].threshold"
+        }
+      },
+      {
+        "label": "PEG screen passed = false (evaluated and failed)",
+        "value": 0.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "d61edb7773eb",
+          "field_path": "criteria[2].passed"
+        }
+      },
+      {
+        "label": "Revenue CAGR used as PEG denominator proxy",
+        "value": 0.15551134263329014,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "d61edb7773eb",
+          "field_path": "criteria[0].observed"
+        }
+      },
+      {
+        "label": "ROIC \u2014 more than 3x minimum threshold",
+        "value": 0.38771998617663495,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "d61edb7773eb",
+          "field_path": "criteria[1].observed"
+        }
+      },
+      {
+        "label": "ROIC screen threshold (minimum)",
+        "value": 0.12,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "d61edb7773eb",
+          "field_path": "criteria[1].threshold"
+        }
+      },
+      {
+        "label": "P/E ratio",
+        "value": 60.250168,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "c4495bbdee55",
+          "field_path": "pe_ratio"
+        }
+      },
+      {
+        "label": "Free cash flow \u2014 omitted from bearish analysis",
+        "value": 8243274752.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "c4495bbdee55",
+          "field_path": "free_cash_flow"
+        }
+      },
+      {
+        "label": "Most recent annual revenue \u2014 highest in series",
+        "value": 32667300000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "c4495bbdee55",
+          "field_path": "total_revenue[0]"
+        }
+      },
+      {
+        "label": "Oldest annual revenue in series \u2014 for trajectory comparison",
+        "value": 21173400000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "c4495bbdee55",
+          "field_path": "total_revenue[3]"
+        }
+      },
+      {
+        "label": "Most recent operating income",
+        "value": 11301400000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "c4495bbdee55",
+          "field_path": "operating_income[0]"
+        }
+      },
+      {
+        "label": "Oldest operating income in series",
+        "value": 6500700000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "c4495bbdee55",
+          "field_path": "operating_income[3]"
+        }
+      },
+      {
+        "label": "Annualized volatility",
+        "value": 0.41444495870810877,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "b26fe4a71794",
+          "field_path": "annualized_volatility"
+        }
+      },
+      {
+        "label": "Pct off 52-week high",
+        "value": -0.050324281805130155,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "b26fe4a71794",
+          "field_path": "pct_off_52w_high"
+        }
+      },
+      {
+        "label": "SMA 50",
+        "value": 1557.7072241210938,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "b26fe4a71794",
+          "field_path": "sma_50"
+        }
+      },
+      {
+        "label": "SMA 200",
+        "value": 1252.7284692382811,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "b26fe4a71794",
+          "field_path": "sma_200"
+        }
+      },
+      {
+        "label": "Last close price",
+        "value": 1803.8900146484375,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "b26fe4a71794",
+          "field_path": "last_close"
+        }
+      },
+      {
+        "label": "Bullish analyst ratio \u2014 stable across 4 consecutive periods",
+        "value": 0.8095,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "0df4bdfffa89",
+          "field_path": "bullish_ratio"
+        }
+      },
+      {
+        "label": "Total analysts in consensus",
+        "value": 42.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "0df4bdfffa89",
+          "field_path": "analysts_total"
+        }
+      },
+      {
+        "label": "Bearish analyst count \u2014 only 2 of 42",
+        "value": 2.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "0df4bdfffa89",
+          "field_path": "bearish_count"
+        }
+      }
+    ],
+    "open_questions": [
+      "What is ASML's trailing and forward EPS growth rate? A PEG using earnings growth (rather than revenue CAGR) could produce a materially different \u2014 and more conventional \u2014 valuation reading.",
+      "What is the FCF yield implied by $8.24B free cash flow against the $695B market cap, and how does that compare to GARP-acceptable ranges? This computation cannot be performed here but is directly decision-relevant.",
+      "Has operating income grown faster than revenue over the trailing three years (i.e., is ASML demonstrating operating leverage)? If operating income CAGR exceeds revenue CAGR, the earnings-based PEG would be lower than the 3.87\u00d7 reported.",
+      "What is the magnitude and remaining authorization of the share buyback program mentioned in news, and at what price has management been buying? Buybacks at current multiples raise capital allocation questions the evidence cannot resolve.",
+      "What proportion of ASML's current revenue backlog is firm versus contingent on Terafab or other speculative demand? Without this, growth durability cannot be assessed.",
+      "Is the annualized volatility of 41.4% elevated versus ASML's own historical norm, or is this typical for the name? Without historical volatility context, the risk characterization cannot be calibrated.",
+      "What is the size and book value of ASML's Mistral AI stake referenced in headlines? If material, it represents an off-balance-sheet asset not reflected in the P/E or ROIC calculations."
+    ],
+    "created_at": "2026-06-17T12:44:01.795118Z"
+  },
+  "decision": {
+    "recommendation": "hold",
+    "confidence": 0.52,
+    "rationale": "## Decision: HOLD \u2014 Confident in Quality, Uncertain on Price\n\n### Strategy Framing\nGrowth at a Reasonable Price (GARP) requires *both* legs of the thesis to hold: demonstrable, durable growth *and* a price that does not overextend relative to that growth. ASML clearly passes the growth and quality gates. The valuation gate is genuinely contested. I cannot resolve that contest with the evidence available, and the critic has identified real structural weaknesses in the bearish consensus that prevent me from adopting it at 72\u201378% confidence. A HOLD reflects the genuine ambiguity.\n\n---\n\n### What the Evidence Establishes Firmly\n\n**Business Quality: Unambiguous Pass**\n\nRevenue CAGR of 15.6% clears the 10% screen threshold by a meaningful margin (observed: 0.1555, threshold: 0.10, call_id: d61edb7773eb, criteria[0].passed = true, criteria[0].observed = 0.1555). ROIC of 38.8% is more than three times the 12% minimum (observed: 0.3877, threshold: 0.12, call_id: d61edb7773eb, criteria[1].passed = true, criteria[1].observed = 0.3877). Market cap of ~$695B clears the sufficiency threshold (observed: 695,251,107,840, threshold: 5,000,000,000, call_id: d61edb7773eb, criteria[3].passed = true). These are not close calls \u2014 they are elite readings.\n\nThe revenue trajectory also supports the critic's point: the four annual observations run from $21.2B \u2192 $27.6B \u2192 $28.3B \u2192 $32.7B (call_id: c4495bbdee55, output.total_revenue), with the most recent year materially above the prior, suggesting the 15.6% blended CAGR may understate current momentum rather than overstate it.\n\nFree cash flow of $8.24B (call_id: c4495bbdee55, output.free_cash_flow) is a substantial cash-generative signal that the bearish consensus entirely ignored. The critic is correct: a cash-yield lens, while uncomputable here per hard rules, is a distinct and material GARP input that no specialist evaluated.\n\n**Analyst Consensus: Stably Bullish**\n\n34 of 42 analysts are bullish (call_id: 0df4bdfffa89, output.bullish_ratio = 0.8095), and this has been stable across four consecutive monthly periods (call_id: f89c252fb00e). The critic is right that uniform stability equally supports durable conviction rather than stale inertia \u2014 the evidence is silent on which interpretation is correct.\n\n---\n\n### What the Evidence Contests\n\n**The PEG Failure: Real but Methodologically Impure**\n\nThe PEG ratio of 3.87\u00d7 failed the 2.0\u00d7 threshold (call_id: d61edb7773eb, criteria[2].passed = false, criteria[2].observed = 3.874). This is a screen failure and cannot be ignored under GARP discipline.\n\nHowever, the critic raises a legitimate methodological challenge: the screen note itself (criteria[2].note: \"PEG = P/E / (in-house revenue CAGR x 100)\") documents that the denominator is *revenue CAGR*, not earnings growth \u2014 a non-standard construction. A conventional PEG uses EPS growth. The evidence shows operating income grew from ~$6.5B to ~$11.3B over the same revenue window (call_id: c4495bbdee55, output.operating_income), suggesting operating leverage may have driven earnings growth faster than revenue. If the earnings-based PEG is materially lower than 3.87\u00d7, the screen failure may not translate into a genuine valuation violation. This question is open \u2014 per hard rules, I cannot compute it, and it is listed as an explicit open question by the critic.\n\nThe ROIC quality adjustment argument also has merit: a flat PEG threshold of 2.0\u00d7 applied without regard to ROIC level conflates 12%-ROIC businesses with 38.8%-ROIC businesses. Whether the strategy's calibration accounts for this is unresolved.\n\n**Technical Picture: Elevated but Not Conclusive**\n\nPrice sits 5.0% below its 52-week high (call_id: b26fe4a71794, output.pct_off_52w_high = -0.0503). The stock trades well above both the SMA50 of 1,557.71 and SMA200 of 1,252.73 (call_id: b26fe4a71794). Annualized volatility is 41.4% (call_id: b26fe4a71794, output.annualized_volatility). These are legitimate caution flags. However, the critic correctly notes that SMA distance alone \u2014 without historical context for this name \u2014 does not establish a mean-reversion prediction. Extended SMA distances can persist for elite-moat compounders during periods of genuine re-rating.\n\n**Sentiment: Bullish but Noisy**\n\nNews flow (101 items, call_id: 0df4bdfffa89) is dominated by the Musk/Terafab narrative. The critic's point that this catalyst is asymmetric is well-taken: a successful Terafab agreement would expand the revenue and earnings base, mechanically improving the PEG ratio. But it remains unconfirmed and speculative. I do not treat the open question of deal probability as a known fact in either direction.\n\n---\n\n### Why Not Sell\n\nThree of four specialists and the risk analyst recommend sell/avoid with 72\u201378% confidence. I override this consensus for the following reasons, all grounded in evidence:\n\n1. **The PEG denominator is non-standard.** The screen itself labels its methodology as using revenue CAGR. The conventional GARP PEG uses earnings growth. The evidence on operating income trajectory (operating income from $6.5B to $11.3B, call_id: c4495bbdee55) is directionally consistent with earnings growth exceeding revenue growth. The \"94% overage\" framing by the risk specialist rests on a figure that may not represent the conventional metric the strategy intends.\n\n2. **FCF is unaddressed.** $8.24B in free cash flow (call_id: c4495bbdee55) against a company of ASML's market position is a material valuation input that was omitted from every specialist analysis. A SELL recommendation that ignores the cash yield dimension is incomplete.\n\n3. **ROIC quality adjustment is absent.** The threshold was set for median-quality businesses. ASML's 38.8% ROIC (3.2\u00d7 the minimum) is elite. The evidence does not establish that the 2.0\u00d7 PEG cap is appropriately calibrated for this ROIC tier.\n\n4. **Revenue trajectory is accelerating, not stalling.** Treating the 15.6% CAGR as a ceiling is not justified by the data, which shows the most recent year as the highest.\n\n### Why Not Buy\n\n1. The PEG screen failure is real, regardless of methodology concerns. It is a hard screen criterion for growth_v2, and it failed (criteria[2].passed = false). Policy states partial_pass_allows_hold=False, but this applies to the hold-despite-failure question within the GARP screen \u2014 which I am not overriding; I am holding *precisely because* the valuation signal is genuinely ambiguous, not passing.\n\n2. Multiple open questions (EPS growth rate, FCF yield ratio, forward guidance, buyback magnitude, Mistral AI stake) are unresolved. Under calibration rules, incomplete evidence requires lower confidence and caution.\n\n3. Price is near a 52-week high with 41.4% annualized volatility. Even if the stock is not overvalued on an earnings-growth PEG basis, limited margin of safety warrants discipline.\n\n4. The Terafab catalyst is real in news flow but unquantified and unconfirmed. It cannot be treated as a known positive.\n\n---\n\n### Dissent Rationale\n\nI am overriding the bearish stances of the fundamental, technical, and risk specialists. The critic has identified real structural weaknesses in the bearish case \u2014 particularly the non-standard PEG denominator, the ROIC under-weighting, and the omission of FCF \u2014 that prevent adoption of a SELL at the stated confidence levels. The sentiment specialist's bullish view is partially accommodated (I am not selling), but a BUY is not warranted given genuine valuation uncertainty and the hard screen failure.\n\n---\n\n### Confidence Calibration\n\nConfidence is 0.52 \u2014 marginally above the midpoint \u2014 reflecting: (a) strong evidence on business quality that biases toward hold-rather-than-sell; (b) a genuine, unresolved methodological contest around the single failing criterion; (c) multiple open questions on FCF yield, earnings-based PEG, and catalyst probability that a human reviewer must resolve before this becomes a BUY conviction; and (d) non-trivial technical risk near a 52-week high with elevated volatility.\n",
+    "dissent": [
+      "fundamental",
+      "technical",
+      "risk"
+    ],
+    "created_at": "2026-06-17T12:44:52.976270Z"
+  },
+  "veto_flags": [
+    {
+      "trigger": "low_confidence",
+      "detail": "decision confidence 0.52 < threshold 0.60",
+      "created_at": "2026-06-17T12:44:52.980485Z"
+    },
+    {
+      "trigger": "specialist_conflict",
+      "detail": "at least one bullish and one bearish specialist",
+      "created_at": "2026-06-17T12:44:52.980503Z"
+    },
+    {
+      "trigger": "majority_override",
+      "detail": "decision hold vs majority sell (1 bullish / 0 neutral / 3 bearish)",
+      "created_at": "2026-06-17T12:44:52.980539Z"
+    }
+  ],
+  "provenance_audit": {
+    "figures_audited": 68,
+    "verified": 68,
+    "mismatch": 0,
+    "unresolvable": 0,
+    "unverifiable": 0,
+    "unit_scaled": 0,
+    "violations": [],
+    "unit_scaled_notes": []
+  }
+}

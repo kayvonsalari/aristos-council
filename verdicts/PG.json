@@ -1,0 +1,26 @@
+[
+  {
+    "ticker": "PG",
+    "run_at": "2026-06-17T11:36:52.783848Z",
+    "strategy_id": "dividend_aristocrats_v1",
+    "verdict": "hold",
+    "confidence": 0.63,
+    "stances": {
+      "fundamental": "bullish",
+      "technical": "bullish",
+      "sentiment": "bullish",
+      "risk": "neutral"
+    },
+    "veto_triggers": [
+      "majority_override"
+    ],
+    "provenance_audit": {
+      "figures_audited": 91,
+      "verified": 88,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 3,
+      "unit_scaled": 0
+    }
+  }
+]

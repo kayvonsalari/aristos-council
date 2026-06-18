@@ -1,0 +1,28 @@
+[
+  {
+    "ticker": "000660.KS",
+    "run_at": "2026-06-16T15:56:11.669868Z",
+    "strategy_id": "growth_v1",
+    "verdict": "hold",
+    "confidence": 0.45,
+    "stances": {
+      "fundamental": "neutral",
+      "technical": "bullish",
+      "sentiment": "abstain",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "low_confidence",
+      "specialist_conflict",
+      "data_quality"
+    ],
+    "provenance_audit": {
+      "figures_audited": 59,
+      "verified": 58,
+      "mismatch": 1,
+      "unresolvable": 0,
+      "unverifiable": 0,
+      "unit_scaled": 0
+    }
+  }
+]

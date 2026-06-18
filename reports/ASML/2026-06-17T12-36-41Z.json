@@ -1,0 +1,925 @@
+{
+  "ticker": "ASML",
+  "run_at": "2026-06-17T12:36:41.973178Z",
+  "strategy_id": "dividend_aristocrats_v1",
+  "company_name": "ASML Holding N.V.",
+  "screen": {
+    "ticker": "ASML",
+    "criteria": [
+      {
+        "name": "min_dividend_yield",
+        "passed": false,
+        "observed": 0.004872802625781536,
+        "threshold": 0.025,
+        "note": "derived deterministically as dividend_per_share / last_close (provider yield field ignored: ambiguous units)"
+      },
+      {
+        "name": "max_payout_ratio",
+        "passed": true,
+        "observed": 0.2582,
+        "threshold": 0.75,
+        "note": ""
+      },
+      {
+        "name": "min_market_cap",
+        "passed": true,
+        "observed": 695251107840.0,
+        "threshold": 10000000000.0,
+        "note": ""
+      },
+      {
+        "name": "min_dividend_growth_streak",
+        "passed": false,
+        "observed": 3.0,
+        "threshold": 25.0,
+        "note": "estimated from 20 years of provider dividend data by per-payment rate (median), immune to ex-date timing; this is a floor / LOWER BOUND \u2014 the true streak is AT LEAST this many years (provider history simply ends here); it is NOT a verified aristocrat count and the true streak may be LONGER, never shorter"
+      }
+    ],
+    "flags": []
+  },
+  "specialist_opinions": [
+    {
+      "specialist": "fundamental",
+      "stance": "bearish",
+      "confidence": 0.78,
+      "thesis": "ASML fails the Dividend Aristocrats screen on two critical fronts that override its otherwise robust fundamentals.\n\nFirst, the yield is severely depressed. The screened dividend yield of 0.49% (observed at 0.004872802625781536, well below the 2.5% threshold) reflects the stock's extraordinary valuation at a PE ratio of 60.25x. While the payout ratio of 25.82% is healthy and leaves ample room for distribution growth, the yield offers negligible total-return contribution\u2014characteristic of a capital-appreciation play, not an income vehicle. For a strategy predicated on yield sustainability and multi-decade dividend streaks as proxies for durability, ASML's yield profile is disqualifying.\n\nSecond and more materially, the dividend growth streak is estimated at only 3 years\u2014far short of the 25-year minimum required. The screening note clarifies this is a floor (the true streak may be longer since provider history ends), but the evidence shows severe disruption in the historical pattern. Examining the dividend history, payments were erratic and modest through 2011, a large special dividend of 11.87 appeared in November 2012, then regular quarterly payments resumed at much lower levels from 2013\u20132015. The pattern of meaningful, consistent year-over-year growth appears to start only around 2016\u20132018. This breaks the aristocrat thesis: a 3-year streak does not demonstrate the \"hard-to-fake signal of disciplined capital allocation and earnings durability\" that multi-decade consistency provides. Without verified evidence of a 25+ year growth streak, ASML cannot credibly claim the dividend fortress status the strategy seeks.\n\nThe company's fundamentals are otherwise attractive: market cap of $695 billion well exceeds the $10 billion threshold, free cash flow of $8.2 billion supports future distributions, and payout ratio of 25.82% is conservative. However, these strengths do not overcome the structural mismatch with Dividend Aristocrats criteria. The strategy is not a growth or quality screen\u2014it is a durability and income screen. ASML, trading at a 77% YTD rally and commanding 60x PE, is priced as a dominant growth compounder in semiconductor equipment, not as a reliable dividend-income play with a multi-decade track record.\n\nCaveats: The dividend growth streak is a floor estimate; if the true historical streak (accounting for timing and special events) proves materially longer, that assessment would need revision. However, the evidence as presented does not support aristocrat classification.",
+      "figures": [
+        {
+          "label": "Dividend yield (screened, deterministic)",
+          "value": 0.004872802625781536,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Dividend yield threshold",
+          "value": 0.025,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Min dividend yield criterion passed",
+          "value": 0.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Payout ratio",
+          "value": 0.2582,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "payout_ratio"
+          }
+        },
+        {
+          "label": "Max payout ratio threshold",
+          "value": 0.75,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "Max payout ratio criterion passed",
+          "value": 1.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "Market capitalization",
+          "value": 695251107840.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "market_cap"
+          }
+        },
+        {
+          "label": "Min market cap criterion passed",
+          "value": 1.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Dividend growth streak (years, estimated floor)",
+          "value": 3.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Min dividend growth streak threshold",
+          "value": 25.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Min dividend growth streak criterion passed",
+          "value": 0.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "PE ratio",
+          "value": 60.250168,
+          "unit": "multiple",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 8243274752.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "free_cash_flow"
+          }
+        }
+      ],
+      "caveats": [
+        "The dividend growth streak is explicitly noted as a floor/lower bound: the true streak may be longer than the observed 3 years, as the provider dividend history simply ends at that point. If independent verification confirms a 25+ year consecutive growth record (accounting for special dividends and timing), the assessment would require revision.",
+        "This analysis is based on the screened yield calculation (dividend_per_share / last_close) and does not incorporate potential provider yield fields that may have different methodologies. The deterministic screening approach is used as the source of truth.",
+        "Market sentiment is strongly bullish (80.95% analyst bullish ratio), and recent news reflects excitement about Musk/Terafab partnerships and market dominance. This positive sentiment is noted but does not override the structural mismatch with Dividend Aristocrats criteria."
+      ],
+      "created_at": "2026-06-17T12:36:59.546644Z"
+    },
+    {
+      "specialist": "technical",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "ASML fails the dividend-aristocrat screen on two critical axes. First, the current dividend yield of 0.49% (expressed as an annual metric in fundamentals) translates to a screen-calculated yield of 0.4872% relative to the last close, well below the 2.5% minimum threshold required. Second, the estimated dividend-growth streak of 3 years falls dramatically short of the 25-year aristocrat minimum. While the payout ratio of 25.82% is sustainable and the market cap of \u20ac695B demonstrates scale, these positives cannot offset the absence of a multi-decade income track record\u2014the cornerstone of the Dividend Aristocrats strategy.\n\nFrom a technical perspective, ASML exhibits bullish structure in the near term: the price of \u20ac1,803.89 stands well above both the 50-day (\u20ac1,557.71) and 200-day (\u20ac1,252.73) moving averages, confirming an uptrend. The stock trades only 5.03% below its 52-week high, indicating recent strength. However, this upside momentum is accompanied by elevated annualized volatility of 41.44%, reflecting the speculative and sentiment-driven nature of the recent run (news coverage is heavily dominated by Elon Musk's Terafab interest and AI-chipmaker tailwinds). Technical strength without a durable dividend-growth pedigree is precisely the kind of momentum trap the aristocrat strategy is designed to avoid.\n\nThe widening gap between analyst enthusiasm (81% bullish ratio) and the company's failure to meet aristocrat criteria underscores the disconnect: ASML may be a sound growth/momentum play, but it is not a dividend-aristocrat investment. The strategy prioritizes earnings durability signaled by multi-decade dividend discipline; ASML's dividend history shows only intermittent regular payments before 2016, with the 3-year estimate likely reflecting more recent quarterly consistency rather than a decades-long commitment to rising distributions.",
+      "figures": [
+        {
+          "label": "Dividend yield (current)",
+          "value": 0.49,
+          "unit": "%",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "output.dividend_yield"
+          }
+        },
+        {
+          "label": "Screen-calculated yield (dividend per share / last close)",
+          "value": 0.004872802625781536,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[0].observed"
+          }
+        },
+        {
+          "label": "Minimum yield threshold",
+          "value": 0.025,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Yield criterion passed",
+          "value": 0.0,
+          "unit": "boolean (false)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[0].passed"
+          }
+        },
+        {
+          "label": "Payout ratio (observed)",
+          "value": 0.2582,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[1].observed"
+          }
+        },
+        {
+          "label": "Payout ratio threshold",
+          "value": 0.75,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[1].passed"
+          }
+        },
+        {
+          "label": "Dividend-growth streak (years, floor estimate)",
+          "value": 3.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[3].observed"
+          }
+        },
+        {
+          "label": "Minimum dividend-growth streak threshold",
+          "value": 25.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Dividend-growth streak criterion passed",
+          "value": 0.0,
+          "unit": "boolean (false)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[3].passed"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 695251107840.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "output.market_cap"
+          }
+        },
+        {
+          "label": "Last close price",
+          "value": 1803.8900146484375,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "7f1d4a608558",
+            "field_path": "output.last_close"
+          }
+        },
+        {
+          "label": "SMA 50",
+          "value": 1557.7072241210938,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "7f1d4a608558",
+            "field_path": "output.sma_50"
+          }
+        },
+        {
+          "label": "SMA 200",
+          "value": 1252.7284692382811,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "7f1d4a608558",
+            "field_path": "output.sma_200"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.050324281805130155,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "7f1d4a608558",
+            "field_path": "output.pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.41444495870810877,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "7f1d4a608558",
+            "field_path": "output.annualized_volatility"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio",
+          "value": 0.8095,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "baef7c81945d",
+            "field_path": "output.bullish_ratio"
+          }
+        }
+      ],
+      "caveats": [
+        "The 3-year dividend-growth streak is a FLOOR estimate; the true streak may be longer, but the provider history does not extend far enough to verify whether it reaches the 25-year aristocrat threshold. The raw dividend history shows sporadic payments in 2007\u20132015, then more consistent quarterly distributions from 2016 onward, consistent with the 3-year estimate but not consistent with a 25-year growth record.",
+        "Analyst sentiment (81% bullish) and strong recent technical performance (price well above both SMA 50 and SMA 200, only 5% below 52w high) reflect genuine market strength, but this is a growth/momentum signal, not a dividend-discipline signal. The strategy prioritizes the latter.",
+        "Volatility of 41.4% is elevated relative to classic dividend-stock profiles, reflecting the speculative overlay from Terafab/Musk-related news flow. This is compatible with strong short-term momentum but inconsistent with the stable, predictable cash-return profile expected of dividend aristocrats.",
+        "The payout ratio of 25.8% is conservative and sustainable\u2014a positive signal for future dividend growth if the streak can be extended. However, sustainability alone is insufficient; the strategy requires proof of a decades-long commitment, which ASML does not yet provide."
+      ],
+      "created_at": "2026-06-17T12:37:16.513617Z"
+    },
+    {
+      "specialist": "sentiment",
+      "stance": "bullish",
+      "confidence": 0.72,
+      "thesis": "ASML exhibits strong near-term sentiment momentum driven by Elon Musk's Terafab negotiations and endorsement, but the fundamental dividend aristocrat profile is compromised for this strategy.\n\nSENTIMENT STRENGTH: The news environment is decidedly bullish. Recent headlines (as of 2026-06-17) prominently feature Musk's endorsement (\"Greatest Company in Europe\"), active Terafab talks, and multiple buy-case narratives (ASML \"Could Soar Higher,\" \"Rally May Continue\"). The analyst base is overwhelmingly constructive: 34 bullish vs. 2 bearish across 42 total analysts, yielding a 0.8095 bullish ratio. This near-monolithic consensus, combined with 101 news items in recent circulation and multiple positive cross-references to ASML's market dominance and competitiveness, reflects genuine enthusiasm.\n\nSTRATEGY MISMATCH: However, ASML fails two critical Dividend Aristocrats screen criteria and shows structural weakness in the core thesis:\n\n1. **Dividend Yield Failure**: Observed yield of ~0.49% (dividend_per_share 8.79 / last_close 1803.89) falls far short of the 2.5% minimum threshold. The screen flags observed yield at 0.004872 (per-share / close ratio), indicating ASML is fundamentally a growth/optionality play, not a yield vehicle.\n\n2. **Dividend Growth Streak Failure**: Observed streak of 3.0 years against a 25.0-year threshold represents a material shortfall. While the dividend history shows payments spanning 2007\u20132026, the characterization as an \"at least\" 3-year floor (not a verified count) and the explicit note that \"the true streak may be LONGER, never shorter\" suggests the streak calculation is incomplete. Regardless, even a charitable reading does not position ASML as a multi-decade rising-dividend champion on the scale required by the aristocrat framework.\n\n3. **Other Metrics**: Payout ratio of 0.2582 (well below the 0.75 threshold) and market cap of \u20ac695B both pass, indicating financial stability. However, low payout and a 60+ P/E imply reinvestment and growth expectations dominate the valuation\u2014antithetical to the aristocrat preference for disciplined, mature capital allocation.\n\nCAVEAT: The bullish stance reflects sentiment intensity, not aristocrat-strategy alignment. The headline of \"ASML: Expensive, Rare, But Still Worth Buying\" captures the market's view, but \"expensive\" and \"rare\" are precisely what the Dividend Aristocrats strategy seeks to avoid in favour of dividend-funded returns and durability. Price momentum and analyst consensus do not repair the fundamental structural misfit.",
+      "figures": [
+        {
+          "label": "Dividend per share",
+          "value": 8.79,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "output.dividend_per_share"
+          }
+        },
+        {
+          "label": "Last close price",
+          "value": 1803.89,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "7f1d4a608558",
+            "field_path": "output.last_close"
+          }
+        },
+        {
+          "label": "Dividend yield (fundamental)",
+          "value": 0.49,
+          "unit": "%",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "output.dividend_yield"
+          }
+        },
+        {
+          "label": "Min dividend yield threshold (failed)",
+          "value": 2.5,
+          "unit": "%",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Yield criterion passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[0].passed"
+          }
+        },
+        {
+          "label": "Payout ratio observed",
+          "value": 0.2582,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[1].observed"
+          }
+        },
+        {
+          "label": "Payout ratio criterion passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[1].passed"
+          }
+        },
+        {
+          "label": "Dividend growth streak (observed, years)",
+          "value": 3.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[3].observed"
+          }
+        },
+        {
+          "label": "Dividend growth streak threshold (years)",
+          "value": 25.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Streak criterion passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "output.criteria[3].passed"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 695251107840.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "output.market_cap"
+          }
+        },
+        {
+          "label": "P/E ratio",
+          "value": 60.25,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "output.pe_ratio"
+          }
+        },
+        {
+          "label": "Analysts total (recommendation trends)",
+          "value": 42.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "baef7c81945d",
+            "field_path": "output.analysts_total"
+          }
+        },
+        {
+          "label": "Bullish analysts (strong buy + buy)",
+          "value": 34.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "baef7c81945d",
+            "field_path": "output.bullish_count"
+          }
+        },
+        {
+          "label": "Bearish analysts (sell + strong sell)",
+          "value": 2.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "baef7c81945d",
+            "field_path": "output.bearish_count"
+          }
+        },
+        {
+          "label": "Bullish ratio",
+          "value": 0.8095,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "baef7c81945d",
+            "field_path": "output.bullish_ratio"
+          }
+        },
+        {
+          "label": "Recent news headlines count",
+          "value": 101.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "baef7c81945d",
+            "field_path": "output.news_count"
+          }
+        }
+      ],
+      "caveats": [
+        "Dividend growth streak reported as 3.0 years with an explicit note that this is a LOWER BOUND\u2014true streak may be longer but is NOT fully verified. Screen caveat states provider history ends there, and the true streak is AT LEAST 3 years, never shorter. This analysis treats 3.0 as the observed floor, not a ceiling.",
+        "Sentiment bullish stance reflects headline sentiment and analyst consensus intensity only and does not override the Dividend Aristocrats strategy requirement for a long, documented rising-dividend streak and minimum yield. The mismatch between market enthusiasm and strategy fit is material.",
+        "P/E of 60.25 and low payout ratio (25.8%) indicate the market is pricing growth optionality and reinvestment, not mature dividend sustainability\u2014a structural misalignment with the Dividend Aristocrats thesis."
+      ],
+      "created_at": "2026-06-17T12:37:34.396427Z"
+    },
+    {
+      "specialist": "risk",
+      "stance": "bearish",
+      "confidence": 0.78,
+      "thesis": "ASML fails the core dividend-aristocrat screen on two critical fronts, each independently disqualifying under the strategy's own rules.\n\n**Failed Screen Criteria:**\n\nCriterion 1: Minimum dividend yield. The screening tool computed a yield of 0.49% (observed 0.00487 against a 2.5% threshold), below the strategy's floor. This is a hard failure.\n\nCriterion 2: Minimum dividend-growth streak. The screen estimates a streak of 3.0 years against a 25-year aristocrat threshold. Critically, the screen's own note flags this as a floor\u2014\"the true streak is AT LEAST this many years\u2026it is NOT a verified aristocrat count.\" Raw dividend history shows consistent payments from 2007 onwards, but the median payment rate is only ~3 years, meaning ASML has not demonstrated 25+ consecutive years of rising annual dividends. This fails the aristocrat litmus.\n\n**Payout Sustainability & Volatility:**\n\nThe payout ratio is conservative at 0.2582, leaving margin for growth. However, this low yield combined with a 60-forward P/E and an annualized volatility of 0.414 signals a high-beta growth stock, not a dividend engine. The valuation (\u20ac695B market cap, 60x forward earnings) leaves little room for multiple compression, especially if semiconductor cycle softens or geopolitical tensions around chip export controls intensify (newsflow repeatedly references government directives and EU supply concerns).\n\n**Data Quality & Verifiability Flags:**\n\nThe dividend history shows a structural break in 2012 (\u20ac0.77 \u2192 \u20ac11.87), suggesting a one-time capital return or stock split adjustment not cleanly documented in the data. The streak calculation depends on \"20 years of provider dividend data\u2026immune to ex-date timing,\" but that methodological confidence is warranted only if the provider's history is complete and unadjusted for corporate actions. The presence of multiple payments per calendar year (common in Dutch dividend policy) and the unexplained jump in 2012 introduce ambiguity in whether a true \"annual streak\" can be verified from this ledger alone.\n\n**Verdict:**\n\nASML is a world-class capital-equipment company with strong free cash flow and disciplined payout policy. But it is not a dividend aristocrat by the strategy's definition. It fails yield; it fails the growth streak; and its mega-cap valuation and semiconductor cyclicality expose it to multiple-compression risk that dividend growth alone may not offset. The recent euphoria (36% in 3 months, Elon Musk endorsement, analyst upside calls) is precisely the environment in which mean reversion and valuation discipline matter most. For a dividend-aristocrats portfolio, ASML does not qualify and introduces concentration risk without the downside cushion of a proven multi-decade dividend raise streak.",
+      "figures": [
+        {
+          "label": "Dividend yield (computed from most recent share price)",
+          "value": 0.004872802625781536,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Minimum dividend yield threshold",
+          "value": 0.025,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Dividend yield screen result",
+          "value": 0.0,
+          "unit": "pass/fail",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Estimated dividend growth streak (floor)",
+          "value": 3.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Minimum dividend growth streak threshold",
+          "value": 25.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Dividend growth streak screen result",
+          "value": 0.0,
+          "unit": "pass/fail",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "268f00e4f832",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "Payout ratio",
+          "value": 0.2582,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "payout_ratio"
+          }
+        },
+        {
+          "label": "P/E ratio",
+          "value": 60.250168,
+          "unit": "multiple",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.41444495870810877,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "7f1d4a608558",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Market capitalization",
+          "value": 695251107840.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "109f2074ea88",
+            "field_path": "market_cap"
+          }
+        },
+        {
+          "label": "Recent share price (last close)",
+          "value": 1803.89,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "7f1d4a608558",
+            "field_path": "last_close"
+          }
+        }
+      ],
+      "caveats": [
+        "The dividend growth streak is estimated as a floor; the true historical streak may be longer, but the ledger does not verify a 25-year unbroken succession.",
+        "The 2012 dividend spike (\u20ac11.87) suggests a one-time capital return or corporate action; the merger of that payment into a continuous streak calculation introduces ambiguity.",
+        "Valuation multiples (60x P/E) are cyclical; multiple compression in a semiconductor downturn would amplify downside and outweigh modest dividend growth.",
+        "Analyst sentiment is overwhelmingly bullish (81% bullish ratio) and driven by recent Musk/Terafab commentary; this enthusiasm may be temporary and does not address fundamental aristocrat eligibility.",
+        "Free cash flow is strong (\u20ac8.2B), but the company is simultaneously deploying capital into buybacks and special dividends; sustainability of the payout structure under sector stress is not verified."
+      ],
+      "created_at": "2026-06-17T12:37:52.021251Z"
+    }
+  ],
+  "critic_report": {
+    "targets_stance": "bearish",
+    "counter_thesis": "The bearish consensus is procedurally correct \u2014 ASML fails two screen criteria \u2014 but it over-extends from \"fails this screen\" to \"bearish on the stock,\" conflates screening disqualification with investment risk, and relies on several fragile assumptions that deserve scrutiny before this council reaches a verdict.\n\n**1. The dividend-growth streak estimate is explicitly a FLOOR, not a count \u2014 the consensus treats it as a ceiling.**\n\nEvery specialist cites the 3-year streak as evidence of a shallow dividend history. But the screen's own note is unambiguous: the observed value of 3.0 is a lower bound derived from a limited provider history window, and \"the true streak may be LONGER, never shorter.\" The consensus uses this floor as if it were a definitive finding. That is logically impermissible. If the true streak is materially longer \u2014 and the dividend history in evidence runs continuously from 2007 through 2026, nearly two decades \u2014 the streak criterion's failure status is uncertain, not confirmed. The screen returned false, but it did so on an admitted lower-bound estimate. The council should not treat a floor as a verdict.\n\n**2. The 2012 \"structural break\" argument is asserted, not evidenced.**\n\nThe risk specialist flags the November 2012 payment of 11.87 as a possible special dividend or split adjustment that \"breaks\" the streak. But no tool in the evidence record classifies that payment as a special dividend. The get_dividend_history tool returns it as a DividendEvent alongside all other events \u2014 it carries no label distinguishing it as special or extraordinary. The specialist is importing an interpretive assumption not supported by any field in the ledger. Without a verified classification, this \"break\" is speculative, and the argument built on it is built on inference, not evidence.\n\n**3. The yield failure is presented as a fundamental flaw, but it is entirely a function of price \u2014 and the screen methodology explicitly disclaims the provider's yield field.**\n\nThe screen computed a yield of 0.49% by dividing dividend_per_share by last_close, with a note that the \"provider yield field [was] ignored: ambiguous units.\" This means the yield failure is wholly a function of the current elevated share price. The dividend_per_share in evidence is 8.79. The payout ratio is a conservative 25.82%. These are the durability signals the aristocrat strategy actually targets. A high stock price \u2014 itself evidence of the market's confidence in ASML's compounding earnings power \u2014 mechanically depresses the yield ratio and triggers a screen failure. To call this a \"structural mismatch\" is to penalize the company for the market's high regard, not for any deterioration in its dividend policy.\n\n**4. The payout ratio and free cash flow strongly support dividend sustainability \u2014 the consensus barely engages with this.**\n\nThe payout ratio of 25.82% is well inside the 75% threshold. Free cash flow is reported at over $8.2 billion. These two figures together suggest the dividend is not merely sustained but has substantial headroom for continued growth. The consensus notes these facts and then dismisses them as \"not overcoming\" the screen failures \u2014 but for an investment thesis about durability, a 25.82% payout against $8.2 billion in free cash flow is precisely the kind of evidence that matters. The screen criteria are proxies for durability; the underlying signals here are strong.\n\n**5. The analyst consensus and recent price action are being used selectively \u2014 cited as evidence of a \"momentum trap\" rather than as independently meaningful signals.**\n\nThe bullish ratio is 80.95% across 42 analysts, with 34 bullish and only 2 bearish. The stock sits 5.03% below its 52-week high, having surged 36% in three months. The consensus calls this a warning sign \u2014 \"precisely the environment in which mean reversion matters most.\" But that is a valuation opinion, not a screen finding, and it introduces outside reasoning that the evidence record does not support. The council's job is to assess the screen, not to make a separate market-timing call. The analyst consensus is evidence; dismissing it as groupthink is not.\n\n**6. The PE ratio of 60.25x is cited as disqualifying, but no dividend-aristocrat screen criterion tests PE ratio.**\n\nMultiple specialists invoke the 60x PE as evidence of speculative excess. But the run_screen output contains exactly four criteria: minimum yield, maximum payout ratio, minimum market cap, and minimum dividend growth streak. PE is not a criterion. Importing it as a disqualifier smuggles a growth-vs-value judgment into what should be a rules-based screen assessment. The screen passed two of four criteria; the two failures are the ones to argue \u2014 not an unmeasured valuation metric.\n\n**7. The bearish specialists are unanimous, which itself should raise calibration concerns.**\n\nThree of four specialists arrived at bearish conclusions with confidence between 0.72 and 0.78. When all specialists converge on the same conclusion from the same evidence, the council risks groupthink rather than triangulation. The critic's role is to surface the strongest counterarguments precisely because the evidence contains real ambiguity \u2014 particularly on the streak floor \u2014 that the consensus has glossed over.",
+    "weaknesses_found": [
+      "The 3-year dividend growth streak is cited as a definitive finding, but the screen explicitly labels it a lower bound \u2014 the true streak may be materially longer and the failure status of this criterion is uncertain, not confirmed.",
+      "The 2012 payment of 11.87 is characterized as a 'structural break' or special dividend, but no tool in the evidence classifies it as such \u2014 this is an unsupported interpretive assumption.",
+      "The yield failure is entirely mechanically driven by the current elevated share price; no specialist addresses the possibility that the dividend_per_share and payout ratio are the more durable signals for aristocrat assessment.",
+      "The PE ratio of 60.25x is repeatedly invoked as disqualifying, but it is not a criterion in the dividend-aristocrat screen \u2014 its inclusion smuggles a separate growth/value judgment into a rules-based assessment.",
+      "The overwhelming analyst consensus (80.95% bullish, 34 of 42 analysts) is dismissed as a momentum-trap warning rather than treated as independently meaningful evidence.",
+      "The free cash flow of over $8.2 billion and payout ratio of 25.82% are acknowledged but summarily dismissed without engaging with their implications for future dividend growth capacity.",
+      "The bearish consensus is internally monolithic across three specialists, raising calibration concerns about groupthink on a genuinely ambiguous evidentiary record."
+    ],
+    "challenged_figures": [
+      "The 3-year streak is presented as evidence of shallow dividend history, but the screen's own note calls it a floor \u2014 the consensus treats a lower bound as a ceiling",
+      "The yield of 0.49% is cited as a structural flaw, but it is mechanically derived from the current elevated price, not from any reduction in dividend_per_share or payout policy",
+      "The PE ratio of 60.25x is cited as disqualifying, but it is not a screen criterion and its use introduces reasoning outside the evidence record"
+    ],
+    "figures": [
+      {
+        "label": "Dividend growth streak \u2014 observed (screen lower bound, NOT a ceiling)",
+        "value": 3.0,
+        "unit": "years",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "268f00e4f832",
+          "field_path": "criteria[3].observed"
+        }
+      },
+      {
+        "label": "Dividend growth streak \u2014 threshold",
+        "value": 25.0,
+        "unit": "years",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "268f00e4f832",
+          "field_path": "criteria[3].threshold"
+        }
+      },
+      {
+        "label": "Dividend growth streak \u2014 passed (false = evaluated and FAILED, per a lower-bound estimate)",
+        "value": 0.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "268f00e4f832",
+          "field_path": "criteria[3].passed"
+        }
+      },
+      {
+        "label": "Dividend yield \u2014 screen observed (mechanically computed as DPS / last_close)",
+        "value": 0.004872802625781536,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "268f00e4f832",
+          "field_path": "criteria[0].observed"
+        }
+      },
+      {
+        "label": "Dividend yield \u2014 threshold",
+        "value": 0.025,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "268f00e4f832",
+          "field_path": "criteria[0].threshold"
+        }
+      },
+      {
+        "label": "Dividend yield \u2014 passed (false = failed)",
+        "value": 0.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "268f00e4f832",
+          "field_path": "criteria[0].passed"
+        }
+      },
+      {
+        "label": "Payout ratio \u2014 observed (well below 75% threshold)",
+        "value": 0.2582,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "268f00e4f832",
+          "field_path": "criteria[1].observed"
+        }
+      },
+      {
+        "label": "Payout ratio \u2014 passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "268f00e4f832",
+          "field_path": "criteria[1].passed"
+        }
+      },
+      {
+        "label": "Free cash flow",
+        "value": 8243274752.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "109f2074ea88",
+          "field_path": "free_cash_flow"
+        }
+      },
+      {
+        "label": "PE ratio",
+        "value": 60.250168,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "109f2074ea88",
+          "field_path": "pe_ratio"
+        }
+      },
+      {
+        "label": "Dividend per share",
+        "value": 8.79,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "109f2074ea88",
+          "field_path": "dividend_per_share"
+        }
+      },
+      {
+        "label": "years_dividend_growth \u2014 null in fundamentals (data gap, not a confirmed zero)",
+        "value": null,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "109f2074ea88",
+          "field_path": "years_dividend_growth"
+        }
+      },
+      {
+        "label": "Bullish analyst ratio",
+        "value": 0.8095,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "baef7c81945d",
+          "field_path": "bullish_ratio"
+        }
+      },
+      {
+        "label": "Bullish analyst count",
+        "value": 34.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "baef7c81945d",
+          "field_path": "bullish_count"
+        }
+      },
+      {
+        "label": "Bearish analyst count",
+        "value": 2.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "baef7c81945d",
+          "field_path": "bearish_count"
+        }
+      },
+      {
+        "label": "Annualized volatility (cited as risk signal by bears)",
+        "value": 0.41444495870810877,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "7f1d4a608558",
+          "field_path": "annualized_volatility"
+        }
+      },
+      {
+        "label": "Pct off 52-week high (stock near highs, not extended)",
+        "value": -0.050324281805130155,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "7f1d4a608558",
+          "field_path": "pct_off_52w_high"
+        }
+      },
+      {
+        "label": "2012 large payment flagged as possible special dividend \u2014 no classification field exists in evidence",
+        "value": 11.87,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_dividend_history",
+          "call_id": "76982e2b43ca",
+          "field_path": "output[6].amount"
+        }
+      }
+    ],
+    "open_questions": [
+      "What is ASML's verified consecutive annual dividend growth streak when examined year-by-year from the full 20-year history, accounting for the 2012 event \u2014 does the record actually show any calendar year where the annual total declined relative to the prior year?",
+      "Is the November 2012 payment of 11.87 classified as a special/one-time dividend or an ordinary dividend in the original provider data? This classification is decisive for streak counting.",
+      "If the 2012 payment is excluded as a special dividend, do the remaining annual totals show an unbroken upward trend from any year through 2024 that would exceed 10 or more consecutive years of growth?",
+      "What is the years_dividend_growth field returning as null in get_fundamentals \u2014 is this a data-availability gap or an affirmative signal that the provider could not verify a streak?",
+      "Does the dividend_per_share figure of 8.79 represent trailing twelve months or a single payment, and how does it compare to prior-year totals to assess most-recent-year growth continuation?",
+      "At what share price would ASML's dividend yield mechanically reach the 2.5% screen threshold, and is that price within any plausible bear-case range for this stock?"
+    ],
+    "created_at": "2026-06-17T12:38:50.068674Z"
+  },
+  "decision": {
+    "recommendation": "hold",
+    "confidence": 0.52,
+    "rationale": "## Decision: HOLD (Confidence: 0.52)\n\n### Summary\nASML formally fails two of four Dividend Aristocrats screen criteria, but the evidentiary record is materially incomplete on the most critical disqualifier \u2014 the dividend growth streak \u2014 and the critic raises legitimate procedural objections that prevent a confident outright sell. A HOLD is the appropriate disposition under `partial_pass_allows_hold=True`, pending resolution of the open questions around streak verification.\n\n---\n\n### Screen Results\n\nASML passed 2 of 4 criteria:\n\n| Criterion | Result | Observed | Threshold |\n|---|---|---|---|\n| min_dividend_yield | **FAILED** | 0.4873% | 2.5% |\n| max_payout_ratio | **PASSED** | 25.82% | 75% |\n| min_market_cap | **PASSED** | $695.25B | $10B |\n| min_dividend_growth_streak | **FAILED** | 3.0 yrs (floor) | 25 yrs |\n\nSources: criteria[0].passed (call 268f00e4f832), criteria[1].passed (268f00e4f832), criteria[2].passed (268f00e4f832), criteria[3].passed (268f00e4f832).\n\n---\n\n### Weighing the Failures\n\n**Failure 1 \u2014 Dividend Yield (criteria[0])**\nThe screen computed an observed yield of 0.4873% against a 2.5% threshold \u2014 a clear, hard failure. However, the critic correctly identifies that this failure is entirely mechanically driven by the current elevated share price: the screener explicitly discarded the provider's own yield field and derived yield as dividend_per_share / last_close. The dividend_per_share is 8.79 and the payout ratio is a conservative 25.82%, both of which are durable fundamental signals. The yield screen penalizes ASML for the market's high regard for its earnings power, not for any deterioration in dividend policy. This is a real failure under the screen's rules, but its analytical weight as a \"structural mismatch\" is overstated by the bearish specialists.\n\n**Failure 2 \u2014 Dividend Growth Streak (criteria[3])**\nThe screen returned false with an observed value of 3.0 years against a 25-year threshold. This is the weightier failure \u2014 but it comes with a critical caveat from the tool itself: the 3.0-year figure is explicitly a **floor / lower bound**. The tool states \"the true streak is AT LEAST this many years\u2026the true streak may be LONGER, never shorter.\" The dividend history in the evidence record spans from 2007 through 2026 \u2014 nearly 20 years of continuous payments. The bearish specialists treat the 3.0-year floor as a ceiling and as a definitive finding. That is not what the evidence says. The screen failed this criterion on an admitted lower-bound estimate, meaning the true failure status of this criterion is **uncertain, not confirmed**.\n\nThe critic further notes that the characterization of the November 2012 payment (amount 11.87) as a \"structural break\" or special dividend is an unsupported interpretive assumption \u2014 no tool in the evidence classifies it as special or extraordinary; it appears in the dividend history as a standard DividendEvent. Importing that interpretation to declare a broken streak violates the evidence-only rule.\n\nThe `years_dividend_growth` field returned null in get_fundamentals (call 109f2074ea88), which the critic flags as a data-availability gap rather than an affirmative negative finding. Null is not false; it signals the provider could not evaluate the streak, not that it evaluated and found a short one.\n\n---\n\n### Factors Supporting Durability (Partially Offsetting)\n\n- **Payout ratio**: 25.82% (criteria[1].passed = true, call 268f00e4f832) \u2014 well inside the 75% ceiling, indicating the dividend is conservatively funded.\n- **Free cash flow**: $8,243,274,752 (call 109f2074ea88, field `free_cash_flow`) \u2014 substantial FCF provides headroom for continued dividend growth.\n- **Market cap**: $695,251,107,840 (call 268f00e4f832, criteria[2].observed) \u2014 scale well above the minimum.\n- **Technical structure**: Price of 1,803.89 sits above both the 50-day SMA of 1,557.71 and the 200-day SMA of 1,252.73 (call 7f1d4a608558), confirming trend strength. The stock is only 5.03% below its 52-week high.\n- **Analyst consensus**: 34 bullish, 2 bearish, 6 hold out of 42 analysts (call baef7c81945d, `bullish_ratio` = 0.8095) \u2014 an overwhelming constructive consensus that cannot simply be dismissed as groupthink.\n\n---\n\n### Factors Supporting Caution\n\n- **Yield failure is real under the screen's rules**: Even acknowledging the mechanical driver, the strategy has a hard yield floor of 2.5% and ASML's observed yield of 0.4873% (criteria[0].observed, call 268f00e4f832) is not close to it. A price far below current levels would be needed to clear this threshold \u2014 not plausibly near-term.\n- **Elevated annualized volatility**: 41.44% (call 7f1d4a608558, `annualized_volatility`) is inconsistent with the stable, low-volatility profile expected of a classic dividend aristocrat.\n- **Streak uncertainty cuts both ways**: While the floor argument prevents treating 3.0 as definitive, the evidence does not *confirm* a 25+ year streak either. The open questions raised by the critic are genuinely unresolved, and uncertainty here justifies caution rather than conviction.\n- **PE ratio**: Not a screen criterion, so not weighted as disqualifying, but the high valuation is a context note that amplifies price sensitivity.\n\n---\n\n### Why HOLD, Not SELL\n\nThe `partial_pass_allows_hold=True` policy applies here. ASML passed 2 of 4 criteria. The two failures are real under the screen's rules, but:\n\n1. The dividend growth streak failure rests on an explicitly flagged lower-bound estimate, not a confirmed count \u2014 the evidence does not definitively establish that ASML lacks a long growth streak, only that the data window is insufficient to verify one.\n2. The yield failure is mechanically price-driven and does not reflect deterioration in dividend policy.\n3. The critic's open questions \u2014 particularly whether the full year-by-year annual dividend history shows any year of decline, and whether the 2012 event is a special dividend \u2014 are decisive for aristocrat eligibility and remain unresolved.\n\nSelling based on a floor estimate of 3.0 years when the evidence also shows nearly 20 years of continuous payments (and the screen itself warns the true count is at minimum that floor) would be acting on incomplete information. A HOLD pending human review of the streak question is the calibrated response.\n\nThe sentiment specialist's bullish stance is overridden (dissent noted) because the strategy is a dividend-durability screen, not a momentum or sentiment play \u2014 but the uncertainty around the streak means a sell is not warranted either.\n\n---\n\n### Confidence Calibration\n\nConfidence is set at 0.52 \u2014 near the midpoint \u2014 reflecting:\n- Genuine screen failures on yield and streak (two hard criteria)\n- Genuine uncertainty on the streak (explicitly a floor, not a confirmed count)\n- Unresolved open questions that are material to aristocrat eligibility\n- A critic who raises procedurally valid objections that the bear specialists did not adequately answer\n- The evidence record is incomplete on the single most important criterion (streak)\n\nThis is a narrow HOLD, not a conviction call. Human verification of the dividend growth streak and classification of the 2012 payment would be decisive for upgrading to buy or downgrading to sell.",
+    "dissent": [
+      "sentiment"
+    ],
+    "created_at": "2026-06-17T12:39:31.326766Z"
+  },
+  "veto_flags": [
+    {
+      "trigger": "low_confidence",
+      "detail": "decision confidence 0.52 < threshold 0.60",
+      "created_at": "2026-06-17T12:39:31.330540Z"
+    },
+    {
+      "trigger": "specialist_conflict",
+      "detail": "at least one bullish and one bearish specialist",
+      "created_at": "2026-06-17T12:39:31.330561Z"
+    },
+    {
+      "trigger": "data_quality",
+      "detail": "provenance value mismatch: technical cited 'Payout ratio threshold'=0.75 at run_dividend_aristocrat_screen \u2192 output.criteria[1].passed (call_id 268f00e4f832) \u2014 cited 0.75 but ledger holds True",
+      "created_at": "2026-06-17T12:39:31.330579Z"
+    },
+    {
+      "trigger": "majority_override",
+      "detail": "decision hold vs majority sell (1 bullish / 0 neutral / 3 bearish)",
+      "created_at": "2026-06-17T12:39:31.330669Z"
+    }
+  ],
+  "provenance_audit": {
+    "figures_audited": 75,
+    "verified": 73,
+    "mismatch": 1,
+    "unresolvable": 0,
+    "unverifiable": 0,
+    "unit_scaled": 1,
+    "violations": [
+      "provenance value mismatch: technical cited 'Payout ratio threshold'=0.75 at run_dividend_aristocrat_screen \u2192 output.criteria[1].passed (call_id 268f00e4f832) \u2014 cited 0.75 but ledger holds True"
+    ],
+    "unit_scaled_notes": [
+      "sentiment: 'Min dividend yield threshold (failed)' \u2014 cited 2.5 appears \u00d7100/\u00f7100 off ledger 0.025"
+    ]
+  }
+}

@@ -1,0 +1,1015 @@
+{
+  "ticker": "T",
+  "run_at": "2026-06-17T13:05:48.134460Z",
+  "strategy_id": "dividend_aristocrats_v2",
+  "company_name": "AT&T Inc.",
+  "screen": {
+    "ticker": "T",
+    "criteria": [
+      {
+        "name": "min_dividend_yield",
+        "passed": true,
+        "observed": 0.0479274614556628,
+        "threshold": 0.025,
+        "note": "derived deterministically as dividend_per_share / last_close (provider yield field ignored: ambiguous units)"
+      },
+      {
+        "name": "max_payout_ratio",
+        "passed": true,
+        "observed": 0.3651315789473685,
+        "threshold": 0.75,
+        "note": ""
+      },
+      {
+        "name": "min_market_cap",
+        "passed": true,
+        "observed": 160923516928.0,
+        "threshold": 10000000000.0,
+        "note": ""
+      },
+      {
+        "name": "min_dividend_growth_streak",
+        "passed": false,
+        "observed": 0.0,
+        "threshold": 25.0,
+        "note": "estimated from 41 years of provider dividend data by per-payment rate (median), immune to ex-date timing; this is a floor / LOWER BOUND \u2014 the true streak is AT LEAST this many years (provider history simply ends here); it is NOT a verified aristocrat count and the true streak may be LONGER, never shorter"
+      }
+    ],
+    "flags": []
+  },
+  "specialist_opinions": [
+    {
+      "specialist": "fundamental",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "AT&T fails the core Dividend Aristocrat test despite superficially attractive metrics. The critical failure is the dividend growth streak: the screen reports an observed streak of 0.0 years against a 25-year threshold, with the note explicitly stating this is a floor and the true streak is \"AT LEAST\" 0.0\u2014meaning the company has not sustained 25+ years of consecutive annual dividend increases within the provider's verifiable history. The dividend history shows a catastrophic reset in April 2022, when the quarterly payment collapsed from $0.52 to $0.278 per share (a ~46% cut). This is an unambiguous breach of the aristocrat covenant, which demands unbroken growth, not retrenchment.\n\nPrior to 2022, T did exhibit a long climb from $0.133 in 1986 to $0.52 by early 2022\u2014a genuine long-term raise streak. However, the 2022 reset severs that continuity. A dividend cut, no matter how strategically justified, disqualifies a company from aristocrat status and raises durability questions that no snapshot yield or payout ratio can overcome.\n\nThe other screen metrics do pass: yield at 4.79% comfortably exceeds the 2.5% floor, payout ratio at 36.5% is well below the 75% ceiling, and market cap at $160.9B exceeds the $10B minimum. However, these are necessary but not sufficient conditions; the growth streak is the signal of discipline and earnings durability that defines the strategy. Without it, T is a mature, cyclical telecom\u2014valuable as a yield play perhaps, but not an aristocrat.\n\nThe fundamentals show a low PE of 7.6 and modest free cash flow of $8.8B, consistent with a stable utility-like business under pressure. Recent news reflects competitive intensity (Verizon's simpler plans, SpaceX threats to satellite backhaul, connected car upside) and CFO transition. The analyst consensus is benign (20 bullish, 14 hold, zero sell as of June 2026), but consensus does not substitute for the hard aristocrat rule: consecutive annual dividend growth. T broke that rule in 2022 and has not recovered it.",
+      "figures": [
+        {
+          "label": "Dividend growth streak (years)",
+          "value": 0.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Dividend growth streak threshold",
+          "value": 25.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Dividend growth streak criterion passed",
+          "value": 0.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "Dividend yield",
+          "value": 0.0479,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Payout ratio",
+          "value": 0.3651,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "payout_ratio"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 160923516928.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "market_cap"
+          }
+        },
+        {
+          "label": "Dividend per share (current)",
+          "value": 1.11,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "dividend_per_share"
+          }
+        },
+        {
+          "label": "P/E ratio",
+          "value": 7.62,
+          "unit": "multiple",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 8849000448.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "free_cash_flow"
+          }
+        }
+      ],
+      "caveats": [
+        "The dividend history shows a 46% cut from $0.52 (early 2022) to $0.278 (April 2022 onward), which is the proximate cause of the failed growth streak criterion. This reset is structural, not cyclical, and represents a break in the aristocrat covenant.",
+        "The screen note on criterion 3 states the observed streak is 'a floor / LOWER BOUND' and 'the true streak is AT LEAST' 0.0 years. This formulation means the verifiable history does not establish a 25+ year unbroken streak; any prior growth was interrupted by the 2022 cut.",
+        "Analyst consensus (20 bullish, 14 hold, zero sell) and recent partnership news (Rivian 5G, Cisco connected car) do not override the hard aristocrat rule. The strategy prioritizes dividend growth durability above market sentiment.",
+        "AT&T remains a large-cap, stable-yield name; the bearish stance reflects disqualification from the Dividend Aristocrats screen, not a prediction of stock underperformance."
+      ],
+      "created_at": "2026-06-17T13:06:04.846321Z"
+    },
+    {
+      "specialist": "technical",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "T exhibits a critical disqualification under the Dividend Aristocrats thesis. While it passes yield and payout-ratio screens, the dividend growth streak has flatlined. The quarterly dividend rate has been frozen at $0.278 since April 2022\u2014approximately four years without an increase. The screen floor estimate of 0.0 years reflects this prolonged stagnation, and the historical data confirms no upward progression in the per-payment rate since that cutoff. This is fundamentally incompatible with the aristocrat mandate: a multi-decade record of rising dividends as a signal of disciplined capital allocation. T's technical position compounds the concern. Price is trading well below both moving averages\u201419.6% below the 52-week high\u2014and below SMA50, indicating a bearish trend structure. Volatility at 22% is moderate but the technical setup (price below both SMAs, distance from highs) suggests further downside risk or sustained consolidation. On fundamentals, the payout ratio remains conservative at 36.5%, and yield is healthy at 4.79%, but these are not sufficient to overcome the broken dividend-growth narrative. The aristocrat thesis specifically requires that yield be paired with demonstrated growth sustainability; T's frozen dividend and below-average technical structure eliminate it as a candidate despite its size and FCF backing. A resumption of annual dividend increases would be necessary to reconsider.",
+      "figures": [
+        {
+          "label": "Dividend per share (current)",
+          "value": 1.11,
+          "unit": "$",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "output.dividend_per_share"
+          }
+        },
+        {
+          "label": "Payout ratio",
+          "value": 0.3651315789473685,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "output.payout_ratio"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 160923516928.0,
+          "unit": "$",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "output.market_cap"
+          }
+        },
+        {
+          "label": "Dividend yield (screen-derived)",
+          "value": 0.0479274614556628,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "output.criteria[0].observed"
+          }
+        },
+        {
+          "label": "Min yield criterion (passed)",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "output.criteria[0].passed"
+          }
+        },
+        {
+          "label": "Max payout ratio criterion (passed)",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "output.criteria[1].passed"
+          }
+        },
+        {
+          "label": "Min market cap criterion (passed)",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "output.criteria[2].passed"
+          }
+        },
+        {
+          "label": "Min dividend growth streak (years, lower bound estimate)",
+          "value": 0.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "output.criteria[3].observed"
+          }
+        },
+        {
+          "label": "Min dividend growth streak criterion (passed)",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "output.criteria[3].passed"
+          }
+        },
+        {
+          "label": "Last close price",
+          "value": 23.15999984741211,
+          "unit": "$",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "output.last_close"
+          }
+        },
+        {
+          "label": "SMA50",
+          "value": 25.07236568450928,
+          "unit": "$",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "output.sma_50"
+          }
+        },
+        {
+          "label": "SMA200",
+          "value": 25.74914849281311,
+          "unit": "$",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "output.sma_200"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.19579401110925965,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "output.pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.21982258859884113,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "output.annualized_volatility"
+          }
+        },
+        {
+          "label": "Latest quarterly dividend (frozen rate since April 2022)",
+          "value": 0.278,
+          "unit": "$",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "2a029358c2b4",
+            "field_path": "output[179].amount"
+          }
+        }
+      ],
+      "caveats": [
+        "The screen's dividend-growth-streak floor estimate (0.0 years) reflects a lack of observable increase in the per-payment rate since April 2022. The historical record confirms no growth in that metric since that date, satisfying the negative finding with high confidence.",
+        "Technical snapshot spans 275 bars from May 2025 to June 2026. The price structure (below SMA50 and SMA200, 19.6% below 52-week high) is consistent with a downtrend or sustained weakness.",
+        "Recommendation analysts remain 59% bullish (20 of 34), but this analyst consensus does not override the hard technical and dividend-growth disqualifications under the aristocrat thesis.",
+        "T's free cash flow ($8.85B) and market cap remain substantial, but the dividend-growth freeze is the critical failure for this strategy."
+      ],
+      "created_at": "2026-06-17T13:06:19.616390Z"
+    },
+    {
+      "specialist": "sentiment",
+      "stance": "neutral",
+      "confidence": 0.62,
+      "thesis": "AT&T presents a mixed sentiment picture that does not support a decisive bullish or bearish conviction. The analyst consensus is modestly pro-AT&T: bullish sentiment (strong buy + buy) dominates at 58.8% of the analyst base, with no bearish ratings, though a significant 41.2% remain at hold. Recent news flow centers on strategic initiatives\u20145G partnerships (Rivian, Cisco), fiber/broadband simplification, AI collaboration, and leadership transitions (new CFO announced)\u2014which are constructive in tone but do not constitute major catalysts. One headline explicitly frames AT&T as falling against a market uptick and notes competitive pressure from Verizon's parallel plan simplifications and fee reductions.\n\nThe dividend fundamentals are sound but paradoxical for an aristocrat thesis: the payout ratio is sustainable at 36.5%, well below the 75% threshold, yet the dividend growth streak is broken. The most recent data shows dividends frozen since Q2 2022 at $0.278/quarter, representing a sharp cut from the prior $0.52 level. While the dividend history from 1986\u20132021 demonstrates a genuine 35-year streak of annual increases, the 2022 reset and subsequent flat years mean the current active streak is zero by the strict \"consecutive annual increases\" definition. This is not merely a valuation quirk\u2014it is a fundamental departure from aristocrat credentials.\n\nSentiment on yield is mildly positive: mentions of AT&T as an attractive-yield dividend candidate appear in recent headlines, and the fundamentals show a dividend yield of 4.79% (well above the 2.5% threshold), a low PE ratio of 7.62, and solid free cash flow. However, this yield is supported not by growth but by a compressed stock price (down 19.6% from 52-week high). The stock trades below both the 50-day and 200-day moving averages, signaling downward momentum. Technical weakness, coupled with the dividend-growth hiatus and intensifying competitive commentary (5G, fiber, broadband), tempers the bullish case.\n\nAnalyst conviction, while positive in ratio, shows diffusion: 14 hold votes are not negligible, and the concentration at \"strong buy\" (26.5% of the base) does not suggest high urgency. One recent analyst initiation (Freedom Broker, buy) is noted, but this alone does not break a cautious consensus.",
+      "figures": [
+        {
+          "label": "Dividend per share (current annual)",
+          "value": 1.11,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "output.dividend_per_share"
+          }
+        },
+        {
+          "label": "Payout ratio",
+          "value": 0.3651315789473685,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "output.payout_ratio"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 160923516928.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "output.market_cap"
+          }
+        },
+        {
+          "label": "EPS",
+          "value": 3.04,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "output.eps"
+          }
+        },
+        {
+          "label": "PE ratio",
+          "value": 7.618421,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "output.pe_ratio"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 8849000448.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "output.free_cash_flow"
+          }
+        },
+        {
+          "label": "Min dividend yield criterion passed",
+          "value": 1.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Observed dividend yield",
+          "value": 0.0479274614556628,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Max payout ratio criterion passed",
+          "value": 1.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "Min market cap criterion passed",
+          "value": 1.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Min dividend growth streak criterion passed",
+          "value": 0.0,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "Observed dividend growth streak",
+          "value": 0.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Last adjusted close price",
+          "value": 23.15999984741211,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "output.last_close"
+          }
+        },
+        {
+          "label": "50-day simple moving average",
+          "value": 25.07236568450928,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "output.sma_50"
+          }
+        },
+        {
+          "label": "200-day simple moving average",
+          "value": 25.74914849281311,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "output.sma_200"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.19579401110925965,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "output.pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Recent news count",
+          "value": 144.0,
+          "unit": "articles",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "8715d4cc970f",
+            "field_path": "output.news_count"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio",
+          "value": 0.5882,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "8715d4cc970f",
+            "field_path": "output.bullish_ratio"
+          }
+        },
+        {
+          "label": "Total analysts covering",
+          "value": 34.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "8715d4cc970f",
+            "field_path": "output.analysts_total"
+          }
+        },
+        {
+          "label": "Strong buy recommendations",
+          "value": 9.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "004a0d495214",
+            "field_path": "output[0].strong_buy"
+          }
+        },
+        {
+          "label": "Buy recommendations",
+          "value": 11.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "004a0d495214",
+            "field_path": "output[0].buy"
+          }
+        },
+        {
+          "label": "Hold recommendations",
+          "value": 14.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "004a0d495214",
+            "field_path": "output[0].hold"
+          }
+        },
+        {
+          "label": "Sell recommendations",
+          "value": 0.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "004a0d495214",
+            "field_path": "output[0].sell"
+          }
+        },
+        {
+          "label": "Strong sell recommendations",
+          "value": 0.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "004a0d495214",
+            "field_path": "output[0].strong_sell"
+          }
+        }
+      ],
+      "caveats": [
+        "Dividend growth streak is zero as of the most recent data; historical streak (1986\u20132021) demonstrates prior discipline but is not active. This is a critical disqualification from true Dividend Aristocrat status under the strategy thesis.",
+        "High yield (4.79%) is supported by a depressed stock price (down 19.6% from 52-week high), not by dividend growth. This is a valuation artifact, not a strength signal.",
+        "News flow includes constructive announcements (5G partnerships, AI initiatives, fiber simplification) but also competitive pressure (Verizon's parallel actions, SpaceX threats). Tone is neutral-to-mildly-positive, not bullish.",
+        "Analyst consensus shows 58.8% bullish support but with 41.2% at hold and no bearish or sell ratings. The absence of downside conviction is noteworthy; this is not a squeeze or capitulation signal.",
+        "Technical indicators (price below 50-day and 200-day averages) suggest downward momentum. Volatility at 22% is moderate for the sector."
+      ],
+      "created_at": "2026-06-17T13:06:40.378746Z"
+    },
+    {
+      "specialist": "risk",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "AT&T fails the core aristocrat test decisively. The dividend growth streak is broken. From the dividend history, payments rose steadily from 1986 through 2021 (quarterly $0.52), then collapsed to $0.278 in April 2022\u2014a ~46% cut. As of June 2026, the $0.278 level persists with no resumption of growth. The screen's estimated floor of zero years is accurate; the true unbroken streak ended in early 2022. This is disqualifying under the Dividend Aristocrats mandate of sustained, uninterrupted increases.\n\nOn paper, T passes three secondary criteria: the dividend yield is healthy, the payout ratio is conservative, and market cap is robust. However, these metrics mask a damaged capital allocation story. The $0.278 dividend has remained flat for four years, suggesting earnings constraints or a strategic reset\u2014either of which signals risk. The payout ratio of 36.5% (based on EPS of $3.04) appears safe, but this low ratio coupled with a frozen dividend is consistent with an issuer rationing cash to cover debt or fund network capex. The free cash flow of $8.8B is sizeable, yet the dividend stagnation indicates management believes insufficient cash should return to shareholders relative to competing capital demands.\n\nThe news backdrop shows active competitive pressure: Verizon is launching simpler plans and loyalty programs, the company faces broadband and 5G intensity, and headlines reference a SpaceX threat. A CFO transition is underway (Jennifer Biry named for 2027). While partnerships with Rivian and Cisco suggest growth optionality, they do not offset the core erosion of dividend momentum.\n\nVolatility of 22% and technical weakness (stock down ~19.6% from 52-week high, trading below both 50- and 200-day SMAs) reinforce downside risk. At $23.16, T is not a value trap correcting downward; it is a mature, pressured telecom nursing a broken dividend growth story.",
+      "figures": [
+        {
+          "label": "Current dividend per share (trailing quarterly level)",
+          "value": 0.278,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "2a029358c2b4",
+            "field_path": "output[183].amount"
+          }
+        },
+        {
+          "label": "Last higher dividend per share (Q1 2022)",
+          "value": 0.52,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_dividend_history",
+            "call_id": "2a029358c2b4",
+            "field_path": "output[173].amount"
+          }
+        },
+        {
+          "label": "Dividend growth streak (estimated floor)",
+          "value": 0.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Dividend growth streak threshold (aristocrat requirement)",
+          "value": 25.0,
+          "unit": "years",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Dividend growth streak criterion passed",
+          "value": 0.0,
+          "unit": "boolean (false)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "Payout ratio (current)",
+          "value": 0.3651315789473685,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "payout_ratio"
+          }
+        },
+        {
+          "label": "EPS (current)",
+          "value": 3.04,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "eps"
+          }
+        },
+        {
+          "label": "Free cash flow (current)",
+          "value": 8849000448.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "free_cash_flow"
+          }
+        },
+        {
+          "label": "Stock price (last close)",
+          "value": 23.15999984741211,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.21982258859884113,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Price vs. 50-day SMA (weakness indicator)",
+          "value": 23.15999984741211,
+          "unit": "USD (below 25.07 SMA)",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "3202cff4796c",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "Dividend yield (observed)",
+          "value": 0.0479274614556628,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Dividend yield criterion passed",
+          "value": 1.0,
+          "unit": "boolean (true)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "6c5eeff7fa1b",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 160923516928.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "869a31849ab5",
+            "field_path": "market_cap"
+          }
+        }
+      ],
+      "caveats": [
+        "Dividend history ends in April 2026; no forward guidance on reinstatement of growth is available.",
+        "The screen notes that the 0.0-year streak is a floor and 'the true streak is AT LEAST this many years'; however, the 2022 dividend cut is directly observable in the ledger data and is not subject to ambiguity\u2014the unbroken growth streak ended then.",
+        "EPS of $3.04 and payout ratio of 36.5% are point-in-time; cyclical softness or asset write-downs could narrow FCF or widen net debt, straining dividends further.",
+        "Analyst sentiment remains bullish (59% bullish, 0 sell ratings as of June 2026), but sentiment is contradicted by the objective dividend history and does not override the screening failure.",
+        "CFO transition and competitive headwinds are nascent; impact on future dividends is not yet quantified in earnings or FCF."
+      ],
+      "created_at": "2026-06-17T13:06:58.535716Z"
+    }
+  ],
+  "critic_report": {
+    "targets_stance": "bearish",
+    "counter_thesis": "The consensus is BEARISH on AT&T as a Dividend Aristocrat candidate, but the bearish case rests on an overly rigid application of a single disqualifying criterion while systematically discounting evidence that argues for a more nuanced, bullish read. Here is the strongest case against that consensus.\n\n**1. The \"broken streak\" argument is factually correct but strategically irrelevant to forward-looking value.**\n\nEvery specialist cites the 2022 dividend cut as an automatic disqualification. That is technically true for index-inclusion purposes. But the council is assessing whether T is a sound *investment* under a dividend-growth framework \u2014 not whether it can print an aristocrat badge. The dividend history shows a genuine, uninterrupted growth streak from 1986 through 2021 \u2014 35+ years of consecutive annual increases. That track record of capital discipline is not erased by the 2022 restructuring reset; it demonstrates that management *can* sustain dividend growth under the right balance sheet conditions. The 2022 cut was a deliberate strategic reset tied to the WarnerMedia spin-off, not a solvency event. The risk specialist conflates a portfolio restructuring with earnings collapse.\n\n**2. The frozen dividend at $0.278 is not a sign of weakness \u2014 it is a sign of sustainability after a debt-laden era.**\n\nThe payout ratio stands at 36.5% against an EPS of $3.04. That is not the ratio of a company rationing dividends under financial stress \u2014 it is a conservatively covered dividend with substantial headroom. Free cash flow of $8.85B provides enormous room to grow the dividend. A company under genuine earnings pressure does not show a 36.5% payout ratio. The bearish specialists argue simultaneously that the payout ratio is \"safe\" AND that the frozen dividend signals distress \u2014 these positions contradict each other. If the business were truly stressed, the payout ratio would be much higher.\n\n**3. The yield of 4.79% is real and derived from the current price, not a yield-trap illusion.**\n\nThe screen derives yield as dividend_per_share / last_close \u2014 a direct, clean calculation. At a $23.16 stock price, the dividend is actually *well supported* by both earnings and free cash flow. The bearish specialists acknowledge the yield is attractive but dismiss it by pointing to price weakness. Price weakness, however, is exactly what creates yield opportunity in a dividend-growth framework: a stock trading 19.6% off its 52-week high with a covered, stable dividend is precisely the kind of entry point the strategy prizes.\n\n**4. The technical weakness is an entry signal, not a condemning structural verdict.**\n\nThe stock trades below both the SMA-50 and SMA-200, and sits 19.6% off the 52-week high. The bearish specialists treat this as confirming downside. But under a dividend-growth lens, price underperformance relative to moving averages at a below-market PE of 7.62 signals potential undervaluation \u2014 not fundamental deterioration. Annualized volatility of 22% is moderate, not extreme.\n\n**5. Analyst consensus is constructively bullish with zero sell-side bearish ratings.**\n\nAs of the most recent period, there are 20 bullish ratings (strong buy + buy) and zero sells. Even accounting for well-known buy-side bias, the complete absence of sell ratings across 34 analysts is a data point the bearish camp explicitly acknowledges but then dismisses without basis. The recent Freedom Broker initiation with a Buy adds to this.\n\n**6. The competitive threat narrative is overstated as a near-term dividend risk.**\n\nNews flow references Verizon plan simplifications and a SpaceX \"threat\" \u2014 but one headline explicitly states \"AT&T: The SpaceX Threat Seems Exaggerated.\" The CFO transition is framed as routine succession (Desroches retiring, Biry named well in advance for 2027). New partnerships with Rivian and Cisco in connected car/5G point to revenue diversification. These are not the hallmarks of a company with an impaired dividend-paying capacity.\n\n**7. The growth streak screen result is flagged as a FLOOR, not a ceiling \u2014 it may understate true streak length.**\n\nThe screen note explicitly states the 0.0 result is a \"floor / LOWER BOUND\" and the true streak \"is AT LEAST this many years.\" While the 2022 cut definitionally breaks the aristocrat streak, the screen's methodology \u2014 counting consecutive annual increases from dividend history \u2014 may not have cleanly resolved the pre-2022 multi-decade record. The council should not treat the 0.0 output as more informative than the raw dividend history, which shows sustained growth from 1986 to 2021.\n\n**CONCLUSION:** T is disqualified from Dividend Aristocrat *index membership* on the strict consecutive-growth criterion. But the bearish investment thesis overloads on a technical disqualification while ignoring a conservatively covered 4.79% yield, a sub-40% payout ratio, $8.85B in free cash flow, constructive analyst consensus, and a price that sits well below trend \u2014 all of which constitute a compelling forward income case for a dividend-growth investor with a longer horizon and willingness to await dividend resumption.",
+    "weaknesses_found": [
+      "The bearish consensus conflates index-eligibility disqualification with investment thesis disqualification \u2014 these are not the same question, and the council should not treat them as identical.",
+      "The risk specialist argues simultaneously that the payout ratio is 'safe' AND that the frozen dividend signals distress; these positions are internally contradictory. A genuinely distressed dividend payer would not show a sub-40% payout ratio.",
+      "Bearish specialists cite technical weakness (price below SMAs, 19.6% off highs) as a confirming bearish signal, but in a dividend-growth framework this is exactly the kind of entry opportunity the strategy is designed to exploit \u2014 a covered yield at a depressed price.",
+      "The screen's 0.0-year streak floor is cited as definitive, but the screen tool itself explicitly labels it a floor / lower bound and cautions it is NOT a verified aristocrat count. The bearish camp treats this output as more precise than the tool declares it to be.",
+      "The 2022 dividend cut is characterized as a 'catastrophic reset' and evidence of 'damaged capital allocation,' but the dividend history shows it coincided with the WarnerMedia spin-off \u2014 a portfolio restructuring event, not a solvency event. No specialist distinguishes between these two very different causal mechanisms.",
+      "Bearish specialists dismiss the zero sell-side bearish ratings (0 out of 34 analysts) without explanation. The complete absence of bearish analyst ratings is non-trivial evidence that is simply waved away.",
+      "The competitive threat narrative (Verizon, SpaceX) is cited as a risk without any evidence of quantified earnings impact; one headline in the evidence record explicitly states 'AT&T: The SpaceX Threat Seems Exaggerated,' which the bearish camp does not engage with.",
+      "The bearish specialists note FCF of $8.85B as 'sizeable' but then fail to consider what it implies about dividend resumption capacity \u2014 a question they leave entirely unresolved."
+    ],
+    "challenged_figures": [
+      "The screen's criteria[3].observed = 0.0 years growth streak, cited as definitive by all bearish specialists, is explicitly labeled a FLOOR estimate by the tool itself \u2014 it should not be treated as a precise or ceiling measurement.",
+      "The characterization of the 2022 dividend cut as a ~46% collapse is directionally correct from the history (0.52 \u2192 0.278), but attributing it to earnings distress rather than spin-off restructuring is an interpretive leap unsupported by the evidence record.",
+      "The bearish framing of price-below-SMAs as 'further downside risk' is not supported by any forward earnings or cash flow evidence \u2014 it is purely a retrospective technical observation."
+    ],
+    "figures": [
+      {
+        "label": "Dividend growth streak (screen floor) \u2014 FAILED criterion",
+        "value": 0.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "6c5eeff7fa1b",
+          "field_path": "criteria[3].passed"
+        }
+      },
+      {
+        "label": "Observed dividend growth streak (years, screen floor estimate)",
+        "value": 0.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "6c5eeff7fa1b",
+          "field_path": "criteria[3].observed"
+        }
+      },
+      {
+        "label": "Minimum dividend growth streak threshold (years)",
+        "value": 25.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "6c5eeff7fa1b",
+          "field_path": "criteria[3].threshold"
+        }
+      },
+      {
+        "label": "Payout ratio (observed)",
+        "value": 0.3651315789473685,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "6c5eeff7fa1b",
+          "field_path": "criteria[1].observed"
+        }
+      },
+      {
+        "label": "Payout ratio screen \u2014 passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "6c5eeff7fa1b",
+          "field_path": "criteria[1].passed"
+        }
+      },
+      {
+        "label": "Dividend yield (observed, derived from DPS/last_close)",
+        "value": 0.0479274614556628,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "6c5eeff7fa1b",
+          "field_path": "criteria[0].observed"
+        }
+      },
+      {
+        "label": "Dividend yield screen \u2014 passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "6c5eeff7fa1b",
+          "field_path": "criteria[0].passed"
+        }
+      },
+      {
+        "label": "Market cap (observed)",
+        "value": 160923516928.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "6c5eeff7fa1b",
+          "field_path": "criteria[2].observed"
+        }
+      },
+      {
+        "label": "Market cap screen \u2014 passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "6c5eeff7fa1b",
+          "field_path": "criteria[2].passed"
+        }
+      },
+      {
+        "label": "EPS",
+        "value": 3.04,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "869a31849ab5",
+          "field_path": "output.eps"
+        }
+      },
+      {
+        "label": "PE ratio",
+        "value": 7.618421,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "869a31849ab5",
+          "field_path": "output.pe_ratio"
+        }
+      },
+      {
+        "label": "Free cash flow",
+        "value": 8849000448.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "869a31849ab5",
+          "field_path": "output.free_cash_flow"
+        }
+      },
+      {
+        "label": "Dividend per share (annual)",
+        "value": 1.11,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "869a31849ab5",
+          "field_path": "output.dividend_per_share"
+        }
+      },
+      {
+        "label": "Last close price",
+        "value": 23.15999984741211,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "3202cff4796c",
+          "field_path": "output.last_close"
+        }
+      },
+      {
+        "label": "SMA-50",
+        "value": 25.07236568450928,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "3202cff4796c",
+          "field_path": "output.sma_50"
+        }
+      },
+      {
+        "label": "SMA-200",
+        "value": 25.74914849281311,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "3202cff4796c",
+          "field_path": "output.sma_200"
+        }
+      },
+      {
+        "label": "Percent off 52-week high",
+        "value": -0.19579401110925965,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "3202cff4796c",
+          "field_path": "output.pct_off_52w_high"
+        }
+      },
+      {
+        "label": "Annualized volatility",
+        "value": 0.21982258859884113,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "3202cff4796c",
+          "field_path": "output.annualized_volatility"
+        }
+      },
+      {
+        "label": "Total analysts covered",
+        "value": 34.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "8715d4cc970f",
+          "field_path": "output.analysts_total"
+        }
+      },
+      {
+        "label": "Bullish analyst count (strong buy + buy)",
+        "value": 20.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "8715d4cc970f",
+          "field_path": "output.bullish_count"
+        }
+      },
+      {
+        "label": "Hold analyst count",
+        "value": 14.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "8715d4cc970f",
+          "field_path": "output.hold_count"
+        }
+      },
+      {
+        "label": "Bearish analyst count",
+        "value": 0.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "8715d4cc970f",
+          "field_path": "output.bearish_count"
+        }
+      },
+      {
+        "label": "Bullish analyst ratio",
+        "value": 0.5882,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "8715d4cc970f",
+          "field_path": "output.bullish_ratio"
+        }
+      }
+    ],
+    "open_questions": [
+      "Was the 2022 dividend cut causally linked to the WarnerMedia/Discovery spin-off (a one-time portfolio restructuring) rather than an ongoing impairment of earnings power \u2014 and if so, does that distinction change the durability assessment?",
+      "Given free cash flow of $8.85B and a payout ratio of only 36.5%, what is the specific capital allocation reason management has cited for not resuming annual dividend increases over the past four years \u2014 debt reduction, capex, or other competing demands?",
+      "What is AT&T's current net debt level and debt maturity schedule, and is the frozen dividend primarily a function of debt service rather than earnings weakness?",
+      "Has AT&T management provided any forward guidance on dividend growth resumption that would allow the council to estimate when a new consecutive-growth streak could credibly begin?",
+      "The screen note says the streak estimate is 'immune to ex-date timing' and represents a floor \u2014 is it possible the methodology fails to credit partial-year data in 2022, and that a more precise calculation would show a longer or shorter streak than zero?",
+      "How does AT&T's $8.85B FCF compare to its total annual dividend obligation at the current $0.278/quarter rate, and what is the coverage ratio? (Cannot be computed by this council \u2014 requires share count.)",
+      "Are the projected forward dividends shown in the history (extending through 2026-04-10 at $0.278) based on declared amounts or extrapolated estimates, and if extrapolated, do they reflect any management guidance for an increase?"
+    ],
+    "created_at": "2026-06-17T13:08:09.785885Z"
+  },
+  "decision": {
+    "recommendation": "sell",
+    "confidence": 0.71,
+    "rationale": "## Decision: SELL (Confidence: 0.71)\n\n### Strategy Context\nThis council operates under the 'Dividend Aristocrats' strategy, whose defining criterion is a documented, unbroken streak of consecutive annual dividend increases\u2014at least 25 years. That criterion is the load-bearing pillar of the thesis; all other metrics are necessary but not sufficient.\n\n---\n\n### Screen Outcome\n\nAT&T passes three of four screen criteria but **fails the critical one**:\n\n- **Min dividend yield**: PASSED \u2014 observed 4.79% vs. 2.5% threshold *(call_id: 6c5eeff7fa1b, criteria[0].passed = true; observed: 6c5eeff7fa1b, criteria[0].observed = 0.0479274614556628)*\n- **Max payout ratio**: PASSED \u2014 observed 36.5% vs. 75% ceiling *(call_id: 6c5eeff7fa1b, criteria[1].passed = true; observed: 6c5eeff7fa1b, criteria[1].observed = 0.3651315789473685)*\n- **Min market cap**: PASSED \u2014 $160.9B vs. $10B threshold *(call_id: 6c5eeff7fa1b, criteria[2].passed = true; observed: 6c5eeff7fa1b, criteria[2].observed = 160923516928.0)*\n- **Min dividend growth streak**: **FAILED** \u2014 observed 0.0 years vs. 25-year threshold *(call_id: 6c5eeff7fa1b, criteria[3].passed = false; observed: 6c5eeff7fa1b, criteria[3].observed = 0.0)*\n\nThe strategy policy is explicit: `partial_pass_allows_hold=False`. A failed growth-streak criterion is disqualifying, and a HOLD is not a permissible outcome under the strategy rules.\n\n---\n\n### The Dividend Cut is Not Ambiguous\n\nThe dividend history (call_id: 2a029358c2b4) shows quarterly payments rising from $0.133 (1986) to $0.52 (through Q1 2022), then collapsing to $0.278 in April 2022\u2014a reduction of approximately 46%\u2014and remaining flat at $0.278 through the last projected payment on record (April 2026). This is not a timing artifact or a floor-estimate ambiguity: the per-payment rate dropped sharply and has not recovered. The screen note correctly labels the 0.0-year streak as a floor (the true streak could be longer, never shorter), but in this case the observable cut in the ledger definitively ends any prior unbroken streak. The screen's 0.0 finding is consistent with the raw history.\n\n---\n\n### Engaging the Critic's Counter-Case\n\nThe critic raises legitimate points, but several are governed by the hard rules of this council:\n\n1. **\"Index eligibility \u2260 investment thesis disqualification\"**: This is a philosophically valid distinction in general investing, but *not* under the Dividend Aristocrats strategy as implemented here. The strategy's purpose is precisely to hold companies that demonstrate multi-decade capital discipline through unbroken dividend increases. A company that cut its dividend by ~46% four years ago and has not resumed growth does not embody that discipline, regardless of the strategic rationale for the cut. The strategy does not contain a \"portfolio-restructuring carve-out.\"\n\n2. **\"Payout ratio is safe AND frozen dividend signals distress \u2014 these contradict each other\"**: The critic correctly identifies a tension in the bearish specialists' framing, but the resolution is straightforward: a frozen dividend with a low payout ratio signals that capital is being directed elsewhere (debt reduction, capex), not necessarily distress. This is a *neutral-to-caution* reading, not a bullish one. It does not restore the broken streak.\n\n3. **\"Technical weakness is an entry signal\"**: Under a dividend-growth framework, price below SMAs can be an entry signal\u2014but *only if* the dividend growth covenant is intact. When the covenant is broken, price weakness is a warning, not an opportunity. The stock sits 19.6% below its 52-week high *(call_id: 3202cff4796c, pct_off_52w_high = -0.19579401110925965)*, below its SMA-50 of $25.07 and SMA-200 of $25.75 *(call_id: 3202cff4796c, sma_50 = 25.07236568450928; sma_200 = 25.74914849281311)*. In the absence of a resumable growth streak, this represents sustained downtrend, not compressed opportunity.\n\n4. **\"Zero sell-side bearish ratings\"**: Analyst consensus is noted *(call_id: 8715d4cc970f, bullish_ratio = 0.5882; bearish_count = 0)*. This is constructive but does not override the hard screen failure under this strategy. Analyst ratings assess general investment merit; they do not apply the Dividend Aristocrats filter.\n\n5. **Critic's open questions**: The questions about WarnerMedia causality, debt service, management guidance on resumption, and FCF coverage ratio are genuinely unresolved. Per Hard Rule 6, these are not evidence\u2014they justify caution in confidence calibration but cannot be treated as facts supporting a bullish case.\n\n---\n\n### Fundamentals Are Not the Issue\n\nEPS of $3.04 *(call_id: 869a31849ab5, eps = 3.04)*, PE ratio of 7.62 *(call_id: 869a31849ab5, pe_ratio = 7.618421)*, and free cash flow of $8.85B *(call_id: 869a31849ab5, free_cash_flow = 8849000448.0)* are all consistent with a stable, cash-generative business. The payout ratio at 36.5% *(call_id: 869a31849ab5, payout_ratio = 0.3651315789473685)* leaves capacity for dividend growth. These facts are real\u2014but they describe a company that *could* resume dividend growth, not one that *has*. The strategy rewards demonstrated discipline, not potential.\n\n---\n\n### Confidence Calibration\n\nConfidence is set at 0.71 (not higher) because:\n- The dividend cut is unambiguous and the failed screen criterion is definitive under the strategy's rules.\n- However, the critic correctly identifies real FCF strength, a low payout ratio, and an active analyst consensus (20 bullish, 0 bearish) that temper conviction on the negative investment case.\n- Several material open questions remain unresolved (debt load, management guidance on dividend resumption, WarnerMedia linkage), which introduce genuine uncertainty about the forward trajectory.\n- The `partial_pass_allows_hold=False` policy removes HOLD as an option, so the decision must be binary between BUY and SELL; the strategy disqualification tips decisively to SELL.\n\n---\n\n### Dissent\n\nThe sentiment specialist rated neutral (not bearish), which is overridden by the hard strategy rule that a failed growth-streak criterion with `partial_pass_allows_hold=False` mandates a sell verdict.",
+    "dissent": [
+      "sentiment"
+    ],
+    "created_at": "2026-06-17T13:08:47.919773Z"
+  },
+  "veto_flags": [
+    {
+      "trigger": "data_quality",
+      "detail": "provenance violation: risk cited 'Percent off 52-week high'=-0.19579401110925965 with unknown call_id '<missing>'; unresolvable provenance path: technical cited 'Latest quarterly dividend (frozen rate since April 2022)'=0.278 at get_dividend_history \u2192 output[179].amount (call_id 2a029358c2b4) \u2014 index [179] out of range at 'output[179]' in 'output[179].amount'; unresolvable provenance path: risk cited 'Current dividend per share (trailing quarterly level)'=0.278 at get_dividend_history \u2192 output[183].amount (call_id 2a029358c2b4) \u2014 index [183] out of range at 'output[183]' in 'output[183].amount'; unresolvable provenance path: risk cited 'Last higher dividend per share (Q1 2022)'=0.52 at get_dividend_history \u2192 output[173].amount (call_id 2a029358c2b4) \u2014 index [173] out of range at 'output[173]' in 'output[173].amount'",
+      "created_at": "2026-06-17T13:08:47.923649Z"
+    }
+  ],
+  "provenance_audit": {
+    "figures_audited": 85,
+    "verified": 82,
+    "mismatch": 0,
+    "unresolvable": 3,
+    "unverifiable": 0,
+    "unit_scaled": 0,
+    "violations": [
+      "unresolvable provenance path: technical cited 'Latest quarterly dividend (frozen rate since April 2022)'=0.278 at get_dividend_history \u2192 output[179].amount (call_id 2a029358c2b4) \u2014 index [179] out of range at 'output[179]' in 'output[179].amount'",
+      "unresolvable provenance path: risk cited 'Current dividend per share (trailing quarterly level)'=0.278 at get_dividend_history \u2192 output[183].amount (call_id 2a029358c2b4) \u2014 index [183] out of range at 'output[183]' in 'output[183].amount'",
+      "unresolvable provenance path: risk cited 'Last higher dividend per share (Q1 2022)'=0.52 at get_dividend_history \u2192 output[173].amount (call_id 2a029358c2b4) \u2014 index [173] out of range at 'output[173]' in 'output[173].amount'"
+    ],
+    "unit_scaled_notes": []
+  }
+}

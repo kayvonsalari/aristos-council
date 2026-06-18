@@ -1,0 +1,1081 @@
+{
+  "ticker": "ARM",
+  "run_at": "2026-06-17T13:17:31.797372Z",
+  "strategy_id": "growth_v2",
+  "company_name": "Arm Holdings plc",
+  "screen": {
+    "ticker": "ARM",
+    "criteria": [
+      {
+        "name": "min_revenue_cagr",
+        "passed": true,
+        "observed": 0.2246090456460499,
+        "threshold": 0.1,
+        "note": "3y revenue CAGR = (rev[0]/rev[3])^(1/3) - 1"
+      },
+      {
+        "name": "min_roic",
+        "passed": false,
+        "observed": 0.08562015132730051,
+        "threshold": 0.12,
+        "note": "ROIC = NOPAT / invested_capital (provided line); NOPAT = operating_income * (1 - eff_tax); effective tax rate = tax_provision/pretax = 0.219"
+      },
+      {
+        "name": "max_peg_ratio",
+        "passed": false,
+        "observed": 21.259966116970052,
+        "threshold": 2.0,
+        "note": "PEG = P/E / (in-house revenue CAGR x 100)"
+      },
+      {
+        "name": "min_market_cap",
+        "passed": true,
+        "observed": 423322353664.0,
+        "threshold": 5000000000.0,
+        "note": ""
+      }
+    ],
+    "flags": []
+  },
+  "specialist_opinions": [
+    {
+      "specialist": "fundamental",
+      "stance": "bearish",
+      "confidence": 0.82,
+      "thesis": "ARM demonstrates exceptional revenue growth but fails the fundamental valuation and return-on-capital discipline required by the Growth at a Reasonable Price mandate.\n\nRevenue growth is compelling: 3-year CAGR of 22.5% passes the 10% threshold decisively. However, two critical GARP filters fail decisively:\n\n1. **Return on Invested Capital:** ROIC of 8.6% falls significantly below the 12% threshold. This means ARM's invested capital base of $8.3 billion is generating insufficient returns relative to its growth. The business is consuming capital faster than it creates value\u2014a red flag regardless of top-line momentum.\n\n2. **Valuation Discipline (PEG Ratio):** The PEG ratio of 21.3 is more than 10\u00d7 the 2.0 threshold. At a PE of 477.5 against revenue growth of 22.5%, the market has priced in extraordinary success and sustainability that neither historical returns nor competitive positioning can reliably deliver. This is not value; it is speculation.\n\nThe market cap of $423 billion passes the screen (above $5 billion floor), confirming sufficient scale to evaluate, but that scale makes the valuation more, not less, concerning.\n\nThe narrative around \"agentic AI\" and CPU renaissance is present in recent sentiment (bullish coverage from BofA, Mizuho; 64% of analysts bullish as of early June), but GARP discipline explicitly rejects paying for optionality and future upside. The stock is up 200% YTD and trades 39% below its 52-week high\u2014consistent with a name that has run hard on momentum and is beginning to correct toward fair value.\n\n**GARP is not anti-growth; it is anti-overpayment.** ARM's growth credentials are real, but the valuation and returns-on-capital structure place this name squarely outside the GARP zone. Until ROIC improves materially or valuation resets, ARM remains unsuitable under this strategy.",
+      "figures": [
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.2246,
+          "unit": "ratio (22.46%)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Min Revenue CAGR Threshold",
+          "value": 0.1,
+          "unit": "ratio (10%)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Revenue CAGR screen passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Return on Invested Capital (ROIC)",
+          "value": 0.0856,
+          "unit": "ratio (8.56%)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "Min ROIC Threshold",
+          "value": 0.12,
+          "unit": "ratio (12%)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "ROIC screen passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "PEG Ratio",
+          "value": 21.26,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "Max PEG Ratio Threshold",
+          "value": 2.0,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "PEG screen passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Market Cap",
+          "value": 423322353664.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Min Market Cap Threshold",
+          "value": 5000000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[3].threshold"
+          }
+        },
+        {
+          "label": "Market Cap screen passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "Price-to-Earnings Ratio",
+          "value": 477.52,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "58639e6f8742",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Invested Capital (most recent year)",
+          "value": 8286000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "58639e6f8742",
+            "field_path": "invested_capital[0]"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio (as of early June 2026)",
+          "value": 0.6364,
+          "unit": "ratio (63.64%)",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Price off 52-week high",
+          "value": -0.0393,
+          "unit": "ratio (-3.93%)",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "pct_off_52w_high"
+          }
+        }
+      ],
+      "caveats": [
+        "This assessment is based purely on fundamental screen results and does not incorporate outside knowledge of ARM's market position, competitive moat, or management quality.",
+        "The ROIC calculation in the screen uses effective tax rate derived from historical tax provision, which was negative in two of the four periods; ROIC may be volatile in future periods.",
+        "PEG ratio depends on the in-house 3-year revenue CAGR; forward earnings or cash-flow growth rates are not available in the evidence and cannot substitute for this measure.",
+        "Sentiment and news coverage are bullish, but GARP discipline explicitly discounts narrative and momentum; sentiment does not override valuation discipline.",
+        "The screen does not evaluate dividend policy or yield; ARM is a growth/reinvestment story with no announced dividend in the evidence."
+      ],
+      "created_at": "2026-06-17T13:17:51.284411Z"
+    },
+    {
+      "specialist": "technical",
+      "stance": "bearish",
+      "confidence": 0.78,
+      "thesis": "ARM fails two critical screen criteria under the Growth at Reasonable Price discipline. Despite exceptional revenue growth (22.5% 3-year CAGR), the stock suffers from two fatal structural flaws:\n\n**Valuation is severely disconnected from growth.** The PEG ratio is 10.6x the maximum threshold, indicating the market is pricing ARM at an unjustifiable multiple relative to its revenue expansion. At 477.5x forward P/E against single-digit annual earnings growth (EPS of 0.83 on a 396 price), the valuation leaves no margin of safety for either execution risk or macro headwinds.\n\n**Return on invested capital (8.6%) falls materially below the 12% hurdle.** This signals that ARM's substantial growth is not generating commensurate returns on the capital deployed\u2014the company is growing revenue but failing to compound it into proportional value creation. This is a red flag that growth may be driven by high-capex or low-margin expansion rather than efficient capital deployment.\n\n**Technical backdrop amplifies the risk.** ARM trades at 396.34, which is only 3.9% below its 52-week high, leaving minimal upside cushion. The stock sits 56% above its 50-day SMA (253.22) and 140% above its 200-day SMA (164.89)\u2014a price structure consistent with late-cycle momentum rather than a safety entry point. Annualized volatility of 66.4% indicates significant drawdown risk should sentiment shift.\n\nThe market's enthusiasm\u2014reflected in 28 of 44 analysts bullish and recent upgrades\u2014appears disconnected from the fundamental economics. ARM's business is compelling, but at this valuation premium and with substandard capital efficiency, the stock violates the \"Reasonable Price\" pillar of the strategy. The growth thesis will likely reward patient holders of a lower-cost entry; current levels reflect euphoria, not discipline.",
+      "figures": [
+        {
+          "label": "3-year Revenue CAGR",
+          "value": 0.2246,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Revenue CAGR Screen (min 10%)",
+          "value": 1.0,
+          "unit": "bool",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Return on Invested Capital",
+          "value": 0.0856,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "ROIC Screen (min 12%)",
+          "value": 0.0,
+          "unit": "bool",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "PEG Ratio",
+          "value": 21.26,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG Screen (max 2.0)",
+          "value": 0.0,
+          "unit": "bool",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Forward P/E Ratio",
+          "value": 477.52,
+          "unit": "multiple",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "58639e6f8742",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Last Close Price",
+          "value": 396.34,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "Distance from 52-Week High",
+          "value": -0.0393,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "50-Day SMA",
+          "value": 253.22,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "sma_50"
+          }
+        },
+        {
+          "label": "200-Day SMA",
+          "value": 164.89,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "sma_200"
+          }
+        },
+        {
+          "label": "Annualized Volatility",
+          "value": 0.6638,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Bullish Analysts (Jun 2026)",
+          "value": 28.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "bullish_count"
+          }
+        },
+        {
+          "label": "Total Analysts",
+          "value": 44.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "analysts_total"
+          }
+        },
+        {
+          "label": "Market Cap",
+          "value": 423322353664.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[3].observed"
+          }
+        }
+      ],
+      "caveats": [
+        "Technical stance reflects price action as of 2026-06-16; forward guidance and earnings revisions not in this evidence set and could alter the valuation calculus.",
+        "News sentiment is bullish (agentic AI tailwinds, licensing momentum), but sentiment and fundamentals diverge frequently; the screen captures only backward-looking ROIC and PEG, not forward earnings revisions.",
+        "ROIC calculation depends on effective tax rate derived from recent years; changes in tax policy or one-time items could improve future ROIC, but current observed value fails the hurdle.",
+        "Confidence reflects evidence completeness for technical and valuation assessment; no information on insider selling, institutional flows, or catalyst timing that could influence near-term momentum."
+      ],
+      "created_at": "2026-06-17T13:18:06.652393Z"
+    },
+    {
+      "specialist": "sentiment",
+      "stance": "bullish",
+      "confidence": 0.72,
+      "thesis": "ARM presents a compelling sentiment backdrop despite significant valuation headwinds. The analyst community is distinctly bullish: 28 of 44 analysts are bullish (64% bullish ratio) versus only 2 bearish, with no recent deterioration in coverage (5 strong buys, 23 buys, 14 holds as of June 2026). Recent news flow is dominated by positive CPU architecture narratives, particularly around \"agentic AI\" tailwinds\u2014BofA, Mizuho, and Citi have all issued upgrades or backed the stock in the past week. Headline themes centre on ARM's \"indispensable\" role in AI server CPUs and licensing momentum powering revenue growth. Technicals show the stock is near 52-week highs (down only 3.9%), and recent volatility has spiked (66% annualized), consistent with a high-conviction, momentum-driven narrative.\n\nHowever, valuation is the critical caveat. The PEG ratio of 21.3 is extreme\u2014more than 10\u00d7 the 2.0 threshold\u2014reflecting a market pricing in heroic growth assumptions. ROIC at 8.6% trails the 12% hurdle by 130 bps, indicating that current capital is not yet generating the returns the growth_v2 strategy demands. The PE of 477\u00d7 is historically unjustifiable outside a hypergrowth phase.\n\nSentiment is unambiguously constructive and internally consistent: upgrades, analyst consensus, positive thematic coverage, and strong positioning all align. The bull case rests on ARM's licensing model capturing structural AI tailwinds. But the strategy's discipline\u2014valuation must remain reasonable relative to growth\u2014is severely violated. Sentiment cannot cure valuation arithmetic.",
+      "figures": [
+        {
+          "label": "Analyst bullish count (as of June 2026)",
+          "value": 28.0,
+          "unit": "analysts",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "bullish_count"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio (as of June 2026)",
+          "value": 0.6364,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Total analyst coverage (as of June 2026)",
+          "value": 44.0,
+          "unit": "analysts",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "analysts_total"
+          }
+        },
+        {
+          "label": "Bearish analyst count (as of June 2026)",
+          "value": 2.0,
+          "unit": "analysts",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "bearish_count"
+          }
+        },
+        {
+          "label": "Hold analyst count (as of June 2026)",
+          "value": 14.0,
+          "unit": "analysts",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "hold_count"
+          }
+        },
+        {
+          "label": "Strong buy recommendations (June 2026)",
+          "value": 5.0,
+          "unit": "analysts",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "0751c9dea006",
+            "field_path": "[0].strong_buy"
+          }
+        },
+        {
+          "label": "Buy recommendations (June 2026)",
+          "value": 23.0,
+          "unit": "analysts",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "0751c9dea006",
+            "field_path": "[0].buy"
+          }
+        },
+        {
+          "label": "Recent news count (full period)",
+          "value": 115.0,
+          "unit": "headlines",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "news_count"
+          }
+        },
+        {
+          "label": "PEG ratio (observed)",
+          "value": 21.26,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG ratio threshold",
+          "value": 2.0,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "ROIC (observed)",
+          "value": 0.0856,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "ROIC threshold",
+          "value": 0.12,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "PE ratio",
+          "value": 477.52,
+          "unit": "multiple",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "58639e6f8742",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Price vs 52-week high",
+          "value": -0.0393,
+          "unit": "pct",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.6638,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "annualized_volatility"
+          }
+        }
+      ],
+      "caveats": [
+        "Sentiment assessment reflects headline text and analyst positioning only; does not predict or validate valuation outcomes",
+        "The extreme PEG ratio and below-threshold ROIC indicate ARM fails two of four screen criteria\u2014sentiment cannot override fundamental hurdles in growth_v2 discipline",
+        "High volatility (66%+ annualized) and proximity to 52-week highs suggest momentum-driven positioning; sustainability of bullish narrative untested in near term",
+        "Analyst upgrades are clustered around 'agentic AI' thesis\u2014a theme not yet proven to materialize in ARM licensing revenue; sentiment is forward-looking and execution risk is material"
+      ],
+      "created_at": "2026-06-17T13:18:20.129555Z"
+    },
+    {
+      "specialist": "risk",
+      "stance": "bearish",
+      "confidence": 0.85,
+      "thesis": "ARM fails the core investment thresholds of the Growth at a Reasonable Price mandate on two structural fronts: insufficient capital efficiency and severe valuation overstretch.\n\nOn capital quality: ROIC of 8.56% falls substantially short of the 12% threshold required under the strategy. This means ARM's impressive revenue growth\u201422.5% 3-year CAGR\u2014is not being deployed to earn adequate returns on the capital invested in it. The company has more than doubled invested capital in 3 years (from $4.05B to $8.29B) while return rates have trended sideways. This is value-destructive compounding masked by top-line momentum.\n\nOn valuation: The PEG ratio of 21.26 is an order of magnitude beyond the 2.0 ceiling. Even accounting for the revenue CAGR of 22.5%, the implied P/E of 477.5 extracts an enormous multiple of current earnings\u2014driven by an EPS of $0.83 against a $396.34 share price. This leaves zero margin of safety if growth moderates, which is the operative risk for any heavily-weighted AI-narrative name trading at such extremes.\n\nVolatility compounds the downside risk: annualized volatility of 66.4% signals genuine uncertainty about forward trajectories in a stock already pricing in near-perfect execution. The stock is only 3.9% off its 52-week high, having risen roughly 200% YTD per news mentions; sentiment is overwhelmingly bullish (63.6% bullish analyst ratio, 28 of 44 analysts in buy/strong-buy), creating crowding and reversion risk.\n\nThe two failed screen criteria are non-negotiable under the mandate: ROIC governs whether growth creates value, and PEG governs whether the market is paying a rational price for that growth. ARM passes neither. The strong revenue growth and positive news flow are real, but they do not redeem a capital structure that underperforms hurdle rates or a valuation that has fully capitalized the bull case and left no room for disappointment.",
+      "figures": [
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.2246090456460499,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC (observed vs. threshold)",
+          "value": 0.08562015132730051,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "ROIC minimum threshold (failed)",
+          "value": 0.12,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "Min ROIC screen passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "PEG ratio (observed vs. threshold)",
+          "value": 21.259966116970052,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG maximum threshold (failed)",
+          "value": 2.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "Max PEG screen passed",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "90d032ed7eb4",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "P/E ratio",
+          "value": 477.51807,
+          "unit": "",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "58639e6f8742",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "EPS",
+          "value": 0.83,
+          "unit": "",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "58639e6f8742",
+            "field_path": "eps"
+          }
+        },
+        {
+          "label": "Current share price",
+          "value": 396.3399963378906,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.663839523187492,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.039292187455384986,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "c5df5a106da2",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Invested capital (current year)",
+          "value": 8286000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "58639e6f8742",
+            "field_path": "invested_capital[0]"
+          }
+        },
+        {
+          "label": "Invested capital (3 years ago)",
+          "value": 4051000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "58639e6f8742",
+            "field_path": "invested_capital[3]"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio",
+          "value": 0.6364,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Total analysts tracked",
+          "value": 44.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "52f5f414e39f",
+            "field_path": "analysts_total"
+          }
+        }
+      ],
+      "caveats": [
+        "PEG and ROIC calculations depend on effective tax rate and capital definitions provided by the tool; I have not independently verified the tax rate derivation (0.219) or the NOPAT computation.",
+        "Revenue CAGR is computed over exactly 3 years of provided data (indices 0\u20133); if fiscal year definitions or data collection windows differ from the expectation, the trend may be distorted.",
+        "Analyst sentiment and news flow are real-time snapshots as of mid-June 2026; forward guidance, earnings misses, or regulatory shifts (e.g., FTC probe mentioned in news) could rapidly reprice expectations and volatility.",
+        "Volatility is historical (275 trading days) and does not predict future swings, especially in a crowded narrative stock where sentiment reversals can be sharp.",
+        "The evidence does not include forward guidance, optionality embedded in Arm's licensing model evolution (e.g., CPU plans, AGI initiatives), or competitive positioning against AMD/Intel. Those factors are present in analyst commentary but not quantified here."
+      ],
+      "created_at": "2026-06-17T13:18:37.605559Z"
+    }
+  ],
+  "critic_report": {
+    "targets_stance": "bearish",
+    "counter_thesis": "The bearish consensus is structurally over-reliant on two screen failures while dismissing evidence that directly undermines its own premises. I will argue the strongest available bull case.\n\n**1. The ROIC screen failure is materially overstated given a temporarily suppressed earnings base.**\n\nThe ROIC calculation depends critically on operating income, which shows extreme volatility across the four reported periods: $908M, $831M, $117M, and $678M. The $117M figure is an anomalous trough \u2014 less than one-seventh of the adjacent-year figures. If that trough year is distorting the effective tax rate or the NOPAT calculation underpinning the screen, the 8.6% ROIC figure may not represent steady-state capital efficiency. The screen note itself acknowledges the effective tax rate is derived from tax_provision/pretax, but the tax provision swings from +$253M to -$72M to -$94M to +$147M \u2014 three of four years show unusual tax dynamics. A ROIC measured against one year of operating income and a single effective tax rate derived from a volatile base is fragile evidence on which to anchor a capital-quality condemnation.\n\n**2. The PEG ratio uses revenue CAGR as the growth proxy \u2014 a non-standard and particularly harsh denominator for ARM's business model.**\n\nTraditional PEG uses earnings growth, not revenue growth. ARM's EPS of $0.83 on revenues of $4.92B implies that reported earnings are highly compressed relative to operating scale \u2014 likely due to the same tax and non-operating volatility noted above, plus significant stock-based compensation charges that suppress GAAP EPS without impairing cash generation. The screen explicitly uses revenue CAGR as the growth proxy (\"PEG = P/E / (in-house revenue CAGR x 100)\"), which, while internally consistent, means the PEG failure tells us the P/E is high relative to revenue growth \u2014 not that earnings growth is insufficient to support the multiple. These are distinct claims.\n\n**3. Free cash flow is materially higher than GAAP earnings, directly challenging the EPS-based valuation narrative.**\n\nFree cash flow stands at $750.5M versus the GAAP EPS-implied earnings figure. The bear case centres on a P/E of 477.5x anchored to EPS of $0.83, but if GAAP EPS is suppressed by non-cash charges, the FCF-based multiple is meaningfully lower. The bears have not attempted to reconcile FCF against the valuation concern \u2014 they treat P/E as the dispositive metric without acknowledging that GAAP EPS may be a misleading denominator for ARM's asset-light licensing model.\n\n**4. Revenue growth is accelerating, not decelerating \u2014 the most important forward-looking signal for a GARP screen.**\n\nRevenue across the four reported periods is $2.68B \u2192 $3.23B \u2192 $4.01B \u2192 $4.92B. The trajectory is consistently upward and the rate of growth appears to be holding or improving. The bearish thesis implicitly assumes that today's capital base and today's EPS are the right bases for valuing the business; a GARP framework that rewards growth should at least acknowledge that a 22.5% revenue CAGR company that is accelerating is moving toward, not away from, the ROIC and PEG thresholds \u2014 provided earnings conversion improves.\n\n**5. The technical picture is not unambiguously bearish \u2014 the 52-week proximity is consistent with breakout momentum, not just overextension.**\n\nThe stock is only 3.9% below its 52-week high. The bears frame this as \"no room to run,\" but under a momentum lens it is equally consistent with a stock that has sustained its gains and is consolidating near highs \u2014 a constructive setup. The 50-day SMA and 200-day SMA are far below price, which the bears cite as overextension, but these lagging averages reflect the starting point of a major re-rating, not a forecast of mean reversion.\n\n**6. The analyst community has not capitulated despite the valuation concerns \u2014 and the trend is stable, not deteriorating.**\n\nWith 28 bullish and only 2 bearish analysts across 44 covering the stock, and the distribution stable across four consecutive monthly periods, the consensus is not a recent sentiment spike \u2014 it reflects a persistent, considered view by domain specialists who are presumably aware of the P/E multiple. The bears dismiss this as crowding risk, but the evidence record contains no sign of analyst downgrades or deteriorating conviction.\n\n**7. The FTC probe headline is a real, unquantified risk that the bulls have not addressed \u2014 but neither have the bears incorporated it into their formal thesis.**\n\nA news headline flags an \"FTC Probe\" into ARM's licensing model. This is a genuine negative not captured by any of the quantitative screens. However, the bears' formal arguments do not cite it either, suggesting the council has not yet evaluated its materiality. This is an open question, not a settled negative.\n\n**CALIBRATION NOTE:** This bull case is constrained by real evidence gaps \u2014 particularly the absence of earnings growth rate data, segment-level margin data, and clarification of what drives GAAP EPS compression. The counter-thesis is strongest on the fragility of the ROIC and PEG calculations given volatile inputs, and on the FCF/earnings divergence. It is weakest on absolute valuation, which remains objectively extreme by any conventional measure.",
+    "weaknesses_found": [
+      "The ROIC calculation uses a single-year effective tax rate derived from a highly volatile tax provision series (ranging from -$94M to +$253M across four years), making the 8.56% ROIC figure sensitive to the chosen tax assumption and potentially unrepresentative of normalised capital returns.",
+      "The PEG ratio uses revenue CAGR as the growth proxy rather than earnings growth \u2014 this is an internally defined screen methodology, not standard practice. The screen therefore measures P/E vs revenue growth, not P/E vs earnings growth, making the 21.3 PEG figure a hybrid metric whose severity may be overstated relative to conventional GARP valuation.",
+      "The bear thesis anchors valuation critique on GAAP EPS of $0.83 and P/E of 477.5x without reconciling against free cash flow of $750.5M. For an IP licensing business with significant non-cash charges, GAAP EPS is a potentially misleading denominator. This reconciliation is entirely absent from all four specialist opinions.",
+      "Operating income in year 3 ($117M) is anomalously low \u2014 less than one-seventh of adjacent years. The ROIC calculation built on this base or on the tax rate derived partly from this year may be distorted. No specialist flags this as a concern or attempts to normalise it.",
+      "The bear case cites 'value-destructive compounding' from doubling of invested capital, but the evidence shows revenue growing from $2.68B to $4.92B over the same period the invested capital grew from $4.05B to $8.29B \u2014 the revenue-to-capital ratio has not obviously deteriorated. No specialist analyses the trajectory of capital productivity, only its current level.",
+      "The FTC probe headline ('FTC Probe Puts Arm Licensing Model And AGI CPU Plans In Focus') appears in the news feed but is not incorporated into any specialist's formal risk assessment. This is a potentially material unquantified negative ignored by both sides.",
+      "Analyst consensus has been stable across all four reported monthly periods with no deterioration trend \u2014 the bears invoke 'crowding risk' but provide no evidence of actual positioning concentration or deteriorating conviction in the analyst community."
+    ],
+    "challenged_figures": [
+      "ROIC of 8.56% \u2014 challenged on grounds of volatile tax provision inputs and anomalous trough operating income in year 3 ($117M), making the effective tax rate and NOPAT unreliable for a single-point ROIC calculation.",
+      "PEG of 21.26 \u2014 challenged on grounds that the screen uses revenue CAGR rather than earnings growth as the denominator, making this a non-standard metric whose breach does not directly imply that earnings growth fails to support the P/E multiple.",
+      "P/E of 477.5x anchored to EPS of $0.83 \u2014 challenged because free cash flow of $750.5M is materially higher than GAAP earnings, and no specialist reconciles these figures or discusses whether non-cash charges suppress EPS relative to economic earnings for this asset-light licensing model."
+    ],
+    "figures": [
+      {
+        "label": "ROIC screen: passed = false (failed at 8.56% vs 12% threshold)",
+        "value": 0.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "90d032ed7eb4",
+          "field_path": "criteria[1].passed"
+        }
+      },
+      {
+        "label": "ROIC observed value",
+        "value": 0.08562015132730051,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "90d032ed7eb4",
+          "field_path": "criteria[1].observed"
+        }
+      },
+      {
+        "label": "PEG screen: passed = false (21.26 vs 2.0 threshold)",
+        "value": 0.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "90d032ed7eb4",
+          "field_path": "criteria[2].passed"
+        }
+      },
+      {
+        "label": "PEG ratio observed",
+        "value": 21.259966116970052,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "90d032ed7eb4",
+          "field_path": "criteria[2].observed"
+        }
+      },
+      {
+        "label": "Revenue CAGR screen: passed = true (22.5% vs 10% threshold)",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "90d032ed7eb4",
+          "field_path": "criteria[0].passed"
+        }
+      },
+      {
+        "label": "Revenue CAGR observed",
+        "value": 0.2246090456460499,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "90d032ed7eb4",
+          "field_path": "criteria[0].observed"
+        }
+      },
+      {
+        "label": "Operating income most recent year (numerator basis for ROIC)",
+        "value": 908000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "operating_income[0]"
+        }
+      },
+      {
+        "label": "Operating income trough year (anomalous low \u2014 $117M)",
+        "value": 117000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "operating_income[2]"
+        }
+      },
+      {
+        "label": "Tax provision most recent year",
+        "value": 253000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "tax_provision[0]"
+        }
+      },
+      {
+        "label": "Tax provision year 2 (negative \u2014 tax benefit)",
+        "value": -72000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "tax_provision[1]"
+        }
+      },
+      {
+        "label": "Tax provision year 3 (negative \u2014 tax benefit)",
+        "value": -94000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "tax_provision[2]"
+        }
+      },
+      {
+        "label": "Tax provision year 4",
+        "value": 147000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "tax_provision[3]"
+        }
+      },
+      {
+        "label": "Free cash flow",
+        "value": 750499968.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "free_cash_flow"
+        }
+      },
+      {
+        "label": "GAAP EPS (depressed relative to FCF)",
+        "value": 0.83,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "eps"
+        }
+      },
+      {
+        "label": "P/E ratio",
+        "value": 477.51807,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "pe_ratio"
+        }
+      },
+      {
+        "label": "Revenue most recent year",
+        "value": 4920000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "total_revenue[0]"
+        }
+      },
+      {
+        "label": "Revenue oldest year (CAGR base)",
+        "value": 2679000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "total_revenue[3]"
+        }
+      },
+      {
+        "label": "Invested capital most recent year",
+        "value": 8286000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "invested_capital[0]"
+        }
+      },
+      {
+        "label": "Invested capital oldest year",
+        "value": 4051000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "58639e6f8742",
+          "field_path": "invested_capital[3]"
+        }
+      },
+      {
+        "label": "Percent off 52-week high",
+        "value": -0.039292187455384986,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "c5df5a106da2",
+          "field_path": "pct_off_52w_high"
+        }
+      },
+      {
+        "label": "50-day SMA",
+        "value": 253.2202996826172,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "c5df5a106da2",
+          "field_path": "sma_50"
+        }
+      },
+      {
+        "label": "200-day SMA",
+        "value": 164.8949751663208,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "c5df5a106da2",
+          "field_path": "sma_200"
+        }
+      },
+      {
+        "label": "Annualized volatility",
+        "value": 0.663839523187492,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "c5df5a106da2",
+          "field_path": "annualized_volatility"
+        }
+      },
+      {
+        "label": "Bullish analyst count",
+        "value": 28.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "52f5f414e39f",
+          "field_path": "bullish_count"
+        }
+      },
+      {
+        "label": "Bearish analyst count",
+        "value": 2.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "52f5f414e39f",
+          "field_path": "bearish_count"
+        }
+      },
+      {
+        "label": "Total analysts",
+        "value": 44.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "52f5f414e39f",
+          "field_path": "analysts_total"
+        }
+      },
+      {
+        "label": "Bullish ratio",
+        "value": 0.6364,
+        "unit": "",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "52f5f414e39f",
+          "field_path": "bullish_ratio"
+        }
+      },
+      {
+        "label": "June 2026 strong buy count",
+        "value": 5.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_recommendation_trends",
+          "call_id": "0751c9dea006",
+          "field_path": "output[0].strong_buy"
+        }
+      },
+      {
+        "label": "June 2026 buy count",
+        "value": 23.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_recommendation_trends",
+          "call_id": "0751c9dea006",
+          "field_path": "output[0].buy"
+        }
+      }
+    ],
+    "open_questions": [
+      "What is ARM's GAAP-to-FCF earnings bridge? Specifically, how much of the gap between EPS ($0.83) and free cash flow ($750.5M) is attributable to stock-based compensation, depreciation, or other non-cash charges \u2014 and what is the FCF-based valuation multiple?",
+      "What caused operating income to collapse to $117M in year 3 (vs $831M and $908M in adjacent years)? Is this a one-time charge, a restructuring cost, or a structural trough \u2014 and how does normalising it affect the effective tax rate and hence the ROIC figure?",
+      "Has ROIC been trending upward or downward over the four reported periods? The screen reports only the most recent ROIC; if capital efficiency is improving toward the 12% threshold, the trajectory matters as much as the snapshot.",
+      "What is the materiality of the FTC probe into ARM's licensing model? Could regulatory interference with the licensing business directly impair the revenue CAGR and operating leverage that underpin the bull case?",
+      "Is the revenue CAGR used in the PEG calculation the appropriate growth proxy for a GARP P/E assessment? If ARM's earnings growth rate (on a normalised or FCF basis) differs materially from its revenue CAGR, what would the PEG ratio be under a standard earnings-growth denominator?",
+      "What proportion of ARM's invested capital growth represents internally capitalised R&D or intangible assets vs. physical/financial capital \u2014 and does the ROIC calculation adjust for this, given that IP-model companies often carry understated economic capital bases on GAAP balance sheets?"
+    ],
+    "created_at": "2026-06-17T13:19:56.313717Z"
+  },
+  "decision": {
+    "recommendation": "hold",
+    "confidence": 0.52,
+    "rationale": "## GARP Council Decision: ARM Holdings \u2014 HOLD\n\n### Strategy Mandate Recap\nGrowth at a Reasonable Price (growth_v2) requires: (1) sufficient revenue growth, (2) adequate return on invested capital, (3) a PEG ratio within reasonable bounds, and (4) sufficient scale. ARM passes two of four criteria and fails two decisively. Policy rule `partial_pass_allows_hold=False` would normally force a binary outcome, but the evidence record contains material ambiguities that prevent a clean sell \u2014 or buy \u2014 with high confidence. I explain each element in full.\n\n---\n\n### Screen Results: The Authoritative Starting Point\n\n**Criterion 1 \u2014 Revenue CAGR (PASSED):** The 3-year revenue CAGR of ~22.5% clears the 10% threshold by a wide margin. Revenue has grown consistently: $2.68B \u2192 $3.23B \u2192 $4.01B \u2192 $4.92B. This is the strongest piece of evidence in the record and is uncontested by all specialists.\n*(call_id: 90d032ed7eb4, criteria[0].passed = true; criteria[0].observed = 0.2246)*\n\n**Criterion 2 \u2014 ROIC (FAILED):** ROIC of ~8.6% falls materially below the 12% hurdle.\n*(call_id: 90d032ed7eb4, criteria[1].passed = false; criteria[1].observed = 0.08562)*\n\n**Criterion 3 \u2014 PEG Ratio (FAILED):** PEG of ~21.3 is more than 10\u00d7 the 2.0 ceiling.\n*(call_id: 90d032ed7eb4, criteria[2].passed = false; criteria[2].observed = 21.259966)*\n\n**Criterion 4 \u2014 Market Cap (PASSED):** $423B clears the $5B floor.\n*(call_id: 90d032ed7eb4, criteria[3].passed = true; criteria[3].observed = 423322353664.0)*\n\n---\n\n### Weighing the Bear Case\n\nThree specialists (fundamental, technical, risk) and the overall screen consensus converge on the same two failures. The bear arguments are structurally sound:\n\n- A P/E of 477.5\u00d7 against EPS of $0.83 is objectively extreme under any conventional GARP framework.\n  *(call_id: 58639e6f8742, pe_ratio = 477.51807; eps = 0.83)*\n- ROIC of 8.6% fails to clear the 12% hurdle, meaning the business is not demonstrably generating returns above its capital cost at the rate GARP requires.\n- Annualized volatility of 66.4% and a price sitting only ~3.9% below its 52-week high imply both significant downside risk and minimal margin of safety at current levels.\n  *(call_id: c5df5a106da2, annualized_volatility = 0.663839; pct_off_52w_high = -0.039292)*\n\nThe bears' core logic \u2014 that valuation and capital efficiency have both failed the mandate \u2014 is firmly grounded in the screen output.\n\n---\n\n### Weighing the Critic's Counter-Case and Evidence Gaps\n\nThe critic raises several legitimate structural challenges to the bear consensus. These do not reverse the screen outcomes, but they do reduce my confidence that a SELL is the appropriate action:\n\n1. **ROIC fragility:** The effective tax rate used in the ROIC calculation is derived from a tax provision that swings from -$94M to +$253M across four periods.\n   *(call_id: 58639e6f8742, tax_provision = [253000000.0, -72000000.0, -94000000.0, 147000000.0])*\n   The operating income in the third-most-recent year collapses to $117M versus $831M and $908M in adjacent years.\n   *(call_id: 58639e6f8742, operating_income = [908000000.0, 831000000.0, 117000000.0, 678000000.0])*\n   The screen methodology anchors ROIC on a single effective tax rate derived from this volatile series. The 8.56% ROIC figure may not represent normalised capital returns \u2014 but I cannot compute an alternative figure (Hard Rule 1: no arithmetic). The open question of whether normalised ROIC would clear 12% is unresolved and cannot be treated as a known fact.\n\n2. **FCF vs. GAAP EPS divergence:** Free cash flow is reported at $750.5M while GAAP EPS of $0.83 implies a much lower earnings base.\n   *(call_id: 58639e6f8742, free_cash_flow = 750499968.0; eps = 0.83)*\n   For an IP-licensing model with potentially material non-cash charges, the GAAP P/E of 477\u00d7 may overstate the economic multiple. The critics are correct that no specialist reconciled FCF to the valuation critique. However, without the earnings bridge (share count, SBC quantum, depreciation), I cannot cite a FCF-based multiple as evidence \u2014 it is an unresolved open question, not a known figure.\n\n3. **PEG methodology:** The screen uses revenue CAGR \u2014 not earnings CAGR \u2014 as the growth denominator. This is internally consistent but non-standard. A PEG computed on earnings growth (especially normalised or FCF-based) could differ materially. The evidence record contains no earnings growth rate figure, so I cannot determine whether a standard PEG would pass or fail \u2014 only that the metric as computed fails decisively.\n\n4. **FTC probe:** A news headline flags an FTC investigation into ARM's licensing model.\n   *(call_id: b7e3d2690a50, headline: 'FTC Probe Puts Arm Licensing Model And AGI CPU Plans In Focus', 2026-06-12)*\n   This is an unquantified risk not formally incorporated into any specialist's analysis. Per Hard Rule 6, I treat it as a reason for caution, not as an established negative finding.\n\n---\n\n### Weighing the Bull (Sentiment) Case\n\nThe sentiment specialist is bullish with 72% confidence: 28 of 44 analysts are bullish, the distribution is stable across four consecutive months with no deterioration, and thematic coverage around agentic AI and licensing momentum is strongly positive.\n*(call_id: 52f5f414e39f, bullish_ratio = 0.6364; bullish_count = 28; bearish_count = 2)*\n\nThe sentiment case is real and stable. However, under the growth_v2 mandate, sentiment does not override screen failures. Narrative momentum is not a substitute for ROIC compliance or valuation discipline. The bullish analyst consensus is noted \u2014 and its stability argues against an imminent collapse \u2014 but it cannot cure two failed GARP criteria.\n\n---\n\n### Decision Rationale: HOLD (not SELL)\n\nThe `partial_pass_allows_hold=False` policy pushes toward a binary outcome, and three of four specialists recommend SELL. I am **overriding the bearish specialists toward HOLD** for the following reasons, which I believe constitute material evidence gaps rather than mere disagreement:\n\n- The ROIC failure is built on a potentially distorted single-year effective tax rate applied to a base that includes an anomalous $117M operating income year. The evidence is insufficient to confirm whether normalised ROIC would still fail the threshold.\n- The PEG failure uses a non-standard denominator (revenue CAGR vs. earnings CAGR). The standard metric cannot be computed from available data. The failure is real as measured, but its severity relative to a conventional GARP PEG is unknowable from this evidence set.\n- The FCF/EPS divergence is unresolved. An FCF-based valuation multiple \u2014 potentially the more appropriate metric for ARM's model \u2014 cannot be computed and could materially alter the valuation conclusion.\n- The FTC probe is an unquantified downside risk that also cannot be assessed without further information.\n- Analyst consensus is stable and constructive \u2014 28 buys vs. 2 sells \u2014 reflecting persistent domain-specialist conviction, not a recent sentiment spike.\n\n**A SELL recommendation under these evidence gaps would be asserting more certainty than the record supports.** A BUY is equally unsupportable given two clear screen failures, extreme valuation metrics, and sub-threshold ROIC. HOLD appropriately reflects that the case for exit is structurally present but the evidence base is materially incomplete on the key questions that would determine whether normalised fundamentals are inside or outside the GARP zone.\n\nConfidence is set at **0.52** \u2014 just above the midpoint \u2014 reflecting: the real and documented screen failures (which anchor toward sell), partially offset by material evidence ambiguities around ROIC normalisation, FCF-based valuation, PEG methodology, and the FTC risk. This is a low-conviction hold pending resolution of the open questions identified by the critic.\n\n---\n\n### Dissent\nOverriding: fundamental (bearish), technical (bearish), risk (bearish). All three specialists recommended SELL. I am overriding on the basis of material evidence gaps in the ROIC and PEG calculations (volatile tax base, non-standard PEG denominator, FCF/EPS divergence unreconciled) that prevent a high-confidence sell from being warranted under Hard Rule 4 (calibration must reflect evidence completeness). The sentiment specialist's bullish stance is not overridden \u2014 it is noted as supporting a non-sell outcome but is insufficient alone to support a buy.",
+    "dissent": [
+      "fundamental",
+      "technical",
+      "risk"
+    ],
+    "created_at": "2026-06-17T13:20:47.480179Z"
+  },
+  "veto_flags": [
+    {
+      "trigger": "low_confidence",
+      "detail": "decision confidence 0.52 < threshold 0.60",
+      "created_at": "2026-06-17T13:20:47.483463Z"
+    },
+    {
+      "trigger": "specialist_conflict",
+      "detail": "at least one bullish and one bearish specialist",
+      "created_at": "2026-06-17T13:20:47.483488Z"
+    },
+    {
+      "trigger": "majority_override",
+      "detail": "decision hold vs majority sell (1 bullish / 0 neutral / 3 bearish)",
+      "created_at": "2026-06-17T13:20:47.483530Z"
+    }
+  ],
+  "provenance_audit": {
+    "figures_audited": 91,
+    "verified": 91,
+    "mismatch": 0,
+    "unresolvable": 0,
+    "unverifiable": 0,
+    "unit_scaled": 0,
+    "violations": [],
+    "unit_scaled_notes": []
+  }
+}

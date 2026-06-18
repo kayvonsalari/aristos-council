@@ -1,0 +1,767 @@
+{
+  "ticker": "000660.KS",
+  "run_at": "2026-06-16T15:56:11.669868Z",
+  "strategy_id": "growth_v1",
+  "company_name": "SK hynix Inc.",
+  "screen": {
+    "ticker": "000660.KS",
+    "criteria": [
+      {
+        "name": "min_revenue_cagr",
+        "passed": true,
+        "observed": 0.29606775079449665,
+        "threshold": 0.1,
+        "note": "3y revenue CAGR = (rev[0]/rev[3])^(1/3) - 1"
+      },
+      {
+        "name": "min_roic",
+        "passed": true,
+        "observed": 0.28140259767871223,
+        "threshold": 0.12,
+        "note": "ROIC = NOPAT / invested_capital (provided line); NOPAT = operating_income * (1 - eff_tax); effective tax rate = tax_provision/pretax = 0.149"
+      },
+      {
+        "name": "max_peg_ratio",
+        "passed": null,
+        "observed": null,
+        "threshold": 2.0,
+        "note": "no positive P/E (negative or missing earnings); PEG undefined"
+      },
+      {
+        "name": "min_market_cap",
+        "passed": null,
+        "observed": null,
+        "threshold": 5000000000.0,
+        "note": "not evaluated: market cap is in KRW, not USD, and the threshold is USD-denominated; no FX conversion is applied (honest abstention, not a silent pass/fail)"
+      }
+    ],
+    "flags": [
+      "unverifiable:max_peg_ratio:no positive P/E (negative or missing earnings); PEG undefined",
+      "unverifiable:min_market_cap:not evaluated: market cap is in KRW, not USD, and the threshold is USD-denominated; no FX conversion is applied (honest abstention, not a silent pass/fail)"
+    ]
+  },
+  "specialist_opinions": [
+    {
+      "specialist": "fundamental",
+      "stance": "neutral",
+      "confidence": 0.52,
+      "thesis": "SK hynix passes two core GARP screens (revenue growth and ROIC) but fails a third (PEG) due to negative earnings, and the market cap criterion is unevaluable because it is denominated in KRW, not USD. This creates asymmetric evidence: the business quality metrics suggest a strong compounder, but valuation remains opaque.\n\nOn the positive side:\n- Revenue CAGR of 29.6% substantially exceeds the 10% threshold, indicating robust multiyear compounding. The most recent revenue (97.1 trillion KRW) is roughly 3\u00d7 the oldest point in the screen window (32.8 trillion KRW).\n- ROIC of 28.1% vastly exceeds the 12% minimum. This signals that incremental growth is being generated at attractive returns on invested capital, not through capital consumption.\n\nHowever, critical gaps prevent a bullish conclusion:\n- The PEG screen cannot be evaluated because the company reports negative earnings (pretax income swung from 50.5 trillion KRW two years ago to -11.7 trillion KRW one year ago, then recovered to 4.0 trillion KRW most recently). With no positive P/E, PEG is undefined, and thus the valuation discipline of GARP cannot be applied. Without evidence of reasonable valuation relative to growth, a bullish stance would violate the strategy's commitment to avoid overpayment.\n- Market cap is stated in KRW (1.69 \u00d7 10^15), but the threshold is USD-denominated (5 billion USD). No FX conversion is provided in the evidence, so the market cap criterion is not evaluated. This is honest abstention rather than a silent pass or fail.\n- The evidence includes price history (last close 2,288,000 KRW, 50-day SMA 1,600,940.68, 200-day SMA 863,618.14) and high volatility (69.4% annualized), but no analyst sentiment or forward guidance is available (news and recommendation endpoints returned HTTP 403).\n\nThe business quality\u2014high growth, strong ROIC\u2014is compelling. But GARP demands both quality *and* reasonable price. The inability to compute PEG, combined with the absence of earnings visibility and analyst perspectives, means the valuation side of the discipline cannot be discharged. Without that, the risk of overpayment cannot be ruled out, even though the fundamentals are strong.\n\nConfidence is moderate because the evidence shows real strength in growth and returns, but the unresolved valuation question and missing forward data introduce material uncertainty about whether the price reflects fair value for a GARP portfolio.",
+      "figures": [
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.29606775079449665,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Revenue CAGR threshold",
+          "value": 0.1,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Revenue CAGR criterion passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "ROIC",
+          "value": 0.28140259767871223,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "ROIC threshold",
+          "value": 0.12,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "ROIC criterion passed",
+          "value": 1.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "PEG ratio criterion passed",
+          "value": null,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Market cap criterion passed",
+          "value": null,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "Most recent revenue",
+          "value": 97146675000000.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "af82d70a1c09",
+            "field_path": "total_revenue[0]"
+          }
+        },
+        {
+          "label": "Oldest revenue in screen window",
+          "value": 44621568000000.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "af82d70a1c09",
+            "field_path": "total_revenue[3]"
+          }
+        },
+        {
+          "label": "Pretax income (most recent, 2 years ago)",
+          "value": 50465552000000.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "af82d70a1c09",
+            "field_path": "pretax_income[0]"
+          }
+        },
+        {
+          "label": "Pretax income (1 year ago)",
+          "value": -11657816000000.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "af82d70a1c09",
+            "field_path": "pretax_income[2]"
+          }
+        },
+        {
+          "label": "Pretax income (most recent)",
+          "value": 4002780000000.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "af82d70a1c09",
+            "field_path": "pretax_income[3]"
+          }
+        },
+        {
+          "label": "Market cap (KRW)",
+          "value": 1690874400473088.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "af82d70a1c09",
+            "field_path": "market_cap"
+          }
+        },
+        {
+          "label": "Last close price",
+          "value": 2288000.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "50-day SMA",
+          "value": 1600940.67625,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "sma_50"
+          }
+        },
+        {
+          "label": "200-day SMA",
+          "value": 863618.140703125,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "sma_200"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.6944180687404048,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "annualized_volatility"
+          }
+        }
+      ],
+      "caveats": [
+        "PEG criterion is unevaluable due to negative/zero earnings; valuation discipline of GARP strategy cannot be applied without PEG",
+        "Market cap criterion is unevaluable; market cap is denominated in KRW with no USD conversion provided; cannot confirm minimum $5B USD threshold",
+        "No analyst sentiment or forward guidance available (news and recommendation endpoints returned HTTP 403); cannot assess expectations or consensus",
+        "Company experienced a significant earnings decline in the most recent completed fiscal year (pretax income fell to 4.0 trillion KRW from 50.5 trillion KRW two years prior); recent recovery to positive earnings lacks confirmation of sustainability",
+        "All financials are in KRW; no USD-denominated metrics provided; evidence is incomplete for USD-based investors or cross-currency analysis"
+      ],
+      "created_at": "2026-06-16T15:56:36.242555Z"
+    },
+    {
+      "specialist": "technical",
+      "stance": "bullish",
+      "confidence": 0.72,
+      "thesis": "SK hynix exhibits strong technical positioning and has cleared two of the three quantifiable growth & value criteria. Price is firmly above both the SMA50 and SMA200, with the stock trading only 3.2% below its 52-week high\u2014indicating maintained momentum. The current price sits 42.9% above SMA50 and 165% above SMA200, reflecting an uptrend. However, elevated volatility (69.4% annualized) warrants caution in a value-discipline framework.\n\nOn fundamentals, the company demonstrated robust 3-year revenue CAGR of 29.6% (vs. 10% threshold) and impressive ROIC of 28.1% (vs. 12% threshold), signaling genuine operating leverage and capital efficiency. These are the hallmarks of a compounding business. The PEG ratio cannot be computed due to negative or missing earnings in the data, and the market cap remains unevaluated at the USD threshold owing to currency denomination mismatch\u2014both are abstentions rather than failures, suggesting the evaluation framework itself has gaps when applied to KRW-denominated equities.\n\nThe technical strength aligns with the growth profile: a business reinvesting heavily into high-ROIC expansion tends to command premium valuations and exhibit elevated volatility. The slight distance from the 52-week high suggests the market has already priced in much of the optimism, reducing margin of safety. For a Growth at a Reasonable Price mandate, this stock passes the growth and capital-efficiency test but leaves less room for further valuation expansion.",
+      "figures": [
+        {
+          "label": "3-year Revenue CAGR",
+          "value": 0.296,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC (Return on Invested Capital)",
+          "value": 0.281,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "Last Close Price",
+          "value": 2288000.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "SMA 50",
+          "value": 1600940.676,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "sma_50"
+          }
+        },
+        {
+          "label": "SMA 200",
+          "value": 863618.141,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "sma_200"
+          }
+        },
+        {
+          "label": "Percent Off 52-Week High",
+          "value": -0.0317,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized Volatility",
+          "value": 0.694,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Revenue CAGR Criterion Passed",
+          "value": 1.0,
+          "unit": "boolean (true=1)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "ROIC Criterion Passed",
+          "value": 1.0,
+          "unit": "boolean (true=1)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "PEG Ratio Criterion (Uneval)",
+          "value": null,
+          "unit": "boolean (null=not evaluated)",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[2].passed"
+          }
+        }
+      ],
+      "caveats": [
+        "PEG ratio cannot be calculated: no positive earnings available in the dataset. Valuation discipline (Growth at Reasonable Price) is incomplete without a price-to-growth anchor.",
+        "Market cap is denominated in KRW and was not converted to USD for threshold comparison; minimum market cap criterion was not evaluated. Unable to independently verify liquidity or index eligibility constraints.",
+        "News sentiment and analyst recommendations unavailable (Finnhub API errors); qualitative catalysts and consensus are not in evidence.",
+        "Volatility at 69.4% annualized is elevated relative to historical medians; this amplifies execution and macro tail-risk and reduces margin of safety in the valuation framework.",
+        "Price is only 3.2% below the 52-week high, leaving limited room for further multiple expansion and increasing sensitivity to downside revisions or macro shocks."
+      ],
+      "created_at": "2026-06-16T15:56:47.242703Z"
+    },
+    {
+      "specialist": "sentiment",
+      "stance": "abstain",
+      "confidence": 0.0,
+      "thesis": "Sentiment assessment cannot be completed. Both sentiment data sources failed: get_company_news returned HTTP 403 (access denied) and get_recommendation_trends returned HTTP 403 (access denied). No headline text, news volume, analyst recommendation counts, or bullish ratios are available in the evidence. The run_screen output provides operational metrics (revenue CAGR, ROIC) but these are fundamental/technical signals, not sentiment signals. Without actual news sentiment data or analyst recommendation distributions, sentiment assessment is not possible under the brief.",
+      "figures": [],
+      "caveats": [
+        "Sentiment data sources (get_company_news, get_recommendation_trends) both returned HTTP 403 errors; no sentiment evidence available",
+        "Cannot assess market sentiment on headline text, news volume, or analyst recommendation ratios without data access"
+      ],
+      "created_at": "2026-06-16T15:57:40.693209Z"
+    },
+    {
+      "specialist": "risk",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "SK hynix passes the growth and capital-efficiency hurdles of the GARP screen, but the risk profile is poor and material hurdles remain unverified. The annualized volatility of 69.4% is extreme\u2014more than double typical equity volatility\u2014reflecting exposure to cyclical semiconductor demand and supply-chain shocks. This is incompatible with the 'reasonable price' discipline: GARP demands both growth *and* stability; SK hynix offers growth at explosion-grade volatility.\n\nThe most critical unverifiable item is the PEG ratio itself. The ticker reported negative pretax income in one of the last four fiscal periods, and the most recent EPS is null. This is not a small data gap\u2014it means we cannot assign a P/E and therefore cannot compute PEG, which is a core screen criterion meant to protect against overpaying for growth. The screen correctly flags this as unverifiable, but it leaves us unable to confirm whether the valuation is reasonable at all. Given the volatile earnings history (NOPAT swings from -11.6T KRW to +50.5T KRW in consecutive periods), and the opacity around current earnings, assuming the valuation is benign is unjustified.\n\nThe market-cap criterion also returns null, not false. The ledger value is in KRW, no FX conversion is applied, and the threshold is USD-denominated. This is an honest abstention rather than a silent pass, but it means we cannot verify size sufficiently to be confident in the history depth or institutional liquidity.\n\nFree cash flow is positive and robust (25.8T KRW), which is encouraging, but is not a substitute for a verifiable valuation multiple. The stock is 3.2% below its 52-week high, suggesting no obvious repricing tailwind.\n\nFor a GARP mandate, the unverifiable valuation, the earnings volatility, and the 69% annualized volatility are material red flags. The burden of proof lies with the optimist to show downside protection; the evidence does not provide it.",
+      "figures": [
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.29606775079449665,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC (observed)",
+          "value": 0.28140259767871223,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "PEG ratio (screen result)",
+          "value": null,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "Market cap (USD) \u2014 screen evaluation",
+          "value": null,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.6944180687404048,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Price % off 52-week high",
+          "value": -0.03173931443080824,
+          "unit": "",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "d44983730bc8",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 25809054072832.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "af82d70a1c09",
+            "field_path": "free_cash_flow"
+          }
+        },
+        {
+          "label": "Most recent pretax income",
+          "value": 50465552000000.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "af82d70a1c09",
+            "field_path": "pretax_income[0]"
+          }
+        },
+        {
+          "label": "Prior-period pretax income (showing volatility)",
+          "value": -11657816000000.0,
+          "unit": "KRW",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "af82d70a1c09",
+            "field_path": "pretax_income[2]"
+          }
+        },
+        {
+          "label": "PEG criterion passed flag",
+          "value": 0.0,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Market cap criterion passed flag",
+          "value": null,
+          "unit": "",
+          "provenance": {
+            "tool_name": "run_dividend_aristocrat_screen",
+            "call_id": "1e905958dd10",
+            "field_path": "criteria[3].passed"
+          }
+        }
+      ],
+      "caveats": [
+        "PEG ratio is unverifiable (no positive P/E available); this is a core GARP criterion and its absence is a material data gap, not a minor miss.",
+        "Market-cap criterion returns null (KRW/USD currency mismatch, no FX applied); size and liquidity cannot be verified.",
+        "Pretax income swung from +50.5T KRW to -11.6T KRW across recent periods, indicating extreme cyclicality; earnings visibility is poor.",
+        "Annualized volatility of 69.4% is at or above distressed-equity levels; incompatible with 'reasonable price' discipline.",
+        "News and analyst recommendation data could not be retrieved (HTTP 403); external sentiment and forward guidance are opaque.",
+        "Free cash flow is reported positive but cannot offset unverifiable valuation and extreme volatility in a GARP framework."
+      ],
+      "created_at": "2026-06-16T15:57:54.186597Z"
+    }
+  ],
+  "critic_report": {
+    "targets_stance": "neutral",
+    "counter_thesis": "The emerging NEUTRAL consensus is too generous. The evidence, read without optimistic inference, supports a BEARISH posture under GARP discipline. The bull case rests on two metrics \u2014 revenue CAGR and ROIC \u2014 while papering over a disqualifying valuation void, extreme earnings cyclicality, and explosive volatility. A strategy that demands Growth *at a Reasonable Price* cannot waive the \"reasonable price\" half simply because the data needed to evaluate it is missing. Absence of evidence is not evidence of adequacy.",
+    "weaknesses_found": [
+      "The ROIC of 28.1% is computed off a single period's NOPAT, which itself is derived from the most recent operating income (47.2T KRW) \u2014 a figure that swung from -7.7T KRW just one period earlier. A ROIC calculated on peak-cycle earnings overstates sustainable capital efficiency. The screen passes this criterion, but the underlying earnings are demonstrably cyclical, and peak-ROIC is the least conservative input possible.",
+      "The revenue CAGR screen passes with 29.6%, anchored by a trough year (32.8T KRW) as the base. Using a cyclical trough as the denominator mechanically inflates any CAGR calculation. The bull specialists celebrate 3\u00d7 revenue growth without acknowledging that this framing is maximally favorable to the company.",
+      "The PEG criterion is not merely 'unevaluable' \u2014 it is a hard, evidenced failure of the GARP mandate. GARP requires a verifiable price-to-growth relationship. The screen correctly returns null, but two specialists reframe this as an 'abstention' or 'data gap.' It is not. The evidence shows EPS is null and pretax income was deeply negative just one period ago. There is no path to a valid PEG from this evidence. A strategy that cannot confirm reasonable price must default to caution, not neutrality.",
+      "Annualized volatility of 69.4% is not a footnote \u2014 it is more than twice typical equity volatility. The technical specialist acknowledges this but dismisses it as a 'caution.' Under GARP, elevated volatility is a direct proxy for valuation uncertainty: the wider the range of outcomes, the harder it is to assert 'reasonable price.' High volatility and missing valuation metrics compound each other as risks.",
+      "The stock is trading only 3.2% below its 52-week high after price has already advanced dramatically above both the 50-day and 200-day SMAs. The technical specialist calls this 'maintained momentum,' but a GARP lens reads it differently: the risk-reward is asymmetric at near-52-week highs when the valuation cannot be confirmed. There is no margin of safety.",
+      "Free cash flow (25.8T KRW) is cited as encouraging, but it is not cross-referenced against capital expenditure needs in the semiconductor cycle, debt levels, or the share price. A high FCF number at cycle peak is not a valuation anchor when earnings have shown they can swing to deeply negative in a single period.",
+      "Both news and recommendation data sources returned HTTP 403 errors \u2014 meaning there is zero forward-looking sentiment, analyst coverage, or guidance information in the evidence record. The council is being asked to form a verdict on a highly cyclical, high-volatility stock with no analyst input. This is not a neutral condition; it is an information deficit that should tilt the burden of proof toward caution.",
+      "The market cap criterion is null \u2014 not evaluated. The bull specialists treat this as benign, but an honest reading is that size, liquidity, and institutional accessibility cannot be confirmed from the evidence. For a strategy allocating real capital, an unverifiable market-cap screen is not a pass."
+    ],
+    "challenged_figures": [
+      "ROIC of 28.1% (criteria[1].observed) \u2014 computed from peak operating income after a trough loss period; not representative of through-cycle capital efficiency",
+      "Revenue CAGR of 29.6% (criteria[0].observed) \u2014 base period revenue (32.8T KRW, total_revenue[2]) is a cyclical trough, mechanically inflating the CAGR",
+      "Annualized volatility of 69.4% (annualized_volatility) \u2014 cited by technical specialist as a 'caution' but is a disqualifying risk under GARP's reasonable-price discipline",
+      "Last close of 2,288,000 KRW trading only 3.2% below 52-week high (pct_off_52w_high) \u2014 framed as momentum but is a margin-of-safety deficit"
+    ],
+    "figures": [
+      {
+        "label": "Revenue CAGR \u2014 screen observed value (passes threshold, but base is cyclical trough)",
+        "value": 0.29606775079449665,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "1e905958dd10",
+          "field_path": "criteria[0].observed"
+        }
+      },
+      {
+        "label": "Revenue CAGR screen \u2014 passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "1e905958dd10",
+          "field_path": "criteria[0].passed"
+        }
+      },
+      {
+        "label": "ROIC \u2014 screen observed value (computed from peak-cycle operating income)",
+        "value": 0.28140259767871223,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "1e905958dd10",
+          "field_path": "criteria[1].observed"
+        }
+      },
+      {
+        "label": "ROIC screen \u2014 passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "1e905958dd10",
+          "field_path": "criteria[1].passed"
+        }
+      },
+      {
+        "label": "PEG screen \u2014 passed (null = not evaluated, valuation discipline cannot be confirmed)",
+        "value": null,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "1e905958dd10",
+          "field_path": "criteria[2].passed"
+        }
+      },
+      {
+        "label": "Market cap screen \u2014 passed (null = not evaluated, size/liquidity unconfirmed)",
+        "value": null,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_dividend_aristocrat_screen",
+          "call_id": "1e905958dd10",
+          "field_path": "criteria[3].passed"
+        }
+      },
+      {
+        "label": "Most recent operating income (peak cycle \u2014 basis for ROIC)",
+        "value": 47206319000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "af82d70a1c09",
+          "field_path": "operating_income[0]"
+        }
+      },
+      {
+        "label": "Trough operating income \u2014 one period prior (makes ROIC peak-dependent)",
+        "value": -7730313000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "af82d70a1c09",
+          "field_path": "operating_income[2]"
+        }
+      },
+      {
+        "label": "Trough revenue \u2014 base period for CAGR calculation (cyclically low)",
+        "value": 32765719000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "af82d70a1c09",
+          "field_path": "total_revenue[2]"
+        }
+      },
+      {
+        "label": "Most recent revenue (CAGR numerator)",
+        "value": 97146675000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "af82d70a1c09",
+          "field_path": "total_revenue[0]"
+        }
+      },
+      {
+        "label": "EPS \u2014 null, blocking P/E and PEG computation",
+        "value": null,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "af82d70a1c09",
+          "field_path": "eps"
+        }
+      },
+      {
+        "label": "P/E ratio \u2014 null, blocking PEG computation",
+        "value": null,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "af82d70a1c09",
+          "field_path": "pe_ratio"
+        }
+      },
+      {
+        "label": "Trough pretax income \u2014 evidences deep earnings cyclicality",
+        "value": -11657816000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "af82d70a1c09",
+          "field_path": "pretax_income[2]"
+        }
+      },
+      {
+        "label": "Peak pretax income \u2014 same window, illustrating swing magnitude",
+        "value": 50465552000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "af82d70a1c09",
+          "field_path": "pretax_income[0]"
+        }
+      },
+      {
+        "label": "Annualized volatility \u2014 extreme, more than 2x typical equity",
+        "value": 0.6944180687404048,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "d44983730bc8",
+          "field_path": "annualized_volatility"
+        }
+      },
+      {
+        "label": "Percent off 52-week high \u2014 near-high entry, minimal margin of safety",
+        "value": -0.03173931443080824,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "d44983730bc8",
+          "field_path": "pct_off_52w_high"
+        }
+      },
+      {
+        "label": "Last close price (KRW)",
+        "value": 2288000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "d44983730bc8",
+          "field_path": "last_close"
+        }
+      },
+      {
+        "label": "50-day SMA \u2014 price already far above, upside priced in",
+        "value": 1600940.67625,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "d44983730bc8",
+          "field_path": "sma_50"
+        }
+      },
+      {
+        "label": "200-day SMA \u2014 price dramatically above, cycle-high positioning",
+        "value": 863618.140703125,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "d44983730bc8",
+          "field_path": "sma_200"
+        }
+      },
+      {
+        "label": "Free cash flow \u2014 positive but cannot substitute for valuation multiple",
+        "value": 25809054072832.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "af82d70a1c09",
+          "field_path": "free_cash_flow"
+        }
+      }
+    ],
+    "open_questions": [
+      "Is the current ROIC of 28.1% representative of through-cycle performance, or is it inflated by peak semiconductor pricing? What was the average ROIC across the full four-period window including the loss year?",
+      "What is the KRW/USD exchange rate at the evaluation date, and does the market cap (1.69 \u00d7 10^15 KRW) clear the $5 billion USD minimum-size threshold? This is a prerequisite criterion that has not been confirmed.",
+      "Does the free cash flow of 25.8T KRW cover the company's expected capital expenditure requirements in the next semiconductor investment cycle, or will it be consumed by capacity expansion, turning FCF negative as happened with operating income?",
+      "What is the current P/E ratio and forward EPS estimate? Without these, the PEG ratio \u2014 a core GARP gate \u2014 cannot be computed. Is there a forward earnings figure from any source that would allow this computation?",
+      "Given that pretax income swung from +50.5T KRW to -11.7T KRW and back within the four-period evidence window, what is the earnings floor scenario, and at what price does the stock become a value trap rather than a GARP compounder?",
+      "With annualized volatility at 69.4%, what is the implied drawdown risk over a 12-month holding period, and does the expected return from the growth profile compensate for that risk under GARP sizing constraints?",
+      "Are the HTTP 403 errors on news and recommendation endpoints a permanent data availability issue for this KRW-listed ticker, or a transient failure? If permanent, the council is systematically blind to analyst sentiment for this name."
+    ],
+    "created_at": "2026-06-16T15:58:44.571757Z"
+  },
+  "decision": {
+    "recommendation": "hold",
+    "confidence": 0.45,
+    "rationale": "## Decision: HOLD (Confidence: 0.45)\n\n### Summary\nSK hynix demonstrates genuine business quality on two of the three evaluable GARP screens \u2014 revenue growth and ROIC \u2014 but the critical \"reasonable price\" half of the GARP mandate cannot be discharged from the available evidence. The critic's counter-case is substantive and cannot be dismissed, but a SELL recommendation would require affirmative evidence of overvaluation or deterioration, neither of which the record establishes. A HOLD reflects an honest evidence-constrained posture pending resolution of the open valuation and data questions.\n\n---\n\n### Evidence Assessment\n\n**What passes:**\n\n- **Revenue CAGR** is 29.6%, well above the 10% threshold. This criterion passed.\n  - Source: call_id `1e905958dd10`, `criteria[0].passed` = true; `criteria[0].observed` = 0.296; `criteria[0].threshold` = 0.1\n- **ROIC** is 28.1%, well above the 12% threshold. This criterion passed.\n  - Source: call_id `1e905958dd10`, `criteria[1].passed` = true; `criteria[1].observed` = 0.281; `criteria[1].threshold` = 0.12\n- **Free cash flow** is robustly positive at 25,809,054,072,832 KRW.\n  - Source: call_id `af82d70a1c09`, `free_cash_flow`\n- **Technical momentum** is strong: last close of 2,288,000 KRW sits materially above both the 50-day SMA (1,600,940.68 KRW) and 200-day SMA (863,618.14 KRW).\n  - Source: call_id `d44983730bc8`, `last_close`; `sma_50`; `sma_200`\n- The stock is only 3.2% below its 52-week high.\n  - Source: call_id `d44983730bc8`, `pct_off_52w_high` = -0.0317\n\n**What fails or is unevaluable:**\n\n- **PEG ratio**: The screen returns `null` (not evaluated), not `false`. EPS is null and pretax income was deeply negative one period ago. There is no path to a PEG calculation from this evidence. This is not a minor gap \u2014 it is the valuation gate of the GARP strategy, and it cannot be cleared.\n  - Source: call_id `1e905958dd10`, `criteria[2].passed` = null\n- **Market cap (USD)**: Also returns null \u2014 the KRW-denominated figure cannot be compared to the USD threshold without FX conversion data that is not in the evidence record.\n  - Source: call_id `1e905958dd10`, `criteria[3].passed` = null\n- **Analyst sentiment and news**: Both endpoints failed with HTTP 403 errors. Zero forward-looking qualitative or quantitative coverage is available.\n  - Source: call_id `fc309ae1c7a4` (error); call_id `c1d9880ea64d` (error)\n\n**Material risk signals:**\n\n- **Annualized volatility of 69.4%** is extreme \u2014 more than double typical equity volatility \u2014 and reflects the deep cyclicality of the semiconductor industry.\n  - Source: call_id `d44983730bc8`, `annualized_volatility` = 0.6944\n- **Earnings cyclicality** is documented in the evidence: pretax income swung from 50,465,552,000,000 KRW (recent peak) to -11,657,816,000,000 KRW (one period prior) to 4,002,780,000,000 KRW (most recent).\n  - Source: call_id `af82d70a1c09`, `pretax_income[0]`; `pretax_income[2]`; `pretax_income[3]`\n- The critic's point that ROIC of 28.1% is computed off peak operating income (47,206,319,000,000 KRW) \u2014 which swung from -7,730,313,000,000 KRW one period earlier \u2014 is well-taken as a qualitative concern. I do not perform arithmetic on these figures, but the directional observation about cyclicality is supported by the evidence.\n  - Source: call_id `af82d70a1c09`, `operating_income[0]`; `operating_income[2]`\n\n---\n\n### Weighing the Specialists and Critic\n\n- **Fundamental (neutral, 0.52)**: Correctly identifies the evidence tension \u2014 strong quality metrics, opaque valuation. The neutral call is defensible.\n- **Technical (bullish, 0.72)**: The momentum signals are real, but a pure-technical bullish call cannot override the GARP requirement for confirmed reasonable price. The GARP mandate is not a momentum mandate.\n- **Sentiment (abstain, 0.00)**: No evidence. Cannot weight.\n- **Risk (bearish, 0.72)**: The risk specialist's concerns about volatility, cyclicality, and the PEG void are well-grounded in the evidence. The critic reinforces this strongly.\n\nThe critic raises several structural weaknesses that the bull specialists underweight: (1) the CAGR base year is a cyclical trough, making the growth rate optically favorable; (2) the ROIC is peak-cycle by construction; (3) the PEG gap is not an abstention \u2014 it is an affirmative inability to confirm reasonable price under the strategy. These observations are supported by the evidence record and cannot be dismissed.\n\nHowever, the critic's case for SELL also requires affirmative evidence that the stock is *overvalued* \u2014 and that evidence is not present either. The PEG is undefined, not \"failed.\" The market cap is unevaluated, not \"failed.\" Free cash flow is positive. Without a confirmed overvaluation signal, a SELL would itself be an inference beyond the evidence.\n\n### Conclusion\n\nHOLD is the appropriate disposition under `partial_pass_allows_hold=True`. Two criteria passed, two are genuinely null (not evaluated), the valuation gate is unresolvable from current evidence, volatility is extreme, and sentiment data is entirely absent. This is a partial-pass, high-uncertainty situation. The confidence of 0.45 reflects incomplete evidence (two null criteria, no sentiment, no analyst coverage) and the genuine tension between strong business quality and unverifiable price discipline. Human review should focus on the open questions identified by the critic \u2014 particularly the through-cycle ROIC, KRW/USD conversion for market-cap confirmation, and any forward EPS estimates that would allow PEG computation.",
+    "dissent": [
+      "technical",
+      "risk"
+    ],
+    "created_at": "2026-06-16T15:59:18.972693Z"
+  },
+  "veto_flags": [
+    {
+      "trigger": "low_confidence",
+      "detail": "decision confidence 0.45 < threshold 0.60",
+      "created_at": "2026-06-16T15:59:18.982469Z"
+    },
+    {
+      "trigger": "specialist_conflict",
+      "detail": "at least one bullish and one bearish specialist",
+      "created_at": "2026-06-16T15:59:18.982496Z"
+    },
+    {
+      "trigger": "data_quality",
+      "detail": "get_company_news: Finnhub /company-news HTTP 403; get_recommendation_trends: Finnhub /stock/recommendation HTTP 403; provenance value mismatch: risk cited 'PEG criterion passed flag'=0.0 at run_dividend_aristocrat_screen \u2192 criteria[2].passed (call_id 1e905958dd10) \u2014 cited 0.0 but ledger field is null; unverifiable:max_peg_ratio:no positive P/E (negative or missing earnings); PEG undefined; unverifiable:min_market_cap:not evaluated: market cap is in KRW, not USD, and the threshold is USD-denominated; no FX conversion is applied (honest abstention, not a silent pass/fail); sentiment abstained (insufficient data)",
+      "created_at": "2026-06-16T15:59:18.982530Z"
+    }
+  ],
+  "provenance_audit": {
+    "figures_audited": 59,
+    "verified": 58,
+    "mismatch": 1,
+    "unresolvable": 0,
+    "unverifiable": 0,
+    "unit_scaled": 0,
+    "violations": [
+      "provenance value mismatch: risk cited 'PEG criterion passed flag'=0.0 at run_dividend_aristocrat_screen \u2192 criteria[2].passed (call_id 1e905958dd10) \u2014 cited 0.0 but ledger field is null"
+    ],
+    "unit_scaled_notes": []
+  }
+}

@@ -1,0 +1,54 @@
+[
+  {
+    "ticker": "ARM",
+    "run_at": "2026-06-17T13:12:47.784325Z",
+    "strategy_id": "growth_v1",
+    "verdict": "hold",
+    "confidence": 0.52,
+    "stances": {
+      "fundamental": "bearish",
+      "technical": "bearish",
+      "sentiment": "bullish",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "low_confidence",
+      "specialist_conflict",
+      "majority_override"
+    ],
+    "provenance_audit": {
+      "figures_audited": 78,
+      "verified": 78,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 0,
+      "unit_scaled": 0
+    }
+  },
+  {
+    "ticker": "ARM",
+    "run_at": "2026-06-17T13:17:31.797372Z",
+    "strategy_id": "growth_v2",
+    "verdict": "hold",
+    "confidence": 0.52,
+    "stances": {
+      "fundamental": "bearish",
+      "technical": "bearish",
+      "sentiment": "bullish",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "low_confidence",
+      "specialist_conflict",
+      "majority_override"
+    ],
+    "provenance_audit": {
+      "figures_audited": 91,
+      "verified": 91,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 0,
+      "unit_scaled": 0
+    }
+  }
+]
