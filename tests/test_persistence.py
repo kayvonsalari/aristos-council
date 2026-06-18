@@ -208,14 +208,16 @@ def test_genuine_flip_same_strategy(tmp_path):
     assert _flip_fired(prior.verdict, Recommendation.SELL) is True
 
 
-def test_saved_msft_growth_prior_is_not_dividend_hold():
-    # Against the committed verdicts/MSFT.json: growth latest is BUY, dividend
-    # latest is HOLD — the growth run must key off BUY, never the dividend HOLD.
+def test_saved_msft_growth_prior_is_scoped_by_strategy():
+    # load_latest must scope by strategy_id, returning each strategy's OWN record.
+    # We assert the scoping invariant — each load returns a record tagged with the
+    # requested strategy — never a specific BUY/HOLD value, since verdicts
+    # legitimately drift with the underlying data over time.
     vd = Path(__file__).resolve().parents[1] / "verdicts"
     g = load_latest("MSFT", vd, strategy_id="growth_v1")
     d = load_latest("MSFT", vd, strategy_id="dividend_aristocrats_v1")
-    assert g is not None and g.verdict == Recommendation.BUY
-    assert d is not None and d.verdict == Recommendation.HOLD
+    assert g is not None and g.strategy_id == "growth_v1"
+    assert d is not None and d.strategy_id == "dividend_aristocrats_v1"
 
 
 # --------------------------------------------------------------------------- #
