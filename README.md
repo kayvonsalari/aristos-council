@@ -6,7 +6,7 @@ The name nods to the [Dividend Aristocrats](https://en.wikipedia.org/wiki/S%26P_
 
 ## How it works
 
-![Aristos Council — how a verdict is reached](docs/council_diagram.png)
+<img src="docs/council_flow.svg" alt="Aristos Council — how a verdict is reached" width="900">
 
 For how a verdict is reached and what each strategy screens on, read the full [Council Explainer](docs/COUNCIL_EXPLAINER.md).
 
