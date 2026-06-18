@@ -6,9 +6,7 @@ The name nods to the [Dividend Aristocrats](https://en.wikipedia.org/wiki/S%26P_
 
 ## How it works
 
-![Aristos Council — how a verdict is reached](docs/council_flow.png)
-
-For the full walkthrough — how a verdict is reached and what each strategy screens on — see the [Council Explainer](docs/COUNCIL_EXPLAINER.md).
+**[View the decision-flow diagram →](docs/council_flow.svg)** — or read the full [Council Explainer](docs/COUNCIL_EXPLAINER.md) for how a verdict is reached and what each strategy screens on.
 
 ## Why this design
 
