@@ -4,6 +4,11 @@ A multi-agent financial research analyst. Specialist agents deliberate over a si
 
 The name nods to the [Dividend Aristocrats](https://en.wikipedia.org/wiki/S%26P_500_Dividend_Aristocrats) — and to the idea that a recommendation should have to survive a council, not just one model's first instinct.
 
+## How it works
+![Aristos Council decision flow](docs/council_flow.svg)
+See the [Council Explainer](docs/COUNCIL_EXPLAINER.md) for how a verdict is reached and what
+each strategy screens on.
+
 ---
 
 ## Why this design
