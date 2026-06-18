@@ -26,7 +26,12 @@ LangGraph orchestration, Anthropic models, pydantic state.
   arguments).
 - `src/aristos_council/audit/provenance.py` — deep provenance audit
   (post-run): resolves every cited figure's field_path against the ledger and
-  compares values. Violations feed the DATA_QUALITY veto.
+  compares values. Violations feed the DATA_QUALITY veto. The grammar is CLOSED;
+  legitimate prompt-view divergence is handled by the alias table
+  (`_PROMPT_VIEW_ALIASES` exact handles + `_PROMPT_VIEWS` whole-view summaries)
+  resolved against the SAME builders the evidence block uses
+  (`presentation.dividend_view` / `recommendation_view`) — never by widening the
+  grammar to accept model improvisation.
 - `src/aristos_council/tools/` — deterministic tools (screen, technical &
   sentiment snapshots). ALL arithmetic happens here, never in agents.
 - `src/aristos_council/tools/criteria/registry.py` — the criterion registry:
@@ -81,7 +86,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    genuine cutters still break (T 2022 cut, INTC suspension -> streak 0). The
    remaining undercount is DATA DEPTH only (the parked EODHD adapter), not the
    method.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 290 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 294 tests
    green as of 2026-06-16. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes

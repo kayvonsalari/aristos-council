@@ -359,3 +359,75 @@ def test_unresolvable_violation_text_names_the_path_not_a_value_mismatch():
     ]))
     [v] = report.violations
     assert v.violation_text().startswith("unresolvable provenance path")
+
+
+# --------------------------------------------------------------------------- #
+# STEP 1 prompt-view summaries: dividend history + recommendation trends are
+# rendered as NAMED HANDLES, and the audit resolves those same paths (this is
+# what kills the index/semantic + summed violation modes from the battery).
+# --------------------------------------------------------------------------- #
+def _div_state(events, figures) -> ResearchState:
+    state = ResearchState(ticker="FAKE", strategy_id=STRATEGY.id)
+    state.tool_calls.append(ToolCall(
+        call_id="dh1", tool_name="get_dividend_history", inputs={}, output=events))
+    state.specialist_opinions.append(SpecialistOpinion(
+        specialist=SpecialistName.RISK, stance=Stance.NEUTRAL, confidence=0.7,
+        thesis="scripted", figures=figures))
+    return state
+
+
+def test_dividend_prompt_view_handles_resolve():
+    # ascending; T-shape: 0.52 held 2020-2021, cut to 0.278 in 2022.
+    events = [_Event(date(2020, 3, 1), 0.52), _Event(date(2021, 3, 1), 0.52),
+              _Event(date(2022, 3, 1), 0.278), _Event(date(2022, 6, 1), 0.278)]
+    figs = [
+        _fig("Latest dividend", 0.278, "dh1", "latest.amount",
+             tool="get_dividend_history"),
+        _fig("Earliest dividend", 0.52, "dh1", "earliest.amount",
+             tool="get_dividend_history"),
+        _fig("2021 rate", 0.52, "dh1", "by_year.2021",          # numeric key
+             tool="get_dividend_history"),
+        _fig("Event count", 4.0, "dh1", "n_events",
+             tool="get_dividend_history"),
+        # a legitimate raw-index citation must STILL fall through and resolve
+        _fig("Raw latest", 0.278, "dh1", "output[-1].amount",
+             tool="get_dividend_history"),
+    ]
+    s = audit_provenance(_div_state(events, figs)).summary()
+    assert s["verified"] == 5
+    assert s["mismatch"] == 0 and s["unresolvable"] == 0
+
+
+def test_dividend_view_wrong_value_through_handle_is_a_mismatch():
+    events = [_Event(date(2022, 6, 1), 0.278)]
+    s = audit_provenance(_div_state(events, [
+        _fig("Latest dividend", 0.52, "dh1", "latest.amount",   # ledger 0.278
+             tool="get_dividend_history"),
+    ])).summary()
+    assert s["mismatch"] == 1 and s["unresolvable"] == 0
+
+
+def test_recommendation_latest_period_total_is_citable():
+    from aristos_council.data.sentiment import RecommendationTrend
+
+    trends = [
+        RecommendationTrend(period="2026-04-01", strong_buy=5, buy=10, hold=3,
+                            sell=1, strong_sell=0),
+        RecommendationTrend(period="2026-06-01", strong_buy=6, buy=12, hold=2,
+                            sell=2, strong_sell=0),    # latest, total = 22
+    ]
+    state = ResearchState(ticker="FAKE", strategy_id=STRATEGY.id)
+    state.tool_calls.append(ToolCall(
+        call_id="rt1", tool_name="get_recommendation_trends", inputs={},
+        output=trends))
+    state.specialist_opinions.append(SpecialistOpinion(
+        specialist=SpecialistName.SENTIMENT, stance=Stance.BULLISH,
+        confidence=0.7, thesis="scripted", figures=[
+            _fig("Analyst total (latest)", 22.0, "rt1", "latest_period.total",
+                 tool="get_recommendation_trends"),
+            _fig("Hold count (latest)", 2.0, "rt1", "latest_period.hold",
+                 tool="get_recommendation_trends"),
+        ]))
+    s = audit_provenance(state).summary()
+    assert s["verified"] == 2
+    assert s["mismatch"] == 0 and s["unresolvable"] == 0

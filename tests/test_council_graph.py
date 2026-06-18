@@ -613,6 +613,18 @@ def test_v1_no_gate_keeps_llm_verdict_on_same_failing_streak():
     assert d.original_recommendation == Recommendation.BUY
 
 
+def test_dividend_history_rendered_as_named_handles_not_a_raw_list():
+    # STEP 1: agents see latest/earliest/by_year/n_events handles, not a bare
+    # list to index (the source of the index/semantic violation mode).
+    _, runners = _run([_bullish()] * 4,
+                      DecisionOutput(recommendation=Recommendation.HOLD,
+                                     confidence=0.9, rationale="r"),
+                      return_runners=True)
+    _, user = runners["specialist"].calls[0]
+    assert '"n_events"' in user and '"by_year"' in user and '"latest"' in user
+    assert "raw event list omitted" in user
+
+
 def test_ephemeral_override_gates_v1_at_runtime_without_a_v2_file():
     # The whole point: take v1 (NO gating), apply a per-run is_gating override on
     # the streak, run a streak-failing ticker with an LLM BUY -> the gate caps

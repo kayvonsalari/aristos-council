@@ -29,6 +29,7 @@ from datetime import date, timedelta
 
 from ..data.adapter import DataUnavailable, MarketDataAdapter
 from ..data.sentiment import SentimentAdapter, SentimentDataUnavailable
+from ..presentation import dividend_view, recommendation_view
 from ..state import (
     CriticReport,
     Decision,
@@ -287,6 +288,20 @@ def _evidence_block(state: ResearchState, strategy: Strategy) -> str:
                 "note": "raw bars omitted from prompt (full series in ledger); "
                         "use technical_snapshot for derived price metrics",
             }
+        # Dividend history as NAMED handles instead of a bare list to index — the
+        # audit resolves these same paths via prompt-view aliases (no drift).
+        if tc.tool_name == "get_dividend_history" and tc.ok and output is not None:
+            output = dividend_view(output)
+            output["note"] = ("raw event list omitted from prompt (full series in "
+                              "ledger); cite latest.amount / earliest.amount / "
+                              "by_year.<year> / n_events — do NOT index a raw list")
+        # Recommendation trends: expose latest_period (with the per-category counts
+        # AND total) so the aggregate is a citable field, not something summed.
+        if tc.tool_name == "get_recommendation_trends" and tc.ok and output is not None:
+            output = recommendation_view(output)
+            output["note"] = ("cite latest_period.total / latest_period.<category> "
+                              "(strong_buy/buy/hold/sell/strong_sell); the bullish "
+                              "ratio lives in sentiment_snapshot, not here")
         # Agent-facing tool label is strategy-neutral; the stored tc.tool_name
         # (used by the audit) is untouched.
         display_tool = (_SCREEN_DISPLAY_TOOL

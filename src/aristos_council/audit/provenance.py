@@ -47,6 +47,7 @@ import math
 import re
 from dataclasses import dataclass, field
 
+from ..presentation import dividend_view, recommendation_view
 from ..state import ResearchState
 
 # A rounding-consistent citation must also be within this relative error of the
@@ -278,11 +279,45 @@ _PROMPT_VIEW_ALIASES: dict[tuple[str, str], object] = {
     ("get_price_history", "last_adj_close"): lambda out: out.bars[-1].adj_close if out.bars else None,
 }
 
+# Whole-view summaries (dividend history, recommendation trends): the agent saw a
+# dict of named handles instead of a raw list, so a path like ``latest.amount`` or
+# ``by_year.2002`` resolves against the SAME builder the evidence block used (in
+# presentation.py — one definition, no drift). by_year keys are numeric strings,
+# which the closed grammar deliberately rejects, so these are walked separately.
+_PROMPT_VIEWS: dict[str, object] = {
+    "get_dividend_history": dividend_view,
+    "get_recommendation_trends": recommendation_view,
+}
+
+
+def _walk_view(view: object, path: str) -> object:
+    """Resolve a dotted path against a prompt-view dict (supports numeric keys
+    like ``by_year.2002`` that the closed field-path grammar rejects)."""
+    current = view
+    for seg in path.split("."):
+        seg = seg.strip()
+        if not seg:
+            raise PathUnresolvable(f"empty segment in '{path}'")
+        if not isinstance(current, dict) or seg not in current:
+            raise PathUnresolvable(f"'{seg}' not in prompt view of '{path}'")
+        current = current[seg]
+    return current
+
 
 def _resolve_with_aliases(tool_name: str, output: object, path: str) -> object:
     bare = (path or "").strip()
     if bare.startswith("output."):
         bare = bare[len("output."):]
+    # 1. Whole prompt-view summaries (dividend / recommendation): resolve the path
+    #    against the named-handle view first; fall through to raw resolution so a
+    #    legitimate raw-index citation (e.g. output[12].amount) still works.
+    builder = _PROMPT_VIEWS.get(tool_name)
+    if builder is not None:
+        try:
+            return _walk_view(builder(output), bare)
+        except PathUnresolvable:
+            return resolve_field_path(output, path)
+    # 2. Exact-match handle aliases (price history).
     alias = _PROMPT_VIEW_ALIASES.get((tool_name, bare))
     if alias is not None:
         try:

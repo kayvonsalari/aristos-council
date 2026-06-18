@@ -73,3 +73,58 @@ def screen_table_rows(screen: dict | None) -> list[dict]:
             "Status": SCREEN_STATUS.get(c.get("passed"), "NOT-EVAL"),
         })
     return rows
+
+
+# --------------------------------------------------------------------------- #
+# Prompt-view summaries (shared by the evidence block AND the provenance audit)
+# --------------------------------------------------------------------------- #
+# Some list-shaped tool outputs (dividend history, recommendation trends) used to
+# reach agents as a bare list they had to INDEX — the source of the index/semantic
+# and summed provenance violations (agents guessed output[164], summed by hand,
+# wrote [last] / "by date …"). These builders turn the list into NAMED, citable
+# handles. They are used in TWO places that must never diverge: the evidence block
+# (what the agent sees) and the audit's prompt-view aliases (what a citation
+# resolves against). One definition guarantees they agree.
+def _event_view(ev) -> dict:
+    """One dividend event as named fields (amount is the citable number)."""
+    return {"ex_date": str(ev.ex_date), "amount": ev.amount}
+
+
+def dividend_view(events) -> dict:
+    """Named handles over a CHRONOLOGICAL-ASCENDING dividend-event list.
+
+    yfinance dividends ascend, so the latest event is the last element.
+    ``by_year`` maps each calendar year to that year's LATEST per-payment amount
+    (the prevailing rate — ascending order makes the last write per year win),
+    which is the figure agents reach for when they cite "the <year> level".
+    """
+    events = list(events or [])
+    return {
+        "n_events": len(events),
+        "latest": _event_view(events[-1]) if events else None,
+        "earliest": _event_view(events[0]) if events else None,
+        "by_year": {str(ev.ex_date.year): ev.amount for ev in events},
+    }
+
+
+def recommendation_view(trends) -> dict:
+    """Named handles over a RecommendationTrend list.
+
+    ``latest_period`` is the entry with the max ISO period (order-independent) and
+    exposes the per-category counts AND ``total`` — the aggregate agents otherwise
+    summed by hand — as a real citable field.
+    """
+    trends = list(trends or [])
+    latest = max(trends, key=lambda t: t.period) if trends else None
+    return {
+        "n_periods": len(trends),
+        "latest_period": ({
+            "period": latest.period,
+            "strong_buy": latest.strong_buy,
+            "buy": latest.buy,
+            "hold": latest.hold,
+            "sell": latest.sell,
+            "strong_sell": latest.strong_sell,
+            "total": latest.total,
+        } if latest is not None else None),
+    }
