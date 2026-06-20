@@ -4,21 +4,11 @@ A multi-agent financial research analyst. Specialist agents deliberate over a si
 
 The name nods to the [Dividend Aristocrats](https://en.wikipedia.org/wiki/S%26P_500_Dividend_Aristocrats) — and to the idea that a recommendation should have to survive a council, not just one model's first instinct.
 
-<<<<<<< HEAD
-## How it works
-![Aristos Council decision flow](docs/council_flow.svg)
-See the [Council Explainer](docs/COUNCIL_EXPLAINER.md) for how a verdict is reached and what
-each strategy screens on.
-=======
-Two strategies run on the same engine today: an income screen (**dividend aristocrats**) and a growth-at-a-reasonable-price screen (**growth**). Each pins its own criteria and thresholds in versioned config; the council, the Critic, and the human veto are shared.
-
-
 ## How it works
 
 <img src="docs/council_diagram.png" alt="Aristos Council — how a verdict is reached" width="900">
 
 For how a verdict is reached and what each strategy screens on, read the full [Council Explainer](docs/COUNCIL_EXPLAINER.md).
->>>>>>> 57907b67282a2c35ac6e913d9ced939d91c3fc15
 
 ---
 
