@@ -71,7 +71,7 @@ LOGO_PATH = ASSETS_DIR / "aristos_council_logo.svg"
 # history verdict markers, and the run-selector labels, consistently.
 _VERDICT_HEX = {"BUY": "#2E7D32", "HOLD": "#B8860B", "SELL": "#B23B3B"}
 _VERDICT_DOT = {"BUY": "🟢", "HOLD": "🟡", "SELL": "🔴"}  # selectbox can't take hex
-GOLD = "#C9A227"  # the single accent
+GOLD = "#52B6A4"  # the single accent
 
 
 def _verdict_hex(verdict: str | None) -> str:

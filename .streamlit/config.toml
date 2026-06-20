@@ -8,7 +8,7 @@ base = "light"
 backgroundColor = "#0E1117"          # app background
 secondaryBackgroundColor = "#1A1F2B" # cards, sidebar, expanders
 textColor = "#E8E6E3"                # off-white
-primaryColor = "#C9A227"             # muted gold — the single accent
+primaryColor = "#52B6A4"             # teal — the single accent
 font = "serif"                       # classical, institutional
 
 [client]
