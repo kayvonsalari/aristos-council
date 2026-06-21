@@ -1,4 +1,4 @@
-"""Tests for the deterministic veto gate — all four triggers."""
+"""Tests for the deterministic veto gate — all triggers."""
 
 from pathlib import Path
 
@@ -10,6 +10,7 @@ from aristos_council.state import (
     SpecialistName,
     SpecialistOpinion,
     Stance,
+    ToolCall,
     VetoTrigger,
 )
 from aristos_council.strategy.loader import load_strategy
@@ -67,22 +68,132 @@ def test_specialist_conflict_trigger():
     assert VetoTrigger.SPECIALIST_CONFLICT in triggers(s)
 
 
-def test_data_quality_trigger_on_abstain():
-    s = _state()
-    s.specialist_opinions = [
-        _opinion(SpecialistName.SENTIMENT, Stance.ABSTAIN),
-    ]
-    s.decision = _decision()
-    make_veto_node(STRATEGY)(s)
-    assert VetoTrigger.DATA_QUALITY in triggers(s)
-
-
 def test_data_quality_trigger_on_provenance_violation():
     s = _state()
     s.errors.append("provenance violation: fundamental cited 'x'=1.0 ...")
     s.decision = _decision()
     make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.DATA_QUALITY in triggers(s)   # provenance error is MATERIAL
+
+
+# --- trigger 3 SEVERITY: material (fires) vs minor (recorded, not escalated) -- #
+def _screen_state(*flags, **kw) -> ResearchState:
+    s = _state(**kw)
+    s.tool_calls.append(ToolCall(
+        call_id="s", tool_name="run_strategy_screen", ok=True,
+        output={"criteria": [], "flags": list(flags)}))
+    return s
+
+
+def test_single_abstention_is_minor_no_data_quality():
+    # Was firing DATA_QUALITY on every abstention — the cry-wolf bug.
+    s = _state()
+    s.specialist_opinions = [_opinion(SpecialistName.SENTIMENT, Stance.ABSTAIN)]
+    s.decision = _decision()
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.DATA_QUALITY not in triggers(s)
+
+
+def test_sentiment_source_403_is_minor_no_data_quality():
+    s = _state()
+    s.errors.append("get_company_news: Finnhub /company-news HTTP 403")
+    s.decision = _decision()
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.DATA_QUALITY not in triggers(s)
+
+
+def test_single_non_gating_not_eval_is_minor():
+    s = _screen_state("unverifiable:min_dividend_yield:no last_close")
+    s.decision = _decision()
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.DATA_QUALITY not in triggers(s)
+
+
+def test_adapter_error_is_material_fires_and_detail_lists_all():
+    s = _state()
+    s.errors.append("get_fundamentals: provider timeout")          # MATERIAL
+    s.specialist_opinions = [_opinion(SpecialistName.SENTIMENT, Stance.ABSTAIN)]  # minor
+    s.decision = _decision()
+    make_veto_node(STRATEGY)(s)
     assert VetoTrigger.DATA_QUALITY in triggers(s)
+    detail = next(f.detail for f in s.veto_flags
+                  if f.trigger == VetoTrigger.DATA_QUALITY)
+    assert "get_fundamentals" in detail and "abstained" in detail  # full picture
+
+
+def test_two_not_eval_criteria_are_material():
+    s = _screen_state("unverifiable:min_dividend_yield:no last_close",
+                      "unverifiable:max_payout_ratio:no eps")
+    s.decision = _decision()
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.DATA_QUALITY in triggers(s)   # screen mostly blind
+
+
+def test_minor_only_run_escalates_nothing():
+    # The whole point: a run carrying ONLY benign noise (one NOT-EVAL, one
+    # sentiment 403, one abstention) now fires NOTHING — previously DATA_QUALITY.
+    s = _screen_state("unverifiable:max_payout_ratio:no eps")
+    s.errors.append("get_recommendation_trends: HTTP 403")
+    s.specialist_opinions = [_opinion(SpecialistName.SENTIMENT, Stance.ABSTAIN)]
+    s.decision = _decision(rec=Recommendation.HOLD, conf=0.9)
+    make_veto_node(STRATEGY)(s)
+    assert s.veto_flags == []
+    assert s.requires_human_review is False
+
+
+# --- trigger 7 GATE_OVERRIDE_MATERIAL: escalate only the SURPRISING caps ------ #
+def _capped(original, final, conf, crit="min_dividend_growth_streak") -> Decision:
+    return Decision(recommendation=final, confidence=conf, rationale="r",
+                    original_recommendation=original, gate_override_applied=True,
+                    gating_criterion_fired=crit)
+
+
+def test_gate_cap_buy_to_sell_fires():
+    s = _state()
+    s.decision = _capped(Recommendation.BUY, Recommendation.SELL, 0.9)
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.GATE_OVERRIDE_MATERIAL in triggers(s)
+    detail = next(f.detail for f in s.veto_flags
+                  if f.trigger == VetoTrigger.GATE_OVERRIDE_MATERIAL)
+    assert "buy" in detail and "sell" in detail
+    assert "min_dividend_growth_streak" in detail
+
+
+def test_gate_cap_buy_to_sell_fires_even_at_low_confidence():
+    # original==BUY escalates regardless of confidence (condition 1).
+    s = _state()
+    s.decision = _capped(Recommendation.BUY, Recommendation.SELL, 0.4)
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.GATE_OVERRIDE_MATERIAL in triggers(s)
+
+
+def test_gate_cap_hold_to_sell_is_routine_no_fire():
+    # 1-rung cap, even at high confidence -> routine gate work, no escalation.
+    s = _state()
+    s.decision = _capped(Recommendation.HOLD, Recommendation.SELL, 0.9)
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.GATE_OVERRIDE_MATERIAL not in triggers(s)
+
+
+def test_gate_cap_not_fired_without_override():
+    s = _state()
+    s.decision = _decision(rec=Recommendation.SELL)   # gate_override_applied False
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.GATE_OVERRIDE_MATERIAL not in triggers(s)
+
+
+def test_insufficient_evidence_does_not_also_fire_gate_override_material():
+    # INSUFFICIENT_EVIDENCE caps set gate_override_applied=True but are excluded
+    # from trigger 7 (trigger 6 handles them, unconditionally).
+    s = _state()
+    s.decision = Decision(
+        recommendation=Recommendation.INSUFFICIENT_EVIDENCE, confidence=0.9,
+        rationale="r", original_recommendation=Recommendation.BUY,
+        gate_override_applied=True, insufficient_evidence=True,
+        gating_criterion_fired="min_dividend_growth_streak")
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.INSUFFICIENT_EVIDENCE in triggers(s)
+    assert VetoTrigger.GATE_OVERRIDE_MATERIAL not in triggers(s)
 
 
 def test_flip_trigger():

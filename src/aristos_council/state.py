@@ -211,6 +211,10 @@ class VetoTrigger(str, Enum):
     # None), so the run is off the buy/hold/sell ladder and ALWAYS pauses for a
     # human — unconditionally, never an auto-proceed.
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    # The deterministic gate capped the verdict AND the LLM/gate disagreement was
+    # LARGE (a confidently bullish call hard-stopped to the SELL cap). Routine caps
+    # (HOLD->SELL, low-confidence) do NOT fire this — only the surprising ones.
+    GATE_OVERRIDE_MATERIAL = "gate_override_material"
 
 
 class VetoFlag(BaseModel):

@@ -287,14 +287,17 @@ def test_legacy_screen_tool_name_still_recognized():
     s.tool_calls = [ToolCall(
         call_id="c1", tool_name=legacy, ok=True,
         output={"criteria": [{"name": "min_dividend_yield", "passed": True}],
-                "flags": ["unverifiable:min_dividend_growth_streak:short history"]})]
+                # TWO NOT-EVAL flags -> MATERIAL, so severity-aware data_quality
+                # still fires (a single flag would be MINOR and not escalate).
+                "flags": ["unverifiable:min_dividend_growth_streak:short history",
+                          "unverifiable:max_payout_ratio:no eps"]})]
     s.decision = Decision(recommendation=Recommendation.HOLD, confidence=0.9,
                           rationale="r")
 
     # reports.py captures the screen despite the legacy ledger name
     assert _screen_from_state(s) is not None
 
-    # veto.py still surfaces the legacy screen's unverifiable flag as DATA_QUALITY
+    # veto.py still surfaces the legacy screen's unverifiable flags as DATA_QUALITY
     strategy = load_strategy(
         Path(__file__).resolve().parents[1]
         / "strategies" / "dividend_aristocrats_v1.yaml")

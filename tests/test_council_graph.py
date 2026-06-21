@@ -139,7 +139,10 @@ def test_full_council_run_clean():
     assert state.critic_report.targets_stance == Stance.BULLISH
     assert state.decision.recommendation == Recommendation.BUY
 
-    # the sentiment abstention (honest: no data) trips DATA_QUALITY — by design
+    # FakeAdapter has no dividend_per_share, so BOTH yield and payout are NOT-EVAL
+    # -> 2 unevaluable criteria = MATERIAL data_quality (the screen is mostly
+    # blind). The lone abstention alone would now be MINOR, but the material screen
+    # gaps still fire (and the abstention rides along in the detail).
     assert {f.trigger for f in state.veto_flags} == {VetoTrigger.DATA_QUALITY}
     assert state.requires_human_review is True
 
@@ -484,7 +487,10 @@ def test_sentiment_outage_degrades_not_crashes():
     assert len(failed) == 2
     assert any("simulated outage" in e for e in state.errors)
     assert state.decision is not None
-    # and the data-quality veto fires
+    # The run DEGRADES gracefully (no crash). data_quality fires here from the
+    # FakeAdapter screen's 2 NOT-EVAL criteria (material), NOT from the sentiment
+    # outage — which is OPTIONAL-by-design and MINOR on its own (proven cleanly in
+    # test_veto.test_sentiment_source_403_is_minor_no_data_quality).
     assert VetoTrigger.DATA_QUALITY in {f.trigger for f in state.veto_flags}
 
 
