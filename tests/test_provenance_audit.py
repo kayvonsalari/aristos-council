@@ -289,7 +289,7 @@ def test_graph_audit_node_routes_mismatch_into_data_quality_veto(monkeypatch):
     probe = ResearchState(ticker="FAKE", strategy_id=STRATEGY.id)
     probe_result = ResearchState.model_validate(app.invoke(probe))
     screen_id = next(tc.call_id for tc in probe_result.tool_calls
-                     if tc.tool_name == "run_dividend_aristocrat_screen")
+                     if tc.tool_name == "run_strategy_screen")
 
     misquote.call_id = screen_id
     reset_ids()

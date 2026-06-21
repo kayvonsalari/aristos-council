@@ -52,14 +52,18 @@ def _state(strategy, fundamentals=_FULL) -> ResearchState:
 def test_agent_evidence_shows_neutral_screen_label():
     ev = _evidence_block(_state(DIVIDEND), DIVIDEND)
     assert '"tool": "run_screen"' in ev                  # neutral, agent-facing
+    # neither the current STORED ledger name nor the legacy one leaks to agents
+    assert _SCREEN_LEDGER_TOOL not in ev
     assert "run_dividend_aristocrat_screen" not in ev
 
 
-def test_stored_ledger_tool_name_is_unchanged():
+def test_stored_ledger_tool_name_is_run_strategy_screen():
+    # The stored ledger name is the strategy-NEUTRAL run_strategy_screen (renamed
+    # from run_dividend_aristocrat_screen); the audit/reports match on it.
     s = _state(DIVIDEND)
     _evidence_block(s, DIVIDEND)
-    assert any(tc.tool_name == "run_dividend_aristocrat_screen"
-               for tc in s.tool_calls)
+    assert any(tc.tool_name == "run_strategy_screen" for tc in s.tool_calls)
+    assert _SCREEN_LEDGER_TOOL == "run_strategy_screen"
 
 
 # --- strategy-scoped fundamentals (4D.2) ----------------------------------- #

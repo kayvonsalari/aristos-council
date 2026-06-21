@@ -2,7 +2,7 @@
 
 The registry refactor's whole correctness claim is: the generic, registry-driven
 screen produces BYTE-IDENTICAL results to the original hardcoded
-``run_dividend_aristocrat_screen``. test_equivalent_to_legacy_screen pins that
+``run_strategy_screen``. test_equivalent_to_legacy_screen pins that
 field-for-field on a fixed set of fundamentals shapes (JNJ/MO/BRK-B/O + the edge
 cases that exercise pass / fail / null / no-dividend / unverifiable paths).
 """
@@ -23,7 +23,7 @@ from aristos_council.tools.criteria.registry import (
     run_screen,
     validate_selections,
 )
-from aristos_council.tools.screening import run_dividend_aristocrat_screen
+from aristos_council.tools.screening import run_strategy_screen
 
 # The dividend strategy's selections at the shipped v1 thresholds.
 DIVIDEND = [
@@ -91,7 +91,7 @@ def test_equivalent_to_legacy_screen(fund, divs, last_close):
     """Registry-driven screen == original hardcoded screen, field-for-field."""
     new = run_screen(DIVIDEND, Evidence(fund, divs, last_close),
                      ticker=fund.ticker)
-    legacy = run_dividend_aristocrat_screen(
+    legacy = run_strategy_screen(
         fund, divs, min_yield=0.025, max_payout=0.75,
         min_market_cap=10_000_000_000, min_growth_years=25,
         last_close=last_close,

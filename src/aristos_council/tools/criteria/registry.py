@@ -9,7 +9,8 @@ assembles the result list — there is no strategy-specific logic in the runner.
 
 This module adds NO new math. The four dividend criteria delegate to the
 existing, unit-tested primitives in ``tools/screening.py``, so the assembled
-screen is BYTE-IDENTICAL to the original ``run_dividend_aristocrat_screen`` —
+screen is BYTE-IDENTICAL to the frozen reference ``run_strategy_screen`` (formerly
+``run_dividend_aristocrat_screen``) —
 pinned by the equivalence test (tests/test_criteria_registry.py). Behavior
 preserved exactly: three-valued ``passed``, derived-yield, the streak
 floor/lower-bound, and the no-current-dividend determinations.
@@ -352,7 +353,7 @@ def run_screen(selections, evidence: Evidence, *, ticker: str) -> ScreenResult:
     ``selections`` is any iterable of objects with ``.name`` and ``.threshold``
     (the loader's ``CriterionSpec`` or ``CriterionSelection``). The assembly —
     result order and the ``unverifiable:<name>:<note>`` flags — mirrors the
-    original ``run_dividend_aristocrat_screen`` exactly.
+    frozen ``run_strategy_screen`` reference exactly.
     """
     results: list[CriterionResult] = []
     for sel in selections:

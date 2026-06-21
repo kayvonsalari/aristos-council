@@ -33,6 +33,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from ..agents.nodes import _is_screen_tool  # screen tool-name back-compat shim
 from ..state import (
     CriticReport,
     Decision,
@@ -98,8 +99,7 @@ def _screen_from_state(state: ResearchState) -> Optional[dict]:
     from dataclasses import asdict, is_dataclass
 
     for tc in state.tool_calls:
-        if (tc.tool_name == "run_dividend_aristocrat_screen"
-                and tc.ok and tc.output):
+        if _is_screen_tool(tc.tool_name) and tc.ok and tc.output:
             out = tc.output
             if isinstance(out, dict):
                 return out

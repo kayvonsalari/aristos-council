@@ -172,7 +172,7 @@ def test_hybrid_run_records_eodhd_dividends_and_yfinance_fundamentals():
     assert by_tool["get_price_history"].inputs["provider"] == "yfinance"
 
     # and the streak was computed by the EODHD method (passes the 20yr floor)
-    screen = by_tool["run_dividend_aristocrat_screen"].output
+    screen = by_tool["run_strategy_screen"].output
     streak = next(c for c in screen["criteria"]
                   if c["name"] == "min_dividend_growth_streak")
     assert streak["passed"] is True

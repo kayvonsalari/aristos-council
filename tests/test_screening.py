@@ -24,7 +24,7 @@ from aristos_council.tools.screening import (
     nopat_roic,
     peg_ratio,
     revenue_cagr,
-    run_dividend_aristocrat_screen,
+    run_strategy_screen,
 )
 
 
@@ -303,7 +303,7 @@ def test_single_year_real_decrease_breaks_at_the_cut():
 # --------------------------------------------------------------------------- #
 def test_screen_flags_unverifiable_streak():
     f = _fund(dividend_per_share=4.0, payout_ratio=0.5, market_cap=2e10)
-    result = run_dividend_aristocrat_screen(
+    result = run_strategy_screen(
         f,
         dividends=[],  # forces streak unverifiable
         min_yield=0.025,
@@ -320,7 +320,7 @@ def test_screen_flags_unverifiable_streak():
 
 
 def _screen(fund, dividends):
-    return run_dividend_aristocrat_screen(
+    return run_strategy_screen(
         fund, dividends=dividends,
         min_yield=0.025, max_payout=0.75, min_market_cap=1e10,
         min_growth_years=25, last_close=100.0,
@@ -372,7 +372,7 @@ def test_suspended_dividend_intc_genuine_zero_fails():
 def test_screen_passes_all_evaluated_with_full_data():
     f = _fund(dividend_per_share=4.0, payout_ratio=0.5, market_cap=2e10)
     divs = _annual_divs(1990, [1.0 + 0.1 * i for i in range(33)])  # long streak
-    result = run_dividend_aristocrat_screen(
+    result = run_strategy_screen(
         f,
         dividends=divs,
         min_yield=0.025,

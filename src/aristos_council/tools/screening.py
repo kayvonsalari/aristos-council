@@ -331,8 +331,8 @@ def min_growth_streak_criterion(
     ``per_payment_median`` for yfinance's ex-date noise, ``calendar_year_sum`` for
     EODHD's adjusted annual totals. The chosen method is RECORDED IN THE NOTE so
     the audit trail shows the provider-matched method as a sourced choice. The
-    default keeps yfinance behaviour — and the frozen
-    ``run_dividend_aristocrat_screen`` equivalence — unchanged.
+    default keeps yfinance behaviour — and the frozen ``run_strategy_screen``
+    equivalence — unchanged.
     """
     streak, note = streak_by_method(method, dividends, min_years=min_years)
     note = f"{note}; streak computed by {method} ({_STREAK_SHAPE[method]})"
@@ -567,7 +567,7 @@ def peg_ratio(
 # --------------------------------------------------------------------------- #
 # Aggregate screen
 # --------------------------------------------------------------------------- #
-def run_dividend_aristocrat_screen(
+def run_strategy_screen(
     fundamentals: Fundamentals,
     dividends: list[DividendEvent],
     *,
@@ -577,12 +577,15 @@ def run_dividend_aristocrat_screen(
     min_growth_years: int,
     last_close: float | None = None,
 ) -> ScreenResult:
-    """Compose the primitives into the full aristocrat screen.
+    """Compose the primitives into the full (dividend-aristocrat) screen.
 
-    Thresholds are injected by the caller (which reads them from the versioned
-    strategy YAML), so this function holds no policy of its own — only math.
-    `last_close` enables deterministic yield derivation (see
-    min_yield_criterion).
+    Retained as the FROZEN equivalence reference that ``run_screen`` (the generic
+    registry-driven runner) is pinned byte-identical against — renamed from
+    ``run_dividend_aristocrat_screen`` with the neutral ledger-tool rename; the
+    math and output are unchanged. Thresholds are injected by the caller (which
+    reads them from the versioned strategy YAML), so this function holds no policy
+    of its own — only math. `last_close` enables deterministic yield derivation
+    (see min_yield_criterion).
     """
     criteria = [
         min_yield_criterion(fundamentals, min_yield=min_yield,

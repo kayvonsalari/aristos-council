@@ -106,7 +106,7 @@ LangGraph orchestration, Anthropic models, pydantic state.
    criteria (yield, payout, revenue CAGR, ROIC, PEG) are currency-INVARIANT and
    evaluate normally regardless. The guard lives in the screening primitive
    (`_non_usd_currency` in tools/screening.py), so `run_screen` stays equivalent
-   to `run_dividend_aristocrat_screen`.
+   to the frozen `run_strategy_screen` reference.
 
 ## Criterion registry (how the screen works, Sprint 4A)
 
@@ -133,8 +133,10 @@ and parameterize them. There is NO dividend-specific logic in the runner.
   required-but-unavailable evidence → `ValidationError` at load.
 - `run_screen(strategy.criteria, evidence, ticker=...)` runs each and assembles
   the `ScreenResult` (+ `unverifiable:<name>:<note>` flags). `gather` logs it
-  under the historical tool_name `run_dividend_aristocrat_screen`, so the
-  ledger/audit/reports are unchanged.
+  under the strategy-neutral tool_name `run_strategy_screen` (renamed from the
+  legacy `run_dividend_aristocrat_screen`; consumers match BOTH via
+  `nodes._is_screen_tool`, so the legacy name in old saved reports still loads —
+  no migration, screen output byte-identical).
 
 **Registered criteria** (`_CRITERIA` in registry.py):
 - Dividend (4A): `min_dividend_yield`, `max_payout_ratio`, `min_market_cap`,
@@ -161,9 +163,10 @@ fields with NO strategy-specific UI code. Params a strategy can't yet set
 evidence packet so dividend framing can't leak into growth runs (live leak on
 NVDA/ASML). Two display-only changes in `agents/nodes.py:_evidence_block` —
 the ledger is never altered:
-- The screen tool shows a neutral label `run_screen`; the STORED tool_name
-  stays `run_dividend_aristocrat_screen` (rule 4 / audit / saved reports match
-  on it).
+- The screen tool shows a neutral label `run_screen`; the STORED tool_name is
+  `run_strategy_screen` (renamed from `run_dividend_aristocrat_screen`; rule 4 /
+  audit / saved reports match on it via `_is_screen_tool`, which also recognizes
+  the legacy name so pre-rename reports still render).
 - `get_fundamentals` renders only the fields the active strategy's criteria
   relate to (each criterion's `fundamentals_fields`) plus a fixed core
   (ticker, name, market_cap, pe_ratio, free_cash_flow, eps). So a growth run
@@ -186,10 +189,10 @@ threshold's bounds/step/default), required evidence, and `fundamentals_fields`
 can render its inputs, and the evidence scopes correctly, with no runner changes.
 
 **Safety net**: `tests/test_criteria_registry.py` pins `run_screen` ==
-the original `run_dividend_aristocrat_screen` field-for-field across JNJ/MO/
-BRK-B/O shapes. `run_dividend_aristocrat_screen` is retained unchanged as that
-reference; if you touch criterion math, that equivalence test must be updated
-deliberately.
+the frozen reference `run_strategy_screen` (renamed from
+`run_dividend_aristocrat_screen`) field-for-field across JNJ/MO/BRK-B/O shapes.
+That reference function is retained unchanged; if you touch criterion math, the
+equivalence test must be updated deliberately.
 
 ## Environment & billing split (important)
 
@@ -269,8 +272,8 @@ change. The hardcoded `run_dividend_aristocrat_screen` is generalized into a
 registry of named criterion functions that strategies select by name (see
 "Criterion registry" above). Screen output is byte-identical (equivalence test).
 The four dividend criteria are registered unchanged; the strategy YAML moved to
-a criteria list. `run_dividend_aristocrat_screen` is kept as the equivalence
-reference. 185 tests green.
+a criteria list. The hardcoded screen is kept as the equivalence reference (later
+renamed `run_dividend_aristocrat_screen` -> `run_strategy_screen`). 185 tests green.
 
 ## Sprint 4B (shipped 2026-06-14)
 

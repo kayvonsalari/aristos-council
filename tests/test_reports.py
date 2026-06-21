@@ -264,3 +264,39 @@ def test_list_and_load_reports_sorted_oldest_first(tmp_path):
 def test_list_reports_missing_ticker_returns_empty(tmp_path):
     assert list_reports("NOPE", tmp_path) == []
     assert load_reports("NOPE", tmp_path) == []
+
+
+# --------------------------------------------------------------------------- #
+# Back-compat: the screen ledger tool was renamed run_dividend_aristocrat_screen
+# -> run_strategy_screen. OLD saved reports (JNJ/MSFT/ASML/PG/000660.KS on disk)
+# carry the LEGACY name; consumers match via _is_screen_tool, so those reports
+# still load and their screen + flags are still recognized — no migration.
+# --------------------------------------------------------------------------- #
+def test_legacy_screen_tool_name_still_recognized():
+    from pathlib import Path
+
+    from aristos_council.agents.nodes import _is_screen_tool
+    from aristos_council.agents.veto import make_veto_node
+    from aristos_council.persistence.reports import _screen_from_state
+    from aristos_council.strategy.loader import load_strategy
+
+    legacy = "run_dividend_aristocrat_screen"
+    assert _is_screen_tool(legacy) and _is_screen_tool("run_strategy_screen")
+
+    s = _state()
+    s.tool_calls = [ToolCall(
+        call_id="c1", tool_name=legacy, ok=True,
+        output={"criteria": [{"name": "min_dividend_yield", "passed": True}],
+                "flags": ["unverifiable:min_dividend_growth_streak:short history"]})]
+    s.decision = Decision(recommendation=Recommendation.HOLD, confidence=0.9,
+                          rationale="r")
+
+    # reports.py captures the screen despite the legacy ledger name
+    assert _screen_from_state(s) is not None
+
+    # veto.py still surfaces the legacy screen's unverifiable flag as DATA_QUALITY
+    strategy = load_strategy(
+        Path(__file__).resolve().parents[1]
+        / "strategies" / "dividend_aristocrats_v1.yaml")
+    make_veto_node(strategy)(s)
+    assert VetoTrigger.DATA_QUALITY in {f.trigger for f in s.veto_flags}

@@ -69,7 +69,7 @@ def _screen_criteria(state: ResearchState) -> list:
     """The screen's per-criterion results (name + three-valued passed) from the
     ledger, for the deterministic disposition gate. Empty if no screen ran."""
     for tc in state.tool_calls:
-        if tc.tool_name == _SCREEN_LEDGER_TOOL and tc.output:
+        if _is_screen_tool(tc.tool_name) and tc.output:
             out = tc.output
             crits = out.get("criteria") if isinstance(out, dict) else None
             return crits or []
@@ -158,7 +158,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
             state.tool_calls.append(
                 ToolCall(
                     call_id=_new_call_id(),
-                    tool_name="run_dividend_aristocrat_screen",
+                    tool_name=_SCREEN_LEDGER_TOOL,
                     inputs={"ticker": state.ticker,
                             "strategy_id": strategy.id},
                     output=asdict(screen),
@@ -238,12 +238,21 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
 MAX_NEWS_LOGGED = 60
 MAX_TOOL_OUTPUT_CHARS = 12000  # per tool call, in prompts only — ledger keeps full output
 
-# The screen's STORED ledger tool_name — the provenance audit, _PROMPT_VIEW_ALIASES,
-# and every saved report match on this, so it never changes. Agents instead SEE a
-# strategy-neutral label, so a tool literally named after "dividend aristocrats"
-# can't frame a growth run (live leak on NVDA/ASML). Display ≠ identity.
-_SCREEN_LEDGER_TOOL = "run_dividend_aristocrat_screen"
+# The screen's STORED ledger tool_name. Renamed to a STRATEGY-NEUTRAL name so it no
+# longer stamps "dividend" on growth-run provenance lines (and to cover dividend +
+# growth + future strategies). The agent-facing label is the even shorter
+# `run_screen` (display ≠ identity, the 4D fix). Old saved reports carry the LEGACY
+# name; consumers match via `_is_screen_tool`, so those reports still load — no
+# migration, no number change (the screen OUTPUT is byte-identical).
+_SCREEN_LEDGER_TOOL = "run_strategy_screen"
+_LEGACY_SCREEN_LEDGER_TOOLS = {"run_dividend_aristocrat_screen"}
 _SCREEN_DISPLAY_TOOL = "run_screen"
+
+
+def _is_screen_tool(name: str) -> bool:
+    """True for the screen's current ledger tool_name OR any historical one — the
+    back-compat shim that keeps pre-rename saved reports loadable."""
+    return name == _SCREEN_LEDGER_TOOL or name in _LEGACY_SCREEN_LEDGER_TOOLS
 
 # Fundamentals fields always shown in the agent evidence, regardless of strategy
 # (identity + universally-relevant context). The active strategy's criteria add
@@ -318,9 +327,10 @@ def _evidence_block(state: ResearchState, strategy: Strategy) -> str:
                               "(strong_buy/buy/hold/sell/strong_sell); the bullish "
                               "ratio lives in sentiment_snapshot, not here")
         # Agent-facing tool label is strategy-neutral; the stored tc.tool_name
-        # (used by the audit) is untouched.
+        # (used by the audit) is untouched. _is_screen_tool so re-rendered OLD
+        # reports (legacy ledger name) also get the neutral display label.
         display_tool = (_SCREEN_DISPLAY_TOOL
-                        if tc.tool_name == _SCREEN_LEDGER_TOOL else tc.tool_name)
+                        if _is_screen_tool(tc.tool_name) else tc.tool_name)
         payload = {"call_id": tc.call_id, "tool": display_tool,
                    "ok": tc.ok, "error": tc.error, "output": output}
         line = json.dumps(payload, default=str)
@@ -394,7 +404,7 @@ _HARD_RULES = (
     "CITE THE RIGHT TOOL: cite a value only on the tool call that actually "
     "returned it — its call_id and tool_name must match the evidence line you "
     "read the value from. A screen criterion is cited as criteria[N].<field> "
-    "(e.g. criteria[2].passed) against the run_dividend_aristocrat_screen "
+    "(e.g. criteria[2].passed) against the run_strategy_screen "
     "call, never against another tool. NO SYNTHETIC FIGURES: if no "
     "single ledger field contains the number, do not cite it as a figure — "
     "describe it in your thesis without a FigureRef instead.\n"

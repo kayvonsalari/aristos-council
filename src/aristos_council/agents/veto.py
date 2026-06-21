@@ -23,6 +23,7 @@ from ..state import (
     VetoTrigger,
 )
 from ..strategy.loader import Strategy
+from .nodes import _is_screen_tool
 
 # Specialist stance -> the verdict it implies, for the MAJORITY_OVERRIDE check.
 _STANCE_VERDICT = {
@@ -58,7 +59,7 @@ def make_veto_node(strategy: Strategy):
         dq: list[str] = []
         dq += [e for e in state.errors]  # adapter failures + provenance violations
         for tc in state.tool_calls:
-            if tc.tool_name == "run_dividend_aristocrat_screen" and tc.output:
+            if _is_screen_tool(tc.tool_name) and tc.output:
                 dq += [str(f) for f in tc.output.get("flags", [])]
         for o in state.specialist_opinions:
             if o.stance == Stance.ABSTAIN:

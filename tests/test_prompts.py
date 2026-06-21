@@ -74,7 +74,7 @@ def test_hard_rules_require_citing_the_originating_tool():
     assert "call_id and tool_name must match" in _HARD_RULES
     # a screen criterion is cited as criteria[N].<field> on the screen tool
     assert "criteria[N].<field>" in _HARD_RULES
-    assert "run_dividend_aristocrat_screen" in _HARD_RULES
+    assert "run_strategy_screen" in _HARD_RULES
 
 
 def test_every_agent_prompt_carries_the_new_rules():

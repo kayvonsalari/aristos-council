@@ -131,7 +131,7 @@ def test_full_council_run_clean():
     # gather logged the adapter + tool calls
     names = {tc.tool_name for tc in state.tool_calls}
     assert {"get_fundamentals", "get_dividend_history", "get_price_history",
-            "run_dividend_aristocrat_screen", "technical_snapshot"} <= names
+            "run_strategy_screen", "technical_snapshot"} <= names
 
     # all four specialists opined, critic + decision landed
     assert len(state.specialist_opinions) == 4
@@ -295,7 +295,7 @@ def test_null_unit_figures_survive_validation_with_empty_unit():
 
     state = ResearchState(ticker="MO", strategy_id=STRATEGY.id)
     state.tool_calls.append(ToolCall(
-        call_id="c1", tool_name="run_dividend_aristocrat_screen",
+        call_id="c1", tool_name="run_strategy_screen",
         output={"metrics": {"dividend_yield": 0.084, "payout_ratio": 0.79}}))
     refs = [
         FigureRef(label="dividend_yield", value=0.084, unit=None,
@@ -660,7 +660,7 @@ def test_confirmed_fail_wins_over_not_eval_at_decision_node():
         recommendation=Recommendation.BUY, confidence=0.9, rationale="r")))
     state = ResearchState(ticker="FAKE", strategy_id=STRATEGY.id)
     state.tool_calls.append(ToolCall(
-        call_id="s", tool_name="run_dividend_aristocrat_screen",
+        call_id="s", tool_name="run_strategy_screen",
         output={"criteria": [
             {"name": "min_dividend_yield", "passed": False, "observed": 0.0,
              "threshold": 0.025, "note": "confirmed fail"},
@@ -686,7 +686,7 @@ def test_non_gating_not_eval_does_not_short_circuit():
         recommendation=Recommendation.BUY, confidence=0.9, rationale="r")))
     state = ResearchState(ticker="FAKE", strategy_id=STRATEGY.id)
     state.tool_calls.append(ToolCall(
-        call_id="s", tool_name="run_dividend_aristocrat_screen",
+        call_id="s", tool_name="run_strategy_screen",
         output={"criteria": [
             {"name": "min_dividend_yield", "passed": None, "observed": None,
              "threshold": 0.025, "note": "not evaluated"},
