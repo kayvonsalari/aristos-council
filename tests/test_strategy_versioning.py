@@ -65,8 +65,8 @@ def test_make_new_version_applies_edits_and_bumps():
     assert by["min_dividend_yield"].threshold == 0.03
     assert new.policy.partial_pass_allows_hold is False
     assert new.veto.min_confidence == 0.7
-    # ...untouched criteria preserved
-    assert by["min_dividend_growth_streak"].threshold == 25
+    # ...untouched criteria preserved (base v1 streak is now 20 — EODHD migration)
+    assert by["min_dividend_growth_streak"].threshold == 20
     assert by["min_dividend_growth_streak"].unverifiable_blocks is True
 
 

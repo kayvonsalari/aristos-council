@@ -27,6 +27,7 @@ import textwrap
 from pathlib import Path
 
 from aristos_council.agents.runners import production_runners
+from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.yfinance_adapter import YFinanceAdapter
 from aristos_council.graph import build_council
 from aristos_council.persistence.reports import report_from_state, save_report
@@ -102,7 +103,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    ticker = args.ticker
+    # Normalize at the input edge: strips a stray trailing dot ("000660.KS.")
+    # that otherwise breaks retrieval AND names the persisted verdict/report files.
+    ticker = normalize_ticker(args.ticker)
     strategy = load_strategy(
         resolve_strategy_path(args.strategy_opt or args.strategy)
     )

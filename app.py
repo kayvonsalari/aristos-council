@@ -28,7 +28,7 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 from pydantic import ValidationError
 
-from aristos_council.data.adapter import DataUnavailable
+from aristos_council.data.adapter import DataUnavailable, normalize_ticker
 from aristos_council.persistence.reports import (
     RunReport,
     list_reports,
@@ -1046,7 +1046,9 @@ def main() -> None:
     # --- sidebar: pick a ticker + strategy, gate the run on a cost ack ---
     with st.sidebar:
         st.header("Run a council")
-        ticker = st.text_input("Ticker", value="JNJ").strip().upper()
+        # normalize_ticker also strips a stray trailing dot ("000660.KS." -> the
+        # SK Hynix retrieval bug); upper-cases and trims like the old inline call.
+        ticker = normalize_ticker(st.text_input("Ticker", value="JNJ"))
 
         options = list_strategy_options(STRATEGIES_DIR)
         if options:

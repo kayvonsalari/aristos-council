@@ -343,6 +343,97 @@ def min_growth_streak_criterion(
 
 
 # --------------------------------------------------------------------------- #
+# EODHD-grade streak (calendar-year SUM of ADJUSTED values)
+# --------------------------------------------------------------------------- #
+# A SECOND streak method, on purpose. ``consecutive_dividend_growth_years`` above
+# uses the per-payment MEDIAN, tuned for yfinance's ex-date timing noise (PG's
+# 2002 had a stray 5th ex-date that a calendar-year SUM misreads as a cut). This
+# one sums per calendar year — the opposite trade-off — because EODHD ships clean
+# ADJUSTED values where the real hazard is CADENCE CHANGE (annual -> Interim+Final),
+# which a per-payment comparison misreads as a cut. The two methods are matched to
+# the two providers' data shapes and must NOT be collapsed; this is additive and
+# the per-payment method (and its regression guards) are untouched.
+def dividend_growth_streak_by_calendar_year(
+    dividends: list[DividendEvent], *, min_years: int,
+) -> tuple[int | None, str]:
+    """Consecutive calendar years whose TOTAL dividend strictly exceeds the prior
+    year's total — the EODHD method. Returns (streak, note); streak is None
+    (NOT-EVAL) when history is too short to verify a ``min_years`` streak.
+
+    Traps the Nestlé data exposed, handled here:
+    1. Caller passes ADJUSTED values (EODHD ``value``), so split jumps (Nestlé
+       2002: 0.64 adjusted vs 6.40 raw) never create a phantom break.
+    2. GROUP BY CALENDAR YEAR and SUM, so a cadence change (annual -> Interim+Final
+       from ~2025) compares like-for-like annual totals, not individual payments.
+    3. STRICT INCREASE counts as a streak year (a "growth" streak; a hold-flat or
+       a cut stops it).
+    4. The most-recent year is EXCLUDED as possibly INCOMPLETE (only Interim paid
+       so far), so a mid-year run does not read the partial year as a cut.
+
+    NOT-EVAL vs FAIL (honesty): if the history is too short to even reach a
+    ``min_years`` streak (a name listed <``min_years`` years ago), the result is
+    None — NOT a fail — so a gating criterion routes it to INSUFFICIENT_EVIDENCE.
+    A cut WITHIN a long-enough window is a genuine fail (a short streak, returned).
+    """
+    if not dividends:
+        return None, "no dividend events available"
+
+    totals: dict[int, float] = {}
+    for ev in dividends:
+        totals[ev.ex_date.year] = totals.get(ev.ex_date.year, 0.0) + ev.amount
+
+    years_sorted = sorted(totals)
+    # Drop the latest calendar year — it may be incomplete (only Interim paid).
+    complete_years = years_sorted[:-1]
+    if len(complete_years) < 2:
+        return None, "insufficient complete-year dividend history (<2 years)"
+
+    # The longest streak this much COMPLETE history could possibly demonstrate.
+    max_observable = len(complete_years) - 1
+    if max_observable < min_years:
+        return None, (
+            f"insufficient history to verify a {min_years}-year streak: "
+            f"{len(complete_years)} complete years (latest excluded as possibly "
+            f"incomplete) support a streak of at most {max_observable}"
+        )
+
+    streak = 0
+    for i in range(len(complete_years) - 1, 0, -1):
+        if totals[complete_years[i]] > totals[complete_years[i - 1]]:
+            streak += 1
+        else:
+            break
+
+    note = (
+        f"streak {streak}: consecutive calendar years with a strictly higher TOTAL "
+        f"dividend (adjusted value, summed per year; latest/incomplete year "
+        f"excluded) across {len(complete_years)} complete years"
+    )
+    return streak, note
+
+
+def min_growth_streak_criterion_by_year(
+    dividends: list[DividendEvent], *, min_years: int
+) -> CriterionResult:
+    """``min_dividend_growth_streak`` evaluated with the calendar-year method.
+
+    Same CriterionResult shape and three-valued ``passed`` as
+    ``min_growth_streak_criterion`` (None == NOT-EVAL, never a phantom fail), so it
+    is a drop-in for the EODHD provider when the live wiring lands."""
+    streak, note = dividend_growth_streak_by_calendar_year(
+        dividends, min_years=min_years)
+    if streak is None:
+        return CriterionResult(
+            name="min_dividend_growth_streak", passed=None, observed=None,
+            threshold=float(min_years), note=note,
+        )
+    return CriterionResult(
+        name="min_dividend_growth_streak", passed=streak >= min_years,
+        observed=float(streak), threshold=float(min_years), note=note,
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Growth / quality primitives (Sprint 4B) — pure math, NOT-EVAL on missing data
 # --------------------------------------------------------------------------- #
 def revenue_cagr(

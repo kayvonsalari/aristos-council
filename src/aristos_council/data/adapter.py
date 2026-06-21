@@ -22,6 +22,23 @@ from datetime import date
 
 
 # --------------------------------------------------------------------------- #
+# Ticker normalization (provider-neutral, applied at INPUT)
+# --------------------------------------------------------------------------- #
+def normalize_ticker(raw: str) -> str:
+    """Canonical ticker form: trim whitespace, upper-case, strip stray trailing
+    dots.
+
+    A dangling trailing '.' (e.g. ``000660.KS.`` pasted from prose or a sentence
+    boundary) silently broke retrieval on the SK Hynix run — the symbol must end
+    at its exchange suffix (``.KS``), never a dotted tail. Internal dots
+    (``BRK.B``, ``NESN.SW``) are preserved; only trailing dots are removed.
+    Applied at the input edge so the cleaned symbol also names the persisted
+    verdict/report files, not just the provider call.
+    """
+    return (raw or "").strip().upper().rstrip(".")
+
+
+# --------------------------------------------------------------------------- #
 # Errors
 # --------------------------------------------------------------------------- #
 class DataUnavailable(Exception):

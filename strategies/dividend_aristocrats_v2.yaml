@@ -39,10 +39,14 @@ criteria:
   - name: min_market_cap            # 10B USD; large-cap durability proxy
     threshold: 10000000000
   - name: min_dividend_growth_streak  # canonical aristocrat streak
-    threshold: 25
-    # When the streak is UNVERIFIABLE on the current provider (yfinance can't
-    # confirm 25y), treat it as blocking rather than auto-passing. (Successor to
-    # the old policy.unverifiable_streak_is_blocking; per-criterion now.)
+    # Lowered 25 -> 20 with the EODHD migration: EODHD's non-US dividend coverage
+    # starts ~2000 (Nestlé: 2002), so a 25-year streak is UNVERIFIABLE for European
+    # names. 20 is verifiable across both US and EU history and is still a strong
+    # aristocrat signal (US-only names easily clear 20; this does not weaken them).
+    threshold: 20
+    # When the streak is UNVERIFIABLE on the current provider (short history can't
+    # confirm the floor), treat it as blocking rather than auto-passing. (Successor
+    # to the old policy.unverifiable_streak_is_blocking; per-criterion now.)
     unverifiable_blocks: true
     # GATING (v2): a confirmed streak FAIL (passed is False) caps the disposition
     # at SELL deterministically — the LLM cannot raise it. Only this criterion is

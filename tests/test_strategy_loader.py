@@ -34,7 +34,7 @@ def test_loads_shipped_v1():
     by = {c.name: c for c in s.criteria}
     assert by["min_dividend_yield"].threshold == 0.025
     assert by["min_market_cap"].threshold == 10_000_000_000
-    assert by["min_dividend_growth_streak"].threshold == 25
+    assert by["min_dividend_growth_streak"].threshold == 20   # lowered 25->20 (EODHD migration)
     assert by["min_dividend_growth_streak"].unverifiable_blocks is True
     assert s.policy.partial_pass_allows_hold is True
     assert s.veto.min_confidence == 0.6
