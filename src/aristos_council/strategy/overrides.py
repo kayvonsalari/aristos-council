@@ -7,8 +7,10 @@ in-memory *effective* Strategy from the immutable base plus the UI's per-run
 choices, and record exactly what differed so the run is reproducible. The on-disk
 YAML is never touched.
 
-Scope (this build): the two disposition controls only —
-``policy.partial_pass_allows_hold`` and per-criterion ``is_gating``.
+Scope (this build): the disposition controls
+``policy.partial_pass_allows_hold`` and per-criterion ``is_gating``, plus a
+per-criterion ``threshold`` override (so the override matrix can be scripted from
+the CLI as well as toggled in the Streamlit sidebar).
 """
 
 from __future__ import annotations
@@ -21,12 +23,14 @@ def effective_strategy(
     *,
     partial_pass_allows_hold: bool | None = None,
     is_gating: dict[str, bool] | None = None,
+    thresholds: dict[str, float] | None = None,
 ) -> Strategy:
     """A DEEP COPY of ``base`` with the given overrides applied.
 
     ``base`` is never mutated (``model_copy(deep=True)`` copies nested policy and
     criteria). ``None`` / omitted keeps the strategy's own value; an ``is_gating``
-    entry only affects the named criterion.
+    or ``thresholds`` entry only affects the named criterion (an unknown name is
+    a silent no-op, mirroring ``is_gating``).
     """
     eff = base.model_copy(deep=True)
     if partial_pass_allows_hold is not None:
@@ -35,6 +39,10 @@ def effective_strategy(
         for c in eff.criteria:
             if c.name in is_gating:
                 c.is_gating = is_gating[c.name]
+    if thresholds:
+        for c in eff.criteria:
+            if c.name in thresholds:
+                c.threshold = thresholds[c.name]
     return eff
 
 
@@ -44,7 +52,8 @@ def applied_overrides(base: Strategy, effective: Strategy) -> dict:
     Empty dict ⇒ the run used pure strategy defaults (a no-op). Shape::
 
         {"partial_pass_allows_hold": <bool>,
-         "criteria.<name>.is_gating": <bool>}
+         "criteria.<name>.is_gating": <bool>,
+         "criteria.<name>.threshold": <float>}
 
     Computed by diffing, so it reflects REAL differences only (toggling a control
     back to the file value records nothing).
@@ -53,8 +62,13 @@ def applied_overrides(base: Strategy, effective: Strategy) -> dict:
     if (effective.policy.partial_pass_allows_hold
             != base.policy.partial_pass_allows_hold):
         out["partial_pass_allows_hold"] = effective.policy.partial_pass_allows_hold
-    base_gating = {c.name: c.is_gating for c in base.criteria}
+    base_by_name = {c.name: c for c in base.criteria}
     for c in effective.criteria:
-        if c.name in base_gating and c.is_gating != base_gating[c.name]:
+        bc = base_by_name.get(c.name)
+        if bc is None:
+            continue
+        if c.is_gating != bc.is_gating:
             out[f"criteria.{c.name}.is_gating"] = c.is_gating
+        if c.threshold != bc.threshold:
+            out[f"criteria.{c.name}.threshold"] = c.threshold
     return out

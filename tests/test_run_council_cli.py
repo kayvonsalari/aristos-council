@@ -10,10 +10,18 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 from aristos_council.strategy.loader import load_strategy
+from aristos_council.strategy.overrides import applied_overrides, effective_strategy
 
 ROOT = Path(__file__).resolve().parents[1]
 STRATEGIES_DIR = ROOT / "strategies"
+STREAK = "min_dividend_growth_streak"
+
+
+def _v1():
+    return load_strategy(STRATEGIES_DIR / "dividend_aristocrats_v1.yaml")
 
 
 def _run_council():
@@ -64,3 +72,50 @@ def test_strategy_via_positional_or_flag():
 def test_ticker_defaults_to_jnj():
     m = _run_council()
     assert m.parse_args([]).ticker == "JNJ"
+
+
+# --- per-run override flags (scriptable override matrix) -------------------- #
+def test_parse_gating_and_threshold_flags_build_override_dict():
+    m = _run_council()
+    a = m.parse_args(["JNJ", "--gating", STREAK, "--threshold", f"{STREAK}=25"])
+    ov = m.build_override_kwargs(a)
+    assert ov["is_gating"] == {STREAK: True}
+    assert ov["thresholds"] == {STREAK: 25.0}
+    assert ov["partial_pass_allows_hold"] is None
+
+
+def test_parse_no_gating_and_partial_pass_flags():
+    m = _run_council()
+    a = m.parse_args(["JNJ", "--no-gating", STREAK, "--no-partial-pass"])
+    ov = m.build_override_kwargs(a)
+    assert ov["is_gating"] == {STREAK: False}
+    assert ov["partial_pass_allows_hold"] is False
+
+
+def test_baseline_run_has_empty_overrides_and_delta():
+    m = _run_council()
+    ov = m.build_override_kwargs(m.parse_args(["JNJ"]))
+    assert ov == {"partial_pass_allows_hold": None, "is_gating": None,
+                  "thresholds": None}
+    # a baseline run records an EMPTY delta -> stays a valid flip baseline
+    base = _v1()
+    assert applied_overrides(base, effective_strategy(base, **ov)) == {}
+
+
+def test_cli_override_run_records_nonempty_delta():
+    m = _run_council()
+    a = m.parse_args(["JNJ", "--no-gating", STREAK, "--threshold", f"{STREAK}=25"])
+    base = _v1()
+    eff = effective_strategy(base, **m.build_override_kwargs(a))
+    delta = applied_overrides(base, eff)
+    # v1 streak gates by default, so --no-gating IS a real change; threshold too.
+    assert delta == {f"criteria.{STREAK}.is_gating": False,
+                     f"criteria.{STREAK}.threshold": 25.0}
+
+
+def test_malformed_threshold_is_rejected_with_clear_error():
+    m = _run_council()
+    with pytest.raises(SystemExit):
+        m.parse_args(["JNJ", "--threshold", STREAK])            # no '='
+    with pytest.raises(SystemExit):
+        m.parse_args(["JNJ", "--threshold", f"{STREAK}=abc"])   # non-numeric

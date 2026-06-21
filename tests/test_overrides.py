@@ -103,3 +103,34 @@ def test_default_run_records_empty_overrides():
     s = ResearchState(ticker="X", strategy_id="dividend_aristocrats_v1")
     assert report_from_state(s).applied_overrides == {}
     assert record_from_state(s).applied_overrides == {}
+
+
+# --- threshold overrides (CLI override matrix; same effective_strategy path) -- #
+def test_effective_strategy_applies_threshold_override():
+    eff = effective_strategy(_v1(), thresholds={STREAK: 25.0})
+    assert {c.name: c.threshold for c in eff.criteria}[STREAK] == 25.0
+
+
+def test_threshold_override_does_not_mutate_base():
+    base = _v1()
+    before = {c.name: c.threshold for c in base.criteria}[STREAK]   # 20 from the file
+    effective_strategy(base, thresholds={STREAK: 25.0})
+    assert {c.name: c.threshold for c in base.criteria}[STREAK] == before
+
+
+def test_applied_overrides_records_threshold_delta():
+    base = _v1()
+    eff = effective_strategy(base, thresholds={STREAK: 25.0})
+    assert applied_overrides(base, eff) == {f"criteria.{STREAK}.threshold": 25.0}
+
+
+def test_threshold_override_to_the_file_value_records_nothing():
+    base = _v1()                                   # streak threshold is 20
+    same = effective_strategy(base, thresholds={STREAK: 20.0})
+    assert applied_overrides(base, same) == {}     # 20.0 == 20 -> no real diff
+
+
+def test_threshold_override_unknown_criterion_is_a_noop():
+    base = _v1()
+    eff = effective_strategy(base, thresholds={"nonexistent_criterion": 99.0})
+    assert applied_overrides(base, eff) == {}

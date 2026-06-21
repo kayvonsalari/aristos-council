@@ -19,6 +19,15 @@ Examples:
 The strategy defaults to dividend_aristocrats_v1 when omitted. The chosen
 strategy flows through to build_council and is recorded as strategy_id in the
 persisted verdict + report (so the log reflects the actual strategy used).
+
+Ephemeral per-run overrides (same mechanism as the Streamlit sidebar; the YAML
+is never touched) let the override matrix be scripted:
+    --gating CRITERION        set is_gating=True  on CRITERION (repeatable)
+    --no-gating CRITERION      set is_gating=False on CRITERION (repeatable)
+    --threshold CRITERION=N    override CRITERION's threshold (repeatable)
+    --partial-pass / --no-partial-pass   set partial_pass_allows_hold
+The applied delta is recorded on the report/verdict (empty for a baseline run),
+and an override run is NOT a flip baseline — identical to the app.
 """
 
 import argparse
@@ -38,6 +47,7 @@ from aristos_council.persistence.verdicts import (
 )
 from aristos_council.state import ResearchState
 from aristos_council.strategy.loader import load_strategy
+from aristos_council.strategy.overrides import applied_overrides, effective_strategy
 
 ROOT = Path(__file__).resolve().parents[1]
 VERDICTS_DIR = ROOT / "verdicts"
@@ -75,6 +85,43 @@ def resolve_strategy_path(arg: str | None,
     return strategies_dir / f"{arg}.yaml"
 
 
+def _threshold_arg(s: str) -> tuple[str, float]:
+    """Parse one ``--threshold CRITERION=VALUE`` into (name, float). Raises a
+    clear argparse error on malformed input (no '=' or non-numeric VALUE)."""
+    if "=" not in s:
+        raise argparse.ArgumentTypeError(
+            f"--threshold expects CRITERION=VALUE, got {s!r} (missing '=')")
+    name, _, raw = s.partition("=")
+    name = name.strip()
+    if not name:
+        raise argparse.ArgumentTypeError(
+            f"--threshold is missing the criterion name: {s!r}")
+    try:
+        value = float(raw)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"--threshold value must be numeric, got {raw!r} in {s!r}")
+    return name, value
+
+
+def build_override_kwargs(args: argparse.Namespace) -> dict:
+    """Turn the parsed per-run flags into the SAME override kwargs the app uses:
+    ``partial_pass_allows_hold`` (bool|None), ``is_gating`` ({crit: bool}|None),
+    ``thresholds`` ({crit: float}|None). Empty/absent flags -> None, so a baseline
+    run produces no overrides (and stays a valid flip baseline)."""
+    is_gating: dict[str, bool] = {}
+    for name in (args.gating or []):
+        is_gating[name] = True
+    for name in (args.no_gating or []):     # an explicit --no-gating wins if both given
+        is_gating[name] = False
+    thresholds = dict(args.threshold or [])  # list of (name, value) tuples
+    return {
+        "partial_pass_allows_hold": args.partial_pass,   # True / False / None
+        "is_gating": is_gating or None,
+        "thresholds": thresholds or None,
+    }
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="run_council.py",
@@ -98,6 +145,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("-s", "--strategy", dest="strategy_opt", default=None,
                         metavar="ID_OR_PATH",
                         help="strategy id or YAML path (overrides the positional)")
+
+    # --- ephemeral per-run overrides (same mechanism as the Streamlit sidebar) -- #
+    ov = parser.add_argument_group("per-run overrides (this run only; YAML untouched)")
+    ov.add_argument("--gating", action="append", metavar="CRITERION", default=[],
+                    help="set is_gating=True on CRITERION this run (repeatable)")
+    ov.add_argument("--no-gating", action="append", metavar="CRITERION", default=[],
+                    help="set is_gating=False on CRITERION this run (repeatable)")
+    ov.add_argument("--threshold", action="append", type=_threshold_arg, default=[],
+                    metavar="CRITERION=VALUE",
+                    help="override CRITERION's threshold this run (repeatable)")
+    pp = ov.add_mutually_exclusive_group()
+    pp.add_argument("--partial-pass", dest="partial_pass", action="store_true",
+                    default=None, help="set partial_pass_allows_hold=True this run")
+    pp.add_argument("--no-partial-pass", dest="partial_pass", action="store_false",
+                    help="set partial_pass_allows_hold=False this run")
     return parser.parse_args(argv)
 
 
@@ -106,10 +168,18 @@ def main(argv: list[str] | None = None) -> None:
     # Normalize at the input edge: strips a stray trailing dot ("000660.KS.")
     # that otherwise breaks retrieval AND names the persisted verdict/report files.
     ticker = normalize_ticker(args.ticker)
-    strategy = load_strategy(
+    base = load_strategy(
         resolve_strategy_path(args.strategy_opt or args.strategy)
     )
-    print(f"(strategy: {strategy.id} — {strategy.name})")
+    # Ephemeral per-run overrides via the SAME path as the app: build the effective
+    # strategy and record exactly what differs. delta is EMPTY for a baseline run
+    # (valid flip baseline) and populated for an override run (never a baseline).
+    strategy = effective_strategy(base, **build_override_kwargs(args))
+    delta = applied_overrides(base, strategy)
+    print(f"(strategy: {base.id} — {base.name})")
+    if delta:
+        print("(overrides: "
+              + "; ".join(f"{k}={v}" for k, v in delta.items()) + ")")
 
     sentiment = None
     if os.environ.get("FINNHUB_API_KEY"):
@@ -126,8 +196,9 @@ def main(argv: list[str] | None = None) -> None:
                         sentiment_adapter=sentiment)
 
     # IO at the edge: load the prior verdict for the same ticker AND strategy
-    # (recommendation_flip key) so the veto never flips across strategies.
-    prior = load_latest(ticker, VERDICTS_DIR, strategy_id=strategy.id)
+    # (recommendation_flip key), keyed off the BASE id. load_latest skips prior
+    # OVERRIDE runs, so an experiment never becomes the flip baseline.
+    prior = load_latest(ticker, VERDICTS_DIR, strategy_id=base.id)
     if prior is not None:
         print(f"(prior verdict: "
               f"{prior.verdict.value.upper() if prior.verdict else 'n/a'} "
@@ -135,13 +206,14 @@ def main(argv: list[str] | None = None) -> None:
     result = ResearchState.model_validate(
         app.invoke(ResearchState(
             ticker=ticker,
-            strategy_id=strategy.id,
+            strategy_id=base.id,                 # always the BASE id (overrides ride in delta)
             prior_recommendation=prior.verdict if prior else None,
+            applied_overrides=delta,             # empty for baseline; populated for overrides
         ))
     )
 
     print(f"\n=== Aristos Council verdict on {ticker} "
-          f"({strategy.id}) ===\n")
+          f"({base.id}) ===\n")
 
     for op in result.specialist_opinions:
         print(f"  {op.specialist.value.upper()}  —  {op.stance.value}  "
