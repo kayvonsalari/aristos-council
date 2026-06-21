@@ -1,0 +1,29 @@
+[
+  {
+    "ticker": "000660.KS.",
+    "run_at": "2026-06-21T13:12:24.980889Z",
+    "strategy_id": "dividend_aristocrats_v1",
+    "verdict": "insufficient_evidence",
+    "confidence": 0.07,
+    "stances": {
+      "fundamental": "abstain",
+      "technical": "abstain",
+      "sentiment": "abstain",
+      "risk": "abstain"
+    },
+    "veto_triggers": [
+      "low_confidence",
+      "data_quality",
+      "insufficient_evidence"
+    ],
+    "provenance_audit": {
+      "figures_audited": 14,
+      "verified": 14,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 0,
+      "unit_scaled": 0
+    },
+    "applied_overrides": {}
+  }
+]
