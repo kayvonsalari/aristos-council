@@ -2,7 +2,7 @@
 
 A multi-agent financial research analyst. Specialist agents deliberate over a single security, a dedicated Critic argues the opposite case before any verdict is reached, and a Decision agent issues a **buy / hold / sell** call — or **insufficient-evidence**, an off-the-ladder "cannot render a verdict" state — with an explicit confidence score and noted dissent. A human holds the veto.
 
-The name nods to the [Dividend Aristocrats](https://en.wikipedia.org/wiki/S%26P_500_Dividend_Aristocrats) — and to the idea that a recommendation should have to survive a council, not just one model's first instinct.
+The name nods to the Dividend Aristocrats — and to the idea that a recommendation should have to survive a council, not just one model's first instinct. Dividend income is one lens; a growth-at-a-reasonable-price (GARP) strategy is another, and both run on the same criterion registry, screen, and provenance guarantees.
 
 ## How it works
 
