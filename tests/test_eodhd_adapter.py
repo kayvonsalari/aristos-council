@@ -220,7 +220,7 @@ from aristos_council.tools.screening import (                         # noqa: E4
 
 def test_adapters_declare_their_streak_shape():
     assert MarketDataAdapter.dividend_streak_method == "per_payment_median"  # default
-    assert YFinanceAdapter().dividend_streak_method == "per_payment_median"
+    assert YFinanceAdapter.dividend_streak_method == "per_payment_median"
     assert EODHDAdapter(api_key="k").dividend_streak_method == "calendar_year_sum"
 
 
