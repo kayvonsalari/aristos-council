@@ -158,5 +158,59 @@ The strategy notes above flag exactly where these gaps affect results today.
 
 ---
 
+## Part C — What's mechanically guaranteed (and how it's tested)
+
+If you are deciding whether to trust this system, the honest answer is that the trust does not
+come from the language models. It comes from the deterministic code that surrounds them and from
+an automated test suite — 371 tests at last count — that runs the entire pipeline on every
+change with fake models and fake data, no API keys and no network. Each guarantee below is
+enforced by that code and re-checked by those tests; none of it depends on a model behaving well
+on the day.
+
+**Every figure is traceable.** No language model does arithmetic. Each number is produced by a
+pure, deterministic tool and is audited after the fact back to the exact source call it came
+from. A number that cannot be resolved to its origin is treated as a hard failure that surfaces
+for review, not a footnote that quietly survives.
+
+**The risk discipline cannot be talked around.** The rule that caps the verdict on a confirmed
+screen failure is deterministic code, not a prompt: a confirmed failure of a gating criterion
+holds the verdict at SELL no matter how bullishly the model argued. This is deliberate —
+prompt-level control over the same rule was tried first and proved evadable, so enforcement was
+moved into code the model cannot override.
+
+**The system refuses to fake a verdict.** When a gating criterion genuinely cannot be evaluated
+— for example, a dividend history too short to confirm the growth streak — the result is
+INSUFFICIENT_EVIDENCE, a verdict off the buy/hold/sell ladder that forces unconditional human
+review, rather than a false HOLD presented as a real call.
+
+**Human review fires on the things that matter.** Seven deterministic triggers can pause a run
+for a human, and the data-quality trigger is severity-aware: a real fetch failure or a screen
+that is mostly blind escalates, while a single optional-source gap (such as a missing sentiment
+feed) is recorded but does not, on its own, raise the flag — so the flag keeps its meaning
+instead of firing on nearly every run.
+
+**Data provenance is honest about its source.** Dividends, fundamentals, and prices are each
+attributed to the provider that actually produced them — including the hybrid configuration,
+where dividends come from one provider and fundamentals and prices from another — never
+collapsed into a single undifferentiated label. The dividend-growth streak is computed by the
+counting method matched to each provider's data shape.
+
+**Growth metrics resist cyclical distortion.** Revenue growth is measured as a base-year-robust
+trend rather than a naive two-point comparison, and it flags when the two diverge — the warning
+sign of a cyclical base year. Return on capital is measured through the cycle (a multi-year
+average) rather than off a single peak, and the valuation-to-growth ratio caps an extreme growth
+input so a trough-inflated number cannot make a stock look cheap.
+
+**The whole pipeline runs end-to-end in continuous integration**, with fakes standing in for the
+models and the data providers, so none of the guarantees above depend on a live key or a network
+call — they are re-checked automatically on every change.
+
+One honest caveat: these tests prove that the machinery behaves as specified — that figures trace
+to their sources, that the gate holds, that the system abstains rather than guesses. They do not
+prove that any individual BUY, HOLD, or SELL is correct. The verdict is a decision-support output
+for human review, not investment advice.
+
+---
+
 *This explainer describes the system as built. The thresholds, criteria, and decision
 mechanics above are read directly from the live strategy configuration and decision code.*
