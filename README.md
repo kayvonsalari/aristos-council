@@ -27,7 +27,7 @@ Three principles drive the architecture:
 - **Orchestration:** LangGraph, with `ResearchState` threaded through every node.
 - **Strategy as config:** the investment thesis lives in versioned YAML — not in code. Changing strategy means adding a new versioned file, so past decisions stay reproducible. Two strategies are live: **dividend aristocrats** (income) and **growth** (growth at a reasonable price).
 - **Data behind an adapter:** every tool talks to a provider-agnostic `MarketDataAdapter`, never a vendor SDK. Provider-selectable at runtime via `ARISTOS_MARKET_PROVIDER` (`yfinance` | `eodhd` | `hybrid`); the hybrid sources dividends from EODHD and fundamentals/prices from yfinance.
-- **Observability:** LangSmith tracing; tiered models via `init_chat_model`.
+- **Observability:** optional LangSmith tracing, opt-in via env vars (off and a silent no-op without a key); tiered models via `init_chat_model`.
 
 ## Project structure
 
@@ -88,7 +88,7 @@ Station's past-run browsing.
 | Filings | SEC EDGAR → RAG *(planned)* |
 | Vector store | ChromaDB *(planned)* |
 | LLM routing | `init_chat_model` (tiered) |
-| Monitoring | LangSmith |
+| Monitoring | LangSmith — optional, env-gated tracing (opt-in on live runs) |
 | Tests / CI | pytest + GitHub Actions |
 
 ## Project status
@@ -103,7 +103,7 @@ Station's past-run browsing.
 
 **371 unit tests**, green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
 
-**Next:** SEC EDGAR filings RAG for the Fundamental specialist, LangSmith tracing, nightly watchlist runs via GitHub Actions cron.
+**Next:** SEC EDGAR filings RAG for the Fundamental specialist, nightly watchlist runs via GitHub Actions cron.
 
 ## A note on honesty
 

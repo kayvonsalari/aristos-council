@@ -23,6 +23,11 @@ yfinance = ["yfinance>=0.2.40"]
 # init_chat_model). The Anthropic provider integration is a hard dependency
 # above. Tests do NOT need this.
 llm = ["langchain>=0.3"]
+# Optional LangSmith tracing for LIVE runs (env-gated; no key = silent no-op).
+# langsmith is already pulled transitively by langgraph/langchain; pinning it
+# under this extra documents the live-with-tracing install (".[llm,tracing]").
+# CI installs ".[dev]" only, so tracing is never a CI/test dependency.
+tracing = ["langsmith>=0.1"]
 # Council Station — the local Streamlit UI (app.py). Browsing past runs needs
 # only this group; LAUNCHING a council additionally needs ".[yfinance,llm]"
 # (and the runtime API keys), so the full install is ".[ui,yfinance,llm]".

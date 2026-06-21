@@ -48,6 +48,8 @@ from aristos_council.persistence.verdicts import (
 from aristos_council.state import ResearchState
 from aristos_council.strategy.loader import load_strategy
 from aristos_council.strategy.overrides import applied_overrides, effective_strategy
+from aristos_council.tracing import status_line as tracing_status_line
+from aristos_council.tracing import trace_config
 
 ROOT = Path(__file__).resolve().parents[1]
 VERDICTS_DIR = ROOT / "verdicts"
@@ -192,6 +194,9 @@ def main(argv: list[str] | None = None) -> None:
     # Provider chosen by $ARISTOS_MARKET_PROVIDER (default yfinance).
     adapter = select_market_adapter()
     print(f"(market provider: {adapter.name})")
+    # Optional LangSmith tracing (env-gated, no-key no-op). Honest on/off line;
+    # LangChain auto-instruments when the env vars are present — no agent changes.
+    print(tracing_status_line())
     app = build_council(adapter, strategy, production_runners(),
                         sentiment_adapter=sentiment)
 
@@ -204,12 +209,16 @@ def main(argv: list[str] | None = None) -> None:
               f"{prior.verdict.value.upper() if prior.verdict else 'n/a'} "
               f"@ {prior.run_at.date()})")
     result = ResearchState.model_validate(
-        app.invoke(ResearchState(
-            ticker=ticker,
-            strategy_id=base.id,                 # always the BASE id (overrides ride in delta)
-            prior_recommendation=prior.verdict if prior else None,
-            applied_overrides=delta,             # empty for baseline; populated for overrides
-        ))
+        app.invoke(
+            ResearchState(
+                ticker=ticker,
+                strategy_id=base.id,             # always the BASE id (overrides ride in delta)
+                prior_recommendation=prior.verdict if prior else None,
+                applied_overrides=delta,         # empty for baseline; populated for overrides
+            ),
+            # Trace metadata so a LangSmith run is filterable (harmless when off).
+            config=trace_config(ticker, base.id, adapter.name, bool(delta)),
+        )
     )
 
     print(f"\n=== Aristos Council verdict on {ticker} "

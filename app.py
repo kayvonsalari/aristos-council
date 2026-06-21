@@ -29,6 +29,7 @@ import streamlit as st
 from pydantic import ValidationError
 
 from aristos_council.data.adapter import DataUnavailable, normalize_ticker
+from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
     RunReport,
     list_reports,
@@ -292,7 +293,8 @@ def run_council(ticker: str, strategy_path: Path,
 
     # Provider chosen by $ARISTOS_MARKET_PROVIDER (default yfinance); adapter.name
     # rides into provenance so the run records which provider it used.
-    app = build_council(select_market_adapter(), strategy, production_runners(),
+    adapter = select_market_adapter()
+    app = build_council(adapter, strategy, production_runners(),
                         sentiment_adapter=sentiment)
 
     # Prior verdict for the SAME ticker AND strategy (recommendation_flip key).
@@ -312,7 +314,10 @@ def run_council(ticker: str, strategy_path: Path,
     progress = st.progress(0.0, text="Gathering evidence…")
     final: dict | None = None
     STAGES = 7  # gather + 4 specialists + critic + decision (audit/veto are fast)
-    for i, chunk in enumerate(app.stream(initial, stream_mode="values"), start=1):
+    # Trace metadata so a live (optional-LangSmith) run is filterable; harmless off.
+    trace = trace_config(ticker, base.id, adapter.name, bool(delta))
+    for i, chunk in enumerate(
+            app.stream(initial, config=trace, stream_mode="values"), start=1):
         final = chunk
         progress.progress(min(i / STAGES, 1.0), text=_stage_label(chunk))
     progress.progress(1.0, text="Done.")
