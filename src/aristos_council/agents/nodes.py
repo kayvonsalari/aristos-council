@@ -104,8 +104,14 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                 state.errors.append(f"{tool_name}: {exc}")
                 return None
 
+        # `provider` tags each market-data call with the adapter that actually
+        # produced it. For a single-source adapter that's its own name; for the
+        # HybridAdapter it's the real per-kind source (eodhd dividends, yfinance
+        # fundamentals/prices) — so mixed provenance stays visible in the ledger.
         fundamentals = log(
-            "get_fundamentals", {"ticker": state.ticker},
+            "get_fundamentals",
+            {"ticker": state.ticker,
+             "provider": adapter.provider_for("fundamentals")},
             lambda: adapter.get_fundamentals(state.ticker),
         )
         # Strategy-scoped tool selection (Sprint 4E): only fetch dividend history
@@ -117,14 +123,16 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
             dividends = log(
                 "get_dividend_history",
                 {"ticker": state.ticker, "start": str(div_start),
-                 "end": str(today)},
+                 "end": str(today),
+                 "provider": adapter.provider_for("dividends")},
                 lambda: adapter.get_dividend_history(
                     state.ticker, start=div_start, end=today
                 ),
             )
         prices = log(
             "get_price_history",
-            {"ticker": state.ticker, "start": str(lookback_start), "end": str(today)},
+            {"ticker": state.ticker, "start": str(lookback_start),
+             "end": str(today), "provider": adapter.provider_for("prices")},
             lambda: adapter.get_price_history(
                 state.ticker, start=lookback_start, end=today
             ),

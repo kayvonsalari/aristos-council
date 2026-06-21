@@ -158,3 +158,13 @@ class MarketDataAdapter(abc.ABC):
         self, ticker: str, *, start: date, end: date
     ) -> list[DividendEvent]:
         ...
+
+    def provider_for(self, data_kind: str) -> str:
+        """Which provider actually produced a given data kind.
+
+        ``data_kind`` is one of ``"dividends"``, ``"fundamentals"``, ``"prices"``.
+        Single-source adapters answer with their own ``name``; ``HybridAdapter``
+        overrides so a MIXED-source run records the real producer per data kind in
+        the ledger — honest provenance, never flattened to a single ``"hybrid"``.
+        """
+        return self.name

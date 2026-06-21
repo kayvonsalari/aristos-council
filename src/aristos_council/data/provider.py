@@ -34,6 +34,9 @@ def select_market_adapter(provider: str | None = None) -> MarketDataAdapter:
     if name == "eodhd":
         from .eodhd_adapter import EODHDAdapter
         return EODHDAdapter()
+    if name == "hybrid":
+        from .hybrid_adapter import HybridAdapter
+        return HybridAdapter()
     raise ValueError(
-        f"unknown {ENV_VAR} {name!r}; known providers: yfinance, eodhd"
+        f"unknown {ENV_VAR} {name!r}; known providers: yfinance, eodhd, hybrid"
     )
