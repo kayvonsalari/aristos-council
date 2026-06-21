@@ -618,7 +618,7 @@ def test_override_off_disables_v1_gate_on_failing_streak():
 class NotEvalStreakAdapter(FakeAdapter):
     """Only ONE dividend year, so the streak criterion is NOT-EVAL (passed is
     None) — insufficient history to even count a streak — rather than a confirmed
-    fail. Under v2 (streak gating) this must short-circuit to INSUFFICIENT_EVIDENCE."""
+    fail. Under v1 (streak gating) this must short-circuit to INSUFFICIENT_EVIDENCE."""
 
     def get_dividend_history(self, ticker, *, start, end):
         return [DividendEvent(ex_date=date(2024, 6, 1), amount=1.0)]
@@ -712,13 +712,12 @@ def test_dividend_history_rendered_as_named_handles_not_a_raw_list():
     assert "raw event list omitted" in user
 
 
-def test_ephemeral_override_gates_v1_at_runtime_without_a_v2_file():
-    # The whole point: take v1 (NO gating), apply a per-run is_gating override on
-    # the streak, run a streak-failing ticker with an LLM BUY -> the gate caps
-    # SELL. Gated behaviour with NO separate strategy file, and the run records
-    # exactly what differed.
+def test_ephemeral_override_relaxes_v1_gate_at_runtime():
+    # v1 GATES the streak by default; an ephemeral is_gating=False override relaxes
+    # it for ONE run, so a streak-failing ticker with an LLM BUY is NOT capped — and
+    # the delta rides through to the run record for reproducibility.
     eff = effective_strategy(STRATEGY,
-                             is_gating={"min_dividend_growth_streak": True})
+                             is_gating={"min_dividend_growth_streak": False})
     delta = applied_overrides(STRATEGY, eff)
     runners = {
         "specialist": ScriptedSpecialistRunner([_bullish()] * 4),
@@ -730,10 +729,9 @@ def test_ephemeral_override_gates_v1_at_runtime_without_a_v2_file():
     state = ResearchState.model_validate(app.invoke(ResearchState(
         ticker="FAKE", strategy_id=STRATEGY.id, applied_overrides=delta)))
     d = state.decision
-    assert d.recommendation == Recommendation.SELL          # override drove the gate
+    assert d.recommendation == Recommendation.BUY           # gate relaxed -> not capped
     assert d.original_recommendation == Recommendation.BUY
-    assert d.gate_override_applied is True
-    assert d.gating_criterion_fired == "min_dividend_growth_streak"
+    assert d.gate_override_applied is False
     # the delta rides through for the report/verdict
     assert state.applied_overrides == {
-        "criteria.min_dividend_growth_streak.is_gating": True}
+        "criteria.min_dividend_growth_streak.is_gating": False}

@@ -25,25 +25,29 @@ def _v1():
     return load_strategy(_STRAT / "dividend_aristocrats_v1.yaml")
 
 
-def _v2():
-    return load_strategy(_STRAT / "dividend_aristocrats_v2.yaml")
+# v1 now GATES the streak by default (the former v2 collapsed into it). A
+# NON-gating variant — needed to test turning the gate ON — is built by overriding
+# v1 with is_gating False, since there is no longer a shipped non-gating strategy.
+def _v1_nongating():
+    return effective_strategy(_v1(), is_gating={STREAK: False})
 
 
 # --- pure function: applies the override, never mutates the base ------------- #
 def test_effective_strategy_applies_overrides():
-    eff = effective_strategy(_v1(), partial_pass_allows_hold=False,
+    # Start from the non-gating variant so turning the gate ON is a real change.
+    eff = effective_strategy(_v1_nongating(), partial_pass_allows_hold=False,
                              is_gating={STREAK: True})
     assert eff.policy.partial_pass_allows_hold is False
     assert {c.name for c in eff.criteria if c.is_gating} == {STREAK}
 
 
 def test_effective_strategy_does_not_mutate_base():
-    base = _v1()                                   # v1: partial True, no gating
+    base = _v1()                                   # v1: partial True, streak GATING
     effective_strategy(base, partial_pass_allows_hold=False,
-                       is_gating={STREAK: True})
+                       is_gating={STREAK: False})
     # the source object is untouched — no mutation leak to the on-disk strategy
     assert base.policy.partial_pass_allows_hold is True
-    assert {c.name for c in base.criteria if c.is_gating} == set()
+    assert {c.name for c in base.criteria if c.is_gating} == {STREAK}
 
 
 def test_no_override_is_a_noop():
@@ -53,35 +57,36 @@ def test_no_override_is_a_noop():
 
 # --- applied_overrides records only REAL diffs vs the file ------------------- #
 def test_applied_overrides_records_the_delta():
-    base = _v1()
+    base = _v1()                                   # streak GATING by default
     eff = effective_strategy(base, partial_pass_allows_hold=False,
-                             is_gating={STREAK: True})
+                             is_gating={STREAK: False})          # relax the gate
     assert applied_overrides(base, eff) == {
         "partial_pass_allows_hold": False,
-        f"criteria.{STREAK}.is_gating": True,
+        f"criteria.{STREAK}.is_gating": False,
     }
 
 
 def test_toggling_back_to_file_value_records_nothing():
-    base = _v1()                                   # partial True, streak not gating
+    base = _v1()                                   # partial True, streak GATING
     same = effective_strategy(base, partial_pass_allows_hold=True,
-                              is_gating={STREAK: False})
+                              is_gating={STREAK: True})          # == the file values
     assert applied_overrides(base, same) == {}
 
 
 # --- the override actually DRIVES the gate (reuses the 5442d1c ceiling) ------ #
-def test_override_turns_the_gate_ON_for_v1():
-    eff = effective_strategy(_v1(), is_gating={STREAK: True})   # v1 has no gating
+def test_override_turns_the_gate_OFF_for_v1():
+    eff = effective_strategy(_v1(), is_gating={STREAK: False})  # v1 gates by default
     gating = {c.name for c in eff.criteria if c.is_gating}
     screen = [{"name": STREAK, "passed": False}]                # confirmed fail
-    assert disposition_ceiling(screen, gating) is Recommendation.SELL
+    assert disposition_ceiling(screen, gating) is None          # gate removed
 
 
-def test_override_turns_the_gate_OFF_for_v2():
-    eff = effective_strategy(_v2(), is_gating={STREAK: False})  # v2 gates by default
+def test_override_turns_the_gate_ON_from_a_nongating_base():
+    # The knob works in both directions: start non-gating, turn the gate back ON.
+    eff = effective_strategy(_v1_nongating(), is_gating={STREAK: True})
     gating = {c.name for c in eff.criteria if c.is_gating}
     screen = [{"name": STREAK, "passed": False}]
-    assert disposition_ceiling(screen, gating) is None          # gate removed
+    assert disposition_ceiling(screen, gating) is Recommendation.SELL
 
 
 # --- the delta is recorded on BOTH sinks (reproducibility) ------------------ #
