@@ -1,6 +1,6 @@
 # Aristos Council
 
-A multi-agent financial research analyst. Specialist agents deliberate over a single security, a dedicated Critic argues the opposite case before any verdict is reached, and a Decision agent issues a **buy / hold / sell** call with an explicit confidence score and noted dissent. A human holds the veto.
+A multi-agent financial research analyst. Specialist agents deliberate over a single security, a dedicated Critic argues the opposite case before any verdict is reached, and a Decision agent issues a **buy / hold / sell** call — or **insufficient-evidence**, an off-the-ladder "cannot render a verdict" state — with an explicit confidence score and noted dissent. A human holds the veto.
 
 The name nods to the [Dividend Aristocrats](https://en.wikipedia.org/wiki/S%26P_500_Dividend_Aristocrats) — and to the idea that a recommendation should have to survive a council, not just one model's first instinct.
 
@@ -26,7 +26,7 @@ Three principles drive the architecture:
 
 - **Orchestration:** LangGraph, with `ResearchState` threaded through every node.
 - **Strategy as config:** the investment thesis lives in versioned YAML — not in code. Changing strategy means adding a new versioned file, so past decisions stay reproducible. Two strategies are live: **dividend aristocrats** (income) and **growth** (growth at a reasonable price).
-- **Data behind an adapter:** every tool talks to a provider-agnostic `MarketDataAdapter`, never a vendor SDK. Develops on yfinance; swaps to EODHD with a one-line change.
+- **Data behind an adapter:** every tool talks to a provider-agnostic `MarketDataAdapter`, never a vendor SDK. Provider-selectable at runtime via `ARISTOS_MARKET_PROVIDER` (`yfinance` | `eodhd` | `hybrid`); the hybrid sources dividends from EODHD and fundamentals/prices from yfinance.
 - **Observability:** LangSmith tracing; tiered models via `init_chat_model`.
 
 ## Project structure
@@ -41,13 +41,15 @@ aristos-council/
 │   │   ├── nodes.py              # gather + specialist/critic/decision nodes, prompts, figure validation
 │   │   ├── runners.py            # model seam: tiered Runner protocol + LangChain impl
 │   │   ├── schemas.py            # structured-output schemas (tolerant parsing)
-│   │   └── veto.py               # deterministic five-trigger human-veto gate
+│   │   └── veto.py               # deterministic seven-trigger human-veto gate
 │   ├── audit/                    # deep provenance audit (Sprint 1)
 │   │   └── provenance.py         # resolve every cited figure's field_path against the ledger
 │   ├── data/                     # provider-agnostic market & sentiment data
 │   │   ├── adapter.py            # MarketDataAdapter interface + DTOs + DataUnavailable
-│   │   ├── yfinance_adapter.py   # dev market-data provider
-│   │   ├── eodhd_adapter.py      # planned market-data provider (stub)
+│   │   ├── yfinance_adapter.py   # yfinance provider (fundamentals, prices, dividends)
+│   │   ├── eodhd_adapter.py      # EODHD provider — dividend history (live) + fundamentals (paid tier)
+│   │   ├── hybrid_adapter.py     # EODHD dividends + yfinance fundamentals/prices
+│   │   ├── provider.py           # ARISTOS_MARKET_PROVIDER selection (yfinance | eodhd | hybrid)
 │   │   ├── sentiment.py          # SentimentAdapter interface + DTOs
 │   │   └── finnhub_adapter.py    # sentiment provider (news + analyst trends)
 │   ├── persistence/              # IO-at-the-edge sinks (Sprint 2–3)
@@ -60,7 +62,7 @@ aristos-council/
 │       ├── screening.py          # dividend-aristocrat screen math
 │       ├── technical.py          # price / technical snapshot
 │       └── sentiment_tools.py    # sentiment aggregation
-├── strategies/                   # versioned strategy YAMLs (dividend_aristocrats_v1/v2, growth_v1)
+├── strategies/                   # versioned strategy YAMLs (dividend_aristocrats_v1, growth_v1)
 ├── verdicts/                     # committed run data — append-only verdict history per ticker
 ├── reports/                      # committed run data — full per-run reports (<TICKER>/<run_at>.json)
 ├── assets/                       # brand mark (SVG logo)
@@ -80,7 +82,8 @@ Station's past-run browsing.
 |---|---|
 | Orchestration | LangGraph |
 | Market data (dev) | yfinance, behind a provider-agnostic adapter |
-| Market data (prod) | EODHD *(planned)* |
+| Market data (prod) | EODHD — dividend history live; fundamentals require EODHD's paid tier |
+| Market data (hybrid) | EODHD dividends + yfinance fundamentals/prices |
 | Sentiment | Finnhub (free tier) — company news + analyst recommendation trends, behind a provider-agnostic `SentimentAdapter` |
 | Filings | SEC EDGAR → RAG *(planned)* |
 | Vector store | ChromaDB *(planned)* |
@@ -90,21 +93,21 @@ Station's past-run browsing.
 
 ## Project status
 
-**Phase 1 — data substrate (complete):** `ResearchState` schema with figure-level provenance, provider-agnostic adapter (yfinance + EODHD stub), deterministic screening tools, versioned strategy config + validating loader.
+**Phase 1 — data substrate (complete):** `ResearchState` schema with figure-level provenance, provider-agnostic adapter (yfinance, EODHD, and a hybrid adapter, provider-selected via `ARISTOS_MARKET_PROVIDER`), deterministic screening tools, versioned strategy config + validating loader.
 
-**Phase 2 — the council (complete):** full LangGraph pipeline — deterministic `gather` node (the only node that touches data or math), four specialists with enforced figure provenance, a provenance-bound Critic arguing the opposite case (unverifiable quantitative concerns become open questions for a human, never asserted facts), Decision agent with recorded dissent, and a fully deterministic five-trigger human-veto gate. LLMs sit behind a `Runner` seam with env-configurable model tiers, so the entire graph is tested end-to-end with fakes — no API keys in CI.
+**Phase 2 — the council (complete):** full LangGraph pipeline — deterministic `gather` node (the only node that touches data or math), four specialists with enforced figure provenance, a provenance-bound Critic arguing the opposite case (unverifiable quantitative concerns become open questions for a human, never asserted facts), Decision agent with recorded dissent, and a fully deterministic seven-trigger human-veto gate. LLMs sit behind a `Runner` seam with env-configurable model tiers, so the entire graph is tested end-to-end with fakes — no API keys in CI.
 
 **Phase 3 — sentiment (complete):** Finnhub news + analyst recommendation trends behind a provider-agnostic `SentimentAdapter`, aggregated by a deterministic `sentiment_snapshot` tool. Without a `FINNHUB_API_KEY` the Sentiment specialist abstains exactly as before; a provider outage degrades to a data-quality veto flag, never a crash.
 
 **Phase 4 — audit, persistence & Council Station (current, Sprint 3):** a deep post-run **provenance audit** that resolves every cited figure's `field_path` against the tool-call ledger and feeds the data-quality veto; an append-only **verdict history** (`verdicts/`) powering the recommendation-flip and majority-override vetoes; full per-run **reports** (`reports/`); **strategy versioning** (edit-as-new-version, never mutating a published file); and **Council Station** — a local Streamlit UI to run the council, read the full deliberation, browse past runs across tickers, chart verdict/confidence history, and edit strategies. See `CLAUDE.md` for the sprint log.
 
-**285 unit tests**, green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
+**371 unit tests**, green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
 
-**Next:** SEC EDGAR filings RAG for the Fundamental specialist, EODHD adapter (fixes the dividend-streak-floor undercount), LangSmith tracing, nightly watchlist runs via GitHub Actions cron.
+**Next:** SEC EDGAR filings RAG for the Fundamental specialist, LangSmith tracing, nightly watchlist runs via GitHub Actions cron.
 
 ## A note on honesty
 
-The yfinance development provider cannot verify the canonical 25-year dividend-growth streak — its history is too short. The screen does **not** paper over this: the streak criterion returns *unverifiable* (distinct from pass or fail) and trips the data-quality veto by design. Confirming that streak is one of the concrete reasons EODHD is the planned upgrade.
+The dividend-growth streak threshold is **20 years**, lowered from 25: EODHD's non-US dividend coverage begins around 2000, so a 25-year streak is unverifiable for European aristocrats, while 20 is verifiable across both US and EU history and remains a strong signal. With EODHD — directly or via the hybrid adapter — the streak is now verifiable for most names. Where the history is genuinely too short (a recent listing, or a non-US name pre-2000), the streak criterion returns *not-evaluated* (distinct from pass or fail); and because that criterion is *gating*, the run short-circuits to **INSUFFICIENT_EVIDENCE** — an off-the-ladder verdict meaning "cannot render a verdict" that forces unconditional human review, rather than passing on faith.
 
 ## Running
 

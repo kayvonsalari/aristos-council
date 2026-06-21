@@ -1,9 +1,10 @@
 # Aristos Council — How It Works
 
 Aristos Council is an auditable, multi-agent equity research system. Given a ticker and a
-strategy, it produces a single recommendation — BUY, HOLD, or SELL — with a confidence
-score and a complete evidence trail: every number that influenced the verdict is traceable
-to the exact data source it came from. The design goal is not to predict prices. It is to
+strategy, it produces a single recommendation — BUY, HOLD, or SELL, or else
+INSUFFICIENT_EVIDENCE (an off-the-ladder state meaning the screen cannot render a verdict,
+distinct from any directional call) — with a confidence score and a complete evidence trail:
+every number that influenced the verdict is traceable to the exact data source it came from. The design goal is not to predict prices. It is to
 apply a stated investment policy consistently, show its work, and refuse to assert anything
 it cannot evidence.
 
@@ -54,12 +55,23 @@ the language models argued. This exists because of a measured failure mode: the 
 agent could be talked into overriding a hard screen failure whenever the Critic supplied a
 plausible "the data is unreliable" argument. No amount of clever rationalization can lift a
 gated failure above SELL. The system records when this override fired and what the models had
-originally proposed, so the disagreement between code and model is visible, not hidden.
+originally proposed, so the disagreement between code and model is visible, not hidden. And
+when a gating criterion is *not-evaluated* — the data cannot confirm pass or fail — the verdict
+becomes INSUFFICIENT_EVIDENCE: off the buy/hold/sell ladder entirely, an unconditional pause
+for human review rather than a guessed direction.
 
-The veto layer flags a verdict for human review on any of five triggers: confidence below
-the strategy's floor (0.6), unresolved disagreement among specialists, a data-quality
-problem (including provenance mismatches and unverifiable inputs), a flip from the previous
-verdict on the same name, or a Decision that overrode the majority of the panel.
+The veto layer flags a verdict for human review on any of seven triggers: confidence below
+the strategy's floor (0.6); unresolved disagreement among specialists; a *material*
+data-quality problem; a flip from the previous verdict on the same name; a Decision that
+overrode the majority of the panel; an INSUFFICIENT_EVIDENCE verdict — a not-evaluated gating
+criterion, which always pauses for a human; and a *material gate override* — where the
+deterministic gate capped a confident or BUY verdict down to SELL (a large model-versus-gate
+disagreement worth a human glance, while routine small caps do not escalate).
+
+Data quality is now severity-aware: only a *material* gap escalates — an adapter or provenance
+error, or two-or-more criteria that could not be evaluated. Benign noise that nearly every run
+carries — a single specialist abstention, one non-gating not-evaluated criterion, or an
+optional-sentiment 403 — is recorded for the reviewer but does not, on its own, fire the veto.
 
 The output is the recommendation, the confidence, the rationale, the full figure-level
 provenance, any criteria that failed or could not be evaluated, and any vetoes raised.
@@ -92,13 +104,17 @@ paired with a stretched payout ratio is treated as a warning, not an attraction.
 | Minimum dividend yield | ≥ 2.5% | A yield floor, to exclude near-zero-yield names |
 | Maximum payout ratio | ≤ 75% | A sustainability ceiling; above this, the payout is questioned |
 | Minimum market cap | ≥ $10B | A large-cap durability proxy |
-| Minimum dividend growth streak | ≥ 25 years | The canonical aristocrat signal: consecutive years of dividend increases |
+| Minimum dividend growth streak | ≥ 20 years | The canonical aristocrat signal: consecutive years of dividend increases |
 
-Known limitation, stated plainly: the development data provider (yfinance) supplies only a
-short dividend history and cannot confirm a 25-year streak. Until a longer-history provider
-is integrated, the streak criterion frequently returns not-evaluated and triggers the
-data-quality veto by design. This is intended behavior — the council refuses to assert an
-aristocrat streak it cannot evidence rather than pass the criterion on faith.
+A note on the streak threshold, stated plainly: it is **20 years**, not 25. EODHD's non-US
+dividend coverage begins around 2000, so a 25-year streak is unverifiable for European
+aristocrats; 20 is verifiable across both US and EU history and remains a strong aristocrat
+signal. With EODHD — directly or via the hybrid adapter (EODHD dividends + yfinance
+fundamentals/prices) — the streak is now verifiable for most names. Where the history is
+genuinely too short (a recent listing, or a non-US name pre-2000), the criterion is
+not-evaluated rather than guessed; and because the streak is a *gating* criterion, that
+short-circuits the run to INSUFFICIENT_EVIDENCE — the off-the-ladder verdict described in
+Part A, an unconditional pause for human review rather than a pass on faith.
 
 ### Growth at a Reasonable Price (v1)
 
@@ -115,6 +131,13 @@ valuation honest relative to the growth on offer.
 | Maximum PEG ratio | ≤ 2.0 | Valuation relative to growth |
 | Minimum market cap | ≥ $5B | Mid/large-cap scope |
 
+These three estimates are hardened against cyclicality (the failure mode where a single
+trough or peak year flatters a metric). Revenue CAGR is a base-year-robust log-linear *trend*
+over the window rather than a naive two-point endpoint ratio, and the note flags when the two
+diverge — a cyclical-base-year signal. PEG winsorizes an extreme growth input, so a
+trough-inflated CAGR cannot make a stock look spuriously cheap. ROIC is computed on
+through-cycle (multi-year mean) operating income, not a single peak year.
+
 Known limitation: the three growth criteria degrade to not-evaluated rather than guessing
 when the financial statements are too short or earnings are negative. Revenue CAGR needs
 enough clean annual data points; ROIC needs a provided invested-capital figure; PEG needs
@@ -123,14 +146,15 @@ it cannot evidence.
 
 ### Data sources
 
-Fundamentals and price history come from yfinance in the current development build. Three
-further sources are designed but not yet active, and the system is built around their absence
-rather than pretending they are present: Finnhub for analyst and news sentiment (until it is
-wired, the Sentiment specialist abstains rather than guess), a retrieval layer over SEC EDGAR
-filings to further ground the Fundamental specialist, and a production-grade fundamentals and
-dividend-history provider (EODHD) that would, among other things, verify the 25-year dividend
-streak the development provider cannot confirm. The strategy notes above flag exactly where
-these gaps affect results today.
+The market-data provider is selectable at runtime via `ARISTOS_MARKET_PROVIDER`: **yfinance**
+(default), **EODHD**, or a **hybrid** that sources dividend history from EODHD and
+fundamentals/prices from yfinance. EODHD is live for dividend history — its deep, clean record
+is what makes the 20-year streak verifiable across US and EU names; its fundamentals endpoint
+requires EODHD's paid tier, which is exactly why the hybrid exists. Sentiment comes from
+**Finnhub** (analyst recommendation trends + company news); without a `FINNHUB_API_KEY` the
+Sentiment specialist abstains rather than guess. One source remains designed-but-not-yet-active
+— a retrieval layer over **SEC EDGAR** filings to further ground the Fundamental specialist.
+The strategy notes above flag exactly where these gaps affect results today.
 
 ---
 
