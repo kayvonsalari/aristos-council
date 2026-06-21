@@ -16,9 +16,18 @@ to exactly one of these outputs.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from ..data.adapter import DividendEvent, Fundamentals
+
+# Growth-hardening constants (SK Hynix cyclical-trough failure).
+# CAGR: warn when the log-linear trend and the two-point endpoint diverge by more
+# than this (a cyclical base year is smoothing/inflating the endpoint estimate).
+_CAGR_DISPERSION_WARN = 0.10
+# PEG: winsorize the growth input here — above this a "CAGR" is almost certainly
+# cyclical noise, not sustainable growth, and would make PEG look spuriously cheap.
+_PEG_GROWTH_CAP = 0.40
 
 # Absolute-money screen thresholds (min_market_cap) are USD-denominated. A non-
 # USD listing makes that comparison meaningless (SK Hynix's 1.69e15 KRW market
@@ -489,24 +498,50 @@ def streak_by_method(
 def revenue_cagr(
     revenue: list[float], years: int
 ) -> tuple[float | None, str]:
-    """Compound annual growth rate over ``years`` from a NEWEST-FIRST series.
+    """Base-year-robust revenue CAGR over ``years`` from a NEWEST-FIRST series.
 
-    CAGR = (rev[0] / rev[years]) ** (1/years) - 1. Returns (None, note) when it
-    cannot be computed honestly: fewer than ``years``+1 clean annual points, or
-    a non-positive endpoint (a negative/zero base destroys the ratio; a
-    fractional power of a negative would also go complex).
+    The OBSERVED value is a LOG-LINEAR TREND CAGR, not the two-point endpoint
+    ratio: we fit a least-squares line to (t, ln(revenue_t)) across all ``years``+1
+    points (t = 0..years, oldest..newest) and return ``exp(slope) - 1`` — the
+    continuous growth rate the whole series implies. Using ALL points means a
+    single cyclical-trough BASE year can't anchor the estimate the way
+    ``(rev[0]/rev[years])^(1/years)-1`` does (the SK Hynix failure, where a trough
+    base made CAGR look great). This is why revenue_cagr is the one growth metric
+    that is GATING-ELIGIBLE: a clean, trough-resistant denominator. The note also
+    records the OLD endpoint CAGR and, when the two DIVERGE, a WARNING — we surface
+    the cyclicality the metric is smoothing rather than hide it.
+
+    Returns (None, note) on the same honest-abstention cases: fewer than
+    ``years``+1 clean points, or ANY non-positive point in the window (a
+    non-positive value destroys the log / the ratio).
     """
     if years < 1:
         return None, "years must be >= 1"
     if len(revenue) < years + 1:
         return None, (f"insufficient revenue history: need {years + 1} annual "
                       f"points, have {len(revenue)}")
-    latest, base = revenue[0], revenue[years]
-    if base <= 0 or latest <= 0:
-        return None, (f"revenue non-positive at an endpoint (base={base}, "
-                      f"latest={latest}); CAGR undefined")
-    cagr = (latest / base) ** (1.0 / years) - 1.0
-    return cagr, f"{years}y revenue CAGR = (rev[0]/rev[{years}])^(1/{years}) - 1"
+    points = revenue[:years + 1]                 # newest-first window
+    if any(p <= 0 for p in points):
+        return None, (f"revenue non-positive in the {years + 1}-point CAGR window "
+                      f"(base={revenue[years]}, latest={revenue[0]}); CAGR undefined")
+
+    # Log-linear least-squares slope over t = 0..years (oldest..newest).
+    ys = [math.log(p) for p in reversed(points)]
+    n = years + 1
+    ts = range(n)
+    mean_t = sum(ts) / n
+    mean_y = sum(ys) / n
+    cov = sum((t - mean_t) * (y - mean_y) for t, y in zip(ts, ys))
+    var = sum((t - mean_t) ** 2 for t in ts)
+    trend_cagr = math.exp(cov / var) - 1.0
+    endpoint_cagr = (revenue[0] / revenue[years]) ** (1.0 / years) - 1.0
+
+    note = (f"{years}y revenue CAGR (log-linear trend over {n} points) = "
+            f"{trend_cagr:.4f}; two-point endpoint CAGR = {endpoint_cagr:.4f}")
+    if abs(trend_cagr - endpoint_cagr) > _CAGR_DISPERSION_WARN:
+        note += (f"; WARNING: endpoint vs trend CAGR diverge by "
+                 f"{abs(trend_cagr - endpoint_cagr):.4f} — base year may be cyclical")
+    return trend_cagr, note
 
 
 def nopat_roic(
@@ -546,22 +581,79 @@ def nopat_roic(
     )
 
 
+def through_cycle_roic(
+    operating_income: list[float],
+    tax_provision: list[float],
+    pretax_income: list[float],
+    invested_capital: list[float],
+    *,
+    window: int,
+) -> tuple[float | None, str]:
+    """ROIC normalized to a THROUGH-CYCLE operating income, not a single peak.
+
+    A peak-year operating income overstates the return a cyclical business earns
+    over the cycle (SK Hynix: 28% ROIC on a peak OI that was NEGATIVE a period
+    earlier). So the NOPAT numerator uses the MEAN operating income over the last
+    ``window`` years, with the tax rate also taken through-cycle (mean tax / mean
+    pretax over the same window). The DENOMINATOR stays the LATEST invested capital
+    — the current capital base is the right base for "what do I earn on it now."
+    Delegates the NOPAT/ROIC arithmetic to ``nopat_roic`` on the aggregates, then
+    frames the note as through-cycle. With only one OI point it falls back to that
+    point and flags single-period (may be peak/trough). Stays NON-GATING — the
+    capital base is arguable, so it must not be a deterministic gate.
+    """
+    ic_latest = invested_capital[0] if invested_capital else None
+    oi_points = operating_income[:window]
+    if not oi_points:
+        # let nopat_roic produce the canonical "operating_income missing" note
+        return nopat_roic(None, None, None, ic_latest)
+
+    n = len(oi_points)
+    oi_mean = sum(oi_points) / n
+    tax_points = tax_provision[:window]
+    pretax_points = pretax_income[:window]
+    tax_mean = sum(tax_points) / len(tax_points) if tax_points else None
+    pretax_mean = sum(pretax_points) / len(pretax_points) if pretax_points else None
+
+    roic, base_note = nopat_roic(oi_mean, tax_mean, pretax_mean, ic_latest)
+    if roic is None:
+        return None, base_note
+    cycle_note = (f"ROIC on through-cycle ({n}y mean) operating income" if n > 1
+                  else "single-period ROIC (no cycle history) — may be peak/trough")
+    return roic, f"{cycle_note}; {base_note}"
+
+
 def peg_ratio(
     pe_ratio: float | None, growth_rate: float | None
 ) -> tuple[float | None, str]:
     """PEG = P/E / (growth_rate * 100), with ``growth_rate`` a decimal CAGR.
 
+    PEG v2 WINSORIZES the growth input: an extreme trough-inflated CAGR makes PEG
+    artificially tiny (looks cheap), so the growth term is capped at
+    ``_PEG_GROWTH_CAP`` (0.40) before forming PEG — above that, a "CAGR" is almost
+    certainly cyclical noise, not sustainable growth, so the cap makes PEG
+    CONSERVATIVE rather than spuriously cheap, and the note records the clamp. Only
+    the GROWTH term is winsorized; the P/E is never invented.
+
     Returns (None, note) when PEG is undefined: no positive P/E (negative or
-    missing earnings) or a non-positive growth rate. The caller supplies the
-    in-house revenue CAGR as ``growth_rate`` — never a provider forward estimate
-    — so the figure stays auditable.
+    missing earnings) or a non-positive growth rate — that honest abstention is
+    UNCHANGED. The caller supplies the in-house ROBUST (trend) revenue CAGR as
+    ``growth_rate`` — never a provider forward estimate — so the figure stays
+    auditable; the winsor cap is a hard backstop on top of the trend smoothing.
     """
     if pe_ratio is None or pe_ratio <= 0:
         return None, "no positive P/E (negative or missing earnings); PEG undefined"
     if growth_rate is None or growth_rate <= 0:
         return None, "growth rate <= 0 or unavailable; PEG undefined"
-    peg = pe_ratio / (growth_rate * 100.0)
-    return peg, "PEG = P/E / (in-house revenue CAGR x 100)"
+    note = "PEG = P/E / (in-house revenue CAGR x 100)"
+    g = growth_rate
+    if g > _PEG_GROWTH_CAP:
+        note += (f"; PEG growth input winsorized from {growth_rate:.4f} to "
+                 f"{_PEG_GROWTH_CAP:.2f} (extreme CAGR, likely cyclical) — "
+                 f"PEG is conservative")
+        g = _PEG_GROWTH_CAP
+    peg = pe_ratio / (g * 100.0)
+    return peg, note
 
 
 # --------------------------------------------------------------------------- #

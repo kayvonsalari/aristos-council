@@ -40,9 +40,9 @@ from ..screening import (
     min_growth_streak_criterion,
     min_market_cap_criterion,
     min_yield_criterion,
-    nopat_roic,
     peg_ratio,
     revenue_cagr,
+    through_cycle_roic,
 )
 
 
@@ -141,11 +141,22 @@ def _min_dividend_growth_streak(ev: Evidence, threshold: float) -> CriterionResu
         ev.dividends, min_years=int(threshold), method=ev.streak_method)
 
 
-# --- Growth / quality criteria (Sprint 4B) ------------------------------- #
+# --- Growth / quality criteria (Sprint 4B; hardened post-SK-Hynix) ------- #
 # In-house revenue-CAGR window. Single source of truth: the years ParamSpec
 # default below references it, and both the CAGR and PEG criteria compute over
 # it (years is not yet a per-strategy YAML param — that's a 4C UI concern).
 _REVENUE_CAGR_YEARS = 3
+# ROIC through-cycle window — average operating income over this many years so a
+# single peak year can't overstate the return (SK Hynix peak-OI ROIC).
+_ROIC_WINDOW = 4
+
+# GATING-ELIGIBILITY (decided, not yet wired): only min_revenue_cagr is eligible
+# to be set is_gating — and only in its robust log-linear-trend form (a clean,
+# trough-resistant denominator). max_peg_ratio and min_roic stay NON-GATING: their
+# denominators are CONTESTABLE (PEG dies on negative earnings; ROIC's invested-
+# capital base is arguable), and a contestable metric as a deterministic gate would
+# recreate the master-key escape-hatch problem in reverse. Turning revenue_cagr's
+# gate ON is a later, separate call — no is_gating flag is set here.
 
 
 def _latest(series: list[float]):
@@ -154,7 +165,7 @@ def _latest(series: list[float]):
 
 def _min_revenue_cagr(ev: Evidence, threshold: float) -> CriterionResult:
     revenue = ev.fundamentals.total_revenue if ev.fundamentals else []
-    cagr, note = revenue_cagr(revenue, _REVENUE_CAGR_YEARS)
+    cagr, note = revenue_cagr(revenue, _REVENUE_CAGR_YEARS)   # robust trend CAGR
     if cagr is None:
         return CriterionResult(name="min_revenue_cagr", passed=None,
                                observed=None, threshold=threshold, note=note)
@@ -167,10 +178,9 @@ def _min_roic(ev: Evidence, threshold: float) -> CriterionResult:
     if f is None:
         return CriterionResult(name="min_roic", passed=None, observed=None,
                                threshold=threshold, note="no fundamentals")
-    roic, note = nopat_roic(_latest(f.operating_income),
-                            _latest(f.tax_provision),
-                            _latest(f.pretax_income),
-                            _latest(f.invested_capital))
+    roic, note = through_cycle_roic(f.operating_income, f.tax_provision,
+                                    f.pretax_income, f.invested_capital,
+                                    window=_ROIC_WINDOW)
     if roic is None:
         return CriterionResult(name="min_roic", passed=None, observed=None,
                                threshold=threshold, note=note)
@@ -181,8 +191,8 @@ def _min_roic(ev: Evidence, threshold: float) -> CriterionResult:
 def _max_peg_ratio(ev: Evidence, threshold: float) -> CriterionResult:
     f = ev.fundamentals
     revenue = f.total_revenue if f else []
-    cagr, _ = revenue_cagr(revenue, _REVENUE_CAGR_YEARS)   # same in-house CAGR
-    peg, note = peg_ratio(f.pe_ratio if f else None, cagr)
+    cagr, _ = revenue_cagr(revenue, _REVENUE_CAGR_YEARS)   # same robust trend CAGR
+    peg, note = peg_ratio(f.pe_ratio if f else None, cagr)  # winsorized inside
     if peg is None:
         return CriterionResult(name="max_peg_ratio", passed=None, observed=None,
                                threshold=threshold, note=note)

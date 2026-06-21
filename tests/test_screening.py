@@ -25,6 +25,7 @@ from aristos_council.tools.screening import (
     peg_ratio,
     revenue_cagr,
     run_strategy_screen,
+    through_cycle_roic,
 )
 
 
@@ -476,16 +477,32 @@ def test_derived_payout_evaluates_in_criterion_end_to_end():
 # Growth / quality primitives (Sprint 4B) — pure math + NOT-EVAL edges
 # --------------------------------------------------------------------------- #
 def test_revenue_cagr_basic():
+    # Monotonic series: the log-linear TREND CAGR ~= the two-point endpoint CAGR
+    # (~0.1346), so they barely diverge -> NO dispersion warning.
     cagr, note = revenue_cagr([146.0, 121.0, 110.0, 100.0], 3)
-    assert abs(cagr - 0.1346) < 1e-3
-    cagr2, _ = revenue_cagr([110.0, 100.0], 1)   # 1-year = simple growth
+    assert abs(cagr - 0.1310) < 1e-3            # trend, not the 0.1346 endpoint
+    assert "WARNING" not in note
+    cagr2, _ = revenue_cagr([110.0, 100.0], 1)   # 1-year: 2-point trend == endpoint
     assert abs(cagr2 - 0.10) < 1e-9
+
+
+def test_revenue_cagr_trough_base_trend_below_endpoint_with_warning():
+    # SK Hynix-shape: a deep cyclical-trough BASE year inflates the two-point
+    # endpoint CAGR; the trend (all points) sees through it and is MEANINGFULLY
+    # lower, AND the note WARNS that the base year may be cyclical.
+    rev = [100.0, 95.0, 90.0, 12.0]            # newest-first; oldest 12 = trough
+    trend, note = revenue_cagr(rev, 3)
+    endpoint = (rev[0] / rev[3]) ** (1.0 / 3) - 1.0   # ~1.03 (inflated)
+    assert trend is not None
+    assert trend < endpoint - 0.10             # meaningfully lower
+    assert "WARNING" in note and "cyclical" in note
 
 
 def test_revenue_cagr_not_eval_short_or_nonpositive():
     assert revenue_cagr([120.0, 100.0], 3)[0] is None        # too few points
     assert revenue_cagr([130.0, 110.0, 100.0, 0.0], 3)[0] is None    # base 0
     assert revenue_cagr([130.0, 110.0, 100.0, -5.0], 3)[0] is None   # base <0
+    assert revenue_cagr([130.0, -1.0, 100.0, 90.0], 3)[0] is None    # mid non-positive
 
 
 def test_nopat_roic_basic_and_tax():
@@ -520,3 +537,39 @@ def test_peg_ratio_basic_and_undefined():
     assert peg_ratio(-5.0, 0.10)[0] is None      # negative PE
     assert peg_ratio(25.0, 0.0)[0] is None       # zero growth
     assert peg_ratio(25.0, -0.05)[0] is None     # negative growth
+
+
+def test_peg_ratio_winsorizes_extreme_growth():
+    # An extreme (trough-inflated) CAGR is capped at 0.40 before forming PEG, so
+    # PEG is LARGER (more conservative) than the un-winsorized value, and the note
+    # records the clamp.
+    peg, note = peg_ratio(25.0, 0.80)            # raw CAGR 80% -> winsor to 40%
+    assert abs(peg - 25.0 / (0.40 * 100.0)) < 1e-9   # 0.625, uses the cap
+    assert peg > 25.0 / (0.80 * 100.0)               # > the un-winsorized 0.3125
+    assert "winsorized" in note and "0.80" in note
+
+
+def test_through_cycle_roic_below_peak_based():
+    # Peak LATEST operating income with a NEGATIVE prior year: the through-cycle
+    # mean is far below the peak, so through-cycle ROIC is MEANINGFULLY lower than
+    # the peak-(latest-)based ROIC, and the note says through-cycle.
+    oi = [100.0, -20.0, 30.0, 40.0]              # newest-first; latest 100 is a peak
+    tax = [10.0, 0.0, 3.0, 4.0]
+    pretax = [90.0, -25.0, 28.0, 38.0]
+    ic = [400.0]
+    roic_tc, note = through_cycle_roic(oi, tax, pretax, ic, window=4)
+    peak_roic, _ = nopat_roic(oi[0], tax[0], pretax[0], ic[0])   # latest-only
+    assert roic_tc is not None and roic_tc < peak_roic - 0.05    # meaningfully lower
+    assert "through-cycle" in note
+
+
+def test_through_cycle_roic_single_point_falls_back():
+    roic, note = through_cycle_roic([12000.0], [2500.0], [10000.0], [30000.0],
+                                    window=4)
+    assert roic is not None
+    assert "single-period" in note               # flagged: no cycle history
+
+
+def test_through_cycle_roic_not_eval_on_missing_inputs():
+    assert through_cycle_roic([], [1.0], [2.0], [400.0], window=4)[0] is None  # no OI
+    assert through_cycle_roic([100.0], [10.0], [90.0], [], window=4)[0] is None  # no IC
