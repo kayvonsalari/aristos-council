@@ -208,6 +208,40 @@ def test_genuine_flip_same_strategy(tmp_path):
     assert _flip_fired(prior.verdict, Recommendation.SELL) is True
 
 
+# --------------------------------------------------------------------------- #
+# INSUFFICIENT_EVIDENCE persistence: the new off-ladder verdict must serialize/
+# round-trip, and must NOT serve as the flip baseline for a later run.
+# --------------------------------------------------------------------------- #
+def test_verdict_record_round_trips_insufficient_evidence():
+    rec = VerdictRecord(
+        ticker="SKHYY",
+        run_at=datetime(2026, 6, 21, tzinfo=timezone.utc),
+        strategy_id="dividend_aristocrats_v2",
+        verdict=Recommendation.INSUFFICIENT_EVIDENCE,
+        confidence=0.9,
+    )
+    back = VerdictRecord.model_validate(json.loads(rec.model_dump_json()))
+    assert back.verdict == Recommendation.INSUFFICIENT_EVIDENCE
+
+
+def test_load_latest_skips_insufficient_evidence_as_flip_baseline(tmp_path):
+    sid = "dividend_aristocrats_v2"
+
+    def _rec(day, verdict):
+        return VerdictRecord(
+            ticker="SKHYY", run_at=datetime(2026, 6, day, tzinfo=timezone.utc),
+            strategy_id=sid, verdict=verdict, confidence=0.9)
+
+    append_record(_rec(19, Recommendation.BUY), tmp_path)
+    append_record(_rec(20, Recommendation.INSUFFICIENT_EVIDENCE), tmp_path)
+    latest = load_latest("SKHYY", tmp_path, strategy_id=sid)
+    # the off-ladder run is skipped; the last DIRECTIONAL verdict is the baseline
+    assert latest is not None and latest.verdict == Recommendation.BUY
+    # but it is still in the append-only history
+    assert [r.verdict for r in load_records("SKHYY", tmp_path)] == [
+        Recommendation.BUY, Recommendation.INSUFFICIENT_EVIDENCE]
+
+
 def test_saved_msft_growth_prior_is_scoped_by_strategy():
     # load_latest must scope by strategy_id, returning each strategy's OWN record.
     # We assert the scoping invariant — each load returns a record tagged with the

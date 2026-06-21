@@ -10,10 +10,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from aristos_council.agents.disposition import (
+    _RANK,
     disposition_ceiling,
     exceeds_ceiling,
     failed_gating_criteria,
+    insufficient_evidence,
+    not_evaluated_gating_criteria,
 )
 from aristos_council.state import Recommendation
 from aristos_council.strategy.loader import load_strategy
@@ -62,6 +67,52 @@ def test_ceiling_sell_exceeds_buy_and_hold_but_not_sell():
     assert exceeds_ceiling(Recommendation.BUY, Recommendation.SELL) is True
     assert exceeds_ceiling(Recommendation.HOLD, Recommendation.SELL) is True
     assert exceeds_ceiling(Recommendation.SELL, Recommendation.SELL) is False
+
+
+# --------------------------------------------------------------------------- #
+# INSUFFICIENT_EVIDENCE: a NOT-EVAL (passed is None) on a GATING criterion is an
+# off-ladder short-circuit, NOT a confirmed-fail cap. Separate identity check.
+# --------------------------------------------------------------------------- #
+def test_insufficient_evidence_true_on_gating_not_eval():
+    screen = [_crit("min_dividend_yield", True), _crit(STREAK, None)]
+    assert insufficient_evidence(screen, {STREAK}) is True
+
+
+def test_insufficient_evidence_false_on_non_gating_not_eval():
+    # The NOT-EVAL is on a NON-gating criterion -> does NOT short-circuit.
+    screen = [_crit("min_dividend_yield", None), _crit(STREAK, True)]
+    assert insufficient_evidence(screen, {STREAK}) is False
+
+
+def test_insufficient_evidence_false_on_confirmed_fail_only():
+    # passed is False is a confirmed fail (a SELL cap), NOT a NOT-EVAL. Identity
+    # check on None must not be fooled by False.
+    screen = [_crit(STREAK, False)]
+    assert insufficient_evidence(screen, {STREAK}) is False
+
+
+def test_not_evaluated_gating_criteria_lists_only_not_eval_gating():
+    screen = [_crit("a", None), _crit("b", True), _crit("c", None), _crit("d", False)]
+    assert not_evaluated_gating_criteria(screen, {"a", "c", "d"}) == ["a", "c"]  # not d (False)
+    assert not_evaluated_gating_criteria(screen, {"b"}) == []                    # b passed
+
+
+def test_confirmed_fail_and_not_eval_coexist_independently():
+    # Both functions are independent: a screen can have a confirmed gating fail
+    # AND a NOT-EVAL gating criterion. The decision node decides precedence
+    # (confirmed-fail wins); the pure functions just report.
+    screen = [_crit("a", False), _crit("b", None)]
+    assert disposition_ceiling(screen, {"a", "b"}) is Recommendation.SELL
+    assert insufficient_evidence(screen, {"a", "b"}) is True
+
+
+def test_insufficient_evidence_is_off_the_rank_ladder():
+    # INSUFFICIENT_EVIDENCE must NEVER be comparable as more/less bullish.
+    assert Recommendation.INSUFFICIENT_EVIDENCE not in _RANK
+    with pytest.raises(ValueError):
+        exceeds_ceiling(Recommendation.INSUFFICIENT_EVIDENCE, Recommendation.SELL)
+    with pytest.raises(ValueError):
+        exceeds_ceiling(Recommendation.BUY, Recommendation.INSUFFICIENT_EVIDENCE)
 
 
 def test_v2_strategy_gating_names_are_streak_only():

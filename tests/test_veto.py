@@ -177,3 +177,64 @@ def test_majority_override_silent_when_no_voters():
     s.decision = _decision(rec=Recommendation.BUY)
     make_veto_node(STRATEGY)(s)
     assert VetoTrigger.MAJORITY_OVERRIDE not in triggers(s)
+
+
+# --- trigger 6: INSUFFICIENT_EVIDENCE ----------------------------------- #
+# An INSUFFICIENT_EVIDENCE verdict (gating criterion NOT-EVAL) ALWAYS pauses for
+# a human, unconditionally. It is off the buy/hold/sell ladder, so it is also
+# excluded from the flip and majority-override comparisons.
+
+def _insufficient(crit="min_dividend_growth_streak"):
+    return Decision(recommendation=Recommendation.INSUFFICIENT_EVIDENCE,
+                    confidence=0.9, rationale="r", insufficient_evidence=True,
+                    gate_override_applied=True, gating_criterion_fired=crit)
+
+
+def test_insufficient_evidence_always_fires_human_review():
+    # High confidence, no conflict, no abstain -> a normal run would be clean.
+    s = _state()
+    s.specialist_opinions = [
+        _opinion(SpecialistName.FUNDAMENTAL, Stance.BULLISH),
+        _opinion(SpecialistName.TECHNICAL, Stance.BULLISH),
+    ]
+    s.decision = _insufficient()
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.INSUFFICIENT_EVIDENCE in triggers(s)
+    assert s.requires_human_review is True
+    flag = next(f for f in s.veto_flags
+                if f.trigger == VetoTrigger.INSUFFICIENT_EVIDENCE)
+    assert "min_dividend_growth_streak" in flag.detail
+
+
+def test_insufficient_evidence_is_not_a_flip_target():
+    # Prior was a directional BUY; this run is INSUFFICIENT_EVIDENCE. That is not
+    # a directional change, so the flip veto must stay silent.
+    s = _state(prior_recommendation=Recommendation.BUY)
+    s.decision = _insufficient()
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.RECOMMENDATION_FLIP not in triggers(s)
+    assert VetoTrigger.INSUFFICIENT_EVIDENCE in triggers(s)
+
+
+def test_insufficient_evidence_prior_is_not_a_flip_baseline():
+    # Prior run was INSUFFICIENT_EVIDENCE; this run is a directional SELL. The
+    # off-ladder prior must not manufacture a flip.
+    s = _state(prior_recommendation=Recommendation.INSUFFICIENT_EVIDENCE)
+    s.decision = _decision(rec=Recommendation.SELL)
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.RECOMMENDATION_FLIP not in triggers(s)
+
+
+def test_insufficient_evidence_silences_majority_override():
+    # 2 bullish voters would normally flag a non-buy verdict as a majority
+    # override, but an off-ladder verdict is not comparable -> no override flag
+    # (human review still fires via trigger 6).
+    s = _state()
+    s.specialist_opinions = [
+        _opinion(SpecialistName.FUNDAMENTAL, Stance.BULLISH),
+        _opinion(SpecialistName.TECHNICAL, Stance.BULLISH),
+    ]
+    s.decision = _insufficient()
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.MAJORITY_OVERRIDE not in triggers(s)
+    assert VetoTrigger.INSUFFICIENT_EVIDENCE in triggers(s)

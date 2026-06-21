@@ -32,10 +32,8 @@ def failed_gating_criteria(screen_criteria, gating_names) -> list[str]:
 
     A confirmed fail is ``passed is False`` — an IDENTITY check, deliberately:
     a NOT-EVAL (``passed is None``) is NOT a confirmed fail and must not gate.
-
-    TODO (future build): a NOT-EVAL on a gating criterion currently yields NO
-    cap. Strategy-disposition work (INSUFFICIENT_EVIDENCE) may later escalate it;
-    this build intentionally does not cap on ``passed is None``.
+    A NOT-EVAL on a gating criterion is handled separately by
+    ``insufficient_evidence`` (short-circuit to INSUFFICIENT_EVIDENCE).
     """
     gating = set(gating_names)
     return [
@@ -43,6 +41,26 @@ def failed_gating_criteria(screen_criteria, gating_names) -> list[str]:
         for c in screen_criteria
         if _name(c) in gating and _passed(c) is False
     ]
+
+
+def not_evaluated_gating_criteria(screen_criteria, gating_names) -> list[str]:
+    """Names of gating criteria that are NOT-EVAL (``passed is None``), in order.
+
+    The NOT-EVAL counterpart to ``failed_gating_criteria`` — an IDENTITY check on
+    None, so a confirmed fail (``passed is False``) is excluded.
+    """
+    gating = set(gating_names)
+    return [
+        _name(c)
+        for c in screen_criteria
+        if _name(c) in gating and _passed(c) is None
+    ]
+
+
+def insufficient_evidence(screen_criteria, gating_names) -> bool:
+    """True if any GATING criterion is NOT-EVAL (passed is None) — identity check."""
+    gating = set(gating_names)
+    return any(_name(c) in gating and _passed(c) is None for c in screen_criteria)
 
 
 def disposition_ceiling(screen_criteria, gating_names) -> Recommendation | None:
@@ -58,5 +76,18 @@ def disposition_ceiling(screen_criteria, gating_names) -> Recommendation | None:
 
 def exceeds_ceiling(recommendation: Recommendation,
                     ceiling: Recommendation) -> bool:
-    """True if ``recommendation`` is more bullish than ``ceiling`` (needs capping)."""
+    """True if ``recommendation`` is more bullish than ``ceiling`` (needs capping).
+
+    Defensive: INSUFFICIENT_EVIDENCE is OFF the buy/hold/sell ladder and absent
+    from ``_RANK``. It must never reach here (the decision node short-circuits
+    before the ceiling), so a ranking attempt is a programming error, raised
+    loudly rather than silently mis-ordered.
+    """
+    for rec in (recommendation, ceiling):
+        if rec not in _RANK:
+            raise ValueError(
+                f"{rec!r} is off the buy/hold/sell ladder and cannot be ranked "
+                "against a disposition ceiling (INSUFFICIENT_EVIDENCE "
+                "short-circuits before the ceiling logic runs)."
+            )
     return _RANK[recommendation] > _RANK[ceiling]

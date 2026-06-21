@@ -97,6 +97,11 @@ def test_verdict_hex_is_the_only_semantic_palette():
     assert app._verdict_hex("hold") == "#B8860B"   # case-insensitive
     assert app._verdict_hex("SELL") == "#B23B3B"
     assert app._verdict_hex(None) == "#8A8A8A"     # neutral fallback
+    # INSUFFICIENT_EVIDENCE has its own NON-directional slate (not green/amber/red)
+    ie = app._verdict_hex("INSUFFICIENT_EVIDENCE")
+    assert ie == "#5B6B7B"
+    assert ie not in {"#2E7D32", "#B8860B", "#B23B3B"}
+    assert "INSUFFICIENT_EVIDENCE" in app._VERDICT_DOT
 
 
 def test_favicon_is_svg_data_uri():

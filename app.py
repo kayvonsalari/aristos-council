@@ -69,8 +69,12 @@ LOGO_PATH = ASSETS_DIR / "aristos_council_logo.svg"
 # Verdict semantic colors — the ONLY semantic colors in the app (everything else
 # is the dark base + the single gold accent). Applied to the verdict banner, the
 # history verdict markers, and the run-selector labels, consistently.
-_VERDICT_HEX = {"BUY": "#2E7D32", "HOLD": "#B8860B", "SELL": "#B23B3B"}
-_VERDICT_DOT = {"BUY": "🟢", "HOLD": "🟡", "SELL": "🔴"}  # selectbox can't take hex
+# INSUFFICIENT_EVIDENCE is OFF the directional ladder, so it gets a NON-directional
+# slate grey — deliberately NOT green/amber/red (it is not a buy/hold/sell call).
+_VERDICT_HEX = {"BUY": "#2E7D32", "HOLD": "#B8860B", "SELL": "#B23B3B",
+                "INSUFFICIENT_EVIDENCE": "#5B6B7B"}
+_VERDICT_DOT = {"BUY": "🟢", "HOLD": "🟡", "SELL": "🔴",
+                "INSUFFICIENT_EVIDENCE": "⚪"}  # selectbox can't take hex
 GOLD = "#52B6A4"  # the single accent
 
 

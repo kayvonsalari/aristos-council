@@ -613,6 +613,95 @@ def test_v1_no_gate_keeps_llm_verdict_on_same_failing_streak():
     assert d.original_recommendation == Recommendation.BUY
 
 
+# --------------------------------------------------------------------------- #
+# INSUFFICIENT_EVIDENCE (strict): a NOT-EVAL on a GATING criterion short-circuits
+# the verdict OFF the buy/hold/sell ladder and ALWAYS fires human review.
+# --------------------------------------------------------------------------- #
+class NotEvalStreakAdapter(FakeAdapter):
+    """Only ONE dividend year, so the streak criterion is NOT-EVAL (passed is
+    None) — insufficient history to even count a streak — rather than a confirmed
+    fail. Under v2 (streak gating) this must short-circuit to INSUFFICIENT_EVIDENCE."""
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return [DividendEvent(ex_date=date(2024, 6, 1), amount=1.0)]
+
+
+def test_not_eval_on_gating_criterion_short_circuits_to_insufficient_evidence():
+    runners = {
+        "specialist": ScriptedSpecialistRunner([_bullish()] * 4),
+        "critic": StaticRunner(CriticOutput(counter_thesis="c")),
+        "decision": StaticRunner(DecisionOutput(
+            recommendation=Recommendation.BUY, confidence=0.9, rationale="r")),
+    }
+    app = build_council(NotEvalStreakAdapter(), V2, runners)
+    state = ResearchState.model_validate(
+        app.invoke(ResearchState(ticker="FAKE", strategy_id=V2.id)))
+    d = state.decision
+    # verdict is off the ladder, not the LLM's BUY
+    assert d.recommendation == Recommendation.INSUFFICIENT_EVIDENCE
+    assert d.original_recommendation == Recommendation.BUY
+    assert d.gate_override_applied is True
+    assert d.insufficient_evidence is True
+    assert d.gating_criterion_fired == "min_dividend_growth_streak"
+    # and human review fires unconditionally via the dedicated veto trigger
+    assert VetoTrigger.INSUFFICIENT_EVIDENCE in {f.trigger for f in state.veto_flags}
+    assert state.requires_human_review is True
+
+
+def test_confirmed_fail_wins_over_not_eval_at_decision_node():
+    """Precedence: when a gating criterion is a CONFIRMED fail AND another is
+    NOT-EVAL, the confirmed-fail SELL cap wins over INSUFFICIENT_EVIDENCE
+    ('a real SELL beats can't-tell'). Exercised directly on the decision node
+    with a crafted screen so both conditions co-occur."""
+    from aristos_council.agents.nodes import make_decision_node
+    from aristos_council.state import ToolCall
+
+    eff = effective_strategy(STRATEGY, is_gating={
+        "min_dividend_yield": True, "min_dividend_growth_streak": True})
+    node = make_decision_node(eff, StaticRunner(DecisionOutput(
+        recommendation=Recommendation.BUY, confidence=0.9, rationale="r")))
+    state = ResearchState(ticker="FAKE", strategy_id=STRATEGY.id)
+    state.tool_calls.append(ToolCall(
+        call_id="s", tool_name="run_dividend_aristocrat_screen",
+        output={"criteria": [
+            {"name": "min_dividend_yield", "passed": False, "observed": 0.0,
+             "threshold": 0.025, "note": "confirmed fail"},
+            {"name": "min_dividend_growth_streak", "passed": None,
+             "observed": None, "threshold": 25.0, "note": "not evaluated"},
+        ]}))
+    node(state)
+    d = state.decision
+    assert d.recommendation == Recommendation.SELL          # confirmed-fail wins
+    assert d.insufficient_evidence is False
+    assert d.gate_override_applied is True
+    assert d.gating_criterion_fired == "min_dividend_yield"
+
+
+def test_non_gating_not_eval_does_not_short_circuit():
+    """A NOT-EVAL on a NON-gating criterion leaves the verdict untouched (the
+    LLM verdict stands) — INSUFFICIENT_EVIDENCE is reserved for GATING NOT-EVAL."""
+    from aristos_council.agents.nodes import make_decision_node
+    from aristos_council.state import ToolCall
+
+    # Only the streak is gating; the NOT-EVAL is on yield (non-gating).
+    node = make_decision_node(V2, StaticRunner(DecisionOutput(
+        recommendation=Recommendation.BUY, confidence=0.9, rationale="r")))
+    state = ResearchState(ticker="FAKE", strategy_id=V2.id)
+    state.tool_calls.append(ToolCall(
+        call_id="s", tool_name="run_dividend_aristocrat_screen",
+        output={"criteria": [
+            {"name": "min_dividend_yield", "passed": None, "observed": None,
+             "threshold": 0.025, "note": "not evaluated"},
+            {"name": "min_dividend_growth_streak", "passed": True,
+             "observed": 40.0, "threshold": 25.0, "note": "ok"},
+        ]}))
+    node(state)
+    d = state.decision
+    assert d.recommendation == Recommendation.BUY           # unaffected
+    assert d.insufficient_evidence is False
+    assert d.gate_override_applied is False
+
+
 def test_dividend_history_rendered_as_named_handles_not_a_raw_list():
     # STEP 1: agents see latest/earliest/by_year/n_events handles, not a bare
     # list to index (the source of the index/semantic violation mode).

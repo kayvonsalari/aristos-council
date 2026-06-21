@@ -9,6 +9,8 @@ gets to look. The four triggers from the project spec:
 4. RECOMMENDATION_FLIP   recommendation differs from the prior run's
 5. MAJORITY_OVERRIDE     decision verdict contradicts the strict stance-majority
                          of non-abstaining specialists
+6. INSUFFICIENT_EVIDENCE verdict is INSUFFICIENT_EVIDENCE (a gating criterion was
+                         NOT-EVAL) — always pauses for a human, unconditionally
 """
 
 from __future__ import annotations
@@ -73,9 +75,16 @@ def make_veto_node(strategy: Strategy):
         # job is catching genuine verdict instability). Override runs are also not
         # the flip baseline (verdicts.load_latest skips them), so a later default
         # run never compares against an experiment either.
+        #
+        # INSUFFICIENT_EVIDENCE is OFF the buy/hold/sell ladder: it is never a flip
+        # TARGET (this run) nor a flip BASELINE (the prior). verdicts.load_latest
+        # already skips it as a baseline; we also guard both sides here so a
+        # directly-set prior can't manufacture a spurious flip.
         if (not state.applied_overrides
                 and state.prior_recommendation is not None
+                and state.prior_recommendation != Recommendation.INSUFFICIENT_EVIDENCE
                 and state.decision is not None
+                and state.decision.recommendation != Recommendation.INSUFFICIENT_EVIDENCE
                 and state.decision.recommendation != state.prior_recommendation):
             flags.append(VetoFlag(
                 trigger=VetoTrigger.RECOMMENDATION_FLIP,
@@ -85,8 +94,13 @@ def make_veto_node(strategy: Strategy):
 
         # 5 — majority override: the Decision verdict contradicts a STRICT
         # majority (>50%) of the non-abstaining specialists' implied verdicts.
-        # No confidence condition; a tie or no-majority is silent.
-        if state.decision is not None:
+        # No confidence condition; a tie or no-majority is silent. Skipped when the
+        # verdict is INSUFFICIENT_EVIDENCE — it is off the ladder, so comparing it
+        # to a directional stance-majority is meaningless (and human review already
+        # fires via trigger 6 below).
+        if (state.decision is not None
+                and state.decision.recommendation
+                != Recommendation.INSUFFICIENT_EVIDENCE):
             voting = [o for o in state.specialist_opinions
                       if o.stance != Stance.ABSTAIN]
             bulls = sum(o.stance == Stance.BULLISH for o in voting)
@@ -109,6 +123,19 @@ def make_veto_node(strategy: Strategy):
                                f"({bulls} bullish / {neutrals} neutral / "
                                f"{bears} bearish)",
                     ))
+
+        # 6 — insufficient evidence: a NOT-EVAL on a GATING criterion short-
+        # circuited the verdict to INSUFFICIENT_EVIDENCE (off the buy/hold/sell
+        # ladder). This ALWAYS pauses for a human — unconditionally, no threshold.
+        if (state.decision is not None
+                and state.decision.recommendation
+                == Recommendation.INSUFFICIENT_EVIDENCE):
+            crit = state.decision.gating_criterion_fired or "a gating criterion"
+            flags.append(VetoFlag(
+                trigger=VetoTrigger.INSUFFICIENT_EVIDENCE,
+                detail=f"gating criterion not evaluated ({crit}) — verdict is off "
+                       f"the buy/hold/sell ladder; human review required",
+            ))
 
         state.veto_flags.extend(flags)
         return state

@@ -165,6 +165,13 @@ class Recommendation(str, Enum):
     BUY = "buy"
     HOLD = "hold"
     SELL = "sell"
+    # Off-ladder verdict (NOT a rank on buy/hold/sell): a NOT-EVAL (passed is
+    # None) on a GATING criterion means the screen could not even decide, so
+    # direction is undefined and the run is short-circuited to human review.
+    # Deliberately ABSENT from disposition._RANK — it must never be compared as
+    # more/less bullish. Fixes the SK Hynix wrong-HOLD (non-USD market cap
+    # NOT-EVAL was silently treated as a pass).
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
 
 class Decision(BaseModel):
@@ -183,6 +190,10 @@ class Decision(BaseModel):
     original_recommendation: Optional[Recommendation] = None  # LLM pre-gate verdict
     gate_override_applied: bool = False
     gating_criterion_fired: Optional[str] = None              # the criterion that capped
+    # True when the verdict was short-circuited to INSUFFICIENT_EVIDENCE because a
+    # GATING criterion was NOT-EVAL (passed is None). Distinct from a confirmed-fail
+    # SELL cap (gate_override_applied alone). Default False so older records parse.
+    insufficient_evidence: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -196,6 +207,10 @@ class VetoTrigger(str, Enum):
     # Decision verdict contradicts the strict stance-majority of non-abstaining
     # specialists (e.g. a HOLD over a 3-bullish council). See agents/veto.py.
     MAJORITY_OVERRIDE = "majority_override"
+    # Verdict is INSUFFICIENT_EVIDENCE: a gating criterion was NOT-EVAL (passed is
+    # None), so the run is off the buy/hold/sell ladder and ALWAYS pauses for a
+    # human — unconditionally, never an auto-proceed.
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
 
 class VetoFlag(BaseModel):

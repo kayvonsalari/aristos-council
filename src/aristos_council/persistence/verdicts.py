@@ -143,11 +143,18 @@ def load_latest(
     are SKIPPED: they are never the flip baseline a future default run compares
     against. They remain in the append-only history (auditable), just not as the
     strategy's "official last verdict" for this purpose.
+
+    INSUFFICIENT_EVIDENCE runs are likewise SKIPPED as a baseline: that verdict is
+    off the buy/hold/sell ladder (a "can't tell", not a directional call), so it
+    is never a flip TARGET to compare a later run against. The fallback baseline is
+    the most recent DIRECTIONAL verdict. (The record stays in the history.)
     """
     records = load_records(ticker, verdicts_dir)
     if strategy_id is not None:
         records = [r for r in records if r.strategy_id == strategy_id]
     records = [r for r in records if not r.applied_overrides]
+    records = [r for r in records
+               if r.verdict != Recommendation.INSUFFICIENT_EVIDENCE]
     return records[-1] if records else None
 
 

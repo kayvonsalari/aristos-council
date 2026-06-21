@@ -35,6 +35,7 @@ from ..state import (
     Decision,
     Figure,
     Provenance,
+    Recommendation,
     ResearchState,
     SpecialistName,
     SpecialistOpinion,
@@ -54,6 +55,8 @@ from .disposition import (
     disposition_ceiling,
     exceeds_ceiling,
     failed_gating_criteria,
+    insufficient_evidence,
+    not_evaluated_gating_criteria,
 )
 from .schemas import CriticOutput, DecisionOutput, FigureRef, SpecialistOutput
 
@@ -576,15 +579,30 @@ def make_decision_node(strategy: Strategy, runner):
         final_rec = out.recommendation
         gate_applied = False
         fired_name = None
+        insufficient = False
         gating = {c.name for c in strategy.criteria if getattr(c, "is_gating", False)}
         if gating:
             screen = _screen_criteria(state)
             ceiling = disposition_ceiling(screen, gating)
-            if ceiling is not None and exceeds_ceiling(out.recommendation, ceiling):
-                final_rec = ceiling
+            if ceiling is not None:
+                # A CONFIRMED gating fail exists -> SELL territory. This takes
+                # PRECEDENCE over a co-occurring NOT-EVAL: a real SELL beats
+                # "can't tell". Only cap when the LLM verdict is more bullish.
+                if exceeds_ceiling(out.recommendation, ceiling):
+                    final_rec = ceiling
+                    gate_applied = True
+                    failed = failed_gating_criteria(screen, gating)
+                    fired_name = failed[0] if failed else None
+            elif insufficient_evidence(screen, gating):
+                # No confirmed fail, but a GATING criterion is NOT-EVAL (passed is
+                # None): the screen could not decide, so the verdict is short-
+                # circuited OFF the buy/hold/sell ladder to INSUFFICIENT_EVIDENCE.
+                # The veto gate then forces human review unconditionally.
+                final_rec = Recommendation.INSUFFICIENT_EVIDENCE
                 gate_applied = True
-                failed = failed_gating_criteria(screen, gating)
-                fired_name = failed[0] if failed else None
+                insufficient = True
+                not_eval = not_evaluated_gating_criteria(screen, gating)
+                fired_name = not_eval[0] if not_eval else None
 
         state.decision = Decision(
             recommendation=final_rec,
@@ -594,6 +612,7 @@ def make_decision_node(strategy: Strategy, runner):
             original_recommendation=out.recommendation,
             gate_override_applied=gate_applied,
             gating_criterion_fired=fired_name,
+            insufficient_evidence=insufficient,
         )
         return state
 
