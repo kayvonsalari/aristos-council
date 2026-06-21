@@ -599,12 +599,14 @@ def test_gate_leaves_sell_unchanged():
     assert d.original_recommendation == Recommendation.SELL
 
 
-def test_v1_no_gate_keeps_llm_verdict_on_same_failing_streak():
-    # Identical failing streak under v1 (no is_gating) -> the LLM verdict stands,
-    # proving the default-off field leaves v1 behaviour unchanged. (partial_pass
-    # is True in BOTH; only is_gating differs.)
-    d = _run_gate(STRATEGY, Recommendation.BUY).decision
-    assert d.recommendation == Recommendation.BUY           # NOT capped
+def test_override_off_disables_v1_gate_on_failing_streak():
+    # v1 now GATES the streak by default. An ephemeral is_gating=False override is
+    # the experiment knob that turns it back off, so the same failing streak leaves
+    # the LLM verdict standing (proves the gate is the default AND still relaxable).
+    ungated = effective_strategy(
+        STRATEGY, is_gating={"min_dividend_growth_streak": False})
+    d = _run_gate(ungated, Recommendation.BUY).decision
+    assert d.recommendation == Recommendation.BUY           # NOT capped (gate off)
     assert d.gate_override_applied is False
     assert d.original_recommendation == Recommendation.BUY
 
