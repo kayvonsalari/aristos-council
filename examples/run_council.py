@@ -28,7 +28,7 @@ from pathlib import Path
 
 from aristos_council.agents.runners import production_runners
 from aristos_council.data.adapter import normalize_ticker
-from aristos_council.data.yfinance_adapter import YFinanceAdapter
+from aristos_council.data.provider import select_market_adapter
 from aristos_council.graph import build_council
 from aristos_council.persistence.reports import report_from_state, save_report
 from aristos_council.persistence.verdicts import (
@@ -119,7 +119,10 @@ def main(argv: list[str] | None = None) -> None:
     else:
         print("(sentiment: no FINNHUB_API_KEY — Sentiment specialist will abstain)")
 
-    app = build_council(YFinanceAdapter(), strategy, production_runners(),
+    # Provider chosen by $ARISTOS_MARKET_PROVIDER (default yfinance).
+    adapter = select_market_adapter()
+    print(f"(market provider: {adapter.name})")
+    app = build_council(adapter, strategy, production_runners(),
                         sentiment_adapter=sentiment)
 
     # IO at the edge: load the prior verdict for the same ticker AND strategy

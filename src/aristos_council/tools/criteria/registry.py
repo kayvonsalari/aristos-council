@@ -59,6 +59,11 @@ class Evidence:
     fundamentals: Fundamentals | None = None
     dividends: list[DividendEvent] = field(default_factory=list)
     last_close: float | None = None
+    # Provider's declared streak DATA-SHAPE method (Option A), riding along with the
+    # dividends it describes. Default matches yfinance so the legacy/equivalence
+    # paths are unchanged; ``gather`` populates it from
+    # ``adapter.dividend_streak_method``.
+    streak_method: str = "per_payment_median"
 
 
 @dataclass(frozen=True)
@@ -131,7 +136,8 @@ def _min_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
 
 
 def _min_dividend_growth_streak(ev: Evidence, threshold: float) -> CriterionResult:
-    return min_growth_streak_criterion(ev.dividends, min_years=int(threshold))
+    return min_growth_streak_criterion(
+        ev.dividends, min_years=int(threshold), method=ev.streak_method)
 
 
 # --- Growth / quality criteria (Sprint 4B) ------------------------------- #

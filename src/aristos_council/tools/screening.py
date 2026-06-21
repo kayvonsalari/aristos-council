@@ -322,9 +322,20 @@ def consecutive_dividend_growth_years(
 
 
 def min_growth_streak_criterion(
-    dividends: list[DividendEvent], *, min_years: int
+    dividends: list[DividendEvent], *, min_years: int,
+    method: str = "per_payment_median",
 ) -> CriterionResult:
-    streak, note = consecutive_dividend_growth_years(dividends)
+    """The streak criterion, computed by the PROVIDER-DECLARED method (Option A).
+
+    ``method`` names the data-shape-matched streak function (``streak_by_method``):
+    ``per_payment_median`` for yfinance's ex-date noise, ``calendar_year_sum`` for
+    EODHD's adjusted annual totals. The chosen method is RECORDED IN THE NOTE so
+    the audit trail shows the provider-matched method as a sourced choice. The
+    default keeps yfinance behaviour — and the frozen
+    ``run_dividend_aristocrat_screen`` equivalence — unchanged.
+    """
+    streak, note = streak_by_method(method, dividends, min_years=min_years)
+    note = f"{note}; streak computed by {method} ({_STREAK_SHAPE[method]})"
     if streak is None:
         return CriterionResult(
             name="min_dividend_growth_streak",
@@ -431,6 +442,45 @@ def min_growth_streak_criterion_by_year(
         name="min_dividend_growth_streak", passed=streak >= min_years,
         observed=float(streak), threshold=float(min_years), note=note,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Provider-declared streak dispatch (Option A)
+# --------------------------------------------------------------------------- #
+# The adapter DECLARES its data shape (MarketDataAdapter.dividend_streak_method);
+# screening OWNS the math and maps the declared name to the matching function
+# here. The two methods are NOT collapsed — they handle opposite hazards
+# (per-payment median vs calendar-year sum) and each is correct only for its
+# provider's shape. Unknown name -> raise (fail loud), never a silent wrong method.
+_STREAK_METHODS = {
+    "per_payment_median": consecutive_dividend_growth_years,
+    "calendar_year_sum": dividend_growth_streak_by_calendar_year,
+}
+_STREAK_SHAPE = {
+    "per_payment_median": "yfinance shape",
+    "calendar_year_sum": "EODHD shape",
+}
+
+
+def streak_by_method(
+    method: str, dividends: list[DividendEvent], *, min_years: int
+) -> tuple[int | None, str]:
+    """Dispatch to the provider-declared streak function. Unknown -> ValueError.
+
+    ``per_payment_median``'s NOT-EVAL is purely data-driven (<2 years) so it
+    ignores ``min_years``; ``calendar_year_sum`` needs it (NOT-EVAL when the
+    history can't reach the floor). The dict maps straight to the two functions;
+    the only branch is which one takes ``min_years``.
+    """
+    fn = _STREAK_METHODS.get(method)
+    if fn is None:
+        raise ValueError(
+            f"unknown dividend_streak_method {method!r}; "
+            f"known: {sorted(_STREAK_METHODS)}"
+        )
+    if method == "calendar_year_sum":
+        return fn(dividends, min_years=min_years)
+    return fn(dividends)
 
 
 # --------------------------------------------------------------------------- #

@@ -36,6 +36,9 @@ from .adapter import (
 
 class YFinanceAdapter(MarketDataAdapter):
     name = "yfinance"
+    # Explicit (== the base default): yfinance's quarterly history carries ex-date
+    # timing noise, so the per-payment MEDIAN method is the correct one.
+    dividend_streak_method = "per_payment_median"
 
     def __init__(self) -> None:
         try:

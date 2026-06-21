@@ -199,9 +199,203 @@ def test_adapter_missing_key_is_data_unavailable(monkeypatch):
         EODHDAdapter(api_key=None).get_dividend_history("KO.US", **FULL_RANGE)
 
 
-def test_adapter_price_and_fundamentals_still_deferred():
+def test_adapter_price_history_still_deferred():
+    # get_price_history raises BEFORE any network call (no key needed).
     a = EODHDAdapter(api_key="k")
     with pytest.raises(NotImplementedError):
         a.get_price_history("KO.US", start=date(2020, 1, 1), end=date(2021, 1, 1))
-    with pytest.raises(NotImplementedError):
-        a.get_fundamentals("KO.US")
+
+
+# --------------------------------------------------------------------------- #
+# PART 1 — provider-declared streak dispatch (Option A)
+# --------------------------------------------------------------------------- #
+from aristos_council.data.adapter import MarketDataAdapter           # noqa: E402
+from aristos_council.data.yfinance_adapter import YFinanceAdapter     # noqa: E402
+from aristos_council.tools.screening import (                         # noqa: E402
+    consecutive_dividend_growth_years,
+    min_growth_streak_criterion,
+    streak_by_method,
+)
+
+
+def test_adapters_declare_their_streak_shape():
+    assert MarketDataAdapter.dividend_streak_method == "per_payment_median"  # default
+    assert YFinanceAdapter().dividend_streak_method == "per_payment_median"
+    assert EODHDAdapter(api_key="k").dividend_streak_method == "calendar_year_sum"
+
+
+def test_dispatch_routes_each_method_to_its_function():
+    divs = dividend_events_from_rows(
+        _annual_rows(1998, [1.0 + 0.1 * i for i in range(27)]), **FULL_RANGE)
+    assert (streak_by_method("per_payment_median", divs, min_years=20)
+            == consecutive_dividend_growth_years(divs))
+    assert (streak_by_method("calendar_year_sum", divs, min_years=20)
+            == dividend_growth_streak_by_calendar_year(divs, min_years=20))
+
+
+def test_dispatch_unknown_method_raises():
+    with pytest.raises(ValueError, match="unknown dividend_streak_method"):
+        streak_by_method("bogus", [], min_years=20)
+
+
+def test_streak_note_records_the_method_used():
+    divs = dividend_events_from_rows(
+        _annual_rows(1998, [1.0 + 0.1 * i for i in range(27)]), **FULL_RANGE)
+    r_eodhd = min_growth_streak_criterion(divs, min_years=20, method="calendar_year_sum")
+    assert "calendar_year_sum" in r_eodhd.note and "EODHD shape" in r_eodhd.note
+    r_yf = min_growth_streak_criterion(divs, min_years=20, method="per_payment_median")
+    assert "per_payment_median" in r_yf.note and "yfinance shape" in r_yf.note
+
+
+def test_eodhd_routing_does_not_false_break_on_cadence_change():
+    # The PART 1.5 mirror of the PG per-payment guard: an EODHD-shaped cadence
+    # change (annual -> Interim/Final) routed through calendar_year_sum must NOT
+    # false-break, while per_payment_median (yfinance's method) WOULD.
+    rows = _annual_rows(2000, [1.0 + 0.1 * i for i in range(20)])
+    year_total = 2.9
+    for y in range(2020, 2025):
+        year_total += 0.2
+        rows.append(_row(f"{y}-03-01", round(year_total * 0.4, 4), period="Interim"))
+        rows.append(_row(f"{y}-09-01", round(year_total * 0.6, 4), period="Final"))
+    divs = dividend_events_from_rows(rows, **FULL_RANGE)
+    eodhd = min_growth_streak_criterion(divs, min_years=20, method="calendar_year_sum")
+    yfin = min_growth_streak_criterion(divs, min_years=20, method="per_payment_median")
+    assert eodhd.passed is True                 # cadence change handled
+    assert yfin.observed < eodhd.observed        # per-payment misreads it as a cut
+
+
+def test_evidence_threads_method_into_the_screen():
+    # End to end through the registry: Evidence carries the provider's declared
+    # method, the streak criterion picks it up and records it.
+    from aristos_council.tools.criteria.registry import (
+        CriterionSelection, Evidence, run_screen)
+    rows = _annual_rows(1998, [1.0 + 0.1 * i for i in range(27)])
+    divs = dividend_events_from_rows(rows, **FULL_RANGE)
+    ev = Evidence(dividends=divs, streak_method="calendar_year_sum")
+    res = run_screen([CriterionSelection("min_dividend_growth_streak", 20)],
+                     ev, ticker="NESN.SW")
+    streak_crit = res.criteria[0]
+    assert streak_crit.passed is True
+    assert "calendar_year_sum" in streak_crit.note
+
+
+# --------------------------------------------------------------------------- #
+# PART 2 — EODHD get_fundamentals (fixture, no network)
+# --------------------------------------------------------------------------- #
+from aristos_council.data.eodhd_adapter import fundamentals_from_payload  # noqa: E402
+from aristos_council.tools.screening import min_market_cap_criterion      # noqa: E402
+
+_EODHD_FUNDAMENTALS = {
+    "General": {"Name": "Coca-Cola", "CurrencyCode": "USD"},
+    "Highlights": {
+        "MarketCapitalization": 2.6e11, "EarningsShare": 2.47, "PERatio": 24.3,
+        "DividendShare": 1.94, "DividendYield": 0.031, "PayoutRatio": 0.74,
+    },
+    "Financials": {
+        "Income_Statement": {
+            "currency_symbol": "USD",
+            # keys deliberately OUT of order -> parser must sort newest-first
+            "yearly": {
+                "2021-12-31": {"totalRevenue": "38655000000",
+                               "operatingIncome": "10300000000", "ebit": "10300000000",
+                               "incomeTaxExpense": "1500000000",
+                               "incomeBeforeTax": "10000000000"},
+                "2023-12-31": {"totalRevenue": "45754000000",
+                               "operatingIncome": "11300000000", "ebit": "11300000000",
+                               "incomeTaxExpense": "2249000000",
+                               "incomeBeforeTax": "12000000000"},
+                "2022-12-31": {"totalRevenue": "43004000000",
+                               "operatingIncome": "10900000000", "ebit": "10900000000",
+                               "incomeTaxExpense": "1700000000",
+                               "incomeBeforeTax": "11600000000"},
+            },
+        },
+        "Balance_Sheet": {"currency_symbol": "USD", "yearly": {
+            "2023-12-31": {"netInvestedCapital": "40000000000"},
+            "2022-12-31": {"netInvestedCapital": "38000000000"},
+        }},
+        "Cash_Flow": {"yearly": {
+            "2023-12-31": {"freeCashFlow": "9500000000"},
+            "2022-12-31": {"freeCashFlow": "9000000000"},
+        }},
+    },
+}
+
+
+def test_fundamentals_parse_scalar_fields():
+    f = fundamentals_from_payload("KO.US", _EODHD_FUNDAMENTALS)
+    assert f.ticker == "KO.US"
+    assert f.name == "Coca-Cola"
+    assert f.market_cap == 2.6e11
+    assert f.eps == 2.47 and f.pe_ratio == 24.3
+    assert f.dividend_yield == 0.031 and f.dividend_per_share == 1.94
+    assert f.payout_ratio == 0.74
+    assert f.free_cash_flow == 9.5e9            # newest year's FCF
+
+
+def test_fundamentals_currency_fields_populated_no_conversion():
+    f = fundamentals_from_payload("KO.US", _EODHD_FUNDAMENTALS)
+    assert f.currency == "USD" and f.financial_currency == "USD"
+
+
+def test_fundamentals_annual_series_newest_first():
+    f = fundamentals_from_payload("KO.US", _EODHD_FUNDAMENTALS)
+    # newest-first, matching the yfinance adapter ordering (CAGR/ROIC depend on it)
+    assert f.total_revenue == [45754000000.0, 43004000000.0, 38655000000.0]
+    assert f.operating_income == [11300000000.0, 10900000000.0, 10300000000.0]
+    assert f.tax_provision == [2249000000.0, 1700000000.0, 1500000000.0]
+    assert f.invested_capital == [40000000000.0, 38000000000.0]
+
+
+def test_fundamentals_missing_fields_stay_none():
+    f = fundamentals_from_payload("X", {"General": {}, "Highlights": {}})
+    assert f.market_cap is None and f.eps is None and f.free_cash_flow is None
+    assert f.total_revenue == [] and f.invested_capital == []
+
+
+def test_non_usd_currency_leaves_market_cap_not_eval():
+    # SK Hynix shape: KRW market cap must NOT be silently compared to a USD floor.
+    payload = {"General": {"Name": "SK Hynix", "CurrencyCode": "KRW"},
+               "Highlights": {"MarketCapitalization": 1.69e15}, "Financials": {}}
+    f = fundamentals_from_payload("000660.KS", payload)
+    assert f.currency == "KRW"
+    r = min_market_cap_criterion(f, min_market_cap=1.0e10)
+    assert r.passed is None                      # NOT-EVAL, never a wrong-currency pass
+
+
+def test_get_fundamentals_empty_payload_is_data_unavailable():
+    class _FakeFund(EODHDAdapter):
+        def __init__(self):
+            super().__init__(api_key="k")
+        def _get_json(self, path):
+            return {}
+    with pytest.raises(DataUnavailable):
+        _FakeFund().get_fundamentals("KO.US")
+
+
+# --------------------------------------------------------------------------- #
+# PART 3 — provider selection
+# --------------------------------------------------------------------------- #
+from aristos_council.data.provider import select_market_adapter        # noqa: E402
+
+
+def test_provider_selection_eodhd(monkeypatch):
+    monkeypatch.setenv("ARISTOS_MARKET_PROVIDER", "eodhd")
+    assert select_market_adapter().name == "eodhd"
+
+
+def test_provider_selection_default_is_yfinance(monkeypatch):
+    pytest.importorskip("yfinance")
+    monkeypatch.delenv("ARISTOS_MARKET_PROVIDER", raising=False)
+    assert select_market_adapter().name == "yfinance"
+
+
+def test_provider_selection_explicit_arg_overrides_env(monkeypatch):
+    monkeypatch.setenv("ARISTOS_MARKET_PROVIDER", "yfinance")
+    assert select_market_adapter("eodhd").name == "eodhd"   # arg wins
+
+
+def test_provider_selection_unknown_raises(monkeypatch):
+    monkeypatch.setenv("ARISTOS_MARKET_PROVIDER", "bloomberg")
+    with pytest.raises(ValueError, match="unknown ARISTOS_MARKET_PROVIDER"):
+        select_market_adapter()

@@ -271,7 +271,7 @@ def run_council(ticker: str, strategy_path: Path,
         )
 
     from aristos_council.agents.runners import production_runners
-    from aristos_council.data.yfinance_adapter import YFinanceAdapter
+    from aristos_council.data.provider import select_market_adapter
     from aristos_council.graph import build_council
     from aristos_council.state import ResearchState
 
@@ -290,7 +290,9 @@ def run_council(ticker: str, strategy_path: Path,
         from aristos_council.data.finnhub_adapter import FinnhubAdapter
         sentiment = FinnhubAdapter()
 
-    app = build_council(YFinanceAdapter(), strategy, production_runners(),
+    # Provider chosen by $ARISTOS_MARKET_PROVIDER (default yfinance); adapter.name
+    # rides into provenance so the run records which provider it used.
+    app = build_council(select_market_adapter(), strategy, production_runners(),
                         sentiment_adapter=sentiment)
 
     # Prior verdict for the SAME ticker AND strategy (recommendation_flip key).

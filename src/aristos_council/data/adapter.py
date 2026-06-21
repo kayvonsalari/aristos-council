@@ -135,6 +135,14 @@ class MarketDataAdapter(abc.ABC):
     #: Short identifier recorded in tool provenance, e.g. "yfinance".
     name: str = "abstract"
 
+    #: DATA-SHAPE DECLARATION (not logic): which dividend-streak computation method
+    #: matches this provider's data shape. The streak is the one criterion whose
+    #: correct computation depends on the provider's shape (ex-date timing noise vs
+    #: split-adjusted annual totals), so the adapter STATES its shape and
+    #: ``screening.streak_by_method`` owns the math. "per_payment_median" is the
+    #: default (yfinance's shape); EODHD overrides to "calendar_year_sum".
+    dividend_streak_method: str = "per_payment_median"
+
     @abc.abstractmethod
     def get_price_history(
         self, ticker: str, *, start: date, end: date

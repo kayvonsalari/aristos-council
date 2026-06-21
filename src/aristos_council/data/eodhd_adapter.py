@@ -1,10 +1,11 @@
 """EODHD implementation of MarketDataAdapter (Phase 2 provider).
 
-Status: get_dividend_history is IMPLEMENTED and is the reason EODHD exists — its
-long, clean, ADJUSTED dividend history is what makes the multi-decade aristocrat
-streak verifiable (yfinance can't). get_price_history and get_fundamentals are
-still NotImplementedError: this build is dividend-history-first by design (see
-the migration plan), so they are deferred rather than half-faked.
+Status: get_dividend_history and get_fundamentals are IMPLEMENTED. The dividend
+history is the reason EODHD exists — its long, clean, ADJUSTED series is what
+makes the multi-decade aristocrat streak verifiable (yfinance can't). Fundamentals
+map onto the same provider-neutral DTO, carrying currency through verbatim (no FX)
+so USD-threshold criteria abstain honestly on non-USD listings. get_price_history
+remains NotImplementedError — deferred rather than half-faked.
 
 Dividend endpoint (confirmed live)
 ----------------------------------
@@ -49,8 +50,8 @@ from .adapter import (
 _BASE_URL = "https://eodhd.com/api"
 
 _NOT_READY = (
-    "EODHDAdapter implements get_dividend_history only (dividend-history-first "
-    "build). get_price_history / get_fundamentals are deferred to the next step."
+    "EODHDAdapter implements get_dividend_history and get_fundamentals; "
+    "get_price_history is deferred to the next step."
 )
 
 
@@ -82,6 +83,87 @@ def _adjusted_amount(row: dict) -> float | None:
     return amount
 
 
+def _coerce_float(value: object) -> float | None:
+    """EODHD returns numbers as strings, numbers, or null. Coerce to float;
+    None on missing/unparseable/NaN so Fundamentals fields stay Optional."""
+    if value is None:
+        return None
+    try:
+        f = float(value)   # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return None if f != f else f
+
+
+def _annual_series(yearly: object, key: str) -> list[float]:
+    """A NEWEST-FIRST list of one statement line across the yearly columns.
+
+    EODHD's ``Financials::*::yearly`` is a dict keyed by fiscal-period date
+    (``"2023-09-30"``). We sort the date keys DESCENDING so the series is
+    newest-first — matching the yfinance adapter's ``_annual_series`` ordering
+    exactly (ROIC / revenue-CAGR depend on revenue[0] being the latest year) —
+    coerce each value to float, and drop missing cells.
+    """
+    if not isinstance(yearly, dict):
+        return []
+    out: list[float] = []
+    for period in sorted(yearly.keys(), reverse=True):   # newest-first
+        row = yearly.get(period) or {}
+        v = _coerce_float(row.get(key)) if isinstance(row, dict) else None
+        if v is not None:
+            out.append(v)
+    return out
+
+
+def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
+    """Map an EODHD ``/fundamentals`` payload onto the Fundamentals DTO.
+
+    Pure (no network) so tests drive it from a recorded fixture. Missing fields
+    stay None / empty (Optional-by-convention). CURRENCY HONESTY: ``currency`` and
+    ``financial_currency`` are carried through verbatim and NEVER converted — a
+    non-USD listing must let the USD-denominated ``min_market_cap`` criterion
+    abstain (NOT-EVAL), exactly as the SK Hynix run required.
+    """
+    general = data.get("General") or {}
+    highlights = data.get("Highlights") or {}
+    financials = data.get("Financials") or {}
+    income = financials.get("Income_Statement") or {}
+    balance = financials.get("Balance_Sheet") or {}
+    cashflow = financials.get("Cash_Flow") or {}
+    income_yearly = income.get("yearly") or {}
+    balance_yearly = balance.get("yearly") or {}
+    cashflow_yearly = cashflow.get("yearly") or {}
+
+    # free_cash_flow is a single (latest) scalar in the DTO, mirroring yfinance's
+    # info["freeCashflow"]; take the newest yearly value.
+    fcf_series = _annual_series(cashflow_yearly, "freeCashFlow")
+
+    return Fundamentals(
+        ticker=ticker,
+        name=(general.get("Name") or None),
+        market_cap=_coerce_float(highlights.get("MarketCapitalization")),
+        # Listing/price currency (General) and statements currency (Income stmt).
+        currency=(general.get("CurrencyCode") or None),
+        financial_currency=(income.get("currency_symbol")
+                            or general.get("CurrencyCode") or None),
+        dividend_yield=_coerce_float(highlights.get("DividendYield")),
+        dividend_per_share=_coerce_float(highlights.get("DividendShare")),
+        payout_ratio=_coerce_float(highlights.get("PayoutRatio")),
+        eps=_coerce_float(highlights.get("EarningsShare")),
+        pe_ratio=_coerce_float(highlights.get("PERatio")),
+        free_cash_flow=(fcf_series[0] if fcf_series else None),
+        # The streak is computed from the dividend series, not this field.
+        years_dividend_growth=None,
+        # Annual series, NEWEST-FIRST (matches yfinance adapter ordering).
+        total_revenue=_annual_series(income_yearly, "totalRevenue"),
+        operating_income=_annual_series(income_yearly, "operatingIncome"),
+        ebit=_annual_series(income_yearly, "ebit"),
+        tax_provision=_annual_series(income_yearly, "incomeTaxExpense"),
+        pretax_income=_annual_series(income_yearly, "incomeBeforeTax"),
+        invested_capital=_annual_series(balance_yearly, "netInvestedCapital"),
+    )
+
+
 def dividend_events_from_rows(
     rows: object, *, start: date, end: date
 ) -> list[DividendEvent]:
@@ -109,6 +191,10 @@ def dividend_events_from_rows(
 
 class EODHDAdapter(MarketDataAdapter):
     name = "eodhd"
+    # EODHD ships clean split-ADJUSTED dividend values where the hazard is cadence
+    # change (annual -> Interim+Final), so the calendar-year SUM method is correct
+    # (see screening.streak_by_method). Declarative only — screening owns the math.
+    dividend_streak_method = "calendar_year_sum"
 
     def __init__(self, api_key: str | None = None, timeout: float = 15.0) -> None:
         # .strip(): stray whitespace in an env var / notebook secret must not be
@@ -124,7 +210,11 @@ class EODHDAdapter(MarketDataAdapter):
         raise NotImplementedError(_NOT_READY)
 
     def get_fundamentals(self, ticker: str) -> Fundamentals:
-        raise NotImplementedError(_NOT_READY)
+        symbol = normalize_ticker(ticker)
+        data = self._get_json(f"/fundamentals/{urllib.parse.quote(symbol)}")
+        if not isinstance(data, dict) or not data:
+            raise DataUnavailable(f"EODHD returned no fundamentals for {symbol}")
+        return fundamentals_from_payload(symbol, data)
 
     # ------------------------------------------------------------------ #
     def get_dividend_history(

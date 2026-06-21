@@ -140,7 +140,11 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                 strategy.criteria,
                 Evidence(fundamentals=fundamentals,
                          dividends=dividends or [],
-                         last_close=last_close),
+                         last_close=last_close,
+                         # Provider declares its streak data shape (Option A); the
+                         # tag rides with the dividends so the criterion picks the
+                         # matching method via screening.streak_by_method.
+                         streak_method=adapter.dividend_streak_method),
                 ticker=state.ticker,
             )
             state.tool_calls.append(
