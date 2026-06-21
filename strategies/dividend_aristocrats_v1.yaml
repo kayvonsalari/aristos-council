@@ -44,6 +44,14 @@ criteria:
     # confirm the floor), treat it as blocking rather than auto-passing. (Successor
     # to the old policy.unverifiable_streak_is_blocking; per-criterion now.)
     unverifiable_blocks: true
+    # GATING (baked in from the former v2): a confirmed streak FAIL (passed is
+    # False) caps the disposition at SELL deterministically — the LLM cannot raise
+    # it; a NOT-EVAL streak short-circuits to INSUFFICIENT_EVIDENCE. With
+    # EODHD/hybrid making the streak verifiable, a broken aristocrat streak is
+    # DEFINITIONAL, not contestable, so gating is now the correct default. Only this
+    # criterion gates; the three financial criteria are not. The ephemeral per-run
+    # override remains the experiment knob to relax it.
+    is_gating: true
 
 # --- How conflicts and edge cases are intended to be handled ---
 policy:
@@ -63,9 +71,11 @@ rationale: >
   payout sustainability and the growth streak above raw yield.
 
 notes: >
-  v1 limitation: the 25-year streak cannot be fully verified on the yfinance
-  development provider, which supplies only a short dividend history. Until EODHD
-  (longer history) is wired in, the streak criterion will frequently return
-  UNVERIFIABLE and trigger the data-quality veto gate by design. This is correct
-  behaviour — the council should refuse to assert an aristocrat streak it cannot
-  evidence.
+  The growth streak is GATING (is_gating): a confirmed streak failure caps the
+  verdict at SELL in code, and a streak that cannot be evaluated short-circuits to
+  INSUFFICIENT_EVIDENCE — a broken or unverifiable aristocrat streak is
+  definitional, not a matter for debate. This was the former v2 behaviour, baked
+  into v1 now that EODHD/hybrid supplies the deep dividend history that makes the
+  20-year streak verifiable (the yfinance development provider's short history
+  could not, and would frequently return UNVERIFIABLE). An ephemeral per-run
+  override remains the experiment knob to relax the gate.

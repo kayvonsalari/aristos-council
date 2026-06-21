@@ -547,18 +547,14 @@ def test_price_history_is_summarized_in_prompts_not_raw():
 
 
 # --------------------------------------------------------------------------- #
-# Deterministic disposition gate (is_gating build) — end to end in the graph.
+# Deterministic disposition gate (baked into v1) — end to end in the graph.
 # The gate must override the LLM verdict on a confirmed gating-criterion fail,
-# regardless of partial_pass_allows_hold (v2 keeps the flag True on purpose).
+# regardless of partial_pass_allows_hold (v1 keeps the flag True on purpose).
+# STRATEGY (v1) now gates the streak by default — the former v2 collapsed in.
 # --------------------------------------------------------------------------- #
-V2 = load_strategy(
-    Path(__file__).resolve().parents[1] / "strategies" / "dividend_aristocrats_v2.yaml"
-)
-
-
 class ShortStreakAdapter(FakeAdapter):
     """Same as FakeAdapter but only ~6 rising dividend years, so the streak
-    criterion is a CONFIRMED fail (streak ~4 < 25), firing the v2 gate."""
+    criterion is a CONFIRMED fail (streak ~4 < 20), firing the v1 gate."""
 
     def get_dividend_history(self, ticker, *, start, end):
         return [
@@ -580,7 +576,7 @@ def _run_gate(strategy, decision_rec):
 
 
 def test_gate_caps_buy_at_sell_on_streak_fail():
-    d = _run_gate(V2, Recommendation.BUY).decision
+    d = _run_gate(STRATEGY, Recommendation.BUY).decision
     assert d.recommendation == Recommendation.SELL          # capped by the gate
     assert d.original_recommendation == Recommendation.BUY   # LLM pre-gate verdict
     assert d.gate_override_applied is True
@@ -588,7 +584,7 @@ def test_gate_caps_buy_at_sell_on_streak_fail():
 
 
 def test_gate_caps_hold_at_sell_on_streak_fail():
-    d = _run_gate(V2, Recommendation.HOLD).decision
+    d = _run_gate(STRATEGY, Recommendation.HOLD).decision
     assert d.recommendation == Recommendation.SELL
     assert d.original_recommendation == Recommendation.HOLD
     assert d.gate_override_applied is True
@@ -597,7 +593,7 @@ def test_gate_caps_hold_at_sell_on_streak_fail():
 
 def test_gate_leaves_sell_unchanged():
     # LLM already at the ceiling -> no override; metadata records the no-op.
-    d = _run_gate(V2, Recommendation.SELL).decision
+    d = _run_gate(STRATEGY, Recommendation.SELL).decision
     assert d.recommendation == Recommendation.SELL
     assert d.gate_override_applied is False
     assert d.original_recommendation == Recommendation.SELL
@@ -633,9 +629,9 @@ def test_not_eval_on_gating_criterion_short_circuits_to_insufficient_evidence():
         "decision": StaticRunner(DecisionOutput(
             recommendation=Recommendation.BUY, confidence=0.9, rationale="r")),
     }
-    app = build_council(NotEvalStreakAdapter(), V2, runners)
+    app = build_council(NotEvalStreakAdapter(), STRATEGY, runners)
     state = ResearchState.model_validate(
-        app.invoke(ResearchState(ticker="FAKE", strategy_id=V2.id)))
+        app.invoke(ResearchState(ticker="FAKE", strategy_id=STRATEGY.id)))
     d = state.decision
     # verdict is off the ladder, not the LLM's BUY
     assert d.recommendation == Recommendation.INSUFFICIENT_EVIDENCE
@@ -684,9 +680,9 @@ def test_non_gating_not_eval_does_not_short_circuit():
     from aristos_council.state import ToolCall
 
     # Only the streak is gating; the NOT-EVAL is on yield (non-gating).
-    node = make_decision_node(V2, StaticRunner(DecisionOutput(
+    node = make_decision_node(STRATEGY, StaticRunner(DecisionOutput(
         recommendation=Recommendation.BUY, confidence=0.9, rationale="r")))
-    state = ResearchState(ticker="FAKE", strategy_id=V2.id)
+    state = ResearchState(ticker="FAKE", strategy_id=STRATEGY.id)
     state.tool_calls.append(ToolCall(
         call_id="s", tool_name="run_dividend_aristocrat_screen",
         output={"criteria": [

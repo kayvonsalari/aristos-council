@@ -115,10 +115,9 @@ def test_insufficient_evidence_is_off_the_rank_ladder():
         exceeds_ceiling(Recommendation.BUY, Recommendation.INSUFFICIENT_EVIDENCE)
 
 
-def test_v2_strategy_gating_names_are_streak_only():
-    # The committed v2 marks ONLY the streak gating; v1 marks nothing.
+def test_v1_strategy_gates_streak_only():
+    # v1 now bakes in streak gating (the former v2 collapsed into it): ONLY the
+    # streak gates; the three financial criteria do not.
     root = Path(__file__).resolve().parents[1] / "strategies"
     v1 = load_strategy(root / "dividend_aristocrats_v1.yaml")
-    v2 = load_strategy(root / "dividend_aristocrats_v2.yaml")
-    assert {c.name for c in v1.criteria if c.is_gating} == set()
-    assert {c.name for c in v2.criteria if c.is_gating} == {STREAK}
+    assert {c.name for c in v1.criteria if c.is_gating} == {STREAK}
