@@ -1,0 +1,86 @@
+<svg viewBox="0 0 980 740" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <!-- mirrors agents/nodes.py decide() precedence; update together -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8590a3"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="740" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="44" y="48" font-size="26" font-weight="700" fill="#1e2a45">How the four verdicts are decided</text>
+  <text x="44" y="74" font-size="14" fill="#5b6478">Three yes/no questions over the LLM's provisional verdict decide the outcome — mirroring the disposition gate in code.</text>
+  <text x="540" y="120" font-size="11" fill="#8590a3">Verdict colours match the product UI (the app's verdict palette).</text>
+
+  <!-- START -->
+  <rect x="80" y="96" width="300" height="56" rx="12" fill="#eef1f6" stroke="#aab4c4" stroke-width="1.5"/>
+  <text x="95" y="120" font-size="15" font-weight="700" fill="#1e2a45">Provisional verdict</text>
+  <text x="95" y="140" font-size="11.5" fill="#5b6478">the LLM weighs panel vs critic → buy / hold / sell + confidence</text>
+  <line x1="230" y1="152" x2="230" y2="182" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Q1 -->
+  <polygon points="230,182 350,230 230,278 110,230" fill="#ffffff" stroke="#aab4c4" stroke-width="1.5"/>
+  <text x="230" y="226" font-size="13" fill="#1e2a45" text-anchor="middle">Strategy has a</text>
+  <text x="230" y="243" font-size="13" fill="#1e2a45" text-anchor="middle">gating criterion?</text>
+  <line x1="350" y1="230" x2="540" y2="230" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="360" y="221" font-size="12" fill="#5b6478">no</text>
+  <line x1="230" y1="278" x2="230" y2="330" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="240" y="302" font-size="12" fill="#5b6478">yes</text>
+
+  <!-- Q2 -->
+  <polygon points="230,330 350,378 230,426 110,378" fill="#ffffff" stroke="#aab4c4" stroke-width="1.5"/>
+  <text x="230" y="370" font-size="13" fill="#1e2a45" text-anchor="middle">A confirmed-fail</text>
+  <text x="230" y="387" font-size="13" fill="#1e2a45" text-anchor="middle">gating criterion?</text>
+  <text x="230" y="402" font-size="10" fill="#8590a3" text-anchor="middle">(passed = false)</text>
+  <line x1="350" y1="378" x2="540" y2="378" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="360" y="369" font-size="12" fill="#5b6478">yes</text>
+  <line x1="230" y1="426" x2="230" y2="478" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="240" y="450" font-size="12" fill="#5b6478">no</text>
+
+  <!-- Q3 -->
+  <polygon points="230,478 350,526 230,574 110,526" fill="#ffffff" stroke="#aab4c4" stroke-width="1.5"/>
+  <text x="230" y="518" font-size="13" fill="#1e2a45" text-anchor="middle">A not-evaluated</text>
+  <text x="230" y="535" font-size="13" fill="#1e2a45" text-anchor="middle">gating criterion?</text>
+  <text x="230" y="550" font-size="10" fill="#8590a3" text-anchor="middle">(passed = null)</text>
+  <line x1="350" y1="526" x2="540" y2="526" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="360" y="517" font-size="12" fill="#5b6478">yes</text>
+  <line x1="230" y1="574" x2="230" y2="624" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="240" y="598" font-size="12" fill="#5b6478">no</text>
+
+  <!-- OUTCOME A: verdict stands (Q1 no) -->
+  <rect x="540" y="196" width="410" height="70" rx="12" fill="#fbfcfd" stroke="#ccd3df" stroke-width="1.5"/>
+  <text x="556" y="216" font-size="12" fill="#5b6478">LLM verdict stands — no gating criterion (e.g. growth today)</text>
+  <rect x="556" y="228" width="120" height="26" rx="13" fill="#e8f2e8" stroke="#2E7D32"/>
+  <text x="616" y="245" font-size="12" font-weight="700" fill="#2E7D32" text-anchor="middle">BUY</text>
+  <rect x="682" y="228" width="120" height="26" rx="13" fill="#f7eed6" stroke="#B8860B"/>
+  <text x="742" y="245" font-size="12" font-weight="700" fill="#B8860B" text-anchor="middle">HOLD</text>
+  <rect x="808" y="228" width="120" height="26" rx="13" fill="#f6e3e3" stroke="#B23B3B"/>
+  <text x="868" y="245" font-size="12" font-weight="700" fill="#B23B3B" text-anchor="middle">SELL</text>
+
+  <!-- OUTCOME: SELL capped (Q2 yes) -->
+  <rect x="540" y="346" width="410" height="64" rx="12" fill="#f6e3e3" stroke="#B23B3B" stroke-width="1.5"/>
+  <text x="556" y="370" font-size="15" font-weight="700" fill="#B23B3B">SELL <tspan font-size="12" font-weight="400" fill="#5b6478">— capped by the gate</tspan></text>
+  <text x="556" y="390" font-size="11" fill="#5b6478">A confirmed fail; the analysis can't override it. Takes precedence</text>
+  <text x="556" y="404" font-size="11" fill="#5b6478">even if another gating criterion is also not-evaluated.</text>
+
+  <!-- OUTCOME: INSUFFICIENT_EVIDENCE (Q3 yes) — off-ladder, dashed -->
+  <rect x="540" y="494" width="410" height="64" rx="12" fill="#e8ebee" stroke="#5B6B7B" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="556" y="518" font-size="14" font-weight="700" fill="#5B6B7B">INSUFFICIENT_EVIDENCE</text>
+  <text x="556" y="537" font-size="11" fill="#5b6478">Off the buy/hold/sell ladder — "cannot render a verdict",</text>
+  <text x="556" y="551" font-size="11" fill="#5b6478">unconditional human review. Not a sell — a different axis.</text>
+
+  <!-- OUTCOME B: verdict stands (Q3 no) -->
+  <rect x="40" y="624" width="410" height="70" rx="12" fill="#fbfcfd" stroke="#ccd3df" stroke-width="1.5"/>
+  <text x="56" y="644" font-size="12" fill="#5b6478">LLM verdict stands — gate silent (no fail, nothing unverifiable)</text>
+  <rect x="56" y="656" width="120" height="26" rx="13" fill="#e8f2e8" stroke="#2E7D32"/>
+  <text x="116" y="673" font-size="12" font-weight="700" fill="#2E7D32" text-anchor="middle">BUY</text>
+  <rect x="182" y="656" width="120" height="26" rx="13" fill="#f7eed6" stroke="#B8860B"/>
+  <text x="242" y="673" font-size="12" font-weight="700" fill="#B8860B" text-anchor="middle">HOLD</text>
+  <rect x="308" y="656" width="120" height="26" rx="13" fill="#f6e3e3" stroke="#B23B3B"/>
+  <text x="368" y="673" font-size="12" font-weight="700" fill="#B23B3B" text-anchor="middle">SELL</text>
+
+  <!-- Footer: the veto sits on top of every outcome -->
+  <text x="540" y="668" font-size="11.5" fill="#5b6478">A human-review veto sits on top of every</text>
+  <text x="540" y="684" font-size="11.5" fill="#5b6478">outcome — any verdict may still pause for a person.</text>
+</svg>

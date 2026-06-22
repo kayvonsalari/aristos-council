@@ -61,6 +61,8 @@ when a gating criterion is *not-evaluated* — the data cannot confirm pass or f
 becomes INSUFFICIENT_EVIDENCE: off the buy/hold/sell ladder entirely, an unconditional pause
 for human review rather than a guessed direction.
 
+<img src="decision_logic.png" alt="How the four verdicts (buy/hold/sell/insufficient-evidence) are decided" width="760">
+
 The veto layer flags a verdict for human review on any of seven triggers: confidence below
 the strategy's floor (0.6); unresolved disagreement among specialists; a *material*
 data-quality problem; a flip from the previous verdict on the same name; a Decision that
