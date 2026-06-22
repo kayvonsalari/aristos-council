@@ -183,7 +183,7 @@ per-run.
 
 If you are deciding whether to trust this system, the honest answer is that the trust does not
 come from the language models. It comes from the deterministic code that surrounds them and from
-an automated test suite — 371 tests at last count — that runs the entire pipeline on every
+an automated test suite — close to 400 tests at last count — that runs the entire pipeline on every
 change with fake models and fake data, no API keys and no network. Each guarantee below is
 enforced by that code and re-checked by those tests; none of it depends on a model behaving well
 on the day.
