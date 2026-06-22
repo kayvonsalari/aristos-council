@@ -271,7 +271,7 @@ def run_council(ticker: str, strategy_path: Path,
             "local .env before running the council."
         )
 
-    from aristos_council.agents.runners import production_runners
+    from aristos_council.agents.runners import production_runners, runner_metadata
     from aristos_council.data.provider import select_market_adapter
     from aristos_council.graph import build_council
     from aristos_council.state import ResearchState
@@ -294,7 +294,8 @@ def run_council(ticker: str, strategy_path: Path,
     # Provider chosen by $ARISTOS_MARKET_PROVIDER (default yfinance); adapter.name
     # rides into provenance so the run records which provider it used.
     adapter = select_market_adapter()
-    app = build_council(adapter, strategy, production_runners(),
+    runners = production_runners()
+    app = build_council(adapter, strategy, runners,
                         sentiment_adapter=sentiment)
 
     # Prior verdict for the SAME ticker AND strategy (recommendation_flip key).
@@ -341,6 +342,7 @@ def run_council(ticker: str, strategy_path: Path,
 
     append_record(record_from_state(result), VERDICTS_DIR)
     report = report_from_state(result)
+    report.models = runner_metadata(runners)   # record model + temperature per tier
     save_report(report, REPORTS_DIR)
     return report
 

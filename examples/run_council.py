@@ -35,7 +35,7 @@ import os
 import textwrap
 from pathlib import Path
 
-from aristos_council.agents.runners import production_runners
+from aristos_council.agents.runners import production_runners, runner_metadata
 from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.provider import select_market_adapter
 from aristos_council.graph import build_council
@@ -197,7 +197,8 @@ def main(argv: list[str] | None = None) -> None:
     # Optional LangSmith tracing (env-gated, no-key no-op). Honest on/off line;
     # LangChain auto-instruments when the env vars are present — no agent changes.
     print(tracing_status_line())
-    app = build_council(adapter, strategy, production_runners(),
+    runners = production_runners()
+    app = build_council(adapter, strategy, runners,
                         sentiment_adapter=sentiment)
 
     # IO at the edge: load the prior verdict for the same ticker AND strategy
@@ -284,7 +285,9 @@ def main(argv: list[str] | None = None) -> None:
     # the next run's vetoes, and the full report for Council Station.
     saved = append_record(record_from_state(result), VERDICTS_DIR)
     print(f"\n  verdict recorded -> {saved}")
-    report_saved = save_report(report_from_state(result), REPORTS_DIR)
+    report = report_from_state(result)
+    report.models = runner_metadata(runners)   # record model + temperature per tier
+    report_saved = save_report(report, REPORTS_DIR)
     print(f"  full report saved -> {report_saved}")
 
 

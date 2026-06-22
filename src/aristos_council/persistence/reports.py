@@ -72,6 +72,12 @@ class RunReport(BaseModel):
     # FULL audit summary (counts AND violations/unit_scaled_notes prose) — the
     # reviewer-facing detail, kept verbatim unlike the verdict log's counts.
     provenance_audit: Optional[dict] = None
+    # Model + temperature each agent tier ran at, e.g.
+    # {"decision": {"model": "anthropic:claude-sonnet-4-6", "temperature": 0.0}}.
+    # Stamped at the edge from the runners (agents.runners.runner_metadata) so a
+    # verdict is auditable/reproducible down to the model and temperature it used.
+    # Optional/default None so reports saved before this field round-trip unchanged.
+    models: Optional[dict] = None
 
 
 def _company_name_from_state(state: ResearchState) -> Optional[str]:
