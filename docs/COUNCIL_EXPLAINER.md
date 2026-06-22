@@ -157,6 +157,24 @@ Sentiment specialist abstains rather than guess. One source remains designed-but
 — a retrieval layer over **SEC EDGAR** filings to further ground the Fundamental specialist.
 The strategy notes above flag exactly where these gaps affect results today.
 
+### What you can change in the app
+
+Council Station exposes two ways to change how a run behaves, and the difference matters:
+
+- **Run overrides — this run only** (sidebar). Ephemeral toggles applied to a single run; the
+strategy file is never touched, the change is stamped "overrides this run" on the report, and the run
+is excluded from flip-comparison baselines. Two controls: whether a partial screen pass can still be
+a HOLD (the partial-pass policy), and whether the deterministic gate is on or off for a given
+criterion (per criterion) — the experiment knob.
+- **Edit as a new version** (Strategy tab). A deliberate, persisted change that creates a *new*
+strategy version rather than mutating a published one: the partial-pass policy and the human-veto
+confidence floor, saved under a new version id.
+
+In short: a run override is "try a setting for this run, nothing saved"; editing as a new version is
+"change the strategy going forward." Threshold values themselves are changed through the new-version
+flow, not as casual per-run sidebar sliders — only the gate toggles and the partial-pass policy are
+per-run.
+
 ---
 
 ## Part C — What's mechanically guaranteed (and how it's tested)
@@ -204,7 +222,10 @@ input so a trough-inflated number cannot make a stock look cheap.
 
 **The whole pipeline runs end-to-end in continuous integration**, with fakes standing in for the
 models and the data providers, so none of the guarantees above depend on a live key or a network
-call — they are re-checked automatically on every change.
+call — they are re-checked automatically on every change. A dedicated deterministic eval suite
+freezes these core guarantees — the disposition gate, the INSUFFICIENT_EVIDENCE short-circuit, and
+the human-veto triggers — as fast assertions, so a change that broke one would turn the suite red
+before it shipped.
 
 These tests verify the machinery — that figures trace to source, that the gate holds, that the
 system abstains rather than guesses. They are a foundation for trust in the process, not a
