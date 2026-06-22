@@ -1,8 +1,16 @@
 # Aristos Council
 
-A multi-agent financial research analyst. Specialist agents deliberate over a single security, a dedicated Critic argues the opposite case before any verdict is reached, and a Decision agent issues a **buy / hold / sell** call — or **insufficient-evidence**, an off-the-ladder "cannot render a verdict" state — with an explicit confidence score and noted dissent. A human holds the veto.
+Most AI stock analysis gives you one model's snap opinion. Aristos Council makes a recommendation earn it.
 
-The name nods to the Dividend Aristocrats — and to the idea that a recommendation should have to survive a council, not just one model's first instinct. Dividend income is one lens; a growth-at-a-reasonable-price (GARP) strategy is another, and both run on the same criterion registry, screen, and provenance guarantees.
+A panel of specialist agents each examines the same company from a different angle — fundamentals, technicals, sentiment, risk — and then a dedicated Critic argues the other side, picking apart the consensus before any verdict can stand. Only then does a Decision agent make the call: buy, hold, or sell, with a confidence score and any dissent on the record.
+
+And when the evidence isn't there — a streak it can't verify, a number the data won't support — it says so: insufficient evidence, rather than a confident guess. No verdict is ever final on its own. A human holds the veto.
+
+Two strategies, one engine: **dividend income** and **growth at a reasonable price**. Both run through the same screen, and every figure in every verdict traces back to its source.
+
+The name nods to the Dividend Aristocrats — companies that earn that status by surviving decades of scrutiny. The same principle runs through everything here, dividend or growth: a recommendation should have to survive the council, not just be the first thing a model says.
+
+New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — a plain-language walkthrough of the council, the screening criteria, and what the system mechanically guarantees.
 
 ## How it works
 

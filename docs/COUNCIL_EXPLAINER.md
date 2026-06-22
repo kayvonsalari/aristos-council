@@ -26,9 +26,10 @@ so the same ticker run against the same strategy version reproduces the same scr
 
 **2. The specialist panel.** Four specialists each form an independent view: Fundamental,
 Technical, Sentiment, and Risk. Each returns a stance, a confidence level, a written thesis,
-and a list of cited figures. (In the current build the Sentiment specialist abstains, because
-its data feed is not yet wired in; the verdict effectively runs on the other three voices
-until then.) A hard rule applies to all of them: every number a specialist cites must carry
+and a list of cited figures. (The Sentiment specialist runs on Finnhub — company news and
+analyst recommendation trends, aggregated by the deterministic sentiment_snapshot tool; without
+a FINNHUB_API_KEY it abstains rather than guess, and a provider outage degrades to a data-quality
+flag rather than a crash.) A hard rule applies to all of them: every number a specialist cites must carry
 the exact reference to the tool output it was read from. Numbers without a valid reference are
 discarded and flagged. Specialists are forbidden from doing arithmetic or introducing outside
 knowledge; they reason only over the evidence placed before them.
@@ -205,10 +206,10 @@ input so a trough-inflated number cannot make a stock look cheap.
 models and the data providers, so none of the guarantees above depend on a live key or a network
 call — they are re-checked automatically on every change.
 
-One honest caveat: these tests prove that the machinery behaves as specified — that figures trace
-to their sources, that the gate holds, that the system abstains rather than guesses. They do not
-prove that any individual BUY, HOLD, or SELL is correct. The verdict is a decision-support output
-for human review, not investment advice.
+These tests verify the machinery — that figures trace to source, that the gate holds, that the
+system abstains rather than guesses. They are a foundation for trust in the process, not a
+guarantee that any single verdict is right. Treat its output as rigorous input to your own
+judgment.
 
 ---
 
