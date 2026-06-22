@@ -8,8 +8,9 @@ every number that influenced the verdict is traceable to the exact data source i
 apply a stated investment policy consistently, show its work, and refuse to assert anything
 it cannot evidence.
 
-This document has two parts. Part A describes how a verdict is reached. Part B describes
-what is actually measured under each strategy.
+This document has three parts. Part A describes how a verdict is reached. Part B describes
+what is actually measured under each strategy. Part C describes what the system mechanically
+guarantees, and how those guarantees are tested.
 
 ---
 
