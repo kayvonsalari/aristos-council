@@ -1,11 +1,11 @@
-<svg viewBox="0 0 980 1400" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<svg viewBox="0 0 980 1450" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
       <path d="M0,0 L6,3 L0,6 Z" fill="#8590a3"/>
     </marker>
   </defs>
 
-  <rect x="0" y="0" width="980" height="1400" fill="#ffffff"/>
+  <rect x="0" y="0" width="980" height="1450" fill="#ffffff"/>
 
   <!-- Title -->
   <text x="44" y="50" font-size="27" font-weight="700" fill="#1e2a45">Aristos Council — how a verdict is reached</text>
@@ -77,8 +77,8 @@
   <line x1="490" y1="1002" x2="490" y2="1032" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- 8. THE VETO -->
-  <rect x="190" y="1032" width="600" height="130" rx="12" fill="#dbe6f5" stroke="#5b7aab" stroke-width="1.5"/>
-  <text x="210" y="1058" font-size="17" font-weight="700" fill="#1e2a45">The veto <tspan font-size="12" font-weight="400" fill="#5b7aab">· five mechanical checks</tspan></text>
+  <rect x="190" y="1032" width="600" height="180" rx="12" fill="#dbe6f5" stroke="#5b7aab" stroke-width="1.5"/>
+  <text x="210" y="1058" font-size="17" font-weight="700" fill="#1e2a45">The veto <tspan font-size="12" font-weight="400" fill="#5b7aab">· seven mechanical checks</tspan></text>
   <text x="210" y="1080" font-size="13" fill="#5b6478">These decide whether a person must review the verdict before it stands. Any single</text>
   <text x="210" y="1098" font-size="13" fill="#5b6478">one firing is enough to pause for a human.</text>
   <rect x="210" y="1118" width="104" height="30" rx="15" fill="#ffffff" stroke="#8ea0bd"/>
@@ -91,22 +91,26 @@
   <text x="602" y="1137" font-size="11" fill="#1e2a45" text-anchor="middle">Verdict flip</text>
   <rect x="658" y="1118" width="116" height="30" rx="15" fill="#ffffff" stroke="#8ea0bd"/>
   <text x="716" y="1137" font-size="11" fill="#1e2a45" text-anchor="middle">Majority override</text>
+  <rect x="210" y="1156" width="150" height="30" rx="15" fill="#ffffff" stroke="#8ea0bd"/>
+  <text x="285" y="1175" font-size="11" fill="#1e2a45" text-anchor="middle">Insufficient evidence</text>
+  <rect x="372" y="1156" width="110" height="30" rx="15" fill="#ffffff" stroke="#8ea0bd"/>
+  <text x="427" y="1175" font-size="11" fill="#1e2a45" text-anchor="middle">Gate override</text>
 
-  <!-- Branch to outcomes -->
-  <path d="M490,1162 L490,1178 L335,1178 L335,1192" fill="none" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M490,1178 L645,1178 L645,1192" fill="none" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Branch to outcomes (veto box grew to y1212; outcomes shifted +50) -->
+  <path d="M490,1212 L490,1228 L335,1228 L335,1242" fill="none" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M490,1228 L645,1228 L645,1242" fill="none" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- 9a. HUMAN REVIEW -->
-  <rect x="190" y="1192" width="290" height="92" rx="12" fill="#f4e3c0" stroke="#cf9f44" stroke-width="1.5"/>
-  <text x="210" y="1220" font-size="16" font-weight="700" fill="#1e2a45">Human review</text>
-  <text x="210" y="1242" font-size="13" fill="#5b6478">A check fired. A person approves,</text>
-  <text x="210" y="1260" font-size="13" fill="#5b6478">overrides, or investigates.</text>
+  <rect x="190" y="1242" width="290" height="92" rx="12" fill="#f4e3c0" stroke="#cf9f44" stroke-width="1.5"/>
+  <text x="210" y="1270" font-size="16" font-weight="700" fill="#1e2a45">Human review</text>
+  <text x="210" y="1292" font-size="13" fill="#5b6478">A check fired. A person approves,</text>
+  <text x="210" y="1310" font-size="13" fill="#5b6478">overrides, or investigates.</text>
 
   <!-- 9b. AUTO-PROCEED -->
-  <rect x="500" y="1192" width="290" height="92" rx="12" fill="#dbe6f5" stroke="#5b7aab" stroke-width="1.5"/>
-  <text x="520" y="1220" font-size="16" font-weight="700" fill="#1e2a45">Auto-proceed</text>
-  <text x="520" y="1242" font-size="13" fill="#5b6478">No check fired. The verdict stands,</text>
-  <text x="520" y="1260" font-size="13" fill="#5b6478">with its full audit trail attached.</text>
+  <rect x="500" y="1242" width="290" height="92" rx="12" fill="#dbe6f5" stroke="#5b7aab" stroke-width="1.5"/>
+  <text x="520" y="1270" font-size="16" font-weight="700" fill="#1e2a45">Auto-proceed</text>
+  <text x="520" y="1292" font-size="13" fill="#5b6478">No check fired. The verdict stands,</text>
+  <text x="520" y="1310" font-size="13" fill="#5b6478">with its full audit trail attached.</text>
 
   <!-- Legend key (top): the three categories, colours matching the boxes -->
   <rect x="190" y="96" width="16" height="16" rx="4" fill="#f4e3c0" stroke="#cf9f44"/>
