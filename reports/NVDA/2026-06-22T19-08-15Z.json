@@ -1,0 +1,894 @@
+{
+  "ticker": "NVDA",
+  "run_at": "2026-06-22T19:08:15.017620Z",
+  "strategy_id": "growth_v1",
+  "applied_overrides": {},
+  "company_name": "NVIDIA Corporation",
+  "screen": {
+    "ticker": "NVDA",
+    "criteria": [
+      {
+        "name": "min_revenue_cagr",
+        "passed": true,
+        "observed": 1.014177563808767,
+        "threshold": 0.1,
+        "note": "3y revenue CAGR (log-linear trend over 4 points) = 1.0142; two-point endpoint CAGR = 1.0005"
+      },
+      {
+        "name": "min_roic",
+        "passed": true,
+        "observed": 0.3254638863004281,
+        "threshold": 0.12,
+        "note": "ROIC on through-cycle (4y mean) operating income; ROIC = NOPAT / invested_capital (provided line); NOPAT = operating_income * (1 - eff_tax); effective tax rate = tax_provision/pretax = 0.138"
+      },
+      {
+        "name": "max_peg_ratio",
+        "passed": true,
+        "observed": 0.7976263,
+        "threshold": 2.0,
+        "note": "PEG = P/E / (in-house revenue CAGR x 100); PEG growth input winsorized from 1.0142 to 0.40 (extreme CAGR, likely cyclical) \u2014 PEG is conservative"
+      },
+      {
+        "name": "min_market_cap",
+        "passed": true,
+        "observed": 5046202793984.0,
+        "threshold": 5000000000.0,
+        "note": ""
+      }
+    ],
+    "flags": []
+  },
+  "specialist_opinions": [
+    {
+      "specialist": "fundamental",
+      "stance": "bullish",
+      "confidence": 0.78,
+      "thesis": "NVDA passes all four fundamental screening criteria for the Growth at a Reasonable Price strategy, signalling a high-quality compounder at a disciplined valuation.\n\n**Business Quality & Growth:**\nNVDA demonstrates exceptional revenue growth, with a 3-year log-linear CAGR of 101.4%, far exceeding the 10% minimum threshold. This reflects the explosive demand for AI-accelerated computing infrastructure. The revenue series ($60.9B \u2192 $130.5B \u2192 $215.9B) shows consistent year-over-year acceleration across the trailing four periods.\n\n**Return on Invested Capital:**\nThe through-cycle ROIC of 32.5% is extraordinarily strong\u2014nearly triple the 12% minimum hurdle. This indicates NVDA converts revenue growth into genuine economic profit at a very high incremental return, meeting the core requirement that growth compounds value rather than consuming capital.\n\n**Valuation Discipline:**\nThe PEG ratio of 0.80 passes the 2.0 threshold comfortably. Notably, the screen applied a conservative winsorization, capping the extreme 101% CAGR to 40% for PEG calculation purposes. Even after this conservative adjustment, the valuation multiple remains attractive relative to growth: the stock trades at a P/E of 31.9x against normalized growth assumptions, signalling the market is not pricing in bubble-level optimism.\n\n**Scale:**\nMarket cap of $5.05 trillion exceeds the $5B minimum, confirming sufficient trading history and analyst coverage to judge business quality reliably.\n\n**Caveats:**\n1. News sentiment reveals active competitive threats (\"Google and Amazon Just Launched a Full-Frontal Assault Against Nvidia\"), suggesting margin pressure ahead despite current ROIC strength. Historical ROIC may not be durably sustainable.\n\n2. The extreme 101% revenue CAGR is inherently cyclical\u2014it reflects a one-time AI infrastructure buildout. Sustaining even 20\u201325% long-term growth would still be exceptional, but the incremental return profile will compress as the market matures.\n\n3. At 31.9x P/E, the stock is not cheap in absolute terms; it is \"reasonable\" only if growth and returns remain exceptional. Any normalization in either metric would erode valuation.\n\n4. Analyst consensus is overwhelmingly bullish (93% bullish ratio), a tail risk for complacency and potential disappointment.",
+      "figures": [
+        {
+          "label": "Revenue CAGR (3-year log-linear)",
+          "value": 1.0142,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Revenue CAGR threshold",
+          "value": 0.1,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "ROIC (through-cycle, 4-year mean)",
+          "value": 0.3254,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "ROIC threshold",
+          "value": 0.12,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 0.7976,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG threshold",
+          "value": 2.0,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "Market Cap",
+          "value": 5046202793984.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Market Cap threshold",
+          "value": 5000000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[3].threshold"
+          }
+        },
+        {
+          "label": "P/E ratio",
+          "value": 31.9051,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Latest trailing revenue",
+          "value": 215938000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "total_revenue[0]"
+          }
+        },
+        {
+          "label": "Prior year revenue",
+          "value": 130497000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "total_revenue[1]"
+          }
+        },
+        {
+          "label": "Two years prior revenue",
+          "value": 60922000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "total_revenue[2]"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio",
+          "value": 0.9265,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "5c45617a4edb",
+            "field_path": "bullish_ratio"
+          }
+        }
+      ],
+      "caveats": [],
+      "created_at": "2026-06-22T19:08:45.258550Z"
+    },
+    {
+      "specialist": "technical",
+      "stance": "neutral",
+      "confidence": 0.65,
+      "thesis": "NVDA passes all four growth_v1 screen criteria with strong marks: revenue CAGR well above 10%, ROIC of 32.5% far exceeds the 12% threshold, and PEG of 0.80 sits well below the 2.0 ceiling, signalling the stock is not egregiously overpriced for its growth profile. The $5.05 trillion market cap comfortably clears the $5B threshold.\n\nHowever, the technical picture presents a mixed signal that tempers conviction. Price sits only 0.79% below the 52-week high, suggesting the stock is near cyclical peaks\u2014a point of caution for entry timing under a \"reasonable price\" discipline. The price (210.69) is trading above both SMA50 (209.12) and well above SMA200 (189.68), confirming a medium-term uptrend, but proximity to the high limits margin of safety. Annualized volatility of 34.7% is elevated, typical of semiconductor and AI-exposed names, adding execution risk.\n\nThe fundamental case is solid: the business demonstrates exceptional capital efficiency (ROIC) and is trading at a discount to growth (PEG < 1). Yet technical positioning and elevated volatility suggest the market has already incorporated near-term enthusiasm. Within the GARP framework, the discipline is to demand a margin of safety; at 99.2% of the 52-week high, that margin is thin.\n\nRecommendation: hold and monitor for a pullback closer to SMA50 or SMA200 to establish an entry point aligned with reasonable-price discipline. Current valuation metrics justify the stock's place on the growth list, but current price does not yet offer the entry opportunity the framework prefers.",
+      "figures": [
+        {
+          "label": "3-year revenue CAGR",
+          "value": 1.014177563808767,
+          "unit": "log-linear ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "min_revenue_cagr screen criterion (10% threshold)",
+          "value": 1.0,
+          "unit": "passed",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "Through-cycle ROIC (4-year mean)",
+          "value": 0.3254638863004281,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "min_roic screen criterion (12% threshold)",
+          "value": 1.0,
+          "unit": "passed",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 0.7976263,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "max_peg_ratio screen criterion (2.0 threshold)",
+          "value": 1.0,
+          "unit": "passed",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 5046202793984.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[3].observed"
+          }
+        },
+        {
+          "label": "Last close price",
+          "value": 210.69000244140625,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "2ca7625452fd",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "SMA50",
+          "value": 209.12096466064452,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "2ca7625452fd",
+            "field_path": "sma_50"
+          }
+        },
+        {
+          "label": "SMA200",
+          "value": 189.6843924713135,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "2ca7625452fd",
+            "field_path": "sma_200"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.10521951502747118,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "2ca7625452fd",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.3468981175575379,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "2ca7625452fd",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Bullish analyst ratio (latest period)",
+          "value": 0.9265,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "5c45617a4edb",
+            "field_path": "bullish_ratio"
+          }
+        }
+      ],
+      "caveats": [
+        "News sentiment reflects a mix of structural bullish commentary (JPMorgan buy call, Vera Rubin momentum) and competitive headwinds (Google/Amazon AI chip push). News data is not part of fundamental or technical screen and does not override quantitative criteria, but context reflects real competitive risk.",
+        "ROIC is calculated on 4-year through-cycle mean operating income; observed 32.5% is exceptional but may reflect cyclical strength in semiconductor pricing. No forward guidance was evaluated.",
+        "Volatility at 34.7% is consistent with semiconductor peers and AI-cycle volatility; it increases execution risk for entry timing.",
+        "The screen employed a PEG winsorization (CAGR capped at 0.40) due to extreme reported revenue CAGR; this makes the PEG conservative and justifies the pass, but underlying revenue growth may be cyclical rather than sustainable at stated rates.",
+        "Recommendation to wait for a pullback is tactical guidance, not a formal screen result. The stock meets GARP growth and valuation criteria; the hold reflects technical positioning relative to margin-of-safety discipline, not fundamental rejection."
+      ],
+      "created_at": "2026-06-22T19:09:02.514229Z"
+    },
+    {
+      "specialist": "sentiment",
+      "stance": "bullish",
+      "confidence": 0.82,
+      "thesis": "NVDA sentiment is strongly bullish on both analyst and news dimensions. Analyst consensus is overwhelmingly positive: 63 bullish recommendations (strong buy + buy) against 1 bearish, yielding a bullish ratio of 0.9265\u2014exceptionally rare and decisive. JPMorgan explicitly endorses aggressive buying in today's headline flow. The news narrative is mixed but constructively tilted: competitive pressure from Google and Amazon on custom AI chips is acknowledged (a legitimate structural risk), but offset by positive momentum catalysts\u2014Vera Rubin platform gains traction and an \"Aggressive Buyer\" call from a major house carries material weight. The most recent 15 headlines include 3 directly NVDA-relevant stories, with 2 positive or neutral and 1 competitive-threat framing; the breadth of recent coverage (250 headlines total) suggests sustained market attention. No negative earnings shock or guidance cut appears in the headline set. Relative to the strategy's fundamental discipline, NVDA passes all four screen criteria cleanly: revenue CAGR is strong (1.0142), ROIC far exceeds the 12% hurdle at 0.3255, PEG at 0.7976 is well below the 2.0 cap, and market cap exceeds $5T, satisfying the liquidity/history requirement. The valuation is not cheap (PE 31.9), but the PEG suggests that growth justifies it under the discipline. Sentiment reinforces rather than contradicts fundamentals.",
+      "figures": [
+        {
+          "label": "Analyst bullish count (strong buy + buy)",
+          "value": 63.0,
+          "unit": "recommendations",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "5c45617a4edb",
+            "field_path": "bullish_count"
+          }
+        },
+        {
+          "label": "Analyst bullish ratio",
+          "value": 0.9265,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "5c45617a4edb",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Analyst bearish count",
+          "value": 1.0,
+          "unit": "recommendations",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "5c45617a4edb",
+            "field_path": "bearish_count"
+          }
+        },
+        {
+          "label": "Total analyst recommendations (latest period 2026-06-01)",
+          "value": 68.0,
+          "unit": "recommendations",
+          "provenance": {
+            "tool_name": "get_recommendation_trends",
+            "call_id": "cd88c8bad91f",
+            "field_path": "latest_period.total"
+          }
+        },
+        {
+          "label": "News count (recent 250)",
+          "value": 250.0,
+          "unit": "headlines",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "5c45617a4edb",
+            "field_path": "news_count"
+          }
+        },
+        {
+          "label": "Revenue CAGR (3-year log-linear)",
+          "value": 1.0142,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC (through-cycle 4-year mean)",
+          "value": 0.3255,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 0.7976,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "P/E ratio",
+          "value": 31.905,
+          "unit": "multiple",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 5046202793984.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[3].observed"
+          }
+        }
+      ],
+      "caveats": [
+        "Sentiment assessment is based on headline text interpretation and analyst recommendation aggregates; no natural language processing sentiment scores are available in the evidence.",
+        "Competitive threat from Google and Amazon custom AI chips is real and mentioned in headlines; this poses structural risk not fully quantified by current analyst consensus.",
+        "News volume (250 total) is high, suggesting attention and volatility risk; recency and sentiment may shift rapidly.",
+        "Confidence reflects strong consensus and positive momentum, but confidence is tempered by elevated valuation (PE 31.9) and cyclical industry dynamics (CAGR windsorized due to extreme prior growth)."
+      ],
+      "created_at": "2026-06-22T19:09:13.968790Z"
+    },
+    {
+      "specialist": "risk",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "NVDA passes the quantitative screen but presents material downside risks that overshadow its strong current fundamentals. The core issue is cyclicality masquerading as sustainable growth, combined with execution and competitive headwinds not captured in backward-looking metrics.\n\n**Growth sustainability concern:** The observed revenue CAGR of 101.4% is acknowledged by the screen itself as \"extreme\" and \"likely cyclical\"\u2014the growth input was winsorized down to 40% for PEG calculation. This is a red flag. Trailing four-point revenue growth ($215.9B \u2192 $60.9B over three years) reflects the AI boom cycle, not structural competitive advantage. When normalized for cyclicality, the sustainable revenue growth rate is an open question. The screen's optimism relies on treating exceptional-cycle performance as repeatable.\n\n**Valuation tension at cyclical peak:** With a PE ratio of 31.9x and the PEG ratio sitting at 0.80 (well below the 2.0 threshold), the stock is only \"cheap\" relative to unsustainable growth assumptions. If the revenue CAGR normalizes toward the market average (8\u201312%) rather than stay near 40%, the PEG ratio would expand materially and the valuation becomes ordinary or stretched. The stock is not protected by margin of safety if growth reverts.\n\n**Competitive assault in real time:** The news environment explicitly flags \"Google and Amazon Just Launched a Full-Frontal Assault Against Nvidia\" and \"Google Backs $3.2B AI Chip Push Against Nvidia.\" These are not rumor; they are current events (2026-06-22). The analyst consensus bullish ratio of 92.65% (63 of 68) reflects sentiment frozen in time before or during the assault announcement. Consensus lags competitive shifts by months.\n\n**Volatility and downside tail risk:** Annualized volatility stands at 34.7%, placing NVDA in the elevated range for a mega-cap. Combined with 92% bullish sentiment and a PE of 32x, the stock has limited consensus downside protection if competitive or cyclical pressure emerges. A reversion to 40\u201350% of current valuation multiples is structurally plausible.\n\n**ROIC stability question:** The reported ROIC of 32.5% is exceptional and passes screening. However, this is a \"through-cycle mean\" of operating income divided by invested capital over four years. The denominator is highly volatile ($33B \u2192 $165B), and ROIC sustainability depends entirely on whether operating margins can hold as revenue growth slows and competition intensifies. Historically, semiconductor oligopolies compress margins during technology transitions.\n\n**Payout stretch and debt not visible:** The evidence does not disclose debt levels, dividend payout, or cash generation relative to capex. Free cash flow of $46.3B is strong in absolute terms, but at a market cap of $5 trillion, FCF yield is modest. Any debt-funded buyback or dividend increase to support the stock during a slowdown would stretch financial flexibility.\n\n**Data quality flags \u2014 analyst consensus lag:** Analyst ratios (24 strong buy, 39 buy, 4 hold, 1 sell) are not independent signals; they reflect backward-looking models that treat the 101% revenue CAGR and 32.5% ROIC as structural. None of the 68 analysts appear to have downgraded materially in response to the Google/Amazon chip initiative announced on 2026-06-22. This suggests consensus has not incorporated current competitive risk.\n\n**Bottom line:** NVDA is a mature, profitable business benefiting from a cyclical AI capex wave. The screen is mathematically sound but inputs are cyclically distorted. If revenue growth normalizes and ROIC compresses as expected in mature semiconductor markets facing new competition, downside to a 15\u201320x PE is plausible (implying 50\u201360% loss from $210.69 current price). Conviction in the current multiple requires belief that NVDA sustains 40%+ growth and 30%+ ROIC for 5+ years\u2014a claim not supported by semiconductor history or competitive dynamics.",
+      "figures": [
+        {
+          "label": "Revenue CAGR (3-year log-linear, winsorized from 101.4% to 40% for PEG)",
+          "value": 1.014177563808767,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC (4-year through-cycle mean, operating income basis)",
+          "value": 0.3254638863004281,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "PEG Ratio",
+          "value": 0.7976263,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PE Ratio",
+          "value": 31.905052,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Market Cap",
+          "value": 5046202793984.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "market_cap"
+          }
+        },
+        {
+          "label": "Free Cash Flow",
+          "value": 46335873024.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "free_cash_flow"
+          }
+        },
+        {
+          "label": "Annualized Volatility",
+          "value": 0.3468981175575379,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "2ca7625452fd",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Current Price (last adj close)",
+          "value": 210.69000244140625,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_price_history",
+            "call_id": "97978f6d862f",
+            "field_path": "last_adj_close"
+          }
+        },
+        {
+          "label": "Analyst Bullish Count (strong buy + buy)",
+          "value": 63.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "5c45617a4edb",
+            "field_path": "bullish_count"
+          }
+        },
+        {
+          "label": "Total Analysts",
+          "value": 68.0,
+          "unit": "count",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "5c45617a4edb",
+            "field_path": "analysts_total"
+          }
+        },
+        {
+          "label": "Bullish Ratio",
+          "value": 0.9265,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "sentiment_snapshot",
+            "call_id": "5c45617a4edb",
+            "field_path": "bullish_ratio"
+          }
+        },
+        {
+          "label": "Latest Revenue (TTM-equivalent point 1)",
+          "value": 215938000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "total_revenue[0]"
+          }
+        },
+        {
+          "label": "Oldest Revenue (point 4)",
+          "value": 26974000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "total_revenue[3]"
+          }
+        },
+        {
+          "label": "Latest Invested Capital",
+          "value": 165761000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "invested_capital[0]"
+          }
+        },
+        {
+          "label": "Oldest Invested Capital",
+          "value": 33054000000.0,
+          "unit": "USD",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "8e7707d0dee1",
+            "field_path": "invested_capital[3]"
+          }
+        },
+        {
+          "label": "Screen Note on CAGR Cyclicality",
+          "value": null,
+          "unit": "text",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "1cd039e61155",
+            "field_path": "criteria[0].note"
+          }
+        },
+        {
+          "label": "News Item: Google/Amazon AI Chip Assault (2026-06-22)",
+          "value": null,
+          "unit": "text",
+          "provenance": {
+            "tool_name": "get_company_news",
+            "call_id": "18fe9500b9d1",
+            "field_path": "[2].headline"
+          }
+        }
+      ],
+      "caveats": [
+        "Evidence contains no debt, leverage, or capital structure data\u2014cannot assess financial risk or payout stretch.",
+        "Price history truncated to technical snapshot; no forward volatility expectations or option-implied downside pricing available.",
+        "Analyst consensus as of 2026-06-01 (21 days prior to Google/Amazon announcement); no post-event downgrades captured.",
+        "Competitive assault (Google/Amazon AI chips, $3.2B investment) is current-day news but analyst consensus has not yet reacted; earnings estimates may be stale.",
+        "Operating margin sustainability is inferred, not directly measured; ROIC assumes margins hold through cycle.",
+        "Screen winsorizes growth input (101.4% \u2192 40%) for PEG; underlying sustainable growth rate remains unspecified.",
+        "No visibility into capex intensity or R&D requirements to defend competitive position in AI silicon.",
+        "Historical comparables for semiconductor ROIC reversion not provided in evidence; cyclicality claim is structural assumption, not evidence-backed."
+      ],
+      "created_at": "2026-06-22T19:09:38.628573Z"
+    }
+  ],
+  "critic_report": {
+    "targets_stance": "bullish",
+    "counter_thesis": "NVDA passes all four mechanical screen criteria, but this council should not mistake a passing screen for an investment thesis. The evidence reveals three critical fault lines: (1) the CAGR driving the PEG is explicitly acknowledged as cyclically distorted and was winsorized \u2014 the \"reasonable price\" conclusion is an artifact of tooling choices, not durable valuation discipline; (2) the ROIC is computed on a through-cycle average that obscures a violently expanding invested capital base, making sustainability claims unverifiable from this evidence; and (3) active competitive threats from hyperscalers are acknowledged in the news record on the very date of this analysis, yet analyst consensus \u2014 93% bullish \u2014 shows no sign of updating. The bullish case rests on the hope that cyclical peak metrics are permanent. That is precisely the optimism GARP discipline is designed to guard against.",
+    "weaknesses_found": [
+      "The PEG ratio passes only because the tool winsorized the 101% CAGR down to 40% \u2014 the 'reasonable price' verdict is entirely dependent on an arbitrary internal cap, not on a genuine market-implied growth expectation. A different winsorization cap would produce a different PEG and potentially a different pass/fail outcome.",
+      "The ROIC of 32.5% is a through-cycle mean, but the invested capital base expanded from $33.1B to $165.8B over the four-period window \u2014 a five-fold expansion. Any mean-ROIC figure computed over a period of dramatic capital expansion likely flatters the current period's return quality, because early high-ROIC years dominate the average while the denominator was still small.",
+      "The 101.4% revenue CAGR is explicitly flagged by the screen itself as 'extreme' and 'likely cyclical.' The screen passes this criterion but immediately caveats it. A GARP strategy should be deeply uncomfortable approving a stock whose single most important growth input is described by its own tooling as probably cyclical.",
+      "The analyst bullish ratio of 92.65% (63 of 68 analysts bullish, 1 bearish) is measured as of the latest period (2026-06-01). The competitive assault headlines ('Google and Amazon Just Launched a Full-Frontal Assault Against Nvidia'; 'Google Backs $3.2B AI Chip Push Against Nvidia') are dated 2026-06-22 \u2014 after the analyst census. The consensus therefore cannot reflect the competitive development. This is not a minor lag; it is a structural information gap at a moment of strategic uncertainty.",
+      "Free cash flow of $46.3B against a $5.05 trillion market cap produces a very thin FCF yield. No debt, capex, or capital structure data appear in the evidence, making it impossible to assess whether the FCF figure is after-debt-service or whether there is financial leverage that amplifies downside in a cyclical slowdown.",
+      "The stock is approximately 10.5% off its 52-week high with annualized volatility of 34.7%. Near-peak positioning combined with elevated volatility means that any negative catalyst \u2014 a missed quarter, a customer defection to custom silicon, or a macro slowdown in AI capex \u2014 could produce outsized drawdowns with limited analyst-consensus cushion (only 1 of 68 is bearish to absorb selling pressure).",
+      "The sentiment specialist's bullish conclusion leans on JPMorgan's 'aggressive buyer' call and Vera Rubin platform momentum \u2014 neither of which appears as structured data in this evidence record. The headline is present in the news feed but the underlying thesis, price target, and basis for that call are entirely absent. Citing a news headline as investment evidence is not the same as having the underlying analysis."
+    ],
+    "challenged_figures": [
+      "PEG ratio of 0.7976 (criteria[2].observed): This figure is only meaningful under the winsorized growth assumption of 40%, not the actual observed CAGR of 101.4%. The 'passed' verdict on this criterion is a function of a tooling decision, not a market-derived valuation signal.",
+      "ROIC of 32.5% (criteria[1].observed): Computed as a through-cycle mean over a period when invested capital quintupled ($33B to $165.8B). The mean-ROIC figure is heavily influenced by the early periods when the capital base was small; it does not represent the marginal return on the current, much larger capital base.",
+      "Bullish ratio of 0.9265 (bullish_ratio): The analyst census is dated 2026-06-01; competitive assault headlines are dated 2026-06-22. The ratio is stale relative to the most material current risk factor in the news record."
+    ],
+    "figures": [
+      {
+        "label": "Revenue CAGR observed (screen criterion 0)",
+        "value": 1.014177563808767,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "1cd039e61155",
+          "field_path": "criteria[0].observed"
+        }
+      },
+      {
+        "label": "Revenue CAGR screen: passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "1cd039e61155",
+          "field_path": "criteria[0].passed"
+        }
+      },
+      {
+        "label": "PEG growth input winsorized to 0.40 from 1.0142 (screen note)",
+        "value": null,
+        "unit": "text",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "1cd039e61155",
+          "field_path": "criteria[2].note"
+        }
+      },
+      {
+        "label": "PEG ratio observed",
+        "value": 0.7976263,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "1cd039e61155",
+          "field_path": "criteria[2].observed"
+        }
+      },
+      {
+        "label": "PEG screen: passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "1cd039e61155",
+          "field_path": "criteria[2].passed"
+        }
+      },
+      {
+        "label": "ROIC observed (through-cycle 4y mean)",
+        "value": 0.3254638863004281,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "1cd039e61155",
+          "field_path": "criteria[1].observed"
+        }
+      },
+      {
+        "label": "Invested capital \u2014 most recent period",
+        "value": 165761000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "8e7707d0dee1",
+          "field_path": "invested_capital[0]"
+        }
+      },
+      {
+        "label": "Invested capital \u2014 oldest period in series",
+        "value": 33054000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "8e7707d0dee1",
+          "field_path": "invested_capital[3]"
+        }
+      },
+      {
+        "label": "P/E ratio",
+        "value": 31.905052,
+        "unit": "x",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "8e7707d0dee1",
+          "field_path": "pe_ratio"
+        }
+      },
+      {
+        "label": "Market cap",
+        "value": 5046202793984.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "8e7707d0dee1",
+          "field_path": "market_cap"
+        }
+      },
+      {
+        "label": "Free cash flow",
+        "value": 46335873024.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "8e7707d0dee1",
+          "field_path": "free_cash_flow"
+        }
+      },
+      {
+        "label": "Annualized volatility",
+        "value": 0.3468981175575379,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "2ca7625452fd",
+          "field_path": "annualized_volatility"
+        }
+      },
+      {
+        "label": "Pct off 52-week high",
+        "value": -0.10521951502747118,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "2ca7625452fd",
+          "field_path": "pct_off_52w_high"
+        }
+      },
+      {
+        "label": "Bullish analyst ratio",
+        "value": 0.9265,
+        "unit": "ratio",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "5c45617a4edb",
+          "field_path": "bullish_ratio"
+        }
+      },
+      {
+        "label": "Total analysts",
+        "value": 68.0,
+        "unit": "count",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "5c45617a4edb",
+          "field_path": "analysts_total"
+        }
+      },
+      {
+        "label": "Bearish analyst count",
+        "value": 1.0,
+        "unit": "count",
+        "provenance": {
+          "tool_name": "sentiment_snapshot",
+          "call_id": "5c45617a4edb",
+          "field_path": "bearish_count"
+        }
+      },
+      {
+        "label": "SMA 200",
+        "value": 189.6843924713135,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "2ca7625452fd",
+          "field_path": "sma_200"
+        }
+      },
+      {
+        "label": "Last close price",
+        "value": 210.69000244140625,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "2ca7625452fd",
+          "field_path": "last_close"
+        }
+      },
+      {
+        "label": "Total revenue \u2014 most recent period",
+        "value": 215938000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "8e7707d0dee1",
+          "field_path": "total_revenue[0]"
+        }
+      },
+      {
+        "label": "Total revenue \u2014 oldest period",
+        "value": 26974000000.0,
+        "unit": "USD",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "8e7707d0dee1",
+          "field_path": "total_revenue[3]"
+        }
+      }
+    ],
+    "open_questions": [
+      "What is NVDA's current debt load and net cash position? Without this, the FCF yield and financial resilience in a cyclical downturn cannot be assessed from the evidence provided.",
+      "What is the marginal ROIC on the most recently deployed invested capital (i.e., the return on the increment from $87.8B to $165.8B)? The through-cycle mean obscures whether incremental returns are rising or falling as the capital base expands.",
+      "Has any analyst in the consensus of 68 updated their model or rating in response to the Google/Amazon competitive developments announced on 2026-06-22? The evidence shows the census period ending 2026-06-01, so post-announcement revisions are entirely absent.",
+      "At what normalized (non-AI-boom-cycle) revenue growth rate does the PEG ratio breach the 2.0 threshold, and what P/E would be warranted? The screen's winsorization to 40% is itself an assumption \u2014 if sustainable growth is 15\u201320%, how does the valuation hold up?",
+      "What portion of NVDA's $215.9B revenue is attributable to a small number of hyperscaler customers (concentration risk), and what is the contractual visibility into that revenue beyond the current fiscal year?",
+      "How does NVDA's operating margin evolve as the hyperscalers (Google, Amazon) increasingly substitute custom AI silicon for NVDA GPUs? The news record flags this as a current event, but no forward margin or unit-economics data appear in the evidence.",
+      "Is the $46.3B free cash flow figure computed before or after capital expenditures required to maintain or expand NVDA's manufacturing and R&D footprint? The evidence does not disclose the capex line."
+    ],
+    "created_at": "2026-06-22T19:10:33.199101Z"
+  },
+  "decision": {
+    "recommendation": "buy",
+    "confidence": 0.62,
+    "rationale": "## NVDA Decision \u2014 Growth at a Reasonable Price (growth_v1)\n\n### Screen Result\nNVDA passes all four mandatory GARP screen criteria cleanly.\n\n- **Revenue CAGR** (criteria[0].passed = true; observed 1.0142 vs. threshold 0.10): Extraordinary multi-year growth, confirmed.\n- **ROIC** (criteria[1].passed = true; observed 0.3255 vs. threshold 0.12): Through-cycle return on invested capital is nearly triple the hurdle, confirming the business converts growth into genuine economic profit.\n- **PEG ratio** (criteria[2].passed = true; observed 0.7976 vs. threshold 2.0): Even under a conservative winsorized growth assumption, the stock is not priced for perfection on a PEG basis.\n- **Market cap** (criteria[3].passed = true; observed $5.046T vs. $5B threshold): Confirms adequate scale and liquidity.\n\n### Fundamental Case (bullish, conf 0.78)\nThe fundamental specialist correctly identifies NVDA as a high-quality compounder meeting every GARP criterion. Revenue of $215.9B (call_id 8e7707d0dee1, output.total_revenue[0]) has grown at a pace far exceeding the 10% hurdle. The P/E of 31.9x (call_id 8e7707d0dee1, output.pe_ratio) is not cheap in isolation but is disciplined relative to PEG. Free cash flow of $46.3B (call_id 8e7707d0dee1, output.free_cash_flow) is substantial in absolute terms.\n\n### Technical Picture (neutral, conf 0.65)\nPrice ($210.69; call_id 2ca7625452fd, output.last_close) is above both the SMA-50 ($209.12; call_id 2ca7625452fd, output.sma_50) and the SMA-200 ($189.68; call_id 2ca7625452fd, output.sma_200), confirming a medium-term uptrend. The stock sits ~10.5% off its 52-week high (call_id 2ca7625452fd, output.pct_off_52w_high = -0.1052), which is a more meaningful pullback than the technical specialist's \"near peak\" characterization suggests \u2014 it is not at a fresh high. Annualized volatility of 34.7% (call_id 2ca7625452fd, output.annualized_volatility) is elevated and warrants position-sizing discipline, but does not disqualify a GARP entry.\n\n### Sentiment (bullish, conf 0.82)\nAnalyst consensus is overwhelmingly constructive: 63 bullish (strong buy + buy) against 1 bearish out of 68 total analysts (call_id 5c45617a4edb, output.bullish_count = 63; output.bearish_count = 1; output.analysts_total = 68), yielding a bullish ratio of 0.9265 (call_id 5c45617a4edb, output.bullish_ratio). The Vera Rubin platform momentum headline and JPMorgan aggressive buyer call appear in the news record, though neither provides structured data allowing a formal figure citation. These are narrative signals only.\n\n### Risk and Critic \u2014 Weighing the Counter-Case\nThe risk specialist (bearish, conf 0.72) and critic raise legitimate and well-reasoned concerns. I give them significant weight but do not find them dispositive for the following reasons:\n\n1. **Winsorized PEG concern**: The critic is correct that the PEG passes only because the 101.4% CAGR was capped at 40%. However, the winsorization was applied to make the PEG *more conservative*, not less. At a 40% growth assumption, the PEG of 0.7976 still comfortably passes. Even if one assumes sustainable growth of only 20\u201325%, the P/E of 31.9x against that rate yields a PEG well below 2.0. The valuation is not as fragile as the critic implies. This concern justifies lower confidence but not a sell.\n\n2. **ROIC through-cycle mean on expanding capital base**: The critic is correct that invested capital expanded from $33.1B to $165.8B (call_id 8e7707d0dee1, output.invested_capital[3] and output.invested_capital[0]) \u2014 a significant expansion. The marginal ROIC on recent capital is unknown and could be lower than the four-year mean. This is a genuine data gap that warrants caution but is not a disqualifying finding. The screen methodology is transparent about this limitation.\n\n3. **Competitive threat from hyperscalers**: Headlines from 2026-06-22 flag Google/Amazon custom AI chip efforts. Per Rule 6, these are current events surfaced in news \u2014 they represent a real risk to monitor, not an established financial finding. They do not override quantitative evidence but they do justify reduced confidence.\n\n4. **Analyst consensus lag**: The census period ends 2026-06-01 (call_id 5c45617a4edb, output.latest_trend_period), predating the competitive headlines by 21 days. The critic is right that no post-announcement downgrades are captured. This is a structural gap. I treat this as a confidence penalty, not a basis to flip to sell.\n\n5. **FCF yield thinness and missing debt data**: The critic notes FCF of $46.3B against a $5.05T market cap implies a thin FCF yield. Debt and capital structure data are entirely absent from the evidence. Per Rule 6, the absence of this data is not evidence of financial fragility \u2014 it is simply an open question. It justifies caution and a moderate (not high) confidence, but not a negative recommendation.\n\n### Overriding the Technical Specialist\nThe technical specialist recommends hold based on proximity to the 52-week high. However, at ~10.5% off the 52-week high with the stock above both moving averages in a confirmed uptrend, the technical picture does not represent a meaningful margin-of-safety violation under GARP. Waiting for a return to SMA-50 (essentially the current price) or SMA-200 could represent waiting indefinitely during a structural growth phase. The \"hold for pullback\" recommendation is tactical guidance, not a screen finding, and is overridden. This is a dissent.\n\n### Overriding the Risk Specialist\nThe risk specialist recommends bearish based on cyclicality, competitive threats, and valuation tension. While I incorporate all of these as confidence-reducers, the quantitative screen passes cleanly, the business quality metrics are genuine and not fabricated, and the bearish case relies substantially on future outcomes (ROIC compression, margin normalization, competitive substitution) that are plausible but not evidenced. A GARP framework does not require certainty of perpetual outperformance \u2014 it requires reasonable price relative to demonstrated quality. NVDA meets that bar. This is a dissent.\n\n### Calibration\nEvidence is reasonably complete for a GARP screen: all four criteria are evaluated and passed, price/technical metrics are present, and analyst consensus is available. Confidence is moderated to 0.62 (not 0.78\u20130.82 as bullish specialists suggest) because: (a) debt/capital structure data are absent; (b) marginal ROIC on recent capital is unknown; (c) analyst consensus may not reflect post-June-22 competitive developments; and (d) the cyclicality of the CAGR input is a legitimate structural concern. These open questions are insufficient to reverse the recommendation but are material enough to cap confidence well below 0.80.\n\n### Conclusion\nNVDA is a **buy** under the Growth at a Reasonable Price strategy: it passes all four criteria, demonstrates exceptional capital returns and growth, and trades at a disciplined PEG even under conservative assumptions. Confidence is moderate at 0.62 reflecting genuine data gaps and competitive uncertainty, not fundamental weakness.",
+    "dissent": [
+      "technical",
+      "risk"
+    ],
+    "created_at": "2026-06-22T19:11:15.546499Z",
+    "original_recommendation": "buy",
+    "gate_override_applied": false,
+    "gating_criterion_fired": null,
+    "insufficient_evidence": false
+  },
+  "veto_flags": [
+    {
+      "trigger": "specialist_conflict",
+      "detail": "at least one bullish and one bearish specialist",
+      "created_at": "2026-06-22T19:11:15.588798Z"
+    }
+  ],
+  "provenance_audit": {
+    "figures_audited": 73,
+    "verified": 70,
+    "mismatch": 0,
+    "unresolvable": 0,
+    "unverifiable": 3,
+    "unit_scaled": 0,
+    "violations": [],
+    "unit_scaled_notes": []
+  }
+}

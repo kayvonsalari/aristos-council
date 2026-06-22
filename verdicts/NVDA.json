@@ -1,0 +1,27 @@
+[
+  {
+    "ticker": "NVDA",
+    "run_at": "2026-06-22T19:08:15.017620Z",
+    "strategy_id": "growth_v1",
+    "verdict": "buy",
+    "confidence": 0.62,
+    "stances": {
+      "fundamental": "bullish",
+      "technical": "neutral",
+      "sentiment": "bullish",
+      "risk": "bearish"
+    },
+    "veto_triggers": [
+      "specialist_conflict"
+    ],
+    "provenance_audit": {
+      "figures_audited": 73,
+      "verified": 70,
+      "mismatch": 0,
+      "unresolvable": 0,
+      "unverifiable": 3,
+      "unit_scaled": 0
+    },
+    "applied_overrides": {}
+  }
+]
