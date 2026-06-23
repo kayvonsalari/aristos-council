@@ -212,6 +212,17 @@ VETO_CASES = [
     VetoCase(
         "EVAL-10", "INSUFFICIENT_EVIDENCE -> human review ALWAYS",
         _INSUFFICIENT, present=(VetoTrigger.INSUFFICIENT_EVIDENCE,), review=True),
+    VetoCase(
+        "EVAL-11", "clean pass -> AUTO-PROCEED: zero vetoes, no human review",
+        _dec(Recommendation.BUY),          # a clean, confident BUY
+        absent=(VetoTrigger.LOW_CONFIDENCE,
+                VetoTrigger.SPECIALIST_CONFLICT,
+                VetoTrigger.DATA_QUALITY,
+                VetoTrigger.RECOMMENDATION_FLIP,
+                VetoTrigger.MAJORITY_OVERRIDE,
+                VetoTrigger.INSUFFICIENT_EVIDENCE,
+                VetoTrigger.GATE_OVERRIDE_MATERIAL),   # ALL seven triggers must be silent
+        review=False),                                  # the whole point: no human gate
 ]
 
 
