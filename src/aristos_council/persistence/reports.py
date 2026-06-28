@@ -85,6 +85,13 @@ class RunReport(BaseModel):
     # run_issues. Both optional/default so older reports round-trip unchanged.
     run_issues: list[RunIssue] = Field(default_factory=list)
     degraded: bool = False
+    # Contested-verdict flag: a one-run signal (derived from panel-split / dissent /
+    # majority-override already on this report) that the verdict is a CLOSE call and
+    # the user should read the report and apply their own judgement. Stored flat so a
+    # screener/log can filter "clean BUY" vs "contested BUY". Optional/default so
+    # older reports round-trip unchanged.
+    contested: bool = False
+    contested_reasons: list[str] = Field(default_factory=list)
 
 
 def _company_name_from_state(state: ResearchState) -> Optional[str]:
@@ -129,6 +136,11 @@ def report_from_state(
     ``run_at`` defaults to the run's ``as_of`` stamp so the report's timestamp
     (and therefore its filename) matches the run it describes.
     """
+    # Contested flag — derived (not new analysis) from panel-split / dissent /
+    # majority-override already on the state. Imported lazily to avoid any import
+    # cycle with the presentation layer.
+    from ..presentation import contested as _contested
+    is_contested, contested_reasons = _contested(state)
     return RunReport(
         ticker=state.ticker,
         run_at=run_at or state.as_of,
@@ -143,6 +155,8 @@ def report_from_state(
         provenance_audit=state.provenance_audit,
         run_issues=list(state.run_issues),
         degraded=state.degraded,
+        contested=is_contested,
+        contested_reasons=contested_reasons,
     )
 
 

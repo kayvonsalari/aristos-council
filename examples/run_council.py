@@ -40,7 +40,12 @@ from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.provider import select_market_adapter
 from aristos_council.graph import build_council
 from aristos_council.persistence.reports import report_from_state, save_report
-from aristos_council.presentation import degraded_banner, run_health_line
+from aristos_council.presentation import (
+    contested_banner,
+    contested_label,
+    degraded_banner,
+    run_health_line,
+)
 from aristos_council.persistence.verdicts import (
     append_record,
     load_latest,
@@ -264,12 +269,19 @@ def main(argv: list[str] | None = None) -> None:
 
     if result.decision:
         d = result.decision
+        label = contested_label(result)
         print(f"  DECISION: {d.recommendation.value.upper()}  "
-              f"(confidence {d.confidence:.2f})")
+              f"(confidence {d.confidence:.2f})"
+              + (f"  {label}" if label else ""))
         print(block(d.rationale))
         if d.dissent:
             print(f"\n      Dissent recorded: "
                   f"{', '.join(s.value for s in d.dissent)}")
+        # Contested call -> route the reader to the report + their own judgement.
+        contested_line = contested_banner(result)
+        if contested_line:
+            print()
+            print(block(f"⚖ {contested_line}"))
         print()
 
     if result.provenance_audit:

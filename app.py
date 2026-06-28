@@ -45,6 +45,7 @@ from aristos_council.persistence.verdicts import (
 )
 from aristos_council.presentation import (
     SCREEN_STATUS_HEX,
+    contested_banner,
     degraded_banner,
     run_health_line,
     screen_table_rows,
@@ -556,6 +557,12 @@ def render_report(
         _render_pdf_button(report, run_uid, key_ns)
 
     _render_verdict_banner(report)
+
+    # Contested-verdict line: a close call (panel split / dissent) routes the user
+    # to the report and their own judgement. Clean verdicts get nothing.
+    contested_line = contested_banner(report)
+    if contested_line:
+        st.warning(f"⚖ **{contested_line}**")
 
     # Override stamp: a run that changed a setting must not read as a default run.
     if report.applied_overrides:

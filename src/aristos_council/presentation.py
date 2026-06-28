@@ -245,3 +245,108 @@ def batch_health_summary(rows: list[dict]) -> str:
     parts.append(f"{fetch_errors} fetch errors")
     parts.append(f"{insufficient} INSUFFICIENT_EVIDENCE")
     return "BATCH HEALTH — " + ", ".join(parts)
+
+
+# --------------------------------------------------------------------------- #
+# Contested-verdict flag — a ONE-RUN signal that a verdict is a close call
+# --------------------------------------------------------------------------- #
+# The REPORT is more trustworthy than the VERDICT: the verdict is a lossy
+# compression of a richer, stable report, and the run-to-run wobble lives ONLY in
+# that compression. Its fingerprint — panel disagreement — is present in EVERY
+# single report (specialist_conflict / dissent / majority_override), so we can
+# PREDICT instability from one run without re-running. This does NOT compute new
+# analysis; it COMBINES signals the graph already produced.
+#
+# The confidence band only ESCALATES wording when a panel/dissent signal already
+# fired — it NEVER marks a verdict contested on its own (empirically confidence is
+# a weak predictor: stable mid-confidence names like MSFT 0.59 would be mislabelled).
+_CONTESTED_CONF_BAND = (0.50, 0.65)
+
+
+def _is_gated(decision) -> bool:
+    """A GATED verdict is settled by deterministic CODE (SELL cap / INSUFFICIENT_
+    EVIDENCE), not an LLM near-tie — so it is never 'contested'."""
+    if decision is None:
+        return False
+    rec = getattr(decision, "recommendation", None)
+    if rec is not None and getattr(rec, "value", None) == "insufficient_evidence":
+        return True
+    return bool(getattr(decision, "gate_override_applied", False)
+                or getattr(decision, "insufficient_evidence", False))
+
+
+def contested(obj, *, conf_band: tuple[float, float] = _CONTESTED_CONF_BAND
+              ) -> tuple[bool, list[str]]:
+    """Is this verdict a contested (near-tie) call? Returns (flag, reasons).
+
+    Duck-typed over a live ResearchState OR a stored RunReport. Fires when the ONE
+    report shows the markers of a near-tie:
+      - ``panel_split``       — specialist_conflict veto (>=1 bullish AND >=1 bearish)
+      - ``decision_dissent``  — the Decision overrode >=1 specialist (dissent non-empty)
+      - ``majority_override`` — verdict contradicts the stance-majority
+    These three are the PRIMARY triggers (panel disagreement, stable across runs).
+    A confidence inside the contested band adds the supplementary
+    ``contested_confidence`` reason ONLY when a primary already fired — confidence
+    alone never marks contested. GATED outcomes are settled, never contested.
+    """
+    d = getattr(obj, "decision", None)
+    if d is None or _is_gated(d):
+        return False, []
+    vetoes = {f.trigger.value for f in getattr(obj, "veto_flags", [])}
+    reasons: list[str] = []
+    if "specialist_conflict" in vetoes:
+        reasons.append("panel_split")
+    if getattr(d, "dissent", None):
+        reasons.append("decision_dissent")
+    if "majority_override" in vetoes:
+        reasons.append("majority_override")
+    primary = bool(reasons)
+    conf = getattr(d, "confidence", None)
+    if primary and conf is not None and conf_band[0] <= conf <= conf_band[1]:
+        reasons.append("contested_confidence")
+    return primary, reasons
+
+
+def contested_banner(obj) -> str | None:
+    """The short 'read the report / your call' line shown under a contested verdict,
+    or None when the verdict is a clean/clear call. Names the concrete split so the
+    label is explainable."""
+    is_c, reasons = contested(obj)
+    if not is_c:
+        return None
+    ops = getattr(obj, "specialist_opinions", []) or []
+    bull = sum(1 for o in ops if getattr(o.stance, "value", o.stance) == "bullish")
+    bear = sum(1 for o in ops if getattr(o.stance, "value", o.stance) == "bearish")
+    neutral = sum(1 for o in ops if getattr(o.stance, "value", o.stance) == "neutral")
+    d = getattr(obj, "decision", None)
+    dissent_n = len(getattr(d, "dissent", []) or []) if d else 0
+
+    bits: list[str] = []
+    if "panel_split" in reasons:
+        split = f"{bull} bullish / {bear} bearish"
+        if neutral:
+            split += f" / {neutral} neutral"
+        bits.append(f"the panel was split ({split})")
+    if "decision_dissent" in reasons and dissent_n:
+        bits.append(f"the Decision overrode {dissent_n} "
+                    f"specialist{'s' if dissent_n != 1 else ''}")
+    if "majority_override" in reasons:
+        bits.append("the verdict contradicts the specialist majority")
+    detail = "; ".join(bits) if bits else "the panel showed disagreement"
+
+    line = (f"CONTESTED CALL — {detail}. Treat this as a LEAD, not a conclusion: "
+            f"read the specialist and critic sections and apply your own judgement. "
+            f"A re-run may land differently.")
+    if "contested_confidence" in reasons:
+        line += " Confidence sits in the contested band, reinforcing this."
+    return line
+
+
+def contested_label(obj) -> str:
+    """Inline screener tag, e.g. ``[CONTESTED: panel_split, decision_dissent]`` —
+    or ``""`` for a clean verdict. So a row reads ``META  BUY  0.62  [CONTESTED: …]``
+    and the user can separate clean picks from ones needing their own analysis."""
+    is_c, reasons = contested(obj)
+    if not is_c:
+        return ""
+    return f"[CONTESTED: {', '.join(reasons)}]"
