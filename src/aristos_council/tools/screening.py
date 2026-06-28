@@ -683,9 +683,14 @@ def peg_with_earnings_growth(
     operating_income: list[float],
     revenue: list[float],
     years: int,
-) -> tuple[float | None, str]:
+) -> tuple[float | None, str, bool]:
     """PEG using OPERATING-INCOME growth as the denominator — the available
     EARNINGS-growth proxy (there is no per-share EPS series in the gathered data).
+
+    Returns ``(value, note, earnings_fail)``. The third element is the FIX-1b
+    signal: ``True`` means the criterion must FAIL (passed=False), NOT abstain —
+    earnings were evaluable and NOT GROWING. Only the present-yet-non-growing case
+    sets it; every other return path leaves it False.
 
     A standard PEG divides P/E by EARNINGS growth, not revenue growth. The Critic
     flagged revenue-PEG as the wrong denominator on essentially every growth name;
@@ -695,22 +700,29 @@ def peg_with_earnings_growth(
     flattering it). The winsor cap and the P/E / growth<=0 abstentions are unchanged
     (they live in ``peg_ratio``).
 
-    FALLBACK: when the operating-income series is too short/missing to trend (fewer
-    than ``years``+1 points), fall back to revenue CAGR — the documented prior
-    behaviour — and SAY SO in the note. We do NOT abstain merely because earnings
-    growth is unavailable. But a PRESENT-yet-NON-POSITIVE operating income (a real
-    earnings problem — the log/ratio is undefined) returns None: an honest NOT-EVAL,
-    never a silent revenue fallback that would hide the loss.
+    The two None-shaped cases are DIFFERENT and must not be conflated:
+    - operating-income series MISSING / too short (fewer than ``years``+1 points):
+      a DATA GAP, not an earnings problem -> FALL BACK to revenue CAGR (documented
+      prior behaviour), ``earnings_fail=False``. Don't fail on missing data.
+    - operating income PRESENT but NOT GROWING (a non-positive value -> CAGR None,
+      or a flat/declining series -> CAGR <= 0): evaluable AND bad. A GARP name must
+      show earnings growth, so this FAILS the criterion (``earnings_fail=True``) —
+      NEVER a revenue fallback that would launder a real earnings problem behind a
+      flattering revenue number (the FIX-1b fix; LMT was being softened to HOLD).
     """
     oi = operating_income or []
     if len(oi) >= years + 1:
         growth, _ = operating_income_cagr(oi, years)
-        if growth is None:
-            # OI present but non-positive in the window: earnings growth undefined.
-            return None, (
-                f"operating income non-positive in the {years + 1}-point window; "
-                f"earnings-growth PEG undefined (no revenue fallback when earnings "
-                f"are negative)")
+        if growth is None or growth <= 0:
+            # Earnings PRESENT but not growing -> FAIL (do not abstain, do not fall
+            # back to revenue). `growth is None` == a non-positive value in the
+            # window; `growth <= 0` == flat/declining positive series.
+            detail = ("operating income non-positive over the window"
+                      if growth is None else
+                      f"operating-income growth {growth:.4f} <= 0 (flat/declining)")
+            note = (f"earnings not growing ({detail}) — fails growth-adjusted "
+                    f"value; a GARP name must show earnings growth")
+            return None, note, True
         source = "operating-income growth"
         rev, _ = revenue_cagr(revenue, years)
         if rev is not None and abs(growth - rev) > _CAGR_DISPERSION_WARN:
@@ -719,7 +731,8 @@ def peg_with_earnings_growth(
     else:
         growth, _ = revenue_cagr(revenue, years)
         source = "revenue CAGR — fallback, operating-income series unavailable"
-    return peg_ratio(pe_ratio, growth, source=source)
+    peg, note = peg_ratio(pe_ratio, growth, source=source)
+    return peg, note, False
 
 
 # --------------------------------------------------------------------------- #

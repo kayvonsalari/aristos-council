@@ -569,10 +569,11 @@ def test_peg_earnings_growth_lower_when_earnings_outgrow_revenue():
     # earnings-based PEG is LOWER (cheaper, more correct) than the revenue-based one.
     revenue = [130.0, 120.0, 110.0, 100.0]       # ~9%/yr
     oi = [180.0, 150.0, 125.0, 100.0]            # ~22%/yr, faster
-    peg_earn, note = peg_with_earnings_growth(25.0, oi, revenue, 3)
+    peg_earn, note, fail = peg_with_earnings_growth(25.0, oi, revenue, 3)
     rev_cagr, _ = revenue_cagr(revenue, 3)
     peg_rev, _ = peg_ratio(25.0, rev_cagr)
     assert peg_earn is not None and peg_earn < peg_rev
+    assert fail is False
     assert "operating-income growth" in note
 
 
@@ -581,32 +582,45 @@ def test_peg_earnings_growth_higher_when_earnings_lag_revenue():
     # earnings PEG is HIGHER (revenue PEG was flattering it).
     revenue = [180.0, 150.0, 125.0, 100.0]       # ~22%/yr
     oi = [115.0, 110.0, 105.0, 100.0]            # ~5%/yr, slower
-    peg_earn, _ = peg_with_earnings_growth(25.0, oi, revenue, 3)
+    peg_earn, _, fail = peg_with_earnings_growth(25.0, oi, revenue, 3)
     rev_cagr, _ = revenue_cagr(revenue, 3)
     peg_rev, _ = peg_ratio(25.0, rev_cagr)
     assert peg_earn is not None and peg_earn > peg_rev
+    assert fail is False                          # earnings still GROWING -> not a fail
 
 
 def test_peg_falls_back_to_revenue_when_oi_series_too_short():
-    # OI series too short to trend -> documented revenue-CAGR fallback, flagged.
+    # OI series too short to trend -> documented revenue-CAGR fallback, flagged,
+    # and NOT a fail (a data gap is not an earnings problem — FIX-1b distinction).
     revenue = [146.0, 121.0, 110.0, 100.0]
-    peg_fb, note = peg_with_earnings_growth(25.0, [120.0, 100.0], revenue, 3)
+    peg_fb, note, fail = peg_with_earnings_growth(25.0, [120.0, 100.0], revenue, 3)
     rev_cagr, _ = revenue_cagr(revenue, 3)
     peg_rev, _ = peg_ratio(25.0, rev_cagr)
     assert peg_fb is not None and abs(peg_fb - peg_rev) < 1e-12
-    assert "fallback" in note
+    assert "fallback" in note and fail is False
     # Missing OI entirely is the same fallback path.
     assert peg_with_earnings_growth(25.0, [], revenue, 3)[0] is not None
 
 
-def test_peg_not_eval_on_negative_operating_income_no_revenue_fallback():
-    # A PRESENT-but-non-positive OI is a real earnings problem -> NOT-EVAL, NOT a
+def test_peg_fails_on_non_positive_operating_income_no_revenue_fallback():
+    # FIX-1b: a PRESENT-but-non-positive OI is a real earnings problem -> the third
+    # tuple element FLAGS A FAIL (earnings_fail=True), NOT a NOT-EVAL and NOT a
     # silent revenue fallback that would hide the loss.
     revenue = [146.0, 121.0, 110.0, 100.0]       # would otherwise yield a PEG
-    oi = [120.0, 110.0, 100.0, -5.0]             # base year a loss
-    peg, note = peg_with_earnings_growth(25.0, oi, revenue, 3)
-    assert peg is None
-    assert "operating income non-positive" in note and "no revenue fallback" in note
+    oi = [120.0, 110.0, 100.0, -5.0]             # base year a loss -> CAGR None
+    peg, note, fail = peg_with_earnings_growth(25.0, oi, revenue, 3)
+    assert peg is None and fail is True
+    assert "earnings not growing" in note and "non-positive" in note
+
+
+def test_peg_fails_on_flat_declining_operating_income():
+    # FIX-1b: declining-but-POSITIVE OI -> CAGR is negative (not None) -> still a
+    # FAIL, not an abstention. This is the LMT shape (earnings shrinking, not zero).
+    revenue = [146.0, 121.0, 110.0, 100.0]
+    oi = [85.0, 90.0, 95.0, 100.0]               # newest-first: declining each year
+    peg, note, fail = peg_with_earnings_growth(25.0, oi, revenue, 3)
+    assert peg is None and fail is True
+    assert "flat/declining" in note
 
 
 def test_through_cycle_roic_below_peak_based():

@@ -263,6 +263,33 @@ def test_peg_not_eval_on_zero_growth():
     assert r.passed is None
 
 
+def test_peg_fails_when_earnings_present_but_not_growing():
+    # FIX-1b: operating income PRESENT (full series) but declining -> the PEG
+    # criterion FAILS (passed=False), it does NOT abstain. A non-growing GARP name
+    # must register a real failure, not a laundered NOT-EVAL.
+    f = _fund("DECLINE", total_revenue=[130.0, 120.0, 110.0, 100.0],
+              operating_income=[85.0, 90.0, 95.0, 100.0],   # declining each year
+              pe_ratio=20.0)
+    r = _crit("max_peg_ratio", f, 2.0)
+    assert r.passed is False and r.observed is None
+    assert "earnings not growing" in r.note
+
+
+def test_lmt_shape_revenue_fail_plus_non_growing_earnings_two_real_fails():
+    # FIX-1b regression LOCK (the LMT case): revenue CAGR below threshold (a real
+    # fail) AND operating income not growing -> max_peg_ratio ALSO fails. TWO genuine
+    # fails, so the name can't be softened to a single-fail HOLD by
+    # partial_pass_allows_hold — the SELL-laundered-into-HOLD bug the fix closes.
+    lmt = _fund("LMT", total_revenue=[114.0, 109.0, 105.0, 100.0],  # ~4.46% CAGR
+                operating_income=[80.0, 90.0, 95.0, 100.0],         # declining
+                pe_ratio=17.0)
+    rev = _crit("min_revenue_cagr", lmt, 0.10)
+    peg = _crit("max_peg_ratio", lmt, 2.0)
+    assert rev.passed is False                  # revenue CAGR ~4.46% < 10% threshold
+    assert peg.passed is False                  # earnings not growing -> real fail
+    assert peg.observed is None and "earnings not growing" in peg.note
+
+
 def test_non_usd_listing_abstains_market_cap_but_ratios_still_evaluate():
     """SK Hynix shape (KRW listing) through run_screen: the USD-denominated
     min_market_cap must NOT-EVAL with a currency note, while currency-invariant
