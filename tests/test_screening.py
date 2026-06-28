@@ -533,19 +533,22 @@ def test_nopat_roic_falls_back_when_tax_unusable():
 
 
 def test_peg_ratio_basic_and_undefined():
-    peg, _ = peg_ratio(25.0, 0.1346)
-    assert abs(peg - 1.857) < 1e-2
-    assert peg_ratio(None, 0.10)[0] is None      # no PE
-    assert peg_ratio(-5.0, 0.10)[0] is None      # negative PE
-    assert peg_ratio(25.0, 0.0)[0] is None       # zero growth
-    assert peg_ratio(25.0, -0.05)[0] is None     # negative growth
+    peg, _, fail = peg_ratio(25.0, 0.1346)
+    assert abs(peg - 1.857) < 1e-2 and fail is False
+    # no/negative P/E and an UNCOMPUTABLE growth (None) -> abstain (must_fail False)
+    assert peg_ratio(None, 0.10)[0] is None and peg_ratio(None, 0.10)[2] is False
+    assert peg_ratio(-5.0, 0.10)[0] is None and peg_ratio(-5.0, 0.10)[2] is False
+    assert peg_ratio(25.0, None)[0] is None and peg_ratio(25.0, None)[2] is False
+    # a COMPUTED non-positive growth (zero/negative) -> FAIL, not abstain (FIX-1c)
+    assert peg_ratio(25.0, 0.0)[0] is None and peg_ratio(25.0, 0.0)[2] is True
+    assert peg_ratio(25.0, -0.05)[0] is None and peg_ratio(25.0, -0.05)[2] is True
 
 
 def test_peg_ratio_winsorizes_extreme_growth():
     # An extreme (trough-inflated) CAGR is capped at 0.40 before forming PEG, so
     # PEG is LARGER (more conservative) than the un-winsorized value, and the note
     # records the clamp.
-    peg, note = peg_ratio(25.0, 0.80)            # raw CAGR 80% -> winsor to 40%
+    peg, note, _ = peg_ratio(25.0, 0.80)         # raw CAGR 80% -> winsor to 40%
     assert abs(peg - 25.0 / (0.40 * 100.0)) < 1e-9   # 0.625, uses the cap
     assert peg > 25.0 / (0.80 * 100.0)               # > the un-winsorized 0.3125
     assert "winsorized" in note and "0.80" in note
@@ -571,7 +574,7 @@ def test_peg_earnings_growth_lower_when_earnings_outgrow_revenue():
     oi = [180.0, 150.0, 125.0, 100.0]            # ~22%/yr, faster
     peg_earn, note, fail = peg_with_earnings_growth(25.0, oi, revenue, 3)
     rev_cagr, _ = revenue_cagr(revenue, 3)
-    peg_rev, _ = peg_ratio(25.0, rev_cagr)
+    peg_rev, _, _ = peg_ratio(25.0, rev_cagr)
     assert peg_earn is not None and peg_earn < peg_rev
     assert fail is False
     assert "operating-income growth" in note
@@ -584,7 +587,7 @@ def test_peg_earnings_growth_higher_when_earnings_lag_revenue():
     oi = [115.0, 110.0, 105.0, 100.0]            # ~5%/yr, slower
     peg_earn, _, fail = peg_with_earnings_growth(25.0, oi, revenue, 3)
     rev_cagr, _ = revenue_cagr(revenue, 3)
-    peg_rev, _ = peg_ratio(25.0, rev_cagr)
+    peg_rev, _, _ = peg_ratio(25.0, rev_cagr)
     assert peg_earn is not None and peg_earn > peg_rev
     assert fail is False                          # earnings still GROWING -> not a fail
 
@@ -595,7 +598,7 @@ def test_peg_falls_back_to_revenue_when_oi_series_too_short():
     revenue = [146.0, 121.0, 110.0, 100.0]
     peg_fb, note, fail = peg_with_earnings_growth(25.0, [120.0, 100.0], revenue, 3)
     rev_cagr, _ = revenue_cagr(revenue, 3)
-    peg_rev, _ = peg_ratio(25.0, rev_cagr)
+    peg_rev, _, _ = peg_ratio(25.0, rev_cagr)
     assert peg_fb is not None and abs(peg_fb - peg_rev) < 1e-12
     assert "fallback" in note and fail is False
     # Missing OI entirely is the same fallback path.

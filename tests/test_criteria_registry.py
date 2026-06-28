@@ -256,11 +256,14 @@ def test_peg_evaluates_with_pe_and_growth():
     assert abs(r.observed - 1.86) < 0.1
 
 
-def test_peg_not_eval_on_zero_growth():
-    # flat revenue -> CAGR 0 -> PEG undefined -> NOT-EVAL
+def test_peg_fails_on_zero_growth():
+    # FIX-1c: flat revenue -> CAGR 0 is a COMPUTED non-positive growth (not a data
+    # gap). The company isn't growing, so the growth-adjusted-value criterion FAILS
+    # (passed=False) rather than abstaining — a 0% grower is not a growth name.
     f = _fund("FLAT", total_revenue=[100.0, 100.0, 100.0, 100.0], pe_ratio=20.0)
     r = _crit("max_peg_ratio", f, 2.0)
-    assert r.passed is None
+    assert r.passed is False and r.observed is None
+    assert "not growing" in r.note
 
 
 def test_peg_fails_when_earnings_present_but_not_growing():
@@ -288,6 +291,34 @@ def test_lmt_shape_revenue_fail_plus_non_growing_earnings_two_real_fails():
     assert rev.passed is False                  # revenue CAGR ~4.46% < 10% threshold
     assert peg.passed is False                  # earnings not growing -> real fail
     assert peg.observed is None and "earnings not growing" in peg.note
+
+
+def test_peg_fails_on_fallback_when_revenue_also_declining():
+    # FIX-1c LOCK — LMT's ACTUAL live path: operating-income series too short to
+    # trend (-> revenue-CAGR FALLBACK), and the fallback revenue is DECLINING (a
+    # COMPUTED non-positive growth). This previously hit peg_ratio's old conflated
+    # abstain and returned NOT-EVAL ("growth rate <= 0 or unavailable"), laundering a
+    # bearish signal into a HOLD. It must now FAIL.
+    lmt = _fund("LMT", total_revenue=[90.0, 95.0, 98.0, 100.0],   # declining -> CAGR<0
+                operating_income=[80.0, 100.0],                   # too short -> fallback
+                pe_ratio=17.0)
+    rev = _crit("min_revenue_cagr", lmt, 0.10)
+    peg = _crit("max_peg_ratio", lmt, 2.0)
+    assert rev.passed is False                  # revenue declining -> real fail
+    assert peg.passed is False                  # fallback onto declining revenue -> FAIL
+    assert peg.observed is None and "not growing" in peg.note
+
+
+def test_peg_still_abstains_on_genuine_data_gap():
+    # FIX-1c distinction preserved: when growth is UNCOMPUTABLE (revenue series too
+    # short -> CAGR None) AND OI is short, that's a true data gap -> abstain
+    # (NOT-EVAL), not a fail. Only a COMPUTED non-positive growth fails.
+    f = _fund("GAP", total_revenue=[110.0, 100.0],   # < window+1 -> revenue CAGR None
+              operating_income=[80.0, 100.0],         # also short
+              pe_ratio=20.0)
+    r = _crit("max_peg_ratio", f, 2.0)
+    assert r.passed is None                      # honest NOT-EVAL, not a fail
+    assert "unavailable" in r.note
 
 
 def test_non_usd_listing_abstains_market_cap_but_ratios_still_evaluate():

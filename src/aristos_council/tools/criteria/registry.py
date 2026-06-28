@@ -193,16 +193,17 @@ def _max_peg_ratio(ev: Evidence, threshold: float) -> CriterionResult:
     # PEG denominator is OPERATING-INCOME growth (the earnings-growth proxy), with a
     # documented revenue-CAGR fallback when the OI series is too short; winsor cap
     # and the P/E / growth<=0 abstentions live inside peg_with_earnings_growth.
-    peg, note, earnings_fail = peg_with_earnings_growth(
+    peg, note, must_fail = peg_with_earnings_growth(
         f.pe_ratio if f else None,
         f.operating_income if f else [],
         f.total_revenue if f else [],
         _REVENUE_CAGR_YEARS,
     )
-    if earnings_fail:
-        # Earnings evaluable but NOT growing -> a real FAIL, not NOT-EVAL (FIX-1b).
-        # Otherwise a flat/declining-earnings name laundered a bearish signal into a
-        # NOT-EVAL and got softened by partial_pass_allows_hold (LMT HOLD->SELL).
+    if must_fail:
+        # Growth was COMPUTED and is non-positive (not growing) -> a real FAIL, not
+        # NOT-EVAL. Covers both earnings present-but-declining (FIX-1b) AND the
+        # fallback-onto-declining-revenue path (FIX-1c, LMT's actual path). A
+        # NOT-EVAL here got laundered into a HOLD by partial_pass_allows_hold.
         return CriterionResult(name="max_peg_ratio", passed=False, observed=None,
                                threshold=threshold, note=note)
     if peg is None:

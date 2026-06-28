@@ -645,8 +645,11 @@ def through_cycle_roic(
 def peg_ratio(
     pe_ratio: float | None, growth_rate: float | None,
     *, source: str = "in-house revenue CAGR",
-) -> tuple[float | None, str]:
+) -> tuple[float | None, str, bool]:
     """PEG = P/E / (growth_rate * 100), with ``growth_rate`` a decimal growth rate.
+
+    Returns ``(value, note, must_fail)``. ``must_fail`` is the FIX-1c signal: True
+    means the growth-adjusted-value criterion must FAIL (passed=False), not abstain.
 
     PEG v2 WINSORIZES the growth input: an extreme trough-inflated growth rate makes
     PEG artificially tiny (looks cheap), so the growth term is capped at
@@ -655,18 +658,32 @@ def peg_ratio(
     CONSERVATIVE rather than spuriously cheap, and the note records the clamp. Only
     the GROWTH term is winsorized; the P/E is never invented.
 
-    Returns (None, note) when PEG is undefined: no positive P/E (negative or
-    missing earnings) or a non-positive growth rate — that honest abstention is
-    UNCHANGED. The caller supplies an in-house ROBUST (trend) growth rate as
-    ``growth_rate`` — never a provider forward estimate — so the figure stays
-    auditable; the winsor cap is a hard backstop on top of the trend smoothing.
-    ``source`` labels which series the growth came from (operating-income growth by
-    default from ``peg_with_earnings_growth``, or a revenue-CAGR fallback).
+    The two "PEG undefined" reasons are DIFFERENT and must not be conflated (the
+    FIX-1c root cause — they used to share one abstain branch):
+    - no positive P/E, OR growth_rate is None (the series was too short/absent to
+      compute a rate): a genuine DATA GAP -> abstain (NOT-EVAL), ``must_fail=False``.
+    - growth_rate is a COMPUTED non-positive number (<= 0): the company is NOT
+      GROWING. That is evaluable and bad for a growth strategy -> FAIL
+      (``must_fail=True``), never a laundered NOT-EVAL. This is what closes LMT:
+      a flat/declining growth rate (whether operating-income or the revenue
+      fallback) now FAILS instead of silently abstaining and softening the verdict.
+
+    The caller supplies an in-house ROBUST (trend) growth rate as ``growth_rate`` —
+    never a provider forward estimate. ``source`` labels which series it came from.
     """
     if pe_ratio is None or pe_ratio <= 0:
-        return None, "no positive P/E (negative or missing earnings); PEG undefined"
-    if growth_rate is None or growth_rate <= 0:
-        return None, "growth rate <= 0 or unavailable; PEG undefined"
+        return (None,
+                "no positive P/E (negative or missing earnings); PEG undefined",
+                False)
+    if growth_rate is None:
+        # Growth could not be COMPUTED (data gap) — abstain, do not fail.
+        return None, "growth rate unavailable (insufficient data); PEG undefined", False
+    if growth_rate <= 0:
+        # Growth WAS computed and is non-positive: not growing -> FAIL (FIX-1c).
+        return (None,
+                f"growth rate {growth_rate:.4f} <= 0 (not growing) — fails "
+                f"growth-adjusted value; a growth name must show growth",
+                True)
     note = f"PEG = P/E / ({source} x 100)"
     g = growth_rate
     if g > _PEG_GROWTH_CAP:
@@ -675,7 +692,7 @@ def peg_ratio(
                  f"PEG is conservative")
         g = _PEG_GROWTH_CAP
     peg = pe_ratio / (g * 100.0)
-    return peg, note
+    return peg, note, False
 
 
 def peg_with_earnings_growth(
@@ -700,15 +717,18 @@ def peg_with_earnings_growth(
     flattering it). The winsor cap and the P/E / growth<=0 abstentions are unchanged
     (they live in ``peg_ratio``).
 
-    The two None-shaped cases are DIFFERENT and must not be conflated:
-    - operating-income series MISSING / too short (fewer than ``years``+1 points):
-      a DATA GAP, not an earnings problem -> FALL BACK to revenue CAGR (documented
-      prior behaviour), ``earnings_fail=False``. Don't fail on missing data.
+    Three outcomes, kept strictly distinct:
     - operating income PRESENT but NOT GROWING (a non-positive value -> CAGR None,
-      or a flat/declining series -> CAGR <= 0): evaluable AND bad. A GARP name must
-      show earnings growth, so this FAILS the criterion (``earnings_fail=True``) —
-      NEVER a revenue fallback that would launder a real earnings problem behind a
-      flattering revenue number (the FIX-1b fix; LMT was being softened to HOLD).
+      or a flat/declining series -> CAGR <= 0): evaluable AND bad -> FAIL here, with
+      a clear earnings note. NEVER a revenue fallback that would launder a real
+      earnings problem behind a flattering revenue number (FIX-1b).
+    - operating-income series MISSING / too short: a DATA GAP -> FALL BACK to revenue
+      CAGR (documented prior behaviour). The fallback then COMPUTES a revenue growth
+      rate and hands it to ``peg_ratio``, which itself FAILS a computed non-positive
+      rate and abstains only on a true data gap (FIX-1c). So a fallback onto
+      DECLINING revenue now FAILS (the actual LMT live path: short OI series ->
+      fallback -> negative revenue CAGR -> previously a laundered NOT-EVAL).
+    - no positive P/E, or growth uncomputable: abstain (handled in ``peg_ratio``).
     """
     oi = operating_income or []
     if len(oi) >= years + 1:
@@ -731,8 +751,10 @@ def peg_with_earnings_growth(
     else:
         growth, _ = revenue_cagr(revenue, years)
         source = "revenue CAGR — fallback, operating-income series unavailable"
-    peg, note = peg_ratio(pe_ratio, growth, source=source)
-    return peg, note, False
+    # peg_ratio returns must_fail=True for a COMPUTED non-positive growth (the
+    # fallback-onto-declining-revenue case), which we propagate unchanged.
+    peg, note, must_fail = peg_ratio(pe_ratio, growth, source=source)
+    return peg, note, must_fail
 
 
 # --------------------------------------------------------------------------- #
