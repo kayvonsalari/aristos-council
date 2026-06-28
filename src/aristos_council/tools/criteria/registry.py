@@ -40,7 +40,7 @@ from ..screening import (
     min_growth_streak_criterion,
     min_market_cap_criterion,
     min_yield_criterion,
-    peg_ratio,
+    peg_with_earnings_growth,
     revenue_cagr,
     through_cycle_roic,
 )
@@ -190,9 +190,15 @@ def _min_roic(ev: Evidence, threshold: float) -> CriterionResult:
 
 def _max_peg_ratio(ev: Evidence, threshold: float) -> CriterionResult:
     f = ev.fundamentals
-    revenue = f.total_revenue if f else []
-    cagr, _ = revenue_cagr(revenue, _REVENUE_CAGR_YEARS)   # same robust trend CAGR
-    peg, note = peg_ratio(f.pe_ratio if f else None, cagr)  # winsorized inside
+    # PEG denominator is OPERATING-INCOME growth (the earnings-growth proxy), with a
+    # documented revenue-CAGR fallback when the OI series is too short; winsor cap
+    # and the P/E / growth<=0 abstentions live inside peg_with_earnings_growth.
+    peg, note = peg_with_earnings_growth(
+        f.pe_ratio if f else None,
+        f.operating_income if f else [],
+        f.total_revenue if f else [],
+        _REVENUE_CAGR_YEARS,
+    )
     if peg is None:
         return CriterionResult(name="max_peg_ratio", passed=None, observed=None,
                                threshold=threshold, note=note)

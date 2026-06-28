@@ -495,35 +495,32 @@ def streak_by_method(
 # --------------------------------------------------------------------------- #
 # Growth / quality primitives (Sprint 4B) — pure math, NOT-EVAL on missing data
 # --------------------------------------------------------------------------- #
-def revenue_cagr(
-    revenue: list[float], years: int
+def _series_cagr(
+    series: list[float], years: int, *, label: str
 ) -> tuple[float | None, str]:
-    """Base-year-robust revenue CAGR over ``years`` from a NEWEST-FIRST series.
+    """Base-year-robust CAGR of a NEWEST-FIRST numeric series over ``years``.
 
     The OBSERVED value is a LOG-LINEAR TREND CAGR, not the two-point endpoint
-    ratio: we fit a least-squares line to (t, ln(revenue_t)) across all ``years``+1
+    ratio: fit a least-squares line to (t, ln(series_t)) across all ``years``+1
     points (t = 0..years, oldest..newest) and return ``exp(slope) - 1`` — the
-    continuous growth rate the whole series implies. Using ALL points means a
-    single cyclical-trough BASE year can't anchor the estimate the way
-    ``(rev[0]/rev[years])^(1/years)-1`` does (the SK Hynix failure, where a trough
-    base made CAGR look great). This is why revenue_cagr is the one growth metric
-    that is GATING-ELIGIBLE: a clean, trough-resistant denominator. The note also
-    records the OLD endpoint CAGR and, when the two DIVERGE, a WARNING — we surface
-    the cyclicality the metric is smoothing rather than hide it.
-
-    Returns (None, note) on the same honest-abstention cases: fewer than
-    ``years``+1 clean points, or ANY non-positive point in the window (a
-    non-positive value destroys the log / the ratio).
+    continuous growth rate the whole series implies, so a single cyclical-trough
+    BASE year can't anchor the estimate the way ``(s[0]/s[years])^(1/years)-1``
+    does (the SK Hynix failure). The note records the OLD endpoint CAGR and, when
+    the two DIVERGE, a WARNING. ``label`` ("revenue", "operating-income") frames
+    the note. Returns (None, note) on the honest-abstention cases: fewer than
+    ``years``+1 clean points, or ANY non-positive point (a non-positive value
+    destroys the log / the ratio). SHARED by ``revenue_cagr`` and
+    ``operating_income_cagr`` so both use identical, tested logic.
     """
     if years < 1:
         return None, "years must be >= 1"
-    if len(revenue) < years + 1:
-        return None, (f"insufficient revenue history: need {years + 1} annual "
-                      f"points, have {len(revenue)}")
-    points = revenue[:years + 1]                 # newest-first window
+    if len(series) < years + 1:
+        return None, (f"insufficient {label} history: need {years + 1} annual "
+                      f"points, have {len(series)}")
+    points = series[:years + 1]                  # newest-first window
     if any(p <= 0 for p in points):
-        return None, (f"revenue non-positive in the {years + 1}-point CAGR window "
-                      f"(base={revenue[years]}, latest={revenue[0]}); CAGR undefined")
+        return None, (f"{label} non-positive in the {years + 1}-point CAGR window "
+                      f"(base={series[years]}, latest={series[0]}); CAGR undefined")
 
     # Log-linear least-squares slope over t = 0..years (oldest..newest).
     ys = [math.log(p) for p in reversed(points)]
@@ -534,14 +531,36 @@ def revenue_cagr(
     cov = sum((t - mean_t) * (y - mean_y) for t, y in zip(ts, ys))
     var = sum((t - mean_t) ** 2 for t in ts)
     trend_cagr = math.exp(cov / var) - 1.0
-    endpoint_cagr = (revenue[0] / revenue[years]) ** (1.0 / years) - 1.0
+    endpoint_cagr = (series[0] / series[years]) ** (1.0 / years) - 1.0
 
-    note = (f"{years}y revenue CAGR (log-linear trend over {n} points) = "
+    note = (f"{years}y {label} CAGR (log-linear trend over {n} points) = "
             f"{trend_cagr:.4f}; two-point endpoint CAGR = {endpoint_cagr:.4f}")
     if abs(trend_cagr - endpoint_cagr) > _CAGR_DISPERSION_WARN:
         note += (f"; WARNING: endpoint vs trend CAGR diverge by "
                  f"{abs(trend_cagr - endpoint_cagr):.4f} — base year may be cyclical")
     return trend_cagr, note
+
+
+def revenue_cagr(
+    revenue: list[float], years: int
+) -> tuple[float | None, str]:
+    """Base-year-robust revenue CAGR (log-linear trend; see ``_series_cagr``).
+
+    The GATING-ELIGIBLE growth metric — a clean, trough-resistant denominator.
+    Output is unchanged from before the ``_series_cagr`` extraction.
+    """
+    return _series_cagr(revenue, years, label="revenue")
+
+
+def operating_income_cagr(
+    operating_income: list[float], years: int
+) -> tuple[float | None, str]:
+    """Operating-income growth (log-linear trend; see ``_series_cagr``) — the
+    available EARNINGS-growth proxy (there is no EPS series). This is the correct
+    PEG denominator (a standard PEG uses earnings growth, not revenue). NOT-EVAL
+    (None) on a too-short series or a non-positive operating-income point (earnings
+    growth undefined)."""
+    return _series_cagr(operating_income, years, label="operating-income")
 
 
 def nopat_roic(
@@ -624,36 +643,83 @@ def through_cycle_roic(
 
 
 def peg_ratio(
-    pe_ratio: float | None, growth_rate: float | None
+    pe_ratio: float | None, growth_rate: float | None,
+    *, source: str = "in-house revenue CAGR",
 ) -> tuple[float | None, str]:
-    """PEG = P/E / (growth_rate * 100), with ``growth_rate`` a decimal CAGR.
+    """PEG = P/E / (growth_rate * 100), with ``growth_rate`` a decimal growth rate.
 
-    PEG v2 WINSORIZES the growth input: an extreme trough-inflated CAGR makes PEG
-    artificially tiny (looks cheap), so the growth term is capped at
-    ``_PEG_GROWTH_CAP`` (0.40) before forming PEG — above that, a "CAGR" is almost
-    certainly cyclical noise, not sustainable growth, so the cap makes PEG
+    PEG v2 WINSORIZES the growth input: an extreme trough-inflated growth rate makes
+    PEG artificially tiny (looks cheap), so the growth term is capped at
+    ``_PEG_GROWTH_CAP`` (0.40) before forming PEG — above that, a "growth rate" is
+    almost certainly cyclical noise, not sustainable growth, so the cap makes PEG
     CONSERVATIVE rather than spuriously cheap, and the note records the clamp. Only
     the GROWTH term is winsorized; the P/E is never invented.
 
     Returns (None, note) when PEG is undefined: no positive P/E (negative or
     missing earnings) or a non-positive growth rate — that honest abstention is
-    UNCHANGED. The caller supplies the in-house ROBUST (trend) revenue CAGR as
+    UNCHANGED. The caller supplies an in-house ROBUST (trend) growth rate as
     ``growth_rate`` — never a provider forward estimate — so the figure stays
     auditable; the winsor cap is a hard backstop on top of the trend smoothing.
+    ``source`` labels which series the growth came from (operating-income growth by
+    default from ``peg_with_earnings_growth``, or a revenue-CAGR fallback).
     """
     if pe_ratio is None or pe_ratio <= 0:
         return None, "no positive P/E (negative or missing earnings); PEG undefined"
     if growth_rate is None or growth_rate <= 0:
         return None, "growth rate <= 0 or unavailable; PEG undefined"
-    note = "PEG = P/E / (in-house revenue CAGR x 100)"
+    note = f"PEG = P/E / ({source} x 100)"
     g = growth_rate
     if g > _PEG_GROWTH_CAP:
         note += (f"; PEG growth input winsorized from {growth_rate:.4f} to "
-                 f"{_PEG_GROWTH_CAP:.2f} (extreme CAGR, likely cyclical) — "
+                 f"{_PEG_GROWTH_CAP:.2f} (extreme growth, likely cyclical) — "
                  f"PEG is conservative")
         g = _PEG_GROWTH_CAP
     peg = pe_ratio / (g * 100.0)
     return peg, note
+
+
+def peg_with_earnings_growth(
+    pe_ratio: float | None,
+    operating_income: list[float],
+    revenue: list[float],
+    years: int,
+) -> tuple[float | None, str]:
+    """PEG using OPERATING-INCOME growth as the denominator — the available
+    EARNINGS-growth proxy (there is no per-share EPS series in the gathered data).
+
+    A standard PEG divides P/E by EARNINGS growth, not revenue growth. The Critic
+    flagged revenue-PEG as the wrong denominator on essentially every growth name;
+    this switches to operating-income growth. For a margin-EXPANDING compounder,
+    operating income grows FASTER than revenue, so the earnings PEG is LOWER (and
+    more correct); for a margin-COMPRESSING name it is HIGHER (the revenue PEG was
+    flattering it). The winsor cap and the P/E / growth<=0 abstentions are unchanged
+    (they live in ``peg_ratio``).
+
+    FALLBACK: when the operating-income series is too short/missing to trend (fewer
+    than ``years``+1 points), fall back to revenue CAGR — the documented prior
+    behaviour — and SAY SO in the note. We do NOT abstain merely because earnings
+    growth is unavailable. But a PRESENT-yet-NON-POSITIVE operating income (a real
+    earnings problem — the log/ratio is undefined) returns None: an honest NOT-EVAL,
+    never a silent revenue fallback that would hide the loss.
+    """
+    oi = operating_income or []
+    if len(oi) >= years + 1:
+        growth, _ = operating_income_cagr(oi, years)
+        if growth is None:
+            # OI present but non-positive in the window: earnings growth undefined.
+            return None, (
+                f"operating income non-positive in the {years + 1}-point window; "
+                f"earnings-growth PEG undefined (no revenue fallback when earnings "
+                f"are negative)")
+        source = "operating-income growth"
+        rev, _ = revenue_cagr(revenue, years)
+        if rev is not None and abs(growth - rev) > _CAGR_DISPERSION_WARN:
+            # Surface the gap so a reviewer sees WHY the earnings PEG differs.
+            source += (f", revenue CAGR {rev:.4f} vs earnings growth {growth:.4f}")
+    else:
+        growth, _ = revenue_cagr(revenue, years)
+        source = "revenue CAGR — fallback, operating-income series unavailable"
+    return peg_ratio(pe_ratio, growth, source=source)
 
 
 # --------------------------------------------------------------------------- #

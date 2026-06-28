@@ -22,7 +22,9 @@ from aristos_council.tools.screening import (
     min_market_cap_criterion,
     min_yield_criterion,
     nopat_roic,
+    operating_income_cagr,
     peg_ratio,
+    peg_with_earnings_growth,
     revenue_cagr,
     run_strategy_screen,
     through_cycle_roic,
@@ -547,6 +549,64 @@ def test_peg_ratio_winsorizes_extreme_growth():
     assert abs(peg - 25.0 / (0.40 * 100.0)) < 1e-9   # 0.625, uses the cap
     assert peg > 25.0 / (0.80 * 100.0)               # > the un-winsorized 0.3125
     assert "winsorized" in note and "0.80" in note
+
+
+def test_operating_income_cagr_matches_series_math():
+    # operating_income_cagr is the same log-linear trend as revenue_cagr, just a
+    # different label -> equal CAGR on equal series, "operating-income" in the note.
+    oi = [146.0, 121.0, 110.0, 100.0]
+    oi_cagr, oi_note = operating_income_cagr(oi, 3)
+    rev_cagr, _ = revenue_cagr(oi, 3)
+    assert abs(oi_cagr - rev_cagr) < 1e-12
+    assert "operating-income" in oi_note
+    # NOT-EVAL on too-short / non-positive, exactly like revenue.
+    assert operating_income_cagr([120.0, 100.0], 3)[0] is None
+    assert operating_income_cagr([130.0, 110.0, 100.0, -5.0], 3)[0] is None
+
+
+def test_peg_earnings_growth_lower_when_earnings_outgrow_revenue():
+    # Margin-EXPANDING name: operating income grows FASTER than revenue, so the
+    # earnings-based PEG is LOWER (cheaper, more correct) than the revenue-based one.
+    revenue = [130.0, 120.0, 110.0, 100.0]       # ~9%/yr
+    oi = [180.0, 150.0, 125.0, 100.0]            # ~22%/yr, faster
+    peg_earn, note = peg_with_earnings_growth(25.0, oi, revenue, 3)
+    rev_cagr, _ = revenue_cagr(revenue, 3)
+    peg_rev, _ = peg_ratio(25.0, rev_cagr)
+    assert peg_earn is not None and peg_earn < peg_rev
+    assert "operating-income growth" in note
+
+
+def test_peg_earnings_growth_higher_when_earnings_lag_revenue():
+    # Margin-COMPRESSING name: operating income grows SLOWER than revenue, so the
+    # earnings PEG is HIGHER (revenue PEG was flattering it).
+    revenue = [180.0, 150.0, 125.0, 100.0]       # ~22%/yr
+    oi = [115.0, 110.0, 105.0, 100.0]            # ~5%/yr, slower
+    peg_earn, _ = peg_with_earnings_growth(25.0, oi, revenue, 3)
+    rev_cagr, _ = revenue_cagr(revenue, 3)
+    peg_rev, _ = peg_ratio(25.0, rev_cagr)
+    assert peg_earn is not None and peg_earn > peg_rev
+
+
+def test_peg_falls_back_to_revenue_when_oi_series_too_short():
+    # OI series too short to trend -> documented revenue-CAGR fallback, flagged.
+    revenue = [146.0, 121.0, 110.0, 100.0]
+    peg_fb, note = peg_with_earnings_growth(25.0, [120.0, 100.0], revenue, 3)
+    rev_cagr, _ = revenue_cagr(revenue, 3)
+    peg_rev, _ = peg_ratio(25.0, rev_cagr)
+    assert peg_fb is not None and abs(peg_fb - peg_rev) < 1e-12
+    assert "fallback" in note
+    # Missing OI entirely is the same fallback path.
+    assert peg_with_earnings_growth(25.0, [], revenue, 3)[0] is not None
+
+
+def test_peg_not_eval_on_negative_operating_income_no_revenue_fallback():
+    # A PRESENT-but-non-positive OI is a real earnings problem -> NOT-EVAL, NOT a
+    # silent revenue fallback that would hide the loss.
+    revenue = [146.0, 121.0, 110.0, 100.0]       # would otherwise yield a PEG
+    oi = [120.0, 110.0, 100.0, -5.0]             # base year a loss
+    peg, note = peg_with_earnings_growth(25.0, oi, revenue, 3)
+    assert peg is None
+    assert "operating income non-positive" in note and "no revenue fallback" in note
 
 
 def test_through_cycle_roic_below_peak_based():
