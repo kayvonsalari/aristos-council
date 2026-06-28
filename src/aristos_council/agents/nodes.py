@@ -33,10 +33,12 @@ from ..presentation import dividend_view, recommendation_view
 from ..state import (
     CriticReport,
     Decision,
+    FailureKind,
     Figure,
     Provenance,
     Recommendation,
     ResearchState,
+    RunIssue,
     SpecialistName,
     SpecialistOpinion,
     Stance,
@@ -80,13 +82,16 @@ def _screen_criteria(state: ResearchState) -> list:
 # gather — deterministic evidence collection
 # --------------------------------------------------------------------------- #
 def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
-                     sentiment_adapter: SentimentAdapter | None = None):
+                     sentiment_adapter: SentimentAdapter | None = None,
+                     *, sentiment_missing_key: bool = False):
     def gather(state: ResearchState) -> ResearchState:
         today = date.today()
         lookback_start = today - timedelta(days=400)   # enough for SMA200
         div_start = today - timedelta(days=365 * 40)   # as deep as provider allows
 
-        def log(tool_name: str, inputs: dict, fn):
+        def log(tool_name: str, inputs: dict, fn, *, source: str):
+            # `source` is the human-facing label for the run-health channel
+            # ('fundamentals', 'sentiment', ...); `tool_name` stays the ledger id.
             call_id = _new_call_id()
             try:
                 output = fn()
@@ -94,6 +99,14 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                     ToolCall(call_id=call_id, tool_name=tool_name,
                              inputs=inputs, output=output, ok=True)
                 )
+                # A call that SUCCEEDED but returned no usable rows is an
+                # EMPTY_RESPONSE — a fixable tool failure, distinct from a fetch
+                # that raised. (Objects without a length, e.g. Fundamentals, are
+                # never "empty" by this rule.)
+                if hasattr(output, "__len__") and len(output) == 0:
+                    state.run_issues.append(RunIssue(
+                        source=source, reason=FailureKind.EMPTY_RESPONSE,
+                        detail=f"{tool_name} returned no rows"))
                 return output
             except (DataUnavailable, SentimentDataUnavailable) as exc:
                 state.tool_calls.append(
@@ -102,7 +115,20 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                              error=str(exc))
                 )
                 state.errors.append(f"{tool_name}: {exc}")
+                # The adapter RAISED — an actual fetch/API failure, not honest
+                # absence. Tag it FETCH_ERROR so the run is marked degraded.
+                state.run_issues.append(RunIssue(
+                    source=source, reason=FailureKind.FETCH_ERROR,
+                    detail=str(exc)))
                 return None
+
+        # An optional source with no API key is a MISSING_KEY tool gap, not honest
+        # absence: record it so the run is flagged degraded and the banner names it
+        # (the FINNHUB_API_KEY-unset case that silently dragged verdicts bearish).
+        if sentiment_adapter is None and sentiment_missing_key:
+            state.run_issues.append(RunIssue(
+                source="sentiment", reason=FailureKind.MISSING_KEY,
+                detail="FINNHUB_API_KEY not set — Sentiment specialist abstained"))
 
         # `provider` tags each market-data call with the adapter that actually
         # produced it. For a single-source adapter that's its own name; for the
@@ -113,6 +139,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
             {"ticker": state.ticker,
              "provider": adapter.provider_for("fundamentals")},
             lambda: adapter.get_fundamentals(state.ticker),
+            source="fundamentals",
         )
         # Strategy-scoped tool selection (Sprint 4E): only fetch dividend history
         # when the active strategy actually needs it. A growth run never sees
@@ -128,6 +155,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                 lambda: adapter.get_dividend_history(
                     state.ticker, start=div_start, end=today
                 ),
+                source="dividends",
             )
         prices = log(
             "get_price_history",
@@ -136,6 +164,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
             lambda: adapter.get_price_history(
                 state.ticker, start=lookback_start, end=today
             ),
+            source="prices",
         )
 
         if fundamentals is not None:
@@ -202,6 +231,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                  "end": str(today), "provider": sentiment_adapter.name,
                  "logged_items_cap": MAX_NEWS_LOGGED},
                 _fetch_news_capped,
+                source="sentiment",
             )
             news = news_full
             if news_full is not None and len(news_full) > MAX_NEWS_LOGGED:
@@ -215,6 +245,7 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                 lambda: sentiment_adapter.get_recommendation_trends(
                     state.ticker
                 ),
+                source="sentiment",
             )
             if news is not None or trends is not None:
                 snap = sentiment_snapshot(news or [], trends or [])  # full list: count stays truthful

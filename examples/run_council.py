@@ -40,6 +40,7 @@ from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.provider import select_market_adapter
 from aristos_council.graph import build_council
 from aristos_council.persistence.reports import report_from_state, save_report
+from aristos_council.presentation import degraded_banner, run_health_line
 from aristos_council.persistence.verdicts import (
     append_record,
     load_latest,
@@ -184,11 +185,13 @@ def main(argv: list[str] | None = None) -> None:
               + "; ".join(f"{k}={v}" for k, v in delta.items()) + ")")
 
     sentiment = None
+    sentiment_missing_key = False
     if os.environ.get("FINNHUB_API_KEY"):
         from aristos_council.data.finnhub_adapter import FinnhubAdapter
         sentiment = FinnhubAdapter()
         print("(sentiment: Finnhub enabled)")
     else:
+        sentiment_missing_key = True
         print("(sentiment: no FINNHUB_API_KEY — Sentiment specialist will abstain)")
 
     # Provider chosen by $ARISTOS_MARKET_PROVIDER (default yfinance).
@@ -199,7 +202,8 @@ def main(argv: list[str] | None = None) -> None:
     print(tracing_status_line())
     runners = production_runners()
     app = build_council(adapter, strategy, runners,
-                        sentiment_adapter=sentiment)
+                        sentiment_adapter=sentiment,
+                        sentiment_missing_key=sentiment_missing_key)
 
     # IO at the edge: load the prior verdict for the same ticker AND strategy
     # (recommendation_flip key), keyed off the BASE id. load_latest skips prior
@@ -224,6 +228,13 @@ def main(argv: list[str] | None = None) -> None:
 
     print(f"\n=== Aristos Council verdict on {ticker} "
           f"({base.id}) ===\n")
+
+    # Run health FIRST: a degraded run (a fixable tool failure) gets a loud banner
+    # at the very top before the verdict; every run gets a one-glance health line.
+    banner = degraded_banner(result.run_issues)
+    if banner:
+        print(banner + "\n")
+    print(run_health_line(result) + "\n")
 
     for op in result.specialist_opinions:
         print(f"  {op.specialist.value.upper()}  —  {op.stance.value}  "

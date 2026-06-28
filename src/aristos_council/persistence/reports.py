@@ -38,6 +38,7 @@ from ..state import (
     CriticReport,
     Decision,
     ResearchState,
+    RunIssue,
     SpecialistOpinion,
     VetoFlag,
 )
@@ -78,6 +79,12 @@ class RunReport(BaseModel):
     # verdict is auditable/reproducible down to the model and temperature it used.
     # Optional/default None so reports saved before this field round-trip unchanged.
     models: Optional[dict] = None
+    # Run-health (observability): the typed issues that occurred and whether the run
+    # was DEGRADED by a fixable tool failure (fetch/empty/missing-key). `degraded`
+    # is stored flat so a batch log / CSV can carry it as a column without parsing
+    # run_issues. Both optional/default so older reports round-trip unchanged.
+    run_issues: list[RunIssue] = Field(default_factory=list)
+    degraded: bool = False
 
 
 def _company_name_from_state(state: ResearchState) -> Optional[str]:
@@ -134,6 +141,8 @@ def report_from_state(
         decision=state.decision,
         veto_flags=list(state.veto_flags),
         provenance_audit=state.provenance_audit,
+        run_issues=list(state.run_issues),
+        degraded=state.degraded,
     )
 
 

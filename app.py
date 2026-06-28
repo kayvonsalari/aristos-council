@@ -45,6 +45,8 @@ from aristos_council.persistence.verdicts import (
 )
 from aristos_council.presentation import (
     SCREEN_STATUS_HEX,
+    degraded_banner,
+    run_health_line,
     screen_table_rows,
     strip_provenance,
 )
@@ -287,16 +289,20 @@ def run_council(ticker: str, strategy_path: Path,
     delta = applied_overrides(base, strategy)   # what actually differs vs the file
 
     sentiment = None
+    sentiment_missing_key = False
     if os.environ.get("FINNHUB_API_KEY"):
         from aristos_council.data.finnhub_adapter import FinnhubAdapter
         sentiment = FinnhubAdapter()
+    else:
+        sentiment_missing_key = True   # -> MISSING_KEY run issue -> degraded banner
 
     # Provider chosen by $ARISTOS_MARKET_PROVIDER (default yfinance); adapter.name
     # rides into provenance so the run records which provider it used.
     adapter = select_market_adapter()
     runners = production_runners()
     app = build_council(adapter, strategy, runners,
-                        sentiment_adapter=sentiment)
+                        sentiment_adapter=sentiment,
+                        sentiment_missing_key=sentiment_missing_key)
 
     # Prior verdict for the SAME ticker AND strategy (recommendation_flip key).
     # load_latest skips prior OVERRIDE runs, so an experiment never becomes the
@@ -526,6 +532,13 @@ def render_report(
 ) -> None:
     """Render a full run report. The deliberation is the product: everything
     examples/run_council.py prints to the console appears here too."""
+    # Run health FIRST: a degraded run (a fixable tool failure) gets a LOUD banner
+    # as the very first thing, above the verdict. A clean run renders no banner.
+    banner = degraded_banner(report.run_issues)
+    if banner:
+        st.error(banner)
+    st.caption(run_health_line(report))
+
     _render_report_header(report, sidebar_ticker)
 
     run_uid = _to_local(report.run_at).strftime("%Y%m%d%H%M%S")

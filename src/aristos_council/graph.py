@@ -41,11 +41,14 @@ def build_council(
     strategy: Strategy,
     runners: dict,   # keys: "specialist", "critic", "decision"
     sentiment_adapter: SentimentAdapter | None = None,
+    *,
+    sentiment_missing_key: bool = False,
 ):
     g = StateGraph(ResearchState)
 
     g.add_node("gather",
-               make_gather_node(adapter, strategy, sentiment_adapter))
+               make_gather_node(adapter, strategy, sentiment_adapter,
+                                sentiment_missing_key=sentiment_missing_key))
     for who in SPECIALIST_ORDER:
         g.add_node(
             who.value,

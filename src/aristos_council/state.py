@@ -224,6 +224,55 @@ class VetoFlag(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# Run health / observability — WHY a datum was absent, so silent degradation
+# becomes loud. The whole point is the HONEST vs TOOL-FAILURE distinction below.
+# --------------------------------------------------------------------------- #
+class FailureKind(str, Enum):
+    """Why a criterion abstained or a source produced nothing.
+
+    The cut that matters: DATA_ABSENT and CURRENCY_MISMATCH are the system working
+    CORRECTLY (the datum genuinely doesn't exist / isn't comparable) — honest
+    abstention that flows through NOT-EVAL / INSUFFICIENT_EVIDENCE and must NOT
+    raise the alarm. FETCH_ERROR, EMPTY_RESPONSE and MISSING_KEY are FIXABLE TOOL
+    failures — a flaky API, an empty response, an unset key — and those mark the
+    run DEGRADED so the verdict carries a loud warning. Don't cry wolf on honest
+    abstention; do scream on a broken tool.
+    """
+
+    DATA_ABSENT = "data_absent"            # datum genuinely doesn't exist (honest)
+    FETCH_ERROR = "fetch_error"            # adapter raised / API errored / timeout
+    EMPTY_RESPONSE = "empty_response"      # call returned but no usable data
+    MISSING_KEY = "missing_key"            # optional source had no API key
+    CURRENCY_MISMATCH = "currency_mismatch"  # not comparable (e.g. EUR cap vs USD)
+
+
+# The kinds that mean a TOOL failed (fixable) — these and only these set
+# `ResearchState.degraded`. DATA_ABSENT / CURRENCY_MISMATCH are deliberately ABSENT.
+_DEGRADING_FAILURES: frozenset[FailureKind] = frozenset(
+    {FailureKind.FETCH_ERROR, FailureKind.EMPTY_RESPONSE, FailureKind.MISSING_KEY}
+)
+
+
+class RunIssue(BaseModel):
+    """One typed thing that went wrong (or was honestly absent) during a run.
+
+    The structured successor to a bare ``errors`` string: it carries WHERE
+    (`source`, e.g. 'sentiment', 'fundamentals'), WHY (`reason`, a FailureKind),
+    and the raw `detail`. ``is_degrading`` is the single source of truth for
+    whether this issue trips the degraded-run alarm.
+    """
+
+    source: str
+    reason: FailureKind
+    detail: str = ""
+    created_at: datetime = Field(default_factory=_utcnow)
+
+    @property
+    def is_degrading(self) -> bool:
+        return self.reason in _DEGRADING_FAILURES
+
+
+# --------------------------------------------------------------------------- #
 # Top-level state
 # --------------------------------------------------------------------------- #
 class ResearchState(BaseModel):
@@ -275,6 +324,10 @@ class ResearchState(BaseModel):
 
     # --- bookkeeping ---
     errors: list[str] = Field(default_factory=list)
+    # Typed run-health channel (observability): WHY a source/criterion was absent.
+    # The bare `errors` strings stay (veto/provenance still append to them); this is
+    # the structured layer the degraded-run banner and health summary read.
+    run_issues: list[RunIssue] = Field(default_factory=list)
 
     # ------------------------------------------------------------------ #
     # Convenience accessors (no business logic — those live in graph nodes)
@@ -296,3 +349,19 @@ class ResearchState(BaseModel):
     @property
     def requires_human_review(self) -> bool:
         return len(self.veto_flags) > 0 and not self.human_reviewed
+
+    # ------------------------------------------------------------------ #
+    # Run health (observability) — derived, never stored, so it can't drift
+    # ------------------------------------------------------------------ #
+    @property
+    def degrading_issues(self) -> list[RunIssue]:
+        """The TOOL-failure issues (fixable) — the ones that mark the run degraded.
+        Honest DATA_ABSENT / CURRENCY_MISMATCH abstentions are excluded."""
+        return [i for i in self.run_issues if i.is_degrading]
+
+    @property
+    def degraded(self) -> bool:
+        """True iff a FIXABLE tool failure occurred (fetch/empty/missing-key). A run
+        that only abstained honestly (DATA_ABSENT / CURRENCY_MISMATCH) is NOT
+        degraded — the system was working correctly."""
+        return len(self.degrading_issues) > 0
