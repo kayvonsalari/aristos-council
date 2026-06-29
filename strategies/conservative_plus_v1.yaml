@@ -1,0 +1,42 @@
+# Aristos Council — RANK strategy: Conservative Formula+ (v1)
+# =========================================================
+# van Vliet & Blitz Conservative Formula: rank on LOW VOLATILITY, NET PAYOUT YIELD,
+# and 12-MONTH MOMENTUM, combine the ranks, take the top. In Schwartz & Hanauer
+# (2024) the Conservative Formula LED risk-adjusted performance with the lowest
+# drawdown.
+#
+# This is the NVO-PROOF strategy: by including momentum AND low-vol, it STRUCTURALLY
+# avoids falling knives. A crashing name (NVO: ~-25% on the year, elevated vol) ranks
+# badly on BOTH the momentum and low-vol legs and never reaches the BUY quintile — no
+# tuned weight required, the ranking does it (the NVO fix as a property of the method,
+# proven in test_conservative_plus).
+
+id: conservative_plus_v1
+name: Conservative Formula+ (rank-based)
+version: 1
+
+description: >
+  Low-risk, income, and trend — the best risk-adjusted of the classic formulas.
+  Ranks the universe on low volatility, net payout yield, and 12-month momentum, and
+  combines the ranks. Momentum + low-vol exclude actively-declining names by
+  construction.
+
+factors:
+  - name: low_volatility      # lower realized vol ranks better (direction from registry)
+  - name: net_payout_yield    # dividends (+ buybacks where available); div-yield fallback
+  - name: momentum_12m        # 12-month trailing return; higher ranks better
+
+cut: quintile
+k: 6
+percentile: 0.2
+# A missing factor sits at the worst rank rather than excluding the name — a
+# non-payer or short-history name is penalised, not dropped.
+missing: worst
+
+min_market_cap: 1000000000
+
+rationale: >
+  Defensive equity returns are driven more by what you AVOID than what you pick:
+  high-volatility, momentum-losing names destroy compounding. Ranking on low-vol +
+  momentum + payout captures that without a single tuned weight, and structurally
+  screens out the cheap-but-falling trap that pure trailing-value scoring walks into.
