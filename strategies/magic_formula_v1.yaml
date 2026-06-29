@@ -1,0 +1,38 @@
+# Aristos Council — RANK strategy: Greenblatt Magic Formula (v1)
+# =============================================================
+# Validated baseline and smallest migration from the existing code (ROIC + value
+# are already computed). Grounding: Schwartz & Hanauer (2024) found the Magic
+# Formula had the highest factor-adjusted alpha of the four classic formulas.
+#
+# Greenblatt's exact mechanic: rank the universe on EACH factor (best = 1), SUM the
+# ranks, lowest combined rank = best. NO point weights — the ranking is the decision.
+# (rank_engine.rank_universe implements this; rank_loader validates the factors.)
+
+id: magic_formula_v1
+name: Magic Formula (rank-based)
+version: 1
+
+description: >
+  Greenblatt's two-factor value+quality rank: cheap (high earnings yield) AND
+  high-quality (high return on capital), combined by rank-sum. A relative,
+  self-scaling verdict over a candidate universe — no thresholds, no weights.
+
+factors:
+  - name: earnings_yield     # value: EBIT/EV proxy (EBIT/market_cap, 1/PE fallback)
+  - name: roic               # quality: through-cycle return on invested capital
+
+# Verdict cut over the ranked universe. Quintile is the quant-desk default; for a
+# small candidate list use top_k (quintiles get too coarse).
+cut: quintile
+k: 6                          # used when cut: top_k
+percentile: 0.2              # used when cut: top_percentile
+missing: exclude             # Greenblatt excludes names you cannot score
+
+# Universe exclusions (applied before ranking by the caller).
+min_market_cap: 1000000000   # 1B floor (Greenblatt excludes micro-caps)
+
+rationale: >
+  Buying good businesses at cheap prices, the two-factor way that has held up across
+  six decades of out-of-sample testing. Ranking removes the weight-guessing entirely:
+  there is no "value weight vs quality weight" to tune — each name is ranked on both
+  and the combined rank orders the universe.
