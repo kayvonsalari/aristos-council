@@ -105,6 +105,23 @@ def test_prompts_are_externalized_and_versioned():
     assert nodes._critic_system(STRATEGY) == prompts.critic_system(STRATEGY)
 
 
+def test_technical_brief_defaults_to_neutral_and_de_biases_drawdown():
+    # FIX A: ambiguous structure -> NEUTRAL (stops the run-to-run flip), and a
+    # drawdown is no longer reflexively bearish (stops fighting the GARP strategy).
+    tech = _specialist_system(SpecialistName.TECHNICAL, STRATEGY)
+    assert "DEFAULT TO NEUTRAL" in tech
+    assert "drawdown is NOT by itself" in tech
+    assert "prefer NEUTRAL over guessing" in tech
+
+
+def test_risk_brief_drops_the_reflexive_pessimist_tilt():
+    # FIX B: risk stays downside-focused but no longer manufactures a bearish tilt.
+    risk = _specialist_system(SpecialistName.RISK, STRATEGY)
+    assert "professional pessimist" not in risk
+    assert "without manufacturing a bearish tilt" in risk
+    assert "open question, not a negative finding" in risk
+
+
 def test_report_records_prompt_version():
     from datetime import datetime, timezone
 

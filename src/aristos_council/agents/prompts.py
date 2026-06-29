@@ -14,9 +14,14 @@ from __future__ import annotations
 from ..state import SpecialistName
 from ..strategy.loader import Strategy
 
-# Bump on EVERY wording change. v1 = the externalized-but-unchanged prompts (moved
-# verbatim out of nodes.py, no behaviour change).
-PROMPT_VERSION = "v1"
+# Bump on EVERY wording change.
+#   v1 = the externalized-but-unchanged prompts (moved verbatim out of nodes.py).
+#   v2 = FIX A/B: TECHNICAL gets an explicit metric->stance rule that DEFAULTS TO
+#        NEUTRAL on ambiguous structure (stops the run-to-run flip that was tipping
+#        the Decision verdict, and the drawdown=bearish reflex that fights GARP);
+#        RISK keeps its downside focus but stops manufacturing a bearish tilt on
+#        ambiguous/absent evidence.
+PROMPT_VERSION = "v2"
 
 
 HARD_RULES = (
@@ -64,8 +69,24 @@ SPECIALIST_BRIEFS = {
         "You assess business quality and dividend durability: yield, payout "
         "sustainability, growth streak, market cap. Lean on the screen results.",
     SpecialistName.TECHNICAL:
-        "You assess price structure: trend vs SMA50/SMA200, distance from the "
-        "52-week high, volatility. Lean on the technical_snapshot output.",
+        "You assess price structure from technical_snapshot: price vs "
+        "SMA50/SMA200, distance from the 52-week high, volatility. Map evidence "
+        "to a stance with these rules, and DEFAULT TO NEUTRAL when signals "
+        "conflict or are marginal (do NOT force a directional call from an "
+        "ambiguous chart):\n"
+        "  - BEARISH only on a clearly broken structure: price well below BOTH "
+        "SMAs AND a deteriorating trend that plausibly reflects fundamental "
+        "weakness — not a mere pullback.\n"
+        "  - BULLISH only on a clearly constructive structure: price above its "
+        "SMAs or a well-supported uptrend.\n"
+        "  - NEUTRAL otherwise — including the common case of a quality name "
+        "pulled back below its moving averages. A drawdown is NOT by itself "
+        "bearish; under a value/GARP strategy a pullback in a sound business can "
+        "be an attractive entry, so report it as NEUTRAL with elevated-"
+        "volatility / execution-timing risk noted, NOT as a BEARISH stance.\n"
+        "When SMA50/SMA200 and the 52-week-high distance disagree, prefer "
+        "NEUTRAL over guessing. Volatility informs execution risk; it is not "
+        "itself a directional signal.",
     SpecialistName.SENTIMENT:
         "You assess news/market sentiment. Your evidence is the "
         "sentiment_snapshot tool output (recent headline list, news volume, "
@@ -78,7 +99,10 @@ SPECIALIST_BRIEFS = {
         "action.",
     SpecialistName.RISK:
         "You assess downside: payout stretch, volatility, data-quality flags, "
-        "anything unverifiable. You are the council's professional pessimist.",
+        "anything unverifiable. You focus on downside and surface risks others "
+        "miss, but you assess them honestly — flag real risks without "
+        "manufacturing a bearish tilt where the evidence is neutral or absent. "
+        "Absent/unverifiable data is an open question, not a negative finding.",
 }
 
 
