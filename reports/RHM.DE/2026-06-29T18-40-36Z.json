@@ -1,0 +1,793 @@
+{
+  "ticker": "RHM.DE",
+  "run_at": "2026-06-29T18:40:36.516732Z",
+  "strategy_id": "growth_v1",
+  "applied_overrides": {},
+  "company_name": "Rheinmetall AG",
+  "screen": {
+    "ticker": "RHM.DE",
+    "criteria": [
+      {
+        "name": "min_revenue_cagr",
+        "passed": true,
+        "observed": 0.1487838000989561,
+        "threshold": 0.1,
+        "note": "3y revenue CAGR (log-linear trend over 4 points) = 0.1488; two-point endpoint CAGR = 0.1573"
+      },
+      {
+        "name": "min_roic",
+        "passed": true,
+        "observed": 0.14420685297120278,
+        "threshold": 0.12,
+        "note": "ROIC on through-cycle (4y mean) operating income; ROIC = NOPAT / invested_capital (provided line); NOPAT = operating_income * (1 - eff_tax); effective tax rate = tax_provision/pretax = 0.256"
+      },
+      {
+        "name": "max_peg_ratio",
+        "passed": true,
+        "observed": 1.2779425455003952,
+        "threshold": 2.0,
+        "note": "PEG = P/E / (operating-income growth, revenue CAGR 0.1488 vs earnings growth 0.3344 x 100)"
+      },
+      {
+        "name": "min_market_cap",
+        "passed": null,
+        "observed": null,
+        "threshold": 5000000000.0,
+        "note": "not evaluated: market cap is in EUR, not USD, and the threshold is USD-denominated; no FX conversion is applied (honest abstention, not a silent pass/fail)"
+      }
+    ],
+    "flags": [
+      "unverifiable:min_market_cap:not evaluated: market cap is in EUR, not USD, and the threshold is USD-denominated; no FX conversion is applied (honest abstention, not a silent pass/fail)"
+    ]
+  },
+  "specialist_opinions": [
+    {
+      "specialist": "fundamental",
+      "stance": "bullish",
+      "confidence": 0.72,
+      "thesis": "Rheinmetall AG passes the core GARP screen on business quality and valuation discipline. Revenue growth is robust at 14.9% CAGR over three years, exceeding the 10% threshold. Return on invested capital at 14.4% demonstrates that this growth translates into genuine value creation, comfortably above the 12% hurdle. The PEG ratio of 1.28 is well below the 2.0 ceiling, indicating the stock is not overpriced relative to its earnings growth trajectory. The company's free cash flow of \u20ac827.5M provides a tangible foundation for dividend sustainability and reinvestment.\n\nHowever, confidence is tempered by three material constraints. First, the market cap criterion could not be evaluated because the \u20ac45.2B figure is denominated in EUR while the threshold is USD; without FX conversion, we cannot confirm whether the company meets the minimum scale requirement for reliable historical analysis. Second, the current price of \u20ac946.60 sits 52% below its 52-week high and 39% below its 200-day moving average, signalling recent sharp drawdown and elevated volatility (48% annualized). This technical deterioration raises questions about near-term momentum and sentiment, even if the fundamental case remains intact. Third, analyst sentiment and recent news flow are unavailable due to data access restrictions, leaving a blind spot on forward guidance and market perception.\n\nThe business itself\u2014strong revenue compounding, healthy ROIC, disciplined valuation\u2014fits the GARP mandate. But the combination of unresolved scale verification, significant recent price weakness, and missing sentiment data prevents a higher conviction call. A bullish stance reflects the quality of the fundamentals on screen; the confidence discount reflects the gaps in the evidence set.",
+      "figures": [
+        {
+          "label": "Revenue CAGR (3-year, log-linear)",
+          "value": 0.1488,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Revenue CAGR threshold",
+          "value": 0.1,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "Min revenue CAGR criterion passed",
+          "value": 1.0,
+          "unit": "boolean (true)",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[0].passed"
+          }
+        },
+        {
+          "label": "ROIC (4-year through-cycle)",
+          "value": 0.1442,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "ROIC threshold",
+          "value": 0.12,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "Min ROIC criterion passed",
+          "value": 1.0,
+          "unit": "boolean (true)",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[1].passed"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 1.2779,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG ratio threshold",
+          "value": 2.0,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "Max PEG criterion passed",
+          "value": 1.0,
+          "unit": "boolean (true)",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[2].passed"
+          }
+        },
+        {
+          "label": "Market cap criterion evaluated",
+          "value": null,
+          "unit": "boolean (null)",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[3].passed"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 827515008.0,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "752c1787a2a6",
+            "field_path": "free_cash_flow"
+          }
+        },
+        {
+          "label": "Market cap",
+          "value": 45187645440.0,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "752c1787a2a6",
+            "field_path": "market_cap"
+          }
+        },
+        {
+          "label": "Current price",
+          "value": 946.6,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.5192,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.4839,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "SMA 200",
+          "value": 1566.63,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "sma_200"
+          }
+        }
+      ],
+      "caveats": [
+        "Market cap scale criterion not evaluated: EUR/USD conversion not applied; cannot confirm minimum market cap threshold in USD terms.",
+        "Recent price action shows 52% drawdown from 52-week high and 39% below 200-day MA; technical weakness contradicts fundamental strength.",
+        "Analyst sentiment and recent news unavailable (API access denied); forward guidance and market perception unknown.",
+        "Dividend durability not directly assessed; free cash flow is present but payout ratio and dividend history not in evidence."
+      ],
+      "created_at": "2026-06-29T18:40:59.234429Z"
+    },
+    {
+      "specialist": "technical",
+      "stance": "bearish",
+      "confidence": 0.72,
+      "thesis": "RHM.DE exhibits a clearly broken technical structure that aligns with deteriorating momentum, warranting a bearish stance despite strong fundamentals.\n\n**Technical Structure \u2014 Broken:**\nThe price of 946.60 is trading substantially below both the 50-day and 200-day simple moving averages (SMA50: 1233.56, SMA200: 1566.63), indicating a loss of near-term and intermediate-term support. The stock is down 51.9% from its 52-week high, a severe drawdown that goes well beyond a routine pullback. This combination\u2014price below both SMAs and a deep distance from the 52-week peak\u2014signals a deteriorating trend structure.\n\n**Volatility Context:**\nAnnualized volatility stands at 48.4%, which is elevated and reflects significant execution risk and price instability. While volatility alone is not directional, it compounds the technical weakness by indicating that the downtrend is accompanied by substantial price swings, consistent with a loss of confidence rather than orderly consolidation.\n\n**Fundamental Strength Does Not Override Broken Structure:**\nThe fundamentals are genuinely sound: revenue CAGR of 14.9% (well above the 10% threshold), ROIC of 14.4% (above the 12% threshold), and a PEG ratio of 1.28 (well below the 2.0 threshold) all indicate a high-quality business with sustainable growth and reasonable valuation. However, under the GARP discipline, a pullback in a sound business is typically neutral\u2014a potential entry point\u2014not bearish. The distinction here is that RHM.DE is not merely pulled back; it is trading 52% below its recent high with price decisively below both moving averages. This magnitude and structure suggest that the market is repricing the business materially, not simply offering a tactical entry in a sound name.\n\n**Interpretation:**\nThe technical deterioration is plausibly reflecting either a shift in market sentiment toward the defense/industrial sector, geopolitical or supply-chain concerns, or a reassessment of growth sustainability. The broken structure\u2014not the pullback itself\u2014is the bearish signal. A quality business at a discount is attractive in principle, but the technical evidence indicates that the repricing may not yet be complete, and entry timing remains uncertain.\n\n**Caveats:**\n- News and analyst sentiment data were unavailable (HTTP 403 errors), so the bearish case rests entirely on price structure and fundamentals; any material positive catalyst or analyst upgrade could reverse this stance quickly.\n- The market-cap criterion was not evaluated due to EUR/USD currency mismatch, so the screen is incomplete.\n- Confidence is moderate (0.72) because the fundamentals are strong and the bearish case depends on the interpretation that a 52% drawdown reflects ongoing repricing rather than a completed correction. A rebound above SMA50 would immediately shift the stance to neutral.",
+      "figures": [
+        {
+          "label": "Last close price",
+          "value": 946.6,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "50-day simple moving average",
+          "value": 1233.56,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "sma_50"
+          }
+        },
+        {
+          "label": "200-day simple moving average",
+          "value": 1566.63,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "sma_200"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.5192,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.4839,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "3-year revenue CAGR",
+          "value": 0.1488,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "ROIC (4-year through-cycle)",
+          "value": 0.1442,
+          "unit": "fraction",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 1.2779,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[2].observed"
+          }
+        }
+      ],
+      "caveats": [
+        "News and analyst recommendation data unavailable (HTTP 403); bearish case rests on price structure and fundamentals alone.",
+        "Market-cap criterion not evaluated due to EUR/USD currency mismatch; screen is incomplete.",
+        "Confidence is moderate because strong fundamentals could support a rebound; any move above SMA50 would shift stance to neutral.",
+        "The 52% drawdown may reflect sector-wide or geopolitical repricing rather than company-specific deterioration; context beyond the technical snapshot is limited."
+      ],
+      "created_at": "2026-06-29T18:41:13.207161Z"
+    },
+    {
+      "specialist": "sentiment",
+      "stance": "abstain",
+      "confidence": 0.0,
+      "thesis": "Sentiment assessment cannot be completed for RHM.DE. Both sentiment data sources failed: get_company_news returned HTTP 403 (Finnhub /company-news), and get_recommendation_trends returned HTTP 403 (Finnhub /stock/recommendation). Without access to recent headlines, news volume, analyst recommendation counts, or bullish ratios, no evidence exists to interpret market or analyst sentiment. Per brief protocol, sentiment data is unavailable and stance must be abstained.",
+      "figures": [],
+      "caveats": [
+        "Sentiment data unavailable: both get_company_news and get_recommendation_trends failed with HTTP 403 errors",
+        "No headline text, news volume, analyst counts, or bullish ratios available for interpretation",
+        "Cannot assess sentiment without the sentiment_snapshot tool output or raw news/recommendation calls"
+      ],
+      "created_at": "2026-06-29T18:41:16.377531Z"
+    },
+    {
+      "specialist": "risk",
+      "stance": "neutral",
+      "confidence": 0.62,
+      "thesis": "RHM.DE passes the core growth-at-reasonable-price criteria on revenue CAGR, ROIC, and PEG, but the risk profile is materially elevated and several data gaps limit conviction.\n\n**Passing criteria:**\n- Revenue CAGR of 14.88% exceeds the 10% threshold, evidencing strong top-line compounding.\n- ROIC of 14.42% exceeds the 12% threshold, indicating the growth is generating incremental returns on capital.\n- PEG ratio of 1.28 is well below the 2.0 ceiling, suggesting valuation is not stretched relative to growth.\n\n**Material downside risks:**\n\n1. **Extreme valuation multiple.** The P/E ratio of 42.73 is very high in absolute terms. While the PEG screen passes, it does so because earnings growth (33.44%) is also very high. This creates a compounding risk: if earnings growth decelerates\u2014a normal reversion for a company growing at 14.88% revenue CAGR\u2014the P/E will re-rate downward sharply. The current price is 52% below the 52-week high, suggesting the market has already begun to price in caution, but the absolute multiple leaves little margin for disappointment.\n\n2. **Elevated volatility.** Annualized volatility of 48.4% is very high. This is consistent with a cyclical or high-beta name, and suggests significant drawdown risk in adverse market conditions or sector rotation. For a GARP strategy, which typically targets lower-volatility compounders, this is a red flag.\n\n3. **Price well below moving averages.** The stock is trading 52% below its 52-week high and is below both the 50-day and 200-day simple moving averages (last close 946.60 vs. SMA-50 1233.56 and SMA-200 1566.63). This suggests either a fundamental repricing or technical weakness. Without recent news access, the driver is unclear.\n\n4. **Market cap currency mismatch.** The market cap is reported in EUR (\u20ac45.2B) but the screen threshold is USD-denominated (USD 5B). The screen correctly abstained on this criterion rather than guessing the conversion. At current EUR/USD rates, the market cap likely exceeds USD 5B, but the unverified conversion introduces a data-quality flag.\n\n5. **Incomplete data on capital structure and cash flow.** Free cash flow of \u20ac827.5M is positive, but without debt levels, dividend payout, or capex detail, the sustainability of the current valuation and the payout stretch cannot be fully assessed. The invested capital has been volatile (\u20ac3.58B to \u20ac6.15B over 4 years), which may reflect M&A, restructuring, or working capital swings\u2014none of which are explained.\n\n6. **No analyst or news data.** Both recommendation trends and company news failed to retrieve, leaving a blind spot on consensus expectations, recent catalysts, or sector headwinds.\n\n**Calibration note:** The passing criteria are genuine and the growth metrics are strong. However, the combination of extreme valuation, high volatility, technical weakness, and data gaps means the downside risk is not fully quantifiable. A neutral stance reflects that the evidence supports neither a bullish nor bearish conviction\u2014the company meets the screen, but the risk/reward is asymmetric and the margin of safety is thin.",
+      "figures": [
+        {
+          "label": "Revenue CAGR (3-year log-linear)",
+          "value": 0.1488,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[0].observed"
+          }
+        },
+        {
+          "label": "Revenue CAGR threshold",
+          "value": 0.1,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[0].threshold"
+          }
+        },
+        {
+          "label": "ROIC (4-year through-cycle)",
+          "value": 0.1442,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[1].observed"
+          }
+        },
+        {
+          "label": "ROIC threshold",
+          "value": 0.12,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[1].threshold"
+          }
+        },
+        {
+          "label": "PEG ratio",
+          "value": 1.2779,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[2].observed"
+          }
+        },
+        {
+          "label": "PEG threshold",
+          "value": 2.0,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[2].threshold"
+          }
+        },
+        {
+          "label": "P/E ratio",
+          "value": 42.73,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "752c1787a2a6",
+            "field_path": "pe_ratio"
+          }
+        },
+        {
+          "label": "Annualized volatility",
+          "value": 0.4839,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "annualized_volatility"
+          }
+        },
+        {
+          "label": "Percent off 52-week high",
+          "value": -0.5192,
+          "unit": "ratio",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "pct_off_52w_high"
+          }
+        },
+        {
+          "label": "Last close price",
+          "value": 946.6,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "last_close"
+          }
+        },
+        {
+          "label": "SMA 50",
+          "value": 1233.56,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "sma_50"
+          }
+        },
+        {
+          "label": "SMA 200",
+          "value": 1566.63,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "technical_snapshot",
+            "call_id": "5e1469bf7518",
+            "field_path": "sma_200"
+          }
+        },
+        {
+          "label": "Free cash flow",
+          "value": 827515008.0,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "752c1787a2a6",
+            "field_path": "free_cash_flow"
+          }
+        },
+        {
+          "label": "Market cap (currency unevaluated)",
+          "value": 45187645440.0,
+          "unit": "EUR",
+          "provenance": {
+            "tool_name": "get_fundamentals",
+            "call_id": "752c1787a2a6",
+            "field_path": "market_cap"
+          }
+        },
+        {
+          "label": "Market cap criterion passed",
+          "value": null,
+          "unit": "boolean",
+          "provenance": {
+            "tool_name": "run_strategy_screen",
+            "call_id": "9c2ae3e7e757",
+            "field_path": "criteria[3].passed"
+          }
+        }
+      ],
+      "caveats": [
+        "Market cap is reported in EUR; the screen threshold is USD-denominated and was not converted. The criterion was correctly abstained on rather than guessed.",
+        "No analyst recommendations or recent news data available; consensus expectations and near-term catalysts are unknown.",
+        "Invested capital has been volatile over the 4-year period (\u20ac3.58B to \u20ac6.15B); the driver (M&A, restructuring, working capital) is not explained in the available data.",
+        "Debt levels, dividend payout, and capex detail are not provided; payout stretch and capital allocation sustainability cannot be fully assessed.",
+        "The stock is trading 52% below its 52-week high and below both 50-day and 200-day moving averages; the fundamental or technical driver is unclear without recent news."
+      ],
+      "created_at": "2026-06-29T18:41:33.532927Z"
+    }
+  ],
+  "critic_report": {
+    "targets_stance": "neutral",
+    "counter_thesis": "The emerging NEUTRAL consensus is too comfortable. The evidence, read without convenient omissions, supports a materially BEARISH case. The bullish fundamental narrative rests on a screen that is structurally incomplete, a PEG ratio built on an earnings-growth figure that deserves deep scepticism, and a free-cash-flow figure that cannot be stress-tested against the capital demands of a business whose invested capital has swung violently. Meanwhile, the technical picture is not merely \"a headwind to monitor\" \u2014 it is a 52% drawdown with price decisively below both moving averages, which in a GARP framework is a direct challenge to the thesis that the market is mispricing a quality compounder. NEUTRAL understates the weight of the bearish evidence.",
+    "weaknesses_found": [
+      "The PEG ratio of 1.28 is computed using an earnings-growth rate of 33.44% \u2014 more than double the revenue CAGR of 14.88%. The screen note reveals this is an 'operating-income growth vs. revenue CAGR' blended figure. A 33% earnings-growth assumption embedded in the PEG denominator is the single most load-bearing number in the bullish case, yet no specialist has challenged whether that growth rate is sustainable or whether it is a one-cycle artefact of defence-sector re-rating. If earnings growth mean-reverts toward the revenue CAGR, the effective PEG re-rates sharply upward, potentially breaching the 2.0 ceiling \u2014 and the P/E of 42.7x on a slower-growth business would be deeply uncomfortable.",
+      "The min_market_cap criterion was NOT EVALUATED (null), not passed. The bullish specialist treats this as a minor footnote, but a null on a minimum-scale criterion means the screen is formally incomplete. GARP discipline requires all criteria to be evaluated; a strategy that cannot confirm minimum scale has not cleared the full screen. The consensus should not be treating a partial pass as equivalent to a full pass.",
+      "Free cash flow of \u20ac827.5M is cited as 'a tangible foundation for dividend sustainability and reinvestment,' but invested capital has ranged from \u20ac3.58B to \u20ac6.15B across the four reported periods \u2014 a swing of over \u20ac2.5B. This volatility in the capital base is unexplained by the evidence. If it reflects ongoing M&A or heavy capex cycles, the \u20ac827.5M FCF figure may be a trough capex year, not a normalised run-rate. No specialist has asked whether FCF is sufficient to fund the capital intensity implied by the invested-capital trajectory.",
+      "The 52% drawdown from the 52-week high is not a technical nuance \u2014 it is a market verdict. At a P/E of 42.7x, the stock was priced for perfection. A halving of the price while fundamentals (per the screen) remain intact implies either: (a) the market has information not captured in the lagged fundamental data, or (b) the earnings-growth rate embedded in the PEG is being revised down by market participants. The NEUTRAL consensus treats this as 'uncertainty,' but the directional signal of a 52% drawdown on a high-multiple stock is bearish, not neutral.",
+      "Both sentiment data sources failed (HTTP 403). The council is making a NEUTRAL call \u2014 implicitly a 'hold' or 'wait' recommendation \u2014 with zero visibility on analyst consensus direction, recent earnings revisions, or news catalysts. A NEUTRAL verdict requires confidence that nothing material is changing; the absence of sentiment data means that confidence is entirely unwarranted. The correct posture when sentiment is a complete blind spot is not NEUTRAL \u2014 it is to flag that the risk is asymmetric to the downside given the existing technical deterioration.",
+      "Annualised volatility of 48.4% is inconsistent with the GARP archetype of a steady compounder. GARP strategies derive their edge from buying quality growth at a discount; they do not typically apply to names with near-50% annualised vol, which implies the market treats this as a high-beta, cyclical or event-driven name. The fundamental screen was designed for a different risk profile, and applying it uncritically here may be a category error."
+    ],
+    "challenged_figures": [
+      "PEG ratio of 1.28 \u2014 the denominator embeds a 33.44% earnings-growth rate that is more than double the revenue CAGR and has not been validated as sustainable",
+      "Free cash flow of \u20ac827.5M cited as a 'foundation' without context of the \u20ac2.5B+ swing in invested capital across the same period",
+      "min_market_cap criterion cited as a minor flag when its ledger value is null (not evaluated), meaning the screen is formally incomplete"
+    ],
+    "figures": [
+      {
+        "label": "PEG ratio (observed)",
+        "value": 1.2779425455003952,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "9c2ae3e7e757",
+          "field_path": "criteria[2].observed"
+        }
+      },
+      {
+        "label": "PEG threshold",
+        "value": 2.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "9c2ae3e7e757",
+          "field_path": "criteria[2].threshold"
+        }
+      },
+      {
+        "label": "PEG passed",
+        "value": 1.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "9c2ae3e7e757",
+          "field_path": "criteria[2].passed"
+        }
+      },
+      {
+        "label": "Revenue CAGR (observed)",
+        "value": 0.1487838000989561,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "9c2ae3e7e757",
+          "field_path": "criteria[0].observed"
+        }
+      },
+      {
+        "label": "ROIC (observed)",
+        "value": 0.14420685297120278,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "9c2ae3e7e757",
+          "field_path": "criteria[1].observed"
+        }
+      },
+      {
+        "label": "min_market_cap passed (null = not evaluated)",
+        "value": null,
+        "unit": "",
+        "provenance": {
+          "tool_name": "run_strategy_screen",
+          "call_id": "9c2ae3e7e757",
+          "field_path": "criteria[3].passed"
+        }
+      },
+      {
+        "label": "P/E ratio",
+        "value": 42.733276,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "752c1787a2a6",
+          "field_path": "pe_ratio"
+        }
+      },
+      {
+        "label": "Free cash flow (EUR)",
+        "value": 827515008.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "752c1787a2a6",
+          "field_path": "free_cash_flow"
+        }
+      },
+      {
+        "label": "Invested capital \u2014 most recent year",
+        "value": 5987000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "752c1787a2a6",
+          "field_path": "invested_capital[0]"
+        }
+      },
+      {
+        "label": "Invested capital \u2014 oldest year in series",
+        "value": 3580000000.0,
+        "unit": "",
+        "provenance": {
+          "tool_name": "get_fundamentals",
+          "call_id": "752c1787a2a6",
+          "field_path": "invested_capital[3]"
+        }
+      },
+      {
+        "label": "Last close price",
+        "value": 946.5999755859375,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "5e1469bf7518",
+          "field_path": "last_close"
+        }
+      },
+      {
+        "label": "SMA 50",
+        "value": 1233.558388671875,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "5e1469bf7518",
+          "field_path": "sma_50"
+        }
+      },
+      {
+        "label": "SMA 200",
+        "value": 1566.6321099853515,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "5e1469bf7518",
+          "field_path": "sma_200"
+        }
+      },
+      {
+        "label": "Pct off 52-week high",
+        "value": -0.519204485256479,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "5e1469bf7518",
+          "field_path": "pct_off_52w_high"
+        }
+      },
+      {
+        "label": "Annualised volatility",
+        "value": 0.48391978796089125,
+        "unit": "",
+        "provenance": {
+          "tool_name": "technical_snapshot",
+          "call_id": "5e1469bf7518",
+          "field_path": "annualized_volatility"
+        }
+      }
+    ],
+    "open_questions": [
+      "Is the 33.44% earnings-growth rate used in the PEG denominator a normalised, forward-looking estimate or a backward-looking single-period figure? If the latter, what is the expected earnings growth over the next 3 years, and does the PEG still pass the 2.0 threshold under a more conservative assumption?",
+      "What explains the swing in invested capital from \u20ac3.58B to \u20ac6.15B (and back to \u20ac5.99B) across the four reported periods? Is this M&A, organic capex, or working-capital movements \u2014 and does it imply that the \u20ac827.5M FCF figure is a trough-capex-year artefact rather than a normalised run-rate?",
+      "At the current EUR/USD exchange rate, does the \u20ac45.2B market cap exceed the USD 5B minimum threshold? The screen formally abstained; this criterion must be resolved before the screen can be treated as a full pass.",
+      "What is the net debt position and interest coverage ratio? Without this, the sustainability of the capital structure supporting a P/E of 42.7x cannot be assessed.",
+      "What drove the 52% drawdown from the 52-week high? Is there a known earnings revision, guidance cut, or sector-level re-rating that the unavailable news and analyst data would have revealed? This is the single most important unanswered question for the investment thesis.",
+      "Is the annualised volatility of 48.4% driven by a specific event window (e.g., a single sharp leg down), or does it reflect persistent price instability? The answer materially affects whether the current price level represents a completed correction or an ongoing repricing."
+    ],
+    "created_at": "2026-06-29T18:42:21.368749Z"
+  },
+  "decision": {
+    "recommendation": "hold",
+    "confidence": 0.38,
+    "rationale": "## Decision: HOLD (Low Confidence)\n\n### Summary\nRHM.DE presents a genuine tension between a fundamentally sound GARP screen result and a severely broken technical structure, compounded by critical data gaps. The evidence does not support a clean buy or sell; it supports a cautious hold pending resolution of material open questions. Confidence is low (0.38) because the evidence base is structurally incomplete.\n\n---\n\n### Fundamental Case \u2014 Passes Screen, But With Caveats\n\nThree of four screen criteria were evaluated. All three evaluated criteria passed:\n\n- **Revenue CAGR** of 14.88% exceeds the 10% threshold (criteria[0].passed = true; criteria[0].observed = 0.1488 from call_id 9c2ae3e7e757).\n- **ROIC** of 14.42% exceeds the 12% hurdle (criteria[1].passed = true; criteria[1].observed = 0.1442 from call_id 9c2ae3e7e757).\n- **PEG ratio** of 1.28 is well below the 2.0 ceiling (criteria[2].passed = true; criteria[2].observed = 1.2779 from call_id 9c2ae3e7e757).\n\nThe **min_market_cap criterion was NOT evaluated** \u2014 its passed value is null (criteria[3].passed = null from call_id 9c2ae3e7e757), not true. This is a formal screen incompleteness, not a minor footnote. The GARP screen cannot be treated as fully cleared.\n\nThe critic raises a legitimate and unresolved challenge to the PEG: the denominator embeds a 33.44% earnings-growth rate \u2014 more than double the revenue CAGR of 14.88%. If that earnings-growth figure is a single-period artefact rather than a sustainable forward rate, the effective PEG could re-rate sharply upward, potentially breaching the 2.0 ceiling. This is an open question, not a resolved fact, but it is the single most load-bearing assumption in the bullish case and it has not been stress-tested by the evidence.\n\nFree cash flow of \u20ac827.5M is positive (output.free_cash_flow from call_id 752c1787a2a6), but invested capital has ranged from \u20ac3.58B to \u20ac6.15B across the four reported periods (output.invested_capital from call_id 752c1787a2a6). This swing is unexplained. If it reflects ongoing M&A or heavy capex cycles, the FCF figure may not represent a normalised run-rate. The P/E of 42.73x (output.pe_ratio from call_id 752c1787a2a6) is high in absolute terms and leaves little margin for earnings disappointment.\n\n---\n\n### Technical Case \u2014 Clearly Bearish\n\nThe technical picture is unambiguously weak:\n\n- Last close of 946.60 is decisively below the 50-day SMA of 1,233.56 and the 200-day SMA of 1,566.63 (output.last_close, output.sma_50, output.sma_200 from call_id 5e1469bf7518).\n- The stock is 51.9% below its 52-week high (output.pct_off_52w_high = -0.5192 from call_id 5e1469bf7518).\n- Annualised volatility of 48.4% (output.annualized_volatility from call_id 5e1469bf7518) is inconsistent with the GARP archetype of a steady compounder and signals a high-beta, potentially cyclical or event-driven name.\n\nA 52% drawdown on a 42.7x P/E stock is a market verdict that demands explanation. The critic is correct that this implies either (a) the market has information not captured in lagged fundamental data, or (b) the earnings-growth rate embedded in the PEG is being revised down. Neither hypothesis can be confirmed or denied because news and analyst data are entirely unavailable.\n\n---\n\n### Sentiment \u2014 Complete Blind Spot\n\nBoth sentiment data sources failed with HTTP 403 errors (call_ids e17a39f425be and d9cf14d1798a). There is zero visibility on analyst consensus direction, recent earnings revisions, or news catalysts. The critic is correct that a HOLD verdict implicitly assumes nothing material is changing \u2014 an assumption that is entirely unwarranted given the existing technical deterioration and the absence of any sentiment signal.\n\n---\n\n### Why HOLD, Not SELL\n\nThe critic makes a strong bearish case, and the technical specialist is bearish at 0.72 confidence. However, the fundamental screen genuinely passes on three evaluated criteria, and the GARP strategy policy (partial_pass_allows_hold=True) explicitly permits a hold when the screen is partially passed. The bearish case rests heavily on open questions \u2014 the sustainability of the 33.44% earnings-growth rate, the driver of the 52% drawdown, the normalised FCF \u2014 which are unresolved for a human reviewer, not established facts. Treating suspected answers as known facts would violate the evidence-only rule.\n\nThe correct posture is: the fundamental quality is real but the evidence is too incomplete and the technical deterioration too severe to recommend purchase. A sell would require confirmed evidence of fundamental deterioration (earnings revision, guidance cut, structural ROIC decline) that is not present in the record. HOLD pending resolution of the open questions is the most defensible call.\n\n---\n\n### Confidence Calibration\n\nConfidence is set at 0.38 \u2014 materially below the midpoint \u2014 reflecting:\n1. Formal screen incompleteness (min_market_cap not evaluated).\n2. Complete absence of sentiment and news data.\n3. Unresolved question about the sustainability of the PEG denominator's earnings-growth assumption.\n4. Unexplained invested-capital volatility undermining FCF normalisation.\n5. A 52% drawdown whose driver is unknown.\n\nThe evidence base is too incomplete to support high confidence in any direction.",
+    "dissent": [
+      "technical",
+      "sentiment"
+    ],
+    "created_at": "2026-06-29T18:42:52.556507Z",
+    "original_recommendation": "hold",
+    "gate_override_applied": false,
+    "gating_criterion_fired": null,
+    "insufficient_evidence": false
+  },
+  "matrix_decision": {
+    "verdict": "buy",
+    "score": 25.25614370118454,
+    "borderline": true,
+    "gated": false,
+    "contributions": [
+      {
+        "name": "min_revenue_cagr",
+        "points": 12.19595002473902,
+        "detail": "min_revenue_cagr: pass (margin +0.49) x w25 = +12.2"
+      },
+      {
+        "name": "min_roic",
+        "points": 4.034475495200464,
+        "detail": "min_roic: pass (margin +0.20) x w20 = +4.0"
+      },
+      {
+        "name": "max_peg_ratio",
+        "points": 9.02571818124506,
+        "detail": "max_peg_ratio: pass (margin +0.36) x w25 = +9.0"
+      },
+      {
+        "name": "min_market_cap",
+        "points": 0.0,
+        "detail": "min_market_cap: NOT-EVAL -> 0"
+      },
+      {
+        "name": "stance:fundamental",
+        "points": 2.16,
+        "detail": "fundamental bullish x conf 0.72 x w3 = +2.2"
+      },
+      {
+        "name": "stance:technical",
+        "points": -2.16,
+        "detail": "technical bearish x conf 0.72 x w3 = -2.2"
+      },
+      {
+        "name": "stance:sentiment",
+        "points": 0.0,
+        "detail": "sentiment abstain x conf 0.00 x w3 = +0.0"
+      },
+      {
+        "name": "stance:risk",
+        "points": 0.0,
+        "detail": "risk neutral x conf 0.62 x w3 = +0.0"
+      }
+    ]
+  },
+  "agreement": "DISAGREE",
+  "veto_flags": [
+    {
+      "trigger": "low_confidence",
+      "detail": "decision confidence 0.38 < threshold 0.60",
+      "created_at": "2026-06-29T18:42:52.571801Z"
+    },
+    {
+      "trigger": "specialist_conflict",
+      "detail": "at least one bullish and one bearish specialist",
+      "created_at": "2026-06-29T18:42:52.571835Z"
+    }
+  ],
+  "provenance_audit": {
+    "figures_audited": 54,
+    "verified": 54,
+    "mismatch": 0,
+    "unresolvable": 0,
+    "unverifiable": 0,
+    "unit_scaled": 0,
+    "violations": [],
+    "unit_scaled_notes": []
+  },
+  "models": {
+    "specialist": {
+      "model": "anthropic:claude-haiku-4-5",
+      "temperature": 0.0
+    },
+    "critic": {
+      "model": "anthropic:claude-sonnet-4-6",
+      "temperature": 0.0
+    },
+    "decision": {
+      "model": "anthropic:claude-sonnet-4-6",
+      "temperature": 0.0
+    }
+  },
+  "run_issues": [
+    {
+      "source": "sentiment",
+      "reason": "fetch_error",
+      "detail": "Finnhub /company-news HTTP 403",
+      "created_at": "2026-06-29T18:40:43.613399Z"
+    },
+    {
+      "source": "sentiment",
+      "reason": "fetch_error",
+      "detail": "Finnhub /stock/recommendation HTTP 403",
+      "created_at": "2026-06-29T18:40:43.780399Z"
+    }
+  ],
+  "degraded": true,
+  "contested": true,
+  "contested_reasons": [
+    "panel_split",
+    "decision_dissent"
+  ],
+  "prompt_version": "v2",
+  "decision_stability": null
+}
