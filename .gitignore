@@ -16,3 +16,4 @@ venv/
 chroma/
 .chroma/
 data_cache/
+.aristos_cache/

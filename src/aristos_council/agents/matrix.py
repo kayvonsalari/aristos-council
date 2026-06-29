@@ -22,12 +22,15 @@ Design:
 
 from __future__ import annotations
 
+from dataclasses import asdict, is_dataclass
+
 from ..state import (
     MatrixContribution,
     MatrixVerdict,
     Recommendation,
     ResearchState,
     Stance,
+    ToolCall,
 )
 from ..strategy.loader import Strategy
 from .disposition import disposition_ceiling, insufficient_evidence
@@ -129,6 +132,23 @@ def decision_matrix(state: ResearchState, strategy: Strategy) -> MatrixVerdict:
     verdict, borderline = _map_score(score, sc)
     return MatrixVerdict(verdict=verdict, score=score, borderline=borderline,
                          gated=False, contributions=contributions)
+
+
+def screen_only_matrix(screen, strategy: Strategy, *, ticker: str = "") -> MatrixVerdict:
+    """The matrix verdict from the SCREEN ALONE — no specialist stances. Used by the
+    fast screen-only ranking path (examples/rank_screen.py).
+
+    It calls ``decision_matrix`` on a state whose ``specialist_opinions`` is EMPTY,
+    so the stance contributions are 0 and the screen-only score is exactly the full
+    matrix score minus the (small) stance terms. Reusing ``decision_matrix`` means
+    the criterion weights / margin math / thresholds are IDENTICAL to the full
+    matrix — they cannot drift. ``screen`` is a ScreenResult (or its asdict dict).
+    """
+    out = asdict(screen) if is_dataclass(screen) else screen
+    state = ResearchState(ticker=ticker, strategy_id=strategy.id)
+    state.tool_calls.append(ToolCall(
+        call_id="screen", tool_name="run_strategy_screen", output=out))
+    return decision_matrix(state, strategy)
 
 
 def make_matrix_node(strategy: Strategy):
