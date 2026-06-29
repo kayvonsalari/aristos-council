@@ -30,9 +30,12 @@ from aristos_council.reproducibility import (
     cost_guard_line,
     decision_cost_guard_line,
     decision_stability_label,
+    format_per_agent_table,
     format_stability,
+    per_agent_csv_row,
     run_council_n,
     run_decision_n,
+    run_per_agent_n,
     stability_csv_row,
 )
 from aristos_council.strategy.loader import load_strategy
@@ -63,6 +66,10 @@ def main() -> None:
         "--full", action="store_true",
         help="re-run the FULL pipeline N times instead of the cheap Decision-node "
              "micro-harness (for validating the two distributions agree)")
+    parser.add_argument(
+        "--per-agent", action="store_true",
+        help="FULL-pipeline diagnostic: record EVERY agent's stance each run and "
+             "report per-agent stability (locates WHICH layer wobbles)")
     args = parser.parse_args()
 
     ticker = normalize_ticker(args.ticker)
@@ -79,11 +86,31 @@ def main() -> None:
 
     adapter = select_market_adapter()
     runners = production_runners()
-    mode = "full pipeline x N" if args.full else "Decision-node micro-harness"
+    if args.per_agent:
+        mode = "per-agent diagnostic (full pipeline x N)"
+    elif args.full:
+        mode = "full pipeline x N"
+    else:
+        mode = "Decision-node micro-harness"
     print(f"(strategy: {strategy.id}; market provider: {adapter.name}; mode: {mode})")
 
-    # Cost guard: n is explicit and the spend is printed BEFORE running.
-    print(cost_guard_line(args.n) if args.full else decision_cost_guard_line(args.n))
+    # Cost guard: n is explicit and the spend is printed BEFORE running. Per-agent
+    # and --full both run the FULL pipeline N times.
+    full_cost = args.full or args.per_agent
+    print(cost_guard_line(args.n) if full_cost else decision_cost_guard_line(args.n))
+
+    # --- per-agent diagnostic: where does the wobble live? ---
+    if args.per_agent:
+        report = run_per_agent_n(
+            ticker=ticker, strategy=strategy, adapter=adapter, runners=runners,
+            n=args.n, sentiment_adapter=sentiment,
+            sentiment_missing_key=sentiment_missing_key)
+        print("\n=== Per-agent stability ===")
+        print(format_per_agent_table(report))
+        if args.csv:
+            append_csv_row(Path(args.csv), per_agent_csv_row(report))
+            print(f"\n  per-agent row appended -> {args.csv}")
+        return
 
     if args.full:
         run_one = build_run_one(

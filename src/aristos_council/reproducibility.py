@@ -297,3 +297,230 @@ def decision_stability_summary(report: StabilityReport) -> dict:
         "confidence_mean": round(report.confidence_mean, 4),
         "confidence_stdev": round(report.confidence_stdev, 4),
     }
+
+
+# --------------------------------------------------------------------------- #
+# Per-agent stability — the FINAL verdict-stability diagnostic. Re-run the WHOLE
+# pipeline N times (NOT the frozen micro-harness — we are measuring exactly the
+# upstream the micro-harness froze) and record EVERY agent's output each run, to
+# locate WHICH layer the wobble lives in: the specialists, the Critic, or only the
+# Decision agent. Tests the thesis that the REPORT is more stable than the VERDICT.
+# --------------------------------------------------------------------------- #
+# Display/aggregation order; mirrors graph.SPECIALIST_ORDER (kept local to avoid an
+# import cycle — reproducibility imports graph lazily inside the runners).
+_SPECIALIST_ORDER = ("fundamental", "technical", "sentiment", "risk")
+
+
+@dataclass(frozen=True)
+class AgentRunRecord:
+    """One full run, reduced to every agent's output (not just the verdict)."""
+
+    specialists: dict[str, tuple[str, float]]   # name -> (stance, confidence)
+    critic_target: Optional[str]                # consensus the Critic argued against
+    decision_verdict: str
+    decision_confidence: float
+    dissent: tuple[str, ...] = ()
+    gated: bool = False
+
+
+@dataclass(frozen=True)
+class AgentStability:
+    """Cross-run stability of ONE agent's output."""
+
+    agent: str
+    distribution: dict[str, int]                # stance/target/verdict -> count
+    modal: str
+    confidence_mean: Optional[float]            # None for the Critic (no confidence)
+    confidence_stdev: Optional[float]
+    stable: bool                                # all n outputs identical
+    label: str                                  # STABLE / WOBBLES / BORDERLINE
+
+
+@dataclass(frozen=True)
+class PerAgentStabilityReport:
+    ticker: str
+    n_requested: int
+    n_run: int
+    gated: bool
+    agents: list[AgentStability]                # specialists, then critic, then decision
+    diagnosis: str                              # the one-line verdict-on-the-diagnosis
+
+
+def agent_record_from_state(state) -> AgentRunRecord:
+    """Read every agent's output from a completed full-run state."""
+    specialists: dict[str, tuple[str, float]] = {}
+    for op in getattr(state, "specialist_opinions", []):
+        specialists[op.specialist.value] = (op.stance.value, float(op.confidence))
+    cr = getattr(state, "critic_report", None)
+    critic_target = cr.targets_stance.value if cr is not None else None
+    d = getattr(state, "decision", None)
+    if d is None:
+        return AgentRunRecord(specialists=specialists, critic_target=critic_target,
+                              decision_verdict="unknown", decision_confidence=0.0)
+    gated = bool(getattr(d, "gate_override_applied", False)
+                 or getattr(d, "insufficient_evidence", False))
+    return AgentRunRecord(
+        specialists=specialists, critic_target=critic_target,
+        decision_verdict=d.recommendation.value if d.recommendation else "unknown",
+        decision_confidence=float(d.confidence),
+        dissent=tuple(s.value for s in (d.dissent or [])), gated=gated)
+
+
+def _dist_modal(values: list[str]) -> tuple[dict[str, int], str]:
+    dist: dict[str, int] = {}
+    for v in values:
+        dist[v] = dist.get(v, 0) + 1
+    modal = sorted(dist.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+    return dist, modal
+
+
+def _mean_stdev(xs: list[float]) -> tuple[Optional[float], Optional[float]]:
+    if not xs:
+        return None, None
+    mean = sum(xs) / len(xs)
+    return mean, (sum((x - mean) ** 2 for x in xs) / len(xs)) ** 0.5
+
+
+def aggregate_per_agent(
+    ticker: str, records: list[AgentRunRecord], *,
+    n_requested: int, deterministic: bool = False,
+) -> PerAgentStabilityReport:
+    """Aggregate per-agent stance/verdict stability across the run records."""
+    if not records:
+        raise ValueError("aggregate_per_agent requires at least one record")
+    names = [n for n in _SPECIALIST_ORDER
+             if any(n in r.specialists for r in records)]
+    # Any unexpected specialist names, appended deterministically.
+    for r in records:
+        for n in r.specialists:
+            if n not in names:
+                names.append(n)
+
+    agents: list[AgentStability] = []
+    for name in names:
+        stances = [r.specialists[name][0] for r in records if name in r.specialists]
+        confs = [r.specialists[name][1] for r in records if name in r.specialists]
+        dist, modal = _dist_modal(stances)
+        mean, stdev = _mean_stdev(confs)
+        stable = len(dist) == 1
+        agents.append(AgentStability(
+            agent=name, distribution=dist, modal=modal,
+            confidence_mean=mean, confidence_stdev=stdev, stable=stable,
+            label="STABLE" if stable else "WOBBLES"))
+
+    # Critic target (deterministic consensus, but it wobbles if the panel does).
+    targets = [r.critic_target or "none" for r in records]
+    tdist, tmodal = _dist_modal(targets)
+    critic_stable = len(tdist) == 1
+    agents.append(AgentStability(
+        agent="critic", distribution=tdist, modal=tmodal,
+        confidence_mean=None, confidence_stdev=None, stable=critic_stable,
+        label="STABLE" if critic_stable else "WOBBLES"))
+
+    # Decision verdict (STABLE / BORDERLINE wording, like the other harnesses).
+    verdicts = [r.decision_verdict for r in records]
+    vdist, vmodal = _dist_modal(verdicts)
+    dmean, dstdev = _mean_stdev([r.decision_confidence for r in records])
+    decision_stable = len(vdist) == 1
+    if deterministic:
+        dlabel = "STABLE (gated)"
+    elif decision_stable:
+        dlabel = "STABLE"
+    else:
+        dlabel = "BORDERLINE"
+    agents.append(AgentStability(
+        agent="decision", distribution=vdist, modal=vmodal,
+        confidence_mean=dmean, confidence_stdev=dstdev, stable=decision_stable,
+        label=dlabel))
+
+    diagnosis = _diagnose(agents, deterministic=deterministic)
+    return PerAgentStabilityReport(
+        ticker=ticker, n_requested=n_requested, n_run=len(records),
+        gated=deterministic, agents=agents, diagnosis=diagnosis)
+
+
+def _diagnose(agents: list[AgentStability], *, deterministic: bool) -> str:
+    if deterministic:
+        return ("GATED (deterministic) verdict — per-agent wobble is only "
+                "meaningful for non-gated names; ran once.")
+    specialists = [a for a in agents if a.agent in _SPECIALIST_ORDER]
+    wobbling = [a.agent for a in specialists if not a.stable]
+    critic = next((a for a in agents if a.agent == "critic"), None)
+    decision = next((a for a in agents if a.agent == "decision"), None)
+    decision_stable = decision.stable if decision else True
+
+    if not wobbling and decision is not None and not decision_stable:
+        diag = ("Wobble is in the FINAL COMPRESSION: the specialists are all "
+                "STABLE and only the Decision agent wobbles — the report's analysis "
+                "is stable and trustworthy; treat the final verdict as its lossy "
+                "summary.")
+    elif wobbling:
+        diag = (f"Instability originates UPSTREAM in {', '.join(wobbling)}: the "
+                f"report itself is not fully stable — read the wobbling layer(s) "
+                f"with the same caution as the verdict.")
+    else:
+        diag = "Fully STABLE: every agent and the final verdict agreed across all runs."
+
+    if critic is not None and not critic.stable:
+        diag += (" Note: the Critic's target stance wobbles — it attacks a "
+                 "different consensus each run, a known amplifier of Decision wobble.")
+    return diag
+
+
+def run_per_agent_n(
+    *, ticker: str, strategy, adapter, runners, n: int = 5,
+    sentiment_adapter=None, sentiment_missing_key: bool = False,
+    prior_recommendation=None,
+) -> PerAgentStabilityReport:
+    """Run the FULL pipeline ``n`` times and record EVERY agent's output each run,
+    then aggregate per-agent stability. REQUIRES full runs (not the micro-harness):
+    the whole point is to measure the upstream the micro-harness freezes. Gated
+    outcomes short-circuit to one run (deterministic)."""
+    if n < 1:
+        raise ValueError("n must be >= 1")
+    from .graph import build_council
+    from .state import ResearchState
+
+    app = build_council(adapter, strategy, runners,
+                        sentiment_adapter=sentiment_adapter,
+                        sentiment_missing_key=sentiment_missing_key)
+
+    def one() -> AgentRunRecord:
+        result = ResearchState.model_validate(app.invoke(ResearchState(
+            ticker=ticker, strategy_id=strategy.id,
+            prior_recommendation=prior_recommendation)))
+        return agent_record_from_state(result)
+
+    first = one()
+    if first.gated:
+        return aggregate_per_agent(ticker, [first], n_requested=n, deterministic=True)
+    records = [first]
+    for _ in range(n - 1):
+        records.append(one())
+    return aggregate_per_agent(ticker, records, n_requested=n, deterministic=False)
+
+
+def format_per_agent_table(report: PerAgentStabilityReport) -> str:
+    """The per-agent stability table + the one-line verdict-on-the-diagnosis."""
+    lines = [f"{report.ticker}: per-agent stability over {report.n_run} full run(s)",
+             f"  {'agent':<12} {'distribution':<34} stable?"]
+    for a in report.agents:
+        dist = " / ".join(f"{k} {c}" for k, c in sorted(
+            a.distribution.items(), key=lambda kv: (-kv[1], kv[0])))
+        prefix = "targets:" if a.agent == "critic" else ""
+        lines.append(f"  {a.agent:<12} {prefix + dist:<34} {a.label}")
+    lines.append("")
+    lines.append(report.diagnosis)
+    return "\n".join(lines)
+
+
+def per_agent_csv_row(report: PerAgentStabilityReport) -> dict:
+    """One row per name; a column per agent holding its stance distribution, plus a
+    <agent>_stable flag and the diagnosis — so results persist and compare."""
+    row: dict = {"ticker": report.ticker, "n_run": report.n_run,
+                 "gated": report.gated}
+    for a in report.agents:
+        row[a.agent] = ";".join(f"{k}:{c}" for k, c in sorted(a.distribution.items()))
+        row[f"{a.agent}_stable"] = a.label
+    row["diagnosis"] = report.diagnosis
+    return row
