@@ -44,6 +44,7 @@ from aristos_council.presentation import (
     contested_banner,
     contested_label,
     degraded_banner,
+    matrix_comparison_line,
     run_health_line,
 )
 from aristos_council.persistence.verdicts import (
@@ -277,6 +278,17 @@ def main(argv: list[str] | None = None) -> None:
         if d.dissent:
             print(f"\n      Dissent recorded: "
                   f"{', '.join(s.value for s in d.dissent)}")
+        # Hybrid: the deterministic matrix verdict next to the LLM one + its working.
+        comparison = matrix_comparison_line(result)
+        if comparison:
+            print()
+            print(block(comparison))
+            m = result.matrix_decision
+            if m is not None:
+                for c in m.contributions:
+                    print(f"        · {c.detail}")
+                if not m.gated:
+                    print(f"        = total score {m.score:+.1f}")
         # Contested call -> route the reader to the report + their own judgement.
         contested_line = contested_banner(result)
         if contested_line:

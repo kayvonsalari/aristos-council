@@ -43,6 +43,24 @@ policy:
 veto:
   min_confidence: 0.6   # decisions below this confidence pause for human review
 
+# --- Deterministic decision-matrix weights (the hybrid verdict, agents/matrix.py) ---
+# Points each input contributes to a continuous score; the score maps to
+# BUY/HOLD/SELL via the dead-band. SCREEN-DOMINANT: the four criteria can swing the
+# score by ~80 points at full margin, while the whole specialist panel (stance_weight
+# 3 x 4 agents) can move it at most ~12 — so the deterministic screen anchors the
+# verdict and the wobble-prone LLM stances only tilt it. Tunable knobs, not code.
+scoring:
+  default_criterion_weight: 20
+  criterion_weights:
+    min_revenue_cagr: 25   # durable top-line growth — the core thesis
+    max_peg_ratio: 25      # valuation discipline — growth at a reasonable price
+    min_roic: 20           # capital-efficiency quality gate
+    min_market_cap: 10     # scope screen, lighter weight
+  stance_weight: 3         # SMALL — one specialist flip can't cross a threshold
+  buy_threshold: 20
+  sell_threshold: -20
+  borderline_margin: 6     # score within 6pts of a boundary -> deterministic BORDERLINE
+
 rationale: >
   Great businesses compound revenue at high incremental returns on capital; the
   discipline is refusing to overpay for that growth. Revenue CAGR evidences the

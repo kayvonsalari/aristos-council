@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, StateGraph
 
+from .agents.matrix import make_matrix_node
 from .agents.nodes import (
     make_critic_node,
     make_decision_node,
@@ -56,6 +57,9 @@ def build_council(
         )
     g.add_node("critic", make_critic_node(strategy, runners["critic"]))
     g.add_node("decision", make_decision_node(strategy, runners["decision"]))
+    # Deterministic matrix verdict, computed in parallel right after the LLM
+    # decision (reads the screen + gate + stances; never mutates `decision`).
+    g.add_node("matrix", make_matrix_node(strategy))
     g.add_node("audit", make_audit_node())
     g.add_node("veto", make_veto_node(strategy))
 
@@ -65,7 +69,8 @@ def build_council(
         g.add_edge(a.value, b.value)
     g.add_edge(SPECIALIST_ORDER[-1].value, "critic")
     g.add_edge("critic", "decision")
-    g.add_edge("decision", "audit")
+    g.add_edge("decision", "matrix")
+    g.add_edge("matrix", "audit")
     g.add_edge("audit", "veto")
     g.add_edge("veto", END)
 

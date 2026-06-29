@@ -350,3 +350,30 @@ def contested_label(obj) -> str:
     if not is_c:
         return ""
     return f"[CONTESTED: {', '.join(reasons)}]"
+
+
+# --------------------------------------------------------------------------- #
+# Hybrid verdict — LLM Decision vs deterministic matrix, side by side
+# --------------------------------------------------------------------------- #
+def matrix_verdict_text(matrix) -> str:
+    """Human text for a MatrixVerdict, e.g. 'BUY score +31 (BORDERLINE)' or
+    'SELL (gated)'."""
+    v = matrix.verdict.value.upper()
+    if matrix.gated:
+        return f"{v} (gated)"
+    bl = " (BORDERLINE)" if matrix.borderline else ""
+    return f"{v} score {matrix.score:+.0f}{bl}"
+
+
+def matrix_comparison_line(obj) -> str | None:
+    """One line comparing the LLM verdict and the deterministic matrix verdict, or
+    None when the matrix didn't run. Duck-typed over a live state or a RunReport."""
+    m = getattr(obj, "matrix_decision", None)
+    d = getattr(obj, "decision", None)
+    if m is None or d is None:
+        return None
+    llm = f"{d.recommendation.value.upper()} {d.confidence:.2f}"
+    agreement = getattr(obj, "agreement", None) or (
+        "AGREE" if m.verdict == d.recommendation else "DISAGREE")
+    return (f"LLM verdict: {llm}  |  Matrix verdict: {matrix_verdict_text(m)}  "
+            f"|  {agreement}")

@@ -197,6 +197,32 @@ class Decision(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# Deterministic decision matrix (hybrid verdict — runs ALONGSIDE the LLM Decision)
+# --------------------------------------------------------------------------- #
+class MatrixContribution(BaseModel):
+    """One input's contribution to the matrix score — the matrix's WORKING, so a
+    verdict is fully explainable/auditable (the matrix's edge over the LLM prose)."""
+
+    name: str
+    points: float
+    detail: str = ""
+
+
+class MatrixVerdict(BaseModel):
+    """The deterministic decision-matrix verdict — a fully REPRODUCIBLE verdict
+    (no LLM in its path) computed from the screen margins + gate + low-weighted
+    specialist stances. Carried alongside the LLM ``Decision`` so the two can be
+    compared empirically.
+    """
+
+    verdict: "Recommendation"
+    score: Optional[float] = None       # None when gated (scoring skipped)
+    borderline: bool = False            # score within the dead-band of a threshold
+    gated: bool = False                 # the disposition gate decided it (not scored)
+    contributions: list[MatrixContribution] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- #
 # Veto gate
 # --------------------------------------------------------------------------- #
 class VetoTrigger(str, Enum):
@@ -310,6 +336,9 @@ class ResearchState(BaseModel):
     specialist_opinions: list[SpecialistOpinion] = Field(default_factory=list)
     critic_report: Optional[CriticReport] = None
     decision: Optional[Decision] = None
+    # Deterministic decision-matrix verdict, computed in parallel with the LLM
+    # `decision` (hybrid). None until the matrix node runs.
+    matrix_decision: Optional[MatrixVerdict] = None
 
     # --- audit ---
     # Summary of the deep provenance audit (see audit/provenance.py): figure

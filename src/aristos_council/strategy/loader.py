@@ -48,6 +48,33 @@ class StrategyPolicy(BaseModel):
     partial_pass_allows_hold: bool = True
 
 
+class ScoringConfig(BaseModel):
+    """Weights + thresholds for the deterministic ``decision_matrix`` (the hybrid
+    verdict that runs alongside the LLM Decision agent).
+
+    SCREEN-DOMINANT by design: each criterion is worth far more than a specialist
+    stance, so the deterministic screen ANCHORS the score and the (wobble-prone) LLM
+    stances only TILT it. Defaults are chosen so a handful of criteria outweigh the
+    whole specialist panel; strategies override per-criterion weights in YAML.
+    Tunable knobs, not code.
+    """
+
+    # Points a criterion contributes at full margin; per-criterion overrides below.
+    default_criterion_weight: float = Field(default=20.0, ge=0.0)
+    criterion_weights: dict[str, float] = Field(default_factory=dict)
+    # SMALL on purpose — one specialist flip must not cross a threshold on a clear
+    # name (the screen-dominance guarantee, asserted in tests).
+    stance_weight: float = Field(default=3.0, ge=0.0)
+    buy_threshold: float = 20.0
+    sell_threshold: float = -20.0
+    # Score within this distance of the nearest band boundary -> BORDERLINE (a
+    # deterministic, single-run "your call" signal — no n=5 needed).
+    borderline_margin: float = Field(default=6.0, ge=0.0)
+
+    def weight_for(self, name: str) -> float:
+        return self.criterion_weights.get(name, self.default_criterion_weight)
+
+
 class VetoPolicy(BaseModel):
     """Thresholds for the deterministic human-veto gate."""
 
@@ -62,6 +89,10 @@ class Strategy(BaseModel):
     criteria: list[CriterionSpec] = Field(min_length=1)
     policy: StrategyPolicy = Field(default_factory=StrategyPolicy)
     veto: VetoPolicy = Field(default_factory=VetoPolicy)
+    # Deterministic decision-matrix weights/thresholds (hybrid verdict). Optional
+    # with screen-dominant defaults, so strategies without a `scoring:` block still
+    # produce a matrix verdict.
+    scoring: ScoringConfig = Field(default_factory=ScoringConfig)
     rationale: str = ""
     notes: str = ""
 

@@ -47,6 +47,8 @@ from aristos_council.presentation import (
     SCREEN_STATUS_HEX,
     contested_banner,
     degraded_banner,
+    matrix_comparison_line,
+    matrix_verdict_text,
     run_health_line,
     screen_table_rows,
     strip_provenance,
@@ -557,6 +559,20 @@ def render_report(
         _render_pdf_button(report, run_uid, key_ns)
 
     _render_verdict_banner(report)
+
+    # Hybrid verdict: the deterministic matrix verdict next to the LLM one, with its
+    # working in an expander (the matrix's edge — a fully auditable verdict).
+    comparison = matrix_comparison_line(report)
+    if comparison:
+        st.info(f"🔢 {comparison}")
+        m = report.matrix_decision
+        if m is not None and m.contributions:
+            with st.expander("Matrix working (deterministic score breakdown)"):
+                for c in m.contributions:
+                    st.markdown(f"- `{c.points:+.1f}` — {c.detail}")
+                if not m.gated:
+                    st.markdown(f"**Total score: {m.score:+.1f}** "
+                                f"→ {matrix_verdict_text(m)}")
 
     # Contested-verdict line: a close call (panel split / dissent) routes the user
     # to the report and their own judgement. Clean verdicts get nothing.

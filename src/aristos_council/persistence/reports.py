@@ -37,6 +37,7 @@ from ..agents.nodes import _is_screen_tool  # screen tool-name back-compat shim
 from ..state import (
     CriticReport,
     Decision,
+    MatrixVerdict,
     ResearchState,
     RunIssue,
     SpecialistOpinion,
@@ -69,6 +70,11 @@ class RunReport(BaseModel):
     specialist_opinions: list[SpecialistOpinion] = Field(default_factory=list)
     critic_report: Optional[CriticReport] = None
     decision: Optional[Decision] = None
+    # Deterministic decision-matrix verdict computed in PARALLEL with the LLM
+    # `decision` (hybrid). `agreement` is "AGREE"/"DISAGREE" between the two so batch
+    # runs can tally match rate. Both optional/default so older reports round-trip.
+    matrix_decision: Optional[MatrixVerdict] = None
+    agreement: Optional[str] = None
     veto_flags: list[VetoFlag] = Field(default_factory=list)
     # FULL audit summary (counts AND violations/unit_scaled_notes prose) — the
     # reviewer-facing detail, kept verbatim unlike the verdict log's counts.
@@ -153,6 +159,12 @@ def report_from_state(
     from ..presentation import contested as _contested
     from ..agents.prompts import PROMPT_VERSION
     is_contested, contested_reasons = _contested(state)
+    # Agreement between the LLM verdict and the deterministic matrix verdict.
+    agreement = None
+    if state.matrix_decision is not None and state.decision is not None:
+        agreement = ("AGREE"
+                     if state.matrix_decision.verdict == state.decision.recommendation
+                     else "DISAGREE")
     return RunReport(
         ticker=state.ticker,
         run_at=run_at or state.as_of,
@@ -163,6 +175,8 @@ def report_from_state(
         specialist_opinions=list(state.specialist_opinions),
         critic_report=state.critic_report,
         decision=state.decision,
+        matrix_decision=state.matrix_decision,
+        agreement=agreement,
         veto_flags=list(state.veto_flags),
         provenance_audit=state.provenance_audit,
         run_issues=list(state.run_issues),
