@@ -52,7 +52,7 @@ from ..tools.criteria.registry import (
     run_screen,
 )
 from ..tools.sentiment_tools import sentiment_snapshot
-from ..tools.technical import technical_snapshot
+from ..tools.technical import _TD_6M, _TD_12M, technical_snapshot, total_return
 from .disposition import (
     disposition_ceiling,
     exceeds_ceiling,
@@ -183,8 +183,13 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
         )
 
         if fundamentals is not None:
-            last_close = (prices.closes[-1]
-                          if prices is not None and prices.closes else None)
+            closes = (prices.closes
+                      if prices is not None and prices.closes else [])
+            last_close = closes[-1] if closes else None
+            # Trailing price momentum from the closes ALREADY fetched (no new call),
+            # using the SAME lookbacks the technical snapshot reports.
+            return_6m = total_return(closes, _TD_6M)
+            return_12m = total_return(closes, _TD_12M)
             # Generic, registry-driven screen: the strategy's selected criteria
             # run against the gathered evidence. Logged under the historical
             # tool_name so the ledger/audit/reports are unchanged.
@@ -196,7 +201,8 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                          # Provider declares its streak data shape (Option A); the
                          # tag rides with the dividends so the criterion picks the
                          # matching method via screening.streak_by_method.
-                         streak_method=adapter.dividend_streak_method),
+                         streak_method=adapter.dividend_streak_method,
+                         return_6m=return_6m, return_12m=return_12m),
                 ticker=state.ticker,
             )
             state.tool_calls.append(

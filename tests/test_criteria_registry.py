@@ -111,6 +111,8 @@ def test_registry_holds_dividend_and_growth_criteria():
         "min_market_cap", "min_dividend_growth_streak",
         # growth / quality (4B)
         "min_revenue_cagr", "min_roic", "max_peg_ratio",
+        # price momentum (value+momentum)
+        "min_price_momentum",
     }
     assert all(isinstance(c, Criterion) for c in REGISTRY.values())
 
@@ -395,10 +397,12 @@ def test_growth_v1_screen_end_to_end():
                  pretax_income=[25000.0], invested_capital=[120000.0])
     result = run_screen(
         strat.criteria,
-        Evidence(fundamentals=garp, dividends=[], last_close=200.0),
+        Evidence(fundamentals=garp, dividends=[], last_close=200.0,
+                 return_12m=0.18),                  # uptrending -> momentum passes
         ticker="GARP",
     )
     assert [c.name for c in result.criteria] == [
-        "min_revenue_cagr", "min_roic", "max_peg_ratio", "min_market_cap"]
-    assert all(c.passed for c in result.criteria)   # GARP-quality passes all
+        "min_revenue_cagr", "min_roic", "max_peg_ratio", "min_market_cap",
+        "min_price_momentum"]
+    assert all(c.passed for c in result.criteria)   # GARP-quality + uptrend passes all
     assert result.flags == []

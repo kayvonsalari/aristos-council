@@ -32,6 +32,9 @@ criteria:
     threshold: 2.0
   - name: min_market_cap            # 5B USD; mid/large-cap scope (reused)
     threshold: 5000000000
+  - name: min_price_momentum        # value+momentum: screen out falling knives (NVO)
+    threshold: 0.0                  # floor: not in a 12m downtrend. NON-GATING — it
+                                    # drags the matrix score, doesn't hard-veto a dip.
 
 # --- How conflicts and edge cases are intended to be handled ---
 policy:
@@ -60,6 +63,8 @@ scoring:
   buy_threshold: 20
   sell_threshold: -20
   borderline_margin: 6     # score within 6pts of a boundary -> deterministic BORDERLINE
+  momentum_weight: 20      # value+momentum: a meaningful, signed contribution
+  momentum_cap: 0.5        # clamp |12m return| to +/-50% before scaling
 
 rationale: >
   Great businesses compound revenue at high incremental returns on capital; the

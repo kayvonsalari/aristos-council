@@ -70,6 +70,13 @@ class ScoringConfig(BaseModel):
     # Score within this distance of the nearest band boundary -> BORDERLINE (a
     # deterministic, single-run "your call" signal — no n=5 needed).
     borderline_margin: float = Field(default=6.0, ge=0.0)
+    # Price-momentum (value+momentum): a SIGNED contribution =
+    # clamp(return_12m, -cap, +cap) x weight. A POSITIVE return boosts the score, a
+    # NEGATIVE return SUBTRACTS (a cheap-but-falling name is dragged out of BUY).
+    # The weight is meaningful (comparable to a screen criterion), NOT the tiny
+    # stance weight — momentum is supposed to matter.
+    momentum_weight: float = Field(default=20.0, ge=0.0)
+    momentum_cap: float = Field(default=0.5, ge=0.0)   # clamp |return| before scaling
 
     def weight_for(self, name: str) -> float:
         return self.criterion_weights.get(name, self.default_criterion_weight)

@@ -45,12 +45,14 @@ def test_loads_growth_v1():
     assert s.id == "growth_v1"
     assert [c.name for c in s.criteria] == [
         "min_revenue_cagr", "min_roic", "max_peg_ratio", "min_market_cap",
+        "min_price_momentum",
     ]
     by = {c.name: c.threshold for c in s.criteria}
     assert by["min_revenue_cagr"] == 0.10
     assert by["min_roic"] == 0.12
     assert by["max_peg_ratio"] == 2.0
     assert by["min_market_cap"] == 5_000_000_000
+    assert by["min_price_momentum"] == 0.0
     assert s.policy.partial_pass_allows_hold is True
 
 

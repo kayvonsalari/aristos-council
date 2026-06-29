@@ -8,7 +8,12 @@ hallucinate chart talk.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+
+# Approximate trading days in 6 / 12 calendar months — the momentum lookbacks.
+_TD_6M = 126
+_TD_12M = 252
 
 
 @dataclass(frozen=True)
@@ -18,7 +23,12 @@ class TechnicalSnapshot:
     sma_200: float | None
     pct_off_52w_high: float | None      # negative = below high; -0.12 == 12% off
     annualized_volatility: float | None  # decimal, e.g. 0.22 == 22%
-    notes: list[str]
+    # Trailing PRICE MOMENTUM (total return over the window) — the market's forward
+    # vote on a name. +0.15 == +15%; -0.40 == an NVO-style 40% drawdown. None when
+    # history is too short. The value+momentum signal that screens out falling knives.
+    return_6m: float | None = None
+    return_12m: float | None = None
+    notes: list[str] = field(default_factory=list)
 
 
 def _finite(values: list[float]) -> bool:
@@ -73,6 +83,22 @@ def annualized_volatility(closes: list[float], trading_days: int = 252) -> float
     return math.sqrt(var) * math.sqrt(trading_days)
 
 
+def total_return(closes: list[float], lookback_days: int) -> float | None:
+    """Trailing total return over ``lookback_days`` trading days:
+    ``closes[-1] / closes[-1-lookback] - 1``.
+
+    None when there is insufficient history, the start price is non-positive, or any
+    value is non-finite — an honest abstain, never a NaN/inf leaking into evidence.
+    """
+    if lookback_days <= 0 or len(closes) < lookback_days + 1:
+        return None
+    start = closes[-1 - lookback_days]
+    end = closes[-1]
+    if not math.isfinite(start) or not math.isfinite(end) or start <= 0:
+        return None
+    return end / start - 1.0
+
+
 def technical_snapshot(closes: list[float]) -> TechnicalSnapshot:
     """Bundle the primitives; record which metrics were uncomputable and why."""
     notes: list[str] = []
@@ -82,11 +108,17 @@ def technical_snapshot(closes: list[float]) -> TechnicalSnapshot:
         notes.append("sma_50 unavailable: <50 closes")
     if s200 is None:
         notes.append("sma_200 unavailable: <200 closes")
+    r6 = total_return(closes, _TD_6M)
+    r12 = total_return(closes, _TD_12M)
+    if r12 is None:
+        notes.append(f"return_12m unavailable: <{_TD_12M + 1} closes")
     return TechnicalSnapshot(
         last_close=closes[-1] if closes else None,
         sma_50=s50,
         sma_200=s200,
         pct_off_52w_high=pct_off_high(closes),
         annualized_volatility=annualized_volatility(closes),
+        return_6m=r6,
+        return_12m=r12,
         notes=notes,
     )

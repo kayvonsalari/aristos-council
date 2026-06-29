@@ -65,6 +65,11 @@ class Evidence:
     # paths are unchanged; ``gather`` populates it from
     # ``adapter.dividend_streak_method``.
     streak_method: str = "per_payment_median"
+    # Trailing PRICE MOMENTUM (total return), computed from the price closes already
+    # fetched. The value+momentum signal the momentum criterion reads. None when
+    # history is too short. Decimals: +0.15 == +15%; -0.40 == a 40% drawdown.
+    return_6m: float | None = None
+    return_12m: float | None = None
 
 
 @dataclass(frozen=True)
@@ -188,6 +193,29 @@ def _min_roic(ev: Evidence, threshold: float) -> CriterionResult:
                            observed=roic, threshold=threshold, note=note)
 
 
+# The momentum criterion's registry name — referenced by the matrix, which gives
+# momentum a SIGNED, magnitude-scaled contribution (not the standard pass/fail margin).
+PRICE_MOMENTUM_CRITERION = "min_price_momentum"
+
+
+def _min_price_momentum(ev: Evidence, threshold: float) -> CriterionResult:
+    """12-month trailing price momentum vs a floor (default 0.0 = 'not in a
+    downtrend'). The market's forward vote: a falling knife is, by definition,
+    falling. NON-GATING by default — it DRAGS the matrix score (a -40% name loses a
+    lot), it doesn't hard-veto, so a value strategy may still buy a modest dip.
+    NOT-EVAL on short history (honest abstain), exactly like the other criteria."""
+    r = ev.return_12m
+    if r is None:
+        return CriterionResult(
+            name=PRICE_MOMENTUM_CRITERION, passed=None, observed=None,
+            threshold=threshold,
+            note="12m price momentum unavailable: insufficient price history")
+    return CriterionResult(
+        name=PRICE_MOMENTUM_CRITERION, passed=r >= threshold, observed=r,
+        threshold=threshold,
+        note=f"12m price momentum {r:+.1%} vs floor {threshold:+.1%}")
+
+
 def _max_peg_ratio(ev: Evidence, threshold: float) -> CriterionResult:
     f = ev.fundamentals
     # PEG denominator is OPERATING-INCOME growth (the earnings-growth proxy), with a
@@ -290,6 +318,19 @@ _CRITERIA: tuple[Criterion, ...] = (
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("total_revenue", "pe_ratio"),
+    ),
+    # --- Price momentum (value+momentum) — fixes cheap-falling-knife false BUYs ---
+    Criterion(
+        PRICE_MOMENTUM_CRITERION, _min_price_momentum,
+        label="Minimum 12m price momentum",
+        # Floor is a return; the loader caps thresholds at >= 0, so 0.0 ('not in a
+        # downtrend') is the natural floor. Reads ev.return_12m (computed from price
+        # closes already fetched), so it needs no fundamentals/dividends evidence.
+        params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.01,
+                          default=0.0),
+                _UNVERIFIABLE_BLOCKS),
+        requires=(),
+        fundamentals_fields=(),
     ),
 )
 

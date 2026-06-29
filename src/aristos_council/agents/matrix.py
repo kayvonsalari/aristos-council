@@ -33,6 +33,7 @@ from ..state import (
     ToolCall,
 )
 from ..strategy.loader import Strategy
+from ..tools.criteria.registry import PRICE_MOMENTUM_CRITERION
 from .disposition import disposition_ceiling, insufficient_evidence
 # Single source for reading the screen criteria out of the ledger (handles the
 # current + legacy screen tool names, dict-or-dataclass output).
@@ -71,6 +72,18 @@ def _criterion_points(name, passed, observed, threshold, weight) -> tuple[float,
     pts = weight * frac
     verb = "pass" if passed else "fail"
     return pts, f"{name}: {verb} ({margin_txt}) x w{weight:.0f} = {pts:+.1f}"
+
+
+def _momentum_points(observed, sc) -> tuple[float, str]:
+    """Price-momentum's SIGNED, magnitude-scaled contribution: clamp(return_12m,
+    -cap, +cap) x momentum_weight. A NEGATIVE return SUBTRACTS points (the
+    cheap-falling-knife fix); NOT-EVAL contributes 0 (no spurious penalty)."""
+    if observed is None:
+        return 0.0, "momentum: NOT-EVAL -> 0"
+    capped = max(-sc.momentum_cap, min(sc.momentum_cap, observed))
+    pts = capped * sc.momentum_weight
+    return pts, (f"momentum: return_12m {observed:+.2f} (cap +/-{sc.momentum_cap:.2f}) "
+                 f"x w{sc.momentum_weight:.0f} = {pts:+.1f}")
 
 
 def _map_score(score: float, sc) -> tuple[Recommendation, bool]:
@@ -114,9 +127,14 @@ def decision_matrix(state: ResearchState, strategy: Strategy) -> MatrixVerdict:
     # PRIMARY: screen criteria (the anchor).
     for c in screen:
         name = _get(c, "name")
-        pts, detail = _criterion_points(
-            name, _get(c, "passed"), _get(c, "observed"), _get(c, "threshold"),
-            sc.weight_for(name))
+        if name == PRICE_MOMENTUM_CRITERION:
+            # Momentum is SIGNED + magnitude-scaled (not the pass/fail margin), so a
+            # negative return can PULL THE SCORE DOWN — the value+momentum fix.
+            pts, detail = _momentum_points(_get(c, "observed"), sc)
+        else:
+            pts, detail = _criterion_points(
+                name, _get(c, "passed"), _get(c, "observed"), _get(c, "threshold"),
+                sc.weight_for(name))
         contributions.append(MatrixContribution(name=name, points=pts, detail=detail))
 
     # SECONDARY: specialist stances, LOW-weighted (only tilt the score).
