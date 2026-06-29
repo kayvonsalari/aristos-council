@@ -60,7 +60,22 @@ from .disposition import (
     insufficient_evidence,
     not_evaluated_gating_criteria,
 )
+from .prompts import (
+    PROMPT_VERSION,
+    critic_system,
+    decision_system,
+    specialist_system,
+)
+from .prompts import HARD_RULES as _HARD_RULES
+from .prompts import SPECIALIST_BRIEFS as _SPECIALIST_BRIEFS
 from .schemas import CriticOutput, DecisionOutput, FigureRef, SpecialistOutput
+
+# Back-compat aliases — the SYSTEM prompts moved to agents/prompts.py (externalized
+# + versioned). These keep existing call sites and prompt-wording tests importing
+# from nodes unchanged; the canonical definitions now live in prompts.py.
+_specialist_system = specialist_system
+_critic_system = critic_system
+_decision_system = decision_system
 
 
 def _new_call_id() -> str:
@@ -404,85 +419,9 @@ def _validated_figures(
     return figures
 
 
-_HARD_RULES = (
-    "HARD RULES — these override everything else:\n"
-    "1. NO ARITHMETIC. You may not add, multiply, divide, annualise, or "
-    "otherwise compute. All math was done by deterministic tools; you reason "
-    "about their outputs only.\n"
-    "2. EVIDENCE ONLY. You may not introduce outside knowledge (figures, "
-    "share counts, index membership, reputation) as if it were evidence. The "
-    "evidence block in the user message is the complete record before this "
-    "council.\n"
-    "3. PROVENANCE. Every number you cite goes in `figures` with the exact "
-    "call_id and field_path it came from, copied verbatim from the evidence. "
-    "Numbers without a valid call_id are discarded and flagged as violations. "
-    "ONE FIGURE = ONE FIELD_PATH: each figure resolves to exactly one call_id "
-    "and one field_path. Composite or computed paths (e.g. 'output[0].a + b', "
-    "'metrics.x - metrics.y') are forbidden — combining values across paths is "
-    "arithmetic and a provenance violation. Cite each value as its own figure. "
-    "SCREEN CRITERIA 'passed' IS THREE-VALUED: true = met, false = evaluated "
-    "and FAILED, null = NOT EVALUATED (the underlying data was missing). These "
-    "are distinct claims: cite false (0.0) for a failed criterion, and cite "
-    "null ONLY when the ledger value is null. Citing null/None for a criterion "
-    "whose ledger value is false is a provenance violation — it claims 'could "
-    "not be evaluated' where the truth is 'evaluated-and-failed'. "
-    "FIELD_PATH IS PATH-ONLY: a field_path contains ONLY the path expression — "
-    "no spaces, commentary, or parentheses. If you want to note context, put it "
-    "in the `label`, never in the field_path. FIELD_PATH IS REQUIRED: a "
-    "field_path must be NON-EMPTY and resolve to a real field in the cited "
-    "tool's output. A figure without a valid path must not be emitted — omit "
-    "the FigureRef and describe the number in your thesis prose instead. "
-    "CITE THE RIGHT TOOL: cite a value only on the tool call that actually "
-    "returned it — its call_id and tool_name must match the evidence line you "
-    "read the value from. A screen criterion is cited as criteria[N].<field> "
-    "(e.g. criteria[2].passed) against the run_strategy_screen "
-    "call, never against another tool. NO SYNTHETIC FIGURES: if no "
-    "single ledger field contains the number, do not cite it as a figure — "
-    "describe it in your thesis without a FigureRef instead.\n"
-    "4. CALIBRATION. Your confidence must reflect the completeness of the "
-    "evidence, not the strength of your conviction.\n"
-)
-
-
 # --------------------------------------------------------------------------- #
 # specialists
 # --------------------------------------------------------------------------- #
-_SPECIALIST_BRIEFS = {
-    SpecialistName.FUNDAMENTAL:
-        "You assess business quality and dividend durability: yield, payout "
-        "sustainability, growth streak, market cap. Lean on the screen results.",
-    SpecialistName.TECHNICAL:
-        "You assess price structure: trend vs SMA50/SMA200, distance from the "
-        "52-week high, volatility. Lean on the technical_snapshot output.",
-    SpecialistName.SENTIMENT:
-        "You assess news/market sentiment. Your evidence is the "
-        "sentiment_snapshot tool output (recent headline list, news volume, "
-        "analyst recommendation counts and bullish ratio) plus the raw "
-        "get_company_news / get_recommendation_trends calls. Interpreting the "
-        "TEXT of headlines is your job; counting is not — cite counts and "
-        "ratios only from the snapshot. If NO sentiment tool output exists in "
-        "the evidence, you MUST return stance=abstain with a caveat saying "
-        "sentiment data is unavailable. Do not improvise sentiment from price "
-        "action.",
-    SpecialistName.RISK:
-        "You assess downside: payout stretch, volatility, data-quality flags, "
-        "anything unverifiable. You are the council's professional pessimist.",
-}
-
-
-def _specialist_system(who: SpecialistName, strategy: Strategy) -> str:
-    return (
-        f"You are the {who.value.upper()} specialist on an investment research "
-        f"council operating under the strategy '{strategy.name}' "
-        f"(id {strategy.id}).\n\n"
-        f"Your brief: {_SPECIALIST_BRIEFS[who]}\n\n"
-        f"{_HARD_RULES}\n"
-        "5. ABSTAIN rather than guess when the evidence is insufficient for "
-        "your domain.\n\n"
-        f"Strategy rationale:\n{strategy.rationale}\n"
-    )
-
-
 def _user_message(state: ResearchState, strategy: Strategy) -> str:
     return (
         f"Ticker under review: {state.ticker}\n\n"
@@ -526,26 +465,6 @@ def consensus_stance(state: ResearchState) -> Stance:
     return Stance.NEUTRAL
 
 
-def _critic_system(strategy: Strategy) -> str:
-    return (
-        "You are the CRITIC on an investment research council operating under "
-        f"the strategy '{strategy.name}' (id {strategy.id}). Your job is to "
-        "argue the strongest case AGAINST the emerging consensus before any "
-        "verdict — attack weak reasoning, mis-weighted figures, convenient "
-        "assumptions, and missing evidence. You do not vote.\n\n"
-        f"{_HARD_RULES}\n"
-        "5. OPEN QUESTIONS. When your concern is quantitative but the evidence "
-        "cannot support it — a computation you are not allowed to perform, a "
-        "figure that looks stale, data that is absent — put it in "
-        "`open_questions`, phrased as a question for human resolution (e.g. "
-        "'Is the dividend covered by free cash flow once the share count is "
-        "known?'). You may NOT state the suspected answer as a fact, estimate "
-        "the missing number, or perform the computation yourself. A sharp "
-        "unresolved question is more valuable to this council than a "
-        "fabricated certainty.\n"
-    )
-
-
 def make_critic_node(strategy: Strategy, runner):
     system = _critic_system(strategy)
 
@@ -578,25 +497,6 @@ def make_critic_node(strategy: Strategy, runner):
 # --------------------------------------------------------------------------- #
 # decision — buy/hold/sell with confidence and dissent
 # --------------------------------------------------------------------------- #
-def _decision_system(strategy: Strategy) -> str:
-    return (
-        "You are the DECISION agent of an investment research council "
-        f"operating under the strategy '{strategy.name}' (id {strategy.id}). "
-        "Weigh the specialists AND the critic's counter-case, then issue "
-        "buy/hold/sell with a confidence in [0,1].\n\n"
-        f"{_HARD_RULES}\n"
-        "5. DISSENT. List every specialist whose stance your call overrides in "
-        "`dissent` — dissent must never be silently dropped.\n"
-        "6. OPEN QUESTIONS ARE NOT EVIDENCE. The critic's open_questions are "
-        "unresolved questions for a human, not established facts. They may "
-        "justify caution (a HOLD pending resolution, lower confidence) but you "
-        "must not cite them as if they were findings, and you must not treat a "
-        "suspected answer as a known one.\n"
-        f"7. POLICY. partial_pass_allows_hold="
-        f"{strategy.policy.partial_pass_allows_hold}.\n"
-    )
-
-
 def make_decision_node(strategy: Strategy, runner):
     system = _decision_system(strategy)
 

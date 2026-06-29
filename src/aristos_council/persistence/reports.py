@@ -92,6 +92,11 @@ class RunReport(BaseModel):
     # older reports round-trip unchanged.
     contested: bool = False
     contested_reasons: list[str] = Field(default_factory=list)
+    # Which versioned agent-prompt wording produced this run (agents.prompts.
+    # PROMPT_VERSION). Stamped so a behavioural prompt change is attributable: a
+    # verdict records the exact prompt it came from. Optional/default None so older
+    # reports round-trip unchanged.
+    prompt_version: Optional[str] = None
     # Decision-node micro-harness result (reproducibility.decision_stability_summary):
     # {verdict_distribution, modal_verdict, stability "STABLE"/"BORDERLINE", gated, n,
     # confidence_mean/stdev} from replaying the Decision node N times on this run's
@@ -146,6 +151,7 @@ def report_from_state(
     # majority-override already on the state. Imported lazily to avoid any import
     # cycle with the presentation layer.
     from ..presentation import contested as _contested
+    from ..agents.prompts import PROMPT_VERSION
     is_contested, contested_reasons = _contested(state)
     return RunReport(
         ticker=state.ticker,
@@ -163,6 +169,7 @@ def report_from_state(
         degraded=state.degraded,
         contested=is_contested,
         contested_reasons=contested_reasons,
+        prompt_version=PROMPT_VERSION,
     )
 
 

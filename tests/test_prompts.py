@@ -93,3 +93,25 @@ def test_every_agent_prompt_carries_the_new_rules():
         # cite a field only on the tool that returned it; screen criteria path
         assert "CITE THE RIGHT TOOL" in prompt
         assert "criteria[N].<field>" in prompt
+
+
+def test_prompts_are_externalized_and_versioned():
+    # The canonical prompts live in agents.prompts; nodes.py re-exports them.
+    from aristos_council.agents import nodes, prompts
+
+    assert isinstance(prompts.PROMPT_VERSION, str) and prompts.PROMPT_VERSION
+    # nodes still exposes the same builders (back-compat) -> identical output
+    assert nodes._specialist_system is prompts.specialist_system
+    assert nodes._critic_system(STRATEGY) == prompts.critic_system(STRATEGY)
+
+
+def test_report_records_prompt_version():
+    from datetime import datetime, timezone
+
+    from aristos_council.agents.prompts import PROMPT_VERSION
+    from aristos_council.persistence.reports import report_from_state
+    from aristos_council.state import ResearchState
+
+    state = ResearchState(ticker="X", strategy_id="dividend_aristocrats_v1")
+    rep = report_from_state(state, run_at=datetime(2026, 6, 29, tzinfo=timezone.utc))
+    assert rep.prompt_version == PROMPT_VERSION
