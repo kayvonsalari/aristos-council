@@ -92,6 +92,12 @@ class RunReport(BaseModel):
     # older reports round-trip unchanged.
     contested: bool = False
     contested_reasons: list[str] = Field(default_factory=list)
+    # Decision-node micro-harness result (reproducibility.decision_stability_summary):
+    # {verdict_distribution, modal_verdict, stability "STABLE"/"BORDERLINE", gated, n,
+    # confidence_mean/stdev} from replaying the Decision node N times on this run's
+    # cached post-Critic state. None when the run wasn't measured. Optional/default so
+    # older reports round-trip unchanged.
+    decision_stability: Optional[dict] = None
 
 
 def _company_name_from_state(state: ResearchState) -> Optional[str]:

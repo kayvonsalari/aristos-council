@@ -70,3 +70,44 @@ def build_council(
     g.add_edge("veto", END)
 
     return g.compile()
+
+
+def build_upstream_council(
+    adapter: MarketDataAdapter,
+    strategy: Strategy,
+    runners: dict,   # only "specialist" + "critic" are used here
+    sentiment_adapter: SentimentAdapter | None = None,
+    *,
+    sentiment_missing_key: bool = False,
+):
+    """The UPSTREAM-ONLY graph: gather -> specialists -> critic -> END.
+
+    Stops BEFORE the Decision node, so a single invoke yields the post-Critic
+    ResearchState (specialist_opinions + critic_report populated) without ever
+    running the Decision/audit/veto stages. This is the substrate for the
+    decision-node micro-harness (reproducibility.run_decision_n): the deterministic
+    screen, the four specialists, and the Critic are empirically STABLE, so they run
+    ONCE; only the Decision node — where the BUY/HOLD/SELL wobble lives — is replayed
+    on copies of this snapshot. Node factories are shared with build_council, so the
+    upstream wiring can never drift from the full graph.
+    """
+    g = StateGraph(ResearchState)
+
+    g.add_node("gather",
+               make_gather_node(adapter, strategy, sentiment_adapter,
+                                sentiment_missing_key=sentiment_missing_key))
+    for who in SPECIALIST_ORDER:
+        g.add_node(
+            who.value,
+            make_specialist_node(who, strategy, runners["specialist"]),
+        )
+    g.add_node("critic", make_critic_node(strategy, runners["critic"]))
+
+    g.set_entry_point("gather")
+    g.add_edge("gather", SPECIALIST_ORDER[0].value)
+    for a, b in zip(SPECIALIST_ORDER[:-1], SPECIALIST_ORDER[1:]):
+        g.add_edge(a.value, b.value)
+    g.add_edge(SPECIALIST_ORDER[-1].value, "critic")
+    g.add_edge("critic", END)
+
+    return g.compile()

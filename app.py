@@ -564,6 +564,19 @@ def render_report(
     if contested_line:
         st.warning(f"⚖ **{contested_line}**")
 
+    # Decision-node micro-harness: if this run was measured and came back BORDERLINE,
+    # show the vote distribution under the verdict.
+    ds = report.decision_stability or {}
+    if ds.get("stability") == "BORDERLINE":
+        dist = ds.get("verdict_distribution", {})
+        dist_txt = " / ".join(f"{v.upper()} {c}"
+                              for v, c in sorted(dist.items(),
+                                                 key=lambda kv: (-kv[1], kv[0])))
+        st.warning(
+            f"⚖ **BORDERLINE — the Decision node returned {dist_txt} over "
+            f"{ds.get('n')} replays on identical evidence; treat as a lead and "
+            f"read the report.**")
+
     # Override stamp: a run that changed a setting must not read as a default run.
     if report.applied_overrides:
         ovr = "; ".join(f"`{k}` = {v}"

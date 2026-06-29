@@ -210,3 +210,90 @@ def build_run_one(
         return outcome_from_state(result)
 
     return run_one
+
+
+# --------------------------------------------------------------------------- #
+# Decision-node MICRO-harness ("Aristos v2" step 1) — replay ONLY the Decision
+# node N times on cached post-Critic state. Same statistical distribution as
+# run_council_n at a fraction of the cost: the screen + 4 specialists + Critic
+# are empirically stable, so they run ONCE; only the wobbling Decision node repeats.
+# --------------------------------------------------------------------------- #
+def run_decision_n(
+    *, ticker: str, strategy, adapter, runners, n: int = 5,
+    sentiment_adapter=None, sentiment_missing_key: bool = False,
+    prior_recommendation=None,
+) -> StabilityReport:
+    """Run the upstream council ONCE, then replay the Decision node ``n`` times on
+    deep-copies of the post-Critic snapshot; label STABLE/BORDERLINE by the verdict
+    distribution.
+
+    Cost ≈ one full run + (n-1) Decision-node calls, NOT n full runs. The upstream
+    (gather + specialists + critic) is invoked exactly once; each Decision replay
+    gets its own deep-copy so no replay can see another's mutations. GATED outcomes
+    short-circuit to n=1 (deterministic) — the Decision node is not replayed.
+    """
+    from .agents.nodes import make_decision_node
+    from .graph import build_upstream_council
+    from .state import ResearchState
+
+    upstream = build_upstream_council(
+        adapter, strategy, runners, sentiment_adapter=sentiment_adapter,
+        sentiment_missing_key=sentiment_missing_key)
+    snapshot = ResearchState.model_validate(upstream.invoke(ResearchState(
+        ticker=ticker, strategy_id=strategy.id,
+        prior_recommendation=prior_recommendation)))
+
+    decide = make_decision_node(strategy, runners["decision"])
+
+    def one_replay() -> RunOutcome:
+        # Independent deep-copy per replay: the Decision node mutates only
+        # `decision`, but copying the whole state guarantees isolation regardless.
+        st = snapshot.model_copy(deep=True)
+        decide(st)
+        return outcome_from_state(st)
+
+    # Reuse the shared short-circuit + aggregation (gated first -> n=1).
+    return run_council_n(one_replay, ticker=ticker, n=n)
+
+
+def decision_cost_guard_line(n: int, per_run: float = _COST_PER_RUN_USD) -> str:
+    """Cost guard for the MICRO-harness: one full upstream pass + cheap replays."""
+    return (f"Estimated cost: 1 full run (${per_run:.2f}) + up to {max(n - 1, 0)} "
+            f"Decision-node replays (fractions of a cent each); gated names "
+            f"short-circuit to the single run")
+
+
+def decision_stability_label(report: StabilityReport) -> str:
+    """One-token label for the micro-harness: STABLE <v> / STABLE (gated) <v> /
+    BORDERLINE (leaning <modal>, k/n)."""
+    if report.stability == "deterministic":
+        return f"STABLE (gated) {report.modal_verdict.upper()}"
+    if report.stability == "stable":
+        return f"STABLE {report.modal_verdict.upper()}"
+    k = report.distribution.get(report.modal_verdict, 0)
+    return (f"BORDERLINE (leaning {report.modal_verdict.upper()}, "
+            f"{k}/{report.n_run})")
+
+
+def decision_stability_banner(report: StabilityReport) -> Optional[str]:
+    """The one-line report banner for a BORDERLINE decision, or None when STABLE."""
+    if report.stability != "BORDERLINE":
+        return None
+    dist = " / ".join(
+        f"{v.upper()} {c}" for v, c in sorted(report.distribution.items(),
+                                              key=lambda kv: (-kv[1], kv[0])))
+    return (f"BORDERLINE — the Decision node returned {dist} over {report.n_run} "
+            f"replays on identical evidence; treat as a lead and read the report.")
+
+
+def decision_stability_summary(report: StabilityReport) -> dict:
+    """Flat machine-readable summary to stamp onto a RunReport / CSV column set."""
+    return {
+        "verdict_distribution": dict(report.distribution),
+        "modal_verdict": report.modal_verdict,
+        "stability": "BORDERLINE" if report.stability == "BORDERLINE" else "STABLE",
+        "gated": report.gated,
+        "n": report.n_run,
+        "confidence_mean": round(report.confidence_mean, 4),
+        "confidence_stdev": round(report.confidence_stdev, 4),
+    }

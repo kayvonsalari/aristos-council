@@ -28,8 +28,11 @@ from aristos_council.data.provider import select_market_adapter
 from aristos_council.reproducibility import (
     build_run_one,
     cost_guard_line,
+    decision_cost_guard_line,
+    decision_stability_label,
     format_stability,
     run_council_n,
+    run_decision_n,
     stability_csv_row,
 )
 from aristos_council.strategy.loader import load_strategy
@@ -49,11 +52,17 @@ def append_csv_row(path: Path, row: dict) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run a council N times; report stability.")
+    parser = argparse.ArgumentParser(
+        description="Replay the Decision node N times on one upstream pass; report "
+                    "STABLE/BORDERLINE. --full re-runs the WHOLE pipeline N times.")
     parser.add_argument("ticker")
     parser.add_argument("--strategy", default=None, help="strategy id or YAML path")
-    parser.add_argument("-n", type=int, default=5, help="runs (default 5)")
+    parser.add_argument("-n", type=int, default=5, help="replays (default 5)")
     parser.add_argument("--csv", default=None, help="append the stability row to this CSV")
+    parser.add_argument(
+        "--full", action="store_true",
+        help="re-run the FULL pipeline N times instead of the cheap Decision-node "
+             "micro-harness (for validating the two distributions agree)")
     args = parser.parse_args()
 
     ticker = normalize_ticker(args.ticker)
@@ -70,17 +79,25 @@ def main() -> None:
 
     adapter = select_market_adapter()
     runners = production_runners()
-    print(f"(strategy: {strategy.id}; market provider: {adapter.name})")
+    mode = "full pipeline x N" if args.full else "Decision-node micro-harness"
+    print(f"(strategy: {strategy.id}; market provider: {adapter.name}; mode: {mode})")
 
     # Cost guard: n is explicit and the spend is printed BEFORE running.
-    print(cost_guard_line(args.n))
+    print(cost_guard_line(args.n) if args.full else decision_cost_guard_line(args.n))
 
-    run_one = build_run_one(
-        ticker=ticker, strategy=strategy, adapter=adapter, runners=runners,
-        sentiment_adapter=sentiment, sentiment_missing_key=sentiment_missing_key)
-    report = run_council_n(run_one, ticker=ticker, n=args.n)
+    if args.full:
+        run_one = build_run_one(
+            ticker=ticker, strategy=strategy, adapter=adapter, runners=runners,
+            sentiment_adapter=sentiment, sentiment_missing_key=sentiment_missing_key)
+        report = run_council_n(run_one, ticker=ticker, n=args.n)
+    else:
+        report = run_decision_n(
+            ticker=ticker, strategy=strategy, adapter=adapter, runners=runners,
+            n=args.n, sentiment_adapter=sentiment,
+            sentiment_missing_key=sentiment_missing_key)
 
     print("\n=== Reproducibility ===")
+    print(decision_stability_label(report))
     print(format_stability(report))
     if report.veto_union:
         print(f"  vetoes seen across runs: {', '.join(report.veto_union)}")
