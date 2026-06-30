@@ -169,6 +169,19 @@ def is_sector_excluded(sector: Optional[str], exclude_sectors) -> bool:
     return sector.strip().lower() in {s.strip().lower() for s in exclude_sectors}
 
 
+def is_payout_uncovered(payout_ratio: Optional[float],
+                        max_payout: Optional[float]) -> bool:
+    """CONFIRMED-ONLY payout-coverage gate. True only when payout_ratio is PRESENT and
+    EXCEEDS max_payout — a dividend the company can't afford is a coming cut, so it is
+    DISQUALIFYING for a defensive income holding (the income-strategy analogue of the
+    falling-knife guard). A missing/None payout (a non-dividend name has no payout to
+    be uncovered) is NEVER excluded — same principle as the sector gate. No gate set
+    (max_payout None) excludes nothing."""
+    if max_payout is None or payout_ratio is None:
+        return False
+    return payout_ratio > max_payout
+
+
 def compute_factors(fi: FactorInputs, names) -> dict[str, Optional[float]]:
     """The factor values for one ticker, for the named factors. Unknown names raise
     (the rank-strategy loader validates names up front)."""

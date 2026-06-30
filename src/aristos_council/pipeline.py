@@ -21,7 +21,12 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Optional
 
-from .factors import compute_factors, gather_factor_inputs, is_sector_excluded
+from .factors import (
+    compute_factors,
+    gather_factor_inputs,
+    is_payout_uncovered,
+    is_sector_excluded,
+)
 from .persistence.reports import RunReport, report_from_state
 from .rank_engine import FactorSpec, RankedTicker, rank_universe
 from .state import Recommendation, ResearchState
@@ -70,6 +75,11 @@ def _rank_stage(universe, rank_strategy, adapter, *, today):
             continue
         if f is not None and is_sector_excluded(f.sector, rank_strategy.exclude_sectors):
             excluded.append((t, f"sector excluded ({f.sector})"))
+            continue
+        if f is not None and is_payout_uncovered(f.payout_ratio,
+                                                 rank_strategy.max_payout_ratio):
+            excluded.append((t, f"payout uncovered ({f.payout_ratio:.0%} > "
+                                f"{rank_strategy.max_payout_ratio:.0%})"))
             continue
         rows.append((t, compute_factors(fi, [fac.name for fac in rank_strategy.factors])))
     specs = [FactorSpec(fac.name, fac.direction, fac.missing)

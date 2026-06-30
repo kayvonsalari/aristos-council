@@ -23,6 +23,7 @@ from aristos_council.data.provider import select_market_adapter
 from aristos_council.factors import (
     compute_factors,
     gather_factor_inputs,
+    is_payout_uncovered,
     is_sector_excluded,
 )
 from aristos_council.rank_engine import FactorSpec, RankedTicker, rank_universe
@@ -85,6 +86,7 @@ def main() -> None:
     rows: list[tuple[str, dict]] = []
     excluded_cap: list[str] = []
     excluded_sector: list[tuple[str, str]] = []
+    excluded_payout: list[tuple[str, float]] = []
     for t in tickers:
         fi = gather_factor_inputs(adapter, t, today=today)
         f = fi.fundamentals
@@ -95,6 +97,9 @@ def main() -> None:
             continue
         if f is not None and is_sector_excluded(f.sector, strat.exclude_sectors):
             excluded_sector.append((t, f.sector))   # e.g. ROIC invalid for banks
+            continue
+        if f is not None and is_payout_uncovered(f.payout_ratio, strat.max_payout_ratio):
+            excluded_payout.append((t, f.payout_ratio))   # uncovered dividend = trap
             continue
         rows.append((t, compute_factors(fi, factor_names)))
         print(f"  computed {t}")
@@ -110,12 +115,14 @@ def main() -> None:
               f"combined {r.combined_rank:>5.0f}   "
               + "  ".join(f"{f}:{rk:.0f}" for f, rk in r.factor_ranks.items()))
     drop = [r for r in ranked if r.excluded]
-    if drop or excluded_cap or excluded_sector:
+    if drop or excluded_cap or excluded_sector or excluded_payout:
         print("\n  Excluded:")
         for t in excluded_cap:
             print(f"      {t:<10} below min market cap")
         for t, sec in excluded_sector:
             print(f"      {t:<10} sector excluded ({sec})")
+        for t, pr in excluded_payout:
+            print(f"      {t:<10} payout uncovered ({pr:.0%} > {strat.max_payout_ratio:.0%})")
         for r in drop:
             print(f"      {r.ticker:<10} {r.reason}")
 

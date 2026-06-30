@@ -40,6 +40,11 @@ council_screen_strategy: conservative_screen_v1
 missing: worst
 
 min_market_cap: 1000000000
+# Payout-coverage gate (matches conservative_screen_v1's max_payout_ratio): exclude
+# names paying out MORE than 85% of earnings — an uncovered dividend is a coming cut,
+# a yield trap (PFE 131% / CVX 120% / ABBV 326% were ranking as top BUYs). A genuinely
+# DEFENSIVE income holding must have covered income, not just a high headline yield.
+max_payout_ratio: 0.85
 
 rationale: >
   Defensive equity returns are driven more by what you AVOID than what you pick:

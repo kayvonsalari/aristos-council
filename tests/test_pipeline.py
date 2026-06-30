@@ -274,3 +274,67 @@ def test_specialist_prompt_is_strategy_relative_and_garp_free():
     assert cons.name in tech                             # active strategy named
     assert "defensive" in tech.lower()                   # its intent injected
     assert "candidate" in tech                           # strategy-relative question
+
+
+# --------------------------------------------------------------------------- #
+# Payout-coverage exclusion gate — the yield-trap guard the council surfaced
+# --------------------------------------------------------------------------- #
+def test_is_payout_uncovered_confirmed_only():
+    from aristos_council.factors import is_payout_uncovered
+    assert is_payout_uncovered(1.31, 0.85) is True       # PFE-shaped uncovered
+    assert is_payout_uncovered(0.60, 0.85) is False      # covered
+    assert is_payout_uncovered(None, 0.85) is False      # non-dividend -> not dropped
+    assert is_payout_uncovered(1.31, None) is False      # no gate -> excludes nothing
+
+
+def _payout_rank_stage(payouts: dict, max_payout):
+    """Run the pipeline's rank stage over a fake universe with given payout ratios."""
+    from aristos_council.pipeline import _rank_stage
+
+    class _Strat:
+        factors = MAGIC.factors
+        cut, k, percentile, missing = "quintile", 6, 0.2, "worst"
+        min_market_cap = None
+        exclude_sectors: list = []
+        max_payout_ratio = max_payout
+
+    class _A(MarketDataAdapter):
+        name = "fake"
+        def get_fundamentals(self, ticker):
+            return Fundamentals(ticker=ticker, market_cap=2e10, sector="Technology",
+                                payout_ratio=payouts[ticker], ebit=[1000.0],
+                                operating_income=[1000.0] * 4, tax_provision=[200.0] * 4,
+                                pretax_income=[950.0] * 4, invested_capital=[5000.0] * 4)
+        def get_price_history(self, ticker, *, start, end):
+            return PriceHistory(ticker=ticker, bars=[])
+        def get_dividend_history(self, ticker, *, start, end):
+            return []
+
+    return _rank_stage(list(payouts), _Strat(), _A(), today=date(2026, 6, 30))
+
+
+def test_uncovered_payout_name_is_excluded_from_ranking():
+    ranked, excluded = _payout_rank_stage(
+        {"PFE": 1.31, "JNJ": 0.60, "KO": 0.70}, max_payout=0.85)
+    tickers = [t for t, _ in [(r.ticker, r) for r in ranked]]
+    assert "PFE" not in tickers                           # excluded, never ranked
+    assert "JNJ" in tickers and "KO" in tickers           # covered -> ranked
+    assert any(t == "PFE" and "payout uncovered" in reason
+               for t, reason in excluded)
+
+
+def test_non_dividend_and_no_gate_are_not_excluded_for_payout():
+    # payout None (non-dividend growth name) with a gate -> NOT excluded
+    ranked, excluded = _payout_rank_stage(
+        {"NVDA": None, "JNJ": 0.60}, max_payout=0.85)
+    assert {r.ticker for r in ranked} == {"NVDA", "JNJ"}
+    assert not any("payout" in reason for _, reason in excluded)
+    # no gate at all -> an uncovered name ranks normally (magic_formula unaffected)
+    ranked2, excluded2 = _payout_rank_stage({"PFE": 1.31, "JNJ": 0.60}, max_payout=None)
+    assert {r.ticker for r in ranked2} == {"PFE", "JNJ"}
+    assert not any("payout" in reason for _, reason in excluded2)
+
+
+def test_conservative_plus_declares_the_payout_gate():
+    cons = load_rank_strategy(STRAT_DIR / "conservative_plus_v1.yaml")
+    assert cons.max_payout_ratio == 0.85                 # matches conservative_screen
