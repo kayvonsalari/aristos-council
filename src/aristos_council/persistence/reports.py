@@ -41,6 +41,7 @@ from ..state import (
     ResearchState,
     RunIssue,
     SpecialistOpinion,
+    Stance,
     VetoFlag,
 )
 
@@ -103,6 +104,21 @@ class RunReport(BaseModel):
     # verdict records the exact prompt it came from. Optional/default None so older
     # reports round-trip unchanged.
     prompt_version: Optional[str] = None
+    # Aristos v2 integrated pipeline. ranker_verdict is the VERDICT-OF-RECORD (the
+    # deterministic factor ranking); council_verdict is the Decision agent's
+    # INDEPENDENT second opinion (Option B; None in 'narrator' mode A);
+    # ranker_council_agreement is AGREE/DISAGREE between them (None when narrating or
+    # no ranker); dissent_notes aggregate the specialists'/critic's challenges to the
+    # ranker (the human's "look closer" signals). All optional/default so older /
+    # standalone-council reports round-trip unchanged.
+    ranker_verdict: Optional[str] = None
+    council_verdict: Optional[str] = None
+    council_mode: Optional[str] = None
+    ranker_council_agreement: Optional[str] = None
+    dissent_notes: list[str] = Field(default_factory=list)
+    # {supports, challenges, abstained} over the specialists — supports/challenges
+    # count NON-abstained specialists only (the abstention rule).
+    specialist_support: Optional[dict] = None
     # Decision-node micro-harness result (reproducibility.decision_stability_summary):
     # {verdict_distribution, modal_verdict, stability "STABLE"/"BORDERLINE", gated, n,
     # confidence_mean/stdev} from replaying the Decision node N times on this run's
@@ -165,6 +181,29 @@ def report_from_state(
         agreement = ("AGREE"
                      if state.matrix_decision.verdict == state.decision.recommendation
                      else "DISAGREE")
+
+    # Aristos v2: ranker (verdict-of-record) vs council (independent second opinion).
+    d = state.decision
+    narrating = bool(d and getattr(d, "narration_only", False))
+    ranker_v = state.ranker_verdict.value if state.ranker_verdict else None
+    council_v = (d.recommendation.value if d and not narrating else None)
+    rc_agreement = None
+    if ranker_v is not None and council_v is not None:
+        rc_agreement = "AGREE" if council_v == ranker_v else "DISAGREE"
+    dissent_notes = [
+        f"{o.specialist.value}: {o.dissent_note}"
+        for o in state.specialist_opinions
+        if o.agrees_with_ranker is False and o.dissent_note]
+    # Specialist agreement summary — counts ONLY non-abstained specialists (a
+    # data-less abstainer never inflates consensus); abstained shown separately.
+    non_abstained = [o for o in state.specialist_opinions
+                     if o.stance != Stance.ABSTAIN]
+    specialist_support = {
+        "supports": sum(1 for o in non_abstained if o.agrees_with_ranker is True),
+        "challenges": sum(1 for o in non_abstained if o.agrees_with_ranker is False),
+        "abstained": sum(1 for o in state.specialist_opinions
+                         if o.stance == Stance.ABSTAIN),
+    }
     return RunReport(
         ticker=state.ticker,
         run_at=run_at or state.as_of,
@@ -177,6 +216,13 @@ def report_from_state(
         decision=state.decision,
         matrix_decision=state.matrix_decision,
         agreement=agreement,
+        ranker_verdict=ranker_v,
+        council_verdict=council_v,
+        council_mode="narrator" if narrating else ("second_opinion"
+                                                   if ranker_v else None),
+        ranker_council_agreement=rc_agreement,
+        dissent_notes=dissent_notes,
+        specialist_support=specialist_support,
         veto_flags=list(state.veto_flags),
         provenance_audit=state.provenance_audit,
         run_issues=list(state.run_issues),

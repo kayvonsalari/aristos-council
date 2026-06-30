@@ -9,7 +9,7 @@ violation and trips the data-quality veto.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -75,6 +75,13 @@ class SpecialistOutput(BaseModel):
     thesis: str
     figures: list[FigureRef] = Field(default_factory=list)
     caveats: list[str] = Field(default_factory=list)
+    # Aristos v2 integrated pipeline: the specialist is an ANALYST, not a voter. When
+    # a RANKER verdict is in the evidence, it states whether its domain view SUPPORTS
+    # (True) or CHALLENGES (False) that verdict — None when it has no domain opinion
+    # on the ranker's call. The dissent_note is the one-line "why" (the forward-
+    # looking check trailing factors lack, e.g. an un-priced patent-cliff headline).
+    agrees_with_ranker: Optional[bool] = None
+    dissent_note: str = ""
 
     _coerce = field_validator("figures", "caveats", mode="before")(
         _coerce_json_list

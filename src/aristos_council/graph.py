@@ -44,6 +44,8 @@ def build_council(
     sentiment_adapter: SentimentAdapter | None = None,
     *,
     sentiment_missing_key: bool = False,
+    council_mode: str = "second_opinion",   # A/B toggle (B default); see prompts.py
+    run_matrix: bool = True,                 # skip when a RANKER drives the pipeline
 ):
     g = StateGraph(ResearchState)
 
@@ -56,10 +58,8 @@ def build_council(
             make_specialist_node(who, strategy, runners["specialist"]),
         )
     g.add_node("critic", make_critic_node(strategy, runners["critic"]))
-    g.add_node("decision", make_decision_node(strategy, runners["decision"]))
-    # Deterministic matrix verdict, computed in parallel right after the LLM
-    # decision (reads the screen + gate + stances; never mutates `decision`).
-    g.add_node("matrix", make_matrix_node(strategy))
+    g.add_node("decision",
+               make_decision_node(strategy, runners["decision"], council_mode))
     g.add_node("audit", make_audit_node())
     g.add_node("veto", make_veto_node(strategy))
 
@@ -69,8 +69,14 @@ def build_council(
         g.add_edge(a.value, b.value)
     g.add_edge(SPECIALIST_ORDER[-1].value, "critic")
     g.add_edge("critic", "decision")
-    g.add_edge("decision", "matrix")
-    g.add_edge("matrix", "audit")
+    if run_matrix:
+        # The old deterministic matrix verdict (screen strategies). REDUNDANT when a
+        # RANKER is the verdict-of-record, so the pipeline skips it for rank runs.
+        g.add_node("matrix", make_matrix_node(strategy))
+        g.add_edge("decision", "matrix")
+        g.add_edge("matrix", "audit")
+    else:
+        g.add_edge("decision", "audit")
     g.add_edge("audit", "veto")
     g.add_edge("veto", END)
 

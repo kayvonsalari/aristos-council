@@ -428,9 +428,20 @@ def _validated_figures(
 # --------------------------------------------------------------------------- #
 # specialists
 # --------------------------------------------------------------------------- #
+def _ranker_block(state: ResearchState) -> str:
+    """The RANKER's verdict-of-record, surfaced to the agents so they can analyse and
+    challenge it. Empty for a standalone council run (no ranker)."""
+    if state.ranker_verdict is None:
+        return ""
+    expl = f" — {state.ranker_explanation}" if state.ranker_explanation else ""
+    return (f"\nRANKER VERDICT (the deterministic verdict-of-record for this name): "
+            f"{state.ranker_verdict.value.upper()}{expl}\n")
+
+
 def _user_message(state: ResearchState, strategy: Strategy) -> str:
     return (
-        f"Ticker under review: {state.ticker}\n\n"
+        f"Ticker under review: {state.ticker}\n"
+        f"{_ranker_block(state)}\n"
         f"EVIDENCE (one JSON tool call per line — the complete record):\n"
         f"{_evidence_block(state, strategy)}\n"
     )
@@ -441,12 +452,19 @@ def make_specialist_node(who: SpecialistName, strategy: Strategy, runner):
 
     def specialist(state: ResearchState) -> ResearchState:
         out: SpecialistOutput = runner.invoke(system, _user_message(state, strategy))
+        # ABSTENTION RULE: a data-less specialist (ABSTAIN — e.g. Sentiment with no
+        # Finnhub data, already tagged degraded) must NOT silently "agree" and inflate
+        # apparent consensus. Force agrees_with_ranker to None on abstention, whatever
+        # the model returned; the agreement summary then counts only non-abstainers.
+        agrees = None if out.stance == Stance.ABSTAIN else out.agrees_with_ranker
         state.specialist_opinions.append(
             SpecialistOpinion(
                 specialist=who, stance=out.stance, confidence=out.confidence,
                 thesis=out.thesis,
                 figures=_validated_figures(state, who.value, out.figures),
                 caveats=out.caveats,
+                agrees_with_ranker=agrees,
+                dissent_note=("" if out.stance == Stance.ABSTAIN else out.dissent_note),
             )
         )
         return state
@@ -503,8 +521,13 @@ def make_critic_node(strategy: Strategy, runner):
 # --------------------------------------------------------------------------- #
 # decision — buy/hold/sell with confidence and dissent
 # --------------------------------------------------------------------------- #
-def make_decision_node(strategy: Strategy, runner):
-    system = _decision_system(strategy)
+def make_decision_node(strategy: Strategy, runner,
+                       council_mode: str = "second_opinion"):
+    # A/B toggle (flag, never a rewrite): "second_opinion" (B, default) — the agent
+    # issues its OWN verdict, compared to the ranker; "narrator" (A) — it only
+    # explains the ranker's verdict and emits no independent call.
+    system = decision_system(strategy, council_mode)
+    narrator = council_mode == "narrator"
 
     def decide(state: ResearchState) -> ResearchState:
         opinions = "\n".join(
@@ -530,12 +553,19 @@ def make_decision_node(strategy: Strategy, runner):
         )
         out: DecisionOutput = runner.invoke(system, user)
 
+        # NARRATOR (Option A): the council does NOT issue an independent verdict — it
+        # echoes the RANKER's verdict-of-record. SECOND_OPINION (Option B, default):
+        # the agent's OWN verdict stands as the independent check.
+        base_rec = out.recommendation
+        if narrator and state.ranker_verdict is not None:
+            base_rec = state.ranker_verdict
+
         # DETERMINISTIC disposition ceiling — authoritative over the LLM. A
         # confirmed fail of a gating criterion caps the verdict at SELL no matter
         # what the agent decided (partial_pass_allows_hold is only a soft hint and
         # proved evadable; this is the enforcement). Default-off: a strategy with
         # no is_gating criteria behaves exactly as before.
-        final_rec = out.recommendation
+        final_rec = base_rec
         gate_applied = False
         fired_name = None
         insufficient = False
@@ -546,8 +576,8 @@ def make_decision_node(strategy: Strategy, runner):
             if ceiling is not None:
                 # A CONFIRMED gating fail exists -> SELL territory. This takes
                 # PRECEDENCE over a co-occurring NOT-EVAL: a real SELL beats
-                # "can't tell". Only cap when the LLM verdict is more bullish.
-                if exceeds_ceiling(out.recommendation, ceiling):
+                # "can't tell". Only cap when the verdict is more bullish.
+                if exceeds_ceiling(base_rec, ceiling):
                     final_rec = ceiling
                     gate_applied = True
                     failed = failed_gating_criteria(screen, gating)
@@ -568,10 +598,11 @@ def make_decision_node(strategy: Strategy, runner):
             confidence=out.confidence,
             rationale=out.rationale,
             dissent=out.dissent,
-            original_recommendation=out.recommendation,
+            original_recommendation=base_rec,
             gate_override_applied=gate_applied,
             gating_criterion_fired=fired_name,
             insufficient_evidence=insufficient,
+            narration_only=narrator,
         )
         return state
 

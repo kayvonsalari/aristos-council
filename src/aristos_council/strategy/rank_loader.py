@@ -59,6 +59,24 @@ class RankStrategy(BaseModel):
     # Universe exclusions (applied by the caller before ranking).
     min_market_cap: float | None = None
     exclude_sectors: list[str] = Field(default_factory=list)
+    # Integrated-pipeline config. council_runs_on gates which ranked names proceed to
+    # the (costly) LLM council; council_mode is the A/B toggle for the Decision agent.
+    council_runs_on: str = "buy_quintile"   # buy_quintile | top_k | all
+    council_mode: str = "second_opinion"    # second_opinion (B) | narrator (A)
+
+    @field_validator("council_runs_on")
+    @classmethod
+    def _runs_on_valid(cls, v):
+        if v not in ("buy_quintile", "top_k", "all"):
+            raise ValueError(f"council_runs_on must be buy_quintile|top_k|all, got {v!r}")
+        return v
+
+    @field_validator("council_mode")
+    @classmethod
+    def _mode_valid(cls, v):
+        if v not in ("second_opinion", "narrator"):
+            raise ValueError(f"council_mode must be second_opinion|narrator, got {v!r}")
+        return v
 
     @field_validator("id")
     @classmethod

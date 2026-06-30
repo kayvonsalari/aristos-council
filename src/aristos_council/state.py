@@ -125,6 +125,11 @@ class SpecialistOpinion(BaseModel):
     # Anything that should make the human gate nervous — stale data, a metric
     # that couldn't be computed, an assumption the specialist had to make.
     caveats: list[str] = Field(default_factory=list)
+    # Aristos v2: does this specialist's domain view SUPPORT (True) or CHALLENGE
+    # (False) the RANKER's verdict? None = no domain opinion. dissent_note is the
+    # one-line "why" — the forward-looking check the trailing factors lack.
+    agrees_with_ranker: Optional[bool] = None
+    dissent_note: str = ""
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -194,6 +199,11 @@ class Decision(BaseModel):
     # GATING criterion was NOT-EVAL (passed is None). Distinct from a confirmed-fail
     # SELL cap (gate_override_applied alone). Default False so older records parse.
     insufficient_evidence: bool = False
+    # Aristos v2 A/B toggle: True when the council ran in 'narrator' mode (Option A) —
+    # the Decision agent only narrated the RANKER's verdict and did NOT issue an
+    # independent second opinion, so `recommendation` echoes the ranker and is not a
+    # ranker-vs-council comparison input. False = 'second_opinion' (Option B, default).
+    narration_only: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -321,6 +331,11 @@ class ResearchState(BaseModel):
     # Recommendation from the previous run for this ticker (if any) — used by
     # the veto gate to detect a RECOMMENDATION_FLIP.
     prior_recommendation: Optional[Recommendation] = None
+    # Aristos v2 integrated pipeline: the RANKER's verdict for this name (the
+    # verdict-of-record), injected before the council runs so specialists/critic/
+    # decision can analyse it and state agreement. None for a standalone council run.
+    ranker_verdict: Optional[Recommendation] = None
+    ranker_explanation: str = ""
     # Ephemeral per-run disposition overrides applied on top of the base strategy
     # (e.g. {"partial_pass_allows_hold": false,
     #        "criteria.min_dividend_growth_streak.is_gating": true}). Empty for a

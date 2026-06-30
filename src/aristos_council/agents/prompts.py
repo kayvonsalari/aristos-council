@@ -21,7 +21,11 @@ from ..strategy.loader import Strategy
 #        the Decision verdict, and the drawdown=bearish reflex that fights GARP);
 #        RISK keeps its downside focus but stops manufacturing a bearish tilt on
 #        ambiguous/absent evidence.
-PROMPT_VERSION = "v2"
+#   v3 = Aristos v2 integrated pipeline: specialists reframed from VOTERS to ANALYSTS
+#        (state agreement with the RANKER verdict via agrees_with_ranker/dissent_note);
+#        critic sharpened to attack the ranker's BUY; Decision agent is an INDEPENDENT
+#        SECOND OPINION (Option B) with a NARRATOR variant (Option A) via council_mode.
+PROMPT_VERSION = "v3"
 
 
 HARD_RULES = (
@@ -106,6 +110,22 @@ SPECIALIST_BRIEFS = {
 }
 
 
+_RANKER_ANALYST_NOTE = (
+    "6. RANKER CHECK. You are an ANALYST, not a voter — your stance is useful "
+    "context but it does NOT decide the verdict. When the evidence includes a "
+    "RANKER VERDICT for this name (a deterministic factor ranking is the verdict-"
+    "of-record), your job is the domain ANALYSIS plus an honest check on that "
+    "verdict: set `agrees_with_ranker` true if your domain view SUPPORTS it, false "
+    "if it CHALLENGES it, null if your domain has no opinion on it, and give a "
+    "one-line `dissent_note` for the why — ESPECIALLY any forward-looking risk the "
+    "ranker's TRAILING factors cannot see yet (an un-priced headline, a guidance "
+    "cut, a patent cliff). This challenge is the point of the council. If you ABSTAIN "
+    "(insufficient data for your domain), set `agrees_with_ranker` to null — never "
+    "agree by default; a data-less specialist must not inflate the council's "
+    "apparent consensus.\n"
+)
+
+
 def specialist_system(who: SpecialistName, strategy: Strategy) -> str:
     return (
         f"You are the {who.value.upper()} specialist on an investment research "
@@ -114,7 +134,8 @@ def specialist_system(who: SpecialistName, strategy: Strategy) -> str:
         f"Your brief: {SPECIALIST_BRIEFS[who]}\n\n"
         f"{HARD_RULES}\n"
         "5. ABSTAIN rather than guess when the evidence is insufficient for "
-        "your domain.\n\n"
+        "your domain.\n"
+        f"{_RANKER_ANALYST_NOTE}\n"
         f"Strategy rationale:\n{strategy.rationale}\n"
     )
 
@@ -136,15 +157,39 @@ def critic_system(strategy: Strategy) -> str:
         "the missing number, or perform the computation yourself. A sharp "
         "unresolved question is more valuable to this council than a "
         "fabricated certainty.\n"
+        "6. ATTACK THE RANKER. When a RANKER VERDICT is in the evidence, sharpen "
+        "your counter-case on IT: why might the ranker's BUY be wrong — cheap "
+        "BECAUSE it is dying, momentum about to reverse, a factor that is lying "
+        "(a buyback masking dilution, a trailing number a forward event has "
+        "already broken)? The ranker sees only trailing data; you find what it "
+        "cannot.\n"
     )
 
 
-def decision_system(strategy: Strategy) -> str:
+def decision_system(strategy: Strategy,
+                    council_mode: str = "second_opinion") -> str:
+    if council_mode == "narrator":
+        # Option A: the RANKER is the decision; the agent only EXPLAINS it.
+        role = (
+            "You are the council's NARRATOR. A deterministic RANKER has issued the "
+            "verdict-of-record for this name; you do NOT issue an independent call. "
+            "Write a synthesis `rationale` that explains the ranker's verdict in "
+            "light of the specialists and the critic, fairly noting any challenges "
+            "they raised. Set `recommendation` to the RANKER's verdict (echo it) — "
+            "you are explaining, not deciding.\n\n")
+    else:
+        # Option B (default): an INDEPENDENT SECOND OPINION that may disagree.
+        role = (
+            "You are the council's INDEPENDENT SECOND OPINION. A deterministic "
+            "RANKER has issued the verdict-of-record for this name; you do NOT "
+            "rubber-stamp it. Weigh the specialists AND the critic's counter-case, "
+            "then issue your OWN buy/hold/sell with a confidence in [0,1] — agreeing "
+            "or DISAGREEING with the ranker on the merits. Your disagreement (e.g. a "
+            "forward risk the ranker's trailing factors miss) is the signal the "
+            "council exists to provide; never bend your call to match the ranker.\n\n")
     return (
-        "You are the DECISION agent of an investment research council "
-        f"operating under the strategy '{strategy.name}' (id {strategy.id}). "
-        "Weigh the specialists AND the critic's counter-case, then issue "
-        "buy/hold/sell with a confidence in [0,1].\n\n"
+        f"{role}"
+        f"Operating under the strategy '{strategy.name}' (id {strategy.id}).\n\n"
         f"{HARD_RULES}\n"
         "5. DISSENT. List every specialist whose stance your call overrides in "
         "`dissent` — dissent must never be silently dropped.\n"
