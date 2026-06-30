@@ -335,6 +335,72 @@ def test_non_dividend_and_no_gate_are_not_excluded_for_payout():
     assert not any("payout" in reason for _, reason in excluded2)
 
 
-def test_conservative_plus_declares_the_payout_gate():
+# --------------------------------------------------------------------------- #
+# Screen-as-prefilter — rank only names that pass the council screen's floors
+# --------------------------------------------------------------------------- #
+CONS_SCREEN = load_strategy(STRAT_DIR / "conservative_screen_v1.yaml")
+
+
+def _fi(ticker, *, last_close=100.0, return_12m=0.05, **fund_kw):
+    from aristos_council.factors import FactorInputs
+    return FactorInputs(ticker=ticker,
+                        fundamentals=Fundamentals(ticker=ticker, **fund_kw),
+                        last_close=last_close, return_12m=return_12m)
+
+
+def test_screen_prefilter_fails_thin_yield_passes_covered_abstains_on_missing():
+    from aristos_council.factors import screen_prefilter_fail
+    crit = CONS_SCREEN.criteria
+    # thin yield (0.4%) < 1.5% floor -> CONFIRMED fail, reason names the criterion
+    thin = screen_prefilter_fail(crit, _fi(
+        "AAPL", market_cap=1e10, dividend_per_share=0.4, payout_ratio=0.5))
+    assert thin is not None and "min_dividend_yield" in thin
+    # covered defensive (2% yield, 60% payout) -> passes everything
+    assert screen_prefilter_fail(crit, _fi(
+        "JNJ", market_cap=1e10, dividend_per_share=2.0, payout_ratio=0.6)) is None
+    # MISSING dps (data gap) -> min_yield ABSTAINS (passed None) -> NOT excluded
+    assert screen_prefilter_fail(crit, _fi(
+        "X", market_cap=1e10, dividend_per_share=None, payout_ratio=None)) is None
+    # genuine NON-payer (dps 0) -> FAILS the income requirement (intended here)
+    nonpayer = screen_prefilter_fail(crit, _fi(
+        "NVDA", market_cap=1e10, dividend_per_share=0.0))
+    assert nonpayer is not None and "min_dividend_yield" in nonpayer
+
+
+def test_rank_stage_prefilter_excludes_failing_names_pre_rank():
+    from aristos_council.pipeline import _rank_stage
     cons = load_rank_strategy(STRAT_DIR / "conservative_plus_v1.yaml")
-    assert cons.max_payout_ratio == 0.85                 # matches conservative_screen
+
+    class _A(MarketDataAdapter):
+        name = "fake"
+        _F = {"AAPL": dict(market_cap=1e10, dividend_per_share=0.4, payout_ratio=0.5),
+              "JNJ": dict(market_cap=1e10, dividend_per_share=4.0, payout_ratio=0.6)}
+        def get_fundamentals(self, t):
+            return Fundamentals(ticker=t, **self._F[t])
+        def get_price_history(self, t, *, start, end):
+            return PriceHistory(ticker=t, bars=[
+                PriceBar(day=date(2026, 1, 1), open=100, high=101, low=99,
+                         close=100 + 0.05 * i, adj_close=100 + 0.05 * i, volume=10)
+                for i in range(260)])
+        def get_dividend_history(self, t, *, start, end):
+            return []
+
+    ranked, excluded = _rank_stage(["AAPL", "JNJ"], cons, _A(),
+                                   today=date(2026, 6, 30),
+                                   prefilter_criteria=CONS_SCREEN.criteria)
+    assert {r.ticker for r in ranked} == {"JNJ"}         # AAPL prefiltered out
+    assert any(t == "AAPL" and "min_dividend_yield" in reason
+               for t, reason in excluded)
+
+
+def test_prefilter_is_one_definition_no_duplicated_threshold():
+    cons = load_rank_strategy(STRAT_DIR / "conservative_plus_v1.yaml")
+    assert cons.prefilter_screen is True
+    # the standalone payout gate is DROPPED — the screen is the single source now
+    assert cons.max_payout_ratio is None
+    payout = next(c for c in CONS_SCREEN.criteria if c.name == "max_payout_ratio")
+    assert payout.threshold == 0.85                      # the ONE coverage threshold
+
+
+def test_magic_formula_has_no_prefilter():
+    assert load_rank_strategy(STRAT_DIR / "magic_formula_v1.yaml").prefilter_screen is False

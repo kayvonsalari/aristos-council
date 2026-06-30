@@ -26,6 +26,7 @@ from .factors import (
     gather_factor_inputs,
     is_payout_uncovered,
     is_sector_excluded,
+    screen_prefilter_fail,
 )
 from .persistence.reports import RunReport, report_from_state
 from .rank_engine import FactorSpec, RankedTicker, rank_universe
@@ -62,7 +63,7 @@ def resolve_council_screen_id(rank_strategy, explicit: Optional[str] = None,
     return rank_strategy.council_screen_strategy or default
 
 
-def _rank_stage(universe, rank_strategy, adapter, *, today):
+def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None):
     rows: list[tuple[str, dict]] = []
     excluded: list[tuple[str, str]] = []
     for t in universe:
@@ -81,6 +82,13 @@ def _rank_stage(universe, rank_strategy, adapter, *, today):
             excluded.append((t, f"payout uncovered ({f.payout_ratio:.0%} > "
                                 f"{rank_strategy.max_payout_ratio:.0%})"))
             continue
+        # SCREEN-AS-PREFILTER: only RANK names that already PASS the defensive
+        # definition (the council screen). One source of truth; floors enforced.
+        if prefilter_criteria is not None:
+            reason = screen_prefilter_fail(prefilter_criteria, fi)
+            if reason is not None:
+                excluded.append((t, reason))
+                continue
         rows.append((t, compute_factors(fi, [fac.name for fac in rank_strategy.factors])))
     specs = [FactorSpec(fac.name, fac.direction, fac.missing)
              for fac in rank_strategy.factors]
@@ -113,7 +121,12 @@ def run_pipeline(
     runs_on = council_runs_on or rank_strategy.council_runs_on
     mode = council_mode or rank_strategy.council_mode
 
-    ranked, excluded = _rank_stage(universe, rank_strategy, adapter, today=today)
+    # If prefilter is on, the SAME screen the council judges by also gatekeeps the
+    # ranking — ranker and council share one defensive definition.
+    prefilter = (screen_strategy.criteria
+                 if getattr(rank_strategy, "prefilter_screen", False) else None)
+    ranked, excluded = _rank_stage(universe, rank_strategy, adapter, today=today,
+                                   prefilter_criteria=prefilter)
     by_ticker = {r.ticker: r for r in ranked}
     shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
 

@@ -43,6 +43,7 @@ class FactorInputs:
     return_6m: Optional[float] = None
     return_12m: Optional[float] = None
     annualized_volatility: Optional[float] = None
+    last_close: Optional[float] = None     # for the screen-as-prefilter (yield etc.)
 
 
 # --- factor functions (pure; None == NOT-EVAL) ---------------------------- #
@@ -215,4 +216,30 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
         ticker=ticker, fundamentals=fundamentals,
         return_6m=total_return(closes, _TD_6M) if closes else None,
         return_12m=total_return(closes, _TD_12M) if closes else None,
-        annualized_volatility=snap.annualized_volatility if snap else None)
+        annualized_volatility=snap.annualized_volatility if snap else None,
+        last_close=closes[-1] if closes else None)
+
+
+def screen_prefilter_fail(screen_criteria, fi: FactorInputs) -> Optional[str]:
+    """Run a SCREEN's criteria on one name; return the NAMED reason for the first
+    CONFIRMED FAIL (passed is False), or None if it passes or only ABSTAINS.
+
+    This is the screen-as-prefilter: for a strategy defined by HARD REQUIREMENTS (a
+    defensive holding MUST have covered, real income and intact trend), the screen
+    says WHO QUALIFIES and the ranking orders what's left — ranking-and-combining
+    alone can't enforce a floor. SAFETY: a criterion that ABSTAINS (passed is None,
+    e.g. missing data) does NOT exclude — abstention != failure, never drop on a data
+    gap. (Requiring income IS the strategy's intent here, so a genuine non-payer
+    failing min_dividend_yield is CORRECT — distinct from the growth-factor rule that
+    never punishes a non-dividend name.)"""
+    from .tools.criteria.registry import Evidence, run_screen
+    if fi.fundamentals is None:
+        return None
+    ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
+                  return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
+    for c in run_screen(screen_criteria, ev, ticker=fi.ticker).criteria:
+        if c.passed is False:               # confirmed fail only (None abstains)
+            obs = (f"{c.observed:.4g}" if isinstance(c.observed, (int, float))
+                   else "n/a")
+            return f"screen: {c.name} (observed {obs} vs threshold {c.threshold})"
+    return None

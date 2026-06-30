@@ -25,7 +25,9 @@ from aristos_council.factors import (
     gather_factor_inputs,
     is_payout_uncovered,
     is_sector_excluded,
+    screen_prefilter_fail,
 )
+from aristos_council.strategy.loader import load_strategy
 from aristos_council.rank_engine import FactorSpec, RankedTicker, rank_universe
 from aristos_council.strategy.rank_loader import load_rank_strategy
 
@@ -80,13 +82,21 @@ def main() -> None:
         adapter = CachingAdapter(adapter, cache_dir=DEFAULT_CACHE_DIR, today=today,
                                  refresh=args.refresh)
     factor_names = [f.name for f in strat.factors]
+    # Screen-as-prefilter: rank only names passing the council screen's floors.
+    prefilter_criteria = None
+    if strat.prefilter_screen and strat.council_screen_strategy:
+        prefilter_criteria = load_strategy(
+            STRATEGIES_DIR / f"{strat.council_screen_strategy}.yaml").criteria
     print(f"(rank strategy: {strat.id}; provider: {adapter.name}; "
-          f"factors: {', '.join(factor_names)}; cut: {cut})")
+          f"factors: {', '.join(factor_names)}; cut: {cut}"
+          + (f"; prefilter: {strat.council_screen_strategy}" if prefilter_criteria else "")
+          + ")")
 
     rows: list[tuple[str, dict]] = []
     excluded_cap: list[str] = []
     excluded_sector: list[tuple[str, str]] = []
     excluded_payout: list[tuple[str, float]] = []
+    excluded_screen: list[tuple[str, str]] = []
     for t in tickers:
         fi = gather_factor_inputs(adapter, t, today=today)
         f = fi.fundamentals
@@ -101,6 +111,11 @@ def main() -> None:
         if f is not None and is_payout_uncovered(f.payout_ratio, strat.max_payout_ratio):
             excluded_payout.append((t, f.payout_ratio))   # uncovered dividend = trap
             continue
+        if prefilter_criteria is not None:
+            reason = screen_prefilter_fail(prefilter_criteria, fi)
+            if reason is not None:
+                excluded_screen.append((t, reason))
+                continue
         rows.append((t, compute_factors(fi, factor_names)))
         print(f"  computed {t}")
 
@@ -115,7 +130,7 @@ def main() -> None:
               f"combined {r.combined_rank:>5.0f}   "
               + "  ".join(f"{f}:{rk:.0f}" for f, rk in r.factor_ranks.items()))
     drop = [r for r in ranked if r.excluded]
-    if drop or excluded_cap or excluded_sector or excluded_payout:
+    if drop or excluded_cap or excluded_sector or excluded_payout or excluded_screen:
         print("\n  Excluded:")
         for t in excluded_cap:
             print(f"      {t:<10} below min market cap")
@@ -123,6 +138,8 @@ def main() -> None:
             print(f"      {t:<10} sector excluded ({sec})")
         for t, pr in excluded_payout:
             print(f"      {t:<10} payout uncovered ({pr:.0%} > {strat.max_payout_ratio:.0%})")
+        for t, reason in excluded_screen:
+            print(f"      {t:<10} {reason}")
         for r in drop:
             print(f"      {r.ticker:<10} {r.reason}")
 

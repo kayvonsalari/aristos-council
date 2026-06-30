@@ -59,11 +59,15 @@ class RankStrategy(BaseModel):
     # Universe exclusions (applied by the caller before ranking).
     min_market_cap: float | None = None
     exclude_sectors: list[str] = Field(default_factory=list)
-    # Payout-coverage gate: exclude a name whose payout_ratio EXCEEDS this (an
-    # uncovered dividend = a coming cut = a yield trap). Matches conservative_screen's
-    # max_payout_ratio so ranker and council use the SAME coverage standard. None ->
-    # no payout gate (magic_formula etc. unaffected).
+    # Payout-coverage gate (subsumed by prefilter_screen when that's on): exclude a
+    # name whose payout_ratio EXCEEDS this. None -> no standalone payout gate.
     max_payout_ratio: float | None = None
+    # SCREEN-AS-PREFILTER: when true, the rank stage runs the council_screen_strategy's
+    # criteria on each name and EXCLUDES any CONFIRMED fail BEFORE ranking — so the
+    # ranker orders only names that already PASS the (one) defensive definition the
+    # council uses. Enforces the FLOORS (real yield, covered payout, cap, momentum)
+    # that ranking-and-combining cannot. None/False -> rank the full universe as now.
+    prefilter_screen: bool = False
     # Integrated-pipeline config. council_runs_on gates which ranked names proceed to
     # the (costly) LLM council; council_mode is the A/B toggle for the Decision agent.
     council_runs_on: str = "buy_quintile"   # buy_quintile | top_k | all

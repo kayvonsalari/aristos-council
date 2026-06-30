@@ -94,7 +94,10 @@ def main() -> None:
     # STAGE 1 (free) up front so the spend can be sized before any council runs.
     from aristos_council.pipeline import _rank_stage, _shortlist
     runs_on = args.council_runs_on or rank_strategy.council_runs_on
-    ranked, _excl = _rank_stage(universe, rank_strategy, adapter, today=today)
+    prefilter = (screen_strategy.criteria
+                 if rank_strategy.prefilter_screen else None)
+    ranked, _excl = _rank_stage(universe, rank_strategy, adapter, today=today,
+                                prefilter_criteria=prefilter)
     shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
     est = estimate_cost(len(shortlist))
     print(f"(rank: {rank_strategy.id}; screen: {screen_strategy.id}; "
