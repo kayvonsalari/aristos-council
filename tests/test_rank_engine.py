@@ -122,8 +122,9 @@ def test_earnings_yield_proxy_and_fallback():
 
 def test_magic_formula_strategy_loads_and_validates():
     assert MAGIC.id == "magic_formula_v1"
-    assert [f.name for f in MAGIC.factors] == ["earnings_yield", "roic"]
-    assert MAGIC.missing == "exclude" and MAGIC.min_market_cap == 1_000_000_000
+    assert [f.name for f in MAGIC.factors] == ["roic", "earnings_yield"]
+    assert MAGIC.missing == "worst" and MAGIC.min_market_cap == 5.0e9
+    assert MAGIC.cut == "quintile"
     # all declared factors exist in the registry
     assert all(f.name in FACTOR_REGISTRY for f in MAGIC.factors)
 
