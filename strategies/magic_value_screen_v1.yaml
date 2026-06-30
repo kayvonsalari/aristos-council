@@ -1,0 +1,31 @@
+# Quality-value screen — the COUNCIL LENS for magic_formula_v1.
+# ===========================================================
+# Greenblatt's intent is QUALITY (ROIC) bought CHEAP — NOT growth. So the council
+# judges a magic_formula pick on capital efficiency + large-cap scope, and does NOT
+# require revenue CAGR / a growth PEG (which would penalise the cheap value names the
+# Magic Formula is built to find).
+id: magic_value_screen_v1
+name: Quality-value screen
+version: 1
+
+description: >-
+  Capital-efficient businesses (ROIC) at mid/large-cap scope — the screen lens for a
+  Magic-Formula quality-value candidate, with no growth requirement.
+
+criteria:
+  - name: min_roic                  # quality: through-cycle return on capital
+    threshold: 0.12
+  - name: min_market_cap            # mid/large-cap scope
+    threshold: 5000000000
+
+policy:
+  partial_pass_allows_hold: true
+
+veto:
+  min_confidence: 0.6
+
+rationale: >-
+  Good businesses (high return on invested capital) bought cheap. The council should
+  AGREE with the ranker on a genuinely high-quality name and flag only real
+  quality-value concerns — deteriorating returns on capital, or a valuation no longer
+  cheap — NOT a failure to grow revenue like a growth stock.

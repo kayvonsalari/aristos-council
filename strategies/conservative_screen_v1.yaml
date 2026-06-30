@@ -1,0 +1,42 @@
+# Conservative (defensive) screen — the COUNCIL LENS for conservative_plus_v1.
+# ============================================================================
+# Expresses the SAME defensive philosophy the ranker uses (low-vol + payout +
+# momentum), so a genuinely sound defensive name PASSES and the council can AGREE
+# with the ranker on it — and DISAGREE only when a real DEFENSIVE concern exists
+# (thin/uncovered payout, a "stable" name that just broke down). It deliberately
+# does NOT require revenue growth: penalising a defensive compounder for not growing
+# fast is the GARP-screen bug this fixes.
+#
+# Uses only registry criteria that are defensive-appropriate (no revenue_cagr / PEG,
+# which structurally fail low-growth value names).
+id: conservative_screen_v1
+name: Conservative (defensive) screen
+version: 1
+
+description: >-
+  Durable, covered income at a reasonable price with the trend intact — the screen
+  lens for a defensive (low-volatility) candidate.
+
+criteria:
+  - name: min_dividend_yield        # defensive income — modest, not a high-yield trap
+    threshold: 0.015
+  - name: max_payout_ratio          # coverage / sustainability, not stretched
+    threshold: 0.85
+  - name: min_market_cap            # large-cap defensive scope
+    threshold: 5000000000
+  - name: min_price_momentum        # not in a downtrend (a "stable" name that broke
+    threshold: 0.0                  # down fails — a real defensive concern)
+
+policy:
+  partial_pass_allows_hold: true
+
+veto:
+  min_confidence: 0.6
+
+rationale: >-
+  A defensive holding earns its place by NOT losing: durable, well-covered income;
+  large-cap stability; a valuation that isn't stretched; and a trend that hasn't
+  broken. A genuinely sound defensive name passes this screen, so the council should
+  AGREE with the ranker on it and flag only real defensive risks — thin dividend
+  coverage, an expensive-for-a-defensive valuation, or a "low-vol" name that has
+  actually started to break down — NOT a failure to grow like a growth stock.

@@ -18,8 +18,12 @@ from aristos_council.data.adapter import (
     PriceBar,
     PriceHistory,
 )
-from aristos_council.pipeline import agreement_table, run_pipeline
-from aristos_council.state import Recommendation, Stance
+from aristos_council.pipeline import (
+    agreement_table,
+    resolve_council_screen_id,
+    run_pipeline,
+)
+from aristos_council.state import Recommendation, SpecialistName, Stance
 from aristos_council.strategy.loader import load_strategy
 from aristos_council.strategy.rank_loader import load_rank_strategy
 
@@ -211,3 +215,62 @@ def test_matrix_node_skipped_in_pipeline_but_runs_standalone():
     st2 = ResearchState.model_validate(app2.invoke(
         ResearchState(ticker="A", strategy_id=GROWTH.id)))
     assert st2.matrix_decision is not None
+
+
+# --------------------------------------------------------------------------- #
+# Lens alignment — the council judges against the rank strategy's philosophy
+# --------------------------------------------------------------------------- #
+def test_council_screen_derives_from_rank_strategy_unless_overridden():
+    cons = load_rank_strategy(STRAT_DIR / "conservative_plus_v1.yaml")
+    # derived (no explicit screen) -> the strategy's same-philosophy lens
+    assert resolve_council_screen_id(cons) == "conservative_screen_v1"
+    assert resolve_council_screen_id(MAGIC) == "magic_value_screen_v1"
+    # explicit --screen-strategy still overrides
+    assert resolve_council_screen_id(cons, "growth_v1") == "growth_v1"
+
+
+def test_pipeline_runs_council_on_the_paired_screen_not_growth():
+    # magic_formula's paired lens is the QUALITY-VALUE screen, not GARP growth_v1.
+    screen = load_strategy(STRAT_DIR / f"{resolve_council_screen_id(MAGIC)}.yaml")
+    runners = _runners(DecisionOutput(recommendation=Recommendation.BUY,
+                                      confidence=0.8, rationale="r"))
+    result = run_pipeline(universe=["A", "B", "C"], rank_strategy=MAGIC,
+                          screen_strategy=screen, adapter=_Adapter(),
+                          runners=runners, today=date(2026, 6, 30))
+    assert result.council[0].report.strategy_id == "magic_value_screen_v1"
+
+
+def test_conservative_screen_passes_sound_defensive_fails_thin_coverage():
+    from aristos_council.tools.criteria.registry import Evidence, run_screen
+    screen = load_strategy(STRAT_DIR / "conservative_screen_v1.yaml")
+    # crucially NO growth criteria that would auto-fail a defensive name
+    names = [c.name for c in screen.criteria]
+    assert "min_revenue_cagr" not in names and "max_peg_ratio" not in names
+
+    sound = Fundamentals(ticker="JNJ", market_cap=1e10, dividend_per_share=2.0,
+                         payout_ratio=0.6)
+    by = {c.name: c for c in run_screen(
+        screen.criteria,
+        Evidence(fundamentals=sound, last_close=100.0, return_12m=0.05),
+        ticker="JNJ").criteria}
+    assert by["min_dividend_yield"].passed is True       # 2/100 = 2% >= 1.5%
+    assert by["max_payout_ratio"].passed is True
+    assert by["min_price_momentum"].passed is True       # not in a downtrend
+
+    thin = Fundamentals(ticker="XYZ", market_cap=1e10, dividend_per_share=2.0,
+                        payout_ratio=0.95)               # uncovered payout
+    r2 = {c.name: c for c in run_screen(
+        screen.criteria,
+        Evidence(fundamentals=thin, last_close=100.0, return_12m=0.05),
+        ticker="XYZ").criteria}
+    assert r2["max_payout_ratio"].passed is False        # a REAL defensive concern
+
+
+def test_specialist_prompt_is_strategy_relative_and_garp_free():
+    from aristos_council.agents.prompts import specialist_system
+    cons = load_strategy(STRAT_DIR / "conservative_screen_v1.yaml")
+    tech = specialist_system(SpecialistName.TECHNICAL, cons)
+    assert "GARP" not in tech                            # GARP wording removed
+    assert cons.name in tech                             # active strategy named
+    assert "defensive" in tech.lower()                   # its intent injected
+    assert "candidate" in tech                           # strategy-relative question

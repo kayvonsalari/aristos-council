@@ -25,7 +25,11 @@ from ..strategy.loader import Strategy
 #        (state agreement with the RANKER verdict via agrees_with_ranker/dissent_note);
 #        critic sharpened to attack the ranker's BUY; Decision agent is an INDEPENDENT
 #        SECOND OPINION (Option B) with a NARRATOR variant (Option A) via council_mode.
-PROMPT_VERSION = "v3"
+#   v4 = STRATEGY-RELATIVE framing: the agrees_with_ranker check judges a name as a
+#        candidate for the ACTIVE strategy (its name + intent injected), not a
+#        hardcoded GARP lens; the technical brief's value/GARP wording is removed.
+#        Fixes the 100%-DISAGREE artifact (defensive picks judged by a growth screen).
+PROMPT_VERSION = "v4"
 
 
 HARD_RULES = (
@@ -85,9 +89,10 @@ SPECIALIST_BRIEFS = {
         "SMAs or a well-supported uptrend.\n"
         "  - NEUTRAL otherwise — including the common case of a quality name "
         "pulled back below its moving averages. A drawdown is NOT by itself "
-        "bearish; under a value/GARP strategy a pullback in a sound business can "
-        "be an attractive entry, so report it as NEUTRAL with elevated-"
-        "volatility / execution-timing risk noted, NOT as a BEARISH stance.\n"
+        "bearish; depending on the ACTIVE strategy's intent a pullback in a sound "
+        "business can be an attractive entry, so report it as NEUTRAL with "
+        "elevated-volatility / execution-timing risk noted, NOT as a BEARISH "
+        "stance.\n"
         "When SMA50/SMA200 and the 52-week-high distance disagree, prefer "
         "NEUTRAL over guessing. Volatility informs execution risk; it is not "
         "itself a directional signal.",
@@ -110,33 +115,42 @@ SPECIALIST_BRIEFS = {
 }
 
 
-_RANKER_ANALYST_NOTE = (
-    "6. RANKER CHECK. You are an ANALYST, not a voter — your stance is useful "
-    "context but it does NOT decide the verdict. When the evidence includes a "
-    "RANKER VERDICT for this name (a deterministic factor ranking is the verdict-"
-    "of-record), your job is the domain ANALYSIS plus an honest check on that "
-    "verdict: set `agrees_with_ranker` true if your domain view SUPPORTS it, false "
-    "if it CHALLENGES it, null if your domain has no opinion on it, and give a "
-    "one-line `dissent_note` for the why — ESPECIALLY any forward-looking risk the "
-    "ranker's TRAILING factors cannot see yet (an un-priced headline, a guidance "
-    "cut, a patent cliff). This challenge is the point of the council. If you ABSTAIN "
-    "(insufficient data for your domain), set `agrees_with_ranker` to null — never "
-    "agree by default; a data-less specialist must not inflate the council's "
-    "apparent consensus.\n"
-)
+def _ranker_analyst_note(strategy: Strategy) -> str:
+    # STRATEGY-RELATIVE: the agrees_with_ranker question is judged against the ACTIVE
+    # strategy's intent, never a hardcoded GARP/growth lens. A defensive candidate is
+    # assessed on defensive merits; a value candidate on value merits.
+    return (
+        "6. RANKER CHECK. You are an ANALYST, not a voter — your stance is useful "
+        "context but it does NOT decide the verdict. When the evidence includes a "
+        "RANKER VERDICT for this name (a deterministic factor ranking is the verdict-"
+        "of-record), judge it STRATEGY-RELATIVELY: does your domain view support this "
+        f"as a '{strategy.name}' candidate — on THAT strategy's terms (see its intent "
+        "below), NOT against any other style? Set `agrees_with_ranker` true if your "
+        "domain SUPPORTS the pick for this strategy, false if it CHALLENGES it, null "
+        "if your domain has no opinion, with a one-line `dissent_note` for the why — "
+        "ESPECIALLY a forward-looking risk the ranker's TRAILING factors cannot see "
+        "yet (an un-priced headline, a guidance cut, a patent cliff), or a concern "
+        "specific to THIS strategy (e.g. for a defensive name: thin dividend coverage, "
+        "or expensive-for-a-defensive valuation — NOT 'it fails to grow like a growth "
+        "stock'). If you ABSTAIN (insufficient data), set `agrees_with_ranker` to "
+        "null — never agree by default; a data-less specialist must not inflate the "
+        "council's apparent consensus.\n"
+    )
 
 
 def specialist_system(who: SpecialistName, strategy: Strategy) -> str:
     return (
         f"You are the {who.value.upper()} specialist on an investment research "
         f"council operating under the strategy '{strategy.name}' "
-        f"(id {strategy.id}).\n\n"
+        f"(id {strategy.id}).\n"
+        f"You judge each name AS A CANDIDATE FOR THIS STRATEGY, on its own terms.\n\n"
         f"Your brief: {SPECIALIST_BRIEFS[who]}\n\n"
         f"{HARD_RULES}\n"
         "5. ABSTAIN rather than guess when the evidence is insufficient for "
         "your domain.\n"
-        f"{_RANKER_ANALYST_NOTE}\n"
-        f"Strategy rationale:\n{strategy.rationale}\n"
+        f"{_ranker_analyst_note(strategy)}\n"
+        f"STRATEGY INTENT ('{strategy.name}') — judge the name against THIS:\n"
+        f"{strategy.rationale}\n"
     )
 
 

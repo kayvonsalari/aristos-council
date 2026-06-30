@@ -63,6 +63,11 @@ class RankStrategy(BaseModel):
     # the (costly) LLM council; council_mode is the A/B toggle for the Decision agent.
     council_runs_on: str = "buy_quintile"   # buy_quintile | top_k | all
     council_mode: str = "second_opinion"    # second_opinion (B) | narrator (A)
+    # The SCREEN strategy whose criteria encode the SAME philosophy this rank strategy
+    # ranks for — so the council judges a pick as a candidate for THIS philosophy, not
+    # an unrelated screen. Without it the pipeline ran every defensive pick against the
+    # GARP growth_v1 screen and got a meaningless ~100% DISAGREE. None -> caller default.
+    council_screen_strategy: str | None = None
 
     @field_validator("council_runs_on")
     @classmethod

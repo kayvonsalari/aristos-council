@@ -232,17 +232,27 @@ def _inject_chrome() -> None:
     )
 
 
-def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strategy]]:
-    """Every loadable strategy YAML as (label, path, strategy), id-sorted.
+# Council-LENS screens that exist only to pair with a rank strategy in the pipeline
+# (the council judges a ranked pick against its philosophy). They are NOT standalone
+# strategies a user runs from the UI, so they're hidden from the dropdown.
+_COUNCIL_LENS_STRATEGY_IDS = {"conservative_screen_v1", "magic_value_screen_v1"}
 
-    All live strategies are selectable (Sprint 4C lit up growth_v1). Invalid
-    YAMLs are skipped silently — the loader is the gatekeeper.
+
+def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strategy]]:
+    """Every loadable, USER-RUNNABLE strategy YAML as (label, path, strategy),
+    id-sorted.
+
+    All live strategies are selectable (Sprint 4C lit up growth_v1). Invalid YAMLs
+    are skipped silently (the loader is the gatekeeper), as are the internal
+    council-lens screens (paired with a rank strategy, not run standalone).
     """
     out: list[tuple[str, Path, Strategy]] = []
     for p in sorted(strategies_dir.glob("*.yaml")):
         try:
             s = load_strategy(p)
         except Exception:
+            continue
+        if s.id in _COUNCIL_LENS_STRATEGY_IDS:
             continue
         out.append((f"{s.name} · {s.id}", p, s))
     return out

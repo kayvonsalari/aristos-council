@@ -46,6 +46,17 @@ class PipelineResult:
     excluded: list[tuple[str, str]] = field(default_factory=list)   # (ticker, reason)
 
 
+def resolve_council_screen_id(rank_strategy, explicit: Optional[str] = None,
+                              *, default: str = "growth_v1") -> str:
+    """The screen strategy the COUNCIL judges against. An explicit --screen-strategy
+    wins; otherwise the rank strategy's declared council_screen_strategy (the
+    same-philosophy lens); only then the blunt default. This is the fix for the
+    100%-DISAGREE artifact — a defensive ranker is no longer judged by a GARP screen."""
+    if explicit:
+        return explicit
+    return rank_strategy.council_screen_strategy or default
+
+
 def _rank_stage(universe, rank_strategy, adapter, *, today):
     rows: list[tuple[str, dict]] = []
     excluded: list[tuple[str, str]] = []

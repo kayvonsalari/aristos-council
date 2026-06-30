@@ -32,6 +32,9 @@ factors:
 cut: quintile
 k: 6
 percentile: 0.2
+# The council judges a pick as a DEFENSIVE candidate (same philosophy), not against
+# the GARP growth screen — otherwise every stable compounder "fails revenue CAGR".
+council_screen_strategy: conservative_screen_v1
 # A missing factor sits at the worst rank rather than excluding the name — a
 # non-payer or short-history name is penalised, not dropped.
 missing: worst

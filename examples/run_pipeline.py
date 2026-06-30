@@ -29,6 +29,7 @@ from aristos_council.data.provider import select_market_adapter
 from aristos_council.pipeline import (
     agreement_csv_rows,
     agreement_table,
+    resolve_council_screen_id,
     run_pipeline,
 )
 from aristos_council.reproducibility import estimate_cost
@@ -65,7 +66,9 @@ def main() -> None:
     p.add_argument("tickers", nargs="*")
     p.add_argument("--file")
     p.add_argument("--rank-strategy", default="conservative_plus_v1")
-    p.add_argument("--screen-strategy", default="growth_v1")
+    p.add_argument("--screen-strategy", default=None,
+                   help="council lens; defaults to the rank strategy's "
+                        "council_screen_strategy (same philosophy)")
     p.add_argument("--council-runs-on", choices=["buy_quintile", "top_k", "all"],
                    default=None)
     p.add_argument("--council-mode", choices=["second_opinion", "narrator"],
@@ -79,7 +82,9 @@ def main() -> None:
     if not universe:
         p.error("no tickers given (positional or --file)")
     rank_strategy = load_rank_strategy(_resolve(args.rank_strategy))
-    screen_strategy = load_strategy(_resolve(args.screen_strategy))
+    # Council lens: the rank strategy's same-philosophy screen unless overridden.
+    screen_id = resolve_council_screen_id(rank_strategy, args.screen_strategy)
+    screen_strategy = load_strategy(_resolve(screen_id))
 
     today = date.today()
     adapter = select_market_adapter()
