@@ -88,6 +88,12 @@ class Fundamentals:
     ticker: str
     name: str | None = None
     market_cap: float | None = None
+    # GICS-style sector (yfinance info 'sector'; EODHD General::Sector). Used by the
+    # rank engine's universe exclusions — e.g. Magic Formula EXCLUDES financials,
+    # because ROIC is a meaningless calculation artifact on a bank's balance sheet.
+    # None = provider didn't report it; callers must NOT exclude on unknown (only on
+    # a confirmed sector match), so missing data never silently drops a name.
+    sector: str | None = None
     # Listing/price currency (yfinance info 'currency') and the financial-
     # statements currency ('financialCurrency'). market_cap, last_close, and
     # dividend_per_share are all denominated in `currency`. A non-USD `currency`

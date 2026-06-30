@@ -20,7 +20,11 @@ from pathlib import Path
 from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
 from aristos_council.data.provider import select_market_adapter
-from aristos_council.factors import compute_factors, gather_factor_inputs
+from aristos_council.factors import (
+    compute_factors,
+    gather_factor_inputs,
+    is_sector_excluded,
+)
 from aristos_council.rank_engine import FactorSpec, RankedTicker, rank_universe
 from aristos_council.strategy.rank_loader import load_rank_strategy
 
@@ -80,20 +84,25 @@ def main() -> None:
 
     rows: list[tuple[str, dict]] = []
     excluded_cap: list[str] = []
+    excluded_sector: list[tuple[str, str]] = []
     for t in tickers:
         fi = gather_factor_inputs(adapter, t, today=today)
-        if (strat.min_market_cap is not None and fi.fundamentals is not None
-                and fi.fundamentals.market_cap is not None
-                and fi.fundamentals.market_cap < strat.min_market_cap):
+        f = fi.fundamentals
+        if (strat.min_market_cap is not None and f is not None
+                and f.market_cap is not None
+                and f.market_cap < strat.min_market_cap):
             excluded_cap.append(t)
+            continue
+        if f is not None and is_sector_excluded(f.sector, strat.exclude_sectors):
+            excluded_sector.append((t, f.sector))   # e.g. ROIC invalid for banks
             continue
         rows.append((t, compute_factors(fi, factor_names)))
         print(f"  computed {t}")
 
-    ranked = rank_universe(rows,
-                           [FactorSpec(f.name, f.direction) for f in strat.factors],
-                           cut=cut, k=k, percentile=strat.percentile,
-                           missing=strat.missing)
+    ranked = rank_universe(
+        rows,
+        [FactorSpec(f.name, f.direction, f.missing) for f in strat.factors],
+        cut=cut, k=k, percentile=strat.percentile, missing=strat.missing)
 
     print(f"\n=== RANKED ({strat.id}, universe {sum(1 for r in ranked if not r.excluded)}) ===")
     for i, r in enumerate([r for r in ranked if not r.excluded], 1):
@@ -101,10 +110,12 @@ def main() -> None:
               f"combined {r.combined_rank:>5.0f}   "
               + "  ".join(f"{f}:{rk:.0f}" for f, rk in r.factor_ranks.items()))
     drop = [r for r in ranked if r.excluded]
-    if drop or excluded_cap:
+    if drop or excluded_cap or excluded_sector:
         print("\n  Excluded:")
         for t in excluded_cap:
             print(f"      {t:<10} below min market cap")
+        for t, sec in excluded_sector:
+            print(f"      {t:<10} sector excluded ({sec})")
         for r in drop:
             print(f"      {r.ticker:<10} {r.reason}")
 

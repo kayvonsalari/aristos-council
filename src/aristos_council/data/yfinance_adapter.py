@@ -128,6 +128,7 @@ class YFinanceAdapter(MarketDataAdapter):
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
             market_cap=_as_float(info.get("marketCap")),
+            sector=(info.get("sector") or None),   # rank-engine sector exclusions
             # Currencies drive honest abstention on USD-denominated thresholds
             # (a non-USD listing makes min_market_cap meaningless). Strings, not
             # floats; normalize empty/missing to None.

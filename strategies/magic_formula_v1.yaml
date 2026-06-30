@@ -18,3 +18,10 @@ factors:
 cut: quintile             # top 20% BUY, middle 60% HOLD, bottom 20% SELL
 missing: worst            # a NOT-EVAL factor keeps the name at worst rank
 min_market_cap: 5.0e9     # Greenblatt-style floor: exclude thin micro-caps
+# Greenblatt EXCLUDES financials and utilities: ROIC / invested-capital is a
+# meaningless artifact on a bank's balance sheet (GS/JPM read as worst-ROIC). Cover
+# the common yfinance/EODHD sector labels (case-insensitive match).
+exclude_sectors:
+  - Financial Services      # yfinance label
+  - Financials              # EODHD / GICS label
+  - Utilities

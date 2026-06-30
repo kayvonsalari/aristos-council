@@ -159,6 +159,16 @@ def price_factors_from_closes(closes: list[float], names) -> dict[str, Optional[
     return out
 
 
+def is_sector_excluded(sector: Optional[str], exclude_sectors) -> bool:
+    """Case-insensitive, CONFIRMED-ONLY sector exclusion. True only when ``sector``
+    is PRESENT and matches an entry — a missing/None sector is NEVER excluded, so
+    absent provider data can't silently drop a name (the rank engine's universe
+    filter, e.g. Magic Formula dropping financials where ROIC is invalid)."""
+    if not sector or not exclude_sectors:
+        return False
+    return sector.strip().lower() in {s.strip().lower() for s in exclude_sectors}
+
+
 def compute_factors(fi: FactorInputs, names) -> dict[str, Optional[float]]:
     """The factor values for one ticker, for the named factors. Unknown names raise
     (the rank-strategy loader validates names up front)."""

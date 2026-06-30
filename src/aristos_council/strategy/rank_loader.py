@@ -16,15 +16,29 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from ..factors import FACTOR_REGISTRY
 
 
+_MISSING_MODES = ("worst", "exclude", "neutral")
+
+
 class RankFactorSpec(BaseModel):
     name: str
     direction: str | None = None        # "high" | "low"; None -> registry default
+    # Per-factor missing-mode override (None -> strategy-level default). 'neutral'
+    # judges a name on the factors it HAS rather than dumping it for a gap (e.g.
+    # net_payout_yield on a buyback-only company with no dividend).
+    missing: str | None = None
 
     @field_validator("direction")
     @classmethod
     def _dir_valid(cls, v):
         if v is not None and v not in ("high", "low"):
             raise ValueError(f"direction must be 'high' or 'low', got {v!r}")
+        return v
+
+    @field_validator("missing")
+    @classmethod
+    def _missing_valid(cls, v):
+        if v is not None and v not in _MISSING_MODES:
+            raise ValueError(f"missing must be one of {_MISSING_MODES}, got {v!r}")
         return v
 
 
@@ -40,8 +54,8 @@ class RankStrategy(BaseModel):
     cut: str = "quintile"               # quintile | top_k | top_percentile
     k: int = Field(default=6, ge=1)
     percentile: float = Field(default=0.2, gt=0.0, le=1.0)
-    # A NOT-EVAL factor: keep at worst rank, or exclude the name from BUY entirely.
-    missing: str = "worst"              # worst | exclude
+    # Strategy-level default for a NOT-EVAL factor (per-factor override above).
+    missing: str = "worst"              # worst | exclude | neutral
     # Universe exclusions (applied by the caller before ranking).
     min_market_cap: float | None = None
     exclude_sectors: list[str] = Field(default_factory=list)
@@ -58,6 +72,13 @@ class RankStrategy(BaseModel):
     def _cut_valid(cls, v):
         if v not in ("quintile", "top_k", "top_percentile"):
             raise ValueError(f"cut must be quintile|top_k|top_percentile, got {v!r}")
+        return v
+
+    @field_validator("missing")
+    @classmethod
+    def _missing_valid(cls, v):
+        if v not in _MISSING_MODES:
+            raise ValueError(f"missing must be one of {_MISSING_MODES}, got {v!r}")
         return v
 
     @model_validator(mode="after")

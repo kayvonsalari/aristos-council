@@ -142,6 +142,7 @@ def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
         ticker=ticker,
         name=(general.get("Name") or None),
         market_cap=_coerce_float(highlights.get("MarketCapitalization")),
+        sector=(general.get("Sector") or None),   # rank-engine sector exclusions
         # Listing/price currency (General) and statements currency (Income stmt).
         currency=(general.get("CurrencyCode") or None),
         financial_currency=(income.get("currency_symbol")

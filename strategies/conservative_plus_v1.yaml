@@ -24,6 +24,9 @@ description: >
 factors:
   - name: low_volatility      # lower realized vol ranks better (direction from registry)
   - name: net_payout_yield    # dividends (+ buybacks where available); div-yield fallback
+    missing: neutral          # buyback-only / non-dividend names (AMZN/ADBE/NVDA) have
+                              # NO free-data payout figure — judge them on low-vol +
+                              # momentum, do NOT dump them to worst rank for the gap.
   - name: momentum_12m        # 12-month trailing return; higher ranks better
 
 cut: quintile

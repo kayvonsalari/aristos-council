@@ -29,9 +29,15 @@ class FactorSpec:
 
     name: str
     direction: Optional[str] = None     # "high" | "low"; None -> registry default
+    # Per-factor missing-mode override: "worst" | "exclude" | "neutral". None ->
+    # use the strategy-level default passed to rank_universe.
+    missing: Optional[str] = None
 
     def resolved_direction(self) -> str:
         return self.direction or FACTOR_REGISTRY[self.name].direction
+
+    def resolved_missing(self, default: str) -> str:
+        return self.missing or default
 
 
 @dataclass
@@ -44,22 +50,32 @@ class RankedTicker:
     verdict: str = "hold"               # buy / hold / sell
     excluded: bool = False
     reason: str = ""
+    # Factors whose value was NOT-EVAL under 'neutral' mode — imputed with the
+    # ticker's mean present-rank (judged on what it has, not punished for the gap).
+    imputed_factors: list[str] = field(default_factory=list)
 
     def explain(self) -> str:
         n = self.universe_size
-        bits = ", ".join(f"{f} rank {r:.0f}/{n}"
-                         for f, r in self.factor_ranks.items())
+        bits = ", ".join(
+            f"{f} rank {r:.0f}/{n}" + ("*" if f in self.imputed_factors else "")
+            for f, r in self.factor_ranks.items())
         if self.excluded:
             return f"{self.ticker}: EXCLUDED ({self.reason})"
+        tail = "  (* = imputed, factor absent)" if self.imputed_factors else ""
         return (f"{self.ticker}: {bits} -> combined {self.combined_rank:.0f} "
-                f"-> {self.verdict.upper()}")
+                f"-> {self.verdict.upper()}{tail}")
 
 
 def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
-                     n: int) -> dict[int, float]:
-    """1-based ranks for one factor across the universe (best = 1). Ties get the
-    AVERAGE rank (standard). Missing values get the WORST rank (n) so a NOT-EVAL
-    factor penalises but doesn't crash — callers that prefer exclusion filter first.
+                     n: int, mode: str) -> dict[int, float]:
+    """1-based ranks for one factor across the universe (best = 1; ties averaged).
+
+    A missing value is handled per ``mode``:
+    - "worst": gets the worst rank (n) — a NOT-EVAL is treated as maximally bad.
+    - "neutral": gets NO rank here (omitted from this factor); the caller imputes it
+      from the ticker's other ranks, so a name without this datum (e.g. a buyback-
+      only payer with no dividend) is judged on the factors it HAS, not punished.
+    - "exclude": handled upstream (the ticker is removed before ranking).
     """
     present = sorted([(i, v) for i, v in values if v is not None],
                      key=lambda iv: iv[1], reverse=(direction == "high"))
@@ -73,9 +89,11 @@ def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
         for k in range(i, j + 1):
             ranks[present[k][0]] = avg
         i = j + 1
-    for idx, v in values:
-        if v is None:
-            ranks[idx] = float(n)            # worst rank for a missing factor
+    if mode == "worst":
+        for idx, v in values:
+            if v is None:
+                ranks[idx] = float(n)        # worst rank for a missing factor
+    # "neutral": leave missing idx unranked (imputed by the combine step).
     return ranks
 
 
@@ -100,38 +118,67 @@ def rank_universe(
 ) -> list[RankedTicker]:
     """Rank a universe and assign verdicts. ``rows`` is (ticker, {factor: value}).
 
-    ``missing='exclude'`` drops any ticker with a NOT-EVAL factor BEFORE ranking
-    (Greenblatt excludes names you can't score); ``missing='worst'`` keeps them at
-    the worst rank. Returns the universe sorted best-first; excluded names are
-    appended, flagged, never given a BUY.
+    ``missing`` is the strategy-level default mode for a NOT-EVAL factor, overridable
+    PER FACTOR via ``FactorSpec.missing``:
+    - 'exclude': drop the ticker entirely BEFORE ranking (Greenblatt excludes names
+      you can't score).
+    - 'worst': keep the ticker at the worst rank for that factor.
+    - 'neutral': omit the ticker from that factor's ranking and impute its rank from
+      the MEAN of the ranks it DOES have — so a name lacking one datum (e.g. a
+      buyback-only company with no dividend yield) is judged on its other factors,
+      not dumped to the bottom for the gap.
+
+    Returns the universe sorted best-first; excluded names are appended, flagged,
+    never given a BUY. The combined rank is the SUM of per-factor ranks (Greenblatt);
+    a neutral-imputed factor contributes the ticker's own mean rank, so the sum stays
+    over a constant number of terms and names are comparable.
     """
+    mode_of = {f.name: f.resolved_missing(missing) for f in factors}
+
     excluded: list[RankedTicker] = []
     kept: list[tuple[int, str, dict]] = []
     for idx, (ticker, vals) in enumerate(rows):
-        missing_factors = [f.name for f in factors if vals.get(f.name) is None]
-        if missing and missing == "exclude" and missing_factors:
+        excl_factors = [f.name for f in factors
+                        if mode_of[f.name] == "exclude" and vals.get(f.name) is None]
+        if excl_factors:
             excluded.append(RankedTicker(
                 ticker=ticker, factor_ranks={}, factor_values=dict(vals),
                 combined_rank=float("inf"), universe_size=len(rows),
                 verdict="hold", excluded=True,
-                reason="missing factor(s): " + ", ".join(missing_factors)))
+                reason="missing factor(s): " + ", ".join(excl_factors)))
         else:
             kept.append((idx, ticker, vals))
 
     n = len(kept)
-    # Per-factor ranks across the KEPT universe (re-indexed 0..n-1).
+    # Per-factor ranks across the KEPT universe (re-indexed 0..n-1). 'worst' fills
+    # the missing idx with rank n; 'neutral' leaves them unranked (imputed below).
     per_factor: dict[str, dict[int, float]] = {}
     for f in factors:
         vals = [(j, kept[j][2].get(f.name)) for j in range(n)]
-        per_factor[f.name] = _rank_one_factor(vals, f.resolved_direction(), n)
+        per_factor[f.name] = _rank_one_factor(
+            vals, f.resolved_direction(), n, mode_of[f.name])
 
     ranked: list[RankedTicker] = []
     for j in range(n):
-        franks = {f.name: per_factor[f.name][j] for f in factors}
+        present: dict[str, float] = {}
+        neutral_missing: list[str] = []
+        for f in factors:
+            r = per_factor[f.name].get(j)
+            if r is not None:
+                present[f.name] = r
+            else:
+                neutral_missing.append(f.name)        # value absent under 'neutral'
+        # Impute each neutral-missing factor with the ticker's mean present rank, so
+        # it neither helps nor hurts relative to the factors it actually has.
+        impute = (sum(present.values()) / len(present)) if present else float(n)
+        franks = dict(present)
+        for name in neutral_missing:
+            franks[name] = impute
         ranked.append(RankedTicker(
             ticker=kept[j][1], factor_ranks=franks,
             factor_values=dict(kept[j][2]),
-            combined_rank=sum(franks.values()), universe_size=n))
+            combined_rank=sum(franks.values()), universe_size=n,
+            imputed_factors=neutral_missing))
 
     # Sort best-first; tie-break by ticker for determinism.
     ranked.sort(key=lambda r: (r.combined_rank, r.ticker))

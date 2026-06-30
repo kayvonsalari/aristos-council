@@ -129,6 +129,102 @@ def test_magic_formula_strategy_loads_and_validates():
     assert all(f.name in FACTOR_REGISTRY for f in MAGIC.factors)
 
 
+# --------------------------------------------------------------------------- #
+# 'neutral' missing-mode — a name missing one factor is judged on the rest
+# --------------------------------------------------------------------------- #
+def test_neutral_missing_judges_on_present_factors_not_worst():
+    # B has no payout (None) under 'neutral': it should be imputed with B's mean rank
+    # over low_vol + momentum, NOT dumped to worst (3). B is strong on the other two,
+    # so it must NOT land at the bottom.
+    rows = [
+        ("A", {"low_volatility": 0.30, "net_payout_yield": 0.03, "momentum_12m": 0.05}),
+        ("B", {"low_volatility": 0.10, "net_payout_yield": None, "momentum_12m": 0.40}),
+        ("C", {"low_volatility": 0.20, "net_payout_yield": 0.02, "momentum_12m": 0.10}),
+    ]
+    specs = [FactorSpec("low_volatility"), FactorSpec("net_payout_yield"),
+             FactorSpec("momentum_12m")]
+    ranked = rank_universe(rows, specs, cut="top_k", k=1, missing="neutral")
+    by = {r.ticker: r for r in ranked}
+    # B: low_vol rank 1 (lowest), momentum rank 1 (highest) -> mean 1.0; payout imputed
+    # 1.0. combined 3.0. A worst combined. So B ranks FIRST (a BUY), not last.
+    assert by["B"].factor_ranks["low_volatility"] == 1.0
+    assert by["B"].factor_ranks["momentum_12m"] == 1.0
+    assert by["B"].imputed_factors == ["net_payout_yield"]
+    assert by["B"].factor_ranks["net_payout_yield"] == 1.0     # imputed = mean(1,1)
+    assert by["B"].combined_rank == 3.0
+    assert ranked[0].ticker == "B" and ranked[0].verdict == "buy"
+
+
+def test_neutral_is_strictly_better_than_worst_for_a_name_missing_payout():
+    # The actual fix: a non-dividend name strong on the OTHER factors must not be
+    # dumped purely for lacking a payout figure. Under 'worst' its payout = n drags
+    # it; under 'neutral' it's imputed to its own mean present rank -> strictly lower
+    # (better) combined rank.
+    rows = [
+        ("NOPAY", {"low_volatility": 0.10, "momentum_12m": 0.40, "net_payout_yield": None}),
+        ("A", {"low_volatility": 0.30, "momentum_12m": 0.05, "net_payout_yield": 0.03}),
+        ("B", {"low_volatility": 0.20, "momentum_12m": 0.10, "net_payout_yield": 0.02}),
+    ]
+    base = [FactorSpec("low_volatility"), FactorSpec("momentum_12m")]
+    neutral = {r.ticker: r for r in rank_universe(
+        rows, base + [FactorSpec("net_payout_yield", missing="neutral")],
+        cut="top_k", k=1)}
+    worst = {r.ticker: r for r in rank_universe(
+        rows, base + [FactorSpec("net_payout_yield")], cut="top_k", k=1,
+        missing="worst")}
+    assert neutral["NOPAY"].combined_rank < worst["NOPAY"].combined_rank
+    assert neutral["NOPAY"].imputed_factors == ["net_payout_yield"]
+    # strong on low-vol + momentum -> with payout neutralised, NOPAY is the BUY
+    assert neutral["NOPAY"].verdict == "buy"
+
+
+def test_per_factor_missing_overrides_strategy_default():
+    # strategy default 'worst', but payout overridden to 'neutral'.
+    rows = [("X", {"roic": 0.3, "net_payout_yield": None})]
+    specs = [FactorSpec("roic"), FactorSpec("net_payout_yield", missing="neutral")]
+    ranked = rank_universe(rows, specs, missing="worst")
+    r = ranked[0]
+    # roic present (rank 1 of 1); payout neutral-imputed to 1.0 (not worst=1 here, but
+    # the point is it's flagged imputed, not a 'worst' fill).
+    assert r.imputed_factors == ["net_payout_yield"]
+
+
+def test_worst_and_exclude_modes_unchanged():
+    # Regression: with no neutral factor, behaviour is byte-identical to before.
+    rows = [("A", {"roic": 0.3}), ("B", {"roic": None})]
+    worst = {r.ticker: r for r in rank_universe(rows, [FactorSpec("roic")],
+                                                missing="worst")}
+    assert worst["B"].factor_ranks["roic"] == 2.0 and not worst["B"].imputed_factors
+    excl = {r.ticker: r for r in rank_universe(rows, [FactorSpec("roic")],
+                                               missing="exclude")}
+    assert excl["B"].excluded is True
+
+
+def test_conservative_plus_uses_neutral_payout():
+    cons = load_rank_strategy(
+        Path(__file__).resolve().parents[1] / "strategies" / "conservative_plus_v1.yaml")
+    payout = next(f for f in cons.factors if f.name == "net_payout_yield")
+    assert payout.missing == "neutral"
+
+
+# --------------------------------------------------------------------------- #
+# Sector exclusion (Magic Formula drops financials — ROIC invalid there)
+# --------------------------------------------------------------------------- #
+def test_sector_exclusion_is_case_insensitive_and_confirmed_only():
+    from aristos_council.factors import is_sector_excluded
+
+    excl = ["Financial Services", "Utilities"]
+    assert is_sector_excluded("financial services", excl) is True   # case-insensitive
+    assert is_sector_excluded("Technology", excl) is False
+    assert is_sector_excluded(None, excl) is False                  # unknown -> keep
+    assert is_sector_excluded("Financial Services", []) is False    # no exclusions
+
+
+def test_magic_formula_declares_sector_exclusions():
+    assert any(s.lower() == "financial services" for s in MAGIC.exclude_sectors)
+    assert any(s.lower() == "utilities" for s in MAGIC.exclude_sectors)
+
+
 def test_rank_loader_rejects_unknown_factor(tmp_path):
     import pytest
     from aristos_council.strategy.rank_loader import load_rank_strategy
