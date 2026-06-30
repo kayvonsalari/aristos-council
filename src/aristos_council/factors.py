@@ -22,7 +22,13 @@ from typing import Callable, Optional
 
 from .data.adapter import DataUnavailable, Fundamentals
 from .tools.screening import revenue_cagr, through_cycle_roic
-from .tools.technical import technical_snapshot, total_return, _TD_6M, _TD_12M
+from .tools.technical import (
+    _TD_6M,
+    _TD_12M,
+    annualized_volatility,
+    technical_snapshot,
+    total_return,
+)
 
 _ROIC_WINDOW = 4   # through-cycle window (matches the screen's ROIC window intent)
 
@@ -126,6 +132,31 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
     "revenue_growth": FactorDef(
         "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3y)"),
 }
+
+
+# Factors derivable from PRICE CLOSES ALONE — these are the only ones a free-data
+# backtest can compute POINT-IN-TIME (historical prices are available as-of; historical
+# point-in-time FUNDAMENTALS are not). The backtest validates this sleeve honestly and
+# FLAGS the rest as data-limited (see backtest.py).
+PRICE_DERIVED_FACTORS: frozenset[str] = frozenset(
+    {"momentum_6m", "momentum_12m", "low_volatility"})
+
+
+def price_factors_from_closes(closes: list[float], names) -> dict[str, Optional[float]]:
+    """Compute the PRICE-DERIVED factors among ``names`` from a close series — the
+    point-in-time-safe sleeve for backtesting. Non-price factors map to None (they
+    cannot be computed point-in-time from free data)."""
+    out: dict[str, Optional[float]] = {}
+    for name in names:
+        if name == "momentum_6m":
+            out[name] = total_return(closes, _TD_6M)
+        elif name == "momentum_12m":
+            out[name] = total_return(closes, _TD_12M)
+        elif name == "low_volatility":
+            out[name] = annualized_volatility(closes)
+        else:
+            out[name] = None
+    return out
 
 
 def compute_factors(fi: FactorInputs, names) -> dict[str, Optional[float]]:
