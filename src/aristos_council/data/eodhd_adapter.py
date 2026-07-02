@@ -45,6 +45,7 @@ from .adapter import (
     MarketDataAdapter,
     PriceHistory,
     normalize_ticker,
+    sane_dividend_yield,
 )
 
 _BASE_URL = "https://eodhd.com/api"
@@ -147,7 +148,9 @@ def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
         currency=(general.get("CurrencyCode") or None),
         financial_currency=(income.get("currency_symbol")
                             or general.get("CurrencyCode") or None),
-        dividend_yield=_coerce_float(highlights.get("DividendYield")),
+        # EODHD's Highlights::DividendYield is already a DECIMAL (0.0289); the
+        # backstop is a no-op unless a future response drifts to percent (>100%).
+        dividend_yield=sane_dividend_yield(_coerce_float(highlights.get("DividendYield"))),
         dividend_per_share=_coerce_float(highlights.get("DividendShare")),
         payout_ratio=_coerce_float(highlights.get("PayoutRatio")),
         eps=_coerce_float(highlights.get("EarningsShare")),

@@ -17,8 +17,27 @@ data-quality veto trigger has a single error type to reason about.
 from __future__ import annotations
 
 import abc
+import logging
 from dataclasses import dataclass, field
 from datetime import date
+
+_log = logging.getLogger(__name__)
+
+
+def sane_dividend_yield(v: float | None) -> float | None:
+    """Defensive backstop enforcing that dividend_yield is a DECIMAL (0.0289 = 2.89%).
+
+    A real equity yield never exceeds ~100%, so a value > 1.0 is a PERCENT that
+    slipped through a provider unit change (yfinance's dividendYield became a percent
+    number: 2.89) -> divide by 100 and warn. Applied AFTER each adapter's per-source
+    normalization, so it catches FUTURE drift rather than doing the per-source
+    conversion itself (a low percent like 0.5%==0.5 is < 1.0 and must be normalised at
+    the source, not here — see each adapter)."""
+    if v is not None and v > 1.0:
+        _log.warning("dividend_yield %.4g > 1.0 (>100%%): treating as a percent "
+                     "that slipped through, dividing by 100", v)
+        return v / 100.0
+    return v
 
 
 # --------------------------------------------------------------------------- #

@@ -31,6 +31,7 @@ from .adapter import (
     MarketDataAdapter,
     PriceBar,
     PriceHistory,
+    sane_dividend_yield,
 )
 
 
@@ -134,7 +135,7 @@ class YFinanceAdapter(MarketDataAdapter):
             # floats; normalize empty/missing to None.
             currency=(info.get("currency") or None),
             financial_currency=(info.get("financialCurrency") or None),
-            dividend_yield=_as_float(info.get("dividendYield")),
+            dividend_yield=_dividend_yield(info),   # normalised to DECIMAL
             dividend_per_share=dps,
             payout_ratio=_payout_ratio(info, dps),
             eps=_as_float(info.get("trailingEps")),
@@ -191,6 +192,22 @@ def _dividend_per_share(info: dict) -> float | None:
     if forward is not None:
         return forward
     return _as_float(info.get("trailingAnnualDividendRate"))
+
+
+def _dividend_yield(info: dict) -> float | None:
+    """Dividend yield as a DECIMAL (0.0289 == 2.89%), regardless of yfinance's shifting
+    units. yfinance's ``dividendYield`` is now a PERCENT NUMBER (2.89 == 2.89%), while
+    ``trailingAnnualDividendYield`` has stayed a DECIMAL (0.0289). PREFER the decimal
+    field; fall back to the percent field / 100. The >100% backstop then catches any
+    further drift. (Do NOT read the raw ``dividendYield`` untouched — that was the 100x
+    bug: 2.89 compared as if it were 289%.)"""
+    trailing = _as_float(info.get("trailingAnnualDividendYield"))
+    if trailing is not None:
+        return sane_dividend_yield(trailing)
+    pct = _as_float(info.get("dividendYield"))
+    if pct is not None:
+        return sane_dividend_yield(pct / 100.0)   # percent -> decimal
+    return None
 
 
 def _payout_ratio(info: dict, dividend_per_share: float | None) -> float | None:
