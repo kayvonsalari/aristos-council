@@ -39,7 +39,11 @@ class CriterionSpec(BaseModel):
     """
 
     name: str
-    threshold: float = Field(ge=0.0)
+    # No global lower bound: each criterion's ParamSpec declares its own range
+    # (validated up front in validate_selections). Most are >= 0, but a RETURN-based
+    # floor like min_price_momentum is legitimately negative (catch breakdowns, not
+    # flatness), which a blanket ge=0.0 wrongly rejected.
+    threshold: float
     unverifiable_blocks: bool = False
     is_gating: bool = False
 

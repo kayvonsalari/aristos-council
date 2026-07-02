@@ -323,10 +323,11 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         PRICE_MOMENTUM_CRITERION, _min_price_momentum,
         label="Minimum 12m price momentum",
-        # Floor is a return; the loader caps thresholds at >= 0, so 0.0 ('not in a
-        # downtrend') is the natural floor. Reads ev.return_12m (computed from price
-        # closes already fetched), so it needs no fundamentals/dividends evidence.
-        params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.01,
+        # Floor is a 12m RETURN and MAY be negative: the floor catches BREAKDOWNS, not
+        # flatness. A defensive floor of -0.10 excludes a name down >10% (breaking
+        # down) while letting a quiet defensive down 0-10% through; 0.0 = 'not in a
+        # downtrend'. Reads ev.return_12m (from price closes already fetched).
+        params=(ParamSpec("threshold", "float", min=-1.0, max=1.0, step=0.01,
                           default=0.0),
                 _UNVERIFIABLE_BLOCKS),
         requires=(),

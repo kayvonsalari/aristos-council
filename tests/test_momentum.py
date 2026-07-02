@@ -61,6 +61,26 @@ def test_momentum_criterion_not_eval_on_missing_history():
     assert "insufficient price history" in r.note
 
 
+def test_negative_floor_catches_breakdown_not_defensive_flatness():
+    # A -0.10 floor: a quiet defensive down 0-10% PASSES; a breakdown (>10% down)
+    # FAILS. Keeps the falling-knife guard while not excluding low-beta staples.
+    assert _momentum(-0.05, floor=-0.10).passed is True    # PG-shaped, was failing @0
+    assert _momentum(-0.10, floor=-0.10).passed is True    # boundary inclusive (>=)
+    assert _momentum(-0.25, floor=-0.10).passed is False   # NVO-shaped breakdown fails
+
+
+def test_conservative_screen_momentum_floor_is_negative_from_yaml():
+    # The floor is READ from the YAML (tunable), not hard-coded; and the loader now
+    # accepts a negative RETURN threshold.
+    from pathlib import Path
+
+    from aristos_council.strategy.loader import load_strategy
+    screen = load_strategy(Path(__file__).resolve().parents[1]
+                           / "strategies" / "conservative_screen_v1.yaml")
+    mom = next(c for c in screen.criteria if c.name == "min_price_momentum")
+    assert mom.threshold == -0.10
+
+
 # --------------------------------------------------------------------------- #
 # BUILD 3: signed matrix contribution
 # --------------------------------------------------------------------------- #
