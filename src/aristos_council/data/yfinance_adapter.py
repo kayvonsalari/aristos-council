@@ -125,6 +125,9 @@ class YFinanceAdapter(MarketDataAdapter):
         # Recovered DPS, reused for the payout derivation below (same source the
         # screen sees), so dividend yield AND payout survive the summaryDetail gap.
         dps = _dividend_per_share(info)
+        # Dividend-growth streak + last cut, DERIVED from the payment history (a
+        # yield-trap separator that's free but yfinance never surfaces as a scalar).
+        streak_years, last_cut = _dividend_streak_from_ticker(tk)
         return Fundamentals(
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
@@ -144,6 +147,11 @@ class YFinanceAdapter(MarketDataAdapter):
             # yfinance does not expose consecutive-growth-years. Left None on
             # purpose; the screen estimates it from dividend history and flags.
             years_dividend_growth=None,
+            # Defensive-risk signals (free-data yield-trap separators).
+            dividend_streak_years=streak_years,
+            last_dividend_reduction_year=last_cut,
+            total_debt=_as_float(info.get("totalDebt")),
+            debt_to_equity=_as_float(info.get("debtToEquity")),
             # Annual series, newest-first, NaN/empty dropped (Sprint 4B).
             total_revenue=_annual_series(income, "Total Revenue"),
             operating_income=_annual_series(income, "Operating Income"),
@@ -192,6 +200,26 @@ def _dividend_per_share(info: dict) -> float | None:
     if forward is not None:
         return forward
     return _as_float(info.get("trailingAnnualDividendRate"))
+
+
+def _dividend_streak_from_ticker(tk) -> tuple[int | None, int | None]:
+    """(streak_years, last_reduction_year) from a yfinance Ticker's dividend history.
+
+    Reads ``tk.dividends`` (already split-adjusted), sums per calendar year, and
+    delegates to ``screening.dividend_streak`` (which excludes the current partial
+    year and distinguishes FLAT from a CUT). Any failure/empty history -> (None,
+    None), a clean abstain — this must never fail the whole fundamentals fetch."""
+    from ..tools.screening import dividend_streak
+    try:
+        divs = tk.dividends
+        if divs is None or len(divs) == 0:
+            return None, None
+        annual: dict[int, float] = {}
+        for ts, amt in divs.items():
+            annual[ts.year] = annual.get(ts.year, 0.0) + float(amt)
+    except Exception:
+        return None, None
+    return dividend_streak(annual, date.today().year)
 
 
 def _dividend_yield(info: dict) -> float | None:

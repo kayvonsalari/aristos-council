@@ -132,6 +132,19 @@ class Fundamentals:
     # Most free providers DON'T supply this; see adapter notes.
     years_dividend_growth: int | None = None
 
+    # --- Defensive-risk signals derivable from FREE data (yield-trap separators) --- #
+    # dividend_streak_years: consecutive YoY dividend INCREASES ending at the latest
+    # complete year (derived from the payment history, screening.dividend_streak).
+    # last_dividend_reduction_year: the most recent actual CUT (a FLAT year ends the
+    # growth streak but is NOT a cut). total_debt / debt_to_equity: balance-sheet
+    # leverage — d/e is UNDEFINED for negative-equity (heavy-buyback) names like MCD,
+    # so leverage gates use a total_debt-vs-market-cap measure, never excluding on a
+    # None d/e. All None when the provider/history can't supply them (honest abstain).
+    dividend_streak_years: int | None = None
+    last_dividend_reduction_year: int | None = None
+    total_debt: float | None = None
+    debt_to_equity: float | None = None          # yfinance percent-ish; may be None
+
     # --- Annual income-statement & balance-sheet series (Sprint 4B) --------- #
     # NEWEST-FIRST lists of clean annual values (NaN years and the trailing
     # empty column dropped by the adapter). Empty when the provider has none —

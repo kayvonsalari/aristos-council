@@ -113,6 +113,8 @@ def test_registry_holds_dividend_and_growth_criteria():
         "min_revenue_cagr", "min_roic", "max_peg_ratio",
         # price momentum (value+momentum)
         "min_price_momentum",
+        # defensive-risk (free-data yield-trap separators)
+        "min_dividend_streak", "max_debt_to_market_cap",
     }
     assert all(isinstance(c, Criterion) for c in REGISTRY.values())
 

@@ -216,6 +216,45 @@ def _min_price_momentum(ev: Evidence, threshold: float) -> CriterionResult:
         note=f"12m price momentum {r:+.1%} vs floor {threshold:+.1%}")
 
 
+def _min_dividend_streak(ev: Evidence, threshold: float) -> CriterionResult:
+    """Consecutive years of dividend INCREASES (from Fundamentals.dividend_streak_years,
+    derived by the adapter from the payment history) at or above a floor. Catches
+    cut-history yield traps (T/MMM read 0). ABSTAINS on missing history — a non-payer
+    is caught by min_dividend_yield, not this criterion."""
+    f = ev.fundamentals
+    s = f.dividend_streak_years if f else None
+    if s is None:
+        return CriterionResult(
+            name="min_dividend_streak", passed=None, observed=None,
+            threshold=threshold,
+            note="dividend-growth streak unavailable (insufficient payment history)")
+    return CriterionResult(
+        name="min_dividend_streak", passed=s >= threshold, observed=float(s),
+        threshold=threshold,
+        note=f"{s}y consecutive dividend increases vs floor {int(threshold)}y")
+
+
+def _max_debt_to_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
+    """Balance-sheet leverage as total_debt / market_cap (a yield-trap separator:
+    VZ ~1.2x fails). Chosen over debt-to-equity BECAUSE it is ROBUST TO NEGATIVE
+    EQUITY: heavy-buyback names (MCD/LOW) have undefined d/e, which must NOT exclude
+    them — market cap is always positive. ABSTAINS on missing total_debt / market_cap."""
+    f = ev.fundamentals
+    debt = f.total_debt if f else None
+    cap = f.market_cap if f else None
+    if debt is None or cap is None or cap <= 0:
+        return CriterionResult(
+            name="max_debt_to_market_cap", passed=None, observed=None,
+            threshold=threshold,
+            note="leverage unavailable (total_debt or market_cap missing)")
+    ratio = debt / cap
+    return CriterionResult(
+        name="max_debt_to_market_cap", passed=ratio <= threshold, observed=ratio,
+        threshold=threshold,
+        note=f"total_debt/market_cap = {ratio:.2f} vs ceiling {threshold:.2f} "
+             f"(market-cap based — robust to negative-equity buyback names)")
+
+
 def _max_peg_ratio(ev: Evidence, threshold: float) -> CriterionResult:
     f = ev.fundamentals
     # PEG denominator is OPERATING-INCOME growth (the earnings-growth proxy), with a
@@ -332,6 +371,24 @@ _CRITERIA: tuple[Criterion, ...] = (
                 _UNVERIFIABLE_BLOCKS),
         requires=(),
         fundamentals_fields=(),
+    ),
+    # --- Defensive-risk criteria (free-data yield-trap separators) ---
+    Criterion(
+        "min_dividend_streak", _min_dividend_streak,
+        label="Minimum dividend-growth streak (years)",
+        params=(ParamSpec("threshold", "int", min=0, max=None, step=1, default=10),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+        fundamentals_fields=("dividend_streak_years",),
+    ),
+    Criterion(
+        "max_debt_to_market_cap", _max_debt_to_market_cap,
+        label="Maximum total-debt / market-cap",
+        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.1,
+                          default=1.0),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+        fundamentals_fields=("total_debt",),
     ),
 )
 

@@ -106,6 +106,14 @@ def _revenue_growth(fi: FactorInputs) -> Optional[float]:
     return cagr
 
 
+def _dividend_streak(fi: FactorInputs) -> Optional[float]:
+    """Consecutive years of dividend increases (adapter-derived) — a durable-income
+    quality signal; higher is better. None when the streak couldn't be derived."""
+    f = fi.fundamentals
+    s = f.dividend_streak_years if f is not None else None
+    return float(s) if s is not None else None
+
+
 @dataclass(frozen=True)
 class FactorDef:
     name: str
@@ -132,6 +140,8 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         "dividend-yield fallback (buybacks unavailable on free fundamentals)"),
     "revenue_growth": FactorDef(
         "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3y)"),
+    "dividend_streak": FactorDef(
+        "dividend_streak", _dividend_streak, "high", "Dividend-growth streak (years)"),
 }
 
 

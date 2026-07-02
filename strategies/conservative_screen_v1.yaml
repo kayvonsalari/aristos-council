@@ -32,6 +32,12 @@ criteria:
                                     # survivors. A 0.0 floor made the screen do the
                                     # ranker's job and over-excluded healthy staples
                                     # (PG/CL/PEP/KMB) for being low-beta and slow.
+  - name: min_dividend_streak       # durable income: >=10y of consecutive increases.
+    threshold: 10                   # T (cut 2022 -> streak 0) / MMM (cut 2024) FAIL;
+                                    # PG/KO/JNJ/MCD pass. Abstains on short history.
+  - name: max_debt_to_market_cap    # balance-sheet risk: total_debt <= market_cap.
+    threshold: 1.0                  # VZ (~1.2x, $201B debt) FAILS; robust to negative-
+                                    # equity buyback names (MCD) — uses debt/cap, not d/e.
 
 policy:
   partial_pass_allows_hold: true

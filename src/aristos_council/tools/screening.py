@@ -471,6 +471,43 @@ _STREAK_SHAPE = {
 }
 
 
+def dividend_streak(
+    annual_by_year: dict[int, float], as_of_year: int, *, flat_tol: float = 0.005,
+) -> tuple[int | None, int | None]:
+    """Consecutive years of dividend INCREASES ending at the latest COMPLETE year, and
+    the most recent CUT year — from per-CALENDAR-YEAR dividend totals.
+
+    Returns ``(streak_years, last_reduction_year)``. The CURRENT (partial) year
+    ``as_of_year`` is EXCLUDED. Two signals kept SEPARATE (the T/MMM lesson — those
+    cut, then went FLAT; a naive ``cur > prev`` mislabels flat years as cuts):
+    - streak_years: walking back from the latest complete year, count consecutive
+      YoY increases; a year within +/-``flat_tol`` of the prior is FLAT and ENDS the
+      growth streak but is NOT a cut.
+    - last_reduction_year: the most recent year whose total fell more than ``flat_tol``
+      below the prior (an actual cut), scanning ALL history — independent of where the
+      growth streak broke.
+    None (both) on fewer than 3 complete years of history (honest abstain). The series
+    is used as given (yfinance dividends are already split-adjusted)."""
+    years = sorted(y for y in annual_by_year if y < as_of_year)
+    if len(years) < 3:
+        return None, None
+
+    last_cut: int | None = None
+    for i in range(1, len(years)):
+        prev, cur = annual_by_year[years[i - 1]], annual_by_year[years[i]]
+        if prev > 0 and (cur - prev) / prev < -flat_tol:
+            last_cut = years[i]                       # keep -> ends at the most recent
+
+    streak = 0
+    for i in range(len(years) - 1, 0, -1):
+        prev, cur = annual_by_year[years[i - 1]], annual_by_year[years[i]]
+        if prev > 0 and (cur - prev) / prev > flat_tol:
+            streak += 1
+        else:
+            break                                     # flat or cut ends the streak
+    return streak, last_cut
+
+
 def streak_by_method(
     method: str, dividends: list[DividendEvent], *, min_years: int
 ) -> tuple[int | None, str]:
