@@ -170,6 +170,15 @@ def price_factors_from_closes(closes: list[float], names) -> dict[str, Optional[
     return out
 
 
+def is_unrateable(fi: "FactorInputs") -> bool:
+    """No usable data at all — failed fundamentals AND no price history (a delisted
+    ticker whose fetches 404, e.g. PARA/WBA). Such a name must NEVER be ranked or
+    reach the council: a worst-rank SELL on it would be a fake assessment. Distinct
+    from a partial gap (fundamentals missing but prices present -> still rateable on
+    price factors)."""
+    return fi.fundamentals is None and fi.last_close is None
+
+
 def is_sector_excluded(sector: Optional[str], exclude_sectors) -> bool:
     """Case-insensitive, CONFIRMED-ONLY sector exclusion. True only when ``sector``
     is PRESENT and matches an entry — a missing/None sector is NEVER excluded, so

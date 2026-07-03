@@ -447,8 +447,10 @@ def _user_message(state: ResearchState, strategy: Strategy) -> str:
     )
 
 
-def make_specialist_node(who: SpecialistName, strategy: Strategy, runner):
-    system = _specialist_system(who, strategy)
+def make_specialist_node(who: SpecialistName, strategy: Strategy, runner,
+                         council_mode: str = "second_opinion"):
+    system = specialist_system(who, strategy, council_mode)
+    narrator = council_mode == "narrator"
 
     def specialist(state: ResearchState) -> ResearchState:
         # RESILIENCE: a single malformed structured output must NEVER kill the whole
@@ -477,7 +479,9 @@ def make_specialist_node(who: SpecialistName, strategy: Strategy, runner):
         # Finnhub data, already tagged degraded) must NOT silently "agree" and inflate
         # apparent consensus. Force agrees_with_ranker to None on abstention, whatever
         # the model returned; the agreement summary then counts only non-abstainers.
-        agrees = None if out.stance == Stance.ABSTAIN else out.agrees_with_ranker
+        # NARRATOR mode has no second verdict -> the field is not emitted at all.
+        agrees = (None if narrator or out.stance == Stance.ABSTAIN
+                  else out.agrees_with_ranker)
         state.specialist_opinions.append(
             SpecialistOpinion(
                 specialist=who, stance=out.stance, confidence=out.confidence,
@@ -485,7 +489,8 @@ def make_specialist_node(who: SpecialistName, strategy: Strategy, runner):
                 figures=_validated_figures(state, who.value, out.figures),
                 caveats=out.caveats,
                 agrees_with_ranker=agrees,
-                dissent_note=("" if out.stance == Stance.ABSTAIN else out.dissent_note),
+                dissent_note=("" if narrator or out.stance == Stance.ABSTAIN
+                              else out.dissent_note),
             )
         )
         return state

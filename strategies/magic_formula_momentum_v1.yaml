@@ -36,6 +36,9 @@ exclude_sectors:             # ROIC invalid for banks; as magic_formula_v1
   - Utilities
 # Same council lens as the classic — the council judges value+quality, unchanged.
 council_screen_strategy: magic_value_screen_v1
+# Rank only names passing the lens's absolute floors (min_roic 12%) — closes the
+# BMY-class rank-relative-vs-floor gap deterministically. One quality-value definition.
+prefilter_screen: true
 
 rationale: >-
   Buying good businesses cheap has decades of out-of-sample validation, but pure

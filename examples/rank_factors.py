@@ -25,6 +25,7 @@ from aristos_council.factors import (
     gather_factor_inputs,
     is_payout_uncovered,
     is_sector_excluded,
+    is_unrateable,
     screen_prefilter_fail,
 )
 from aristos_council.strategy.loader import load_strategy
@@ -97,9 +98,13 @@ def main() -> None:
     excluded_sector: list[tuple[str, str]] = []
     excluded_payout: list[tuple[str, float]] = []
     excluded_screen: list[tuple[str, str]] = []
+    unrateable: list[str] = []
     for t in tickers:
         fi = gather_factor_inputs(adapter, t, today=today)
         f = fi.fundamentals
+        if is_unrateable(fi):                        # delisted / all-404 -> no verdict
+            unrateable.append(t)
+            continue
         if (strat.min_market_cap is not None and f is not None
                 and f.market_cap is not None
                 and f.market_cap < strat.min_market_cap):
@@ -129,6 +134,10 @@ def main() -> None:
         print(f"  {i:>2}  {r.ticker:<10} {r.verdict.upper():<5} "
               f"combined {r.combined_rank:>5.0f}   "
               + "  ".join(f"{f}:{rk:.0f}" for f, rk in r.factor_ranks.items()))
+    if unrateable:
+        print("\n  UNRATEABLE (no data — possibly delisted; not ranked):")
+        for t in unrateable:
+            print(f"      {t}")
     drop = [r for r in ranked if r.excluded]
     if drop or excluded_cap or excluded_sector or excluded_payout or excluded_screen:
         print("\n  Excluded:")

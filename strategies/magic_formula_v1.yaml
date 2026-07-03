@@ -28,3 +28,8 @@ exclude_sectors:
 # Council judges a pick as a QUALITY-VALUE candidate (ROIC + valuation sanity), not
 # against the GARP growth screen.
 council_screen_strategy: magic_value_screen_v1
+# Screen-as-prefilter: rank ONLY names passing magic_value_screen_v1's ABSOLUTE
+# floors (min_roic 12%). Rank-relative ROIC let BMY (10.6%) into the BUY quintile
+# below the lens's own floor — the same rank-vs-floor mismatch fixed for
+# conservative_plus. One definition of "quality-value" for ranker and council.
+prefilter_screen: true

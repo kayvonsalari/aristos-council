@@ -103,11 +103,17 @@ def _runners(decision_out):
             "decision": _CountingDecisionRunner(decision_out)}
 
 
+# The council-WIRING tests isolate from the (new) growth screen-as-prefilter, which
+# would exclude the fixtures on GROWTH's floors — orthogonal to what they test.
+MAGIC_NO_PREFILTER = MAGIC.model_copy(update={"prefilter_screen": False})
+
+
 def _run(decision_out, *, council_mode=None, council_runs_on=None):
     runners = _runners(decision_out)
     result = run_pipeline(
-        universe=["A", "B", "C"], rank_strategy=MAGIC, screen_strategy=GROWTH,
-        adapter=_Adapter(), runners=runners, today=date(2026, 6, 30),
+        universe=["A", "B", "C"], rank_strategy=MAGIC_NO_PREFILTER,
+        screen_strategy=GROWTH, adapter=_Adapter(), runners=runners,
+        today=date(2026, 6, 30),
         council_mode=council_mode, council_runs_on=council_runs_on)
     return result, runners
 
@@ -138,9 +144,11 @@ def test_council_runs_on_all_overrides_the_shortlist():
 # Option B — independent second opinion, agreement, dissent surfaced
 # --------------------------------------------------------------------------- #
 def test_option_b_disagreement_surfaces_dissent():
-    # ranker BUYs A on factors; council SELLs (a forward risk it can't see) -> DISAGREE
+    # ranker BUYs A on factors; council SELLs (a forward risk it can't see) -> DISAGREE.
+    # Option B is now behind the flag (narrator is the default), so request it.
     result, _ = _run(DecisionOutput(recommendation=Recommendation.SELL,
-                                    confidence=0.7, rationale="forward risk"))
+                                    confidence=0.7, rationale="forward risk"),
+                     council_mode="second_opinion")
     a = result.council[0]
     assert a.ranker_verdict == "buy" and a.council_verdict == "sell"
     assert a.agreement == "DISAGREE"
@@ -150,7 +158,8 @@ def test_option_b_disagreement_surfaces_dissent():
 
 def test_option_b_agreement_when_council_concurs():
     result, _ = _run(DecisionOutput(recommendation=Recommendation.BUY,
-                                    confidence=0.8, rationale="agree"))
+                                    confidence=0.8, rationale="agree"),
+                     council_mode="second_opinion")
     assert result.council[0].agreement == "AGREE"
 
 
@@ -170,19 +179,24 @@ def test_narrator_mode_emits_no_independent_verdict():
     assert a.report.decision.recommendation == Recommendation.BUY   # echoes ranker
 
 
-def test_second_opinion_is_the_default_mode():
+def test_narrator_is_the_default_mode():
+    # The experiment's verdict: default flipped to narrator (verdict = ranker; LLM
+    # narrates, no independent second opinion).
     result, _ = _run(DecisionOutput(recommendation=Recommendation.HOLD,
                                     confidence=0.6, rationale="r"))
-    assert result.council_mode == "second_opinion"
-    assert result.council[0].report.decision.narration_only is False
+    assert result.council_mode == "narrator"
+    assert result.council[0].report.decision.narration_only is True
+    assert result.council[0].council_verdict is None      # no independent verdict
 
 
 # --------------------------------------------------------------------------- #
 # Abstention rule — a data-less specialist never inflates consensus
 # --------------------------------------------------------------------------- #
 def test_abstaining_specialist_agreement_is_forced_null():
+    # agrees_with_ranker only exists in second_opinion mode -> request it.
     result, _ = _run(DecisionOutput(recommendation=Recommendation.BUY,
-                                    confidence=0.8, rationale="r"))
+                                    confidence=0.8, rationale="r"),
+                     council_mode="second_opinion")
     rep = result.council[0].report
     sentiment = next(o for o in rep.specialist_opinions
                      if o.specialist.value == "sentiment")
@@ -402,5 +416,66 @@ def test_prefilter_is_one_definition_no_duplicated_threshold():
     assert payout.threshold == 0.85                      # the ONE coverage threshold
 
 
-def test_magic_formula_has_no_prefilter():
-    assert load_rank_strategy(STRAT_DIR / "magic_formula_v1.yaml").prefilter_screen is False
+def test_growth_strategies_prefilter_on_the_quality_value_screen():
+    # The BMY fix: growth rank strategies now prefilter on their absolute-floor lens
+    # (magic_value_screen_v1), so a name failing min_roic is excluded pre-rank.
+    for sid in ("magic_formula_v1", "magic_formula_momentum_v1"):
+        s = load_rank_strategy(STRAT_DIR / f"{sid}.yaml")
+        assert s.prefilter_screen is True
+        assert s.council_screen_strategy == "magic_value_screen_v1"
+
+
+def test_bmy_class_low_roic_name_excluded_pre_rank_by_growth_prefilter():
+    from aristos_council.factors import screen_prefilter_fail, FactorInputs
+    lens = load_strategy(STRAT_DIR / "magic_value_screen_v1.yaml")
+    # BMY-shape: ROIC 10.6% < the lens's own 12% floor -> excluded, reason named
+    bmy = FactorInputs(ticker="BMY", fundamentals=Fundamentals(
+        ticker="BMY", market_cap=1e11, operating_income=[10.6] * 4,
+        tax_provision=[0.0] * 4, pretax_income=[10.6] * 4, invested_capital=[100.0] * 4))
+    reason = screen_prefilter_fail(lens.criteria, bmy)
+    assert reason is not None and "min_roic" in reason
+
+
+# --------------------------------------------------------------------------- #
+# Narrator default + UNRATEABLE guard (closing batch)
+# --------------------------------------------------------------------------- #
+def test_narrator_mode_specialists_do_not_emit_agreement():
+    from aristos_council.agents.prompts import specialist_system
+    from aristos_council.state import SpecialistName as _SN
+    narrator = specialist_system(_SN.RISK, GROWTH, "narrator")
+    second = specialist_system(_SN.RISK, GROWTH, "second_opinion")
+    assert "agrees_with_ranker" not in narrator      # no agreement question in narrator
+    assert "agrees_with_ranker" in second            # ...but present in second_opinion
+
+
+def test_unrateable_delisted_name_is_not_ranked_on_any_path():
+    from aristos_council.factors import is_unrateable, FactorInputs
+    from aristos_council.pipeline import _rank_stage
+
+    # PARA/WBA-shape: no fundamentals AND no price history (all fetches 404)
+    assert is_unrateable(FactorInputs(ticker="PARA")) is True
+    assert is_unrateable(FactorInputs(ticker="X", last_close=100.0)) is False  # has price
+
+    class _A(MarketDataAdapter):
+        name = "fake"
+        def get_fundamentals(self, t):
+            from aristos_council.data.adapter import DataUnavailable
+            if t in ("PARA", "WBA"):
+                raise DataUnavailable("404 delisted")
+            return Fundamentals(ticker=t, market_cap=2e10, sector="Technology",
+                                ebit=[1000.0], operating_income=[1000.0] * 4,
+                                tax_provision=[200.0] * 4, pretax_income=[950.0] * 4,
+                                invested_capital=[5000.0] * 4)
+        def get_price_history(self, t, *, start, end):
+            from aristos_council.data.adapter import DataUnavailable, PriceHistory
+            if t in ("PARA", "WBA"):
+                raise DataUnavailable("404 delisted")
+            return PriceHistory(ticker=t, bars=[])
+        def get_dividend_history(self, t, *, start, end):
+            return []
+
+    ranked, excluded = _rank_stage(["GOOD", "PARA", "WBA"], MAGIC_NO_PREFILTER, _A(),
+                                   today=date(2026, 6, 30))
+    assert {r.ticker for r in ranked} == {"GOOD"}        # delisted names NOT ranked
+    for name in ("PARA", "WBA"):
+        assert any(t == name and "UNRATEABLE" in reason for t, reason in excluded)

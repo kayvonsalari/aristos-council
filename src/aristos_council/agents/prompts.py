@@ -29,7 +29,12 @@ from ..strategy.loader import Strategy
 #        candidate for the ACTIVE strategy (its name + intent injected), not a
 #        hardcoded GARP lens; the technical brief's value/GARP wording is removed.
 #        Fixes the 100%-DISAGREE artifact (defensive picks judged by a growth screen).
-PROMPT_VERSION = "v4"
+#   v5 = NARRATOR default (Option A): the experiment showed the second opinion carries
+#        no information, so the ranker is the verdict-of-record and the LLM narrates.
+#        The narrator MAY report factor/screen values but MUST NOT reinterpret
+#        accounting or assert forward deterioration as fact (open questions only); in
+#        narrator mode specialists are pure ANALYSTS (no agrees_with_ranker question).
+PROMPT_VERSION = "v5"
 
 
 HARD_RULES = (
@@ -138,7 +143,13 @@ def _ranker_analyst_note(strategy: Strategy) -> str:
     )
 
 
-def specialist_system(who: SpecialistName, strategy: Strategy) -> str:
+def specialist_system(who: SpecialistName, strategy: Strategy,
+                      council_mode: str = "second_opinion") -> str:
+    # In NARRATOR mode there is no independent second verdict to agree/disagree with,
+    # so the specialist is a PURE ANALYST — the agrees_with_ranker/dissent question is
+    # dropped (its fields are not emitted). In second_opinion mode it fires.
+    ranker_note = ("" if council_mode == "narrator"
+                   else f"{_ranker_analyst_note(strategy)}\n")
     return (
         f"You are the {who.value.upper()} specialist on an investment research "
         f"council operating under the strategy '{strategy.name}' "
@@ -148,7 +159,7 @@ def specialist_system(who: SpecialistName, strategy: Strategy) -> str:
         f"{HARD_RULES}\n"
         "5. ABSTAIN rather than guess when the evidence is insufficient for "
         "your domain.\n"
-        f"{_ranker_analyst_note(strategy)}\n"
+        f"{ranker_note}"
         f"STRATEGY INTENT ('{strategy.name}') — judge the name against THIS:\n"
         f"{strategy.rationale}\n"
     )
@@ -187,10 +198,17 @@ def decision_system(strategy: Strategy,
         role = (
             "You are the council's NARRATOR. A deterministic RANKER has issued the "
             "verdict-of-record for this name; you do NOT issue an independent call. "
-            "Write a synthesis `rationale` that explains the ranker's verdict in "
-            "light of the specialists and the critic, fairly noting any challenges "
-            "they raised. Set `recommendation` to the RANKER's verdict (echo it) — "
-            "you are explaining, not deciding.\n\n")
+            "Write a synthesis `rationale` that explains WHY the name ranked where it "
+            "did — its factor ranks, the strategy fit, and neutral context. Set "
+            "`recommendation` to the RANKER's verdict (echo it) — you are explaining, "
+            "not deciding.\n"
+            "HARD CONSTRAINT: you MAY report factor values and screen results as "
+            "given. You may NOT reinterpret accounting (a utility's capex-driven low "
+            "FCF, a buyback-driven negative equity, a one-off-distorted GAAP figure) "
+            "or assert forward deterioration as FACT — the ranker's own experiment "
+            "showed such 'insights' are unreliable. Phrase anything beyond the "
+            "reported numbers as an explicit OPEN QUESTION ('worth checking: ...'), "
+            "never as a finding.\n\n")
     else:
         # Option B (default): an INDEPENDENT SECOND OPINION that may disagree.
         role = (

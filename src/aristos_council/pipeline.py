@@ -26,6 +26,7 @@ from .factors import (
     gather_factor_inputs,
     is_payout_uncovered,
     is_sector_excluded,
+    is_unrateable,
     screen_prefilter_fail,
 )
 from .persistence.reports import RunReport, report_from_state
@@ -69,6 +70,11 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     for t in universe:
         fi = gather_factor_inputs(adapter, t, today=today)
         f = fi.fundamentals
+        # UNRATEABLE: no fundamentals AND no price history (delisted / all-404). NEVER
+        # ranked, no verdict, never reaches the council — applies on EVERY path.
+        if is_unrateable(fi):
+            excluded.append((t, "UNRATEABLE: no data — possibly delisted"))
+            continue
         if (rank_strategy.min_market_cap is not None and f is not None
                 and f.market_cap is not None
                 and f.market_cap < rank_strategy.min_market_cap):

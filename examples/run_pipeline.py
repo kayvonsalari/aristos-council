@@ -113,12 +113,21 @@ def main() -> None:
         today=today, council_runs_on=args.council_runs_on,
         council_mode=args.council_mode)
 
+    print("\nVerdict: deterministic ranker.  Narrative: LLM "
+          f"({'non-judging' if result.council_mode == 'narrator' else 'independent second opinion'}).")
     print(f"\n=== RANKED ({rank_strategy.id}) — verdict-of-record ===")
     for i, r in enumerate([r for r in result.ranked if not r.excluded], 1):
         print(f"  {i:>2}  {r.ticker:<10} {r.verdict.upper():<5} combined {r.combined_rank:>5.0f}")
-    print("\n" + agreement_table(result))
+    if result.excluded:
+        print("\n  Excluded (not ranked):")
+        for t, reason in result.excluded:
+            print(f"      {t:<10} {reason}")
+    # In narrator mode there is no independent verdict -> no agreement table; the
+    # per-name narration lives in each report.
+    if result.council_mode != "narrator":
+        print("\n" + agreement_table(result))
 
-    if args.csv:
+    if args.csv and result.council_mode != "narrator":
         path = Path(args.csv)
         new = not path.exists()
         rows = agreement_csv_rows(result)

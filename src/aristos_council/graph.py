@@ -55,7 +55,7 @@ def build_council(
     for who in SPECIALIST_ORDER:
         g.add_node(
             who.value,
-            make_specialist_node(who, strategy, runners["specialist"]),
+            make_specialist_node(who, strategy, runners["specialist"], council_mode),
         )
     g.add_node("critic", make_critic_node(strategy, runners["critic"]))
     g.add_node("decision",

@@ -71,7 +71,12 @@ class RankStrategy(BaseModel):
     # Integrated-pipeline config. council_runs_on gates which ranked names proceed to
     # the (costly) LLM council; council_mode is the A/B toggle for the Decision agent.
     council_runs_on: str = "buy_quintile"   # buy_quintile | top_k | all
-    council_mode: str = "second_opinion"    # second_opinion (B) | narrator (A)
+    # DEFAULT narrator (Option A): the controlled ranker-vs-council experiment (arms
+    # D/G1/G2) returned 0 AGREEs in 17 councils and G2 proved the dissent is
+    # pick-independent — the council's INDEPENDENT verdict carried no information. So
+    # the ranker is the verdict-of-record and the LLM narrates. 'second_opinion' (B)
+    # stays available behind the flag (it's a toggle by design; the code path lives).
+    council_mode: str = "narrator"          # narrator (A, default) | second_opinion (B)
     # The SCREEN strategy whose criteria encode the SAME philosophy this rank strategy
     # ranks for — so the council judges a pick as a candidate for THIS philosophy, not
     # an unrelated screen. Without it the pipeline ran every defensive pick against the
