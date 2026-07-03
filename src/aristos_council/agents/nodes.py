@@ -451,7 +451,28 @@ def make_specialist_node(who: SpecialistName, strategy: Strategy, runner):
     system = _specialist_system(who, strategy)
 
     def specialist(state: ResearchState) -> ResearchState:
-        out: SpecialistOutput = runner.invoke(system, _user_message(state, strategy))
+        # RESILIENCE: a single malformed structured output must NEVER kill the whole
+        # run (all prior councils' spend wasted). Retry ONCE, then degrade THIS
+        # specialist to ABSTAIN with a typed run issue — abstention exists for exactly
+        # this. Scoped to the LLM parse; opinion construction stays outside.
+        user_msg = _user_message(state, strategy)
+        try:
+            out: SpecialistOutput = runner.invoke(system, user_msg)
+        except Exception:                                   # e.g. pydantic ValidationError
+            try:
+                out = runner.invoke(system, user_msg)       # one retry
+            except Exception as exc:
+                state.run_issues.append(RunIssue(
+                    source=who.value, reason=FailureKind.FETCH_ERROR,
+                    detail=f"{who.value} specialist output invalid after one "
+                           f"retry ({exc}); abstained"))
+                state.specialist_opinions.append(SpecialistOpinion(
+                    specialist=who, stance=Stance.ABSTAIN, confidence=0.0,
+                    thesis="Specialist output could not be parsed (invalid "
+                           "structured output after one retry); abstaining.",
+                    caveats=["malformed model output — abstained (run continues)"],
+                    agrees_with_ranker=None))
+                return state
         # ABSTENTION RULE: a data-less specialist (ABSTAIN — e.g. Sentiment with no
         # Finnhub data, already tagged degraded) must NOT silently "agree" and inflate
         # apparent consensus. Force agrees_with_ranker to None on abstention, whatever

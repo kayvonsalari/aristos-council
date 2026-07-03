@@ -67,6 +67,13 @@ class FigureRef(BaseModel):
     )
 
     _unitless = field_validator("unit", mode="before")(_coerce_unit)
+    # Tolerate an EXPLICIT null (not just an omitted key): the LLM intermittently
+    # emits `call_id: null` / `field_path: null`, and a str-only field rejects None
+    # and kills the WHOLE council run. Coerce null -> "" here; the specialist node
+    # then treats an empty call_id as a provenance VIOLATION (figure dropped, logged,
+    # data-quality veto fires) — violation-and-flag, never crash-on-parse.
+    _ids_nullable = field_validator("call_id", "field_path",
+                                    mode="before")(_coerce_unit)
 
 
 class SpecialistOutput(BaseModel):
