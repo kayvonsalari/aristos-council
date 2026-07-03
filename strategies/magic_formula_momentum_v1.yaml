@@ -1,0 +1,45 @@
+# Magic Formula + Momentum (rank-based) — value+quality+momentum.
+# ==============================================================
+# Greenblatt's two-factor rank (ROIC quality + earnings-yield value) with a THIRD
+# rank factor, 12-month price momentum, added per the value+momentum literature
+# (Asness, Moskowitz & Pedersen). Guards the value screen's FALLING-KNIFE blind spot:
+# ROIC + earnings-yield alone cannot tell "cheap quality" from "quality in freefall"
+# (the audit's #1 BUY was ADBE, down ~45% over 12m). Momentum REORDERS rather than
+# banishes — a drawdown name can still rank if cheap+quality enough, but a name in a
+# sustained downtrend no longer tops the list. Deliberately NOT a hard floor: value
+# entries are often drawdowns, and a -10% floor would gut the strategy's character.
+#
+# classic magic_formula_v1 is left UNTOUCHED as the audited baseline for comparison.
+
+id: magic_formula_momentum_v1
+name: Magic Formula + Momentum
+version: 1
+
+description: >-
+  Greenblatt two-factor (ROIC quality + earnings-yield value) with a 12-month
+  momentum rank added per the value+momentum literature — guards the value screen's
+  falling-knife blind spot (cheap-quality names in sustained downtrends no longer top
+  the list). Momentum has equal rank weight and the same rank-sum combine as the
+  other two factors.
+
+factors:
+  - name: roic               # quality  (registry direction: high)
+  - name: earnings_yield     # value    (registry direction: high)
+  - name: momentum_12m       # trend    — equal rank weight, same combine
+
+cut: quintile                # top 20% BUY, middle 60% HOLD, bottom 20% SELL
+missing: worst               # as magic_formula_v1; momentum is price-based, rarely missing
+min_market_cap: 5.0e9        # Greenblatt-style floor: exclude thin micro-caps
+exclude_sectors:             # ROIC invalid for banks; as magic_formula_v1
+  - Financial Services
+  - Financials
+  - Utilities
+# Same council lens as the classic — the council judges value+quality, unchanged.
+council_screen_strategy: magic_value_screen_v1
+
+rationale: >-
+  Buying good businesses cheap has decades of out-of-sample validation, but pure
+  value/quality has a known blind spot: it loves a falling knife. Adding momentum as
+  a co-equal rank factor is the value+momentum combination the literature validates —
+  it demotes cheap-quality names in sustained downtrends without banishing ordinary
+  value entries (which are often modest drawdowns). Momentum orders; it does not gate.
