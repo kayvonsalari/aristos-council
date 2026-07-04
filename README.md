@@ -30,6 +30,10 @@ factor, criterion, and guard, generated from the code.
 
 ## How a verdict is reached
 
+<p align="center">
+  <img src="docs/council_diagram.png" alt="Aristos Council v2 architecture: a deterministic core (ticker + strategy → screen with UNRATEABLE exit → rank engine → gates → verdict of record) hands off to a non-judging LLM narrator layer (four specialists + critic → narrative + open questions → human veto), with second_opinion as an optional dashed path" width="820">
+</p>
+
 1. **Screen (deterministic).** The strategy's lens screen evaluates absolute floors —
    income, coverage, balance-sheet, momentum-breakdown, quality. Three states per
    criterion: pass / fail / not-evaluated. Only a confirmed FAIL excludes; missing data

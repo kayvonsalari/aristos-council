@@ -1,0 +1,140 @@
+<svg viewBox="0 0 1000 1220" width="1000" height="1220" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8590a3"/>
+    </marker>
+    <marker id="arrowMuted" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8a93a3"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="1220" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="44" y="52" font-size="27" font-weight="700" fill="#1e2a45">Aristos Council — architecture (v2)</text>
+  <text x="44" y="80" font-size="15" fill="#5b6478">The math judges; the AI narrates — the verdict is a pure function of the data, and the LLM layer only explains it.</text>
+
+  <!-- ===================== INPUT ===================== -->
+  <rect x="150" y="100" width="500" height="52" rx="12" fill="#f4e3c0" stroke="#cf9f44" stroke-width="1.5"/>
+  <text x="170" y="124" font-size="16" font-weight="700" fill="#1e2a45">Input <tspan font-size="12" font-weight="400" fill="#5b6478">· ticker + strategy</tspan></text>
+  <text x="170" y="143" font-size="12.5" fill="#5b6478">One strategy's lens — its factors, absolute floors, and verdict cut.</text>
+  <line x1="400" y1="152" x2="400" y2="176" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ===================== DETERMINISTIC LANE ===================== -->
+  <rect x="70" y="176" width="860" height="496" rx="16" fill="#eef3fb" stroke="#cdd9ea" stroke-width="1.5"/>
+  <text x="42" y="424" font-size="12" font-weight="700" fill="#7f93b3" letter-spacing="2" transform="rotate(-90 42 424)" text-anchor="middle">DETERMINISTIC CORE — VERDICT OF RECORD</text>
+
+  <!-- Screen -->
+  <rect x="150" y="196" width="500" height="90" rx="12" fill="#dbe6f5" stroke="#5b7aab" stroke-width="1.5"/>
+  <text x="170" y="224" font-size="17" font-weight="700" fill="#1e2a45">The screen <tspan font-size="12" font-weight="400" fill="#5b7aab">· absolute floors</tspan></text>
+  <text x="170" y="246" font-size="12.5" fill="#5b6478">Each criterion passes, fails, or is not-evaluated. Only a confirmed</text>
+  <text x="170" y="263" font-size="12.5" fill="#5b6478">FAIL excludes; missing data abstains and never silently disqualifies.</text>
+  <!-- UNRATEABLE side exit -->
+  <line x1="650" y1="241" x2="690" y2="241" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="655" y="234" font-size="10.5" fill="#8590a3">no data</text>
+  <rect x="690" y="199" width="240" height="84" rx="12" fill="#e8ebee" stroke="#5B6B7B" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="705" y="222" font-size="13.5" font-weight="700" fill="#5B6B7B">UNRATEABLE</text>
+  <text x="705" y="241" font-size="11" fill="#5b6478">No usable data (a delisted name).</text>
+  <text x="705" y="256" font-size="11" fill="#5b6478">Listed with its reason — no verdict,</text>
+  <text x="705" y="271" font-size="11" fill="#5b6478">never sent to a model.</text>
+  <line x1="400" y1="286" x2="400" y2="312" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Rank engine -->
+  <rect x="150" y="312" width="500" height="120" rx="12" fill="#dbe6f5" stroke="#5b7aab" stroke-width="1.5"/>
+  <text x="170" y="340" font-size="17" font-weight="700" fill="#1e2a45">The rank engine <tspan font-size="12" font-weight="400" fill="#5b7aab">· rank, don't weight</tspan></text>
+  <text x="170" y="362" font-size="12.5" fill="#5b6478">Survivors ranked per factor across the universe — no tuned weights.</text>
+  <!-- chips: per-factor ranks -> rank-sum -> quintile cut -->
+  <rect x="162" y="384" width="150" height="30" rx="15" fill="#ffffff" stroke="#8ea0bd"/>
+  <text x="237" y="403" font-size="11.5" fill="#1e2a45" text-anchor="middle">per-factor ranks</text>
+  <line x1="314" y1="399" x2="336" y2="399" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="340" y="384" width="100" height="30" rx="15" fill="#ffffff" stroke="#8ea0bd"/>
+  <text x="390" y="403" font-size="11.5" fill="#1e2a45" text-anchor="middle">rank-sum</text>
+  <line x1="442" y1="399" x2="464" y2="399" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="468" y="384" width="176" height="30" rx="15" fill="#ffffff" stroke="#8ea0bd"/>
+  <text x="556" y="403" font-size="11.5" fill="#1e2a45" text-anchor="middle">quintile cut → B / H / S</text>
+  <line x1="400" y1="432" x2="400" y2="456" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Gates -->
+  <rect x="150" y="456" width="500" height="104" rx="12" fill="#dbe6f5" stroke="#5b7aab" stroke-width="2.5"/>
+  <rect x="486" y="444" width="166" height="24" rx="12" fill="#cf9f44"/>
+  <text x="569" y="460" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">CANNOT BE OVERRIDDEN</text>
+  <text x="170" y="486" font-size="17" font-weight="700" fill="#1e2a45">The gates <tspan font-size="12" font-weight="400" fill="#5b7aab">· the safety controls</tspan></text>
+  <text x="170" y="508" font-size="12.5" fill="#5b6478">A confirmed <tspan font-weight="700" fill="#B23B3B">gating fail</tspan> caps the verdict at SELL, however it ranked.</text>
+  <text x="170" y="526" font-size="12.5" fill="#5b6478">A <tspan font-weight="700" fill="#5B6B7B">not-evaluated</tspan> gating criterion → INSUFFICIENT_EVIDENCE (off the</text>
+  <text x="170" y="544" font-size="12.5" fill="#5b6478">buy/hold/sell ladder — unconditional human review). Firings recorded.</text>
+  <line x1="400" y1="560" x2="400" y2="586" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Verdict of record -->
+  <rect x="150" y="586" width="500" height="72" rx="12" fill="#cfe0f3" stroke="#3f6096" stroke-width="2.5"/>
+  <text x="170" y="614" font-size="17" font-weight="700" fill="#1e2a45">Verdict of record</text>
+  <rect x="170" y="626" width="86" height="24" rx="12" fill="#e8f2e8" stroke="#2E7D32"/>
+  <text x="213" y="643" font-size="11.5" font-weight="700" fill="#2E7D32" text-anchor="middle">BUY</text>
+  <rect x="264" y="626" width="86" height="24" rx="12" fill="#f7eed6" stroke="#B8860B"/>
+  <text x="307" y="643" font-size="11.5" font-weight="700" fill="#B8860B" text-anchor="middle">HOLD</text>
+  <rect x="358" y="626" width="86" height="24" rx="12" fill="#f6e3e3" stroke="#B23B3B"/>
+  <text x="401" y="643" font-size="11.5" font-weight="700" fill="#B23B3B" text-anchor="middle">SELL</text>
+  <rect x="452" y="626" width="184" height="24" rx="12" fill="#e8ebee" stroke="#5B6B7B" stroke-dasharray="5 3"/>
+  <text x="544" y="643" font-size="10.5" font-weight="700" fill="#5B6B7B" text-anchor="middle">INSUFFICIENT_EVIDENCE</text>
+
+  <!-- cross-boundary arrow into banner -->
+  <line x1="400" y1="658" x2="400" y2="690" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ===================== LANE BOUNDARY BANNER ===================== -->
+  <rect x="70" y="690" width="860" height="40" rx="10" fill="#1e2a45"/>
+  <text x="500" y="715" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">Verdict: deterministic ranker.&#160;&#160;&#160;·&#160;&#160;&#160;Narrative: LLM (non-judging).</text>
+  <line x1="400" y1="730" x2="400" y2="756" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ===================== NARRATOR LANE (visually distinct) ===================== -->
+  <rect x="70" y="744" width="860" height="392" rx="16" fill="#f1f7ef" stroke="#d3e4cf" stroke-width="1.5"/>
+  <text x="42" y="940" font-size="12" font-weight="700" fill="#7ea277" letter-spacing="2" transform="rotate(-90 42 940)" text-anchor="middle">NARRATOR LAYER — LLM, NON-JUDGING</text>
+
+  <!-- Narrator layer -->
+  <rect x="150" y="764" width="500" height="128" rx="12" fill="#dcebd9" stroke="#6f9e6a" stroke-width="1.5"/>
+  <text x="170" y="792" font-size="17" font-weight="700" fill="#1e2a45">The narrator layer <tspan font-size="12" font-weight="400" fill="#6f9e6a">· non-judging · provenance-bound</tspan></text>
+  <text x="170" y="814" font-size="12.5" fill="#5b6478">Four specialists and a critic explain why the name ranked where it</text>
+  <text x="170" y="831" font-size="12.5" fill="#5b6478">did. Every figure traces to a tool output; no arithmetic, no outside facts.</text>
+  <rect x="151" y="848" width="104" height="28" rx="14" fill="#ffffff" stroke="#a9bca6"/>
+  <text x="203" y="866" font-size="11.5" fill="#1e2a45" text-anchor="middle">Fundamental</text>
+  <rect x="265" y="848" width="92" height="28" rx="14" fill="#ffffff" stroke="#a9bca6"/>
+  <text x="311" y="866" font-size="11.5" fill="#1e2a45" text-anchor="middle">Technical</text>
+  <rect x="367" y="848" width="96" height="28" rx="14" fill="#ffffff" stroke="#a9bca6"/>
+  <text x="415" y="866" font-size="11.5" fill="#1e2a45" text-anchor="middle">Sentiment</text>
+  <rect x="473" y="848" width="64" height="28" rx="14" fill="#ffffff" stroke="#a9bca6"/>
+  <text x="505" y="866" font-size="11.5" fill="#1e2a45" text-anchor="middle">Risk</text>
+  <rect x="547" y="848" width="88" height="28" rx="14" fill="#ffffff" stroke="#a9bca6"/>
+  <text x="591" y="866" font-size="11.5" fill="#1e2a45" text-anchor="middle">Critic</text>
+
+  <!-- second_opinion dashed optional path -->
+  <line x1="650" y1="828" x2="690" y2="828" stroke="#8a93a3" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrowMuted)"/>
+  <text x="653" y="821" font-size="10.5" fill="#8a93a3">optional</text>
+  <rect x="690" y="776" width="240" height="104" rx="12" fill="#f6faf5" stroke="#6f9e6a" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="705" y="799" font-size="13" font-weight="700" fill="#4f7a4a">second_opinion</text>
+  <text x="705" y="817" font-size="10.5" fill="#5b6478">Behind a flag. The council issues</text>
+  <text x="705" y="832" font-size="10.5" fill="#5b6478">its own verdict for comparison</text>
+  <text x="705" y="847" font-size="10.5" fill="#5b6478">only — it does not change the</text>
+  <text x="705" y="862" font-size="10.5" fill="#5b6478">verdict of record.</text>
+  <line x1="400" y1="892" x2="400" y2="918" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Narrative + open questions -->
+  <rect x="150" y="918" width="500" height="82" rx="12" fill="#dcebd9" stroke="#6f9e6a" stroke-width="1.5"/>
+  <text x="170" y="946" font-size="17" font-weight="700" fill="#1e2a45">Narrative + open questions</text>
+  <text x="170" y="968" font-size="12.5" fill="#5b6478">The factor story, the strategy fit, and what a human should check.</text>
+  <text x="170" y="986" font-size="12.5" fill="#5b6478">Concerns the evidence can't prove are phrased as open questions.</text>
+  <line x1="400" y1="1000" x2="400" y2="1026" stroke="#8590a3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Human veto -->
+  <rect x="150" y="1026" width="500" height="86" rx="12" fill="#f4e3c0" stroke="#cf9f44" stroke-width="1.5"/>
+  <text x="170" y="1054" font-size="17" font-weight="700" fill="#1e2a45">Human veto</text>
+  <text x="170" y="1076" font-size="12.5" fill="#5b6478">Contested runs escalate — low confidence, a material data-quality gap,</text>
+  <text x="170" y="1094" font-size="12.5" fill="#5b6478">a verdict flip, a gate override, INSUFFICIENT_EVIDENCE. The human holds the veto.</text>
+
+  <!-- ===================== LEGEND ===================== -->
+  <rect x="100" y="1176" width="16" height="16" rx="4" fill="#dbe6f5" stroke="#5b7aab"/>
+  <text x="124" y="1189" font-size="12" fill="#5b6478">Deterministic (fixed)</text>
+  <rect x="320" y="1176" width="16" height="16" rx="4" fill="#dcebd9" stroke="#6f9e6a"/>
+  <text x="344" y="1189" font-size="12" fill="#5b6478">LLM narration</text>
+  <rect x="500" y="1176" width="16" height="16" rx="4" fill="#f4e3c0" stroke="#cf9f44"/>
+  <text x="524" y="1189" font-size="12" fill="#5b6478">Human control</text>
+  <rect x="680" y="1176" width="16" height="16" rx="4" fill="#e8ebee" stroke="#5B6B7B" stroke-dasharray="4 3"/>
+  <text x="704" y="1189" font-size="12" fill="#5b6478">Off-pipeline / optional (dashed)</text>
+</svg>
