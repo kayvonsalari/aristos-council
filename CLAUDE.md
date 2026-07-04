@@ -51,8 +51,27 @@ LangGraph orchestration, Anthropic models, pydantic state.
   deliberation for the UI to re-render). `load_latest` takes a `strategy_id` so
   the recommendation_flip veto compares within the SAME ticker+strategy (a
   growth BUY never flips against a dividend HOLD).
-- `examples/run_council.py` — the demo entrypoint (run in Colab, not here).
+- `src/aristos_council/pipeline.py` — the v2 rank pipeline + the ONE shared entry
+  `run_rank_pipeline(universe, strategy_id, *, council_mode, ranker_only, csv_path,
+  …) -> RankPipelineResult` that BOTH the CLI (`examples/run_pipeline.py`) and
+  Council Station's Universe Run tab call (no subprocess, no duplicated
+  orchestration). `RankPipelineResult` splits UNRATEABLE (no-data/delisted) from
+  Excluded (screen/cap/sector) and carries `narratives`, `header`, `meta`; the
+  per-name council loop lives once in `_council_stage` (shared with the older
+  `run_pipeline`). `format_cli_report(result)` is what the CLI prints, so UI and
+  CLI show the SAME thing.
+- `src/aristos_council/strategy/discovery.py` — classify strategy YAMLs by SHAPE:
+  RANK (`factors:`), COUNCIL (`criteria:`, single-ticker), LENS (a `criteria:`
+  screen referenced by a rank strategy's `council_screen_strategy` — hidden). The
+  lens set is DERIVED (union of rank strategies' `council_screen_strategy`), never
+  hardcoded. Drives both dropdowns: single-ticker page → COUNCIL only, Universe Run
+  tab → RANK only.
+- `examples/run_council.py` — the single-ticker demo entrypoint (run in Colab, not
+  here). `examples/run_pipeline.py` — the v2 universe CLI, now a THIN wrapper over
+  `run_rank_pipeline` (`--ranker-only` for a free, no-LLM deterministic ranking).
 - `app.py` — Council Station, the local Streamlit UI (`streamlit run app.py`).
+  Tabs: Report (single-ticker), **Universe Run** (the v2 rank pipeline — see
+  below), History, Strategy. Loads `.env` at app start so keys reach the process.
 
 ## Hard project rules (learned the expensive way — do not relax)
 
@@ -326,6 +345,51 @@ data-gathering tools on `registry.required_evidence(strategy.criteria)`: a growt
 run no longer calls `get_dividend_history` (no dividend events in the packet), a
 dividend run is unchanged. Fixed the live MSFT dividend-citation violations.
 235 tests green.
+
+## Universe Run tab (shipped 2026-07-04)
+
+Council Station catches up with the v2 pipeline. Before this, `app.py` could only
+drive `run_council(ticker, strategy)` — the pre-v2 single-ticker path — so the rank
+strategies (`conservative_plus_v1` / `magic_formula_v1` /
+`magic_formula_momentum_v1`) existed only in `examples/run_pipeline.py` and were
+unreachable from the UI. This adds ONE tab that renders what the pipeline already
+produces. Presentation only — NO new decision logic.
+
+- **Shared entrypoint** (`pipeline.run_rank_pipeline`, see Architecture): the CLI
+  and the tab call the same function; the CLI became a thin wrapper and prints
+  `format_cli_report(result)`, so the two can't drift. The council loop is factored
+  into `_council_stage` (one source of truth with `run_pipeline`, whose signature +
+  behavior are unchanged). Test: the entry returns the same content the CLI prints
+  for a fixed fake-adapter fixture (`tests/test_run_rank_pipeline.py`).
+- **Schema-split dropdowns** (`strategy/discovery.py`, see Architecture): fixes the
+  dropdown showing the wrong strategies. Single-ticker page lists COUNCIL only; the
+  new tab lists RANK only; LENS screens are hidden by DERIVATION, not a hardcoded
+  set (the old `_COUNCIL_LENS_STRATEGY_IDS` is gone). `tests/test_discovery.py` pins
+  the classification over the live `strategies/` dir.
+- **The tab** (`render_universe_tab`): universe textarea (whitespace/comma/newline,
+  normalized + de-duped, count shown), rank-strategy dropdown, `council_mode`
+  selector defaulting to narrator + a "ranker only — no LLM, no cost" checkbox, run
+  button with a cost estimate. Guards: narrator mode without `ANTHROPIC_API_KEY`
+  disables the run (ranker-only stays available); empty / oversized (cap 60)
+  universe → friendly error. Output mirrors the CLI report order: (1) the header
+  line (`Verdict: deterministic ranker. Narrative: LLM (non-judging)`); (2) a
+  sortable RANKED table — position, ticker, verdict (existing verdict palette),
+  combined rank, per-factor ranks (imputed marked `*`); (3) Excluded — ticker +
+  named reason; (4) UNRATEABLE — ticker + reason, VISUALLY DISTINCT from Excluded
+  (its own axis: no data → no verdict); (5) NARRATIVE — one expander per BUY name.
+  Per-phase `st.status` progress (screening / ranking / narrating name k of n — the
+  narrator phase is minutes, so silence would look like a hang).
+- **Persistence**: the pipeline does NOT persist reports, so the tab offers a
+  "download run as markdown" button — NO new on-disk storage format this sprint.
+- **`.env` at app start** (`main()`): so `ANTHROPIC` / `FINNHUB` keys reach the
+  Streamlit process regardless of launch shell. Scope-fenced — NO other Finnhub
+  work: sentiment failures degrade to abstention per the Phase-3 contract; a live
+  run that still crashes on Finnhub captures the traceback and STOPS (a separate bug
+  with its own spec, not fixed blind).
+
+OUT OF SCOPE (kept so): redesigning the single-ticker page; strategy editing for
+rank YAMLs; charts/history for rank runs; any Finnhub fix beyond env loading. 581
+tests green.
 
 ## Sprint 4F (next build)
 
