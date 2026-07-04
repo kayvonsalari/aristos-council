@@ -19,7 +19,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Optional
+from pathlib import Path
+from typing import Callable, Optional
 
 from .factors import (
     compute_factors,
@@ -31,7 +32,12 @@ from .factors import (
 )
 from .persistence.reports import RunReport, report_from_state
 from .rank_engine import FactorSpec, RankedTicker, rank_universe
+from .reproducibility import estimate_cost
 from .state import Recommendation, ResearchState
+
+# The repo strategies/ dir, used to resolve a strategy id when the caller does not
+# pass one (the UI/CLI pass their own). src/aristos_council/pipeline.py -> repo root.
+_STRATEGIES_DIR = Path(__file__).resolve().parents[2] / "strategies"
 
 
 @dataclass
@@ -113,6 +119,40 @@ def _shortlist(ranked: list[RankedTicker], runs_on: str, k: int) -> list[RankedT
     return [r for r in live if r.verdict == "buy"]   # buy_quintile (default)
 
 
+def _council_stage(
+    shortlist: list[RankedTicker], screen_strategy, adapter, runners, mode: str, *,
+    sentiment_adapter=None, sentiment_missing_key: bool = False,
+    progress: Optional[Callable[[str], None]] = None,
+) -> list[CouncilOutcome]:
+    """Run the LLM council over the shortlist (matrix skipped — the ranker is the
+    verdict-of-record). Shared by ``run_pipeline`` and ``run_rank_pipeline`` so the
+    per-name invocation lives in ONE place. ``progress`` (optional) is called with a
+    human status string before each name — the narrator phase is minutes, so the UI
+    needs a heartbeat."""
+    from .graph import build_council        # local import: avoids a heavy import cycle
+
+    app = build_council(adapter, screen_strategy, runners,
+                        sentiment_adapter=sentiment_adapter,
+                        sentiment_missing_key=sentiment_missing_key,
+                        council_mode=mode, run_matrix=False)
+    outcomes: list[CouncilOutcome] = []
+    n = len(shortlist)
+    for i, r in enumerate(shortlist, 1):
+        if progress is not None:
+            progress(f"Narrating {r.ticker} ({i} of {n})…")
+        result = ResearchState.model_validate(app.invoke(ResearchState(
+            ticker=r.ticker, strategy_id=screen_strategy.id,
+            ranker_verdict=Recommendation(r.verdict),
+            ranker_explanation=r.explain())))
+        rep = report_from_state(result)
+        outcomes.append(CouncilOutcome(
+            ticker=r.ticker, ranker_verdict=r.verdict,
+            council_verdict=rep.council_verdict,
+            agreement=rep.ranker_council_agreement,
+            dissent_notes=rep.dissent_notes, report=rep))
+    return outcomes
+
+
 def run_pipeline(
     *, universe: list[str], rank_strategy, screen_strategy, adapter, runners,
     today: date, sentiment_adapter=None, sentiment_missing_key: bool = False,
@@ -122,8 +162,6 @@ def run_pipeline(
     default to the rank strategy's config; pass to override. The council uses the
     SCREEN strategy for evidence/analysis, with the matrix node skipped (the ranker
     is the deterministic verdict-of-record)."""
-    from .graph import build_council        # local import: avoids a heavy import cycle
-
     runs_on = council_runs_on or rank_strategy.council_runs_on
     mode = council_mode or rank_strategy.council_mode
 
@@ -133,30 +171,211 @@ def run_pipeline(
                  if getattr(rank_strategy, "prefilter_screen", False) else None)
     ranked, excluded = _rank_stage(universe, rank_strategy, adapter, today=today,
                                    prefilter_criteria=prefilter)
-    by_ticker = {r.ticker: r for r in ranked}
     shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
 
-    app = build_council(adapter, screen_strategy, runners,
-                        sentiment_adapter=sentiment_adapter,
-                        sentiment_missing_key=sentiment_missing_key,
-                        council_mode=mode, run_matrix=False)
-
-    outcomes: list[CouncilOutcome] = []
-    for r in shortlist:
-        rv = r.verdict
-        result = ResearchState.model_validate(app.invoke(ResearchState(
-            ticker=r.ticker, strategy_id=screen_strategy.id,
-            ranker_verdict=Recommendation(rv),
-            ranker_explanation=r.explain())))
-        rep = report_from_state(result)
-        outcomes.append(CouncilOutcome(
-            ticker=r.ticker, ranker_verdict=rv,
-            council_verdict=rep.council_verdict,
-            agreement=rep.ranker_council_agreement,
-            dissent_notes=rep.dissent_notes, report=rep))
+    outcomes = _council_stage(
+        shortlist, screen_strategy, adapter, runners, mode,
+        sentiment_adapter=sentiment_adapter,
+        sentiment_missing_key=sentiment_missing_key)
 
     return PipelineResult(ranked=ranked, shortlist=[r.ticker for r in shortlist],
                           council=outcomes, council_mode=mode, excluded=excluded)
+
+
+# --------------------------------------------------------------------------- #
+# High-level entry — the ONE callable both the CLI and the UI drive
+# --------------------------------------------------------------------------- #
+UNRATEABLE_PREFIX = "UNRATEABLE"
+
+
+@dataclass
+class RankPipelineResult:
+    """The full v2 run, structured for a caller to render without re-deriving.
+
+    ``ranked`` is the LIVE ranked universe (verdict-of-record, best-first; excluded
+    names removed). ``excluded`` and ``unrateable`` are split so the UNRATEABLE
+    no-data names (delisted) read distinctly from screen/cap exclusions.
+    ``narratives`` maps a shortlisted (BUY) name to its LLM narration markdown (empty
+    in ranker-only runs). ``header`` is the division-of-labor line; ``meta`` carries
+    the ids, sizes, and the cost estimate the CLI computes."""
+
+    ranked: list[RankedTicker]
+    excluded: list[tuple[str, str]]
+    unrateable: list[tuple[str, str]]
+    narratives: dict[str, str]
+    header: str
+    meta: dict
+    council_mode: str = "narrator"                    # lets agreement_table/format_narratives read it
+    council: list[CouncilOutcome] = field(default_factory=list)
+    shortlist: list[str] = field(default_factory=list)
+
+
+def _pipeline_header(mode: str) -> str:
+    tail = "non-judging" if mode == "narrator" else "independent second opinion"
+    return f"Verdict: deterministic ranker.  Narrative: LLM ({tail})."
+
+
+def _narrative_text(outcome: CouncilOutcome) -> str:
+    d = outcome.report.decision
+    return (d.rationale.strip() if d and d.rationale else "") or "(no narrative produced)"
+
+
+def _split_exclusions(
+    ranked: list[RankedTicker], prerank_excluded: list[tuple[str, str]],
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """Partition every non-ranked name into (excluded, unrateable). Sources: the
+    pre-rank exclusions (cap/sector/payout/screen/UNRATEABLE) AND any rank-engine
+    exclusion (a missing 'exclude'-mode factor). UNRATEABLE — a delisted no-data
+    name — is surfaced on its own axis (no verdict), never mixed with a screen fail."""
+    engine_excluded = [(r.ticker, r.reason) for r in ranked if r.excluded]
+    everything = list(prerank_excluded) + engine_excluded
+    unrateable = [(t, why) for t, why in everything if why.startswith(UNRATEABLE_PREFIX)]
+    excluded = [(t, why) for t, why in everything if not why.startswith(UNRATEABLE_PREFIX)]
+    return excluded, unrateable
+
+
+def _resolve_strategy_path(strategy_id: str, strategies_dir: Path) -> Path:
+    return (Path(strategy_id) if strategy_id.endswith((".yaml", ".yml"))
+            else strategies_dir / f"{strategy_id}.yaml")
+
+
+def run_rank_pipeline(
+    universe: list[str], strategy_id: str, *,
+    council_mode: str = "narrator", csv_path: str | Path | None = None,
+    ranker_only: bool = False, strategies_dir: str | Path | None = None,
+    screen_strategy_id: Optional[str] = None,
+    council_runs_on: Optional[str] = None,
+    adapter=None, runners=None, today: Optional[date] = None,
+    use_cache: bool = True, progress: Optional[Callable[[str], None]] = None,
+) -> RankPipelineResult:
+    """Rank a universe under a RANK strategy, then (unless ``ranker_only``) narrate
+    the shortlist with the LLM council. The single entrypoint the CLI and Council
+    Station both call — no subprocess, no duplicated orchestration.
+
+    Deterministic STAGE 1 (screen -> rank -> gates) always runs and is free; STAGE 2
+    (the council) runs only when ``ranker_only`` is False and bills API credits. When
+    ``adapter``/``runners`` are None they are built from the environment
+    (``ARISTOS_MARKET_PROVIDER``; ``ANTHROPIC_API_KEY`` for the council) — tests inject
+    fakes instead. ``progress`` receives per-phase status strings for a live UI."""
+    strategies_dir = Path(strategies_dir) if strategies_dir else _STRATEGIES_DIR
+    rank_strategy = load_rank_strategy_from_id(strategy_id, strategies_dir)
+    screen_id = resolve_council_screen_id(rank_strategy, screen_strategy_id)
+    screen_strategy = load_screen_from_id(screen_id, strategies_dir)
+
+    today = today or date.today()
+    mode = council_mode or rank_strategy.council_mode
+    runs_on = council_runs_on or rank_strategy.council_runs_on
+
+    if adapter is None:
+        adapter = _build_adapter(today=today, use_cache=use_cache)
+
+    if progress is not None:
+        progress("Screening & ranking the universe…")
+    prefilter = (screen_strategy.criteria
+                 if getattr(rank_strategy, "prefilter_screen", False) else None)
+    ranked, prerank_excluded = _rank_stage(
+        universe, rank_strategy, adapter, today=today, prefilter_criteria=prefilter)
+    live = [r for r in ranked if not r.excluded]
+    excluded, unrateable = _split_exclusions(ranked, prerank_excluded)
+
+    shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
+    est = estimate_cost(len(shortlist))
+
+    council: list[CouncilOutcome] = []
+    narratives: dict[str, str] = {}
+    if not ranker_only and shortlist:
+        if runners is None:
+            from .agents.runners import production_runners
+            runners = production_runners()
+        council = _council_stage(shortlist, screen_strategy, adapter, runners, mode,
+                                 progress=progress)
+        narratives = {o.ticker: _narrative_text(o) for o in council}
+
+    meta = {
+        "rank_strategy_id": rank_strategy.id,
+        "screen_strategy_id": screen_strategy.id,
+        "council_mode": mode,
+        "council_runs_on": runs_on,
+        "ranker_only": ranker_only,
+        "universe_size": len(universe),
+        "ranked_count": len(live),
+        "shortlist": [r.ticker for r in shortlist],
+        "est_cost": est,
+    }
+    result = RankPipelineResult(
+        ranked=live, excluded=excluded, unrateable=unrateable, narratives=narratives,
+        header=_pipeline_header(mode), meta=meta, council_mode=mode, council=council,
+        shortlist=[r.ticker for r in shortlist])
+
+    if csv_path and not ranker_only and mode != "narrator":
+        _append_agreement_csv(result, Path(csv_path))
+    return result
+
+
+def load_rank_strategy_from_id(strategy_id: str, strategies_dir: Path):
+    from .strategy.rank_loader import load_rank_strategy
+    return load_rank_strategy(_resolve_strategy_path(strategy_id, strategies_dir))
+
+
+def load_screen_from_id(screen_id: str, strategies_dir: Path):
+    from .strategy.loader import load_strategy
+    return load_strategy(_resolve_strategy_path(screen_id, strategies_dir))
+
+
+def _build_adapter(*, today: date, use_cache: bool):
+    from .data.provider import select_market_adapter
+    adapter = select_market_adapter()
+    if use_cache:
+        from .data.cache import DEFAULT_CACHE_DIR, CachingAdapter
+        adapter = CachingAdapter(adapter, cache_dir=DEFAULT_CACHE_DIR, today=today)
+    return adapter
+
+
+def _append_agreement_csv(result: RankPipelineResult, path: Path) -> None:
+    import csv
+    new = not path.exists()
+    rows = agreement_csv_rows(result)
+    with path.open("a", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()) if rows else
+                           ["ticker", "ranker_verdict", "council_verdict",
+                            "agreement", "council_mode", "dissent_notes"])
+        if new:
+            w.writeheader()
+        for row in rows:
+            w.writerow(row)
+
+
+def format_cli_report(result: RankPipelineResult) -> str:
+    """The console report the CLI prints — built from the structured result so the UI
+    and CLI show the SAME thing. Mirrors the legacy run_pipeline.py layout."""
+    m = result.meta
+    lines = [
+        f"(rank: {m['rank_strategy_id']}; screen: {m['screen_strategy_id']}; "
+        f"mode: {m['council_mode']}; shortlist {len(m['shortlist'])}/"
+        f"{m['universe_size']}; est ${m['est_cost']:.2f})",
+        "",
+        result.header,
+        "",
+        f"=== RANKED ({m['rank_strategy_id']}) — verdict-of-record ===",
+    ]
+    for i, r in enumerate(result.ranked, 1):
+        lines.append(f"  {i:>2}  {r.ticker:<10} {r.verdict.upper():<5} "
+                     f"combined {r.combined_rank:>5.0f}")
+    if result.excluded:
+        lines.append("")
+        lines.append("  Excluded (not ranked):")
+        for t, reason in result.excluded:
+            lines.append(f"      {t:<10} {reason}")
+    if result.unrateable:
+        lines.append("")
+        lines.append("  UNRATEABLE (no data — no verdict):")
+        for t, reason in result.unrateable:
+            lines.append(f"      {t:<10} {reason}")
+    if not m["ranker_only"]:
+        lines.append("")
+        lines.append(format_narratives(result) if m["council_mode"] == "narrator"
+                     else agreement_table(result))
+    return "\n".join(lines)
 
 
 def agreement_table(result: PipelineResult) -> str:

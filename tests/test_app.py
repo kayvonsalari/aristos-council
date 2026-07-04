@@ -189,6 +189,90 @@ def _markdown_blob(at) -> str:
     return "\n".join(m.value for m in at.markdown if isinstance(m.value, str))
 
 
+# --------------------------------------------------------------------------- #
+# Universe Run tab — schema-split dropdowns + pure render helpers (Sprint)
+# --------------------------------------------------------------------------- #
+def test_rank_strategy_options_lists_only_rank_strategies():
+    ids = [s.id for _, _, s in app.list_rank_strategy_options(app.STRATEGIES_DIR)]
+    assert {"conservative_plus_v1", "magic_formula_v1",
+            "magic_formula_momentum_v1"} <= set(ids)
+    # council + lens strategies never appear in the rank dropdown
+    assert "growth_v1" not in ids and "magic_value_screen_v1" not in ids
+
+
+def test_single_ticker_dropdown_excludes_rank_and_lens():
+    ids = [s.id for _, _, s in app.list_strategy_options(app.STRATEGIES_DIR)]
+    assert "magic_formula_v1" not in ids               # rank -> Universe Run tab only
+    assert "conservative_screen_v1" not in ids         # lens -> hidden
+
+
+def test_parse_universe_normalizes_dedupes_and_orders():
+    got = app._parse_universe("aapl, msft\nGOOGL aapl , ,brk.b")
+    assert got == ["AAPL", "MSFT", "GOOGL", "BRK.B"]    # upper, de-duped, order kept
+    assert app._parse_universe("") == []
+
+
+def test_estimate_shortlist_size_tracks_the_cut():
+    from aristos_council.strategy.rank_loader import load_rank_strategy
+    magic = load_rank_strategy(app.STRATEGIES_DIR / "magic_formula_v1.yaml")
+    assert app._estimate_shortlist_size(0, magic) == 0
+    assert app._estimate_shortlist_size(20, magic) == 4   # quintile ~ n/5
+    assert app._estimate_shortlist_size(2, magic) == 1     # never below 1 for n>0
+
+
+def test_ranked_rows_marks_imputed_factors_with_a_star():
+    from aristos_council.rank_engine import RankedTicker
+    rt = RankedTicker(
+        ticker="A", factor_ranks={"earnings_yield": 1.0, "net_payout_yield": 2.0},
+        factor_values={}, combined_rank=3.0, universe_size=3, verdict="buy",
+        imputed_factors=["net_payout_yield"])
+    rows, factors = app._ranked_rows([rt])
+    assert factors == ["earnings_yield", "net_payout_yield"]
+    row = rows[0]
+    assert row["Verdict"] == "BUY" and row["#"] == 1
+    assert row["earnings_yield"] == "1"                 # present, no star
+    assert row["net_payout_yield"] == "2*"              # imputed -> star
+
+
+def test_universe_markdown_has_sections_from_the_result():
+    from aristos_council.pipeline import RankPipelineResult
+    from aristos_council.rank_engine import RankedTicker
+    rt = RankedTicker(ticker="A", factor_ranks={"earnings_yield": 1.0},
+                      factor_values={}, combined_rank=1.0, universe_size=2,
+                      verdict="buy")
+    result = RankPipelineResult(
+        ranked=[rt], excluded=[("C", "screen: min_roic (observed 0.08 vs 0.12)")],
+        unrateable=[("DEAD", "UNRATEABLE: no data — possibly delisted")],
+        narratives={"A": "ranked #1 on ROIC."},
+        header="Verdict: deterministic ranker.  Narrative: LLM (non-judging).",
+        meta={"rank_strategy_id": "magic_formula_v1",
+              "screen_strategy_id": "magic_value_screen_v1",
+              "council_mode": "narrator", "ranker_only": False,
+              "universe_size": 3, "ranked_count": 1, "shortlist": ["A"],
+              "est_cost": 0.19},
+        council_mode="narrator")
+    md = app._universe_markdown(result)
+    assert "# Universe run — magic_formula_v1" in md
+    assert "## Ranked (verdict of record)" in md
+    assert "| 1 | A | BUY |" in md                      # the ranked row for A
+    assert "## Excluded" in md and "min_roic" in md
+    assert "## Unrateable" in md and "DEAD" in md
+    assert "## Narrative" in md and "ranked #1 on ROIC." in md
+
+
+def test_universe_run_tab_renders_with_rank_dropdown():
+    # The app renders (all tabs) with the new Universe Run tab present and a rank-
+    # strategy dropdown — no run triggered, so nothing hits the network.
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    # The "Rank strategy" selectbox only exists inside render_universe_tab, so its
+    # presence proves the tab rendered.
+    rank_dd = next(s for s in at.selectbox if s.label == "Rank strategy")
+    assert any("magic_formula" in o for o in rank_dd.options)
+    assert not any("growth_v1" in o for o in rank_dd.options)   # council, not rank
+
+
 _MSFT_PRE_4E = _REPORTS / "MSFT" / "2026-06-14T13-29-49Z.json"
 
 

@@ -232,29 +232,40 @@ def _inject_chrome() -> None:
     )
 
 
-# Council-LENS screens that exist only to pair with a rank strategy in the pipeline
-# (the council judges a ranked pick against its philosophy). They are NOT standalone
-# strategies a user runs from the UI, so they're hidden from the dropdown.
-_COUNCIL_LENS_STRATEGY_IDS = {"conservative_screen_v1", "magic_value_screen_v1"}
-
-
 def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strategy]]:
-    """Every loadable, USER-RUNNABLE strategy YAML as (label, path, strategy),
+    """Every USER-RUNNABLE SINGLE-TICKER (council) strategy as (label, path, strategy),
     id-sorted.
 
-    All live strategies are selectable (Sprint 4C lit up growth_v1). Invalid YAMLs
-    are skipped silently (the loader is the gatekeeper), as are the internal
-    council-lens screens (paired with a rank strategy, not run standalone).
+    Classification is by SHAPE (``aristos_council.strategy.discovery``): council
+    strategies have ``criteria:`` and are NOT referenced as a rank strategy's
+    council-lens screen. The rank strategies (Universe Run tab) and the internal lens
+    screens are excluded here. Invalid YAMLs are skipped silently (the loader gates).
     """
+    from aristos_council.strategy.discovery import council_strategies
+
     out: list[tuple[str, Path, Strategy]] = []
-    for p in sorted(strategies_dir.glob("*.yaml")):
+    for info in council_strategies(strategies_dir):
         try:
-            s = load_strategy(p)
+            s = load_strategy(info.path)
         except Exception:
             continue
-        if s.id in _COUNCIL_LENS_STRATEGY_IDS:
+        out.append((f"{s.name} · {s.id}", info.path, s))
+    return out
+
+
+def list_rank_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, object]]:
+    """Every RANK strategy (Universe Run tab) as (label, path, rank_strategy),
+    id-sorted — the schema-split counterpart to ``list_strategy_options``."""
+    from aristos_council.strategy.discovery import rank_strategies
+    from aristos_council.strategy.rank_loader import load_rank_strategy
+
+    out: list[tuple[str, Path, object]] = []
+    for info in rank_strategies(strategies_dir):
+        try:
+            s = load_rank_strategy(info.path)
+        except Exception:
             continue
-        out.append((f"{s.name} · {s.id}", p, s))
+        out.append((f"{s.name} · {s.id}", info.path, s))
     return out
 
 
@@ -1093,9 +1104,257 @@ def render_strategy_tab(selected_path: Path | None) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Universe Run tab — the v2 rank pipeline (screen -> rank -> gates -> narrator)
+# --------------------------------------------------------------------------- #
+def _parse_universe(raw: str) -> list[str]:
+    """Whitespace/comma/newline-separated tickers -> normalized, de-duped, ordered."""
+    if not raw:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for tok in raw.replace(",", " ").split():
+        nt = normalize_ticker(tok)
+        if nt and nt not in seen:
+            seen.add(nt)
+            out.append(nt)
+    return out
+
+
+def _estimate_shortlist_size(n: int, rank_strategy) -> int:
+    """Rough shortlist size for a pre-run cost hint (exact size is known only after
+    the free ranking pass, which exclusions shrink)."""
+    if n == 0:
+        return 0
+    runs_on = rank_strategy.council_runs_on
+    if runs_on == "all":
+        return n
+    if runs_on == "top_k" or rank_strategy.cut == "top_k":
+        return min(rank_strategy.k, n)
+    return max(1, round(n / 5))          # buy_quintile
+
+
+def _ranked_rows(ranked) -> tuple[list[dict], list[str]]:
+    """Rows + the ordered factor columns for the ranked table. A per-factor rank is
+    marked with a trailing ``*`` when it was imputed (the value was absent)."""
+    factor_names: list[str] = []
+    for r in ranked:
+        for f in r.factor_ranks:
+            if f not in factor_names:
+                factor_names.append(f)
+    rows: list[dict] = []
+    for i, r in enumerate(ranked, 1):
+        row = {"#": i, "Ticker": r.ticker, "Verdict": r.verdict.upper(),
+               "Combined": round(r.combined_rank, 1)}
+        for f in factor_names:
+            if f in r.factor_ranks:
+                row[f] = f"{r.factor_ranks[f]:.0f}" + \
+                    ("*" if f in r.imputed_factors else "")
+            else:
+                row[f] = "—"
+        rows.append(row)
+    return rows, factor_names
+
+
+def _universe_markdown(result) -> str:
+    """The run as a self-contained markdown doc (the download; NO new storage format
+    this sprint — the pipeline does not persist reports)."""
+    m = result.meta
+    lines = [f"# Universe run — {m['rank_strategy_id']}", "",
+             f"_{result.header}_", "",
+             f"- screen: `{m['screen_strategy_id']}`",
+             f"- mode: {m['council_mode']}",
+             f"- ranked: {m['ranked_count']} / {m['universe_size']}"]
+    if not m["ranker_only"]:
+        lines.append(f"- shortlist: {len(m['shortlist'])} · est ${m['est_cost']:.2f}")
+    lines += ["", "## Ranked (verdict of record)", ""]
+    rows, factor_names = _ranked_rows(result.ranked)
+    if rows:
+        head = ["#", "Ticker", "Verdict", "Combined", *factor_names]
+        lines.append("| " + " | ".join(head) + " |")
+        lines.append("|" + "---|" * len(head))
+        for row in rows:
+            cells = [str(row["#"]), row["Ticker"], row["Verdict"],
+                     str(row["Combined"]), *[str(row[f]) for f in factor_names]]
+            lines.append("| " + " | ".join(cells) + " |")
+    else:
+        lines.append("_(no names survived the screen)_")
+    if result.excluded:
+        lines += ["", "## Excluded (screen / cap / sector)", ""]
+        lines += [f"- **{t}** — {why}" for t, why in result.excluded]
+    if result.unrateable:
+        lines += ["", "## Unrateable (no data — no verdict)", ""]
+        lines += [f"- **{t}** — {why}" for t, why in result.unrateable]
+    if result.narratives:
+        lines += ["", "## Narrative", ""]
+        for t, text in result.narratives.items():
+            lines += [f"### {t}", "", text, ""]
+    return "\n".join(lines)
+
+
+def _render_universe_result(result) -> None:
+    m = result.meta
+
+    # 1 — the division-of-labor header line, prominent.
+    st.markdown(f"#### {result.header}")
+    meta_bits = (f"rank: `{m['rank_strategy_id']}` · screen: "
+                 f"`{m['screen_strategy_id']}` · mode: {m['council_mode']} · "
+                 f"ranked {m['ranked_count']}/{m['universe_size']}")
+    if not m["ranker_only"]:
+        meta_bits += (f" · shortlist {len(m['shortlist'])} · "
+                      f"est ${m['est_cost']:.2f}")
+    st.caption(meta_bits)
+
+    # 2 — RANKED table: sortable, verdict palette, per-factor ranks (imputed *).
+    st.subheader("Ranked — verdict of record")
+    rows, factor_names = _ranked_rows(result.ranked)
+    if rows:
+        import pandas as pd
+
+        df = pd.DataFrame(rows)
+        styler = df.style.map(
+            lambda v: f"color: {_verdict_hex(v)}; font-weight: 700",
+            subset=["Verdict"])
+        st.dataframe(styler, hide_index=True, width="stretch")
+        if any("*" in str(row[f]) for row in rows for f in factor_names):
+            st.caption("\\* = factor value absent; rank imputed from the name's "
+                       "other factors (judged on what it has, not punished).")
+    else:
+        st.info("No names survived the screen to be ranked.")
+
+    # 3 — Excluded (screen / cap / sector / payout): a neutral table.
+    if result.excluded:
+        st.subheader(f"Excluded — screen / cap / sector · {len(result.excluded)}")
+        st.dataframe([{"Ticker": t, "Reason": why} for t, why in result.excluded],
+                     hide_index=True, width="stretch")
+
+    # 4 — UNRATEABLE: its OWN axis (no data, no verdict) — deliberately distinct.
+    if result.unrateable:
+        st.subheader(f"⚪ Unrateable — no data, no verdict · {len(result.unrateable)}")
+        with st.container(border=True):
+            st.caption("A SELL implies an assessment was made; these names had no "
+                       "usable data at all (likely delisted), so they receive NO "
+                       "verdict and reached no model.")
+            for t, why in result.unrateable:
+                st.markdown(f"- **{t}** — {why}")
+
+    # 5 — NARRATIVE: one expander per shortlisted (BUY) name — the narrator's job.
+    if not m["ranker_only"]:
+        st.subheader("Narrative")
+        if result.narratives:
+            verdict_of = {r.ticker: r.verdict.upper() for r in result.ranked}
+            for ticker, text in result.narratives.items():
+                v = verdict_of.get(ticker, "")
+                with st.expander(f"{ticker}{(' · ' + v) if v else ''} — narration"):
+                    st.markdown(_md(text) or "_(no narrative produced)_")
+        else:
+            st.caption("No names reached the council.")
+
+    # 6 — download the run as markdown (no new on-disk storage this sprint).
+    st.download_button(
+        "⬇ Download run as markdown",
+        data=_universe_markdown(result),
+        file_name=f"universe_{m['rank_strategy_id']}.md",
+        mime="text/markdown", key="uni_download")
+
+
+def render_universe_tab() -> None:
+    import os
+
+    from aristos_council.reproducibility import estimate_cost
+
+    st.subheader("Universe Run — the v2 rank pipeline")
+    st.caption("Screen → rank → gates issue the verdict of record; the LLM only "
+               "narrates. Pick a rank strategy and paste a universe.")
+
+    rank_options = list_rank_strategy_options(STRATEGIES_DIR)
+    if not rank_options:
+        st.error(f"No rank strategies found under {STRATEGIES_DIR}")
+        return
+    labels = [label for label, _, _ in rank_options]
+    choice = st.selectbox("Rank strategy", labels, key="uni_strategy")
+    rank_strategy = next(s for label, _, s in rank_options if label == choice)
+
+    raw = st.text_area(
+        "Universe — tickers separated by spaces, commas, or newlines",
+        key="uni_universe", height=120, placeholder="AAPL MSFT GOOGL AMZN META …")
+    universe = _parse_universe(raw)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        ranker_only = st.checkbox("Ranker only — no LLM, no cost", value=False,
+                                  key="uni_ranker_only")
+    with col_b:
+        mode = st.selectbox(
+            "Council mode", ["narrator", "second_opinion"],
+            key="uni_mode", disabled=ranker_only,
+            help="narrator: the LLM explains the ranker verdict (default). "
+                 "second_opinion: the LLM issues an independent comparison verdict.")
+
+    st.caption(f"**{len(universe)}** ticker(s) parsed.")
+
+    CAP = 60
+    has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    problems: list[str] = []
+    if not universe:
+        problems.append("Enter at least one ticker.")
+    if len(universe) > CAP:
+        problems.append(f"Universe too large ({len(universe)} > {CAP}) for an "
+                        f"interactive run — trim it.")
+    if not ranker_only and not has_key:
+        problems.append("Narrator / second-opinion needs ANTHROPIC_API_KEY (set it "
+                        "in the environment or a local .env). Use **Ranker only** to "
+                        "run with no LLM and no cost.")
+
+    if not ranker_only and universe and len(universe) <= CAP:
+        est = estimate_cost(_estimate_shortlist_size(len(universe), rank_strategy))
+        st.caption(f"Estimated council cost ≈ **${est:.2f}** "
+                   "(exact shortlist shown after ranking).")
+
+    for msg in problems:
+        st.info(msg)
+
+    label = "▶ Run ranker (free)" if ranker_only else "▶ Run universe"
+    run = st.button(label, type="primary", disabled=bool(problems), key="uni_run")
+
+    if run:
+        status = st.status("Starting…", expanded=True)
+        try:
+            from aristos_council.pipeline import run_rank_pipeline
+
+            result = run_rank_pipeline(
+                universe, rank_strategy.id, council_mode=mode,
+                ranker_only=ranker_only, strategies_dir=STRATEGIES_DIR,
+                progress=lambda msg: status.update(label=msg))
+        except Exception as exc:
+            status.update(label="Run failed", state="error")
+            # Finnhub scope-fence (sprint item 4): a live crash on Finnhub is a
+            # SEPARATE bug with its own spec — capture the traceback and STOP,
+            # do not paper over it. Sentiment should degrade to abstention upstream.
+            st.exception(exc)
+            st.session_state.pop("uni_result", None)
+        else:
+            status.update(label="Done.", state="complete")
+            st.session_state["uni_result"] = result
+
+    result = st.session_state.get("uni_result")
+    if result is not None:
+        st.divider()
+        _render_universe_result(result)
+
+
+# --------------------------------------------------------------------------- #
 # Page
 # --------------------------------------------------------------------------- #
 def main() -> None:
+    # Load a local .env at APP START (item 4) so ANTHROPIC/FINNHUB keys reach the
+    # Streamlit process regardless of the launch shell — the key guards below and
+    # every run path then see them. No-op if absent; never overrides real env vars.
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(ROOT / ".env")
+    except Exception:
+        pass  # python-dotenv is a runtime extra; browsing past runs doesn't need it
+
     try:
         st.set_page_config(page_title="Council Station", page_icon=_favicon(),
                            layout="wide")
@@ -1171,11 +1430,14 @@ def main() -> None:
     if pending:
         st.success(pending)
 
-    tab_report, tab_history, tab_strategy = st.tabs(
-        ["Report", "History", "Strategy"])
+    tab_report, tab_universe, tab_history, tab_strategy = st.tabs(
+        ["Report", "Universe Run", "History", "Strategy"])
 
     with tab_report:
         _report_tab(ticker)
+
+    with tab_universe:
+        render_universe_tab()
 
     with tab_history:
         render_history(ticker)

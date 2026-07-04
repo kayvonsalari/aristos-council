@@ -1,49 +1,39 @@
-"""Integrated pipeline CLI (Aristos v2) — rank a universe, then run the council on the
-shortlist as an independent second opinion.
+"""Integrated pipeline CLI (Aristos v2) — rank a universe, then narrate the
+shortlist with the LLM council.
 
 STAGE 1 ranks the universe (free, deterministic) — the ranker verdict is the
 verdict-of-record. STAGE 2 runs the LLM council ONLY on the shortlist (default: the
-BUY quintile) — analysis + a second opinion, with the ranker-vs-council agreement and
-dissent notes surfaced. The council bills API credits; the estimate is printed and
-requires --yes above the cap.
+BUY quintile) as a NARRATOR (or an independent second opinion behind the flag). The
+council bills API credits; the estimate is printed and requires --yes above the cap.
+
+This script is a THIN WRAPPER: all orchestration lives in
+``aristos_council.pipeline.run_rank_pipeline`` (the SAME entrypoint Council Station's
+Universe Run tab calls) and the console report is ``format_cli_report`` of its result.
 
 Usage:
     python examples/run_pipeline.py --file pool.txt --rank-strategy conservative_plus_v1 \
         --screen-strategy growth_v1 --council-runs-on buy_quintile --yes
     python examples/run_pipeline.py META MSFT GOOGL ... --council-mode narrator --yes
+    python examples/run_pipeline.py --file pool.txt --ranker-only   # free, no LLM
 
-Requires the runtime extras + keys. Do NOT launch from the Claude Code dev env.
+Requires the runtime extras + keys (except --ranker-only). Do NOT launch from the
+Claude Code dev env.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 from datetime import date
 from pathlib import Path
 
-from aristos_council.agents.runners import production_runners
 from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
 from aristos_council.data.provider import select_market_adapter
-from aristos_council.pipeline import (
-    agreement_csv_rows,
-    agreement_table,
-    format_narratives,
-    resolve_council_screen_id,
-    run_pipeline,
-)
-from aristos_council.reproducibility import estimate_cost
-from aristos_council.strategy.loader import load_strategy
-from aristos_council.strategy.rank_loader import load_rank_strategy
+from aristos_council.pipeline import format_cli_report, run_rank_pipeline
 
 ROOT = Path(__file__).resolve().parents[1]
 STRATEGIES_DIR = ROOT / "strategies"
 SPEND_CAP_COUNCILS = 8   # require --yes above this many council runs
-
-
-def _resolve(arg: str) -> Path:
-    return Path(arg) if arg.endswith((".yaml", ".yml")) else STRATEGIES_DIR / f"{arg}.yaml"
 
 
 def _read_tickers(args) -> list[str]:
@@ -63,7 +53,7 @@ def _read_tickers(args) -> list[str]:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Rank -> council second-opinion pipeline.")
+    p = argparse.ArgumentParser(description="Rank -> council narrator pipeline.")
     p.add_argument("tickers", nargs="*")
     p.add_argument("--file")
     p.add_argument("--rank-strategy", default="conservative_plus_v1")
@@ -76,72 +66,44 @@ def main() -> None:
                    default=None)
     p.add_argument("--csv")
     p.add_argument("--no-cache", action="store_true")
+    p.add_argument("--ranker-only", action="store_true",
+                   help="STAGE 1 only — deterministic ranking, no LLM, no spend")
     p.add_argument("--yes", action="store_true", help="approve the council spend")
     args = p.parse_args()
 
     universe = _read_tickers(args)
     if not universe:
         p.error("no tickers given (positional or --file)")
-    rank_strategy = load_rank_strategy(_resolve(args.rank_strategy))
-    # Council lens: the rank strategy's same-philosophy screen unless overridden.
-    screen_id = resolve_council_screen_id(rank_strategy, args.screen_strategy)
-    screen_strategy = load_strategy(_resolve(screen_id))
 
     today = date.today()
+    # Build the caching adapter ONCE so the (free) sizing pass and the full run
+    # share a cache — the rank stage runs twice but hits data only once.
     adapter = select_market_adapter()
     if not args.no_cache:
         adapter = CachingAdapter(adapter, cache_dir=DEFAULT_CACHE_DIR, today=today)
 
-    # STAGE 1 (free) up front so the spend can be sized before any council runs.
-    from aristos_council.pipeline import _rank_stage, _shortlist
-    runs_on = args.council_runs_on or rank_strategy.council_runs_on
-    prefilter = (screen_strategy.criteria
-                 if rank_strategy.prefilter_screen else None)
-    ranked, _excl = _rank_stage(universe, rank_strategy, adapter, today=today,
-                                prefilter_criteria=prefilter)
-    shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
-    est = estimate_cost(len(shortlist))
-    print(f"(rank: {rank_strategy.id}; screen: {screen_strategy.id}; "
-          f"mode: {args.council_mode or rank_strategy.council_mode}; "
-          f"shortlist {len(shortlist)}/{len(universe)}; est ${est:.2f})")
-    if len(shortlist) > SPEND_CAP_COUNCILS and not args.yes:
-        p.error(f"{len(shortlist)} council runs (> {SPEND_CAP_COUNCILS}) — re-run "
-                f"with --yes to approve ~${est:.2f} of spend")
+    common = dict(strategies_dir=STRATEGIES_DIR, adapter=adapter, today=today,
+                  screen_strategy_id=args.screen_strategy,
+                  council_runs_on=args.council_runs_on,
+                  council_mode=args.council_mode)
 
-    result = run_pipeline(
-        universe=universe, rank_strategy=rank_strategy,
-        screen_strategy=screen_strategy, adapter=adapter, runners=production_runners(),
-        today=today, council_runs_on=args.council_runs_on,
-        council_mode=args.council_mode)
+    # STAGE 1 sizing (free) up front so the spend can be gated before any council.
+    sizing = run_rank_pipeline(universe, args.rank_strategy, ranker_only=True, **common)
+    n_short = len(sizing.meta["shortlist"])
+    if not args.ranker_only and n_short > SPEND_CAP_COUNCILS and not args.yes:
+        p.error(f"{n_short} council runs (> {SPEND_CAP_COUNCILS}) — re-run with --yes "
+                f"to approve ~${sizing.meta['est_cost']:.2f} of spend")
 
-    print("\nVerdict: deterministic ranker.  Narrative: LLM "
-          f"({'non-judging' if result.council_mode == 'narrator' else 'independent second opinion'}).")
-    print(f"\n=== RANKED ({rank_strategy.id}) — verdict-of-record ===")
-    for i, r in enumerate([r for r in result.ranked if not r.excluded], 1):
-        print(f"  {i:>2}  {r.ticker:<10} {r.verdict.upper():<5} combined {r.combined_rank:>5.0f}")
-    if result.excluded:
-        print("\n  Excluded (not ranked):")
-        for t, reason in result.excluded:
-            print(f"      {t:<10} {reason}")
-    # In narrator mode the LLM's whole job is the narrative — SURFACE it (a bare
-    # table is not the product). In second_opinion mode show the agreement table.
-    if result.council_mode == "narrator":
-        print("\n" + format_narratives(result))
-    else:
-        print("\n" + agreement_table(result))
+    runners = None
+    if not args.ranker_only:
+        from aristos_council.agents.runners import production_runners
+        runners = production_runners()
 
-    if args.csv and result.council_mode != "narrator":
-        path = Path(args.csv)
-        new = not path.exists()
-        rows = agreement_csv_rows(result)
-        with path.open("a", newline="", encoding="utf-8") as fh:
-            w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()) if rows else
-                               ["ticker", "ranker_verdict", "council_verdict",
-                                "agreement", "council_mode", "dissent_notes"])
-            if new:
-                w.writeheader()
-            for row in rows:
-                w.writerow(row)
+    result = run_rank_pipeline(
+        universe, args.rank_strategy, ranker_only=args.ranker_only,
+        csv_path=args.csv, runners=runners, **common)
+    print(format_cli_report(result))
+    if args.csv and not args.ranker_only and result.council_mode != "narrator":
         print(f"\n  agreement rows appended -> {args.csv}")
 
 
