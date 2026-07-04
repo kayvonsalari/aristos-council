@@ -29,6 +29,7 @@ from aristos_council.data.provider import select_market_adapter
 from aristos_council.pipeline import (
     agreement_csv_rows,
     agreement_table,
+    format_narratives,
     resolve_council_screen_id,
     run_pipeline,
 )
@@ -122,9 +123,11 @@ def main() -> None:
         print("\n  Excluded (not ranked):")
         for t, reason in result.excluded:
             print(f"      {t:<10} {reason}")
-    # In narrator mode there is no independent verdict -> no agreement table; the
-    # per-name narration lives in each report.
-    if result.council_mode != "narrator":
+    # In narrator mode the LLM's whole job is the narrative — SURFACE it (a bare
+    # table is not the product). In second_opinion mode show the agreement table.
+    if result.council_mode == "narrator":
+        print("\n" + format_narratives(result))
+    else:
         print("\n" + agreement_table(result))
 
     if args.csv and result.council_mode != "narrator":

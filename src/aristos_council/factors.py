@@ -171,12 +171,28 @@ def price_factors_from_closes(closes: list[float], names) -> dict[str, Optional[
 
 
 def is_unrateable(fi: "FactorInputs") -> bool:
-    """No usable data at all — failed fundamentals AND no price history (a delisted
-    ticker whose fetches 404, e.g. PARA/WBA). Such a name must NEVER be ranked or
-    reach the council: a worst-rank SELL on it would be a fake assessment. Distinct
-    from a partial gap (fundamentals missing but prices present -> still rateable on
-    price factors)."""
-    return fi.fundamentals is None and fi.last_close is None
+    """No usable data at all — a delisted / all-404 ticker (PARA/WBA) that must NEVER
+    be ranked or reach the council (a worst-rank SELL on it is a fake assessment, and
+    the ghost also pads the bottom and skews every real name's quintile).
+
+    Two real failure shapes on yfinance: (a) get_fundamentals RAISES -> fundamentals
+    is None; (b) yfinance returns a NON-EMPTY-but-blank `info` -> the adapter builds a
+    SHELL Fundamentals with every number None/empty. Both, combined with no usable
+    price history, are UNRATEABLE. A name missing ONE input (has a market cap OR a
+    price) is NOT unrateable — the abstention rule still ranks it."""
+    if fi.last_close is not None or fi.return_12m is not None \
+            or fi.annualized_volatility is not None:
+        return False                                  # has usable price data -> rateable
+    f = fi.fundamentals
+    if f is None:
+        return True
+    # fundamentals present but a SHELL: no usable numbers at all.
+    has_scalar = any(v is not None for v in (
+        f.market_cap, f.pe_ratio, f.eps, f.dividend_per_share, f.free_cash_flow,
+        f.payout_ratio, f.total_debt))
+    has_series = bool(f.total_revenue or f.operating_income or f.ebit
+                      or f.invested_capital)
+    return not (has_scalar or has_series)
 
 
 def is_sector_excluded(sector: Optional[str], exclude_sectors) -> bool:
@@ -221,15 +237,16 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
     fundamentals = None
     try:
         fundamentals = adapter.get_fundamentals(ticker)
-    except DataUnavailable:
-        pass
+    except Exception:
+        pass                                          # DataUnavailable OR a raw error
     closes: list[float] = []
     try:
         prices = adapter.get_price_history(
             ticker, start=today - timedelta(days=400), end=today)
         closes = prices.closes if prices and prices.closes else []
-    except DataUnavailable:
-        pass
+    except Exception:
+        pass    # a delisted name can raise a RAW yfinance error ("no timezone found")
+                # rather than DataUnavailable — degrade to no-data, never crash the run
     snap = technical_snapshot(closes) if closes else None
     return FactorInputs(
         ticker=ticker, fundamentals=fundamentals,

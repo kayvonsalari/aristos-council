@@ -178,6 +178,23 @@ def agreement_table(result: PipelineResult) -> str:
     return "\n".join(lines)
 
 
+def format_narratives(result: PipelineResult) -> str:
+    """The NARRATIVE section — in narrator mode this is the LLM's ENTIRE job, so it
+    must be visible. One block per shortlisted name: the ranker verdict-of-record and
+    the Decision agent's synthesis (factor ranks / strategy fit; anything beyond the
+    snapshot phrased as an open question — no accounting reinterpretation)."""
+    lines = ["=== NARRATIVE (non-judging) ==="]
+    if not result.council:
+        lines.append("  (no names reached the council)")
+    for o in result.council:
+        d = o.report.decision
+        narrative = (d.rationale.strip() if d and d.rationale else "") \
+            or "(no narrative produced)"
+        lines.append(f"\n{o.ticker} — ranker verdict {o.ranker_verdict.upper()}")
+        lines.append(narrative)
+    return "\n".join(lines)
+
+
 def agreement_csv_rows(result: PipelineResult) -> list[dict]:
     return [{
         "ticker": o.ticker, "ranker_verdict": o.ranker_verdict,

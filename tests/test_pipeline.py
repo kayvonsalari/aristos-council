@@ -448,34 +448,70 @@ def test_narrator_mode_specialists_do_not_emit_agreement():
     assert "agrees_with_ranker" in second            # ...but present in second_opinion
 
 
-def test_unrateable_delisted_name_is_not_ranked_on_any_path():
+def test_is_unrateable_detects_shell_fundamentals_and_spares_partial_data():
     from aristos_council.factors import is_unrateable, FactorInputs
+    # SHELL shape (the REAL delisted output): a blank Fundamentals + no price history
+    assert is_unrateable(FactorInputs(
+        ticker="PARA", fundamentals=Fundamentals(ticker="PARA"))) is True
+    # raise shape: fundamentals None + no prices
+    assert is_unrateable(FactorInputs(ticker="WBA")) is True
+    # partial data still rateable (abstention rule untouched): has a market cap...
+    assert is_unrateable(FactorInputs(
+        ticker="X", fundamentals=Fundamentals(ticker="X", market_cap=1e10))) is False
+    # ...or has a price
+    assert is_unrateable(FactorInputs(ticker="Y", last_close=100.0)) is False
+
+
+class _DelistedAdapter(MarketDataAdapter):
+    """A delisted name's REAL shape: get_fundamentals returns a blank shell (yfinance
+    info comes back non-empty but empty), get_price_history raises a raw error."""
+
+    name = "fake"
+
+    def get_fundamentals(self, t):
+        if t in ("PARA", "WBA"):
+            return Fundamentals(ticker=t)                # shell — all None/empty
+        return Fundamentals(ticker=t, market_cap=2e10, sector="Technology",
+                            ebit=[1000.0], operating_income=[1000.0] * 4,
+                            tax_provision=[200.0] * 4, pretax_income=[950.0] * 4,
+                            invested_capital=[5000.0] * 4)
+
+    def get_price_history(self, t, *, start, end):
+        from aristos_council.data.adapter import PriceHistory
+        if t in ("PARA", "WBA"):
+            raise RuntimeError("no timezone found, symbol may be delisted")  # raw error
+        return PriceHistory(ticker=t, bars=[])
+
+    def get_dividend_history(self, t, *, start, end):
+        return []
+
+
+def test_unrateable_excluded_on_both_prefiltered_and_unprefiltered_paths():
     from aristos_council.pipeline import _rank_stage
+    from aristos_council.strategy.loader import load_strategy
+    lens = load_strategy(STRAT_DIR / "magic_value_screen_v1.yaml")
 
-    # PARA/WBA-shape: no fundamentals AND no price history (all fetches 404)
-    assert is_unrateable(FactorInputs(ticker="PARA")) is True
-    assert is_unrateable(FactorInputs(ticker="X", last_close=100.0)) is False  # has price
+    for prefilter in (None, lens.criteria):              # un-prefiltered AND prefiltered
+        ranked, excluded = _rank_stage(
+            ["GOOD", "PARA", "WBA"], MAGIC_NO_PREFILTER, _DelistedAdapter(),
+            today=date(2026, 6, 30), prefilter_criteria=prefilter)
+        assert {r.ticker for r in ranked} == {"GOOD"}    # ghosts NOT ranked
+        for name in ("PARA", "WBA"):
+            assert any(t == name and "UNRATEABLE" in reason
+                       for t, reason in excluded)         # named UNRATEABLE, no verdict
 
-    class _A(MarketDataAdapter):
-        name = "fake"
-        def get_fundamentals(self, t):
-            from aristos_council.data.adapter import DataUnavailable
-            if t in ("PARA", "WBA"):
-                raise DataUnavailable("404 delisted")
-            return Fundamentals(ticker=t, market_cap=2e10, sector="Technology",
-                                ebit=[1000.0], operating_income=[1000.0] * 4,
-                                tax_provision=[200.0] * 4, pretax_income=[950.0] * 4,
-                                invested_capital=[5000.0] * 4)
-        def get_price_history(self, t, *, start, end):
-            from aristos_council.data.adapter import DataUnavailable, PriceHistory
-            if t in ("PARA", "WBA"):
-                raise DataUnavailable("404 delisted")
-            return PriceHistory(ticker=t, bars=[])
-        def get_dividend_history(self, t, *, start, end):
-            return []
 
-    ranked, excluded = _rank_stage(["GOOD", "PARA", "WBA"], MAGIC_NO_PREFILTER, _A(),
-                                   today=date(2026, 6, 30))
-    assert {r.ticker for r in ranked} == {"GOOD"}        # delisted names NOT ranked
-    for name in ("PARA", "WBA"):
-        assert any(t == name and "UNRATEABLE" in reason for t, reason in excluded)
+def test_narration_is_surfaced_in_narrator_mode():
+    from aristos_council.pipeline import format_narratives
+    runners = _runners(DecisionOutput(recommendation=Recommendation.BUY,
+                                      confidence=0.8,
+                                      rationale="NARRATIVE: ranked #1 on ROIC+value."))
+    result = run_pipeline(
+        universe=["A", "B", "C"], rank_strategy=MAGIC_NO_PREFILTER,
+        screen_strategy=GROWTH, adapter=_Adapter(), runners=runners,
+        today=date(2026, 6, 30), council_mode="narrator", council_runs_on="all")
+    text = format_narratives(result)
+    assert "NARRATIVE (non-judging)" in text
+    for name in result.shortlist:                        # a block per shortlisted name
+        assert name in text
+    assert "NARRATIVE: ranked #1" in text                # the actual narration text
