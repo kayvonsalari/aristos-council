@@ -8,145 +8,87 @@ every number that influenced the verdict is traceable to the exact data source i
 apply a stated investment policy consistently, show its work, and refuse to assert anything
 it cannot evidence.
 
-This document has three parts. Part A describes how a verdict is reached. Part B describes
-what is actually measured under each strategy. Part C describes what the system mechanically
-guarantees, and how those guarantees are tested.
+This document has three parts. Part A describes how a verdict is reached. Part B points to
+[The Calculations](CALCULATIONS.md) — every factor, criterion, and threshold, generated
+from the code. Part C describes what the system mechanically guarantees, and how those
+guarantees are tested.
 
 ---
 
-## Part A — How the Council Decides
+## Part A — How a Verdict Is Reached
 
-A run moves through six stages. The first and the last two are deterministic code, not
-language models. The language models do the reasoning in the middle, but they are bounded
-on both sides by mechanical checks they cannot override.
+A run moves through five stages. The first three — the ones that decide — are
+deterministic code. The language models enter only afterwards, to explain.
 
-**1. The deterministic screen.** Before any model runs, a rules engine evaluates the ticker
-against the active strategy's criteria (Part B). Each criterion returns one of three states:
-pass, fail, or not-evaluated. The thresholds live in a versioned strategy file, not in code,
-so the same ticker run against the same strategy version reproduces the same screen result.
+**1. The screen.** A rules engine evaluates the ticker against the strategy's absolute
+criteria (thresholds live in versioned YAML). Each criterion returns pass, fail, or
+not-evaluated. Only a confirmed FAIL excludes; missing data abstains and never silently
+disqualifies. A ticker with no usable data at all — a delisted name — is declared
+UNRATEABLE: listed with its reason, given no verdict, sent to no model.
 
-**2. The specialist panel.** Four specialists each form an independent view: Fundamental,
-Technical, Sentiment, and Risk. Each returns a stance, a confidence level, a written thesis,
-and a list of cited figures. (The Sentiment specialist runs on Finnhub — company news and
-analyst recommendation trends, aggregated by the deterministic sentiment_snapshot tool; without
-a FINNHUB_API_KEY it abstains rather than guess, and a provider outage degrades to a data-quality
-flag rather than a crash.) A hard rule applies to all of them: every number a specialist cites must carry
-the exact reference to the tool output it was read from. Numbers without a valid reference are
-discarded and flagged. Specialists are forbidden from doing arithmetic or introducing outside
-knowledge; they reason only over the evidence placed before them.
+**2. The rank.** Names that pass are ranked on the strategy's factors across the whole
+universe — rank 1 is best, ties average — and the per-factor ranks are summed. Lowest
+combined rank wins. This is the Magic-Formula mechanic: there are no tuned weights to
+guess, the ranking is the decision, and every verdict decomposes into named, inspectable
+factor ranks. A quintile cut (or top-k for small universes) maps positions to
+BUY / HOLD / SELL. The formulas behind every factor are in [The Calculations](CALCULATIONS.md).
 
-**3. The Critic.** A dedicated adversarial agent challenges the panel — surfacing weak
-reasoning, contestable figures, and questions the evidence cannot answer. The Critic is
-held to the same citation contract as the specialists.
-
-**4. The Decision.** A synthesis step weighs the panel and the Critic's challenge into a
-single recommendation and confidence.
-
-**5. The provenance audit.** After the verdict is proposed, every cited figure is
-re-resolved against the source data and classified: verified, mismatch, unresolvable, or
-non-comparable. This catches the failure mode where an agent attaches a valid source
-reference to a misread value — for example, claiming a criterion "could not be evaluated"
-when the record shows it was evaluated and failed. Mismatches are surfaced for review, not
-silently corrected, so a wrong number never quietly disappears from the trail.
-
-**6. The disposition gate and veto.** Two mechanical guards sit at the end.
-
-The disposition gate is the system's central trust anchor. If a criterion designated as
-*gating* is a confirmed failure, the verdict is capped at SELL — regardless of how bullish
-the language models argued. This exists because of a measured failure mode: the Decision
-agent could be talked into overriding a hard screen failure whenever the Critic supplied a
-plausible "the data is unreliable" argument. No amount of clever rationalization can lift a
-gated failure above SELL. The system records when this override fired and what the models had
-originally proposed, so the disagreement between code and model is visible, not hidden. And
-when a gating criterion is *not-evaluated* — the data cannot confirm pass or fail — the verdict
-becomes INSUFFICIENT_EVIDENCE: off the buy/hold/sell ladder entirely, an unconditional pause
-for human review rather than a guessed direction.
+**3. The gates.** Two mechanical guards no model can argue past. A confirmed failure on a
+*gating* criterion caps the verdict at SELL — the system records when this fired and what
+was originally proposed, so code-versus-model disagreement stays visible. A gating
+criterion that could not be evaluated yields INSUFFICIENT_EVIDENCE: off the
+buy/hold/sell ladder entirely, an unconditional pause for human review rather than a
+guessed direction.
 
 <img src="decision_logic.png" alt="How the four verdicts (buy/hold/sell/insufficient-evidence) are decided" width="760">
 
-The veto layer flags a verdict for human review on any of seven triggers: confidence below
-the strategy's floor (0.6); unresolved disagreement among specialists; a *material*
-data-quality problem; a flip from the previous verdict on the same name; a Decision that
-overrode the majority of the panel; an INSUFFICIENT_EVIDENCE verdict — a not-evaluated gating
-criterion, which always pauses for a human; and a *material gate override* — where the
-deterministic gate capped a confident or BUY verdict down to SELL (a large model-versus-gate
-disagreement worth a human glance, while routine small caps do not escalate).
+**4. The narrative.** Only now do the language models run. Four specialists —
+Fundamental, Technical, Sentiment, Risk — write the evidence-bound story of the verdict:
+why the name ranked where it did, how it fits the strategy, what a human should check.
+Hard rules bound them on every side: every cited figure must carry provenance to the
+exact tool output it was read from (a post-run audit re-resolves every citation and
+surfaces mismatches rather than correcting them silently); no arithmetic; no outside
+knowledge; no reinterpretation of accounting; nothing beyond the evidence asserted as
+fact — open questions are phrased as open questions.
 
-Data quality is now severity-aware: only a *material* gap escalates — an adapter or provenance
-error, or two-or-more criteria that could not be evaluated. Benign noise that nearly every run
-carries — a single specialist abstention, one non-gating not-evaluated criterion, or an
-optional-sentiment 403 — is recorded for the reviewer but does not, on its own, fire the veto.
+Why don't the models judge? Because we measured what happened when they did. The council
+originally held the verdict and flipped on identical inputs. Moved to a second-opinion
+role, it disagreed with 100% of verdicts in a pre-registered controlled experiment across
+three strategies — and when its best objection (momentum) was handled deterministically,
+it began objecting to momentum itself. Its valid insights were hardened into rules: the
+momentum objections became a momentum factor; its one legitimate catch (a name ranking
+well while failing the strategy's own quality floor) became the screen-as-prefilter. The
+`second_opinion` mode remains behind a flag as the experimental instrument; the verdict
+header states the division of labor plainly: *Verdict: deterministic ranker. Narrative:
+LLM (non-judging).*
 
-The output is the recommendation, the confidence, the rationale, the full figure-level
-provenance, any criteria that failed or could not be evaluated, and any vetoes raised.
-
-A note on the three-valued logic, because it matters for trust: "not-evaluated" is a
-first-class state, distinct from "failed." When the underlying data is missing or
-unreliable, the council abstains on that criterion rather than guessing a pass or
-manufacturing a fail. A verdict built on abstentions is reported as such, not dressed up as
-conviction.
+**5. The veto.** Contested runs escalate to a human: low confidence, material
+data-quality gaps, a verdict flip from the prior run on the same name, a gate override of
+a confident call, INSUFFICIENT_EVIDENCE always. Benign noise — a single abstention, one
+non-gating not-evaluated criterion — is recorded but does not escalate on its own. The
+human holds the veto; the system surfaces candidates and shows its work.
 
 ---
 
 ## Part B — What the Council Measures
 
-Two strategies are implemented. Both select their criteria by name from a shared registry
-and pin their own thresholds; the strategies share the engine but not the policy. Strategies
-are versioned — a published strategy is never edited in place, a new version is created
-instead, so historical decisions remain reproducible.
+The per-strategy detail — every factor, criterion, threshold, and guard — lives in one
+generated-from-code reference: **[The Calculations](CALCULATIONS.md)**. Its §2 gives the
+factors and their formulas, §3 the dividend-streak counting method (why a *flat* year is
+not a cut), §4 the screen criteria with current thresholds, and §5 the guards. Where this
+document and the code ever disagree, the code — and The Calculations, which is generated
+from it — win.
 
-### Dividend Aristocrats (v1)
-
-A conservative income strategy. It targets large, financially durable companies with a long,
-unbroken record of growing dividends, and it prioritizes the sustainability of the payout
-over headline yield. The thesis is that a multi-decade record of rising dividends is a
-hard-to-fake signal of disciplined capital allocation and earnings durability; a high yield
-paired with a stretched payout ratio is treated as a warning, not an attraction.
-
-| Criterion | Threshold | What it checks |
-|---|---|---|
-| Minimum dividend yield | ≥ 2.5% | A yield floor, to exclude near-zero-yield names |
-| Maximum payout ratio | ≤ 75% | A sustainability ceiling; above this, the payout is questioned |
-| Minimum market cap | ≥ $10B | A large-cap durability proxy |
-| Minimum dividend growth streak | ≥ 20 years | The canonical aristocrat signal: consecutive years of dividend increases |
-
-A note on the streak threshold, stated plainly: it is **20 years**, not 25. EODHD's non-US
-dividend coverage begins around 2000, so a 25-year streak is unverifiable for European
-aristocrats; 20 is verifiable across both US and EU history and remains a strong aristocrat
-signal. With EODHD — directly or via the hybrid adapter (EODHD dividends + yfinance
-fundamentals/prices) — the streak is now verifiable for most names. Where the history is
-genuinely too short (a recent listing, or a non-US name pre-2000), the criterion is
-not-evaluated rather than guessed; and because the streak is a *gating* criterion, that
-short-circuits the run to INSUFFICIENT_EVIDENCE — the off-the-ladder verdict described in
-Part A, an unconditional pause for human review rather than a pass on faith.
-
-### Growth at a Reasonable Price (v1)
-
-The mirror image of the income screen: durable top-line compounding bought at a sane price,
-with capital efficiency as the quality gate. The discipline is refusing to overpay for
-growth — revenue growth evidences the compounding, return on invested capital evidences that
-the growth creates value rather than just consuming capital, and the PEG ratio keeps
-valuation honest relative to the growth on offer.
-
-| Criterion | Threshold | What it checks |
-|---|---|---|
-| Minimum revenue CAGR | ≥ 10% | Durable top-line growth (in-house 3-year compound rate) |
-| Minimum ROIC | ≥ 12% | Capital efficiency / quality |
-| Maximum PEG ratio | ≤ 2.0 | Valuation relative to growth |
-| Minimum market cap | ≥ $5B | Mid/large-cap scope |
-
-These three estimates are hardened against cyclicality (the failure mode where a single
-trough or peak year flatters a metric). Revenue CAGR is a base-year-robust log-linear *trend*
-over the window rather than a naive two-point endpoint ratio, and the note flags when the two
-diverge — a cyclical-base-year signal. PEG winsorizes an extreme growth input, so a
-trough-inflated CAGR cannot make a stock look spuriously cheap. ROIC is computed on
-through-cycle (multi-year mean) operating income, not a single peak year.
-
-Known limitation: the three growth criteria degrade to not-evaluated rather than guessing
-when the financial statements are too short or earnings are negative. Revenue CAGR needs
-enough clean annual data points; ROIC needs a provided invested-capital figure; PEG needs
-positive earnings and positive in-house growth. The council refuses to assert a growth thesis
-it cannot evidence.
+Three rank strategies ship on one engine, each pinning its own factors and floors in a
+versioned YAML (a published strategy is never edited in place — a new version is created
+instead): **Conservative Formula** (defensive income — low volatility + net payout +
+12-month momentum, screened for covered income, real yield, leverage, and a
+momentum-breakdown floor), **Greenblatt Magic Formula** (classic value — earnings yield +
+return on capital, financials excluded), and **value + momentum** (the Magic Formula with a
+momentum factor added to demote falling knives). Each pairs with an absolute-floor lens
+screen run as a prefilter — the screen says who qualifies, the ranking orders survivors.
+The dividend-aristocrat and growth (GARP) screens remain available as standalone strategies.
+All thresholds are in [The Calculations §4](CALCULATIONS.md#4-screen-criteria-three-state-abstention-never-excludes).
 
 ### Data sources
 
@@ -184,10 +126,13 @@ per-run.
 
 If you are deciding whether to trust this system, the honest answer is that the trust does not
 come from the language models. It comes from the deterministic code that surrounds them and from
-an automated test suite — close to 400 tests at last count — that runs the entire pipeline on every
+an automated test suite — over 550 tests at last count — that runs the entire pipeline on every
 change with fake models and fake data, no API keys and no network. Each guarantee below is
 enforced by that code and re-checked by those tests; none of it depends on a model behaving well
 on the day.
+
+**No model makes the call.** The verdict is a pure function of adapter data through the screen,
+rank, and gates; no language model output can change it. The LLM layer can only annotate.
 
 **Every figure is traceable.** No language model does arithmetic. Each number is produced by a
 pure, deterministic tool and is audited after the fact back to the exact source call it came

@@ -80,6 +80,15 @@ strategy YAML, not code. Current registry (thresholds shown from the live strate
 | `min_roic` | 0.12 (magic_value_screen) | The quality floor for value strategies. |
 | `revenue_cagr`, `peg_ratio` | growth_v1 | GARP criteria; PEG uses earnings-growth with a cyclical-base guard. |
 
+**Growth-metric cyclicality guards** (the GARP screen, `growth_v1`). The three growth
+criteria are hardened against a single trough or peak year flattering a metric:
+`revenue_cagr` is a base-year-robust log-linear **trend** over the window — not a naive
+two-point endpoint ratio — and the note flags when the two diverge (a cyclical-base
+signal); `peg_ratio` winsorizes an extreme growth input, so a trough-inflated CAGR
+cannot make a stock look spuriously cheap; and `roic` is computed on through-cycle
+(multi-year mean) operating income, not a single peak. Each degrades to **not-evaluated**
+rather than guessing when the statements are too short or earnings are negative.
+
 **Screen-as-prefilter.** Rank strategies set `prefilter_screen: true`: only names that
 pass the lens screen's absolute floors are ranked. This enforces **one definition per
 strategy** — the screen says who qualifies, the ranking orders survivors. It closes the
