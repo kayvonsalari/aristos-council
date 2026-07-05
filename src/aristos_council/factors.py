@@ -52,9 +52,9 @@ def enterprise_value(f) -> Optional[float]:
 
     None unless ALL of market_cap, total_debt, total_cash are present (a partial EV is
     misleading, so we abstain and let the earnings-yield factor fall back to
-    EBIT/market_cap). A NEGATIVE or zero EV (a net-cash name: cash > mcap + debt) is
-    returned as-is here; the factor guards it — an EBIT/EV over a non-positive EV would
-    be a nonsense negative/blow-up rank artifact.
+    EBIT/market_cap). A NEGATIVE or zero EV (cash & investments exceed market cap + debt
+    — only a deeply cash-rich small cap) is returned as-is here; the factor guards it —
+    an EBIT/EV over a non-positive EV would be a nonsense negative/blow-up rank artifact.
 
     Caveat (refined, not exact): yfinance ``totalDebt`` includes operating leases and
     the figure carries no minority-interest / pension adjustments — a refined proxy for
@@ -72,10 +72,12 @@ def _earnings_yield(fi: FactorInputs) -> Optional[float]:
     ~95% of a real universe), falling back to EBIT/market_cap when they are missing, then
     1/PE. Higher is cheaper/better.
 
-    Negative-EV guard: a net-cash name (cash > mcap + debt, e.g. NVDA/GOOGL today) has a
-    non-positive EV, on which EBIT/EV is a meaningless negative/huge value — so we ABSTAIN
-    (None) rather than emit a negative-yield rank artifact. Missing EV components are a
-    different case: they fall back to EBIT/market_cap, a comparable positive proxy."""
+    Negative-EV guard: only when cash & investments exceed market cap + debt (EV ≤ 0 —
+    a deeply cash-rich small cap) is EBIT/EV a meaningless negative/huge value, so we
+    ABSTAIN (None) rather than emit a negative-yield rank artifact. A merely net-cash
+    mega-cap (cash > debt but < market cap, e.g. NVDA/GOOGL) still has a large POSITIVE
+    EV and ranks normally. Missing EV components are a different case: they fall back to
+    EBIT/market_cap, a comparable positive proxy."""
     f = fi.fundamentals
     if f is None:
         return None

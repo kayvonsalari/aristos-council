@@ -40,7 +40,7 @@ All factors are pure functions of adapter data; each returns a float or `None`
 
 | Factor | Formula | Direction | Notes |
 |---|---|---|---|
-| `earnings_yield` | EBIT / EV, where **EV = market cap + total debt − cash & short-term investments**; falls back to EBIT/market cap when EV components are missing, then 1/PE | high | Net-cash names (EV ≤ 0, e.g. NVDA/GOOGL) **abstain** — never a negative-yield artifact. EV is a refined proxy (see §6). |
+| `earnings_yield` | EBIT / EV, where **EV = market cap + total debt − cash & short-term investments**; falls back to EBIT/market cap when EV components are missing, then 1/PE | high | Only a deeply cash-rich name whose cash exceeds market cap + debt (**EV ≤ 0**) **abstains** — a merely net-cash mega-cap (cash > debt but < market cap, e.g. NVDA/GOOGL) still has a large positive EV and ranks normally. EV is a refined proxy (see §6). |
 | `roic` | Through-cycle ROIC: NOPAT / invested capital, averaged over a 4-year window | high | Negative-equity-safe (uses provided invested capital, not equity). |
 | `momentum_12m` / `momentum_6m` | Trailing total return over ~252 / ~126 trading days | high | Price-derived from the close series. |
 | `low_volatility` | Annualized volatility of daily returns | **low** | Pairs with momentum to exclude falling knives (a crashing name is high-vol *and* negative-momentum). |
@@ -138,8 +138,10 @@ just flags a knife-edge miss to the reader (`factors.is_borderline_fail`).
   components populate for **95% of growth_40** (`scripts/check_ev_fields.py`, 38/40; the
   two gaps were delisted PARA/WBA). It remains a REFINED proxy: yfinance `totalDebt`
   includes operating leases, and there is no minority-interest or pension adjustment.
-  Missing EV components fall back to EBIT/market cap; net-cash names (EV ≤ 0, live-relevant
-  for NVDA/GOOGL) abstain rather than emit a negative-yield rank artifact.
+  Missing EV components fall back to EBIT/market cap; only a name whose cash exceeds market
+  cap + debt (EV ≤ 0 — a deeply cash-rich small cap) abstains rather than emit a
+  negative-yield rank artifact (a merely net-cash mega-cap like NVDA/GOOGL keeps a large
+  positive EV and ranks normally).
 
 ## 7. Evidence coverage — what gates the escalation (not the LLM's number) (`coverage.py`)
 
