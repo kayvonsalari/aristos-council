@@ -39,6 +39,7 @@ from .state import Recommendation, ResearchState
 # not pass one (the UI/CLI pass their own). src/aristos_council/pipeline.py -> repo root.
 _STRATEGIES_DIR = Path(__file__).resolve().parents[2] / "strategies"
 _UNIVERSES_DIR = Path(__file__).resolve().parents[2] / "universes"
+_RUNS_DIR = Path(__file__).resolve().parents[2] / "runs"        # frozen run records (ITEM 4)
 
 
 @dataclass
@@ -252,6 +253,7 @@ def run_rank_pipeline(
     council_runs_on: Optional[str] = None,
     adapter=None, runners=None, today: Optional[date] = None,
     use_cache: bool = True, progress: Optional[Callable[[str], None]] = None,
+    freeze_dir: str | Path | None = None, replay_run_id: Optional[str] = None,
 ) -> RankPipelineResult:
     """Rank a universe under a RANK strategy, then (unless ``ranker_only``) narrate
     the shortlist with the LLM council. The single entrypoint the CLI and Council
@@ -279,8 +281,20 @@ def run_rank_pipeline(
     mode = council_mode or rank_strategy.council_mode
     runs_on = council_runs_on or rank_strategy.council_runs_on
 
-    if adapter is None:
-        adapter = _build_adapter(today=today, use_cache=use_cache)
+    # ITEM 4 — offline replay serves a FROZEN run record (no network); otherwise, if a
+    # freeze_dir is set, wrap the live adapter to CAPTURE every raw payload for freezing.
+    recording = None
+    if replay_run_id:
+        from .persistence.replay import FrozenAdapter
+        base = Path(freeze_dir) if freeze_dir else _RUNS_DIR
+        adapter = FrozenAdapter(base / replay_run_id)
+    else:
+        if adapter is None:
+            adapter = _build_adapter(today=today, use_cache=use_cache)
+        if freeze_dir:
+            from .persistence.replay import RecordingAdapter
+            recording = RecordingAdapter(adapter)
+            adapter = recording
 
     if progress is not None:
         progress("Screening & ranking the universe…")
@@ -304,10 +318,19 @@ def run_rank_pipeline(
                                  progress=progress)
         narratives = {o.ticker: _narrative_text(o) for o in council}
 
+    # Freeze the captured inputs into a run record (ITEM 4). Replay runs record which
+    # run_id they reproduced. The frozen values are what make the run replayable.
+    run_id = replay_run_id
+    if recording is not None:
+        from .persistence.replay import freeze_run, make_run_id
+        run_id = make_run_id(rank_strategy.id)
+        freeze_run(recording, run_id=run_id, runs_dir=freeze_dir)
+
     meta = {
         "rank_strategy_id": rank_strategy.id,
         "screen_strategy_id": screen_strategy.id,
         "universe_id": resolved_universe_id,
+        "run_id": run_id,
         "council_mode": mode,
         "council_runs_on": runs_on,
         "ranker_only": ranker_only,

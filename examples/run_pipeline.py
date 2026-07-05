@@ -33,6 +33,7 @@ from aristos_council.pipeline import format_cli_report, run_rank_pipeline
 
 ROOT = Path(__file__).resolve().parents[1]
 STRATEGIES_DIR = ROOT / "strategies"
+RUNS_DIR = ROOT / "runs"                  # frozen run records (ITEM 4)
 SPEND_CAP_COUNCILS = 8   # require --yes above this many council runs
 
 
@@ -68,24 +69,38 @@ def main() -> None:
     p.add_argument("--no-cache", action="store_true")
     p.add_argument("--ranker-only", action="store_true",
                    help="STAGE 1 only — deterministic ranking, no LLM, no spend")
+    p.add_argument("--replay", help="replay a frozen run record (runs/<run_id>) "
+                                    "OFFLINE — no network; universe read from its manifest")
+    p.add_argument("--no-freeze", action="store_true",
+                   help="do not freeze this run's inputs to runs/")
     p.add_argument("--yes", action="store_true", help="approve the council spend")
     args = p.parse_args()
 
-    universe = _read_tickers(args)
-    if not universe:
-        p.error("no tickers given (positional or --file)")
-
     today = date.today()
-    # Build the caching adapter ONCE so the (free) sizing pass and the full run
-    # share a cache — the rank stage runs twice but hits data only once.
-    adapter = select_market_adapter()
-    if not args.no_cache:
-        adapter = CachingAdapter(adapter, cache_dir=DEFAULT_CACHE_DIR, today=today)
+    if args.replay:
+        import json
+        manifest = json.loads(
+            (RUNS_DIR / args.replay / "manifest.json").read_text(encoding="utf-8"))
+        universe = manifest["tickers"]
+    else:
+        universe = _read_tickers(args)
+    if not universe:
+        p.error("no tickers given (positional, --file, or --replay)")
 
-    common = dict(strategies_dir=STRATEGIES_DIR, adapter=adapter, today=today,
+    # Replay serves a frozen record (no network). A live run builds the caching
+    # adapter ONCE so the (free) sizing pass and the full run share a cache.
+    common = dict(strategies_dir=STRATEGIES_DIR, today=today,
                   screen_strategy_id=args.screen_strategy,
                   council_runs_on=args.council_runs_on,
                   council_mode=args.council_mode)
+    if args.replay:
+        common["replay_run_id"] = args.replay
+        common["freeze_dir"] = RUNS_DIR                  # locates the record
+    else:
+        adapter = select_market_adapter()
+        if not args.no_cache:
+            adapter = CachingAdapter(adapter, cache_dir=DEFAULT_CACHE_DIR, today=today)
+        common["adapter"] = adapter
 
     # STAGE 1 sizing (free) up front so the spend can be gated before any council.
     sizing = run_rank_pipeline(universe, args.rank_strategy, ranker_only=True, **common)
@@ -99,10 +114,18 @@ def main() -> None:
         from aristos_council.agents.runners import production_runners
         runners = production_runners()
 
+    # A live full run FREEZES its inputs (unless --no-freeze); replay does not.
+    full_kw = dict(common)
+    if not args.replay and not args.no_freeze:
+        full_kw["freeze_dir"] = RUNS_DIR
+
     result = run_rank_pipeline(
         universe, args.rank_strategy, ranker_only=args.ranker_only,
-        csv_path=args.csv, runners=runners, **common)
+        csv_path=args.csv, runners=runners, **full_kw)
     print(format_cli_report(result))
+    if result.meta.get("run_id"):
+        print(f"\n  run {'replayed' if args.replay else 'frozen'}: "
+              f"{result.meta['run_id']}  (runs/{result.meta['run_id']})")
     if args.csv and not args.ranker_only and result.council_mode != "narrator":
         print(f"\n  agreement rows appended -> {args.csv}")
 

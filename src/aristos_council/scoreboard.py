@@ -513,19 +513,20 @@ def collect_consensus(adapter, tickers: list[str]) -> dict[str, StreetConsensus]
 
 def run_snapshot(universe: Optional[list[str]], strategy_id: str, *, adapter,
                  today: date, strategies_dir, out_dir: str | Path,
-                 universe_id: Optional[str] = None,
-                 universes_dir=None) -> tuple[list[SnapshotRow], Path]:
+                 universe_id: Optional[str] = None, universes_dir=None,
+                 freeze_dir=None) -> tuple[list[SnapshotRow], Path]:
     """Freeze one snapshot: ranker-only pipeline (no LLM, $0) + street consensus for
     every name (ranked, excluded, unrateable), appended to the CSV. Pass a ``universe``
-    list or a ``universe_id`` manifest; the resolved id is stamped on every row. Returns
-    the rows and the CSV path. Adapter is injected — the CLI builds the real one, tests
-    fake it."""
+    list or a ``universe_id`` manifest; the resolved id is stamped on every row. When
+    ``freeze_dir`` is set the run's raw inputs are frozen too (ITEM 4 — same freezing as
+    a pipeline run), so a snapshot is replayable. Returns the rows and the CSV path.
+    Adapter is injected — the CLI builds the real one, tests fake it."""
     from .pipeline import run_rank_pipeline
 
     result = run_rank_pipeline(universe, strategy_id, ranker_only=True,
                                universe_id=universe_id, universes_dir=universes_dir,
                                strategies_dir=strategies_dir, adapter=adapter,
-                               today=today)
+                               today=today, freeze_dir=freeze_dir)
     tickers = ([r.ticker for r in result.ranked]
                + [t for t, _ in result.excluded]
                + [t for t, _ in result.unrateable])

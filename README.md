@@ -82,7 +82,8 @@ factor, criterion, and guard, generated from the code.
   (`yfinance` | `eodhd` | `hybrid` via `ARISTOS_MARKET_PROVIDER`); Finnhub behind a
   `SentimentAdapter`; per-adapter unit normalization with sanity guards.
 - **Persistence & audit:** append-only verdict history, full per-run reports, deep
-  provenance audit resolving every cited figure against the tool-call ledger.
+  provenance audit resolving every cited figure against the tool-call ledger. Every
+  run stores the inputs it saw (`runs/<run_id>/`); any run can be replayed offline.
 - **Council Station:** local Streamlit UI — run, read the deliberation, browse history,
   edit strategies (edit-as-new-version; published files are never mutated).
 
