@@ -108,6 +108,9 @@ LangGraph orchestration, Anthropic models, pydantic state.
 6. Tests run with `python -m pytest` (pythonpath=src configured). 294 tests
    green as of 2026-06-16. New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
+   - **Run the full pytest suite before EVERY commit. A commit with a red suite
+     is forbidden, including docs-only commits (imports break through refactors
+     — this repo has the scar).**
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
    a new `<id>_v<n+1>.yaml` and refuses to overwrite — recorded verdicts and
    run reports reference their `strategy_id` and must stay reproducible
