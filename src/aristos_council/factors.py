@@ -234,9 +234,14 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
     """Fetch the deterministic inputs one ticker needs for factor ranking — the same
     adapter the council uses. Per-source DataUnavailable is swallowed (partial inputs
     -> NOT-EVAL factors), so one flaky name never aborts a universe ranking."""
+    from .data.adapter import TransientFetchError
+
     fundamentals = None
     try:
         fundamentals = adapter.get_fundamentals(ticker)
+    except TransientFetchError:
+        raise                                         # a live name was throttled, not
+                                                      # absent — abort THIS name (ITEM 5)
     except Exception:
         pass                                          # DataUnavailable OR a raw error
     closes: list[float] = []
@@ -244,6 +249,9 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
         prices = adapter.get_price_history(
             ticker, start=today - timedelta(days=400), end=today)
         closes = prices.closes if prices and prices.closes else []
+    except TransientFetchError:
+        raise                                         # transient -> fetch-error, not
+                                                      # UNRATEABLE
     except Exception:
         pass    # a delisted name can raise a RAW yfinance error ("no timezone found")
                 # rather than DataUnavailable — degrade to no-data, never crash the run

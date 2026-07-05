@@ -73,10 +73,19 @@ def resolve_council_screen_id(rank_strategy, explicit: Optional[str] = None,
 
 
 def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None):
+    from .data.adapter import TransientFetchError
+
     rows: list[tuple[str, dict]] = []
     excluded: list[tuple[str, str]] = []
     for t in universe:
-        fi = gather_factor_inputs(adapter, t, today=today)
+        # A TRANSIENT fetch failure (429/timeout/5xx, unrecovered after retries) is NOT
+        # absent data — abort THIS name with a fetch-error status (rerun), never mislabel
+        # a throttled live ticker as UNRATEABLE or silently worst-rank it (ITEM 5).
+        try:
+            fi = gather_factor_inputs(adapter, t, today=today)
+        except TransientFetchError as exc:
+            excluded.append((t, f"{FETCH_ERROR_PREFIX}: {exc}"))
+            continue
         f = fi.fundamentals
         # UNRATEABLE: no fundamentals AND no price history (delisted / all-404). NEVER
         # ranked, no verdict, never reaches the council — applies on EVERY path.
@@ -191,6 +200,7 @@ def run_pipeline(
 # High-level entry — the ONE callable both the CLI and the UI drive
 # --------------------------------------------------------------------------- #
 UNRATEABLE_PREFIX = "UNRATEABLE"
+FETCH_ERROR_PREFIX = "FETCH_ERROR"     # a transient fetch failure (ITEM 5), NOT absent
 
 
 @dataclass
@@ -213,6 +223,9 @@ class RankPipelineResult:
     council_mode: str = "narrator"                    # lets agreement_table/format_narratives read it
     council: list[CouncilOutcome] = field(default_factory=list)
     shortlist: list[str] = field(default_factory=list)
+    # Names that hit a TRANSIENT fetch failure this run (ITEM 5) — aborted, NOT ranked
+    # and NOT UNRATEABLE. A rerun should recover them; surfaced on its own axis.
+    fetch_errors: list[tuple[str, str]] = field(default_factory=list)
 
 
 def _pipeline_header(mode: str) -> str:
@@ -227,16 +240,22 @@ def _narrative_text(outcome: CouncilOutcome) -> str:
 
 def _split_exclusions(
     ranked: list[RankedTicker], prerank_excluded: list[tuple[str, str]],
-) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """Partition every non-ranked name into (excluded, unrateable). Sources: the
-    pre-rank exclusions (cap/sector/payout/screen/UNRATEABLE) AND any rank-engine
-    exclusion (a missing 'exclude'-mode factor). UNRATEABLE — a delisted no-data
-    name — is surfaced on its own axis (no verdict), never mixed with a screen fail."""
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
+    """Partition every non-ranked name into (excluded, unrateable, fetch_errors).
+    Sources: the pre-rank exclusions (cap/sector/payout/screen/UNRATEABLE/FETCH_ERROR)
+    AND any rank-engine exclusion (a missing 'exclude'-mode factor). UNRATEABLE (a
+    delisted no-data name) and FETCH_ERROR (a transient failure — rerunnable) each get
+    their OWN axis, never mixed with a screen fail."""
     engine_excluded = [(r.ticker, r.reason) for r in ranked if r.excluded]
     everything = list(prerank_excluded) + engine_excluded
-    unrateable = [(t, why) for t, why in everything if why.startswith(UNRATEABLE_PREFIX)]
-    excluded = [(t, why) for t, why in everything if not why.startswith(UNRATEABLE_PREFIX)]
-    return excluded, unrateable
+    fetch_errors = [(t, why) for t, why in everything
+                    if why.startswith(FETCH_ERROR_PREFIX)]
+    unrateable = [(t, why) for t, why in everything
+                  if why.startswith(UNRATEABLE_PREFIX)]
+    excluded = [(t, why) for t, why in everything
+                if not why.startswith(UNRATEABLE_PREFIX)
+                and not why.startswith(FETCH_ERROR_PREFIX)]
+    return excluded, unrateable, fetch_errors
 
 
 def _resolve_strategy_path(strategy_id: str, strategies_dir: Path) -> Path:
@@ -303,7 +322,7 @@ def run_rank_pipeline(
     ranked, prerank_excluded = _rank_stage(
         universe, rank_strategy, adapter, today=today, prefilter_criteria=prefilter)
     live = [r for r in ranked if not r.excluded]
-    excluded, unrateable = _split_exclusions(ranked, prerank_excluded)
+    excluded, unrateable, fetch_errors = _split_exclusions(ranked, prerank_excluded)
 
     shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
     est = estimate_cost(len(shortlist))
@@ -338,11 +357,12 @@ def run_rank_pipeline(
         "ranked_count": len(live),
         "shortlist": [r.ticker for r in shortlist],
         "est_cost": est,
+        "fetch_error_count": len(fetch_errors),
     }
     result = RankPipelineResult(
         ranked=live, excluded=excluded, unrateable=unrateable, narratives=narratives,
         header=_pipeline_header(mode), meta=meta, council_mode=mode, council=council,
-        shortlist=[r.ticker for r in shortlist])
+        shortlist=[r.ticker for r in shortlist], fetch_errors=fetch_errors)
 
     if csv_path and not ranker_only and mode != "narrator":
         _append_agreement_csv(result, Path(csv_path))
@@ -375,7 +395,10 @@ def load_screen_from_id(screen_id: str, strategies_dir: Path):
 
 def _build_adapter(*, today: date, use_cache: bool):
     from .data.provider import select_market_adapter
-    adapter = select_market_adapter()
+    from .data.retry import RetryAdapter
+    # Armor the raw provider (retry+classify transient failures), THEN wrap in the cache
+    # so a cache hit skips both the network and the retry (ITEM 5 — cache consulted first).
+    adapter = RetryAdapter(select_market_adapter())
     if use_cache:
         from .data.cache import DEFAULT_CACHE_DIR, CachingAdapter
         adapter = CachingAdapter(adapter, cache_dir=DEFAULT_CACHE_DIR, today=today)
@@ -421,6 +444,11 @@ def format_cli_report(result: RankPipelineResult) -> str:
         lines.append("")
         lines.append("  UNRATEABLE (no data — no verdict):")
         for t, reason in result.unrateable:
+            lines.append(f"      {t:<10} {reason}")
+    if result.fetch_errors:
+        lines.append("")
+        lines.append("  FETCH FAILED — RERUN (transient; not ranked, not UNRATEABLE):")
+        for t, reason in result.fetch_errors:
             lines.append(f"      {t:<10} {reason}")
     if not m["ranker_only"]:
         lines.append("")

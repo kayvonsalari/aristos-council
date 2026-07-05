@@ -70,6 +70,14 @@ class DataUnavailable(Exception):
     """
 
 
+class TransientFetchError(Exception):
+    """A fetch that FAILED for a transient reason (timeout / 429 / 5xx / connection)
+    and did NOT recover after retries. Distinct from ``DataUnavailable`` (ABSENT data —
+    a clean 404 or an empty result) so the pipeline can ABORT the name with a
+    'fetch failed — rerun' status instead of mislabelling live data as UNRATEABLE.
+    Raised by ``data.retry.RetryAdapter`` after its attempts are exhausted."""
+
+
 # --------------------------------------------------------------------------- #
 # Normalized DTOs (provider-neutral)
 # --------------------------------------------------------------------------- #

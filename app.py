@@ -1265,6 +1265,18 @@ def _render_universe_result(result) -> None:
             for t, why in result.unrateable:
                 st.markdown(f"- **{t}** — {why}")
 
+    # 4b — FETCH FAILED: a transient failure (429/timeout/5xx) — NOT a verdict, NOT
+    # UNRATEABLE. The name aborted this run and should be RE-RUN, distinct from a
+    # genuinely dataless name.
+    if result.fetch_errors:
+        st.subheader(f"🔁 Fetch failed — rerun · {len(result.fetch_errors)}")
+        st.warning("These names hit a **transient** fetch failure (rate limit / "
+                   "timeout / server error) that did not recover after retries — a "
+                   "live ticker, NOT delisted. They were aborted (no verdict, not "
+                   "worst-ranked); re-run to recover them.")
+        for t, why in result.fetch_errors:
+            st.markdown(f"- **{t}** — {why}")
+
     # 5 — NARRATIVE: one expander per shortlisted (BUY) name — the narrator's job.
     if not m["ranker_only"]:
         st.subheader("Narrative")
