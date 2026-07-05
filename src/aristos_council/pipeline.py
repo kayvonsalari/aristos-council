@@ -17,10 +17,29 @@ second opinion, it is not an oracle.
 
 from __future__ import annotations
 
+import logging
+import os
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Callable, Optional
+
+_log = logging.getLogger(__name__)
+
+
+def _log_sentiment_status() -> None:
+    """ONE startup line stating the sentiment-provider status (ITEM 5 diagnostic).
+
+    FINDING: the rank-pipeline council does NOT wire a sentiment adapter (this entry
+    never builds a FinnhubAdapter, unlike the legacy run_council), so the Sentiment
+    specialist ABSTAINS on every narrator run regardless of the key — it is (c) not-wired,
+    not (a) key-not-reaching-process. Diagnostic only; wiring it is a separate change."""
+    if os.environ.get("FINNHUB_API_KEY"):
+        _log.info("sentiment (finnhub): FINNHUB_API_KEY present, but run_rank_pipeline "
+                  "does not wire a sentiment adapter into the council — Sentiment "
+                  "specialist abstains (ITEM 5: not-wired, not a key/env issue)")
+    else:
+        _log.info("sentiment (finnhub): no FINNHUB_API_KEY — sentiment abstains")
 
 from .factors import (
     compute_factor_outcomes,
@@ -341,6 +360,7 @@ def run_rank_pipeline(
     council: list[CouncilOutcome] = []
     narratives: dict[str, str] = {}
     if not ranker_only and shortlist:
+        _log_sentiment_status()          # ITEM 5 diagnostic — one line, no behavior change
         # Disclose the ACTUAL post-screen shortlist cost before the narrator spends
         # (ITEM 4) — the pre-run estimate is an upper bound; this is the real number,
         # from the shortlist we already have (no second screen run).
