@@ -47,17 +47,45 @@ class FactorInputs:
 
 
 # --- factor functions (pure; None == NOT-EVAL) ---------------------------- #
+def enterprise_value(f) -> Optional[float]:
+    """EV = market cap + total debt − cash & short-term investments.
+
+    None unless ALL of market_cap, total_debt, total_cash are present (a partial EV is
+    misleading, so we abstain and let the earnings-yield factor fall back to
+    EBIT/market_cap). A NEGATIVE or zero EV (a net-cash name: cash > mcap + debt) is
+    returned as-is here; the factor guards it — an EBIT/EV over a non-positive EV would
+    be a nonsense negative/blow-up rank artifact.
+
+    Caveat (refined, not exact): yfinance ``totalDebt`` includes operating leases and
+    the figure carries no minority-interest / pension adjustments — a refined proxy for
+    true EV, documented in CALCULATIONS.md §6."""
+    if f is None:
+        return None
+    if f.market_cap is None or f.total_debt is None or f.total_cash is None:
+        return None
+    return f.market_cap + f.total_debt - f.total_cash
+
+
 def _earnings_yield(fi: FactorInputs) -> Optional[float]:
-    """Greenblatt's value leg. Proper form is EBIT/EV, but enterprise value (market
-    cap + net debt) needs a balance-sheet debt/cash line free fundamentals don't
-    reliably give — so use EBIT/market_cap as the available proxy, falling back to
-    1/PE. Higher is cheaper/better."""
+    """Greenblatt's value leg, EBIT/EV. Uses a true-ish enterprise value when the
+    balance-sheet components are available (ITEM 6: totalDebt+totalCash populate for
+    ~95% of a real universe), falling back to EBIT/market_cap when they are missing, then
+    1/PE. Higher is cheaper/better.
+
+    Negative-EV guard: a net-cash name (cash > mcap + debt, e.g. NVDA/GOOGL today) has a
+    non-positive EV, on which EBIT/EV is a meaningless negative/huge value — so we ABSTAIN
+    (None) rather than emit a negative-yield rank artifact. Missing EV components are a
+    different case: they fall back to EBIT/market_cap, a comparable positive proxy."""
     f = fi.fundamentals
     if f is None:
         return None
     ebit = f.ebit[0] if f.ebit else None
-    if ebit is not None and f.market_cap and f.market_cap > 0:
-        return ebit / f.market_cap
+    if ebit is not None:
+        ev = enterprise_value(f)
+        if ev is not None:
+            return ebit / ev if ev > 0 else None      # net-cash -> abstain, no artifact
+        if f.market_cap and f.market_cap > 0:
+            return ebit / f.market_cap                # EV components missing -> proxy
     if f.pe_ratio and f.pe_ratio > 0:
         return 1.0 / f.pe_ratio
     return None
@@ -125,8 +153,9 @@ class FactorDef:
 
 FACTOR_REGISTRY: dict[str, FactorDef] = {
     "earnings_yield": FactorDef(
-        "earnings_yield", _earnings_yield, "high", "Earnings yield (EBIT/EV proxy)",
-        "EBIT/market_cap proxy; 1/PE fallback (no enterprise-value debt line)"),
+        "earnings_yield", _earnings_yield, "high", "Earnings yield (EBIT/EV)",
+        "EBIT / (market cap + total debt − cash); EBIT/market_cap fallback when EV "
+        "components missing, then 1/PE; net-cash (EV≤0) abstains"),
     "roic": FactorDef(
         "roic", _return_on_capital, "high", "Return on invested capital"),
     "momentum_12m": FactorDef(

@@ -153,6 +153,7 @@ class YFinanceAdapter(MarketDataAdapter):
             last_dividend_reduction_year=last_cut,
             total_debt=_as_float(info.get("totalDebt")),
             debt_to_equity=_as_float(info.get("debtToEquity")),
+            total_cash=_as_float(info.get("totalCash")),   # EV = mcap + debt − cash
             # Annual series, newest-first, NaN/empty dropped (Sprint 4B).
             total_revenue=_annual_series(income, "Total Revenue"),
             operating_income=_annual_series(income, "Operating Income"),

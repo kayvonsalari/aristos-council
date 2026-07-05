@@ -40,7 +40,7 @@ All factors are pure functions of adapter data; each returns a float or `None`
 
 | Factor | Formula | Direction | Notes |
 |---|---|---|---|
-| `earnings_yield` | EBIT / market cap; fallback 1/PE | high | Proxy for Greenblatt's EBIT/EV — free data lacks a reliable net-debt line for EV. A documented approximation. |
+| `earnings_yield` | EBIT / EV, where **EV = market cap + total debt − cash & short-term investments**; falls back to EBIT/market cap when EV components are missing, then 1/PE | high | Net-cash names (EV ≤ 0, e.g. NVDA/GOOGL) **abstain** — never a negative-yield artifact. EV is a refined proxy (see §6). |
 | `roic` | Through-cycle ROIC: NOPAT / invested capital, averaged over a 4-year window | high | Negative-equity-safe (uses provided invested capital, not equity). |
 | `momentum_12m` / `momentum_6m` | Trailing total return over ~252 / ~126 trading days | high | Price-derived from the close series. |
 | `low_volatility` | Annualized volatility of daily returns | **low** | Pairs with momentum to exclude falling knives (a crashing name is high-vol *and* negative-momentum). |
@@ -133,10 +133,13 @@ just flags a knife-edge miss to the reader (`factors.is_borderline_fail`).
   `top_k`, or treat the screen as the product on curated lists.
 - **Trailing data**: every factor is historical. Momentum is the only forward-leaning
   signal; there is no estimate-revision input on free data.
-- **EBIT/market-cap proxy**: understates leverage-adjusted cheapness vs true EBIT/EV.
-  The EBIT/EV upgrade is **diagnostic-gated**: `scripts/check_ev_fields.py` measures
-  whether `totalDebt` and `totalCash` populate for ≥90% of a real universe before the
-  switch is made — pending a live run, the documented proxy stands (do not implement blind).
+- **EV is refined, not exact**: `earnings_yield` uses EBIT/EV (EV = market cap + total
+  debt − cash & short-term investments), shipped after the diagnostic confirmed the
+  components populate for **95% of growth_40** (`scripts/check_ev_fields.py`, 38/40; the
+  two gaps were delisted PARA/WBA). It remains a REFINED proxy: yfinance `totalDebt`
+  includes operating leases, and there is no minority-interest or pension adjustment.
+  Missing EV components fall back to EBIT/market cap; net-cash names (EV ≤ 0, live-relevant
+  for NVDA/GOOGL) abstain rather than emit a negative-yield rank artifact.
 
 ## 7. Evidence coverage — what gates the escalation (not the LLM's number) (`coverage.py`)
 

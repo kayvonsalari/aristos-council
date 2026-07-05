@@ -152,6 +152,11 @@ class Fundamentals:
     last_dividend_reduction_year: int | None = None
     total_debt: float | None = None
     debt_to_equity: float | None = None          # yfinance percent-ish; may be None
+    # Cash & short-term investments (yfinance info 'totalCash'). With total_debt +
+    # market_cap this gives enterprise value (EV = market cap + total debt − cash) for
+    # the EBIT/EV earnings-yield factor. None when the provider omits it -> the factor
+    # falls back to EBIT/market_cap (see factors.enterprise_value).
+    total_cash: float | None = None
 
     # --- Annual income-statement & balance-sheet series (Sprint 4B) --------- #
     # NEWEST-FIRST lists of clean annual values (NaN years and the trailing
