@@ -70,6 +70,7 @@ STRATEGIES_DIR = ROOT / "strategies"
 UNIVERSES_DIR = ROOT / "universes"
 VERDICTS_DIR = ROOT / "verdicts"
 REPORTS_DIR = ROOT / "reports"
+SNAPSHOTS_CSV = ROOT / "snapshots" / "verdict_consensus.csv"
 ASSETS_DIR = ROOT / "assets"
 LOGO_PATH = ASSETS_DIR / "aristos_council_logo.svg"
 
@@ -83,6 +84,15 @@ _VERDICT_HEX = {"BUY": "#2E7D32", "HOLD": "#B8860B", "SELL": "#B23B3B",
 _VERDICT_DOT = {"BUY": "🟢", "HOLD": "🟡", "SELL": "🔴",
                 "INSUFFICIENT_EVIDENCE": "⚪"}  # selectbox can't take hex
 GOLD = "#52B6A4"  # the single accent
+
+# The one-line banner on every PRE-V2 surface (the single-ticker council flow and its
+# Report/History browsers). The council no longer issues the verdict — it narrates the
+# deterministic ranker — so these surfaces are kept for comparison, clearly labeled.
+_LEGACY_BANNER = (
+    "Pre-v2 architecture: an LLM council issued the verdict. Demoted to narrator "
+    "after a controlled experiment (README: 'Why this design'). Kept for comparison "
+    "and demonstration."
+)
 
 
 def _verdict_hex(verdict: str | None) -> str:
@@ -1013,8 +1023,13 @@ def _run_overrides(strategy: Strategy) -> dict:
 
 
 def render_strategy_tab(selected_path: Path | None) -> None:
+    # Honest scope: this editor knows only COUNCIL-strategy YAMLs (legacy schemas). The
+    # sidebar dropdown already lists council strategies only (the schema-split
+    # classifier hides rank + lens screens), so a v2 rank strategy can never land here.
+    st.info("**Edits council-strategy YAMLs (legacy schemas).** Rank strategies (v2) "
+            "are versioned files under `strategies/` — edit via the repo, not here.")
     if selected_path is None:
-        st.info("Pick a strategy in the sidebar to view or version it.")
+        st.caption("Pick a strategy in the sidebar to view or version it.")
         return
 
     strategy = load_strategy(selected_path)
@@ -1305,11 +1320,18 @@ def render_universe_tab() -> None:
         ranker_only = st.checkbox("Ranker only — no LLM, no cost", value=False,
                                   key="uni_ranker_only")
     with col_b:
+        # Value stays "second_opinion" (behavior unchanged); only its LABEL flags it as
+        # the experimental null-result mode.
+        _mode_label = {
+            "narrator": "narrator",
+            "second_opinion": "second_opinion (experimental — null result; see README)",
+        }
         mode = st.selectbox(
             "Council mode", ["narrator", "second_opinion"],
-            key="uni_mode", disabled=ranker_only,
+            key="uni_mode", disabled=ranker_only, format_func=lambda m: _mode_label[m],
             help="narrator: the LLM explains the ranker verdict (default). "
-                 "second_opinion: the LLM issues an independent comparison verdict.")
+                 "second_opinion: an independent comparison verdict — a pre-registered "
+                 "experiment that returned a null result; kept behind this flag.")
 
     st.caption(f"**{len(universe)}** ticker(s) parsed.")
 
@@ -1328,8 +1350,8 @@ def render_universe_tab() -> None:
 
     if not ranker_only and universe and len(universe) <= CAP:
         est = estimate_cost(_estimate_shortlist_size(len(universe), rank_strategy))
-        st.caption(f"Estimated council cost ≈ **${est:.2f}** "
-                   "(exact shortlist shown after ranking).")
+        st.caption(f"Estimated council cost ≈ **${est:.2f}** — upper bound (pre-screen); "
+                   "the exact shortlist (after the screen prefilter) is shown after ranking.")
 
     for msg in problems:
         st.info(msg)
@@ -1363,6 +1385,35 @@ def render_universe_tab() -> None:
         st.divider()
         _render_universe_result(result)
 
+    _render_snapshot_history()
+
+
+def _render_snapshot_history() -> None:
+    """Minimal, read-only listing of the persisted rank-run records — the append-only
+    snapshot store (date · strategy · universe · rows), labeled with universe_id, plus
+    a raw-CSV download. Rank runs aren't saved as single-ticker reports, so this is
+    where they're retrievable; it's a listing, NOT a new report renderer."""
+    from aristos_council.scoreboard import read_rows
+
+    if not SNAPSHOTS_CSV.exists():
+        return
+    rows = read_rows(SNAPSHOTS_CSV)
+    if not rows:
+        return
+    with st.expander(f"📸 Persisted snapshots (rank-run records) · {len(rows)} rows"):
+        agg: dict[tuple, int] = {}
+        for r in rows:
+            key = (r.snapshot_date, r.strategy, r.universe_id or "—")
+            agg[key] = agg.get(key, 0) + 1
+        table = [{"snapshot_date": d, "strategy": s, "universe_id": u, "rows": n}
+                 for (d, s, u), n in sorted(agg.items(), reverse=True)]
+        st.dataframe(table, hide_index=True, width="stretch")
+        st.download_button(
+            "⬇ Download snapshot CSV", data=SNAPSHOTS_CSV.read_bytes(),
+            file_name="verdict_consensus.csv", mime="text/csv", key="snap_csv_dl")
+        st.caption("Scored later on forward returns via "
+                   "`examples/score_snapshot.py` (the prospective scoreboard).")
+
 
 # --------------------------------------------------------------------------- #
 # Page
@@ -1390,11 +1441,14 @@ def main() -> None:
         st.markdown(_logo_markup(52), unsafe_allow_html=True)
     with col_title:
         st.title("Council Station")
-    st.caption("Local control room for the Aristos Council.")
+    # v2 subtitle: the division of labor is the product's headline (the math judges,
+    # the LLM narrates) — not "control room for the council" (the demoted pre-v2 frame).
+    st.caption("**Verdict: deterministic ranker. Narrative: LLM (non-judging).**")
 
-    # --- sidebar: pick a ticker + strategy, gate the run on a cost ack ---
+    # --- sidebar: LEGACY single-ticker council flow (pre-v2) ---
     with st.sidebar:
-        st.header("Run a council")
+        st.header("Run a council · Legacy (pre-v2)")
+        st.caption(_LEGACY_BANNER)
         # normalize_ticker also strips a stray trailing dot ("000660.KS." -> the
         # SK Hynix retrieval bug); upper-cases and trims like the old inline call.
         ticker = normalize_ticker(st.text_input("Ticker", value="JNJ"))
@@ -1452,16 +1506,21 @@ def main() -> None:
     if pending:
         st.success(pending)
 
-    tab_report, tab_universe, tab_history, tab_strategy = st.tabs(
-        ["Report", "Universe Run", "History", "Strategy"])
-
-    with tab_report:
-        _report_tab(ticker)
+    # Universe Run FIRST -> Streamlit selects it by default: the v2 product is the
+    # landing experience. The pre-v2 council browsers follow, each labeled Legacy; the
+    # council-YAML editor is last.
+    tab_universe, tab_report, tab_history, tab_strategy = st.tabs(
+        ["Universe Run", "Report · Legacy", "History · Legacy", "Strategy · Legacy"])
 
     with tab_universe:
         render_universe_tab()
 
+    with tab_report:
+        st.info(f"**Legacy (pre-v2).** {_LEGACY_BANNER}")
+        _report_tab(ticker)
+
     with tab_history:
+        st.info(f"**Legacy (pre-v2).** {_LEGACY_BANNER}")
         render_history(ticker)
 
     with tab_strategy:
