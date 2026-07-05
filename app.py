@@ -721,7 +721,10 @@ def render_report(
 def _render_verdict_banner(report: RunReport) -> None:
     d = report.decision
     verdict = d.recommendation.value.upper() if d else "—"
-    conf = f"{d.confidence:.2f}" if d else "—"
+    # The GATING metric is the deterministic evidence coverage — NOT the narrator's
+    # self-assigned confidence (which is now a non-gating prose note below).
+    cov = report.evidence_coverage
+    cov_txt = f"{cov:.2f}" if cov is not None else "—"
     # Class lets the print stylesheet darken the verdict color for paper.
     vclass = f"verdict-{d.recommendation.value}" if d else "verdict-none"
     col1, col2, col3 = st.columns([2, 1, 2])
@@ -733,8 +736,16 @@ def _render_verdict_banner(report: RunReport) -> None:
         f"line-height:1.1;color:{_verdict_hex(verdict)}'>{verdict}</div>",
         unsafe_allow_html=True,
     )
-    col2.metric("Confidence", conf)
+    col2.metric("Evidence coverage", cov_txt,
+                help="Deterministic coverage of what the run actually saw — this "
+                     "gates the low-confidence escalation, in place of the narrator's "
+                     "self-assigned number.")
     col3.metric("Run", _fmt_local(report.run_at))
+    if d:
+        # The narrator's number, kept as an HONEST non-gating note (renamed from
+        # "confidence" — it no longer moves any mechanical outcome).
+        st.caption(f"Narrator's note on conviction: **{d.confidence:.2f}** — a prose "
+                   "signal only; it does NOT gate escalation.")
 
 
 def _render_provenance_panel(audit: dict | None) -> None:

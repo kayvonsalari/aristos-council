@@ -125,3 +125,32 @@ Exclusion happens **only on a confirmed FAIL**; a not-evaluated criterion never 
 - **Trailing data**: every factor is historical. Momentum is the only forward-leaning
   signal; there is no estimate-revision input on free data.
 - **EBIT/market-cap proxy**: understates leverage-adjusted cheapness vs true EBIT/EV.
+
+## 7. Evidence coverage — what gates the escalation (not the LLM's number) (`coverage.py`)
+
+The low-confidence human-review escalation used to consume the NARRATOR's self-assigned
+confidence — an LLM number moving a mechanical outcome, the failure class the council was
+demoted for. It now consumes a **deterministic evidence-coverage score** in `[0, 1]`: a
+pure function of what the run actually saw. The narrator may still express verbal nuance
+in prose (shown as a non-gating "note on conviction"), but its number gates nothing.
+
+Five components, each in `[0, 1]`, combined by fixed weights (sum = 1.0):
+
+| Component | Weight | Definition |
+|---|---|---|
+| `criteria` | 0.30 | screen criteria EVALUATED / total (a NOT-EVAL is not evidence) |
+| `factors` | 0.20 | `1 − fraction of ranker factors imputed` (absent factor values) |
+| `provenance` | 0.25 | figures VERIFIED / audited (mismatch + unresolvable discount) |
+| `fundamentals` | 0.15 | core fundamentals fields present / expected (market_cap, pe, eps, fcf) |
+| `price` | 0.10 | price history sufficient for the technical snapshot (0 or 1) |
+
+`coverage = Σ weightᵢ · componentᵢ`. A component whose data is **absent** (never gathered
+in this state — a standalone/legacy run has no ranker factors; a bare unit-test state has
+no tool calls) defaults to **1.0**: it never invents a penalty from context that was never
+collected. A component whose fetch was **attempted and failed** (a real fundamentals/price
+error) scores **0.0** — that IS a coverage gap. The escalation fires when
+`coverage < veto.min_confidence` (the same YAML floor, now read as a coverage floor).
+
+No LLM anywhere in this score. It is the deterministic replacement for "the model felt
+0.55 sure", and it is unit-tested (full data → high; a two-criteria screen or an
+imputation-heavy rank → discounted; a failed fundamentals fetch → penalized).

@@ -1,7 +1,8 @@
 """The human-veto gate. Fully deterministic — no LLM decides whether a human
 gets to look. The four triggers from the project spec:
 
-1. LOW_CONFIDENCE        decision confidence below the strategy threshold
+1. LOW_CONFIDENCE        deterministic EVIDENCE COVERAGE below the threshold
+                         (coverage.py — NOT the narrator's self-assigned confidence)
 2. SPECIALIST_CONFLICT   at least one bull AND one bear among specialists
 3. DATA_QUALITY          SEVERITY-AWARE — fires only on a MATERIAL data gap
                          (adapter/provenance error, or 2+ unevaluable screen
@@ -53,12 +54,18 @@ def make_veto_node(strategy: Strategy):
     def veto(state: ResearchState) -> ResearchState:
         flags: list[VetoFlag] = []
 
-        # 1 — low confidence
-        if state.decision and state.decision.confidence < min_conf:
+        # 1 — low EVIDENCE COVERAGE (hardening ITEM 3). The escalation no longer
+        # consumes the narrator's self-assigned confidence (an LLM number moving a
+        # mechanical outcome); it consumes a DETERMINISTIC coverage score of what the
+        # run actually saw. The narrator's prose conviction cannot alter this.
+        from ..coverage import coverage_from_state
+        cov = coverage_from_state(state)
+        state.evidence_coverage = cov["score"]
+        if cov["score"] < min_conf:
             flags.append(VetoFlag(
                 trigger=VetoTrigger.LOW_CONFIDENCE,
-                detail=f"decision confidence {state.decision.confidence:.2f} "
-                       f"< threshold {min_conf:.2f}",
+                detail=f"evidence coverage {cov['score']:.2f} < threshold "
+                       f"{min_conf:.2f} (deterministic — not the narrator's number)",
             ))
 
         # 2 — specialist conflict

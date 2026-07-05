@@ -222,7 +222,10 @@ def test_conflict_and_flip_triggers_fire_together():
     trig = {f.trigger for f in state.veto_flags}
     assert VetoTrigger.SPECIALIST_CONFLICT in trig
     assert VetoTrigger.RECOMMENDATION_FLIP in trig
-    assert VetoTrigger.LOW_CONFIDENCE in trig  # 0.5 < 0.6
+    # ITEM 3: the LLM's 0.5 confidence NO LONGER escalates — LOW_CONFIDENCE is now
+    # gated by deterministic evidence coverage, which is adequate on this full run.
+    assert VetoTrigger.LOW_CONFIDENCE not in trig
+    assert state.evidence_coverage is not None and state.evidence_coverage >= 0.6
     # dissent preserved on the decision
     assert state.decision.dissent == [SpecialistName.FUNDAMENTAL]
 

@@ -141,10 +141,13 @@ def _council_stage(
     for i, r in enumerate(shortlist, 1):
         if progress is not None:
             progress(f"Narrating {r.ticker} ({i} of {n})…")
+        imputed_fraction = (len(r.imputed_factors) / len(r.factor_ranks)
+                            if r.factor_ranks else 0.0)
         result = ResearchState.model_validate(app.invoke(ResearchState(
             ticker=r.ticker, strategy_id=screen_strategy.id,
             ranker_verdict=Recommendation(r.verdict),
-            ranker_explanation=r.explain())))
+            ranker_explanation=r.explain(),
+            ranker_imputed_fraction=imputed_fraction)))
         rep = report_from_state(result)
         outcomes.append(CouncilOutcome(
             ticker=r.ticker, ranker_verdict=r.verdict,

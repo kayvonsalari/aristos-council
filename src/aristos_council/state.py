@@ -336,6 +336,11 @@ class ResearchState(BaseModel):
     # decision can analyse it and state agreement. None for a standalone council run.
     ranker_verdict: Optional[Recommendation] = None
     ranker_explanation: str = ""
+    # Fraction of the ranker's factors that were IMPUTED for this name (value absent,
+    # judged on the mean of its present ranks). Threaded in by the rank pipeline so the
+    # deterministic evidence-coverage score (see coverage.py) can discount an
+    # imputation-heavy rank. None on a standalone council run (no ranker).
+    ranker_imputed_fraction: Optional[float] = None
     # Ephemeral per-run disposition overrides applied on top of the base strategy
     # (e.g. {"partial_pass_allows_hold": false,
     #        "criteria.min_dividend_growth_streak.is_gating": true}). Empty for a
@@ -360,6 +365,13 @@ class ResearchState(BaseModel):
     # counts by status plus violation texts. Populated by the audit node,
     # after decision and before veto. None if the audit hasn't run.
     provenance_audit: Optional[dict] = None
+
+    # Deterministic evidence-coverage score in [0,1] (coverage.py): a pure function of
+    # what the run actually saw (criteria evaluated, factors imputed, provenance audit,
+    # fundamentals present, price sufficiency). The low-confidence escalation veto
+    # consumes THIS — never the narrator's self-assigned confidence. Set by the veto
+    # node; None until it runs.
+    evidence_coverage: Optional[float] = None
 
     # --- gate ---
     veto_flags: list[VetoFlag] = Field(default_factory=list)

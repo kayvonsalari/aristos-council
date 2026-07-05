@@ -50,11 +50,49 @@ def test_clean_run_no_flags():
     assert s.requires_human_review is False
 
 
-def test_low_confidence_trigger():
+def _low_coverage_state():
+    # A run that SAW LITTLE: a blind screen (all criteria NOT-EVAL) + a FAILED
+    # fundamentals fetch -> low deterministic coverage. Decision confidence is HIGH
+    # (0.9) to prove the narrator's number cannot move this escalation.
     s = _state()
-    s.decision = _decision(conf=0.4)  # below YAML threshold 0.6
+    s.decision = _decision(conf=0.9)
+    s.tool_calls = [
+        ToolCall(call_id="s", tool_name="run_strategy_screen",
+                 output={"criteria": [{"name": "c1", "passed": None},
+                                      {"name": "c2", "passed": None}], "flags": []}),
+        ToolCall(call_id="f", tool_name="get_fundamentals", output=None,
+                 ok=False, error="fetch failed"),
+    ]
+    return s
+
+
+def test_low_confidence_trigger_fires_on_low_evidence_coverage():
+    s = _low_coverage_state()
     make_veto_node(STRATEGY)(s)
-    assert VetoTrigger.LOW_CONFIDENCE in triggers(s)
+    assert VetoTrigger.LOW_CONFIDENCE in triggers(s)          # coverage, not confidence
+    assert s.evidence_coverage is not None and s.evidence_coverage < 0.6
+    # the detail is deterministic, not the narrator's number
+    detail = next(f.detail for f in s.veto_flags
+                  if f.trigger == VetoTrigger.LOW_CONFIDENCE)
+    assert "evidence coverage" in detail
+
+
+def test_low_confidence_veto_ignores_narrator_confidence():
+    # High coverage but a LOW narrator confidence -> NO escalation: the LLM number
+    # cannot manufacture a low-confidence veto any more.
+    s = _state()
+    s.decision = _decision(conf=0.2)                          # narrator "unsure"
+    s.tool_calls = [
+        ToolCall(call_id="s", tool_name="run_strategy_screen",
+                 output={"criteria": [{"name": "c1", "passed": True},
+                                      {"name": "c2", "passed": False}], "flags": []}),
+        ToolCall(call_id="f", tool_name="get_fundamentals",
+                 output={"market_cap": 1e10, "pe_ratio": 15.0, "eps": 5.0,
+                         "free_cash_flow": 1e9}),
+    ]
+    make_veto_node(STRATEGY)(s)
+    assert VetoTrigger.LOW_CONFIDENCE not in triggers(s)
+    assert s.evidence_coverage >= 0.6
 
 
 def test_specialist_conflict_trigger():

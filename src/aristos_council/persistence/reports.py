@@ -80,6 +80,10 @@ class RunReport(BaseModel):
     # FULL audit summary (counts AND violations/unit_scaled_notes prose) — the
     # reviewer-facing detail, kept verbatim unlike the verdict log's counts.
     provenance_audit: Optional[dict] = None
+    # Deterministic evidence-coverage score in [0,1] (coverage.py) — what GATES the
+    # low-confidence escalation, in place of the narrator's self-assigned confidence
+    # (which is now shown as a non-gating note). None for reports saved before ITEM 3.
+    evidence_coverage: Optional[float] = None
     # Model + temperature each agent tier ran at, e.g.
     # {"decision": {"model": "anthropic:claude-sonnet-4-6", "temperature": 0.0}}.
     # Stamped at the edge from the runners (agents.runners.runner_metadata) so a
@@ -225,6 +229,7 @@ def report_from_state(
         specialist_support=specialist_support,
         veto_flags=list(state.veto_flags),
         provenance_audit=state.provenance_audit,
+        evidence_coverage=state.evidence_coverage,
         run_issues=list(state.run_issues),
         degraded=state.degraded,
         contested=is_contested,
