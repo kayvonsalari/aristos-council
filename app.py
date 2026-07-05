@@ -1445,43 +1445,62 @@ def main() -> None:
     # the LLM narrates) — not "control room for the council" (the demoted pre-v2 frame).
     st.caption("**Verdict: deterministic ranker. Narrative: LLM (non-judging).**")
 
-    # --- sidebar: LEGACY single-ticker council flow (pre-v2) ---
+    # Legacy surfaces are HIDDEN BY DEFAULT (product decision): the app opens as
+    # v2-only. Read the toggle's persisted value FIRST so the pre-v2 flow renders only
+    # when enabled; the toggle itself sits small at the BOTTOM of the sidebar.
+    show_legacy = st.session_state.get("show_legacy", False)
+
+    ticker = "JNJ"
+    selected_path: Path | None = None
+    run_overrides: dict = {}
+    run_clicked = False
+
     with st.sidebar:
-        st.header("Run a council · Legacy (pre-v2)")
-        st.caption(_LEGACY_BANNER)
-        # normalize_ticker also strips a stray trailing dot ("000660.KS." -> the
-        # SK Hynix retrieval bug); upper-cases and trims like the old inline call.
-        ticker = normalize_ticker(st.text_input("Ticker", value="JNJ"))
+        if show_legacy:
+            # --- LEGACY single-ticker council flow (pre-v2) ---
+            st.header("Run a council · Legacy (pre-v2)")
+            st.caption(_LEGACY_BANNER)
+            # normalize_ticker also strips a stray trailing dot ("000660.KS." -> the
+            # SK Hynix retrieval bug); upper-cases and trims like the old inline call.
+            ticker = normalize_ticker(st.text_input("Ticker", value="JNJ"))
 
-        options = list_strategy_options(STRATEGIES_DIR)
-        if options:
-            labels = [label for label, _, _ in options]
-            choice = st.selectbox("Strategy", labels)
-            by_label = {label: (p, s) for label, p, s in options}
-            selected_path, selected_strategy = by_label[choice]
-            run_overrides = _run_overrides(selected_strategy)
-        else:  # no loadable strategy files — show the absolute path searched
-            st.error(f"No strategies found under {STRATEGIES_DIR}")
-            selected_path = None
-            run_overrides = {}
+            options = list_strategy_options(STRATEGIES_DIR)
+            if options:
+                labels = [label for label, _, _ in options]
+                choice = st.selectbox("Strategy", labels)
+                by_label = {label: (p, s) for label, p, s in options}
+                selected_path, selected_strategy = by_label[choice]
+                run_overrides = _run_overrides(selected_strategy)
+            else:  # no loadable strategy files — show the absolute path searched
+                st.error(f"No strategies found under {STRATEGIES_DIR}")
 
-        st.divider()
-        # Cost gate. Cleared BEFORE the widget renders, so it starts unchecked
-        # each session AND re-arms after every run — each API run requires a
-        # fresh acknowledgement, never a leftover tick.
-        if st.session_state.pop("_clear_cost_ack", False):
-            st.session_state["cost_ack"] = False
-        ack = st.checkbox(
-            "I understand an API run costs real credits.", key="cost_ack")
-        run_clicked = st.button(
-            "▶ Run council",
-            type="primary",
-            disabled=not (ack and ticker and selected_path is not None),
-        )
-        if not ack:
-            st.caption("Acknowledge the cost to enable the Run button.")
+            st.divider()
+            # Cost gate. Cleared BEFORE the widget renders, so it starts unchecked
+            # each session AND re-arms after every run — each API run requires a
+            # fresh acknowledgement, never a leftover tick.
+            if st.session_state.pop("_clear_cost_ack", False):
+                st.session_state["cost_ack"] = False
+            ack = st.checkbox(
+                "I understand an API run costs real credits.", key="cost_ack")
+            run_clicked = st.button(
+                "▶ Run council",
+                type="primary",
+                disabled=not (ack and ticker and selected_path is not None),
+            )
+            if not ack:
+                st.caption("Acknowledge the cost to enable the Run button.")
+            st.divider()
 
-    if run_clicked and selected_path is not None:
+        # The toggle — small, at the very bottom of the sidebar, in BOTH states so it
+        # is always the way back. No `value=` so its default is off and tests/session
+        # can set it without a default-conflict warning.
+        st.toggle(
+            "Show legacy tools", key="show_legacy",
+            help="Reveal the pre-v2 single-ticker council, its Report/History, and the "
+                 "council-strategy editor. Off by default — the app opens as the v2 "
+                 "Universe Run.")
+
+    if show_legacy and run_clicked and selected_path is not None:
         try:
             with st.spinner(f"Running the council on {ticker}…"):
                 report = run_council(ticker, selected_path, run_overrides)
@@ -1506,9 +1525,14 @@ def main() -> None:
     if pending:
         st.success(pending)
 
-    # Universe Run FIRST -> Streamlit selects it by default: the v2 product is the
-    # landing experience. The pre-v2 council browsers follow, each labeled Legacy; the
-    # council-YAML editor is last.
+    if not show_legacy:
+        # v2-ONLY landing: the Universe Run tab IS the app (its snapshot-history view
+        # included). No legacy render function is called.
+        render_universe_tab()
+        return
+
+    # Legacy ON: Universe Run FIRST (Streamlit default-selects it), then the pre-v2
+    # council browsers (each labeled Legacy), the council-YAML editor last.
     tab_universe, tab_report, tab_history, tab_strategy = st.tabs(
         ["Universe Run", "Report · Legacy", "History · Legacy", "Strategy · Legacy"])
 

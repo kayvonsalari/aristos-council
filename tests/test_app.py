@@ -189,6 +189,17 @@ def _markdown_blob(at) -> str:
     return "\n".join(m.value for m in at.markdown if isinstance(m.value, str))
 
 
+def _legacy_app(timeout: int = 60):
+    """Run the app with the 'Show legacy tools' toggle ON — legacy surfaces (the
+    single-ticker council, Report/History, Strategy editor) are hidden by DEFAULT, so
+    any test that exercises them must opt in. Session state persists across at.run()."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(str(_APP), default_timeout=timeout)
+    at.session_state["show_legacy"] = True
+    return at.run()
+
+
 # --------------------------------------------------------------------------- #
 # Universe Run tab — schema-split dropdowns + pure render helpers (Sprint)
 # --------------------------------------------------------------------------- #
@@ -273,6 +284,44 @@ def test_universe_run_tab_renders_with_rank_dropdown():
     assert not any("growth_v1" in o for o in rank_dd.options)   # council, not rank
 
 
+# --------------------------------------------------------------------------- #
+# Legacy surfaces hidden by default behind the "Show legacy tools" toggle
+# --------------------------------------------------------------------------- #
+def _info_blob(at) -> str:
+    return " ".join(str(getattr(e, "value", "")) for e in getattr(at, "info", []))
+
+
+def _header_blob(at) -> str:
+    return " ".join(str(getattr(e, "value", "")) for e in getattr(at, "header", []))
+
+
+def test_legacy_hidden_by_default_and_toggle_defaults_off():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    # the toggle exists and defaults OFF
+    legacy_toggle = next(t for t in at.toggle if t.label == "Show legacy tools")
+    assert legacy_toggle.value is False
+    assert at.session_state["show_legacy"] is False
+    # NO legacy surface rendered: no council-run button, no legacy sidebar header, no
+    # Strategy-editor scope banner, no legacy tabs — the legacy render paths never ran.
+    assert not any("Run council" in b.label for b in at.button)
+    assert "Run a council" not in _header_blob(at)
+    assert "Edits council-strategy YAMLs" not in _info_blob(at)
+    assert not any("Legacy" in str(t.label) for t in at.tabs)
+    # the v2 product IS the landing (the Universe Run rank dropdown renders)
+    assert any(s.label == "Rank strategy" for s in at.selectbox)
+
+
+def test_legacy_surfaces_appear_when_toggle_on():
+    at = _legacy_app(60)
+    assert not at.exception
+    assert any("Run council" in b.label for b in at.button)          # council flow back
+    assert "Run a council" in _header_blob(at)                       # legacy sidebar back
+    assert "Edits council-strategy YAMLs" in _info_blob(at)          # Strategy editor back
+    assert any("Report · Legacy" in str(t.label) for t in at.tabs)   # legacy tabs back
+
+
 _MSFT_PRE_4E = _REPORTS / "MSFT" / "2026-06-14T13-29-49Z.json"
 
 
@@ -305,8 +354,7 @@ def test_data_quality_violations_grouped_by_tool():
 def test_data_quality_banner_renders_summary_with_expander():
     # Integration: browsing the pre-4E MSFT run, the data_quality flag shows the
     # one-line summary and a "Show provenance issues" expander (not a raw dump).
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=90).run()
+    at = _legacy_app(90)                              # Report browser is a legacy surface
     next(s for s in at.selectbox if s.label.startswith("Runs for")).set_value("MSFT")
     at.run()
     run_sel = next(s for s in at.selectbox if s.label == "Run")
@@ -351,8 +399,7 @@ def test_human_number_formats_large_thresholds():
 
 
 def test_strategy_tab_renders_dividend_criteria_by_default():
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _legacy_app(60)                              # Strategy tab is a legacy surface
     assert not at.exception
     blob = _markdown_blob(at)
     assert "Minimum dividend yield" in blob           # registry label rendered
@@ -360,8 +407,7 @@ def test_strategy_tab_renders_dividend_criteria_by_default():
 
 
 def test_strategy_tab_switches_to_growth_criteria_generically():
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _legacy_app(60)
     sb = next(s for s in at.selectbox if s.label == "Strategy")
     growth_label = next(o for o in sb.options if "growth_v1" in o)
     sb.set_value(growth_label)
@@ -380,8 +426,7 @@ def test_growth_run_is_triggerable_and_reports_browsable_under_growth():
     # the cost ack makes the Run button live (run_council would receive the
     # growth path — see the routing test), and the report browser still works
     # (it is strategy-independent, so any saved ticker is browsable).
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _legacy_app(60)
     sb = next(s for s in at.selectbox if s.label == "Strategy")
     sb.set_value(next(o for o in sb.options if "growth_v1" in o))
     next(t for t in at.text_input if t.label == "Ticker").set_value("JNJ")
@@ -422,8 +467,7 @@ def _strategy_tab_text(at) -> str:
 
 
 def test_strategy_tab_header_names_selected_strategy_and_switches():
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _legacy_app(60)
     assert not at.exception
     assert "Viewing: Dividend Aristocrats (dividend_aristocrats_v1)" \
         in _strategy_tab_text(at)
@@ -438,8 +482,7 @@ def test_strategy_tab_header_names_selected_strategy_and_switches():
 
 
 def test_strategy_tab_has_distinct_criteria_policy_and_veto_sections():
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _legacy_app(60)
     txt = _strategy_tab_text(at)
     assert "Criteria" in txt and "Policy" in txt and "Veto gate" in txt
     # the Policy flag lives in its own section as a checkbox, not a criterion box
@@ -451,8 +494,7 @@ def test_cagr_window_shown_once_and_locked_even_in_edit_mode():
     # surfaced EXACTLY ONCE, read-only/locked (disabled + 🔒), and stays locked
     # even when editing (it is not strategy-configurable). It is not duplicated
     # under max_peg_ratio — PEG reuses the same window, not its own.
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _legacy_app(60)
     sb = next(s for s in at.selectbox if s.label == "Strategy")
     sb.set_value(next(o for o in sb.options if "growth_v1" in o))
     at.run()
