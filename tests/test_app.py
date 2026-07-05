@@ -271,6 +271,31 @@ def test_universe_markdown_has_sections_from_the_result():
     assert "## Narrative" in md and "ranked #1 on ROIC." in md
 
 
+def test_confirmation_line_states_strategy_universe_and_mode():
+    m = {"rank_strategy_id": "magic_formula_v1", "universe_id": "growth_40_v1",
+         "council_mode": "ranker-only"}
+    assert app._confirmation_line(m) == \
+        "Running magic_formula_v1 on growth_40_v1 in ranker-only."
+    # ad-hoc universe id (with its hash) is carried through
+    m2 = {"rank_strategy_id": "s", "universe_id": "adhoc:abcd1234",
+          "council_mode": "narrator"}
+    assert "adhoc:abcd1234" in app._confirmation_line(m2)
+
+
+def test_confirmation_line_is_in_the_persisted_markdown():
+    from aristos_council.pipeline import RankPipelineResult
+    result = RankPipelineResult(
+        ranked=[], excluded=[], unrateable=[], narratives={},
+        header="Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran).",
+        meta={"rank_strategy_id": "magic_formula_momentum_v1",
+              "screen_strategy_id": "magic_value_screen_v1",
+              "universe_id": "growth_40_v1", "council_mode": "ranker-only",
+              "ranker_only": True, "universe_size": 40, "ranked_count": 0,
+              "shortlist": [], "est_cost": 0.0}, council_mode="ranker-only")
+    md = app._universe_markdown(result)
+    assert "Running magic_formula_momentum_v1 on growth_40_v1 in ranker-only." in md
+
+
 def test_universe_run_tab_renders_with_rank_dropdown():
     # The app renders (all tabs) with the new Universe Run tab present and a rank-
     # strategy dropdown — no run triggered, so nothing hits the network.

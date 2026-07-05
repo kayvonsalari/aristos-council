@@ -1182,11 +1182,19 @@ def _ranked_rows(ranked) -> tuple[list[dict], list[str]]:
     return rows, factor_names
 
 
+def _confirmation_line(m: dict) -> str:
+    """The always-rendered pre-run confirmation (ITEM 6): a wrong dropdown is visible in
+    the first second and in every exported report. Uses the truthful executed mode."""
+    return (f"Running {m['rank_strategy_id']} on "
+            f"{m.get('universe_id') or 'adhoc'} in {m['council_mode']}.")
+
+
 def _universe_markdown(result) -> str:
     """The run as a self-contained markdown doc (the download; NO new storage format
     this sprint — the pipeline does not persist reports)."""
     m = result.meta
     lines = [f"# Universe run — {m['rank_strategy_id']}", "",
+             f"**{_confirmation_line(m)}**", "",
              f"_{result.header}_", "",
              f"- screen: `{m['screen_strategy_id']}`",
              f"- mode: {m['council_mode']}",
@@ -1227,6 +1235,8 @@ def _universe_markdown(result) -> str:
 def _render_universe_result(result) -> None:
     m = result.meta
 
+    # ITEM 6: the confirmation line first — a wrong dropdown is visible immediately.
+    st.caption(_confirmation_line(m))
     # 1 — the division-of-labor header line, prominent.
     st.markdown(f"#### {result.header}")
     meta_bits = (f"rank: `{m['rank_strategy_id']}` · screen: "
