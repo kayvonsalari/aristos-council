@@ -148,6 +148,18 @@ def test_narrator_narrates_the_shortlist():
     assert "non-judging" in text and "ranked #1 on ROIC" in text
 
 
+def test_actual_shortlist_cost_disclosed_before_narration():
+    # ITEM 4: the real post-screen shortlist cost is surfaced via progress BEFORE the
+    # narrator spends — not the pre-run upper-bound estimate.
+    msgs: list[str] = []
+    run_rank_pipeline(
+        UNIVERSE, "magic_formula_v1", council_mode="narrator", strategies_dir=STRAT_DIR,
+        adapter=_Adapter(), runners=_runners(DecisionOutput(
+            recommendation=Recommendation.BUY, confidence=0.8, rationale="r")),
+        today=date(2026, 6, 30), progress=msgs.append)
+    assert any("Shortlist:" in m and "→ $" in m and "name(s)" in m for m in msgs)
+
+
 def test_mode_stamp_tells_the_truth_on_both_paths():
     # ranker-only: NO LLM ran -> the stamp must say so (ITEM 3), not leak "narrator".
     ranker = run_rank_pipeline(

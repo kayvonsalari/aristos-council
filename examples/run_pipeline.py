@@ -108,6 +108,10 @@ def main() -> None:
     if not args.ranker_only and n_short > SPEND_CAP_COUNCILS and not args.yes:
         p.error(f"{n_short} council runs (> {SPEND_CAP_COUNCILS}) — re-run with --yes "
                 f"to approve ~${sizing.meta['est_cost']:.2f} of spend")
+    # The ACTUAL post-screen shortlist cost, before any narrator spend (ITEM 4).
+    if not args.ranker_only:
+        print(f"  shortlist: {n_short} name(s) → ${sizing.meta['est_cost']:.2f} "
+              "(actual, post-screen)")
 
     runners = None
     if not args.ranker_only:

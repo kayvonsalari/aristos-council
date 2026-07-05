@@ -341,6 +341,12 @@ def run_rank_pipeline(
     council: list[CouncilOutcome] = []
     narratives: dict[str, str] = {}
     if not ranker_only and shortlist:
+        # Disclose the ACTUAL post-screen shortlist cost before the narrator spends
+        # (ITEM 4) — the pre-run estimate is an upper bound; this is the real number,
+        # from the shortlist we already have (no second screen run).
+        if progress is not None:
+            progress(f"Shortlist: {len(shortlist)} name(s) → ${est:.2f} — "
+                     "starting narration…")
         if runners is None:
             from .agents.runners import production_runners
             runners = production_runners()
