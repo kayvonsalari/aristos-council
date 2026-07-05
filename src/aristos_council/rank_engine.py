@@ -53,6 +53,10 @@ class RankedTicker:
     # Factors whose value was NOT-EVAL under 'neutral' mode — imputed with the
     # ticker's mean present-rank (judged on what it has, not punished for the gap).
     imputed_factors: list[str] = field(default_factory=list)
+    # Per-factor SOURCE tag (ITEM 1): which computation path produced each value
+    # (e.g. earnings_yield -> "ev" | "fallback:ebit_mcap" | "abstained"). Attached by
+    # the rank stage after ranking; empty for a bare rank_universe call.
+    factor_sources: dict[str, str] = field(default_factory=dict)
 
     def explain(self) -> str:
         n = self.universe_size

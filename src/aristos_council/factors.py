@@ -66,31 +66,50 @@ def enterprise_value(f) -> Optional[float]:
     return f.market_cap + f.total_debt - f.total_cash
 
 
-def _earnings_yield(fi: FactorInputs) -> Optional[float]:
-    """Greenblatt's value leg, EBIT/EV. Uses a true-ish enterprise value when the
-    balance-sheet components are available (ITEM 6: totalDebt+totalCash populate for
-    ~95% of a real universe), falling back to EBIT/market_cap when they are missing, then
-    1/PE. Higher is cheaper/better.
+# --- Factor SOURCE tags (ITEM 1: silent fallbacks become disclosed fallbacks) ------- #
+# The exact computation path a factor took FOR ONE NAME, recorded at compute time so the
+# report can say EV-or-proxy in plain text. "computed"/"abstained" are the defaults for
+# factors with no fallback; the ones with fallbacks (earnings_yield, net_payout_yield)
+# name their path.
+SRC_COMPUTED = "computed"
+SRC_ABSTAINED = "abstained"
+SRC_EV = "ev"                              # earnings_yield on true EBIT/EV
+SRC_EBIT_MCAP = "fallback:ebit_mcap"       # earnings_yield fell back to EBIT/market cap
+SRC_PE = "fallback:pe"                     # earnings_yield fell back to 1/PE
+SRC_DIVIDEND_YIELD = "fallback:dividend_yield"   # net_payout fell back to dividend yield
 
-    Negative-EV guard: only when cash & investments exceed market cap + debt (EV ≤ 0 —
-    a deeply cash-rich small cap) is EBIT/EV a meaningless negative/huge value, so we
-    ABSTAIN (None) rather than emit a negative-yield rank artifact. A merely net-cash
-    mega-cap (cash > debt but < market cap, e.g. NVDA/GOOGL) still has a large POSITIVE
-    EV and ranks normally. Missing EV components are a different case: they fall back to
-    EBIT/market_cap, a comparable positive proxy."""
+
+def _earnings_yield_outcome(fi: FactorInputs) -> tuple[Optional[float], str]:
+    """(value, source) for the value leg — the SINGLE place the EBIT/EV vs proxy path is
+    decided, so the disclosed source can never drift from the computed value.
+
+    EBIT/EV when the balance-sheet components are available (ITEM 6), falling back to
+    EBIT/market_cap when they are missing, then 1/PE. Negative-EV guard: only when cash &
+    investments exceed market cap + debt (EV ≤ 0 — a deeply cash-rich small cap) is EBIT/EV
+    a meaningless negative/huge value, so we ABSTAIN. A merely net-cash mega-cap (cash >
+    debt but < market cap, e.g. NVDA/GOOGL) still has a large POSITIVE EV and ranks
+    normally. Higher is cheaper/better."""
     f = fi.fundamentals
     if f is None:
-        return None
+        return None, SRC_ABSTAINED
     ebit = f.ebit[0] if f.ebit else None
     if ebit is not None:
         ev = enterprise_value(f)
         if ev is not None:
-            return ebit / ev if ev > 0 else None      # net-cash -> abstain, no artifact
+            return (ebit / ev, SRC_EV) if ev > 0 else (None, SRC_ABSTAINED)
         if f.market_cap and f.market_cap > 0:
-            return ebit / f.market_cap                # EV components missing -> proxy
+            return ebit / f.market_cap, SRC_EBIT_MCAP     # EV components missing -> proxy
     if f.pe_ratio and f.pe_ratio > 0:
-        return 1.0 / f.pe_ratio
-    return None
+        return 1.0 / f.pe_ratio, SRC_PE
+    return None, SRC_ABSTAINED
+
+
+def _earnings_yield(fi: FactorInputs) -> Optional[float]:
+    return _earnings_yield_outcome(fi)[0]
+
+
+def _earnings_yield_source(fi: FactorInputs) -> str:
+    return _earnings_yield_outcome(fi)[1]
 
 
 def _return_on_capital(fi: FactorInputs) -> Optional[float]:
@@ -128,6 +147,13 @@ def _net_payout_yield(fi: FactorInputs) -> Optional[float]:
     return f.dividend_yield if f is not None else None
 
 
+def _net_payout_source(fi: FactorInputs) -> str:
+    f = fi.fundamentals
+    if f is None or f.dividend_yield is None:
+        return SRC_ABSTAINED
+    return SRC_DIVIDEND_YIELD              # buybacks unavailable -> always the fallback
+
+
 def _revenue_growth(fi: FactorInputs) -> Optional[float]:
     f = fi.fundamentals
     if f is None:
@@ -151,13 +177,18 @@ class FactorDef:
     direction: str        # "high" = higher is better, "low" = lower is better
     label: str
     fallback_note: str = ""
+    # Optional per-name SOURCE tag (ITEM 1). None -> the source is derived generically
+    # as "computed"/"abstained" from the value; set it for factors WITH fallbacks so the
+    # report discloses which path was taken per ticker.
+    source_fn: Optional[Callable[[FactorInputs], str]] = None
 
 
 FACTOR_REGISTRY: dict[str, FactorDef] = {
     "earnings_yield": FactorDef(
         "earnings_yield", _earnings_yield, "high", "Earnings yield (EBIT/EV)",
         "EBIT / (market cap + total debt − cash); EBIT/market_cap fallback when EV "
-        "components missing, then 1/PE; net-cash (EV≤0) abstains"),
+        "components missing, then 1/PE; net-cash (EV≤0) abstains",
+        source_fn=_earnings_yield_source),
     "roic": FactorDef(
         "roic", _return_on_capital, "high", "Return on invested capital"),
     "momentum_12m": FactorDef(
@@ -168,7 +199,8 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         "low_volatility", _low_volatility, "low", "Annualized volatility (low best)"),
     "net_payout_yield": FactorDef(
         "net_payout_yield", _net_payout_yield, "high", "Net payout yield",
-        "dividend-yield fallback (buybacks unavailable on free fundamentals)"),
+        "dividend-yield fallback (buybacks unavailable on free fundamentals)",
+        source_fn=_net_payout_source),
     "revenue_growth": FactorDef(
         "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3y)"),
     "dividend_streak": FactorDef(
@@ -249,16 +281,30 @@ def is_payout_uncovered(payout_ratio: Optional[float],
     return payout_ratio > max_payout
 
 
-def compute_factors(fi: FactorInputs, names) -> dict[str, Optional[float]]:
-    """The factor values for one ticker, for the named factors. Unknown names raise
-    (the rank-strategy loader validates names up front)."""
-    out: dict[str, Optional[float]] = {}
+def compute_factor_outcomes(
+    fi: FactorInputs, names) -> dict[str, tuple[Optional[float], str]]:
+    """(value, source) per named factor for one ticker — the source-aware form. The
+    source is the factor's own ``source_fn`` when it has one (disclosing which fallback
+    path it took), else "computed"/"abstained" derived from the value (ITEM 1)."""
+    out: dict[str, tuple[Optional[float], str]] = {}
     for name in names:
         fdef = FACTOR_REGISTRY.get(name)
         if fdef is None:
             raise KeyError(f"unknown factor '{name}'")
-        out[name] = fdef.fn(fi)
+        value = fdef.fn(fi)
+        if fdef.source_fn is not None:
+            source = fdef.source_fn(fi)
+        else:
+            source = SRC_COMPUTED if value is not None else SRC_ABSTAINED
+        out[name] = (value, source)
     return out
+
+
+def compute_factors(fi: FactorInputs, names) -> dict[str, Optional[float]]:
+    """The factor values for one ticker, for the named factors. Unknown names raise
+    (the rank-strategy loader validates names up front)."""
+    return {name: value for name, (value, _) in
+            compute_factor_outcomes(fi, names).items()}
 
 
 def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:

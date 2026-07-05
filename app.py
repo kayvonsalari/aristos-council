@@ -1205,6 +1205,12 @@ def _universe_markdown(result) -> str:
             lines.append("| " + " | ".join(cells) + " |")
     else:
         lines.append("_(no names survived the screen)_")
+    from aristos_council.pipeline import factor_integrity, format_integrity_entry
+
+    entries = factor_integrity(result)
+    if entries:
+        lines += ["", "## Factor integrity", ""]
+        lines += [f"- **{e['factor']}** — {format_integrity_entry(e)}" for e in entries]
     if result.excluded:
         lines += ["", "## Excluded (screen / cap / sector)", ""]
         lines += [f"- **{t}** — {why}" for t, why in result.excluded]
@@ -1248,6 +1254,18 @@ def _render_universe_result(result) -> None:
                        "other factors (judged on what it has, not punished).")
     else:
         st.info("No names survived the screen to be ranked.")
+
+    # 2b — FACTOR INTEGRITY: which computation path produced each factor per name
+    # (ITEM 1) — EV vs EBIT/mcap proxy vs abstained, no longer silent.
+    from aristos_council.pipeline import factor_integrity, format_integrity_entry
+
+    entries = factor_integrity(result)
+    if entries:
+        st.subheader("Factor integrity")
+        st.caption("Per factor, how each ranked name's value was produced — a silent "
+                   "fallback (stale cache / missing fields) now shows in plain text.")
+        for e in entries:
+            st.markdown(f"- **{e['factor']}** — {format_integrity_entry(e)}")
 
     # 3 — Excluded (screen / cap / sector / payout): a neutral table.
     if result.excluded:

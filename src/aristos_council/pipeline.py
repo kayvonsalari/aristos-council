@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .factors import (
-    compute_factors,
+    compute_factor_outcomes,
     gather_factor_inputs,
     is_payout_uncovered,
     is_sector_excluded,
@@ -77,6 +77,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
 
     rows: list[tuple[str, dict]] = []
     excluded: list[tuple[str, str]] = []
+    sources_by_ticker: dict[str, dict[str, str]] = {}
     for t in universe:
         # A TRANSIENT fetch failure (429/timeout/5xx, unrecovered after retries) is NOT
         # absent data — abort THIS name with a fetch-error status (rerun), never mislabel
@@ -112,12 +113,20 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             if reason is not None:
                 excluded.append((t, reason))
                 continue
-        rows.append((t, compute_factors(fi, [fac.name for fac in rank_strategy.factors])))
+        outcomes = compute_factor_outcomes(
+            fi, [fac.name for fac in rank_strategy.factors])
+        rows.append((t, {n: v for n, (v, _) in outcomes.items()}))
+        sources_by_ticker[t] = {n: s for n, (_, s) in outcomes.items()}
     specs = [FactorSpec(fac.name, fac.direction, fac.missing)
              for fac in rank_strategy.factors]
     ranked = rank_universe(rows, specs, cut=rank_strategy.cut, k=rank_strategy.k,
                            percentile=rank_strategy.percentile,
                            missing=rank_strategy.missing)
+    # Attach the per-factor SOURCE tags recorded at compute time (ITEM 1) — the report's
+    # factor-integrity block reads these to disclose EV vs proxy vs abstained per name.
+    for r in ranked:
+        if r.ticker in sources_by_ticker:
+            r.factor_sources = sources_by_ticker[r.ticker]
     return ranked, excluded
 
 
@@ -419,6 +428,72 @@ def _append_agreement_csv(result: RankPipelineResult, path: Path) -> None:
             w.writerow(row)
 
 
+# Source-tag -> human label for the factor-integrity block (ITEM 1).
+_SOURCE_LABELS = {
+    "ev": "EV",
+    "computed": "computed",
+    "abstained": "abstained",
+    "fallback:ebit_mcap": "EBIT/mcap proxy",
+    "fallback:pe": "1/PE",
+    "fallback:dividend_yield": "dividend-yield",
+}
+
+
+def _source_label(src: str) -> str:
+    return _SOURCE_LABELS.get(src, src)
+
+
+def factor_integrity(result: RankPipelineResult) -> list[dict]:
+    """Per-factor source breakdown across the RANKED names (ITEM 1). For each factor:
+    ``{factor, total, by_source: {source_tag: [tickers]}}`` — the data behind the
+    'Factor integrity' disclosure block, so three runtime states (EV / EBIT-mcap proxy /
+    abstained) that used to render identically now read in plain text."""
+    ranked = result.ranked
+    if not ranked:
+        return []
+    order = list(ranked[0].factor_sources) or list(ranked[0].factor_values)
+    out: list[dict] = []
+    for name in order:
+        by_source: dict[str, list[str]] = {}
+        for r in ranked:
+            src = r.factor_sources.get(name)
+            if src is None:                    # no tag recorded -> derive from presence
+                src = "computed" if r.factor_values.get(name) is not None else "abstained"
+            by_source.setdefault(src, []).append(r.ticker)
+        out.append({"factor": name, "total": len(ranked), "by_source": by_source})
+    return out
+
+
+def format_integrity_entry(e: dict) -> str:
+    """One factor's source breakdown as a string, e.g.
+    'EV 21/23 · EBIT/mcap proxy 2/23 (HD, CAT) · abstained 0'. Fallback tickers are named
+    when ≤5, counted otherwise. Shared by the CLI report and the Universe Run tab."""
+    total, bs = e["total"], e["by_source"]
+    primary = [s for s in bs if not s.startswith("fallback:") and s != "abstained"]
+    fallbacks = [s for s in bs if s.startswith("fallback:")]
+    parts = [f"{_source_label(s)} {len(bs[s])}/{total}" for s in primary]
+    for s in fallbacks:
+        tks = bs[s]
+        named = f" ({', '.join(tks)})" if len(tks) <= 5 else ""
+        parts.append(f"{_source_label(s)} {len(tks)}/{total}{named}")
+    ab = bs.get("abstained", [])
+    named = f" ({', '.join(ab)})" if 0 < len(ab) <= 5 else ""
+    parts.append(f"abstained {len(ab)}{named}")
+    return " · ".join(parts)
+
+
+def format_factor_integrity(result: RankPipelineResult) -> list[str]:
+    """The 'Factor integrity' block as text lines, e.g.
+    'earnings_yield: EV 21/23 · EBIT/mcap proxy 2/23 (HD, CAT) · abstained 0'."""
+    entries = factor_integrity(result)
+    if not entries:
+        return []
+    lines = ["=== FACTOR INTEGRITY (per-factor source across the ranked names) ==="]
+    for e in entries:
+        lines.append(f"  {e['factor']}: " + format_integrity_entry(e))
+    return lines
+
+
 def format_cli_report(result: RankPipelineResult) -> str:
     """The console report the CLI prints — built from the structured result so the UI
     and CLI show the SAME thing. Mirrors the legacy run_pipeline.py layout."""
@@ -435,6 +510,10 @@ def format_cli_report(result: RankPipelineResult) -> str:
     for i, r in enumerate(result.ranked, 1):
         lines.append(f"  {i:>2}  {r.ticker:<10} {r.verdict.upper():<5} "
                      f"combined {r.combined_rank:>5.0f}")
+    integrity = format_factor_integrity(result)
+    if integrity:
+        lines.append("")
+        lines.extend(integrity)
     if result.excluded:
         lines.append("")
         lines.append("  Excluded (not ranked):")
