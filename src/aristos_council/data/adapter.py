@@ -164,6 +164,25 @@ class DividendEvent:
     amount: float
 
 
+@dataclass(frozen=True)
+class StreetConsensus:
+    """Sell-side analyst consensus snapshot (provider 'info'-style fields).
+
+    Every field is Optional: a provider that doesn't report one records ``None`` —
+    the same abstain-not-guess discipline the rest of the system uses, applied to
+    analyst data. ``recommendation_mean`` is on yfinance's 1=StrongBuy .. 5=Sell
+    scale (LOWER = more bullish); the prospective scoreboard buckets it by RELATIVE
+    terciles, never absolute bands (see ``scoreboard`` — absolute bands are
+    structurally all-BUY on the observed universes).
+    """
+
+    ticker: str
+    recommendation_mean: float | None = None     # 1=StrongBuy .. 5=Sell
+    n_analysts: int | None = None
+    target_mean_price: float | None = None
+    current_price: float | None = None
+
+
 # --------------------------------------------------------------------------- #
 # Adapter interface
 # --------------------------------------------------------------------------- #
@@ -196,6 +215,17 @@ class MarketDataAdapter(abc.ABC):
         self, ticker: str, *, start: date, end: date
     ) -> list[DividendEvent]:
         ...
+
+    def get_street_consensus(self, ticker: str) -> StreetConsensus:
+        """Sell-side analyst consensus for a ticker.
+
+        DEFAULT: an all-null abstention — a provider without analyst data records
+        nulls rather than guessing, and every existing adapter/fake keeps working
+        without change. Concrete adapters that HAVE the data (yfinance) override.
+        Deliberately NOT abstract: this is a read-only add-on for the prospective
+        scoreboard, orthogonal to the council's data path.
+        """
+        return StreetConsensus(ticker=ticker)
 
     def provider_for(self, data_kind: str) -> str:
         """Which provider actually produced a given data kind.

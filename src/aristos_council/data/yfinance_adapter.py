@@ -31,6 +31,7 @@ from .adapter import (
     MarketDataAdapter,
     PriceBar,
     PriceHistory,
+    StreetConsensus,
     sane_dividend_yield,
 )
 
@@ -184,6 +185,28 @@ class YFinanceAdapter(MarketDataAdapter):
                 events.append(DividendEvent(ex_date=d, amount=float(amount)))
         return events
 
+    # ------------------------------------------------------------------ #
+    def get_street_consensus(self, ticker: str) -> StreetConsensus:
+        """Sell-side consensus from yfinance ``info``. Any missing field -> None
+        (abstain-not-guess); a failed/empty ``info`` -> an all-null consensus, never
+        an exception — the scoreboard records the abstention, it does not crash."""
+        import yfinance as yf
+
+        try:
+            info = yf.Ticker(ticker).info
+        except Exception:
+            return StreetConsensus(ticker=ticker)
+        if not info:
+            return StreetConsensus(ticker=ticker)
+        return StreetConsensus(
+            ticker=ticker,
+            recommendation_mean=_as_float(info.get("recommendationMean")),
+            n_analysts=_as_int(info.get("numberOfAnalystOpinions")),
+            target_mean_price=_as_float(info.get("targetMeanPrice")),
+            current_price=_as_float(info.get("currentPrice")
+                                    or info.get("regularMarketPrice")),
+        )
+
 
 def _dividend_per_share(info: dict) -> float | None:
     """Annual dividend per share, resilient to yfinance's flaky `info`.
@@ -268,6 +291,11 @@ def _as_float(value: object) -> float | None:
         return None
     # yfinance uses NaN for missing cells; treat NaN as absent.
     return None if f != f else f
+
+
+def _as_int(value: object) -> int | None:
+    f = _as_float(value)
+    return None if f is None else int(f)
 
 
 def _annual_series(df: object, label: str) -> list[float]:

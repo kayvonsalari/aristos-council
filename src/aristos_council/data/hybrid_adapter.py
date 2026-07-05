@@ -29,6 +29,7 @@ from .adapter import (
     Fundamentals,
     MarketDataAdapter,
     PriceHistory,
+    StreetConsensus,
 )
 
 
@@ -64,6 +65,11 @@ class HybridAdapter(MarketDataAdapter):
         self, ticker: str, *, start: date, end: date
     ) -> PriceHistory:
         return self._yf.get_price_history(ticker, start=start, end=end)
+
+    def get_street_consensus(self, ticker: str) -> StreetConsensus:
+        # Consensus rides with fundamentals/prices -> yfinance (EODHD /fundamentals
+        # is paywalled; its default would abstain). Same source as get_fundamentals.
+        return self._yf.get_street_consensus(ticker)
 
     # --- honest per-source provenance --------------------------------------- #
     def provider_for(self, data_kind: str) -> str:

@@ -1,0 +1,79 @@
+"""Prospective scoreboard — SNAPSHOT job (Aristos v2).
+
+Freeze today's Aristos ranker verdicts AND the street's consensus, same-day, into an
+append-only store. Scored later on FORWARD returns (``examples/score_snapshot.py``) —
+the only honest "how do we fare vs analysts". NO LLM, $0: this runs the EXISTING
+``run_rank_pipeline`` in ranker-only mode.
+
+CLI:
+    python examples/snapshot_consensus.py AAPL MSFT GOOGL ... --rank-strategy magic_formula_v1
+    python examples/snapshot_consensus.py --file pool.txt --rank-strategy conservative_plus_v1 --out snapshots/
+
+Appends one row per name (ranked, EXCLUDED, and UNRATEABLE — an exclusion is a call
+too) to ``<out>/verdict_consensus.csv``, then prints the divergence map. Cadence is
+MANUAL / quarterly — no scheduler in scope. Requires the market-data extra; NO keys
+(ranker-only + yfinance ``info``).
+"""
+
+from __future__ import annotations
+
+import argparse
+from datetime import date
+from pathlib import Path
+
+from aristos_council.data.adapter import normalize_ticker
+from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
+from aristos_council.data.provider import select_market_adapter
+from aristos_council.scoreboard import format_divergence_map, run_snapshot
+
+ROOT = Path(__file__).resolve().parents[1]
+STRATEGIES_DIR = ROOT / "strategies"
+DEFAULT_OUT = ROOT / "snapshots"
+
+
+def _read_tickers(args) -> list[str]:
+    raw = list(args.tickers)
+    if args.file:
+        for line in Path(args.file).read_text(encoding="utf-8").splitlines():
+            line = line.split("#", 1)[0].strip()
+            if line:
+                raw.extend(line.replace(",", " ").split())
+    seen, out = set(), []
+    for t in raw:
+        nt = normalize_ticker(t)
+        if nt and nt not in seen:
+            seen.add(nt)
+            out.append(nt)
+    return out
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="Freeze verdict + street-consensus snapshot.")
+    p.add_argument("tickers", nargs="*")
+    p.add_argument("--file")
+    p.add_argument("--rank-strategy", required=True)
+    p.add_argument("--out", default=str(DEFAULT_OUT))
+    p.add_argument("--no-cache", action="store_true")
+    args = p.parse_args()
+
+    universe = _read_tickers(args)
+    if not universe:
+        p.error("no tickers given (positional or --file)")
+
+    today = date.today()
+    adapter = select_market_adapter()
+    if not args.no_cache:
+        adapter = CachingAdapter(adapter, cache_dir=DEFAULT_CACHE_DIR, today=today)
+
+    rows, path = run_snapshot(universe, args.rank_strategy, adapter=adapter,
+                              today=today, strategies_dir=STRATEGIES_DIR,
+                              out_dir=args.out)
+
+    print(f"Snapshot {today.isoformat()} · strategy {args.rank_strategy} · "
+          f"{len(rows)} row(s) appended -> {path}")
+    print()
+    print(format_divergence_map(rows))
+
+
+if __name__ == "__main__":
+    main()

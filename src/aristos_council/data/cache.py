@@ -22,9 +22,19 @@ from .adapter import (
     MarketDataAdapter,
     PriceBar,
     PriceHistory,
+    StreetConsensus,
 )
 
 _FUND_FIELDS = {f.name for f in fields(Fundamentals)}
+_CONSENSUS_FIELDS = {f.name for f in fields(StreetConsensus)}
+
+
+def _ser_consensus(c: StreetConsensus) -> dict:
+    return asdict(c)
+
+
+def _deser_consensus(d: dict) -> StreetConsensus:
+    return StreetConsensus(**{k: v for k, v in d.items() if k in _CONSENSUS_FIELDS})
 
 
 # --- per-type (de)serialisers: dataclasses with date fields aren't JSON-native --- #
@@ -119,3 +129,10 @@ class CachingAdapter(MarketDataAdapter):
                             lambda: self._inner.get_dividend_history(
                                 ticker, start=start, end=end),
                             _ser_dividends, _deser_dividends)
+
+    def get_street_consensus(self, ticker):
+        # Delegate to the inner adapter (the base default would return an all-null
+        # abstention and silently drop real analyst data), cached daily like the rest.
+        return self._cached(ticker, "consensus",
+                            lambda: self._inner.get_street_consensus(ticker),
+                            _ser_consensus, _deser_consensus)
