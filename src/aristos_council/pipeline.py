@@ -238,6 +238,8 @@ class RankPipelineResult:
 
 
 def _pipeline_header(mode: str) -> str:
+    if mode == "ranker-only":
+        return "Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)."
     tail = "non-judging" if mode == "narrator" else "independent second opinion"
     return f"Verdict: deterministic ranker.  Narrative: LLM ({tail})."
 
@@ -354,12 +356,15 @@ def run_rank_pipeline(
         run_id = make_run_id(rank_strategy.id)
         freeze_run(recording, run_id=run_id, runs_dir=freeze_dir)
 
+    # The stamp tells the TRUTH: a ranker-only run stamps "ranker-only", not the disabled
+    # selector's leaked "narrator" value (ITEM 3). No LLM ran -> say so.
+    executed_mode = "ranker-only" if ranker_only else mode
     meta = {
         "rank_strategy_id": rank_strategy.id,
         "screen_strategy_id": screen_strategy.id,
         "universe_id": resolved_universe_id,
         "run_id": run_id,
-        "council_mode": mode,
+        "council_mode": executed_mode,
         "council_runs_on": runs_on,
         "ranker_only": ranker_only,
         "universe_size": len(universe),
@@ -370,8 +375,9 @@ def run_rank_pipeline(
     }
     result = RankPipelineResult(
         ranked=live, excluded=excluded, unrateable=unrateable, narratives=narratives,
-        header=_pipeline_header(mode), meta=meta, council_mode=mode, council=council,
-        shortlist=[r.ticker for r in shortlist], fetch_errors=fetch_errors)
+        header=_pipeline_header(executed_mode), meta=meta, council_mode=executed_mode,
+        council=council, shortlist=[r.ticker for r in shortlist],
+        fetch_errors=fetch_errors)
 
     if csv_path and not ranker_only and mode != "narrator":
         _append_agreement_csv(result, Path(csv_path))

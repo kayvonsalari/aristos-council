@@ -148,9 +148,22 @@ def test_narrator_narrates_the_shortlist():
     assert "non-judging" in text and "ranked #1 on ROIC" in text
 
 
-def test_narrator_header_states_the_division_of_labor():
-    result = run_rank_pipeline(
+def test_mode_stamp_tells_the_truth_on_both_paths():
+    # ranker-only: NO LLM ran -> the stamp must say so (ITEM 3), not leak "narrator".
+    ranker = run_rank_pipeline(
         UNIVERSE, "magic_formula_v1", ranker_only=True,
         strategies_dir=STRAT_DIR, adapter=_Adapter(), today=date(2026, 6, 30))
-    assert result.header == \
+    assert ranker.meta["council_mode"] == "ranker-only"
+    assert ranker.council_mode == "ranker-only"
+    assert ranker.header == \
+        "Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)."
+
+    # narrator: an LLM ran -> the stamp is "narrator".
+    narrator = run_rank_pipeline(
+        UNIVERSE, "magic_formula_v1", council_mode="narrator",
+        strategies_dir=STRAT_DIR, adapter=_Adapter(), runners=_runners(
+            DecisionOutput(recommendation=Recommendation.BUY, confidence=0.8,
+                           rationale="r")), today=date(2026, 6, 30))
+    assert narrator.meta["council_mode"] == "narrator"
+    assert narrator.header == \
         "Verdict: deterministic ranker.  Narrative: LLM (non-judging)."
