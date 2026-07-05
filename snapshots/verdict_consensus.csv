@@ -1,0 +1,41 @@
+snapshot_date,strategy,ticker,aristos_verdict,combined_rank,price,street_mean,n_analysts,target_mean,notes
+2026-07-05,magic_formula_momentum_v1,AAPL,BUY,24.0,308.63,2.02128,42,315.09048,
+2026-07-05,magic_formula_momentum_v1,LOW,BUY,25.0,227.5,1.8,33,263.72726,
+2026-07-05,magic_formula_momentum_v1,QCOM,BUY,25.0,176.25,2.51351,31,215.41936,
+2026-07-05,magic_formula_momentum_v1,ADBE,BUY,27.0,219.72,2.58974,33,280.65698,
+2026-07-05,magic_formula_momentum_v1,MRK,BUY,29.0,129.56,1.86207,27,131.11111,
+2026-07-05,magic_formula_momentum_v1,NVDA,HOLD,31.0,194.83,1.29508,58,301.6207,
+2026-07-05,magic_formula_momentum_v1,GOOGL,HOLD,32.0,359.91,1.4375,53,432.28735,
+2026-07-05,magic_formula_momentum_v1,GILD,HOLD,33.0,131.27,1.68966,27,157.66667,
+2026-07-05,magic_formula_momentum_v1,HD,HOLD,33.0,357.9,1.94444,32,370.34375,
+2026-07-05,magic_formula_momentum_v1,LMT,HOLD,33.0,545.91,2.52381,19,617.0526,
+2026-07-05,magic_formula_momentum_v1,TGT,HOLD,35.0,130.21,2.5,34,133.69559,
+2026-07-05,magic_formula_momentum_v1,LLY,HOLD,36.0,1213.91,1.76667,28,1220.3928,
+2026-07-05,magic_formula_momentum_v1,SBUX,HOLD,39.0,104.27,2.38889,31,105.93548,
+2026-07-05,magic_formula_momentum_v1,CAT,HOLD,40.0,963.53,2.10714,26,957.7558,
+2026-07-05,magic_formula_momentum_v1,TXN,HOLD,40.0,293.08,2.22222,32,298.0,
+2026-07-05,magic_formula_momentum_v1,NKE,HOLD,41.0,44.09,2.48718,34,51.45588,
+2026-07-05,magic_formula_momentum_v1,KO,HOLD,42.0,84.14,1.8,24,85.97417,
+2026-07-05,magic_formula_momentum_v1,PG,HOLD,42.0,151.41,2.08,23,163.43478,
+2026-07-05,magic_formula_momentum_v1,ABBV,HOLD,43.0,261.07,1.74194,28,256.14285,
+2026-07-05,magic_formula_momentum_v1,GE,SELL,43.0,377.52,1.5,21,362.57144,"bottom quintile of 23-name universe (relative rank, not a short thesis)"
+2026-07-05,magic_formula_momentum_v1,UNH,SELL,44.0,425.36,1.64286,26,411.8846,"bottom quintile of 23-name universe (relative rank, not a short thesis)"
+2026-07-05,magic_formula_momentum_v1,MSFT,SELL,45.0,390.49,1.32143,55,561.1149,"bottom quintile of 23-name universe (relative rank, not a short thesis)"
+2026-07-05,magic_formula_momentum_v1,META,SELL,46.0,582.9,1.31746,58,828.16864,"bottom quintile of 23-name universe (relative rank, not a short thesis)"
+2026-07-05,magic_formula_momentum_v1,AVGO,EXCLUDED:min_roic,,360.45,1.3125,45,523.72894,screen: min_roic (observed 0.1118 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,AMD,EXCLUDED:min_roic,,517.82,1.45098,48,508.3125,screen: min_roic (observed 0.02811 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,CRM,EXCLUDED:min_roic,,166.11,1.58824,53,246.4419,screen: min_roic (observed 0.06622 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,ORCL,EXCLUDED:min_roic,,140.27,1.51163,40,251.8495,screen: min_roic (observed 0.09351 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,PFE,EXCLUDED:min_roic,,24.32,2.41379,27,29.15074,screen: min_roic (observed 0.1198 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,BMY,EXCLUDED:min_roic,,58.13,2.5,24,63.0,screen: min_roic (observed 0.1061 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,AMZN,EXCLUDED:min_roic,,242.67,1.34848,62,312.90628,screen: min_roic (observed 0.1037 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,TSLA,EXCLUDED:min_roic,,393.45,2.34043,41,423.4,screen: min_roic (observed 0.09783 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,XOM,EXCLUDED:min_roic,,137.09,2.29167,21,169.4762,screen: min_roic (observed 0.1111 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,CVX,EXCLUDED:min_roic,,169.2,1.70833,23,216.47826,screen: min_roic (observed 0.07773 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,DE,EXCLUDED:min_roic,,621.27,2.125,23,646.51263,screen: min_roic (observed 0.09446 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,RTX,EXCLUDED:min_roic,,199.25,1.86957,22,215.68091,screen: min_roic (observed 0.05043 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,INTC,EXCLUDED:min_roic,,120.35,2.63265,42,100.87619,screen: min_roic (observed -0.003674 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,F,EXCLUDED:min_roic,,13.36,2.71429,20,14.901,screen: min_roic (observed 0.009765 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,GM,EXCLUDED:min_roic,,76.0,1.88889,26,95.42308,screen: min_roic (observed 0.03879 vs threshold 0.12)
+2026-07-05,magic_formula_momentum_v1,PARA,UNRATEABLE,,,,,,UNRATEABLE: no data — possibly delisted
+2026-07-05,magic_formula_momentum_v1,WBA,UNRATEABLE,,,,,,UNRATEABLE: no data — possibly delisted
