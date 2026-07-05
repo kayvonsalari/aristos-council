@@ -12,9 +12,12 @@ live), so it helps most on the screen-only ranking path where data is the main c
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, fields
 from datetime import date
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 
 from .adapter import (
     DividendEvent,
@@ -74,6 +77,25 @@ def _deser_dividends(d: list) -> list:
 DEFAULT_CACHE_DIR = ".aristos_cache"
 
 
+def _schema_marker(cls) -> str:
+    """A stable marker for a DTO's shape: its sorted field-name set. When the dataclass
+    gains a field (e.g. Fundamentals.total_cash), the marker changes, so an entry written
+    under the OLD shape is detected as stale on read (ITEM 2 — tonight's root cause: a
+    fundamentals entry cached before total_cash deserialised the field as None -> silent
+    EBIT/mcap fallback all day)."""
+    return ",".join(sorted(f.name for f in fields(cls)))
+
+
+# Schema marker per cache KIND — keyed by the DTO whose shape drift would silently
+# introduce None fields on read.
+_SCHEMAS = {
+    "fundamentals": _schema_marker(Fundamentals),
+    "prices": _schema_marker(PriceBar),
+    "dividends": _schema_marker(DividendEvent),
+    "consensus": _schema_marker(StreetConsensus),
+}
+
+
 class CachingAdapter(MarketDataAdapter):
     """Wraps an adapter; caches raw fetches to dated JSON files. Delegates
     provider/streak metadata to the inner adapter so provenance is unchanged."""
@@ -102,14 +124,22 @@ class CachingAdapter(MarketDataAdapter):
 
     def _cached(self, ticker, kind, fetch, ser, deser):
         path = self._path(ticker, kind)
+        schema = _SCHEMAS.get(kind, "")
         if not self._refresh and path.exists():
             try:
-                return deser(json.loads(path.read_text(encoding="utf-8")))
+                doc = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(doc, dict) and doc.get("_schema") == schema:
+                    return deser(doc["data"])          # HIT: shape matches
+                # marker mismatch (schema drift), a pre-marker file, or a corrupted
+                # marker -> treat as MISS. Logged once so the event is VISIBLE, then
+                # refetched + rewritten under the current schema.
+                _log.info("cache schema stale for %s (%s) — refetching", ticker, kind)
             except Exception:
-                pass   # corrupt/incompatible cache -> fall through and refetch
+                pass   # corrupt/unparseable cache -> fall through and refetch (no crash)
         obj = fetch()
         self._dir.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(ser(obj)), encoding="utf-8")
+        path.write_text(json.dumps({"_schema": schema, "data": ser(obj)}),
+                        encoding="utf-8")
         return obj
 
     # --- MarketDataAdapter interface --- #
