@@ -81,6 +81,13 @@ def test_growth_40_manifest_loads_with_40_names():
     assert "NVDA" in u.tickers and "XOM" in u.tickers
 
 
+def test_defensive_16_manifest_loads_with_16_names():
+    u = load_universe_by_id("defensive_16_v1", UNIVERSES_DIR)
+    assert u.id == "defensive_16_v1"
+    assert len(u.tickers) == 16
+    assert "PG" in u.tickers and "JNJ" in u.tickers
+
+
 def test_unknown_universe_id_is_a_clear_error():
     with pytest.raises(ValueError, match="unknown universe id 'nope_v9'"):
         load_universe_by_id("nope_v9", UNIVERSES_DIR)

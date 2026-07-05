@@ -1,0 +1,30 @@
+# Defensive-16 — a curated defensive large-cap dividend universe.
+# ===============================================================
+# NOTE: unlike growth_40_v1 (recovered verbatim from a validation snapshot), no
+# defensive validation run existed in the repo, so this list is a CURATED standard
+# defensive set — low-beta, non-cyclical dividend payers across consumer staples,
+# healthcare, utilities, and telecom. Edit the tickers here to match your own
+# validated defensive list; it is just a versioned input.
+id: defensive_16_v1
+description: Curated 16-name defensive large-cap dividend universe (staples / healthcare / utilities / telecom).
+created: "2026-07-05"
+rationale: >-
+  Low-volatility, non-cyclical dividend payers — the pool the conservative /
+  defensive rank strategies (conservative_plus_v1) are meant to rank within.
+tickers:
+  - PG
+  - KO
+  - PEP
+  - CL
+  - KMB
+  - JNJ
+  - MRK
+  - ABBV
+  - PFE
+  - MCD
+  - WMT
+  - MO
+  - VZ
+  - DUK
+  - SO
+  - NEE
