@@ -1,0 +1,52 @@
+# Growth-40 — the standing 40-name growth/large-cap universe.
+# ==========================================================
+# The list the magic_formula / magic_formula_momentum validation runs are ranked
+# over (recovered verbatim from the 2026-07-05 snapshot). A rank verdict is
+# universe-relative, so freezing this list is what makes those verdicts reproducible.
+id: growth_40_v1
+description: Standing 40-name growth / large-cap universe for the value & momentum rank strategies.
+created: "2026-07-05"
+rationale: >-
+  Liquid US large caps across growth, value, and defensives — the fixed pool the
+  magic_formula_v1 / magic_formula_momentum_v1 verdicts are ranked within.
+tickers:
+  - AAPL
+  - ABBV
+  - ADBE
+  - AMD
+  - AMZN
+  - AVGO
+  - BMY
+  - CAT
+  - CRM
+  - CVX
+  - DE
+  - F
+  - GE
+  - GILD
+  - GM
+  - GOOGL
+  - HD
+  - INTC
+  - KO
+  - LLY
+  - LMT
+  - LOW
+  - META
+  - MRK
+  - MSFT
+  - NKE
+  - NVDA
+  - ORCL
+  - PARA
+  - PFE
+  - PG
+  - QCOM
+  - RTX
+  - SBUX
+  - TGT
+  - TSLA
+  - TXN
+  - UNH
+  - WBA
+  - XOM

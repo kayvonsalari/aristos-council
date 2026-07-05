@@ -35,9 +35,10 @@ from .rank_engine import FactorSpec, RankedTicker, rank_universe
 from .reproducibility import estimate_cost
 from .state import Recommendation, ResearchState
 
-# The repo strategies/ dir, used to resolve a strategy id when the caller does not
-# pass one (the UI/CLI pass their own). src/aristos_council/pipeline.py -> repo root.
+# The repo strategies/ and universes/ dirs, used to resolve an id when the caller does
+# not pass one (the UI/CLI pass their own). src/aristos_council/pipeline.py -> repo root.
 _STRATEGIES_DIR = Path(__file__).resolve().parents[2] / "strategies"
+_UNIVERSES_DIR = Path(__file__).resolve().parents[2] / "universes"
 
 
 @dataclass
@@ -240,7 +241,8 @@ def _resolve_strategy_path(strategy_id: str, strategies_dir: Path) -> Path:
 
 
 def run_rank_pipeline(
-    universe: list[str], strategy_id: str, *,
+    universe: Optional[list[str]] = None, strategy_id: str = "", *,
+    universe_id: Optional[str] = None, universes_dir: str | Path | None = None,
     council_mode: str = "narrator", csv_path: str | Path | None = None,
     ranker_only: bool = False, strategies_dir: str | Path | None = None,
     screen_strategy_id: Optional[str] = None,
@@ -252,12 +254,20 @@ def run_rank_pipeline(
     the shortlist with the LLM council. The single entrypoint the CLI and Council
     Station both call — no subprocess, no duplicated orchestration.
 
+    Pass EITHER an explicit ``universe`` ticker list OR a ``universe_id`` naming a
+    manifest under ``universes/`` (a declared, versioned input). The resolved id is
+    stamped into ``meta['universe_id']`` — a named manifest keeps its id; an ad-hoc
+    list is recorded as ``adhoc:<hex8>`` so identical ad-hoc runs link.
+
     Deterministic STAGE 1 (screen -> rank -> gates) always runs and is free; STAGE 2
     (the council) runs only when ``ranker_only`` is False and bills API credits. When
     ``adapter``/``runners`` are None they are built from the environment
     (``ARISTOS_MARKET_PROVIDER``; ``ANTHROPIC_API_KEY`` for the council) — tests inject
     fakes instead. ``progress`` receives per-phase status strings for a live UI."""
     strategies_dir = Path(strategies_dir) if strategies_dir else _STRATEGIES_DIR
+    universe, resolved_universe_id = _resolve_universe(
+        universe, universe_id,
+        Path(universes_dir) if universes_dir else _UNIVERSES_DIR)
     rank_strategy = load_rank_strategy_from_id(strategy_id, strategies_dir)
     screen_id = resolve_council_screen_id(rank_strategy, screen_strategy_id)
     screen_strategy = load_screen_from_id(screen_id, strategies_dir)
@@ -294,6 +304,7 @@ def run_rank_pipeline(
     meta = {
         "rank_strategy_id": rank_strategy.id,
         "screen_strategy_id": screen_strategy.id,
+        "universe_id": resolved_universe_id,
         "council_mode": mode,
         "council_runs_on": runs_on,
         "ranker_only": ranker_only,
@@ -310,6 +321,20 @@ def run_rank_pipeline(
     if csv_path and not ranker_only and mode != "narrator":
         _append_agreement_csv(result, Path(csv_path))
     return result
+
+
+def _resolve_universe(universe, universe_id, universes_dir: Path) -> tuple[list[str], str]:
+    """Turn (universe list, universe_id) into (tickers, recorded_id). A ``universe_id``
+    with no explicit list loads the named manifest; an explicit list keeps its
+    ``universe_id`` if given, else gets an ``adhoc:<hex8>`` fingerprint."""
+    from .universe import adhoc_universe_id, load_universe_by_id
+    if universe_id and not universe:
+        u = load_universe_by_id(universe_id, universes_dir)
+        return list(u.tickers), u.id
+    if universe:
+        return list(universe), (universe_id or adhoc_universe_id(list(universe)))
+    raise ValueError("run_rank_pipeline needs an explicit `universe` list or a "
+                     "`universe_id` naming a manifest")
 
 
 def load_rank_strategy_from_id(strategy_id: str, strategies_dir: Path):

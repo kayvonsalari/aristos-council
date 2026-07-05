@@ -134,10 +134,10 @@ def test_sell_row_carries_the_relative_rank_note():
 # Street terciles + divergence map
 # --------------------------------------------------------------------------- #
 def _srow(ticker, verdict, street_mean, *, target=None, price=None):
-    return SnapshotRow(snapshot_date="2026-07-04", strategy="s", ticker=ticker,
-                       aristos_verdict=verdict, combined_rank=None, price=price,
-                       street_mean=street_mean, n_analysts=None, target_mean=target,
-                       notes="")
+    return SnapshotRow(snapshot_date="2026-07-04", strategy="s", universe_id="u",
+                       ticker=ticker, aristos_verdict=verdict, combined_rank=None,
+                       price=price, street_mean=street_mean, n_analysts=None,
+                       target_mean=target, notes="")
 
 
 def test_street_terciles_edge_ties_go_to_the_more_loved_bucket():
@@ -230,7 +230,7 @@ def test_score_snapshot_bucket_means_and_ordering_fully_elapsed():
     rows = [
         _srow("WIN", "BUY", 1.2), _srow("MID", "HOLD", 2.0), _srow("LOSE", "SELL", 3.0),
         _srow("NOSTREET", "BUY", None),                        # empty street data
-        SnapshotRow("2026-01-05", "s", "GONE", "EXCLUDED:min_roic", None, None,
+        SnapshotRow("2026-01-05", "s", "u", "GONE", "EXCLUDED:min_roic", None, None,
                     None, None, None, "screen"),
     ]
     scores, partial = score_snapshot(rows, adapter=_PriceAdapter(prices),

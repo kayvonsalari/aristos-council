@@ -67,6 +67,7 @@ from aristos_council.strategy.versioning import (
 # never the launch cwd — so discovery works no matter where streamlit is started.
 ROOT = Path(__file__).resolve().parent
 STRATEGIES_DIR = ROOT / "strategies"
+UNIVERSES_DIR = ROOT / "universes"
 VERDICTS_DIR = ROOT / "verdicts"
 REPORTS_DIR = ROOT / "reports"
 ASSETS_DIR = ROOT / "assets"
@@ -1197,7 +1198,8 @@ def _render_universe_result(result) -> None:
     # 1 — the division-of-labor header line, prominent.
     st.markdown(f"#### {result.header}")
     meta_bits = (f"rank: `{m['rank_strategy_id']}` · screen: "
-                 f"`{m['screen_strategy_id']}` · mode: {m['council_mode']} · "
+                 f"`{m['screen_strategy_id']}` · universe: "
+                 f"`{m.get('universe_id', '—')}` · mode: {m['council_mode']} · "
                  f"ranked {m['ranked_count']}/{m['universe_size']}")
     if not m["ranker_only"]:
         meta_bits += (f" · shortlist {len(m['shortlist'])} · "
@@ -1262,9 +1264,12 @@ def render_universe_tab() -> None:
 
     from aristos_council.reproducibility import estimate_cost
 
+    from aristos_council.universe import list_universes
+
     st.subheader("Universe Run — the v2 rank pipeline")
     st.caption("Screen → rank → gates issue the verdict of record; the LLM only "
-               "narrates. Pick a rank strategy and paste a universe.")
+               "narrates. Pick a rank strategy and a universe (a saved manifest or a "
+               "custom list).")
 
     rank_options = list_rank_strategy_options(STRATEGIES_DIR)
     if not rank_options:
@@ -1274,10 +1279,26 @@ def render_universe_tab() -> None:
     choice = st.selectbox("Rank strategy", labels, key="uni_strategy")
     rank_strategy = next(s for label, _, s in rank_options if label == choice)
 
-    raw = st.text_area(
-        "Universe — tickers separated by spaces, commas, or newlines",
-        key="uni_universe", height=120, placeholder="AAPL MSFT GOOGL AMZN META …")
-    universe = _parse_universe(raw)
+    # Universe source: a declared manifest (recorded by id) or a custom paste
+    # (recorded as adhoc:<hash>). The manifest is the reproducible, versioned input.
+    manifests = list_universes(UNIVERSES_DIR)
+    CUSTOM = "Custom (paste tickers)"
+    source_labels = [f"{u.id} · {len(u.tickers)} names" for u in manifests] + [CUSTOM]
+    source = st.selectbox("Universe", source_labels, key="uni_source")
+    if source == CUSTOM:
+        raw = st.text_area(
+            "Universe — tickers separated by spaces, commas, or newlines",
+            key="uni_universe", height=120, placeholder="AAPL MSFT GOOGL AMZN META …")
+        universe = _parse_universe(raw)
+        universe_id = None                          # -> adhoc:<hash> in the record
+    else:
+        picked = manifests[source_labels.index(source)]
+        universe = list(picked.tickers)
+        universe_id = picked.id
+        st.caption(f"Manifest **{picked.id}** — {len(universe)} names. "
+                   f"{picked.description}")
+        with st.expander("Tickers in this manifest"):
+            st.write(", ".join(universe))
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -1322,8 +1343,9 @@ def render_universe_tab() -> None:
             from aristos_council.pipeline import run_rank_pipeline
 
             result = run_rank_pipeline(
-                universe, rank_strategy.id, council_mode=mode,
-                ranker_only=ranker_only, strategies_dir=STRATEGIES_DIR,
+                universe, rank_strategy.id, universe_id=universe_id,
+                council_mode=mode, ranker_only=ranker_only,
+                strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")

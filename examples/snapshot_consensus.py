@@ -28,6 +28,7 @@ from aristos_council.scoreboard import format_divergence_map, run_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 STRATEGIES_DIR = ROOT / "strategies"
+UNIVERSES_DIR = ROOT / "universes"
 DEFAULT_OUT = ROOT / "snapshots"
 
 
@@ -51,26 +52,31 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Freeze verdict + street-consensus snapshot.")
     p.add_argument("tickers", nargs="*")
     p.add_argument("--file")
+    p.add_argument("--universe-id",
+                   help="a manifest under universes/ (recorded by id); "
+                        "otherwise the ticker list is recorded as adhoc:<hash>")
     p.add_argument("--rank-strategy", required=True)
     p.add_argument("--out", default=str(DEFAULT_OUT))
     p.add_argument("--no-cache", action="store_true")
     args = p.parse_args()
 
     universe = _read_tickers(args)
-    if not universe:
-        p.error("no tickers given (positional or --file)")
+    if not universe and not args.universe_id:
+        p.error("no tickers given (positional, --file, or --universe-id)")
 
     today = date.today()
     adapter = select_market_adapter()
     if not args.no_cache:
         adapter = CachingAdapter(adapter, cache_dir=DEFAULT_CACHE_DIR, today=today)
 
-    rows, path = run_snapshot(universe, args.rank_strategy, adapter=adapter,
+    rows, path = run_snapshot(universe or None, args.rank_strategy, adapter=adapter,
                               today=today, strategies_dir=STRATEGIES_DIR,
-                              out_dir=args.out)
+                              out_dir=args.out, universe_id=args.universe_id,
+                              universes_dir=UNIVERSES_DIR)
 
+    uid = rows[0].universe_id if rows else (args.universe_id or "—")
     print(f"Snapshot {today.isoformat()} · strategy {args.rank_strategy} · "
-          f"{len(rows)} row(s) appended -> {path}")
+          f"universe {uid} · {len(rows)} row(s) appended -> {path}")
     print()
     print(format_divergence_map(rows))
 

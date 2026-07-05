@@ -39,8 +39,8 @@ from .data.adapter import StreetConsensus
 # --------------------------------------------------------------------------- #
 # The append-only snapshot record
 # --------------------------------------------------------------------------- #
-COLUMNS = ["snapshot_date", "strategy", "ticker", "aristos_verdict", "combined_rank",
-           "price", "street_mean", "n_analysts", "target_mean", "notes"]
+COLUMNS = ["snapshot_date", "strategy", "universe_id", "ticker", "aristos_verdict",
+           "combined_rank", "price", "street_mean", "n_analysts", "target_mean", "notes"]
 
 SELL_NOTE = ("bottom quintile of {n}-name universe "
              "(relative rank, not a short thesis)")
@@ -56,6 +56,7 @@ ADJUSTMENT_NOTE = ("Forward TOTAL return uses auto-adjusted closes — dividends
 class SnapshotRow:
     snapshot_date: str                  # ISO 'YYYY-MM-DD'
     strategy: str
+    universe_id: str                    # manifest id, or 'adhoc:<hex8>' (Item 1)
     ticker: str
     aristos_verdict: str                # BUY|HOLD|SELL|EXCLUDED:<criterion>|UNRATEABLE
     combined_rank: Optional[float]
@@ -68,7 +69,8 @@ class SnapshotRow:
     def to_csv(self) -> dict:
         return {
             "snapshot_date": self.snapshot_date, "strategy": self.strategy,
-            "ticker": self.ticker, "aristos_verdict": self.aristos_verdict,
+            "universe_id": self.universe_id, "ticker": self.ticker,
+            "aristos_verdict": self.aristos_verdict,
             "combined_rank": _num(self.combined_rank), "price": _num(self.price),
             "street_mean": _num(self.street_mean), "n_analysts": _num(self.n_analysts),
             "target_mean": _num(self.target_mean), "notes": self.notes,
@@ -78,6 +80,7 @@ class SnapshotRow:
     def from_csv(cls, d: dict) -> "SnapshotRow":
         return cls(
             snapshot_date=d["snapshot_date"], strategy=d["strategy"],
+            universe_id=(d.get("universe_id") or ""),      # pre-Item-1 rows -> ''
             ticker=d["ticker"], aristos_verdict=d["aristos_verdict"],
             combined_rank=_as_float(d.get("combined_rank")),
             price=_as_float(d.get("price")),
@@ -136,13 +139,14 @@ def build_snapshot_rows(result, consensus: dict[str, StreetConsensus], *,
     too (an exclusion is a call — it gets scored like any other)."""
     iso = snapshot_date.isoformat()
     n_universe = len(result.ranked)
+    universe_id = getattr(result, "meta", {}).get("universe_id", "") or ""
     rows: list[SnapshotRow] = []
 
     def _row(ticker, verdict, combined_rank, note):
         c = consensus.get(ticker)
         return SnapshotRow(
-            snapshot_date=iso, strategy=strategy, ticker=ticker,
-            aristos_verdict=verdict, combined_rank=combined_rank,
+            snapshot_date=iso, strategy=strategy, universe_id=universe_id,
+            ticker=ticker, aristos_verdict=verdict, combined_rank=combined_rank,
             price=(c.current_price if c else None),
             street_mean=(c.recommendation_mean if c else None),
             n_analysts=(c.n_analysts if c else None),
@@ -162,14 +166,37 @@ def build_snapshot_rows(result, consensus: dict[str, StreetConsensus], *,
 # --------------------------------------------------------------------------- #
 # CSV sink — append-only, never rewritten
 # --------------------------------------------------------------------------- #
+def _upgrade_schema(path: Path) -> None:
+    """One-time ADDITIVE column upgrade for an existing CSV whose header predates a new
+    column (e.g. Item 1's ``universe_id``). Reads existing rows, rewrites with the full
+    ``COLUMNS`` header, missing cells -> ''. This preserves every recorded VALUE (no
+    verdict is changed), so it honours 'append-only' — it adds a column, never rewrites
+    history."""
+    with path.open(newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        header = reader.fieldnames or []
+        if set(COLUMNS) <= set(header):
+            return                                    # already current (or a superset)
+        existing = list(reader)
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=COLUMNS, extrasaction="ignore")
+        w.writeheader()
+        for d in existing:
+            w.writerow({c: d.get(c, "") for c in COLUMNS})
+
+
 def append_rows(rows: list[SnapshotRow], path: str | Path) -> Path:
     """APPEND rows to the snapshot CSV (write the header only when creating it). The
-    store is append-only by contract: a re-run adds rows, never rewrites history."""
+    store is append-only by contract: a re-run adds rows, never rewrites history. If an
+    existing file predates a schema column, it is upgraded additively first (values
+    preserved) so appended rows stay aligned."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     new = not p.exists()
+    if not new:
+        _upgrade_schema(p)
     with p.open("a", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=COLUMNS)
+        w = csv.DictWriter(fh, fieldnames=COLUMNS, extrasaction="ignore")
         if new:
             w.writeheader()
         for row in rows:
@@ -484,14 +511,19 @@ def collect_consensus(adapter, tickers: list[str]) -> dict[str, StreetConsensus]
     return out
 
 
-def run_snapshot(universe: list[str], strategy_id: str, *, adapter, today: date,
-                 strategies_dir, out_dir: str | Path) -> tuple[list[SnapshotRow], Path]:
+def run_snapshot(universe: Optional[list[str]], strategy_id: str, *, adapter,
+                 today: date, strategies_dir, out_dir: str | Path,
+                 universe_id: Optional[str] = None,
+                 universes_dir=None) -> tuple[list[SnapshotRow], Path]:
     """Freeze one snapshot: ranker-only pipeline (no LLM, $0) + street consensus for
-    every name (ranked, excluded, unrateable), appended to the CSV. Returns the rows and
-    the CSV path. Adapter is injected — the CLI builds the real one, tests fake it."""
+    every name (ranked, excluded, unrateable), appended to the CSV. Pass a ``universe``
+    list or a ``universe_id`` manifest; the resolved id is stamped on every row. Returns
+    the rows and the CSV path. Adapter is injected — the CLI builds the real one, tests
+    fake it."""
     from .pipeline import run_rank_pipeline
 
     result = run_rank_pipeline(universe, strategy_id, ranker_only=True,
+                               universe_id=universe_id, universes_dir=universes_dir,
                                strategies_dir=strategies_dir, adapter=adapter,
                                today=today)
     tickers = ([r.ticker for r in result.ranked]
