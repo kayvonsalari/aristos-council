@@ -75,6 +75,9 @@ factor, criterion, and guard, generated from the code.
 
 - **Decision core:** `rank_engine.py` (rank-sum + verdict cuts) + `factors.py` (factor
   registry) + `tools/` (all arithmetic; pure, unit-tested) + screens in versioned YAML.
+- **Universes:** declared, versioned manifests (`universes/*.yaml`) — a rank verdict is
+  universe-relative, so every run records the `universe_id` it ranked within (an ad-hoc
+  list is fingerprinted `adhoc:<hash>`).
 - **Orchestration:** LangGraph; `ResearchState` threaded through every node; LLMs behind
   a `Runner` seam (tiered models via `init_chat_model`), so the graph tests end-to-end
   with fakes — no API keys in CI.

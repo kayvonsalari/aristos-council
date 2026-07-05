@@ -96,6 +96,14 @@ rank-relative-vs-absolute-floor gap (a name can rank top-quintile on relative RO
 failing the strategy's own 12% floor — BMY did exactly this until the prefilter).
 Exclusion happens **only on a confirmed FAIL**; a not-evaluated criterion never excludes.
 
+**Borderline tag** (legibility, no logic change). A confirmed fail whose observed value
+is within **5% (relative)** of its threshold is tagged `[borderline]` in the exclusion
+reason, e.g. `screen: min_roic (observed 0.1198 vs threshold 0.12) [borderline]`. The
+margin is the symmetric relative gap `|observed − threshold| / |threshold|`, correct for
+both `min_*` (fail below) and `max_*` (fail above) since an excluded value always sits on
+the failing side. The floor is unchanged — a borderline fail is still a fail; the tag
+just flags a knife-edge miss to the reader (`factors.is_borderline_fail`).
+
 ## 5. Guards
 
 - **UNRATEABLE** — a ticker with failed fundamentals *and* no usable price history (a
@@ -119,12 +127,16 @@ Exclusion happens **only on a confirmed FAIL**; a not-evaluated criterion never 
   payout-on-FCF; until then these exclusions are legible but contestable.
 - **Knife-edge floors**: absolute thresholds exclude at any margin (PFE at ROIC 0.1198 vs
   a 0.12 floor). That is what floors do, but two hundredths of a percent is inside
-  measurement noise for a computed ROIC.
+  measurement noise for a computed ROIC. These near-misses are now flagged `[borderline]`
+  in the exclusion line (§4) — legible, though the floor still governs.
 - **Small universes**: a quintile cut on 6 survivors makes BUY = top 2 — an artifact. Use
   `top_k`, or treat the screen as the product on curated lists.
 - **Trailing data**: every factor is historical. Momentum is the only forward-leaning
   signal; there is no estimate-revision input on free data.
 - **EBIT/market-cap proxy**: understates leverage-adjusted cheapness vs true EBIT/EV.
+  The EBIT/EV upgrade is **diagnostic-gated**: `scripts/check_ev_fields.py` measures
+  whether `totalDebt` and `totalCash` populate for ≥90% of a real universe before the
+  switch is made — pending a live run, the documented proxy stands (do not implement blind).
 
 ## 7. Evidence coverage — what gates the escalation (not the LLM's number) (`coverage.py`)
 
