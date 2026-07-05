@@ -256,9 +256,34 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
         last_close=closes[-1] if closes else None)
 
 
+BORDERLINE_TOL = 0.05    # within 5% (relative) of the threshold
+
+
+def is_borderline_fail(observed, threshold, tol: float = BORDERLINE_TOL) -> bool:
+    """Is a CONFIRMED-fail observation within ``tol`` (relative) of its threshold?
+
+    Legibility only — the floor is unchanged; a borderline fail is still a fail. An
+    excluded observation always sits on the failing side of the threshold (a min_*
+    below it, a max_* above it), so the symmetric relative gap
+    ``|observed - threshold| / |threshold|`` is direction-agnostic AND correct for both
+    (PFE's ROIC 0.1198 vs a 0.12 floor -> 0.17% -> borderline; a max_payout 0.87 vs
+    0.85 -> 2.4% -> borderline; 0.106 vs 0.12 -> 11.7% -> not). Non-numeric observed or
+    a zero threshold -> not borderline (no meaningful margin)."""
+    if not isinstance(observed, (int, float)) or not isinstance(threshold, (int, float)):
+        return False
+    if threshold == 0:
+        return False
+    return abs(observed - threshold) / abs(threshold) <= tol
+
+
 def screen_prefilter_fail(screen_criteria, fi: FactorInputs) -> Optional[str]:
     """Run a SCREEN's criteria on one name; return the NAMED reason for the first
     CONFIRMED FAIL (passed is False), or None if it passes or only ABSTAINS.
+
+    A fail whose observed value is within ``BORDERLINE_TOL`` (5% relative) of its
+    threshold is tagged ``[borderline]`` in the reason — a legibility flag that flows
+    unchanged to every render site (CLI, Universe Run tab, snapshot notes). The floor
+    is NOT relaxed: a borderline fail is still an exclusion.
 
     This is the screen-as-prefilter: for a strategy defined by HARD REQUIREMENTS (a
     defensive holding MUST have covered, real income and intact trend), the screen
@@ -277,5 +302,6 @@ def screen_prefilter_fail(screen_criteria, fi: FactorInputs) -> Optional[str]:
         if c.passed is False:               # confirmed fail only (None abstains)
             obs = (f"{c.observed:.4g}" if isinstance(c.observed, (int, float))
                    else "n/a")
-            return f"screen: {c.name} (observed {obs} vs threshold {c.threshold})"
+            tag = " [borderline]" if is_borderline_fail(c.observed, c.threshold) else ""
+            return f"screen: {c.name} (observed {obs} vs threshold {c.threshold}){tag}"
     return None
