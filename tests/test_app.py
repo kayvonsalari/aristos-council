@@ -271,6 +271,18 @@ def test_universe_markdown_has_sections_from_the_result():
     assert "## Narrative" in md and "ranked #1 on ROIC." in md
 
 
+def test_rank_dropdown_order_baseline_label_and_no_v2_heading():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    rank_dd = next(s for s in at.selectbox if s.label == "Rank strategy")
+    opts = list(rank_dd.options)
+    assert "momentum" in opts[0].lower()                        # flagship first
+    assert any("baseline — for comparison" in o for o in opts)  # magic_formula_v1 labeled
+    heads = " ".join(str(getattr(e, "value", "")) for e in at.subheader)
+    assert "Universe Run — screen, rank, verdict" in heads and "v2" not in heads
+
+
 def test_confirmation_line_states_strategy_universe_and_mode():
     m = {"rank_strategy_id": "magic_formula_v1", "universe_id": "growth_40_v1",
          "council_mode": "ranker-only"}

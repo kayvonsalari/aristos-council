@@ -89,7 +89,7 @@ GOLD = "#52B6A4"  # the single accent
 # Report/History browsers). The council no longer issues the verdict — it narrates the
 # deterministic ranker — so these surfaces are kept for comparison, clearly labeled.
 _LEGACY_BANNER = (
-    "Pre-v2 architecture: an LLM council issued the verdict. Demoted to narrator "
+    "Earlier architecture: an LLM council issued the verdict. Demoted to narrator "
     "after a controlled experiment (README: 'Why this design'). Kept for comparison "
     "and demonstration."
 )
@@ -1037,7 +1037,7 @@ def render_strategy_tab(selected_path: Path | None) -> None:
     # Honest scope: this editor knows only COUNCIL-strategy YAMLs (legacy schemas). The
     # sidebar dropdown already lists council strategies only (the schema-split
     # classifier hides rank + lens screens), so a v2 rank strategy can never land here.
-    st.info("**Edits council-strategy YAMLs (legacy schemas).** Rank strategies (v2) "
+    st.info("**Edits council-strategy YAMLs (legacy schemas).** Rank strategies "
             "are versioned files under `strategies/` — edit via the repo, not here.")
     if selected_path is None:
         st.caption("Pick a strategy in the sidebar to view or version it.")
@@ -1332,7 +1332,7 @@ def render_universe_tab() -> None:
 
     from aristos_council.universe import list_universes
 
-    st.subheader("Universe Run — the v2 rank pipeline")
+    st.subheader("Universe Run — screen, rank, verdict")
     st.caption("Screen → rank → gates issue the verdict of record; the LLM only "
                "narrates. Pick a rank strategy and a universe (a saved manifest or a "
                "custom list).")
@@ -1341,9 +1341,22 @@ def render_universe_tab() -> None:
     if not rank_options:
         st.error(f"No rank strategies found under {STRATEGIES_DIR}")
         return
-    labels = [label for label, _, _ in rank_options]
+    # Present the flagship first, the baseline last (ITEM 7). Unknown ids keep id-order.
+    _rank_priority = ["magic_formula_momentum_v1", "conservative_plus_v1",
+                      "magic_formula_v1"]
+    _rank_label_override = {
+        "magic_formula_v1": "Magic Formula · magic_formula_v1 (baseline — for comparison)",
+    }
+    rank_options = sorted(
+        rank_options,
+        key=lambda o: (_rank_priority.index(o[2].id) if o[2].id in _rank_priority
+                       else len(_rank_priority), o[2].id))
+    labels = [_rank_label_override.get(s.id, label) for label, _, s in rank_options]
     choice = st.selectbox("Rank strategy", labels, key="uni_strategy")
-    rank_strategy = next(s for label, _, s in rank_options if label == choice)
+    rank_strategy = rank_options[labels.index(choice)][2]
+    # Surface the strategy's own YAML description (no duplicated copy).
+    if getattr(rank_strategy, "description", ""):
+        st.caption(rank_strategy.description.strip())
 
     # Universe source: a declared manifest (recorded by id) or a custom paste
     # (recorded as adhoc:<hash>). The manifest is the reproducible, versioned input.
@@ -1509,7 +1522,7 @@ def main() -> None:
     with st.sidebar:
         if show_legacy:
             # --- LEGACY single-ticker council flow (pre-v2) ---
-            st.header("Run a council · Legacy (pre-v2)")
+            st.header("Run a council · Legacy")
             st.caption(_LEGACY_BANNER)
             # normalize_ticker also strips a stray trailing dot ("000660.KS." -> the
             # SK Hynix retrieval bug); upper-cases and trims like the old inline call.
@@ -1547,8 +1560,8 @@ def main() -> None:
         # can set it without a default-conflict warning.
         st.toggle(
             "Show legacy tools", key="show_legacy",
-            help="Reveal the pre-v2 single-ticker council, its Report/History, and the "
-                 "council-strategy editor. Off by default — the app opens as the v2 "
+            help="Reveal the legacy single-ticker council, its Report/History, and the "
+                 "council-strategy editor. Off by default — the app opens as the "
                  "Universe Run.")
 
     if show_legacy and run_clicked and selected_path is not None:
@@ -1591,11 +1604,11 @@ def main() -> None:
         render_universe_tab()
 
     with tab_report:
-        st.info(f"**Legacy (pre-v2).** {_LEGACY_BANNER}")
+        st.info(f"**Legacy.** {_LEGACY_BANNER}")
         _report_tab(ticker)
 
     with tab_history:
-        st.info(f"**Legacy (pre-v2).** {_LEGACY_BANNER}")
+        st.info(f"**Legacy.** {_LEGACY_BANNER}")
         render_history(ticker)
 
     with tab_strategy:
