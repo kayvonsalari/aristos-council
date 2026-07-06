@@ -72,7 +72,7 @@ strategy YAML, not code. Current registry (thresholds shown from the live strate
 | Criterion | Threshold (current) | What it catches |
 |---|---|---|
 | `min_dividend_yield` | 0.015 | Names not actually paying meaningful income (WMT at 0.9%). |
-| `max_payout_ratio_fcf` | 0.80 | Coverage measured against **cash**: dividends_paid / free cash flow (FCF = free_cash_flow, else operating_cash_flow + capex). Motivation: the GAAP-EPS basis wrongly excluded sound payers whose earnings carry non-cash charges — **ABBV 3.26**, PEP 0.89, KMB 0.98, MRK 0.94 on EPS, all covered on cash. FCF ≤ 0 abstains (utilities); EPS payout is a MARKED fallback when cash-flow data is absent. **0.80 against FCF follows the common 70–80% cash-coverage prudence band; like all thresholds it is a stated convention, never fitted to outcomes.** (The EPS `max_payout_ratio` at 0.85 stays in the registry for other strategies.) |
+| `max_payout_ratio_fcf` | 0.80 | Coverage measured against **cash, through-cycle**: CURRENT-year dividends_paid / the MEAN free cash flow over the last up-to-4 fiscal years (≥2 required; FCF = free_cash_flow, else operating_cash_flow + capex). Single-year FCF carries one-off cash events (KO's fairlife earnout crushed one year to a 2.81 payout) exactly as GAAP earnings carried non-cash charges (ABBV 3.26); the through-cycle mean, matching ROIC's window, dampens both — the numerator stays current-year. Mean FCF ≤ 0 abstains (utilities); EPS payout is a MARKED fallback (< 2 years of FCF history). **0.80 against FCF follows the common 70–80% cash-coverage prudence band; like all thresholds it is a stated convention, never fitted to outcomes.** (The EPS `max_payout_ratio` at 0.85 stays in the registry for other strategies.) |
 | `min_market_cap` | strategy-specific | Micro-cap noise. |
 | `min_price_momentum` | −0.10 (12m) | **Breakdowns, not flatness**: a defensive down >10% on the year is breaking (T at −26%); a quiet staple down 0–10% passes. The ranker handles the gradient among survivors. |
 | `min_dividend_streak` | 10 years | Cut history: T (cut 2022 → streak 0) and MMM (cut 2024) fail; PG/KO/JNJ/MCD pass. |
@@ -122,11 +122,13 @@ just flags a knife-edge miss to the reader (`factors.is_borderline_fail`).
 
 ## 6. Known limitations (measured, not hypothetical)
 
-- **GAAP payout noise — resolved for the defensive screen**: measuring payout against
-  GAAP EPS wrongly excluded sound payers whose earnings carry non-cash charges (PEP 0.89,
-  KMB 0.98, MRK 0.94, ABBV 3.26). `conservative_screen_v1` now measures coverage against
-  free cash flow (`max_payout_ratio_fcf`, §4); the EPS basis remains only as a MARKED
-  fallback when cash-flow data is absent. Refined, not deleted.
+- **GAAP payout noise — the honest post-validation account**: the FCF basis rescued the
+  true accounting-noise victims (AbbVie GAAP 3.26 → FCF ~0.5; Merck similar). PepsiCo
+  (0.87) and Kimberly-Clark (1.57) fail on cash as well — those exclusions are CORRECT,
+  not noise; the original claim that they were GAAP victims was half wrong and the
+  pre-registered validation caught it. `conservative_screen_v1` measures coverage against
+  through-cycle free cash flow (`max_payout_ratio_fcf`, §4); the EPS basis remains a
+  MARKED fallback when cash-flow history is too short.
 - **Knife-edge floors**: absolute thresholds exclude at any margin (PFE at ROIC 0.1198 vs
   a 0.12 floor). That is what floors do, but two hundredths of a percent is inside
   measurement noise for a computed ROIC. These near-misses are now flagged `[borderline]`
