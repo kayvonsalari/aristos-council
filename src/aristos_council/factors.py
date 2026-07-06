@@ -381,8 +381,8 @@ def screen_prefilter_fail(screen_criteria, fi: FactorInputs) -> Optional[str]:
     return screen_evaluate(screen_criteria, fi)[0]
 
 
-# Display labels for a criterion's measurement basis (ITEM: payout-on-FCF).
-_BASIS_LABEL = {"fcf": "FCF", "eps": "EPS fallback"}
+# Display labels for a criterion's measurement basis (payout-on-FCF, through-cycle).
+_BASIS_LABEL = {"fcf": "FCF (4y mean)", "eps": "EPS fallback"}
 
 
 def screen_evaluate(screen_criteria, fi: FactorInputs):

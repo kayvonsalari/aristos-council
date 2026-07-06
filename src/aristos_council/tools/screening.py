@@ -237,38 +237,56 @@ def max_payout_criterion(
     )
 
 
-def effective_free_cash_flow(f: Fundamentals) -> float | None:
-    """Free cash flow for the payout-coverage basis: the provider's ``free_cash_flow``
-    when present, else derived ``operating_cash_flow + capital_expenditure`` (yfinance
-    CapEx is a negative outflow). None when neither is available."""
-    if f.free_cash_flow is not None:
-        return f.free_cash_flow
-    if f.operating_cash_flow is not None and f.capital_expenditure is not None:
-        return f.operating_cash_flow + f.capital_expenditure
-    return None
+# Through-cycle window for the FCF payout denominator — matches ROIC's 4-year smoothing.
+_FCF_WINDOW = 4
+
+
+def fcf_annual_series(f: Fundamentals) -> list[float]:
+    """Newest-first annual free cash flow: the provider's ``free_cash_flow_annual`` row
+    if present, else per-year ``operating_cash_flow_annual + capital_expenditure_annual``
+    (yfinance CapEx is a negative outflow). Empty when neither is available."""
+    if f.free_cash_flow_annual:
+        return list(f.free_cash_flow_annual)
+    ocf, capex = f.operating_cash_flow_annual, f.capital_expenditure_annual
+    if ocf and capex:
+        return [ocf[i] + capex[i] for i in range(min(len(ocf), len(capex)))]
+    return []
+
+
+def through_cycle_fcf(f: Fundamentals, *, window: int = _FCF_WINDOW):
+    """(mean FCF over the last up-to-``window`` fiscal years, n_years). A single crushed
+    or inflated year is dampened — single-year FCF carries one-off cash events (KO's
+    fairlife earnout) exactly as GAAP earnings carried non-cash ones."""
+    series = fcf_annual_series(f)[:window]
+    if not series:
+        return None, 0
+    return sum(series) / len(series), len(series)
 
 
 def max_payout_fcf_criterion(
     fundamentals: Fundamentals, *, max_payout: float
 ) -> CriterionResult:
     """Dividend coverage measured against CASH, not GAAP earnings (dividends are paid
-    from cash). ``dividends_paid / free_cash_flow`` at or below the ceiling.
+    from cash): CURRENT-year ``dividends_paid`` / the THROUGH-CYCLE MEAN free cash flow
+    (last up-to-4 fiscal years) at or below the ceiling. The numerator stays current
+    (today's dividend safety); only the denominator smooths — single-year FCF carries
+    one-off cash events (KO's fairlife earnout, JNJ settlements) as GAAP earnings carried
+    non-cash charges (ABBV 3.26), so the through-cycle mean (matching ROIC's window)
+    dampens both.
 
     Semantics — each a lesson already paid for:
     - dividend_per_share NULL -> NOT EVALUATED (data gap, hard rule 3).
-    - NO current dividend (dps == 0) -> PASS trivially: there is no payout to sustain,
-      and excluding a non-payer is min_dividend_yield's job, not this one's.
-    - FCF <= 0 -> NOT EVALUATED (abstain, NEVER fail): negative FCF from investment is
-      not dividend distress (the utilities lesson).
-    - FCF > 0 with dividends_paid -> the FCF basis, ``basis='fcf'``.
-    - FCF unusable (missing, or the dividends_paid numerator missing) but a GAAP payout
-      is computable -> the EPS basis as a MARKED fallback, ``basis='eps'`` (same
-      discipline as earnings_yield's proxy; the report names it).
+    - NO current dividend (dps == 0) -> PASS trivially (non-payers are yield's job).
+    - >= 2 years of FCF with a MEAN <= 0 -> NOT EVALUATED (abstain, NEVER fail — the
+      utilities lesson, now through-cycle).
+    - >= 2 years of FCF (mean > 0) with dividends_paid -> the FCF basis, ``basis='fcf'``.
+    - < 2 years of FCF, or the numerator missing, but a GAAP payout is computable -> the
+      EPS basis as a MARKED fallback, ``basis='eps'``.
     """
     name = "max_payout_ratio_fcf"
     if fundamentals.dividend_per_share is None:
         return CriterionResult(name=name, passed=None, observed=None,
-                               threshold=max_payout,
+                               threshold=max_payout, basis="abstained",
                                note="not evaluated: dividend figure unavailable "
                                     "(dividend_per_share is null) — a data gap")
     if not _has_current_dividend(fundamentals):
@@ -276,27 +294,30 @@ def max_payout_fcf_criterion(
                                threshold=max_payout,
                                note="no current dividend — trivially covered "
                                     "(exclusion of non-payers is min_dividend_yield's job)")
-    fcf = effective_free_cash_flow(fundamentals)
-    if fcf is not None and fcf <= 0:
-        return CriterionResult(name=name, passed=None, observed=None,
-                               threshold=max_payout,
-                               note="not evaluated: free cash flow ≤ 0 (investment-"
-                                    "driven, not dividend distress) — the utilities lesson")
-    if fcf is not None and fcf > 0 and fundamentals.dividends_paid is not None:
-        payout = fundamentals.dividends_paid / fcf
+    mean_fcf, n_years = through_cycle_fcf(fundamentals)
+    if n_years >= 2 and mean_fcf is not None and fundamentals.dividends_paid is not None:
+        if mean_fcf <= 0:
+            return CriterionResult(name=name, passed=None, observed=None,
+                                   threshold=max_payout, basis="abstained",
+                                   note=f"not evaluated: {n_years}y-mean free cash flow "
+                                        "≤ 0 (investment-driven, not dividend distress) "
+                                        "— the utilities lesson")
+        payout = fundamentals.dividends_paid / mean_fcf
         return CriterionResult(name=name, passed=payout <= max_payout, observed=payout,
                                threshold=max_payout, basis="fcf",
-                               note="FCF basis: dividends_paid / free_cash_flow")
-    # FCF unusable -> EPS payout as a MARKED fallback, when computable.
+                               note=f"FCF basis: current dividends_paid / {n_years}y-mean "
+                                    "free cash flow")
+    # < 2 years of FCF, or the numerator missing -> EPS payout as a MARKED fallback.
     p = fundamentals.payout_ratio
     if p is not None:
         return CriterionResult(name=name, passed=p <= max_payout, observed=p,
                                threshold=max_payout, basis="eps",
-                               note="EPS-fallback basis (free cash flow unavailable) — "
-                                    "a MARKED GAAP proxy")
+                               note="EPS-fallback basis (< 2 years of free-cash-flow "
+                                    "history) — a MARKED GAAP proxy")
     return CriterionResult(name=name, passed=None, observed=None, threshold=max_payout,
-                           note="not evaluated: neither a free-cash-flow nor a GAAP "
-                                "payout basis is available")
+                           basis="abstained",
+                           note="not evaluated: neither a through-cycle free-cash-flow "
+                                "nor a GAAP payout basis is available")
 
 
 def min_market_cap_criterion(

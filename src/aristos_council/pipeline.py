@@ -537,7 +537,7 @@ def format_factor_integrity(result: RankPipelineResult) -> list[str]:
 # Screen-criterion measurement-basis disclosure (payout-on-FCF). Payout is a SCREEN
 # criterion, not a rank factor, so its basis reads across ALL screened names (ranked or
 # excluded), not just the ranked ones — its own line, same format as factor integrity.
-_BASIS_DISPLAY = {"fcf": "FCF", "eps": "EPS fallback"}
+_BASIS_DISPLAY = {"fcf": "FCF (4y mean)", "eps": "EPS fallback"}
 
 
 def screen_basis_integrity(result: RankPipelineResult) -> list[dict]:
@@ -556,18 +556,21 @@ def screen_basis_integrity(result: RankPipelineResult) -> list[dict]:
 
 
 def format_screen_basis_entry(e: dict) -> str:
-    """One criterion's basis breakdown, e.g. 'FCF 14/16 · EPS fallback 2/16 (KMB, PEP)'
-    (fallback tickers named when ≤5, counted otherwise)."""
+    """One criterion's basis breakdown, e.g.
+    'FCF (4y mean) 11/13 · EPS fallback 1/13 (X) · abstained 1 (Y)' — primary basis first,
+    marked fallbacks (with names when ≤5) next, abstentions last as a bare count."""
     total, bb = e["total"], e["by_basis"]
-    # Primary basis (fcf) first, then fallbacks (eps), each with names when ≤5.
-    order = ([b for b in bb if b == "fcf"]
-             + sorted(b for b in bb if b != "fcf"))
     parts = []
-    for b in order:
+    if "fcf" in bb:
+        parts.append(f"{_BASIS_DISPLAY['fcf']} {len(bb['fcf'])}/{total}")
+    for b in sorted(x for x in bb if x not in ("fcf", "abstained")):
         tks = bb[b]
-        label = _BASIS_DISPLAY.get(b, b)
-        named = f" ({', '.join(tks)})" if b != "fcf" and len(tks) <= 5 else ""
-        parts.append(f"{label} {len(tks)}/{total}{named}")
+        named = f" ({', '.join(tks)})" if len(tks) <= 5 else ""
+        parts.append(f"{_BASIS_DISPLAY.get(b, b)} {len(tks)}/{total}{named}")
+    if "abstained" in bb:
+        tks = bb["abstained"]
+        named = f" ({', '.join(tks)})" if len(tks) <= 5 else ""
+        parts.append(f"abstained {len(tks)}{named}")
     return " · ".join(parts)
 
 

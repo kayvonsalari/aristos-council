@@ -137,13 +137,18 @@ class Fundamentals:
     pe_ratio: float | None = None
     free_cash_flow: float | None = None
     # Cash-flow-statement lines for the FCF-basis payout criterion (max_payout_ratio_fcf).
-    # dividends_paid is the ABSOLUTE cash paid in dividends; free cash flow is used
-    # directly when present, else derived operating_cash_flow + capital_expenditure
-    # (yfinance CapEx is negative). All None when the provider omits the cash-flow
-    # statement -> the criterion falls back to the EPS payout basis (marked).
+    # dividends_paid is the CURRENT-year ABSOLUTE cash paid in dividends (the numerator —
+    # today's dividend safety, not smoothed). The *_annual lists are NEWEST-FIRST annual
+    # series used for the THROUGH-CYCLE mean FCF denominator (single-year FCF carries
+    # one-off cash events, e.g. KO's fairlife earnout, exactly as GAAP carried non-cash
+    # ones); the scalars remain as a single-year convenience. All None/empty when the
+    # provider omits the cash-flow statement -> the criterion falls back to EPS (marked).
     dividends_paid: float | None = None
     operating_cash_flow: float | None = None
     capital_expenditure: float | None = None
+    free_cash_flow_annual: list[float] = field(default_factory=list)
+    operating_cash_flow_annual: list[float] = field(default_factory=list)
+    capital_expenditure_annual: list[float] = field(default_factory=list)
     # Consecutive years of dividend increases — the defining aristocrat test.
     # Most free providers DON'T supply this; see adapter notes.
     years_dividend_growth: int | None = None

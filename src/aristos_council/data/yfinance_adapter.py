@@ -168,6 +168,12 @@ class YFinanceAdapter(MarketDataAdapter):
                 cashflow, "Operating Cash Flow", "Total Cash From Operating Activities"),
             capital_expenditure=_latest_cashflow(
                 cashflow, "Capital Expenditure", "Capital Expenditures"),
+            # Newest-first annual series for the THROUGH-CYCLE mean FCF denominator.
+            free_cash_flow_annual=_cashflow_series(cashflow, "Free Cash Flow"),
+            operating_cash_flow_annual=_cashflow_series(
+                cashflow, "Operating Cash Flow", "Total Cash From Operating Activities"),
+            capital_expenditure_annual=_cashflow_series(
+                cashflow, "Capital Expenditure", "Capital Expenditures"),
             # Annual series, newest-first, NaN/empty dropped (Sprint 4B).
             total_revenue=_annual_series(income, "Total Revenue"),
             operating_income=_annual_series(income, "Operating Income"),
@@ -326,6 +332,15 @@ def _latest_cashflow(df: object, *labels: str) -> float | None:
 
 def _abs_or_none(v: float | None) -> float | None:
     return None if v is None else abs(v)
+
+
+def _cashflow_series(df: object, *labels: str) -> list[float]:
+    """Newest-first annual series for the first matching cash-flow row label."""
+    for label in labels:
+        series = _annual_series(df, label)
+        if series:
+            return series
+    return []
 
 
 def _annual_series(df: object, label: str) -> list[float]:
