@@ -136,6 +136,14 @@ class Fundamentals:
     eps: float | None = None
     pe_ratio: float | None = None
     free_cash_flow: float | None = None
+    # Cash-flow-statement lines for the FCF-basis payout criterion (max_payout_ratio_fcf).
+    # dividends_paid is the ABSOLUTE cash paid in dividends; free cash flow is used
+    # directly when present, else derived operating_cash_flow + capital_expenditure
+    # (yfinance CapEx is negative). All None when the provider omits the cash-flow
+    # statement -> the criterion falls back to the EPS payout basis (marked).
+    dividends_paid: float | None = None
+    operating_cash_flow: float | None = None
+    capital_expenditure: float | None = None
     # Consecutive years of dividend increases — the defining aristocrat test.
     # Most free providers DON'T supply this; see adapter notes.
     years_dividend_growth: int | None = None

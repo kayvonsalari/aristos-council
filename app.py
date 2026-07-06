@@ -1213,12 +1213,20 @@ def _universe_markdown(result) -> str:
             lines.append("| " + " | ".join(cells) + " |")
     else:
         lines.append("_(no names survived the screen)_")
-    from aristos_council.pipeline import factor_integrity, format_integrity_entry
+    from aristos_council.pipeline import (
+        factor_integrity, format_integrity_entry,
+        format_screen_basis_entry, screen_basis_integrity,
+    )
 
     entries = factor_integrity(result)
     if entries:
         lines += ["", "## Factor integrity", ""]
         lines += [f"- **{e['factor']}** — {format_integrity_entry(e)}" for e in entries]
+    basis_entries = screen_basis_integrity(result)
+    if basis_entries:
+        lines += ["", "## Screen basis", ""]
+        lines += [f"- **{e['criterion']}** — {format_screen_basis_entry(e)}"
+                  for e in basis_entries]
     if result.excluded:
         lines += ["", "## Excluded (screen / cap / sector)", ""]
         lines += [f"- **{t}** — {why}" for t, why in result.excluded]
@@ -1267,7 +1275,10 @@ def _render_universe_result(result) -> None:
 
     # 2b — FACTOR INTEGRITY: which computation path produced each factor per name
     # (ITEM 1) — EV vs EBIT/mcap proxy vs abstained, no longer silent.
-    from aristos_council.pipeline import factor_integrity, format_integrity_entry
+    from aristos_council.pipeline import (
+        factor_integrity, format_integrity_entry,
+        format_screen_basis_entry, screen_basis_integrity,
+    )
 
     entries = factor_integrity(result)
     if entries:
@@ -1276,6 +1287,17 @@ def _render_universe_result(result) -> None:
                    "fallback (stale cache / missing fields) now shows in plain text.")
         for e in entries:
             st.markdown(f"- **{e['factor']}** — {format_integrity_entry(e)}")
+
+    # 2c — SCREEN BASIS: the measurement basis each screen criterion used (payout FCF
+    # vs EPS fallback) across the screened names.
+    basis_entries = screen_basis_integrity(result)
+    if basis_entries:
+        st.subheader("Screen basis")
+        st.caption("Which measurement basis each screen criterion used across the "
+                   "screened names — a marked fallback (e.g. EPS when FCF is absent) "
+                   "shows in plain text.")
+        for e in basis_entries:
+            st.markdown(f"- **{e['criterion']}** — {format_screen_basis_entry(e)}")
 
     # 3 — Excluded (screen / cap / sector / payout): a neutral table.
     if result.excluded:

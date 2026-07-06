@@ -34,6 +34,7 @@ from typing import Callable
 
 from ...data.adapter import DividendEvent, Fundamentals
 from ..screening import (
+    max_payout_fcf_criterion,
     CriterionResult,
     ScreenResult,
     max_payout_criterion,
@@ -135,6 +136,10 @@ def _min_dividend_yield(ev: Evidence, threshold: float) -> CriterionResult:
 
 def _max_payout_ratio(ev: Evidence, threshold: float) -> CriterionResult:
     return max_payout_criterion(ev.fundamentals, max_payout=threshold)
+
+
+def _max_payout_ratio_fcf(ev: Evidence, threshold: float) -> CriterionResult:
+    return max_payout_fcf_criterion(ev.fundamentals, max_payout=threshold)
 
 
 def _min_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
@@ -303,6 +308,17 @@ _CRITERIA: tuple[Criterion, ...] = (
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("payout_ratio", "dividend_per_share"),
+    ),
+    Criterion(
+        "max_payout_ratio_fcf", _max_payout_ratio_fcf,
+        label="Maximum payout ratio (cash / FCF basis)",
+        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.05,
+                          default=0.80),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+        fundamentals_fields=("dividends_paid", "free_cash_flow", "operating_cash_flow",
+                             "capital_expenditure", "payout_ratio",
+                             "dividend_per_share"),
     ),
     Criterion(
         "min_market_cap", _min_market_cap,

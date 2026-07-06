@@ -107,7 +107,7 @@ def test_equivalent_to_legacy_screen(fund, divs, last_close):
 def test_registry_holds_dividend_and_growth_criteria():
     assert set(REGISTRY) == {
         # dividend (4A)
-        "min_dividend_yield", "max_payout_ratio",
+        "min_dividend_yield", "max_payout_ratio", "max_payout_ratio_fcf",
         "min_market_cap", "min_dividend_growth_streak",
         # growth / quality (4B)
         "min_revenue_cagr", "min_roic", "max_peg_ratio",

@@ -378,15 +378,35 @@ def screen_prefilter_fail(screen_criteria, fi: FactorInputs) -> Optional[str]:
     gap. (Requiring income IS the strategy's intent here, so a genuine non-payer
     failing min_dividend_yield is CORRECT — distinct from the growth-factor rule that
     never punishes a non-dividend name.)"""
+    return screen_evaluate(screen_criteria, fi)[0]
+
+
+# Display labels for a criterion's measurement basis (ITEM: payout-on-FCF).
+_BASIS_LABEL = {"fcf": "FCF", "eps": "EPS fallback"}
+
+
+def screen_evaluate(screen_criteria, fi: FactorInputs):
+    """Run a screen ONCE and return ``(first_confirmed_fail_reason | None, bases)`` where
+    ``bases`` maps each criterion that reported a measurement basis to it (e.g.
+    ``{"max_payout_ratio_fcf": "fcf"}``). The fail reason NAMES the basis for a
+    multi-basis criterion and carries the borderline tag — so both the exclusion line and
+    the aggregate basis count read from the SAME single evaluation."""
     from .tools.criteria.registry import Evidence, run_screen
     if fi.fundamentals is None:
-        return None
+        return None, {}
     ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
                   return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
+    reason = None
+    bases: dict[str, str] = {}
     for c in run_screen(screen_criteria, ev, ticker=fi.ticker).criteria:
-        if c.passed is False:               # confirmed fail only (None abstains)
+        basis = getattr(c, "basis", "") or ""
+        if basis:
+            bases[c.name] = basis
+        if reason is None and c.passed is False:      # first confirmed fail (None abstains)
             obs = (f"{c.observed:.4g}" if isinstance(c.observed, (int, float))
                    else "n/a")
-            tag = " [borderline]" if is_borderline_fail(c.observed, c.threshold) else ""
-            return f"screen: {c.name} (observed {obs} vs threshold {c.threshold}){tag}"
-    return None
+            basis_tag = f" [{_BASIS_LABEL.get(basis, basis)}]" if basis else ""
+            border = " [borderline]" if is_borderline_fail(c.observed, c.threshold) else ""
+            reason = (f"screen: {c.name} (observed {obs} vs threshold "
+                      f"{c.threshold}){basis_tag}{border}")
+    return reason, bases

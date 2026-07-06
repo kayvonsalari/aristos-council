@@ -20,8 +20,11 @@ description: >-
 criteria:
   - name: min_dividend_yield        # defensive income — modest, not a high-yield trap
     threshold: 0.015
-  - name: max_payout_ratio          # coverage / sustainability, not stretched
-    threshold: 0.85
+  - name: max_payout_ratio_fcf      # coverage measured against CASH (FCF), not GAAP EPS
+    threshold: 0.80                 # 0.80 vs FCF ~ the 70-80% cash-coverage prudence band.
+                                    # Fixes PEP/KMB/MRK-class wrong exclusions (sound payers
+                                    # whose GAAP EPS carries non-cash charges). Abstains on
+                                    # FCF<=0 (utilities); EPS basis is a MARKED fallback.
   - name: min_market_cap            # large-cap defensive scope
     threshold: 5000000000
   - name: min_price_momentum        # catch BREAKDOWNS, not flatness: a name down >10%

@@ -47,7 +47,7 @@ from .factors import (
     is_payout_uncovered,
     is_sector_excluded,
     is_unrateable,
-    screen_prefilter_fail,
+    screen_evaluate,
 )
 from .persistence.reports import RunReport, report_from_state
 from .rank_engine import FactorSpec, RankedTicker, rank_universe
@@ -97,6 +97,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     rows: list[tuple[str, dict]] = []
     excluded: list[tuple[str, str]] = []
     sources_by_ticker: dict[str, dict[str, str]] = {}
+    screen_bases: dict[str, dict[str, str]] = {}     # ticker -> {criterion: basis}
     for t in universe:
         # A TRANSIENT fetch failure (429/timeout/5xx, unrecovered after retries) is NOT
         # absent data — abort THIS name with a fetch-error status (rerun), never mislabel
@@ -126,9 +127,12 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
                                 f"{rank_strategy.max_payout_ratio:.0%})"))
             continue
         # SCREEN-AS-PREFILTER: only RANK names that already PASS the defensive
-        # definition (the council screen). One source of truth; floors enforced.
+        # definition (the council screen). One source of truth; floors enforced. Capture
+        # each name's per-criterion measurement basis (payout FCF/EPS) for the report.
         if prefilter_criteria is not None:
-            reason = screen_prefilter_fail(prefilter_criteria, fi)
+            reason, bases = screen_evaluate(prefilter_criteria, fi)
+            if bases:
+                screen_bases[t] = bases
             if reason is not None:
                 excluded.append((t, reason))
                 continue
@@ -146,7 +150,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     for r in ranked:
         if r.ticker in sources_by_ticker:
             r.factor_sources = sources_by_ticker[r.ticker]
-    return ranked, excluded
+    return ranked, excluded, screen_bases
 
 
 def _shortlist(ranked: list[RankedTicker], runs_on: str, k: int) -> list[RankedTicker]:
@@ -211,8 +215,8 @@ def run_pipeline(
     # ranking — ranker and council share one defensive definition.
     prefilter = (screen_strategy.criteria
                  if getattr(rank_strategy, "prefilter_screen", False) else None)
-    ranked, excluded = _rank_stage(universe, rank_strategy, adapter, today=today,
-                                   prefilter_criteria=prefilter)
+    ranked, excluded, _ = _rank_stage(universe, rank_strategy, adapter, today=today,
+                                      prefilter_criteria=prefilter)
     shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
 
     outcomes = _council_stage(
@@ -254,6 +258,10 @@ class RankPipelineResult:
     # Names that hit a TRANSIENT fetch failure this run (ITEM 5) — aborted, NOT ranked
     # and NOT UNRATEABLE. A rerun should recover them; surfaced on its own axis.
     fetch_errors: list[tuple[str, str]] = field(default_factory=list)
+    # Per-name screen-criterion measurement basis over ALL screened names (ranked or
+    # excluded), e.g. {"PEP": {"max_payout_ratio_fcf": "fcf"}} — the payout-basis
+    # disclosure counts across this.
+    screen_bases: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 def _pipeline_header(mode: str) -> str:
@@ -349,7 +357,7 @@ def run_rank_pipeline(
         progress("Screening & ranking the universe…")
     prefilter = (screen_strategy.criteria
                  if getattr(rank_strategy, "prefilter_screen", False) else None)
-    ranked, prerank_excluded = _rank_stage(
+    ranked, prerank_excluded, screen_bases = _rank_stage(
         universe, rank_strategy, adapter, today=today, prefilter_criteria=prefilter)
     live = [r for r in ranked if not r.excluded]
     excluded, unrateable, fetch_errors = _split_exclusions(ranked, prerank_excluded)
@@ -403,7 +411,7 @@ def run_rank_pipeline(
         ranked=live, excluded=excluded, unrateable=unrateable, narratives=narratives,
         header=_pipeline_header(executed_mode), meta=meta, council_mode=executed_mode,
         council=council, shortlist=[r.ticker for r in shortlist],
-        fetch_errors=fetch_errors)
+        fetch_errors=fetch_errors, screen_bases=screen_bases)
 
     if csv_path and not ranker_only and mode != "narrator":
         _append_agreement_csv(result, Path(csv_path))
@@ -526,6 +534,55 @@ def format_factor_integrity(result: RankPipelineResult) -> list[str]:
     return lines
 
 
+# Screen-criterion measurement-basis disclosure (payout-on-FCF). Payout is a SCREEN
+# criterion, not a rank factor, so its basis reads across ALL screened names (ranked or
+# excluded), not just the ranked ones — its own line, same format as factor integrity.
+_BASIS_DISPLAY = {"fcf": "FCF", "eps": "EPS fallback"}
+
+
+def screen_basis_integrity(result: RankPipelineResult) -> list[dict]:
+    """Per screen-criterion, the count of names measured on each basis across the whole
+    screened universe: ``[{criterion, total, by_basis: {basis: [tickers]}}]``."""
+    by_criterion: dict[str, dict[str, list[str]]] = {}
+    for ticker, crit_bases in result.screen_bases.items():
+        for crit, basis in crit_bases.items():
+            by_criterion.setdefault(crit, {}).setdefault(basis, []).append(ticker)
+    out = []
+    for crit in sorted(by_criterion):
+        by_basis = by_criterion[crit]
+        total = sum(len(v) for v in by_basis.values())
+        out.append({"criterion": crit, "total": total, "by_basis": by_basis})
+    return out
+
+
+def format_screen_basis_entry(e: dict) -> str:
+    """One criterion's basis breakdown, e.g. 'FCF 14/16 · EPS fallback 2/16 (KMB, PEP)'
+    (fallback tickers named when ≤5, counted otherwise)."""
+    total, bb = e["total"], e["by_basis"]
+    # Primary basis (fcf) first, then fallbacks (eps), each with names when ≤5.
+    order = ([b for b in bb if b == "fcf"]
+             + sorted(b for b in bb if b != "fcf"))
+    parts = []
+    for b in order:
+        tks = bb[b]
+        label = _BASIS_DISPLAY.get(b, b)
+        named = f" ({', '.join(tks)})" if b != "fcf" and len(tks) <= 5 else ""
+        parts.append(f"{label} {len(tks)}/{total}{named}")
+    return " · ".join(parts)
+
+
+def format_screen_basis(result: RankPipelineResult) -> list[str]:
+    """The screen-criterion basis block as text lines, e.g.
+    'payout (max_payout_ratio_fcf): FCF 14/16 · EPS fallback 2/16 (KMB, PEP)'."""
+    entries = screen_basis_integrity(result)
+    if not entries:
+        return []
+    lines = ["=== SCREEN BASIS (measurement basis across the screened names) ==="]
+    for e in entries:
+        lines.append(f"  {e['criterion']}: " + format_screen_basis_entry(e))
+    return lines
+
+
 def format_cli_report(result: RankPipelineResult) -> str:
     """The console report the CLI prints — built from the structured result so the UI
     and CLI show the SAME thing. Mirrors the legacy run_pipeline.py layout."""
@@ -546,6 +603,10 @@ def format_cli_report(result: RankPipelineResult) -> str:
     if integrity:
         lines.append("")
         lines.extend(integrity)
+    basis_block = format_screen_basis(result)
+    if basis_block:
+        lines.append("")
+        lines.extend(basis_block)
     if result.excluded:
         lines.append("")
         lines.append("  Excluded (not ranked):")

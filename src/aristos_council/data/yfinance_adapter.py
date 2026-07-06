@@ -122,6 +122,12 @@ class YFinanceAdapter(MarketDataAdapter):
             balance = tk.balance_sheet
         except Exception:
             balance = None
+        # Cash-flow statement for the FCF-basis payout criterion (best-effort, like the
+        # others): absence -> None fields -> the criterion falls back to the EPS basis.
+        try:
+            cashflow = tk.cashflow
+        except Exception:
+            cashflow = None
 
         # Recovered DPS, reused for the payout derivation below (same source the
         # screen sees), so dividend yield AND payout survive the summaryDetail gap.
@@ -154,6 +160,14 @@ class YFinanceAdapter(MarketDataAdapter):
             total_debt=_as_float(info.get("totalDebt")),
             debt_to_equity=_as_float(info.get("debtToEquity")),
             total_cash=_as_float(info.get("totalCash")),   # EV = mcap + debt − cash
+            # Cash-flow-statement lines for the FCF payout basis (newest column). Cash
+            # dividends paid is a NEGATIVE outflow -> stored as its absolute value.
+            dividends_paid=_abs_or_none(_latest_cashflow(
+                cashflow, "Cash Dividends Paid", "Common Stock Dividend Paid")),
+            operating_cash_flow=_latest_cashflow(
+                cashflow, "Operating Cash Flow", "Total Cash From Operating Activities"),
+            capital_expenditure=_latest_cashflow(
+                cashflow, "Capital Expenditure", "Capital Expenditures"),
             # Annual series, newest-first, NaN/empty dropped (Sprint 4B).
             total_revenue=_annual_series(income, "Total Revenue"),
             operating_income=_annual_series(income, "Operating Income"),
@@ -297,6 +311,21 @@ def _as_float(value: object) -> float | None:
 def _as_int(value: object) -> int | None:
     f = _as_float(value)
     return None if f is None else int(f)
+
+
+def _latest_cashflow(df: object, *labels: str) -> float | None:
+    """The newest cash-flow-statement value for the first matching row label (yfinance
+    renames these across versions, hence the aliases). None if the frame or every label
+    is absent."""
+    for label in labels:
+        series = _annual_series(df, label)
+        if series:
+            return series[0]                          # _annual_series is newest-first
+    return None
+
+
+def _abs_or_none(v: float | None) -> float | None:
+    return None if v is None else abs(v)
 
 
 def _annual_series(df: object, label: str) -> list[float]:

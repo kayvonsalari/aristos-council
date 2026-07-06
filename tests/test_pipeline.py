@@ -268,7 +268,9 @@ def test_conservative_screen_passes_sound_defensive_fails_thin_coverage():
         Evidence(fundamentals=sound, last_close=100.0, return_12m=0.05),
         ticker="JNJ").criteria}
     assert by["min_dividend_yield"].passed is True       # 2/100 = 2% >= 1.5%
-    assert by["max_payout_ratio"].passed is True
+    # FCF basis criterion; no cash-flow data on the fixture -> EPS-fallback basis, marked.
+    assert by["max_payout_ratio_fcf"].passed is True
+    assert by["max_payout_ratio_fcf"].basis == "eps"
     assert by["min_price_momentum"].passed is True       # not in a downtrend
 
     thin = Fundamentals(ticker="XYZ", market_cap=1e10, dividend_per_share=2.0,
@@ -277,7 +279,7 @@ def test_conservative_screen_passes_sound_defensive_fails_thin_coverage():
         screen.criteria,
         Evidence(fundamentals=thin, last_close=100.0, return_12m=0.05),
         ticker="XYZ").criteria}
-    assert r2["max_payout_ratio"].passed is False        # a REAL defensive concern
+    assert r2["max_payout_ratio_fcf"].passed is False    # a REAL defensive concern (0.95 > 0.80)
 
 
 def test_specialist_prompt_is_strategy_relative_and_garp_free():
@@ -324,7 +326,9 @@ def _payout_rank_stage(payouts: dict, max_payout):
         def get_dividend_history(self, ticker, *, start, end):
             return []
 
-    return _rank_stage(list(payouts), _Strat(), _A(), today=date(2026, 6, 30))
+    ranked, excluded, _ = _rank_stage(list(payouts), _Strat(), _A(),
+                                      today=date(2026, 6, 30))
+    return ranked, excluded
 
 
 def test_uncovered_payout_name_is_excluded_from_ranking():
@@ -399,9 +403,9 @@ def test_rank_stage_prefilter_excludes_failing_names_pre_rank():
         def get_dividend_history(self, t, *, start, end):
             return []
 
-    ranked, excluded = _rank_stage(["AAPL", "JNJ"], cons, _A(),
-                                   today=date(2026, 6, 30),
-                                   prefilter_criteria=CONS_SCREEN.criteria)
+    ranked, excluded, _ = _rank_stage(["AAPL", "JNJ"], cons, _A(),
+                                      today=date(2026, 6, 30),
+                                      prefilter_criteria=CONS_SCREEN.criteria)
     assert {r.ticker for r in ranked} == {"JNJ"}         # AAPL prefiltered out
     assert any(t == "AAPL" and "min_dividend_yield" in reason
                for t, reason in excluded)
@@ -412,8 +416,8 @@ def test_prefilter_is_one_definition_no_duplicated_threshold():
     assert cons.prefilter_screen is True
     # the standalone payout gate is DROPPED — the screen is the single source now
     assert cons.max_payout_ratio is None
-    payout = next(c for c in CONS_SCREEN.criteria if c.name == "max_payout_ratio")
-    assert payout.threshold == 0.85                      # the ONE coverage threshold
+    payout = next(c for c in CONS_SCREEN.criteria if c.name == "max_payout_ratio_fcf")
+    assert payout.threshold == 0.80                      # the ONE coverage threshold (FCF basis)
 
 
 def test_growth_strategies_prefilter_on_the_quality_value_screen():
@@ -492,7 +496,7 @@ def test_unrateable_excluded_on_both_prefiltered_and_unprefiltered_paths():
     lens = load_strategy(STRAT_DIR / "magic_value_screen_v1.yaml")
 
     for prefilter in (None, lens.criteria):              # un-prefiltered AND prefiltered
-        ranked, excluded = _rank_stage(
+        ranked, excluded, _ = _rank_stage(
             ["GOOD", "PARA", "WBA"], MAGIC_NO_PREFILTER, _DelistedAdapter(),
             today=date(2026, 6, 30), prefilter_criteria=prefilter)
         assert {r.ticker for r in ranked} == {"GOOD"}    # ghosts NOT ranked
