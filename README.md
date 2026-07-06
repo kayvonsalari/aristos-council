@@ -19,10 +19,16 @@ deterministically. Its valid insights were extracted and hardened into rules (a 
 factor; a screen-as-prefilter); what remained was noise. The narrative layer is what an
 LLM demonstrably does well here, so that is the job it keeps.
 
-Three strategies, one engine: **defensive income** (Conservative Formula: low volatility +
-net payout + momentum), **classic value** (Greenblatt Magic Formula), and
-**value + momentum**. Strategy logic lives in versioned YAML; the math lives in
-unit-tested tools.
+Three strategies run on one engine — each is a versioned YAML file, not code:
+- **Defensive income** (`conservative_plus_v1`) — van Vliet's Conservative Formula: low volatility,
+  high net payout (dividends plus buybacks), momentum guard. For steady income portfolios.
+- **Classic value** (`magic_formula_v1`) — Greenblatt's Magic Formula: high return on capital,
+  bought at a high earnings yield. Preserved unchanged as the audited baseline.
+- **Value + momentum** (`magic_formula_momentum_v1`) — the flagship: Greenblatt's two factors plus
+  a 12-month momentum rank (per the value-and-momentum literature), which keeps falling knives out
+  of the top quintile.
+A strategy file declares its factors, screen, and verdict cut; the arithmetic behind every factor
+is unit-tested and documented in [The Calculations](docs/CALCULATIONS.md).
 
 New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — the plain-language
 walkthrough. Want the formulas? **[The Calculations](docs/CALCULATIONS.md)** — every
@@ -163,6 +169,8 @@ Station's past-run browsing.
 **Phase 4 — audit, persistence & Council Station (complete):** a deep post-run **provenance audit** that resolves every cited figure's `field_path` against the tool-call ledger and feeds the data-quality veto; an append-only **verdict history** (`verdicts/`) powering the recommendation-flip and majority-override vetoes; full per-run **reports** (`reports/`); **strategy versioning** (edit-as-new-version, never mutating a published file); and **Council Station** — a local Streamlit UI to run the council, read the full deliberation, browse past runs across tickers, chart verdict/confidence history, and edit strategies. See `CLAUDE.md` for the sprint log.
 
 **Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator` by default; `second_opinion` survives behind the flag). Three rank strategies ship — Conservative Formula (defensive income), Greenblatt Magic Formula (classic value), and value+momentum — each running the same rank-sum engine with **no tuned weights**, an absolute-floor **screen-as-prefilter** (one definition per strategy), and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
+
+**Phase 6 — Prospective evaluation (running).** Verdicts and street consensus are frozen in quarterly snapshots (first freeze: 2026-07-05, growth_40; defensive follows the FCF payout fix) and scored on 6- and 12-month forward total returns. The pre-committed test is bucket ordering — BUY > HOLD > SELL, and street most-loved > least-loved — against the equal-weight universe. Standing caveat: single snapshots are anecdotes; the evidence is the ordering across repeated freezes. Next scoring: January 2027.
 
 **565 unit tests**, green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
 

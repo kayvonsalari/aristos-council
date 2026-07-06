@@ -72,7 +72,7 @@ strategy YAML, not code. Current registry (thresholds shown from the live strate
 | Criterion | Threshold (current) | What it catches |
 |---|---|---|
 | `min_dividend_yield` | 0.015 | Names not actually paying meaningful income (WMT at 0.9%). |
-| `max_payout_ratio` | 0.85 | Uncovered/stretched payouts (KMB 0.98). Confirmed-only: missing payout excludes nothing. |
+| `max_payout_ratio_fcf` | 0.80 | Coverage measured against **cash**: dividends_paid / free cash flow (FCF = free_cash_flow, else operating_cash_flow + capex). Motivation: the GAAP-EPS basis wrongly excluded sound payers whose earnings carry non-cash charges — **ABBV 3.26**, PEP 0.89, KMB 0.98, MRK 0.94 on EPS, all covered on cash. FCF ≤ 0 abstains (utilities); EPS payout is a MARKED fallback when cash-flow data is absent. **0.80 against FCF follows the common 70–80% cash-coverage prudence band; like all thresholds it is a stated convention, never fitted to outcomes.** (The EPS `max_payout_ratio` at 0.85 stays in the registry for other strategies.) |
 | `min_market_cap` | strategy-specific | Micro-cap noise. |
 | `min_price_momentum` | −0.10 (12m) | **Breakdowns, not flatness**: a defensive down >10% on the year is breaking (T at −26%); a quiet staple down 0–10% passes. The ranker handles the gradient among survivors. |
 | `min_dividend_streak` | 10 years | Cut history: T (cut 2022 → streak 0) and MMM (cut 2024) fail; PG/KO/JNJ/MCD pass. |
@@ -122,9 +122,11 @@ just flags a knife-edge miss to the reader (`factors.is_borderline_fail`).
 
 ## 6. Known limitations (measured, not hypothetical)
 
-- **GAAP payout noise**: payout ratios computed on GAAP EPS exclude names whose earnings
-  are depressed by non-cash charges (KMB, PEP, MRK at 0.89–0.98). The eventual fix is
-  payout-on-FCF; until then these exclusions are legible but contestable.
+- **GAAP payout noise — resolved for the defensive screen**: measuring payout against
+  GAAP EPS wrongly excluded sound payers whose earnings carry non-cash charges (PEP 0.89,
+  KMB 0.98, MRK 0.94, ABBV 3.26). `conservative_screen_v1` now measures coverage against
+  free cash flow (`max_payout_ratio_fcf`, §4); the EPS basis remains only as a MARKED
+  fallback when cash-flow data is absent. Refined, not deleted.
 - **Knife-edge floors**: absolute thresholds exclude at any margin (PFE at ROIC 0.1198 vs
   a 0.12 floor). That is what floors do, but two hundredths of a percent is inside
   measurement noise for a computed ROIC. These near-misses are now flagged `[borderline]`
@@ -171,3 +173,62 @@ error) scores **0.0** — that IS a coverage gap. The escalation fires when
 No LLM anywhere in this score. It is the deterministic replacement for "the model felt
 0.55 sure", and it is unit-tested (full data → high; a two-criteria screen or an
 imputation-heavy rank → discounted; a failed fundamentals fetch → penalized).
+
+## 8. Anatomy of a strategy (`strategies/magic_formula_momentum_v1.yaml`)
+
+A strategy is a versioned YAML file, not code. The flagship, annotated — one line on what
+changing each field does:
+
+```yaml
+id: magic_formula_momentum_v1     # unique id; must encode a version (…_v1). Names the file.
+name: Magic Formula + Momentum    # human label shown in the UI dropdown.
+version: 1                        # bump on any published change (files are immutable).
+factors:                          # the rank factors (rank-sum, equal weight, no tuning):
+  - name: roic                    #   quality — return on invested capital (high = better).
+  - name: earnings_yield          #   value — EBIT/EV (high = better). Drop one -> a different strategy.
+  - name: momentum_12m            #   trend — 12m return; remove it and you have classic Magic Formula.
+cut: quintile                     # verdict cut: top 20% BUY / 60% HOLD / 20% SELL. top_k for small lists.
+missing: worst                    # a NOT-EVAL factor -> worst rank. 'neutral' imputes; 'exclude' drops.
+min_market_cap: 5.0e9             # universe floor; raise it to exclude smaller names.
+exclude_sectors:                  # confirmed-only sector exclusion (ROIC/EV are meaningless here):
+  - Financial Services            #   financials — balance-sheet businesses.
+  - Financials
+  - Utilities                     #   utilities — structural negative FCF by design.
+council_screen_strategy: magic_value_screen_v1   # the lens the narrator judges a pick against.
+prefilter_screen: true            # rank ONLY names passing that lens's absolute floors (min_roic 12%).
+```
+
+Everything that decides a verdict is here; the arithmetic behind each factor is in §1–§2.
+
+**Adding a strategy.** Write a new YAML naming registry factors and a screen; the
+schema-split classifier surfaces it in Council Station's dropdown automatically — no code
+changes. A published file is never edited in place: change it by saving a new version
+(`edit-as-new-version`), so every recorded verdict stays reproducible against the exact
+file it ran under.
+
+## 9. Scope: where the metrics apply
+
+The factors and screens are honest on operating businesses and disclose their limits
+elsewhere — a documented boundary beats an untested feature.
+
+| Tier | Sectors | Why | Revisit trigger |
+|---|---|---|---|
+| **Excluded by design** | Financials (banks, insurers) | ROIC and EV are category errors for balance-sheet businesses; the sector exclusion fires by name. | A funded use case — basic P/B + ROE data is already free. |
+| **Supported, distortion disclosed** | Deep cyclicals (energy, miners, autos, memory); REITs & utilities | Trailing metrics snapshot the cycle (4-year through-cycle averaging dampens, does not fix); payout/FCF semantics half-fit — REITs need FFO, utilities run structural negative FCF by regulated design (the documented council-era lesson). | An FFO / regulated-asset data source. |
+| **Clean fit** | Asset-light & industrial operating businesses — mature tech, staples, discretionary, pharma, industrials, retail, defence | Trailing fundamentals and cash-based coverage describe them well. | — (the current manifests, minus the distortion cases). |
+
+## 10. Future work & data dependencies
+
+Honest direction of travel — each entry is what, its concrete requirement, and the
+trigger. No dates.
+
+- **Financials strategy** (P/B + ROE, banks-only universe): the data is already
+  sufficient on free tiers; the trigger is a real user, not budget.
+- **Estimate-revision signals + point-in-time backtesting**: requires a paid
+  fundamentals tier (~€50–150/mo class — Sharadar / EODHD upper tiers); trigger is the
+  prospective scoreboard maturing enough to justify historical validation.
+- **REIT / utility coverage**: requires FFO / regulated-asset data; trigger is a
+  defensive user who needs those sectors.
+
+These are considered extensions with named requirements — not commitments. The system
+prefers a documented boundary to an untested feature.
