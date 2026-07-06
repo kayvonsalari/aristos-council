@@ -1,0 +1,31 @@
+# Defensive-income-16 — the prospective-scoreboard universe.
+# ==========================================================
+# The broader defensive-INCOME pool for the prospective-scoreboard freeze: staples +
+# healthcare + telecom + regulated utilities. Distinct from defensive_16_v1 (the
+# validation set): utilities are INCLUDED here because the scoreboard measures forward
+# total return on income names, where a regulated negative-FCF profile is a portfolio
+# characteristic to track — not a screen distortion to exclude.
+id: defensive_income_16_v1
+description: Defensive-income scoreboard universe — staples, healthcare, telecom, utilities.
+created: "2026-07-06"
+rationale: >-
+  the defensive-income pool the prospective scoreboard freezes and scores on forward
+  total returns; utilities/telecom included as income holdings (the validation universe
+  defensive_16_v1 excludes them to keep payout semantics clean)
+tickers:
+  - PG
+  - KO
+  - PEP
+  - CL
+  - KMB
+  - JNJ
+  - MRK
+  - ABBV
+  - PFE
+  - MCD
+  - WMT
+  - MO
+  - VZ
+  - DUK
+  - SO
+  - NEE

@@ -92,6 +92,15 @@ def test_defensive_16_manifest_is_the_validated_set():
     assert not ({"DUK", "SO", "NEE", "MO", "PFE", "ABBV"} & set(u.tickers))
 
 
+def test_defensive_income_16_is_the_scoreboard_universe():
+    u = load_universe_by_id("defensive_income_16_v1", UNIVERSES_DIR)
+    assert u.id == "defensive_income_16_v1" and len(u.tickers) == 16
+    assert u.tickers == ["PG", "KO", "PEP", "CL", "KMB", "JNJ", "MRK", "ABBV", "PFE",
+                         "MCD", "WMT", "MO", "VZ", "DUK", "SO", "NEE"]
+    # utilities INCLUDED here (income holdings) — the validation set excludes them.
+    assert {"DUK", "SO", "NEE"} <= set(u.tickers)
+
+
 def test_unknown_universe_id_is_a_clear_error():
     with pytest.raises(ValueError, match="unknown universe id 'nope_v9'"):
         load_universe_by_id("nope_v9", UNIVERSES_DIR)
