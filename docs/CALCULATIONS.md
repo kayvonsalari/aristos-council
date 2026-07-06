@@ -122,13 +122,24 @@ just flags a knife-edge miss to the reader (`factors.is_borderline_fail`).
 
 ## 6. Known limitations (measured, not hypothetical)
 
-- **GAAP payout noise — the honest post-validation account**: the FCF basis rescued the
-  true accounting-noise victims (AbbVie GAAP 3.26 → FCF ~0.5; Merck similar). PepsiCo
-  (0.87) and Kimberly-Clark (1.57) fail on cash as well — those exclusions are CORRECT,
-  not noise; the original claim that they were GAAP victims was half wrong and the
-  pre-registered validation caught it. `conservative_screen_v1` measures coverage against
-  through-cycle free cash flow (`max_payout_ratio_fcf`, §4); the EPS basis remains a
-  MARKED fallback when cash-flow history is too short.
+- **GAAP payout noise — the honest post-validation account**: AbbVie and Merck were
+  GAAP-noise victims (rescued by the FCF basis); Kimberly-Clark was a single-year-cash
+  victim (single-year FCF payout 1.57, four-year mean ~0.7 — rescued by the through-cycle
+  basis); PepsiCo remains excluded on both bases (~1.08 on the 4y mean) — the one original
+  exclusion that was correct as issued. Each claim was revised when pre-registered
+  validation contradicted it; the revisions are the record. `conservative_screen_v1`
+  measures coverage against through-cycle free cash flow (`max_payout_ratio_fcf`, §4); the
+  EPS basis remains a MARKED fallback when cash-flow history is too short.
+- **A defended exclusion — Coca-Cola**: Coca-Cola (KO) is excluded at 1.198 on the
+  four-year-mean basis and stays excluded knowingly: two of its four window years carry
+  large one-off cash outflows (a tax deposit and an acquisition earnout — attribution to be
+  verified against filings), which inflate the ratio; but even on its clean years KO's
+  dividend consumes ~0.91 of free cash flow. Its EPS payout (0.65) and 23-year growth
+  streak say the dividend is safe by earnings and history; the 0.80 cash bar says it is
+  tight by cash. This screen is deliberately the strict one — a less conservative variant
+  would set the bar at 0.90 and say so. The stop-rule was exercised, the underlying series
+  read, and the threshold not moved: excluding a >90%-cash-payout name is the criterion's
+  definition operating, not a defect.
 - **Knife-edge floors**: absolute thresholds exclude at any margin (PFE at ROIC 0.1198 vs
   a 0.12 floor). That is what floors do, but two hundredths of a percent is inside
   measurement noise for a computed ROIC. These near-misses are now flagged `[borderline]`

@@ -11,6 +11,31 @@ panel of specialist LLM agents then writes the narrative around that verdict —
 story, the strategy fit, the open questions worth a human's attention — under a hard rule:
 **the language models explain; they do not judge, and they never do arithmetic.**
 
+## What this is — and what it isn't
+
+Aristos Council is a research prototype with one central claim: **AI-era investment tooling can be
+trustworthy — deterministic where it decides, honest where it can't, and graded in public.** It was
+built to demonstrate that architecture; it is also the foundation the author intends to grow into a
+personal analysis platform, sequenced by evidence and feedback rather than coverage ambition.
+
+What it demonstrably does today — each point verifiable in this repo:
+- **Three validated rank strategies** (defensive income, classic value, value + momentum) on free
+  market data, with every verdict reproducible offline (`--replay`) and every cited figure traced to
+  its source tool call.
+- **An LLM layer that explains but never judges** — demoted from judging by a pre-registered
+  controlled experiment (0 agreements in 17 councils; dissent shown to be pick-independent), its
+  valid insights hardened into deterministic rules instead.
+- **Honest failure modes:** missing data abstains rather than guesses; names with no data get no
+  verdict; when a gating criterion can't be evaluated the answer is INSUFFICIENT_EVIDENCE, not a
+  guess; contested runs escalate to a human.
+- **A prospective scoreboard:** verdicts and street consensus frozen quarterly (first freeze
+  2026-07-05), graded on 6- and 12-month forward returns against pre-committed tests.
+
+What it deliberately is not (yet): broad-coverage — financials are excluded by design and several
+sectors carry disclosed metric distortions (see *Scope* in [The Calculations](docs/CALCULATIONS.md));
+not production infrastructure; not investment advice. Considered extensions and their concrete
+requirements are in *Future work* — documented boundaries are preferred to untested features.
+
 That split is a measured conclusion, not a design fashion. The LLM council originally held
 the verdict. Testing showed it flipped on identical inputs, and in a pre-registered
 controlled experiment its "second opinion" disagreed with 100% of verdicts across three
@@ -170,7 +195,7 @@ Station's past-run browsing.
 
 **Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator` by default; `second_opinion` survives behind the flag). Three rank strategies ship — Conservative Formula (defensive income), Greenblatt Magic Formula (classic value), and value+momentum — each running the same rank-sum engine with **no tuned weights**, an absolute-floor **screen-as-prefilter** (one definition per strategy), and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
 
-**Phase 6 — Prospective evaluation (running).** Verdicts and street consensus are frozen in quarterly snapshots (first freeze: 2026-07-05, growth_40; defensive follows the FCF payout fix) and scored on 6- and 12-month forward total returns. The pre-committed test is bucket ordering — BUY > HOLD > SELL, and street most-loved > least-loved — against the equal-weight universe. Standing caveat: single snapshots are anecdotes; the evidence is the ordering across repeated freezes. Next scoring: January 2027.
+**Phase 6 — Prospective evaluation (running).** Verdicts and street consensus are frozen in quarterly snapshots (first freeze: 2026-07-05, growth_40; defensive follows the FCF payout fix) and scored on 6- and 12-month forward total returns. The pre-committed test is bucket ordering — BUY > HOLD > SELL, and street most-loved > least-loved — against the equal-weight universe. Standing caveat: single snapshots are anecdotes; the evidence is the ordering across repeated freezes. Next scoring: January 2027. Methodology: **[The Scoreboard](docs/SCOREBOARD.md)**.
 
 **565 unit tests**, green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
 
