@@ -116,9 +116,50 @@ def test_exclusion_line_names_the_eps_fallback_basis():
 
 
 def test_screen_evaluate_records_basis_for_a_passing_name():
-    _, bases = screen_evaluate(
+    _, bases, _ = screen_evaluate(
         _SCREEN, _fi(dividends_paid=4e9, free_cash_flow_annual=[10e9] * 4))
     assert bases.get("max_payout_ratio_fcf") == "fcf"
+
+
+def test_ranked_table_marks_a_screen_abstention():
+    from datetime import date
+
+    from aristos_council.data.adapter import (
+        MarketDataAdapter, PriceBar, PriceHistory)
+    from aristos_council.pipeline import (
+        format_cli_report, ranked_abstention_footnotes, run_rank_pipeline)
+
+    class _A(MarketDataAdapter):
+        name = "fake"
+        _F = {"NORMAL": dict(free_cash_flow_annual=[10e9] * 4, dividends_paid=4e9),
+              "UTIL": dict(free_cash_flow_annual=[-1e9] * 4, dividends_paid=4e9)}
+
+        def get_fundamentals(self, t):
+            return Fundamentals(ticker=t, name=t, market_cap=2e10,
+                                dividend_per_share=2.0, dividend_yield=0.02,
+                                total_debt=1e9, **self._F[t])
+
+        def get_price_history(self, t, *, start, end):
+            return PriceHistory(ticker=t, bars=[
+                PriceBar(day=date(2026, 1, 1 + (i % 27)), open=100, high=101, low=99,
+                         close=100 + 0.05 * i, adj_close=100 + 0.05 * i, volume=10)
+                for i in range(260)])
+
+        def get_dividend_history(self, t, *, start, end):
+            return []
+
+    result = run_rank_pipeline(
+        ["NORMAL", "UTIL"], "conservative_plus_v1", ranker_only=True,
+        strategies_dir=STRAT_DIR, adapter=_A(), today=date(2026, 6, 30))
+    by = {r.ticker: r for r in result.ranked}
+    assert "UTIL" in by and "NORMAL" in by                          # both pass the screen
+    assert "max_payout_ratio_fcf" in by["UTIL"].screen_abstentions  # abstained -> flagged
+    assert by["NORMAL"].screen_abstentions == {}                    # fully evaluated -> none
+    foots = ranked_abstention_footnotes(result)
+    assert any("UTIL" in f and "max_payout_ratio_fcf" in f for f in foots)
+    assert not any("NORMAL" in f for f in foots)
+    report = format_cli_report(result)
+    assert "UTIL†" in report and "NORMAL†" not in report            # dagger on the abstainer
 
 
 def test_basis_block_counts_names_and_abstentions():

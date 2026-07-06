@@ -98,6 +98,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     excluded: list[tuple[str, str]] = []
     sources_by_ticker: dict[str, dict[str, str]] = {}
     screen_bases: dict[str, dict[str, str]] = {}     # ticker -> {criterion: basis}
+    abstentions_by_ticker: dict[str, dict[str, str]] = {}   # ticker -> {criterion: note}
     for t in universe:
         # A TRANSIENT fetch failure (429/timeout/5xx, unrecovered after retries) is NOT
         # absent data — abort THIS name with a fetch-error status (rerun), never mislabel
@@ -130,9 +131,11 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         # definition (the council screen). One source of truth; floors enforced. Capture
         # each name's per-criterion measurement basis (payout FCF/EPS) for the report.
         if prefilter_criteria is not None:
-            reason, bases = screen_evaluate(prefilter_criteria, fi)
+            reason, bases, abstentions = screen_evaluate(prefilter_criteria, fi)
             if bases:
                 screen_bases[t] = bases
+            if abstentions:
+                abstentions_by_ticker[t] = abstentions
             if reason is not None:
                 excluded.append((t, reason))
                 continue
@@ -150,6 +153,8 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     for r in ranked:
         if r.ticker in sources_by_ticker:
             r.factor_sources = sources_by_ticker[r.ticker]
+        if r.ticker in abstentions_by_ticker:
+            r.screen_abstentions = abstentions_by_ticker[r.ticker]
     return ranked, excluded, screen_bases
 
 
@@ -574,6 +579,27 @@ def format_screen_basis_entry(e: dict) -> str:
     return " · ".join(parts)
 
 
+def _abstention_reason(note: str) -> str:
+    """Concise reason from a criterion's abstention note for the footnote."""
+    r = note
+    if r.startswith("not evaluated:"):
+        r = r[len("not evaluated:"):].strip()
+    return r.split(" — ")[0].strip()
+
+
+def ranked_abstention_footnotes(result: RankPipelineResult) -> list[str]:
+    """One footnote per ranked name whose screen criterion ABSTAINED (ITEM 3), e.g.
+    '† PEP — screen criterion not evaluated: max_payout_ratio_fcf (mean FCF ≤ 0)'. A BUY
+    whose dividend-safety check abstained is legitimate (abstention never excludes) but
+    must be visible."""
+    lines = []
+    for r in result.ranked:
+        for crit, note in sorted(r.screen_abstentions.items()):
+            lines.append(f"† {r.ticker} — screen criterion not evaluated: "
+                         f"{crit} ({_abstention_reason(note)})")
+    return lines
+
+
 def format_screen_basis(result: RankPipelineResult) -> list[str]:
     """The screen-criterion basis block as text lines, e.g.
     'payout (max_payout_ratio_fcf): FCF 14/16 · EPS fallback 2/16 (KMB, PEP)'."""
@@ -600,8 +626,11 @@ def format_cli_report(result: RankPipelineResult) -> str:
         f"=== RANKED ({m['rank_strategy_id']}) — verdict-of-record ===",
     ]
     for i, r in enumerate(result.ranked, 1):
-        lines.append(f"  {i:>2}  {r.ticker:<10} {r.verdict.upper():<5} "
+        tick = r.ticker + ("†" if r.screen_abstentions else "")
+        lines.append(f"  {i:>2}  {tick:<11} {r.verdict.upper():<5} "
                      f"combined {r.combined_rank:>5.0f}")
+    for foot in ranked_abstention_footnotes(result):
+        lines.append(f"  {foot}")
     integrity = format_factor_integrity(result)
     if integrity:
         lines.append("")

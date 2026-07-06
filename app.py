@@ -1170,7 +1170,9 @@ def _ranked_rows(ranked) -> tuple[list[dict], list[str]]:
                 factor_names.append(f)
     rows: list[dict] = []
     for i, r in enumerate(ranked, 1):
-        row = {"#": i, "Ticker": r.ticker, "Verdict": r.verdict.upper(),
+        # † marks a name that PASSED the screen while a criterion abstained (ITEM 3).
+        ticker = r.ticker + ("†" if r.screen_abstentions else "")
+        row = {"#": i, "Ticker": ticker, "Verdict": r.verdict.upper(),
                "Combined": round(r.combined_rank, 1)}
         for f in factor_names:
             if f in r.factor_ranks:
@@ -1215,8 +1217,11 @@ def _universe_markdown(result) -> str:
         lines.append("_(no names survived the screen)_")
     from aristos_council.pipeline import (
         factor_integrity, format_integrity_entry,
-        format_screen_basis_entry, screen_basis_integrity,
+        format_screen_basis_entry, ranked_abstention_footnotes, screen_basis_integrity,
     )
+
+    for foot in ranked_abstention_footnotes(result):
+        lines.append(foot)
 
     entries = factor_integrity(result)
     if entries:
@@ -1270,6 +1275,10 @@ def _render_universe_result(result) -> None:
         if any("*" in str(row[f]) for row in rows for f in factor_names):
             st.caption("\\* = factor value absent; rank imputed from the name's "
                        "other factors (judged on what it has, not punished).")
+        from aristos_council.pipeline import ranked_abstention_footnotes
+
+        for foot in ranked_abstention_footnotes(result):
+            st.caption(foot)
     else:
         st.info("No names survived the screen to be ranked.")
 

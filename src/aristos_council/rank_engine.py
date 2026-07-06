@@ -57,6 +57,10 @@ class RankedTicker:
     # (e.g. earnings_yield -> "ev" | "fallback:ebit_mcap" | "abstained"). Attached by
     # the rank stage after ranking; empty for a bare rank_universe call.
     factor_sources: dict[str, str] = field(default_factory=dict)
+    # Screen criteria that ABSTAINED for this (ranked) name -> note. A name that passed
+    # the screen while a dividend-safety criterion could not be evaluated is legitimate
+    # but must be VISIBLE (footnote in the ranked table).
+    screen_abstentions: dict[str, str] = field(default_factory=dict)
 
     def explain(self) -> str:
         n = self.universe_size

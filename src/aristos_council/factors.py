@@ -386,22 +386,29 @@ _BASIS_LABEL = {"fcf": "FCF (4y mean)", "eps": "EPS fallback"}
 
 
 def screen_evaluate(screen_criteria, fi: FactorInputs):
-    """Run a screen ONCE and return ``(first_confirmed_fail_reason | None, bases)`` where
-    ``bases`` maps each criterion that reported a measurement basis to it (e.g.
-    ``{"max_payout_ratio_fcf": "fcf"}``). The fail reason NAMES the basis for a
-    multi-basis criterion and carries the borderline tag — so both the exclusion line and
-    the aggregate basis count read from the SAME single evaluation."""
+    """Run a screen ONCE and return ``(first_confirmed_fail_reason | None, bases,
+    abstentions)``:
+    - ``bases`` maps each criterion reporting a measurement basis to it (e.g.
+      ``{"max_payout_ratio_fcf": "fcf"}``, incl. ``"abstained"``);
+    - ``abstentions`` maps a criterion that ABSTAINED on a per-name data condition
+      (basis == "abstained") to its note — a PASSED name whose dividend-safety check
+      could not be evaluated is legitimate (abstention never excludes) but must be
+      VISIBLE (ITEM 3). The fail reason NAMES the basis and carries the borderline tag.
+    All three read from the SAME single evaluation."""
     from .tools.criteria.registry import Evidence, run_screen
     if fi.fundamentals is None:
-        return None, {}
+        return None, {}, {}
     ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
                   return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
     reason = None
     bases: dict[str, str] = {}
+    abstentions: dict[str, str] = {}
     for c in run_screen(screen_criteria, ev, ticker=fi.ticker).criteria:
         basis = getattr(c, "basis", "") or ""
         if basis:
             bases[c.name] = basis
+        if basis == "abstained" and c.passed is None:
+            abstentions[c.name] = c.note
         if reason is None and c.passed is False:      # first confirmed fail (None abstains)
             obs = (f"{c.observed:.4g}" if isinstance(c.observed, (int, float))
                    else "n/a")
@@ -409,4 +416,4 @@ def screen_evaluate(screen_criteria, fi: FactorInputs):
             border = " [borderline]" if is_borderline_fail(c.observed, c.threshold) else ""
             reason = (f"screen: {c.name} (observed {obs} vs threshold "
                       f"{c.threshold}){basis_tag}{border}")
-    return reason, bases
+    return reason, bases, abstentions
