@@ -81,11 +81,15 @@ def test_growth_40_manifest_loads_with_40_names():
     assert "NVDA" in u.tickers and "XOM" in u.tickers
 
 
-def test_defensive_16_manifest_loads_with_16_names():
+def test_defensive_16_manifest_is_the_validated_set():
     u = load_universe_by_id("defensive_16_v1", UNIVERSES_DIR)
     assert u.id == "defensive_16_v1"
     assert len(u.tickers) == 16
-    assert "PG" in u.tickers and "JNJ" in u.tickers
+    # the EXACT validated set (staples + healthcare + T/VZ/MMM trap controls);
+    # utilities and the never-validated names are absent.
+    assert u.tickers == ["PG", "KO", "CL", "KMB", "PEP", "MCD", "WMT", "MDLZ", "GIS",
+                         "HSY", "JNJ", "ABT", "MRK", "T", "VZ", "MMM"]
+    assert not ({"DUK", "SO", "NEE", "MO", "PFE", "ABBV"} & set(u.tickers))
 
 
 def test_unknown_universe_id_is_a_clear_error():
