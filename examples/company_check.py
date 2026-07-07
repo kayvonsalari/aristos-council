@@ -19,6 +19,7 @@ import argparse
 from datetime import date
 from pathlib import Path
 
+from aristos_council.cli_guards import implausible_ticker_reason
 from aristos_council.company_check import format_company_check, run_company_check
 from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
@@ -43,6 +44,12 @@ def main() -> None:
                         "context; omit for raw values with no cohort position")
     p.add_argument("--no-cache", action="store_true")
     args = p.parse_args()
+
+    # Guardrail FIRST (the paste-slip lesson): reject a path / flag / '.py' token by
+    # NAME before any fetch — a bogus symbol must never masquerade as a diagnosis.
+    why = implausible_ticker_reason(args.ticker)
+    if why:
+        p.error(f"implausible ticker {args.ticker!r}: {why}")
 
     ticker = normalize_ticker(args.ticker)
     if not ticker:

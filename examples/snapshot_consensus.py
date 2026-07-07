@@ -21,6 +21,7 @@ import argparse
 from datetime import date
 from pathlib import Path
 
+from aristos_council.cli_guards import universe_args_error
 from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
 from aristos_council.data.provider import select_market_adapter
@@ -60,6 +61,13 @@ def main() -> None:
     p.add_argument("--no-cache", action="store_true")
     args = p.parse_args()
 
+    # Guardrails FIRST (the paste-slip lesson): reject an implausible positional token
+    # by NAME, and forbid positional tickers together with --universe-id — before any
+    # adapter runs or any row is written to the permanent record.
+    guard = universe_args_error(args.tickers, args.universe_id)
+    if guard:
+        p.error(guard)
+
     universe = _read_tickers(args)
     if not universe and not args.universe_id:
         p.error("no tickers given (positional, --file, or --universe-id)")
@@ -75,8 +83,10 @@ def main() -> None:
                               universes_dir=UNIVERSES_DIR)
 
     uid = rows[0].universe_id if rows else (args.universe_id or "—")
-    print(f"Snapshot {today.isoformat()} · strategy {args.rank_strategy} · "
-          f"universe {uid} · {len(rows)} row(s) appended -> {path}")
+    src = "--universe-id" if args.universe_id else f"{len(universe)} positional/-file ticker(s)"
+    print(f"Snapshot {today.isoformat()} · strategy {args.rank_strategy} "
+          f"(ranker-only, no LLM) · universe {uid} (from {src}) · "
+          f"{len(rows)} row(s) appended -> {path}")
     print()
     print(format_divergence_map(rows))
 
