@@ -138,6 +138,7 @@ class YFinanceAdapter(MarketDataAdapter):
         return Fundamentals(
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
+            company_name=(info.get("longName") or None),   # display label (None-guarded)
             market_cap=_as_float(info.get("marketCap")),
             sector=(info.get("sector") or None),   # rank-engine sector exclusions
             # Currencies drive honest abstention on USD-denominated thresholds

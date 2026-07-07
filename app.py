@@ -28,7 +28,8 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 from pydantic import ValidationError
 
-from aristos_council.data.adapter import DataUnavailable, normalize_ticker
+from aristos_council.data.adapter import (
+    DataUnavailable, display_name, normalize_ticker)
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
     RunReport,
@@ -1160,9 +1161,12 @@ def _estimate_shortlist_size(n: int, rank_strategy) -> int:
     return max(1, round(n / 5))          # buy_quintile
 
 
-def _ranked_rows(ranked) -> tuple[list[dict], list[str]]:
+def _ranked_rows(ranked, names: dict | None = None) -> tuple[list[dict], list[str]]:
     """Rows + the ordered factor columns for the ranked table. A per-factor rank is
-    marked with a trailing ``*`` when it was imputed (the value was absent)."""
+    marked with a trailing ``*`` when it was imputed (the value was absent). The Name
+    column leads with 'Company Name (TICKER)' (ITEM 1), falling back to the bare
+    ticker when the display name is unknown."""
+    names = names or {}
     factor_names: list[str] = []
     for r in ranked:
         for f in r.factor_ranks:
@@ -1171,8 +1175,9 @@ def _ranked_rows(ranked) -> tuple[list[dict], list[str]]:
     rows: list[dict] = []
     for i, r in enumerate(ranked, 1):
         # † marks a name that PASSED the screen while a criterion abstained (ITEM 3).
-        ticker = r.ticker + ("†" if r.screen_abstentions else "")
-        row = {"#": i, "Ticker": ticker, "Verdict": r.verdict.upper(),
+        label = display_name(r.ticker, names.get(r.ticker)) + \
+            ("†" if r.screen_abstentions else "")
+        row = {"#": i, "Name": label, "Verdict": r.verdict.upper(),
                "Combined": round(r.combined_rank, 1)}
         for f in factor_names:
             if f in r.factor_ranks:
@@ -1204,13 +1209,13 @@ def _universe_markdown(result) -> str:
     if not m["ranker_only"]:
         lines.append(f"- shortlist: {len(m['shortlist'])} · est ${m['est_cost']:.2f}")
     lines += ["", "## Ranked (verdict of record)", ""]
-    rows, factor_names = _ranked_rows(result.ranked)
+    rows, factor_names = _ranked_rows(result.ranked, result.names)
     if rows:
-        head = ["#", "Ticker", "Verdict", "Combined", *factor_names]
+        head = ["#", "Name", "Verdict", "Combined", *factor_names]
         lines.append("| " + " | ".join(head) + " |")
         lines.append("|" + "---|" * len(head))
         for row in rows:
-            cells = [str(row["#"]), row["Ticker"], row["Verdict"],
+            cells = [str(row["#"]), row["Name"], row["Verdict"],
                      str(row["Combined"]), *[str(row[f]) for f in factor_names]]
             lines.append("| " + " | ".join(cells) + " |")
     else:
@@ -1234,14 +1239,16 @@ def _universe_markdown(result) -> str:
                   for e in basis_entries]
     if result.excluded:
         lines += ["", "## Excluded (screen / cap / sector)", ""]
-        lines += [f"- **{t}** — {why}" for t, why in result.excluded]
+        lines += [f"- **{display_name(t, result.names.get(t))}** — {why}"
+                  for t, why in result.excluded]
     if result.unrateable:
         lines += ["", "## Unrateable (no data — no verdict)", ""]
-        lines += [f"- **{t}** — {why}" for t, why in result.unrateable]
+        lines += [f"- **{display_name(t, result.names.get(t))}** — {why}"
+                  for t, why in result.unrateable]
     if result.narratives:
         lines += ["", "## Narrative", ""]
         for t, text in result.narratives.items():
-            lines += [f"### {t}", "", text, ""]
+            lines += [f"### {display_name(t, result.names.get(t))}", "", text, ""]
     return "\n".join(lines)
 
 
@@ -1263,7 +1270,7 @@ def _render_universe_result(result) -> None:
 
     # 2 — RANKED table: sortable, verdict palette, per-factor ranks (imputed *).
     st.subheader("Ranked — verdict of record")
-    rows, factor_names = _ranked_rows(result.ranked)
+    rows, factor_names = _ranked_rows(result.ranked, result.names)
     if rows:
         import pandas as pd
 
@@ -1311,7 +1318,8 @@ def _render_universe_result(result) -> None:
     # 3 — Excluded (screen / cap / sector / payout): a neutral table.
     if result.excluded:
         st.subheader(f"Excluded — screen / cap / sector · {len(result.excluded)}")
-        st.dataframe([{"Ticker": t, "Reason": why} for t, why in result.excluded],
+        st.dataframe([{"Name": display_name(t, result.names.get(t)), "Reason": why}
+                      for t, why in result.excluded],
                      hide_index=True, width="stretch")
 
     # 4 — UNRATEABLE: its OWN axis (no data, no verdict) — deliberately distinct.
@@ -1322,7 +1330,7 @@ def _render_universe_result(result) -> None:
                        "usable data at all (likely delisted), so they receive NO "
                        "verdict and reached no model.")
             for t, why in result.unrateable:
-                st.markdown(f"- **{t}** — {why}")
+                st.markdown(f"- **{display_name(t, result.names.get(t))}** — {why}")
 
     # 4b — FETCH FAILED: a transient failure (429/timeout/5xx) — NOT a verdict, NOT
     # UNRATEABLE. The name aborted this run and should be RE-RUN, distinct from a
@@ -1334,7 +1342,7 @@ def _render_universe_result(result) -> None:
                    "live ticker, NOT delisted. They were aborted (no verdict, not "
                    "worst-ranked); re-run to recover them.")
         for t, why in result.fetch_errors:
-            st.markdown(f"- **{t}** — {why}")
+            st.markdown(f"- **{display_name(t, result.names.get(t))}** — {why}")
 
     # 5 — NARRATIVE: one expander per shortlisted (BUY) name — the narrator's job.
     if not m["ranker_only"]:
@@ -1343,7 +1351,8 @@ def _render_universe_result(result) -> None:
             verdict_of = {r.ticker: r.verdict.upper() for r in result.ranked}
             for ticker, text in result.narratives.items():
                 v = verdict_of.get(ticker, "")
-                with st.expander(f"{ticker}{(' · ' + v) if v else ''} — narration"):
+                disp = display_name(ticker, result.names.get(ticker))
+                with st.expander(f"{disp}{(' · ' + v) if v else ''} — narration"):
                     st.markdown(_md(text) or "_(no narrative produced)_")
         else:
             st.caption("No names reached the council.")

@@ -34,13 +34,14 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from .data.adapter import StreetConsensus
+from .data.adapter import StreetConsensus, display_name
 
 # --------------------------------------------------------------------------- #
 # The append-only snapshot record
 # --------------------------------------------------------------------------- #
-COLUMNS = ["snapshot_date", "strategy", "universe_id", "ticker", "aristos_verdict",
-           "combined_rank", "price", "street_mean", "n_analysts", "target_mean", "notes"]
+COLUMNS = ["snapshot_date", "strategy", "universe_id", "ticker", "company_name",
+           "aristos_verdict", "combined_rank", "price", "street_mean", "n_analysts",
+           "target_mean", "notes"]
 
 SELL_NOTE = ("bottom quintile of {n}-name universe "
              "(relative rank, not a short thesis)")
@@ -65,11 +66,14 @@ class SnapshotRow:
     n_analysts: Optional[int]
     target_mean: Optional[float]
     notes: str
+    company_name: Optional[str] = None  # yfinance longName (display label; rows predating
+                                        # this column read back as None -> bare ticker)
 
     def to_csv(self) -> dict:
         return {
             "snapshot_date": self.snapshot_date, "strategy": self.strategy,
             "universe_id": self.universe_id, "ticker": self.ticker,
+            "company_name": (self.company_name or ""),
             "aristos_verdict": self.aristos_verdict,
             "combined_rank": _num(self.combined_rank), "price": _num(self.price),
             "street_mean": _num(self.street_mean), "n_analysts": _num(self.n_analysts),
@@ -87,7 +91,8 @@ class SnapshotRow:
             street_mean=_as_float(d.get("street_mean")),
             n_analysts=_as_int(d.get("n_analysts")),
             target_mean=_as_float(d.get("target_mean")),
-            notes=d.get("notes", "") or "")
+            notes=d.get("notes", "") or "",
+            company_name=(d.get("company_name") or None))
 
 
 def _num(v) -> str:
@@ -140,6 +145,7 @@ def build_snapshot_rows(result, consensus: dict[str, StreetConsensus], *,
     iso = snapshot_date.isoformat()
     n_universe = len(result.ranked)
     universe_id = getattr(result, "meta", {}).get("universe_id", "") or ""
+    names = getattr(result, "names", {}) or {}
     rows: list[SnapshotRow] = []
 
     def _row(ticker, verdict, combined_rank, note):
@@ -150,7 +156,8 @@ def build_snapshot_rows(result, consensus: dict[str, StreetConsensus], *,
             price=(c.current_price if c else None),
             street_mean=(c.recommendation_mean if c else None),
             n_analysts=(c.n_analysts if c else None),
-            target_mean=(c.target_mean_price if c else None), notes=note)
+            target_mean=(c.target_mean_price if c else None), notes=note,
+            company_name=names.get(ticker))
 
     for r in result.ranked:
         verdict = r.verdict.upper()
@@ -273,6 +280,11 @@ class DivergenceRow:
     price: Optional[float]
     tercile_disagreement: bool          # aristos bucket != street bucket
     sticky_label: bool                  # top-tercile rating but target <= price
+    company_name: Optional[str] = None  # display label (yfinance longName)
+
+    @property
+    def display(self) -> str:
+        return display_name(self.ticker, self.company_name)
 
 
 def divergence_map(rows: list[SnapshotRow]) -> list[DivergenceRow]:
@@ -291,7 +303,8 @@ def divergence_map(rows: list[SnapshotRow]) -> list[DivergenceRow]:
         out.append(DivergenceRow(
             ticker=r.ticker, aristos_verdict=r.aristos_verdict,
             street_mean=r.street_mean, street_bucket=sb, target_mean=r.target_mean,
-            price=r.price, tercile_disagreement=disagree, sticky_label=sticky))
+            price=r.price, tercile_disagreement=disagree, sticky_label=sticky,
+            company_name=r.company_name))
     out.sort(key=lambda d: (d.street_mean is None, d.street_mean or 0.0, d.ticker))
     return out
 
@@ -299,7 +312,7 @@ def divergence_map(rows: list[SnapshotRow]) -> list[DivergenceRow]:
 def format_divergence_map(rows: list[SnapshotRow]) -> str:
     dm = divergence_map(rows)
     lines = ["Divergence map (sorted by street rating; 1=StrongBuy .. 5=Sell)",
-             f"  {'ticker':<10} {'aristos':<16} {'street':<6} {'tercile':<11} "
+             f"  {'name':<34} {'aristos':<16} {'street':<6} {'tercile':<11} "
              f"{'target':<9} {'price':<9} flags"]
     for d in dm:
         flags = []
@@ -307,8 +320,9 @@ def format_divergence_map(rows: list[SnapshotRow]) -> str:
             flags.append("DISAGREE")
         if d.sticky_label:
             flags.append("STICKY-LABEL")
+        disp = d.display if len(d.display) <= 34 else d.display[:33] + "…"
         lines.append(
-            f"  {d.ticker:<10} {d.aristos_verdict:<16} "
+            f"  {disp:<34} {d.aristos_verdict:<16} "
             f"{('—' if d.street_mean is None else f'{d.street_mean:.2f}'):<6} "
             f"{(d.street_bucket or '—'):<11} "
             f"{('—' if d.target_mean is None else f'{d.target_mean:.2f}'):<9} "

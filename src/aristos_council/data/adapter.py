@@ -57,6 +57,15 @@ def normalize_ticker(raw: str) -> str:
     return (raw or "").strip().upper().rstrip(".")
 
 
+def display_name(ticker: str, company_name: str | None) -> str:
+    """A report line's leading label: ``"Micron Technology (MU)"`` when the company
+    name is known, else the bare ``ticker``. One place so every surface (ranked table,
+    excluded, unrateable, narratives, snapshot divergence map, Company Check) renders
+    the same shape and degrades identically when the provider omits the name."""
+    name = (company_name or "").strip()
+    return f"{name} ({ticker})" if name else ticker
+
+
 # --------------------------------------------------------------------------- #
 # Errors
 # --------------------------------------------------------------------------- #
@@ -114,6 +123,11 @@ class Fundamentals:
 
     ticker: str
     name: str | None = None
+    # Full display/legal name (yfinance ``longName``) — the label report surfaces lead
+    # a line with, as "Micron Technology (MU)". Distinct from ``name`` (longName OR
+    # shortName) so the display path has one dedicated, None-guarded source; None when
+    # the provider omits longName -> callers fall back to the bare ticker.
+    company_name: str | None = None
     market_cap: float | None = None
     # GICS-style sector (yfinance info 'sector'; EODHD General::Sector). Used by the
     # rank engine's universe exclusions — e.g. Magic Formula EXCLUDES financials,

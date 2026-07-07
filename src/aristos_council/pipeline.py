@@ -49,6 +49,7 @@ from .factors import (
     is_unrateable,
     screen_evaluate,
 )
+from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
 from .rank_engine import FactorSpec, RankedTicker, rank_universe
 from .reproducibility import estimate_cost
@@ -99,6 +100,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     sources_by_ticker: dict[str, dict[str, str]] = {}
     screen_bases: dict[str, dict[str, str]] = {}     # ticker -> {criterion: basis}
     abstentions_by_ticker: dict[str, dict[str, str]] = {}   # ticker -> {criterion: note}
+    names_by_ticker: dict[str, str] = {}             # ticker -> company display name (ITEM 1)
     for t in universe:
         # A TRANSIENT fetch failure (429/timeout/5xx, unrecovered after retries) is NOT
         # absent data — abort THIS name with a fetch-error status (rerun), never mislabel
@@ -109,6 +111,8 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             excluded.append((t, f"{FETCH_ERROR_PREFIX}: {exc}"))
             continue
         f = fi.fundamentals
+        if f is not None and getattr(f, "company_name", None):
+            names_by_ticker[t] = f.company_name        # display label (ITEM 1)
         # UNRATEABLE: no fundamentals AND no price history (delisted / all-404). NEVER
         # ranked, no verdict, never reaches the council — applies on EVERY path.
         if is_unrateable(fi):
@@ -155,7 +159,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             r.factor_sources = sources_by_ticker[r.ticker]
         if r.ticker in abstentions_by_ticker:
             r.screen_abstentions = abstentions_by_ticker[r.ticker]
-    return ranked, excluded, screen_bases
+    return ranked, excluded, screen_bases, names_by_ticker
 
 
 def _shortlist(ranked: list[RankedTicker], runs_on: str, k: int) -> list[RankedTicker]:
@@ -220,8 +224,8 @@ def run_pipeline(
     # ranking — ranker and council share one defensive definition.
     prefilter = (screen_strategy.criteria
                  if getattr(rank_strategy, "prefilter_screen", False) else None)
-    ranked, excluded, _ = _rank_stage(universe, rank_strategy, adapter, today=today,
-                                      prefilter_criteria=prefilter)
+    ranked, excluded, _, _ = _rank_stage(universe, rank_strategy, adapter, today=today,
+                                          prefilter_criteria=prefilter)
     shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
 
     outcomes = _council_stage(
@@ -267,6 +271,22 @@ class RankPipelineResult:
     # excluded), e.g. {"PEP": {"max_payout_ratio_fcf": "fcf"}} — the payout-basis
     # disclosure counts across this.
     screen_bases: dict[str, dict[str, str]] = field(default_factory=dict)
+    # Ticker -> company display name (yfinance longName), for every processed name
+    # (ranked, excluded, unrateable). Render surfaces lead a line with
+    # display_name(ticker, names.get(ticker)); a missing entry falls back to the bare
+    # ticker (ITEM 1).
+    names: dict[str, str] = field(default_factory=dict)
+
+
+def _disp(result: "RankPipelineResult", ticker: str) -> str:
+    """The leading label for a report line: 'Company Name (TICKER)' or the bare ticker
+    when the name is unknown (ITEM 1)."""
+    return display_name(ticker, result.names.get(ticker))
+
+
+def _name_col(label: str, width: int = 34) -> str:
+    """Pad/truncate a display label to keep the ranked table's trailing columns aligned."""
+    return label if len(label) <= width else label[: width - 1] + "…"
 
 
 def _pipeline_header(mode: str) -> str:
@@ -362,7 +382,7 @@ def run_rank_pipeline(
         progress("Screening & ranking the universe…")
     prefilter = (screen_strategy.criteria
                  if getattr(rank_strategy, "prefilter_screen", False) else None)
-    ranked, prerank_excluded, screen_bases = _rank_stage(
+    ranked, prerank_excluded, screen_bases, names = _rank_stage(
         universe, rank_strategy, adapter, today=today, prefilter_criteria=prefilter)
     live = [r for r in ranked if not r.excluded]
     excluded, unrateable, fetch_errors = _split_exclusions(ranked, prerank_excluded)
@@ -416,7 +436,7 @@ def run_rank_pipeline(
         ranked=live, excluded=excluded, unrateable=unrateable, narratives=narratives,
         header=_pipeline_header(executed_mode), meta=meta, council_mode=executed_mode,
         council=council, shortlist=[r.ticker for r in shortlist],
-        fetch_errors=fetch_errors, screen_bases=screen_bases)
+        fetch_errors=fetch_errors, screen_bases=screen_bases, names=names)
 
     if csv_path and not ranker_only and mode != "narrator":
         _append_agreement_csv(result, Path(csv_path))
@@ -626,8 +646,8 @@ def format_cli_report(result: RankPipelineResult) -> str:
         f"=== RANKED ({m['rank_strategy_id']}) — verdict-of-record ===",
     ]
     for i, r in enumerate(result.ranked, 1):
-        tick = r.ticker + ("†" if r.screen_abstentions else "")
-        lines.append(f"  {i:>2}  {tick:<11} {r.verdict.upper():<5} "
+        disp = _disp(result, r.ticker) + ("†" if r.screen_abstentions else "")
+        lines.append(f"  {i:>2}  {_name_col(disp):<34} {r.verdict.upper():<5} "
                      f"combined {r.combined_rank:>5.0f}")
     for foot in ranked_abstention_footnotes(result):
         lines.append(f"  {foot}")
@@ -643,17 +663,17 @@ def format_cli_report(result: RankPipelineResult) -> str:
         lines.append("")
         lines.append("  Excluded (not ranked):")
         for t, reason in result.excluded:
-            lines.append(f"      {t:<10} {reason}")
+            lines.append(f"      {_disp(result, t)} — {reason}")
     if result.unrateable:
         lines.append("")
         lines.append("  UNRATEABLE (no data — no verdict):")
         for t, reason in result.unrateable:
-            lines.append(f"      {t:<10} {reason}")
+            lines.append(f"      {_disp(result, t)} — {reason}")
     if result.fetch_errors:
         lines.append("")
         lines.append("  FETCH FAILED — RERUN (transient; not ranked, not UNRATEABLE):")
         for t, reason in result.fetch_errors:
-            lines.append(f"      {t:<10} {reason}")
+            lines.append(f"      {_disp(result, t)} — {reason}")
     if not m["ranker_only"]:
         lines.append("")
         lines.append(format_narratives(result) if m["council_mode"] == "narrator"
@@ -685,6 +705,7 @@ def format_narratives(result: PipelineResult) -> str:
     must be visible. One block per shortlisted name: the ranker verdict-of-record and
     the Decision agent's synthesis (factor ranks / strategy fit; anything beyond the
     snapshot phrased as an open question — no accounting reinterpretation)."""
+    names = getattr(result, "names", {})
     lines = ["=== NARRATIVE (non-judging) ==="]
     if not result.council:
         lines.append("  (no names reached the council)")
@@ -692,7 +713,8 @@ def format_narratives(result: PipelineResult) -> str:
         d = o.report.decision
         narrative = (d.rationale.strip() if d and d.rationale else "") \
             or "(no narrative produced)"
-        lines.append(f"\n{o.ticker} — ranker verdict {o.ranker_verdict.upper()}")
+        lines.append(f"\n{display_name(o.ticker, names.get(o.ticker))} — "
+                     f"ranker verdict {o.ranker_verdict.upper()}")
         lines.append(narrative)
     return "\n".join(lines)
 
