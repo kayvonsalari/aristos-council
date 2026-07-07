@@ -107,6 +107,9 @@ class CompanyCheckResult:
     reference_cohort_n: int
     data_integrity: DataIntegrity
     pointer: str
+    # True when the lens-screen min_market_cap tested the SAME floor as the rank gate, so
+    # market cap is printed ONCE (under GATES) and the SCREEN references it (ITEM 3).
+    market_cap_in_gates: bool = False
 
     @property
     def display(self) -> str:
@@ -241,6 +244,19 @@ def run_company_check(
     # GATES — sector / market-cap / coarse payout (rank-strategy universe filters).
     gates = _gate_cells(rank_strategy, f)
 
+    # ITEM 3: market cap is printed ONCE (under GATES). When the lens-screen
+    # min_market_cap criterion tests the SAME floor as the gate, it is a duplicate —
+    # drop it from the SCREEN table and reference GATES. A DIFFERENT floor is a genuinely
+    # distinct constraint (e.g. a 5B lens floor over a 1B universe gate) and stays.
+    market_cap_in_gates = False
+    mcap_gate = getattr(rank_strategy, "min_market_cap", None)
+    if mcap_gate is not None:
+        dupe = next((c for c in screen_cells
+                     if c.name == "min_market_cap" and c.threshold == mcap_gate), None)
+        if dupe is not None:
+            screen_cells = [c for c in screen_cells if c is not dupe]
+            market_cap_in_gates = True
+
     # FACTORS — raw value + cohort position (from the latest frozen reference run).
     ref = _latest_reference_run(runs_dir, rank_strategy.id, _universe_tickers(
         reference_universe_id, universes_dir))
@@ -291,7 +307,8 @@ def run_company_check(
         screen=screen_cells, gates=gates, factors=factor_cells,
         divergence_flag=divergence, reference_available=cohort is not None,
         reference_run_id=ref_run_id, reference_run_date=ref_run_date,
-        reference_cohort_n=cohort_n, data_integrity=di, pointer=pointer)
+        reference_cohort_n=cohort_n, data_integrity=di, pointer=pointer,
+        market_cap_in_gates=market_cap_in_gates)
 
 
 def _universe_tickers(universe_id: str, universes_dir: Path) -> list[str]:
@@ -370,6 +387,21 @@ def _fmt_num(v: Optional[float]) -> str:
     return f"{v:.4g}"
 
 
+# Factors whose value is a return and reads as a SIGNED PERCENT (+711%), matching the
+# divergence flag — never the raw ratio 7.11 (ITEM 3).
+_PERCENT_FACTORS = frozenset({"momentum_12m", "momentum_6m"})
+
+
+def format_factor_value(factor: str, value: Optional[float]) -> str:
+    """A factor's value for display: momentum as a signed percent (+711%, consistent
+    with the divergence flag), everything else via the general number formatter."""
+    if value is None:
+        return "—"
+    if factor in _PERCENT_FACTORS:
+        return f"{value:+.0%}"
+    return _fmt_num(value)
+
+
 def format_company_check(result: CompanyCheckResult) -> str:
     """The text report the CLI prints — the SAME content the UI renders."""
     lines = [
@@ -395,6 +427,9 @@ def format_company_check(result: CompanyCheckResult) -> str:
         tag = f"  [{'; '.join(tags)}]" if tags else ""
         lines.append(f"  {c.status:<14} {c.name:<26} observed {_fmt_num(c.observed)} "
                      f"vs threshold {_fmt_num(c.threshold)}{tag}")
+    if result.market_cap_in_gates:
+        lines.append("  (min_market_cap — same floor as the universe gate; shown once, "
+                     "under GATES below)")
     if result.gates:
         lines.append("")
         lines.append("GATES (sector / cap / payout):")
@@ -408,7 +443,8 @@ def format_company_check(result: CompanyCheckResult) -> str:
            else "reference: none available — run the universe once for context")
     lines.append(f"FACTOR VALUES + CONTEXT ({ref}):")
     for fc in result.factors:
-        lines.append(f"  {fc.label} ({fc.factor}): {_fmt_num(fc.value)} "
+        lines.append(f"  {fc.label} ({fc.factor}): "
+                     f"{format_factor_value(fc.factor, fc.value)} "
                      f"[{fc.source}] — {fc.context}")
 
     if result.divergence_flag:

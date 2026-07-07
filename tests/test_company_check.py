@@ -50,9 +50,9 @@ class _OneName(MarketDataAdapter):
         return []
 
 
-def _check(fundamentals, *, ticker="X", has_price=True, reference=""):
+def _check(fundamentals, *, ticker="X", has_price=True, reference="", strat=_STRAT):
     return run_company_check(
-        ticker, _STRAT, reference, adapter=_OneName(fundamentals, has_price=has_price),
+        ticker, strat, reference, adapter=_OneName(fundamentals, has_price=has_price),
         strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR, runs_dir=RUNS_DIR,
         today=date(2026, 6, 30))
 
@@ -79,10 +79,14 @@ _MU = Fundamentals(
 def test_mu_shaped_full_table_flag_and_no_verdict():
     r = _check(_MU, ticker="MU")
     assert not r.unrateable
-    # ALL criteria present (min_roic FAIL, min_market_cap PASS) — evaluated, not short-circuited.
+    # ALL criteria evaluated (min_roic FAIL) — not short-circuited at the first fail.
     statuses = {c.name: c.status for c in r.screen}
     assert statuses["min_roic"] == "FAIL"
-    assert statuses["min_market_cap"] == "PASS"
+    # ITEM 3: market cap is deduped out of the SCREEN (same floor as the gate) and shown
+    # ONCE under GATES; the flag records that.
+    assert "min_market_cap" not in statuses
+    assert r.market_cap_in_gates is True
+    assert any(g.name == "min_market_cap" and g.status == "PASS" for g in r.gates)
     # every rank factor is reported with a raw value + context (no reference -> raw).
     assert {f.factor for f in r.factors} == {"roic", "earnings_yield", "momentum_12m"}
     assert all("no reference run available" in f.context for f in r.factors)
@@ -155,3 +159,35 @@ def test_passing_name_all_pass_no_verdict_points_at_universe_run():
     assert _no_verdict(text)
     assert "Passes the screen" in r.pointer
     assert "universe run" in r.pointer
+
+
+# --------------------------------------------------------------------------- #
+# ITEM 3 cosmetic sweep
+# --------------------------------------------------------------------------- #
+def test_momentum_factor_renders_as_signed_percent():
+    from aristos_council.company_check import format_factor_value
+    # matches the divergence flag's +711%, never the raw ratio 7.11.
+    assert format_factor_value("momentum_12m", 7.11) == "+711%"
+    assert format_factor_value("momentum_6m", -0.083) == "-8%"
+    # a non-momentum factor is untouched by the percent rule.
+    assert format_factor_value("roic", 0.0482) == "0.0482"
+    assert format_factor_value("momentum_12m", None) == "—"
+    # and it flows into the report text for MU (momentum ~+50% over the rising fixture).
+    r = _check(_MU, ticker="MU")
+    mom = next(f for f in r.factors if f.factor == "momentum_12m")
+    assert format_factor_value("momentum_12m", mom.value).endswith("%")
+    assert format_factor_value("momentum_12m", mom.value) in format_company_check(r)
+
+
+def test_market_cap_deduped_only_when_floors_match():
+    # Flagship: lens-screen floor (5B) == rank gate (5B) -> deduped to GATES only.
+    flag = _check(_MU, ticker="MU")
+    assert flag.market_cap_in_gates is True
+    assert "min_market_cap" not in {c.name for c in flag.screen}
+    assert "shown once, under GATES" in format_company_check(flag)
+
+    # conservative_plus: screen floor (5B) != rank gate (1B) -> genuinely distinct, kept
+    # in BOTH (a real constraint, not a duplicate).
+    cons = _check(_MU, ticker="MU", strat="conservative_plus_v1")
+    assert cons.market_cap_in_gates is False
+    assert "min_market_cap" in {c.name for c in cons.screen}

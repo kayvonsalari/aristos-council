@@ -1400,9 +1400,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
     labels = [strategy_label(s) for _, _, s in rank_options]
     choice = st.selectbox("Rank strategy", labels, key="uni_strategy")
     rank_strategy = rank_options[labels.index(choice)][2]
-    st.caption(f"`{rank_strategy.id}`"
-               + (f" · {strategy_role(rank_strategy)}" if strategy_role(rank_strategy)
-                  else ""))
+    st.caption(f"`{rank_strategy.id}`")                  # the stable record key
+    if strategy_role(rank_strategy):
+        st.caption(f"↳ {strategy_role(rank_strategy)}")
     if getattr(rank_strategy, "description", ""):
         st.caption(rank_strategy.description.strip())
 
@@ -1424,8 +1424,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
         picked = manifests[source_labels.index(source)]
         universe = list(picked.tickers)
         universe_id = picked.id
-        st.caption(f"`{picked.id}` · {len(universe)} names"
-                   + (f" · {universe_role(picked)}" if universe_role(picked) else ""))
+        st.caption(f"`{picked.id}` · {len(universe)} names")
+        if universe_role(picked):
+            st.caption(f"↳ {universe_role(picked)}")
         if picked.description:
             st.caption(picked.description)
         with st.expander("Tickers in this manifest"):
@@ -1574,9 +1575,9 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     choice = st.selectbox("Strategy (lens screen + factors)", labels, index=default_ix,
                           key="cc_strategy")
     rank_strategy = rank_options[labels.index(choice)][2]
-    st.caption(f"`{rank_strategy.id}`"
-               + (f" · {strategy_role(rank_strategy)}" if strategy_role(rank_strategy)
-                  else ""))
+    st.caption(f"`{rank_strategy.id}`")                  # the stable record key
+    if strategy_role(rank_strategy):
+        st.caption(f"↳ {strategy_role(rank_strategy)}")
 
     # Reference universe — manifests only (context comes from a persisted run; never a
     # fresh universe fetch). A 'None' option runs raw values with no cohort position.
@@ -1590,9 +1591,9 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     reference = None if ref_choice == NONE else manifests[ref_labels.index(ref_choice)]
     reference_id = "" if reference is None else reference.id
     if reference is not None:
-        st.caption(f"`{reference.id}`"
-                   + (f" · {universe_role(reference)}" if universe_role(reference)
-                      else ""))
+        st.caption(f"`{reference.id}`")                  # the stable record key
+        if universe_role(reference):
+            st.caption(f"↳ {universe_role(reference)}")
 
     run = st.button("▶ Run company check (free — no LLM)", type="primary",
                     disabled=not ticker, key="cc_run")
@@ -1648,6 +1649,9 @@ def _render_company_check(result) -> None:
             lambda v: f"color: {_CC_STATUS_HEX.get(v, '')}; font-weight: 700",
             subset=["Status"])
         st.dataframe(styler, hide_index=True, width="stretch")
+    if result.market_cap_in_gates:
+        st.caption("`min_market_cap` — same floor as the universe gate; shown once, "
+                   "under **Gates** below.")
 
     if result.gates:
         st.subheader("Gates — sector / cap / payout")
@@ -1668,8 +1672,11 @@ def _render_company_check(result) -> None:
     else:
         st.caption("No reference run available — showing raw values. Run the universe "
                    "once (Universe Run tab) to get cohort context.")
+    from aristos_council.company_check import format_factor_value
+
     for fc in result.factors:
-        st.markdown(f"- **{fc.label}** (`{fc.factor}`): {_cc_num(fc.value)} "
+        st.markdown(f"- **{fc.label}** (`{fc.factor}`): "
+                    f"{format_factor_value(fc.factor, fc.value)} "
                     f"_[{fc.source}]_ — {fc.context}")
 
     # Divergence flag — prominent.

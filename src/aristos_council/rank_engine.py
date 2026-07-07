@@ -70,8 +70,11 @@ class RankedTicker:
         if self.excluded:
             return f"{self.ticker}: EXCLUDED ({self.reason})"
         tail = "  (* = imputed, factor absent)" if self.imputed_factors else ""
-        return (f"{self.ticker}: {bits} -> combined {self.combined_rank:.0f} "
-                f"-> {self.verdict.upper()}{tail}")
+        # "combined rank-sum N across an M-name cohort" — the ranker verdict IS a
+        # cohort statement (a rank-sum over the universe), phrased so the narrator that
+        # echoes this text reads cleanly (never "combined rank of N/M-name cohort").
+        return (f"{self.ticker}: {bits} -> combined rank-sum {self.combined_rank:.0f} "
+                f"across a {n}-name cohort -> {self.verdict.upper()}{tail}")
 
 
 def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
