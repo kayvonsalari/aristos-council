@@ -1519,6 +1519,167 @@ def _render_snapshot_history() -> None:
                    "`examples/score_snapshot.py` (the prospective scoreboard).")
 
 
+_CC_STATUS_HEX = {"PASS": "#2E7D32", "FAIL": "#B23B3B", "NOT-EVALUATED": "#B8860B"}
+
+
+def _company_check_adapter():
+    """A cached yfinance adapter for the single-name fetch (free — no keys, no LLM)."""
+    from datetime import date as _date
+
+    from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
+    from aristos_council.data.provider import select_market_adapter
+    return CachingAdapter(select_market_adapter(), cache_dir=DEFAULT_CACHE_DIR,
+                          today=_date.today())
+
+
+def render_company_check_tab() -> None:
+    """Single-name diagnostic — 'why isn't X on the list?'. NO verdict is ever shown
+    (a rank over one name is fabricated); this reports the screen, the gates, factor
+    values with NAMED-cohort context, and the price-divergence flag."""
+    from aristos_council.company_check import run_company_check
+    from aristos_council.universe import list_universes
+
+    st.subheader("Company Check — single-name diagnostic")
+    st.caption("Why isn't a name on the list? Every screen criterion with values, each "
+               "factor vs a named reference cohort, and the price-divergence flag. "
+               "**No verdict** — a verdict is a cohort statement (a universe run).")
+
+    rank_options = list_rank_strategy_options(STRATEGIES_DIR)
+    if not rank_options:
+        st.error(f"No rank strategies found under {STRATEGIES_DIR}")
+        return
+
+    ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
+                                            placeholder="MU"))
+
+    # Strategy — default magic_formula_momentum_v1 (the flagship) when present.
+    ids = [s.id for _, _, s in rank_options]
+    default_ix = ids.index("magic_formula_momentum_v1") \
+        if "magic_formula_momentum_v1" in ids else 0
+    labels = [label for label, _, _ in rank_options]
+    choice = st.selectbox("Strategy (lens screen + factors)", labels, index=default_ix,
+                          key="cc_strategy")
+    rank_strategy = rank_options[labels.index(choice)][2]
+
+    # Reference universe — manifests only (context comes from a persisted run; never a
+    # fresh universe fetch). A 'None' option runs raw values with no cohort position.
+    manifests = list_universes(UNIVERSES_DIR)
+    NONE = "(none — raw values, no cohort context)"
+    ref_labels = [f"{u.id} · {len(u.tickers)} names" for u in manifests] + [NONE]
+    ref_choice = st.selectbox("Reference universe (for factor context)", ref_labels,
+                              key="cc_reference")
+    reference_id = "" if ref_choice == NONE else \
+        manifests[ref_labels.index(ref_choice)].id
+
+    run = st.button("▶ Run company check (free — no LLM)", type="primary",
+                    disabled=not ticker, key="cc_run")
+    if run:
+        try:
+            with st.spinner(f"Diagnosing {ticker}…"):
+                adapter = _company_check_adapter()
+                result = run_company_check(
+                    ticker, rank_strategy.id, reference_id, adapter=adapter,
+                    strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
+                    runs_dir=ROOT / "runs")
+        except Exception as exc:
+            st.exception(exc)
+            st.session_state.pop("cc_result", None)
+        else:
+            st.session_state["cc_result"] = result
+
+    result = st.session_state.get("cc_result")
+    if result is not None:
+        st.divider()
+        _render_company_check(result)
+
+
+def _render_company_check(result) -> None:
+    from aristos_council.company_check import format_company_check
+
+    st.markdown(f"### Company Check — {result.display}")
+    st.caption("Single-name diagnostic · **NO VERDICT** — verdicts are cohort "
+               "statements (see `docs/SCOREBOARD.md`).")
+    st.caption(f"strategy: `{result.rank_strategy_id}` · lens screen: "
+               f"`{result.screen_strategy_id}` · reference: "
+               f"`{result.reference_universe_id or '—'}`")
+
+    if result.unrateable:
+        st.warning(f"⚪ **UNRATEABLE** — {result.data_integrity.note}. No data, so no "
+                   "diagnosis and no verdict.")
+        st.info(result.pointer)
+        return
+
+    # SCREEN — every criterion evaluated (no short-circuit).
+    st.subheader("Screen — all criteria evaluated for diagnosis")
+    st.caption("A universe run excludes on the FIRST confirmed fail; here every "
+               "criterion is evaluated so the whole picture is visible.")
+    import pandas as pd
+
+    srows = [{"Criterion": c.name, "Observed": _cc_num(c.observed),
+              "Threshold": _cc_num(c.threshold), "Status": c.status,
+              "Basis": c.basis or "", "Borderline": "●" if c.borderline else ""}
+             for c in result.screen]
+    if srows:
+        sdf = pd.DataFrame(srows)
+        styler = sdf.style.map(
+            lambda v: f"color: {_CC_STATUS_HEX.get(v, '')}; font-weight: 700",
+            subset=["Status"])
+        st.dataframe(styler, hide_index=True, width="stretch")
+
+    if result.gates:
+        st.subheader("Gates — sector / cap / payout")
+        gdf = pd.DataFrame([{"Gate": g.name, "Status": g.status, "Detail": g.detail}
+                            for g in result.gates])
+        styler = gdf.style.map(
+            lambda v: f"color: {_CC_STATUS_HEX.get(v, '')}; font-weight: 700",
+            subset=["Status"])
+        st.dataframe(styler, hide_index=True, width="stretch")
+
+    # FACTORS + cohort context.
+    st.subheader("Factor values + cohort context")
+    if result.reference_available:
+        st.caption(f"Position vs the latest persisted run of "
+                   f"`{result.reference_universe_id}` (run {result.reference_run_date}, "
+                   f"{result.reference_cohort_n} ranked) — replayed offline, no fresh "
+                   "fetch.")
+    else:
+        st.caption("No reference run available — showing raw values. Run the universe "
+                   "once (Universe Run tab) to get cohort context.")
+    for fc in result.factors:
+        st.markdown(f"- **{fc.label}** (`{fc.factor}`): {_cc_num(fc.value)} "
+                    f"_[{fc.source}]_ — {fc.context}")
+
+    # Divergence flag — prominent.
+    if result.divergence_flag:
+        st.warning(f"**Price/fundamentals divergence** — {result.divergence_flag}")
+
+    # Data integrity footer.
+    di = result.data_integrity
+    with st.expander("Data integrity"):
+        st.markdown(f"- fundamentals: **{'ok' if di.fundamentals_ok else 'MISSING'}** · "
+                    f"price: **{'ok' if di.price_ok else 'MISSING'}**")
+        if di.abstained_criteria:
+            st.markdown("- criteria not evaluated (abstained): "
+                        + ", ".join(di.abstained_criteria))
+        if di.not_evaluated_factors:
+            st.markdown("- factors not evaluated: "
+                        + ", ".join(di.not_evaluated_factors))
+
+    st.info(result.pointer)
+    st.download_button(
+        "⬇ Download check as text", data=format_company_check(result),
+        file_name=f"company_check_{result.ticker}.txt", mime="text/plain",
+        key="cc_download")
+
+
+def _cc_num(v) -> str:
+    if v is None:
+        return "—"
+    if isinstance(v, float) and (abs(v) >= 1e6 or (v != 0 and abs(v) < 1e-3)):
+        return f"{v:,.0f}"
+    return f"{v:.4g}" if isinstance(v, float) else str(v)
+
+
 # --------------------------------------------------------------------------- #
 # Page
 # --------------------------------------------------------------------------- #
@@ -1630,18 +1791,25 @@ def main() -> None:
         st.success(pending)
 
     if not show_legacy:
-        # v2-ONLY landing: the Universe Run tab IS the app (its snapshot-history view
-        # included). No legacy render function is called.
-        render_universe_tab()
+        # v2-ONLY landing: Universe Run + Company Check (both first-class, not legacy).
+        tab_universe, tab_company = st.tabs(["Universe Run", "Company Check"])
+        with tab_universe:
+            render_universe_tab()
+        with tab_company:
+            render_company_check_tab()
         return
 
-    # Legacy ON: Universe Run FIRST (Streamlit default-selects it), then the pre-v2
-    # council browsers (each labeled Legacy), the council-YAML editor last.
-    tab_universe, tab_report, tab_history, tab_strategy = st.tabs(
-        ["Universe Run", "Report · Legacy", "History · Legacy", "Strategy · Legacy"])
+    # Legacy ON: Universe Run FIRST (Streamlit default-selects it), Company Check next
+    # (first-class), then the pre-v2 council browsers (Legacy), the YAML editor last.
+    tab_universe, tab_company, tab_report, tab_history, tab_strategy = st.tabs(
+        ["Universe Run", "Company Check", "Report · Legacy", "History · Legacy",
+         "Strategy · Legacy"])
 
     with tab_universe:
         render_universe_tab()
+
+    with tab_company:
+        render_company_check_tab()
 
     with tab_report:
         st.info(f"**Legacy.** {_LEGACY_BANNER}")
