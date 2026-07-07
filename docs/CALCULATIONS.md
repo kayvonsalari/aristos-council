@@ -104,6 +104,17 @@ both `min_*` (fail below) and `max_*` (fail above) since an excluded value alway
 the failing side. The floor is unchanged — a borderline fail is still a fail; the tag
 just flags a knife-edge miss to the reader (`factors.is_borderline_fail`).
 
+**Diverging-exclusions flag** (disclosure, no logic change). When an excluded name has ANY
+CONFIRMED fundamental-criterion FAIL *and* its trailing 12-month price momentum is at or
+above **+0.30**, the exclusion line is annotated
+`[⚠ price diverging: +XX% 12m — cyclical inflection or mania; human review]` (the actual
+momentum is shown). The **0.30** threshold is a stated convention, not fitted to outcomes —
+like every threshold here. The price-momentum criterion itself is excluded from
+"fundamental" (a price criterion can't be the price-vs-fundamentals tell), and an
+ABSTENTION never counts as a fail (rule 3). Base-rate warning: *the flag also decorates
+value traps whose price has not finished falling; it marks disagreement, not direction.*
+The flag NEVER alters a verdict or an exclusion (`factors.price_divergence_flag`).
+
 ## 5. Guards
 
 - **UNRATEABLE** — a ticker with failed fundamentals *and* no usable price history (a

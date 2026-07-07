@@ -385,6 +385,44 @@ def screen_prefilter_fail(screen_criteria, fi: FactorInputs) -> Optional[str]:
 _BASIS_LABEL = {"fcf": "FCF (4y mean)", "eps": "EPS fallback"}
 
 
+# Price-vs-fundamentals divergence flag (ITEM 2). A STATED convention, not fitted:
+# a 12m run-up of +30% or more while a fundamental floor confirmed-fails is the
+# cyclical-inflection / mania shape worth a human's eye. Documented in CALCULATIONS.md §4.
+_DIVERGENCE_MOMENTUM_THRESHOLD = 0.30
+
+
+def price_divergence_flag(fi: FactorInputs, screen_criteria) -> Optional[str]:
+    """Return the price-divergence disclosure note for an excluded name, else None.
+
+    Fires when ANY *fundamental* screen criterion is a CONFIRMED FAIL (``passed is
+    False``) AND the name's trailing 12m price momentum is >= +0.30 — a price that has
+    run up hard while the business floor it's screened on is failing (a cyclical
+    inflection, or a mania). The note is::
+
+        [⚠ price diverging: +35% 12m — cyclical inflection or mania; human review]
+
+    and carries the ACTUAL momentum value. It NEVER alters a verdict or an exclusion —
+    it only annotates the reason so the reader sees the disagreement. Two disciplines:
+    ABSTENTION is not a fail (``passed is None`` doesn't count — rule 3), and the
+    price-momentum criterion itself is excluded from 'fundamental' (a price criterion
+    can't be the price-divergence tell)."""
+    mom = fi.return_12m
+    if mom is None or mom < _DIVERGENCE_MOMENTUM_THRESHOLD:
+        return None
+    if fi.fundamentals is None:
+        return None
+    from .tools.criteria.registry import (
+        Evidence, PRICE_MOMENTUM_CRITERION, run_screen)
+    ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
+                  return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
+    res = run_screen(screen_criteria, ev, ticker=fi.ticker)
+    if not any(c.passed is False and c.name != PRICE_MOMENTUM_CRITERION
+               for c in res.criteria):
+        return None
+    return (f"[⚠ price diverging: {mom:+.0%} 12m — cyclical inflection or mania; "
+            f"human review]")
+
+
 def screen_evaluate(screen_criteria, fi: FactorInputs):
     """Run a screen ONCE and return ``(first_confirmed_fail_reason | None, bases,
     abstentions)``:

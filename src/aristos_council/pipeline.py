@@ -47,6 +47,7 @@ from .factors import (
     is_payout_uncovered,
     is_sector_excluded,
     is_unrateable,
+    price_divergence_flag,
     screen_evaluate,
 )
 from .data.adapter import display_name
@@ -141,6 +142,12 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             if abstentions:
                 abstentions_by_ticker[t] = abstentions
             if reason is not None:
+                # ITEM 2: decorate (never alter) the exclusion when a fundamental floor
+                # confirmed-fails while price has run up hard — visible wherever the
+                # exclusion line renders (CLI, Universe Run tab, snapshot notes).
+                flag = price_divergence_flag(fi, prefilter_criteria)
+                if flag:
+                    reason = f"{reason} {flag}"
                 excluded.append((t, reason))
                 continue
         outcomes = compute_factor_outcomes(
