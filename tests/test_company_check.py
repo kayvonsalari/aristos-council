@@ -88,6 +88,10 @@ def test_mu_shaped_full_table_flag_and_no_verdict():
     assert all("no reference run available" in f.context for f in r.factors)
     # the price/fundamentals divergence flag fires (min_roic fail + momentum >= +0.30).
     assert r.divergence_flag is not None and "price diverging" in r.divergence_flag
+    # the '⚠' flag glyph is present and the report is UTF-8 encodable — the CLIs force
+    # UTF-8 stdout so this doesn't crash a Windows cp1252 console (found in validation).
+    assert "⚠" in format_company_check(r)
+    format_company_check(r).encode("utf-8")
     # NO verdict anywhere; the object has no verdict field at all.
     assert not hasattr(r, "verdict")
     text = format_company_check(r)

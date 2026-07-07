@@ -21,7 +21,7 @@ import argparse
 from datetime import date
 from pathlib import Path
 
-from aristos_council.cli_guards import universe_args_error
+from aristos_council.cli_guards import force_utf8_stdout, universe_args_error
 from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
 from aristos_council.data.provider import select_market_adapter
@@ -51,6 +51,7 @@ def _read_tickers(args) -> list[str]:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Freeze verdict + street-consensus snapshot.")
+    force_utf8_stdout()          # the '⚠' divergence flag must not crash a cp1252 console
     p.add_argument("tickers", nargs="*")
     p.add_argument("--file")
     p.add_argument("--universe-id",

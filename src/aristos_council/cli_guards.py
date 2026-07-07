@@ -9,7 +9,19 @@ is written. Pure functions so they unit-test without argparse or a network.
 
 from __future__ import annotations
 
+import sys
 from typing import Optional
+
+
+def force_utf8_stdout() -> None:
+    """Emit UTF-8 on stdout/stderr so report glyphs — the '⚠' divergence flag (ITEM 2),
+    '—', and company names — don't crash on a legacy code page (Windows consoles default
+    to cp1252, which can't encode '⚠'). No-op where ``reconfigure`` is unavailable."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")     # type: ignore[union-attr]
+        except Exception:
+            pass
 
 # Substrings/shapes a real ticker never has. Tickers legitimately carry '.' (BRK.B,
 # 000660.KS) and '-' (BRK-B), so those are NOT rejected wholesale — only path

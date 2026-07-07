@@ -19,7 +19,7 @@ import argparse
 from datetime import date
 from pathlib import Path
 
-from aristos_council.cli_guards import implausible_ticker_reason
+from aristos_council.cli_guards import force_utf8_stdout, implausible_ticker_reason
 from aristos_council.company_check import format_company_check, run_company_check
 from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
@@ -35,6 +35,7 @@ def main() -> None:
     p = argparse.ArgumentParser(
         description="Single-name diagnostic — why isn't this ticker on the list? "
                     "(NO verdict; NO LLM).")
+    force_utf8_stdout()          # the '⚠' divergence flag must not crash a cp1252 console
     p.add_argument("ticker", help="the ONE ticker to diagnose")
     p.add_argument("--strategy", default="magic_formula_momentum_v1",
                    help="rank strategy whose lens screen + factors apply "
