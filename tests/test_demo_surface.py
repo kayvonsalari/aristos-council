@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from aristos_council.demo_surface import (
-    strategy_label, strategy_role, universe_label, universe_role)
+    strategy_label, strategy_role, universe_label, universe_role,
+    visible_rank_strategies, visible_universes)
 from aristos_council.strategy.rank_loader import load_rank_strategy
 from aristos_council.universe import list_universes, load_universe_by_id
 
@@ -86,3 +87,32 @@ def test_label_falls_back_to_name_then_id():
     assert strategy_label(_Stub(id="foo_v1")) == "foo_v1"                # no name either
     assert universe_label(_Stub(id="bar_v1")) == "bar_v1"
     assert strategy_role(_Stub(id="x_v1")) == ""                        # empty role ok
+
+
+# --------------------------------------------------------------------------- #
+# Visibility — validation assets hidden by default, revealed by the toggle (ITEM 2)
+# --------------------------------------------------------------------------- #
+_RANKS = ("magic_formula_momentum_v1", "conservative_plus_v1", "magic_formula_v1")
+
+
+def test_visible_universes_hides_the_bench_by_default():
+    manifests = list_universes(UNIV_DIR)
+    off = {u.id for u in visible_universes(manifests, show_validation=False)}
+    assert off == {"growth_40_v1", "defensive_income_16_v1"}            # scoreboard only
+    on = {u.id for u in visible_universes(manifests, show_validation=True)}
+    assert "defensive_16_v1" in on                                      # bench revealed
+
+
+def test_visible_rank_strategies_hides_the_baseline_by_default():
+    strategies = [_strategy(s) for s in _RANKS]
+    off = {s.id for s in visible_rank_strategies(strategies, show_validation=False)}
+    assert off == {"magic_formula_momentum_v1", "conservative_plus_v1"}  # live only
+    on = {s.id for s in visible_rank_strategies(strategies, show_validation=True)}
+    assert "magic_formula_v1" in on                                     # baseline revealed
+
+
+def test_hidden_assets_remain_fully_functional_ids_intact():
+    # The bench/baseline are hidden, NOT deleted — still loadable, ids intact (records
+    # reference ids, so hiding a demo asset can't change a persisted key).
+    assert _universe("defensive_16_v1").id == "defensive_16_v1"
+    assert _strategy("magic_formula_v1").id == "magic_formula_v1"

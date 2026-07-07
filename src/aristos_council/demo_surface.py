@@ -11,6 +11,37 @@ Pure functions (no Streamlit), so the labelling is unit-tested directly.
 
 from __future__ import annotations
 
+# Validation / baseline assets — HIDDEN from the default demo surface, revealed only by
+# the "Show validation & legacy tools" toggle. They remain fully functional (the baseline
+# side-by-side is a demo exhibit one toggle-flip away, NOT deleted). Ids, not display
+# names, so the gate keys off the stable record key.
+_VALIDATION_UNIVERSE_IDS = frozenset({"defensive_16_v1"})     # the known-trap bench
+_VALIDATION_STRATEGY_IDS = frozenset({"magic_formula_v1"})    # the Classic Value baseline
+
+
+def is_validation_universe(universe_id: str) -> bool:
+    """True for a universe shown only behind the validation toggle (the trap bench)."""
+    return universe_id in _VALIDATION_UNIVERSE_IDS
+
+
+def is_validation_strategy(strategy_id: str) -> bool:
+    """True for a strategy shown only behind the validation toggle (the baseline)."""
+    return strategy_id in _VALIDATION_STRATEGY_IDS
+
+
+def visible_universes(manifests, *, show_validation: bool):
+    """The universe manifests a dropdown should offer: all of them when the validation
+    toggle is ON, else only the non-validation (scoreboard) universes."""
+    return [u for u in manifests
+            if show_validation or not is_validation_universe(u.id)]
+
+
+def visible_rank_strategies(strategies, *, show_validation: bool):
+    """The rank strategies a dropdown should offer: all when the toggle is ON, else only
+    the live (non-baseline) strategies. Accepts objects with a ``.id``."""
+    return [s for s in strategies
+            if show_validation or not is_validation_strategy(s.id)]
+
 
 def universe_label(u) -> str:
     """Friendly dropdown label for a universe manifest — its ``display_name`` if set,

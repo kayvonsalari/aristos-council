@@ -31,7 +31,8 @@ from pydantic import ValidationError
 from aristos_council.data.adapter import (
     DataUnavailable, display_name, normalize_ticker)
 from aristos_council.demo_surface import (
-    strategy_label, strategy_role, universe_label, universe_role)
+    is_validation_strategy, strategy_label, strategy_role, universe_label,
+    universe_role, visible_universes)
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
     RunReport,
@@ -1367,7 +1368,7 @@ def _render_universe_result(result) -> None:
         mime="text/markdown", key="uni_download")
 
 
-def render_universe_tab() -> None:
+def render_universe_tab(show_validation: bool = False) -> None:
     import os
 
     from aristos_council.reproducibility import estimate_cost
@@ -1379,7 +1380,11 @@ def render_universe_tab() -> None:
                "narrates. Pick a rank strategy and a universe (a saved manifest or a "
                "custom list).")
 
-    rank_options = list_rank_strategy_options(STRATEGIES_DIR)
+    # Behind the validation toggle: the baseline strategy + the trap bench universe are
+    # hidden by default (fully functional — one toggle-flip away), so the demo surface
+    # shows only the live strategies and the scoreboard universes.
+    rank_options = [o for o in list_rank_strategy_options(STRATEGIES_DIR)
+                    if show_validation or not is_validation_strategy(o[2].id)]
     if not rank_options:
         st.error(f"No rank strategies found under {STRATEGIES_DIR}")
         return
@@ -1403,7 +1408,8 @@ def render_universe_tab() -> None:
 
     # Universe source: a declared manifest (recorded by id) or a custom paste
     # (recorded as adhoc:<hash>). The manifest is the reproducible, versioned input.
-    manifests = list_universes(UNIVERSES_DIR)
+    manifests = visible_universes(list_universes(UNIVERSES_DIR),
+                                  show_validation=show_validation)
     CUSTOM = "Custom (paste tickers)"
     source_labels = [f"{universe_label(u)} · {len(u.tickers)} names"
                      for u in manifests] + [CUSTOM]
@@ -1538,7 +1544,7 @@ def _company_check_adapter():
                           today=_date.today())
 
 
-def render_company_check_tab() -> None:
+def render_company_check_tab(show_validation: bool = False) -> None:
     """Single-name diagnostic — 'why isn't X on the list?'. NO verdict is ever shown
     (a rank over one name is fabricated); this reports the screen, the gates, factor
     values with NAMED-cohort context, and the price-divergence flag."""
@@ -1550,7 +1556,8 @@ def render_company_check_tab() -> None:
                "factor vs a named reference cohort, and the price-divergence flag. "
                "**No verdict** — a verdict is a cohort statement (a universe run).")
 
-    rank_options = list_rank_strategy_options(STRATEGIES_DIR)
+    rank_options = [o for o in list_rank_strategy_options(STRATEGIES_DIR)
+                    if show_validation or not is_validation_strategy(o[2].id)]
     if not rank_options:
         st.error(f"No rank strategies found under {STRATEGIES_DIR}")
         return
@@ -1573,7 +1580,8 @@ def render_company_check_tab() -> None:
 
     # Reference universe — manifests only (context comes from a persisted run; never a
     # fresh universe fetch). A 'None' option runs raw values with no cohort position.
-    manifests = list_universes(UNIVERSES_DIR)
+    manifests = visible_universes(list_universes(UNIVERSES_DIR),
+                                  show_validation=show_validation)
     NONE = "(none — raw values, no cohort context)"
     ref_labels = [f"{universe_label(u)} · {len(u.tickers)} names"
                   for u in manifests] + [NONE]
@@ -1775,10 +1783,12 @@ def main() -> None:
         # is always the way back. No `value=` so its default is off and tests/session
         # can set it without a default-conflict warning.
         st.toggle(
-            "Show legacy tools", key="show_legacy",
-            help="Reveal the legacy single-ticker council, its Report/History, and the "
-                 "council-strategy editor. Off by default — the app opens as the "
-                 "Universe Run.")
+            "Show validation & legacy tools", key="show_legacy",
+            help="Reveal the validation assets — the known-trap bench universe and the "
+                 "Classic Value baseline strategy (for side-by-side comparison) — plus "
+                 "the legacy single-ticker council, its Report/History, and the "
+                 "council-strategy editor. Off by default — the app opens on the live "
+                 "scoreboard strategies and universes only.")
 
     if show_legacy and run_clicked and selected_path is not None:
         try:
@@ -1807,24 +1817,26 @@ def main() -> None:
 
     if not show_legacy:
         # v2-ONLY landing: Universe Run + Company Check (both first-class, not legacy).
+        # Validation assets hidden (show_validation=False).
         tab_universe, tab_company = st.tabs(["Universe Run", "Company Check"])
         with tab_universe:
-            render_universe_tab()
+            render_universe_tab(show_validation=False)
         with tab_company:
-            render_company_check_tab()
+            render_company_check_tab(show_validation=False)
         return
 
     # Legacy ON: Universe Run FIRST (Streamlit default-selects it), Company Check next
     # (first-class), then the pre-v2 council browsers (Legacy), the YAML editor last.
+    # The toggle is ON here, so validation assets (bench + baseline) are revealed.
     tab_universe, tab_company, tab_report, tab_history, tab_strategy = st.tabs(
         ["Universe Run", "Company Check", "Report · Legacy", "History · Legacy",
          "Strategy · Legacy"])
 
     with tab_universe:
-        render_universe_tab()
+        render_universe_tab(show_validation=True)
 
     with tab_company:
-        render_company_check_tab()
+        render_company_check_tab(show_validation=True)
 
     with tab_report:
         st.info(f"**Legacy.** {_LEGACY_BANNER}")

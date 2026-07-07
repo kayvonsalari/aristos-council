@@ -278,7 +278,10 @@ def test_rank_dropdown_order_baseline_label_and_no_v2_heading():
     rank_dd = next(s for s in at.selectbox if s.label == "Rank strategy")
     opts = list(rank_dd.options)
     assert "momentum" in opts[0].lower()                        # flagship first
-    assert any("baseline — for comparison" in o for o in opts)  # magic_formula_v1 labeled
+    # the baseline (magic_formula_v1) is HIDDEN by default now (ITEM 2) — it carries its
+    # 'baseline — for comparison' label only under the validation toggle (asserted in
+    # test_validation_assets_revealed_when_toggle_on).
+    assert not any("baseline" in o.lower() for o in opts)
     heads = " ".join(str(getattr(e, "value", "")) for e in at.subheader)
     assert "Universe Run — screen, rank, verdict" in heads and "v2" not in heads
 
@@ -339,7 +342,8 @@ def test_legacy_hidden_by_default_and_toggle_defaults_off():
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
     # the toggle exists and defaults OFF
-    legacy_toggle = next(t for t in at.toggle if t.label == "Show legacy tools")
+    legacy_toggle = next(t for t in at.toggle
+                         if t.label == "Show validation & legacy tools")
     assert legacy_toggle.value is False
     assert at.session_state["show_legacy"] is False
     # NO legacy surface rendered: no council-run button, no legacy sidebar header, no
@@ -359,6 +363,38 @@ def test_legacy_surfaces_appear_when_toggle_on():
     assert "Run a council" in _header_blob(at)                       # legacy sidebar back
     assert "Edits council-strategy YAMLs" in _info_blob(at)          # Strategy editor back
     assert any("Report · Legacy" in str(t.label) for t in at.tabs)   # legacy tabs back
+
+
+def _dropdown(at, label):
+    return next(s for s in at.selectbox if s.label == label)
+
+
+def test_validation_assets_hidden_by_default(monkeypatch):
+    # ITEM 2: toggle OFF (default) -> universe dropdown = the two scoreboard universes +
+    # Custom; strategy dropdown = the two live strategies. Bench + baseline are hidden.
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+
+    uni = _dropdown(at, "Universe").options
+    assert any(o.startswith("Growth 40 ·") for o in uni)
+    assert any(o.startswith("Defensive Income 16 ·") for o in uni)
+    assert "Custom (paste tickers)" in uni
+    assert not any("Validation Bench" in o for o in uni)             # bench hidden
+    assert len(uni) == 3                                             # exactly the three
+
+    rank = _dropdown(at, "Rank strategy").options
+    assert not any("Classic Value" in o for o in rank)              # baseline hidden
+    assert len(rank) == 2                                            # exactly the two live
+
+
+def test_validation_assets_revealed_when_toggle_on():
+    at = _legacy_app(60)
+    assert not at.exception
+    uni = _dropdown(at, "Universe").options
+    assert any("Validation Bench" in o for o in uni)                 # bench revealed
+    rank = _dropdown(at, "Rank strategy").options
+    assert any("Classic Value" in o for o in rank)                  # baseline revealed
 
 
 _MSFT_PRE_4E = _REPORTS / "MSFT" / "2026-06-14T13-29-49Z.json"
