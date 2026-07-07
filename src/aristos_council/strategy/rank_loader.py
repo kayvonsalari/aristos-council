@@ -46,6 +46,12 @@ class RankStrategy(BaseModel):
     id: str
     name: str
     version: int = Field(ge=1)
+    # Friendly, user-facing name for dropdowns/captions (e.g. "Value + Momentum
+    # (flagship)"). The `id` stays the STABLE record key (never renamed); this is
+    # display-only, falling back to `name` then `id` when absent.
+    display_name: str = ""
+    # Optional one-line role caption shown under the selected entry. Display-only.
+    role: str = ""
     description: str = ""
     rationale: str = ""
     # The proven factors to rank on (>=1), validated against the factor registry.

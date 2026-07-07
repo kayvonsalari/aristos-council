@@ -3,6 +3,8 @@
 # The historically validated defensive set: consumer staples + healthcare, plus the
 # three known dividend traps (T, VZ, MMM) as controls the screen must still exclude.
 id: defensive_16_v1
+display_name: Validation Bench (defensive)
+role: known-trap controls — never graded
 description: Validated 16-name defensive universe — staples + healthcare, with known-trap controls.
 created: "2026-07-05"
 rationale: >-

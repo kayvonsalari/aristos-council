@@ -317,8 +317,10 @@ def test_universe_run_tab_renders_with_rank_dropdown():
     # The "Rank strategy" selectbox only exists inside render_universe_tab, so its
     # presence proves the tab rendered.
     rank_dd = next(s for s in at.selectbox if s.label == "Rank strategy")
-    assert any("magic_formula" in o for o in rank_dd.options)
-    assert not any("growth_v1" in o for o in rank_dd.options)   # council, not rank
+    # Options are the FRIENDLY display names now (ITEM 1) — the technical id is demoted
+    # to a caption, so it never appears in the label (no ids/underscores/_v1).
+    assert any("Value + Momentum" in o for o in rank_dd.options)
+    assert not any("_" in o for o in rank_dd.options)
 
 
 # --------------------------------------------------------------------------- #

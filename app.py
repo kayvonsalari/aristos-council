@@ -30,6 +30,8 @@ from pydantic import ValidationError
 
 from aristos_council.data.adapter import (
     DataUnavailable, display_name, normalize_ticker)
+from aristos_council.demo_surface import (
+    strategy_label, strategy_role, universe_label, universe_role)
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
     RunReport,
@@ -1384,17 +1386,18 @@ def render_universe_tab() -> None:
     # Present the flagship first, the baseline last (ITEM 7). Unknown ids keep id-order.
     _rank_priority = ["magic_formula_momentum_v1", "conservative_plus_v1",
                       "magic_formula_v1"]
-    _rank_label_override = {
-        "magic_formula_v1": "Magic Formula · magic_formula_v1 (baseline — for comparison)",
-    }
     rank_options = sorted(
         rank_options,
         key=lambda o: (_rank_priority.index(o[2].id) if o[2].id in _rank_priority
                        else len(_rank_priority), o[2].id))
-    labels = [_rank_label_override.get(s.id, label) for label, _, s in rank_options]
+    # Dropdowns render the FRIENDLY display_name; the technical id lives only in a small
+    # caption (ids are the stable record keys — never renamed, never in the label).
+    labels = [strategy_label(s) for _, _, s in rank_options]
     choice = st.selectbox("Rank strategy", labels, key="uni_strategy")
     rank_strategy = rank_options[labels.index(choice)][2]
-    # Surface the strategy's own YAML description (no duplicated copy).
+    st.caption(f"`{rank_strategy.id}`"
+               + (f" · {strategy_role(rank_strategy)}" if strategy_role(rank_strategy)
+                  else ""))
     if getattr(rank_strategy, "description", ""):
         st.caption(rank_strategy.description.strip())
 
@@ -1402,7 +1405,8 @@ def render_universe_tab() -> None:
     # (recorded as adhoc:<hash>). The manifest is the reproducible, versioned input.
     manifests = list_universes(UNIVERSES_DIR)
     CUSTOM = "Custom (paste tickers)"
-    source_labels = [f"{u.id} · {len(u.tickers)} names" for u in manifests] + [CUSTOM]
+    source_labels = [f"{universe_label(u)} · {len(u.tickers)} names"
+                     for u in manifests] + [CUSTOM]
     source = st.selectbox("Universe", source_labels, key="uni_source")
     if source == CUSTOM:
         raw = st.text_area(
@@ -1414,8 +1418,10 @@ def render_universe_tab() -> None:
         picked = manifests[source_labels.index(source)]
         universe = list(picked.tickers)
         universe_id = picked.id
-        st.caption(f"Manifest **{picked.id}** — {len(universe)} names. "
-                   f"{picked.description}")
+        st.caption(f"`{picked.id}` · {len(universe)} names"
+                   + (f" · {universe_role(picked)}" if universe_role(picked) else ""))
+        if picked.description:
+            st.caption(picked.description)
         with st.expander("Tickers in this manifest"):
             st.write(", ".join(universe))
 
@@ -1552,24 +1558,33 @@ def render_company_check_tab() -> None:
     ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
                                             placeholder="MU"))
 
-    # Strategy — default magic_formula_momentum_v1 (the flagship) when present.
+    # Strategy — default magic_formula_momentum_v1 (the flagship) when present. The
+    # dropdown shows the friendly display_name; the id is a small caption.
     ids = [s.id for _, _, s in rank_options]
     default_ix = ids.index("magic_formula_momentum_v1") \
         if "magic_formula_momentum_v1" in ids else 0
-    labels = [label for label, _, _ in rank_options]
+    labels = [strategy_label(s) for _, _, s in rank_options]
     choice = st.selectbox("Strategy (lens screen + factors)", labels, index=default_ix,
                           key="cc_strategy")
     rank_strategy = rank_options[labels.index(choice)][2]
+    st.caption(f"`{rank_strategy.id}`"
+               + (f" · {strategy_role(rank_strategy)}" if strategy_role(rank_strategy)
+                  else ""))
 
     # Reference universe — manifests only (context comes from a persisted run; never a
     # fresh universe fetch). A 'None' option runs raw values with no cohort position.
     manifests = list_universes(UNIVERSES_DIR)
     NONE = "(none — raw values, no cohort context)"
-    ref_labels = [f"{u.id} · {len(u.tickers)} names" for u in manifests] + [NONE]
+    ref_labels = [f"{universe_label(u)} · {len(u.tickers)} names"
+                  for u in manifests] + [NONE]
     ref_choice = st.selectbox("Reference universe (for factor context)", ref_labels,
                               key="cc_reference")
-    reference_id = "" if ref_choice == NONE else \
-        manifests[ref_labels.index(ref_choice)].id
+    reference = None if ref_choice == NONE else manifests[ref_labels.index(ref_choice)]
+    reference_id = "" if reference is None else reference.id
+    if reference is not None:
+        st.caption(f"`{reference.id}`"
+                   + (f" · {universe_role(reference)}" if universe_role(reference)
+                      else ""))
 
     run = st.button("▶ Run company check (free — no LLM)", type="primary",
                     disabled=not ticker, key="cc_run")

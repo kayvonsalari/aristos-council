@@ -96,6 +96,10 @@ class Strategy(BaseModel):
     id: str
     name: str
     version: int = Field(ge=1)
+    # Friendly, user-facing name for dropdowns/captions. The `id` stays the STABLE
+    # record key (never renamed); display-only, falling back to `name` then `id`.
+    display_name: str = ""
+    role: str = ""              # optional one-line role caption (display-only)
     description: str = ""
     criteria: list[CriterionSpec] = Field(min_length=1)
     policy: StrategyPolicy = Field(default_factory=StrategyPolicy)

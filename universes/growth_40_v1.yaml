@@ -4,6 +4,8 @@
 # over (recovered verbatim from the 2026-07-05 snapshot). A rank verdict is
 # universe-relative, so freezing this list is what makes those verdicts reproducible.
 id: growth_40_v1
+display_name: Growth 40
+role: scoreboard universe — graded quarterly
 description: Standing 40-name growth / large-cap universe for the value & momentum rank strategies.
 created: "2026-07-05"
 rationale: >-

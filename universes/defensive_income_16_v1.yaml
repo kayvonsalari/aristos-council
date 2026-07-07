@@ -6,6 +6,8 @@
 # total return on income names, where a regulated negative-FCF profile is a portfolio
 # characteristic to track — not a screen distortion to exclude.
 id: defensive_income_16_v1
+display_name: Defensive Income 16
+role: scoreboard universe — graded quarterly
 description: Defensive-income scoreboard universe — staples, healthcare, telecom, utilities.
 created: "2026-07-06"
 rationale: >-

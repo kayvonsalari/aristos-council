@@ -4,6 +4,7 @@
 # migration from the old screen (ROIC + value already in the registry).
 id: magic_formula_v1
 name: Magic Formula
+display_name: Classic Value (baseline — for comparison)
 version: 1
 description: >-
   Greenblatt's two-factor rank: return on invested capital (quality) + earnings

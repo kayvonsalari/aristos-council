@@ -31,6 +31,13 @@ from .data.adapter import normalize_ticker
 
 class Universe(BaseModel):
     id: str
+    # Friendly, user-facing name for dropdowns/captions (e.g. "Growth 40"). The `id`
+    # stays the STABLE record key (never renamed); this is display-only. Optional —
+    # falls back to the id when absent.
+    display_name: str = ""
+    # Optional one-line role caption shown under the selected entry (e.g. "scoreboard
+    # universe — graded quarterly"). Display-only.
+    role: str = ""
     description: str = ""
     tickers: list[str] = Field(min_length=1)
     created: str = ""
