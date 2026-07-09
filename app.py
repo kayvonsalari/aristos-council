@@ -1360,11 +1360,16 @@ def _render_universe_result(result) -> None:
         else:
             st.caption("No names reached the council.")
 
-    # 6 — download the run as markdown (no new on-disk storage this sprint).
+    # 6 — download the run as markdown (no new on-disk storage this sprint). Unique,
+    # self-describing filename: strategy + mode + run-start (Europe/Berlin) — ITEM 6.
+    from aristos_council.download_names import universe_download_name
+
+    run_start = st.session_state.get("uni_run_start") or datetime.now(timezone.utc)
     st.download_button(
         "⬇ Download run as markdown",
         data=_universe_markdown(result),
-        file_name=f"universe_{m['rank_strategy_id']}.md",
+        file_name=universe_download_name(m["rank_strategy_id"], m["council_mode"],
+                                         run_start),
         mime="text/markdown", key="uni_download")
 
 
@@ -1477,6 +1482,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
     run = st.button(label, type="primary", disabled=bool(problems), key="uni_run")
 
     if run:
+        run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         status = st.status("Starting…", expanded=True)
         try:
             from aristos_council.pipeline import run_rank_pipeline
@@ -1500,6 +1506,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
         else:
             status.update(label="Done.", state="complete")
             st.session_state["uni_result"] = result
+            st.session_state["uni_run_start"] = run_start
 
     result = st.session_state.get("uni_result")
     if result is not None:
@@ -1602,6 +1609,7 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     run = st.button("▶ Run company check (free — no LLM)", type="primary",
                     disabled=not ticker, key="cc_run")
     if run:
+        run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         try:
             with st.spinner(f"Diagnosing {ticker}…"):
                 adapter = _company_check_adapter()
@@ -1614,6 +1622,7 @@ def render_company_check_tab(show_validation: bool = False) -> None:
             st.session_state.pop("cc_result", None)
         else:
             st.session_state["cc_result"] = result
+            st.session_state["cc_run_start"] = run_start
 
     result = st.session_state.get("cc_result")
     if result is not None:
@@ -1703,10 +1712,15 @@ def _render_company_check(result) -> None:
                         + ", ".join(di.not_evaluated_factors))
 
     st.info(result.pointer)
+    # Unique, self-describing filename: ticker + strategy + run-start (ITEM 6).
+    from aristos_council.download_names import company_check_download_name
+
+    cc_run_start = st.session_state.get("cc_run_start") or datetime.now(timezone.utc)
     st.download_button(
         "⬇ Download check as text", data=format_company_check(result),
-        file_name=f"company_check_{result.ticker}.txt", mime="text/plain",
-        key="cc_download")
+        file_name=company_check_download_name(result.ticker, result.rank_strategy_id,
+                                              cc_run_start),
+        mime="text/plain", key="cc_download")
 
 
 def _cc_num(v) -> str:
