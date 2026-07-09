@@ -1,0 +1,24 @@
+Company Check — Amazon.com, Inc. (AMZN) · single-name diagnostic · NO VERDICT.
+Verdicts are cohort statements (see docs/SCOREBOARD.md).
+  strategy: magic_formula_raw_v1  ·  lens screen: growth_v1  ·  reference: growth_40_v1
+
+SCREEN (all criteria evaluated for diagnosis; universe runs exclude on first confirmed fail):
+  PASS           min_revenue_cagr           observed 0.1166 vs threshold 0.1  [non-gating]
+  FAIL           min_roic                   observed 0.08674 vs threshold 0.12  [non-gating]
+  PASS           max_peg_ratio              observed 0.7833 vs threshold 2  [non-gating]
+  PASS           min_price_momentum         observed 0.09017 vs threshold 0  [non-gating]
+  (min_market_cap — same floor as the universe gate; shown once, under GATES below)
+
+GATES (sector / cap / payout):
+  PASS           sector                     sector 'Consumer Cyclical' not excluded
+  PASS           min_market_cap             market cap 2,595,233,464,320 vs floor 5,000,000,000
+
+FACTOR VALUES + CONTEXT (reference: latest run of growth_40_v1 (run 2026-07-09, 38 ranked)):
+  Return on invested capital (roic): 0.08674 [computed] — ahead of 8 of 38 of growth_40_v1 (run 2026-07-09)
+  Earnings yield (EBIT/EV) (earnings_yield): 0.03705 [ev] — ahead of 16 of 38 of growth_40_v1 (run 2026-07-09)
+  12-month price momentum (momentum_12m): +9% [computed] — ahead of 11 of 38 of growth_40_v1 (run 2026-07-09)
+
+DATA INTEGRITY:
+  fundamentals: ok  ·  price: ok
+
+Would be EXCLUDED from a universe list (a screen fail, NOT a SELL) on: min_roic. A rank/verdict is a cohort statement — run the universe to place it.

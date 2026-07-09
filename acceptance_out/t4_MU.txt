@@ -1,0 +1,23 @@
+Company Check — Micron Technology, Inc. (MU) · single-name diagnostic · NO VERDICT.
+Verdicts are cohort statements (see docs/SCOREBOARD.md).
+  strategy: magic_formula_momentum_v1  ·  lens screen: magic_value_screen_v1  ·  reference: growth_40_v1
+
+SCREEN (all criteria evaluated for diagnosis; universe runs exclude on first confirmed fail):
+  FAIL           min_roic                   observed 0.04821 vs threshold 0.12  [non-gating]
+  (min_market_cap — same floor as the universe gate; shown once, under GATES below)
+
+GATES (sector / cap / payout):
+  PASS           sector                     sector 'Technology' not excluded
+  PASS           min_market_cap             market cap 1,145,674,006,528 vs floor 5,000,000,000
+
+FACTOR VALUES + CONTEXT (reference: latest run of growth_40_v1 (run 2026-07-09, 23 ranked)):
+  Return on invested capital (roic): 0.04821 [computed] — below all 23 of growth_40_v1 (run 2026-07-09)
+  Earnings yield (EBIT/EV) (earnings_yield): 0.008997 [ev] — below all 23 of growth_40_v1 (run 2026-07-09)
+  12-month price momentum (momentum_12m): +692% [computed] — ahead of all 23 of growth_40_v1 (run 2026-07-09)
+
+DIVERGENCE: [⚠ price diverging: +692% 12m — cyclical inflection or mania; human review]
+
+DATA INTEGRITY:
+  fundamentals: ok  ·  price: ok
+
+Would be EXCLUDED from a universe list (a screen fail, NOT a SELL) on: min_roic. A rank/verdict is a cohort statement — run the universe to place it.
