@@ -54,6 +54,7 @@ def test_every_live_strategy_gets_exactly_one_kind():
         "magic_formula_v1": "rank",
         "magic_formula_momentum_v1": "rank",
         "growth_garp_v1": "rank",             # Sprint 4C: the GARP rank strategy
+        "magic_formula_raw_v1": "rank",       # RAW-1: canonical no-screen variant
         "dividend_aristocrats_v1": "council",
         "growth_v1": "council",
         "conservative_screen_v1": "lens",
@@ -74,10 +75,11 @@ def test_discovery_is_cwd_independent(monkeypatch, tmp_path):
 # --------------------------------------------------------------------------- #
 # 4C ITEM 1 — visibility (ui: hidden) + discovery is the only strategy source
 # --------------------------------------------------------------------------- #
-def test_visible_rank_set_is_exactly_the_three_live_strategies():
+def test_visible_rank_set_is_the_live_strategies():
     visible = {s.id for s in visible_rank_strategies(STRAT_DIR)}
+    # RAW-1 adds magic_formula_raw_v1 (visible) -> now four.
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
-                       "growth_garp_v1"}
+                       "growth_garp_v1", "magic_formula_raw_v1"}
 
 
 def test_hidden_flag_is_respected_and_screens_never_appear():

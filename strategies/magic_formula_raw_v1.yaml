@@ -1,0 +1,55 @@
+# Magic Formula RAW — canonical Greenblatt + momentum, NO screens.
+# =================================================================
+# Rank the WHOLE universe on earnings yield (EBIT/EV), ROIC and 12m momentum with NO
+# threshold screening — quality enters via RANKING only, exactly as Greenblatt's
+# canonical method intends. This is the comparison lens against magic_formula_momentum_v1:
+# the delta between the two ranked lists measures what the house screens (the magic_value
+# prefilter — min_roic 12%, etc.) actually contribute. Exploratory — NEVER on the
+# prospective scoreboard.
+#
+# NO screen criteria: this rank strategy declares no council_screen_strategy and no
+# prefilter_screen, so no criteria screen ever runs (the rank runner simply isn't handed
+# a screen — no runner change, no placeholder criterion needed).
+#
+# Sector gate retained: EBIT/EV and ROIC are not computable for financials (factor
+# integrity, not a screening opinion). The market-cap gate is retained too — both are
+# copied exactly from magic_formula_momentum_v1.
+
+id: magic_formula_raw_v1
+name: Magic Formula RAW
+display_name: Magic Formula RAW (canonical, no screens)
+version: 1
+created: "2026-07-09"
+
+description: >-
+  Canonical Greenblatt + momentum — rank the whole universe on earnings yield (EBIT/EV),
+  ROIC and 12m momentum with NO threshold screening; quality enters via ranking only.
+  Comparison lens against magic_formula_momentum_v1: the delta measures what the house
+  screens contribute. Exploratory — never on the prospective scoreboard.
+
+# Factors — copied EXACTLY from magic_formula_momentum_v1 (same three, same combine).
+factors:
+  - name: roic               # quality  (registry direction: high)
+  - name: earnings_yield     # value    (registry direction: high)
+  - name: momentum_12m       # trend    — equal rank weight, same combine
+
+cut: quintile                # top 20% BUY, middle 60% HOLD, bottom 20% SELL
+missing: worst               # as magic_formula_momentum_v1
+min_market_cap: 5.0e9        # market-cap gate retained (copied exactly)
+exclude_sectors:             # sector gate retained (copied exactly)
+  - Financial Services
+  - Financials
+  - Utilities
+sector_exclusion_rationale: >-
+  EBIT/EV and ROIC are not computable on a comparable basis for financials
+  (Greenblatt exclusion). Note the factor block: roic abstains,
+  earnings_yield falls back to P/E.
+# NO council_screen_strategy and NO prefilter_screen: nothing screens out but the
+# sector/cap gates above — quality enters via ranking only.
+
+rationale: >-
+  Greenblatt's canonical method ranks the whole universe and lets the rank-sum express
+  quality and value — it does not pre-screen on thresholds. Running the raw method
+  alongside the screened flagship isolates the contribution of the house screens: a name
+  the flagship excludes but the raw method ranks (with a verdict) is a name the screens,
+  not the factors, kept off the list.
