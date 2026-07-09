@@ -102,6 +102,19 @@ factor, criterion, and guard, generated from the code.
    excludes; a name without data gets no verdict at all. INSUFFICIENT_EVIDENCE is a
    first-class outcome.
 
+## Company Check
+
+A single-name diagnostic that answers "why isn't this name on the list?" — and, by
+design, **issues no verdict** (a rank over a cohort of one would be fabricated). For one
+ticker under a chosen strategy it shows every screen criterion with its value and
+pass/fail/not-evaluated state (all criteria evaluated, not short-circuited at the first
+fail), the sector/market-cap/payout **gates**, each rank factor's value with its position
+against a named, dated reference cohort (replayed offline from a past run — never a fresh
+universe fetch), and the price-vs-fundamentals **divergence flag** when a name's price has
+run up hard while a quality floor fails. It lives in the **Company Check** tab of Council
+Station (and as `examples/company_check.py` on the CLI); a passing name is pointed back to
+a universe run, because a verdict is a cohort statement.
+
 ## Architecture
 
 - **Decision core:** `rank_engine.py` (rank-sum + verdict cuts) + `factors.py` (factor

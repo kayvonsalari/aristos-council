@@ -115,6 +115,14 @@ ABSTENTION never counts as a fail (rule 3). Base-rate warning: *the flag also de
 value traps whose price has not finished falling; it marks disagreement, not direction.*
 The flag NEVER alters a verdict or an exclusion (`factors.price_divergence_flag`).
 
+*Worked example (Company Check, `magic_formula_momentum_v1`).* **MU** — up **+711%** over
+12 months while `min_roic` is a confirmed FAIL (**0.048** vs the 0.12 floor): a fundamental
+fail with a runaway price, so the flag **fires**. **GS** — up **~+50%** but excluded by the
+financials **sector gate**, with `min_roic` merely *abstaining* (ROIC isn't computable for a
+bank), i.e. NO confirmed fundamental fail: the flag is **correctly silent**. The pair shows
+the two guards working — a real fail + momentum trips it; an abstention or a non-fundamental
+(sector) exclusion does not.
+
 ## 5. Guards
 
 - **UNRATEABLE** — a ticker with failed fundamentals *and* no usable price history (a
