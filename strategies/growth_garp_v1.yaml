@@ -13,6 +13,9 @@
 id: growth_garp_v1
 name: Growth at a Reasonable Price
 display_name: Growth at a Reasonable Price (GARP)
+# superseded by growth_garp_v2 (non-gating momentum; lens -> growth_screen_v2). Hidden
+# from the dropdowns; still loadable via the CLI/loader.
+ui: hidden
 version: 1
 
 description: >-

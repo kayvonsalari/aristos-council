@@ -1,0 +1,54 @@
+# Growth at a Reasonable Price — rank strategy v2 (Sprint 4C-FIX-1).
+# ==================================================================
+# The RANK counterpart to the growth screen: it ranks growth/quality names on proven
+# factors and judges/prefilters them against the growth screen (its lens). Supersedes
+# growth_garp_v1; the only change is the lens -> growth_screen_v2 (momentum gate removed),
+# so dip names are dragged down by the momentum_12m rank factor rather than vetoed.
+#
+# Factors: durable top-line growth (revenue CAGR) + capital efficiency (ROIC) +
+# valuation (EV earnings yield) + trend (12m momentum) — the GARP quad, combined by the
+# same rank-sum mechanic as every other strategy (no tuned weights).
+#
+# DEVIATIONS (recorded 2026-07-09):
+# - Approved factor design (2026-07-09 spec) was the trio revenue_cagr / peg / roic.
+#   Shipped as the quad revenue_growth / roic / earnings_yield / momentum_12m: PEG
+#   demoted to screen-only (known extreme-CAGR distortion, v2 research question 1), EV
+#   earnings yield used as the valuation factor, momentum added per house style. Quad
+#   explicitly approved by owner 2026-07-09, post-shipment.
+# - min_price_momentum non-gating from v2 (see growth_screen_v2 header); gating in v1 was
+#   a deviation from growth_v1's documented intent, corrected here.
+
+id: growth_garp_v2
+name: Growth at a Reasonable Price
+display_name: Growth at a Reasonable Price (GARP)
+version: 2
+created: "2026-07-09"
+
+description: >-
+  Growth at a Reasonable Price: rank durable compounders on revenue growth, capital
+  efficiency (ROIC), valuation (earnings yield) and 12-month momentum, over names that
+  pass the growth screen (revenue CAGR, ROIC, PEG, mid/large cap). Momentum is a rank
+  factor, not a screen gate (v2): dip names rank low, they are not vetoed.
+
+factors:
+  - name: revenue_growth     # growth   — in-house 3y revenue CAGR
+  - name: roic               # quality  — through-cycle return on invested capital
+  - name: earnings_yield     # value    — EBIT/EV (reasonable price)
+  - name: momentum_12m       # trend    — equal rank weight, same combine
+
+cut: quintile                # top 20% BUY, middle 60% HOLD, bottom 20% SELL
+missing: worst               # as the flagship; survivors of the prefilter have the inputs
+min_market_cap: 5.0e9        # mid/large-cap scope (also enforced by the screen)
+
+# The v2 growth screen is the lens (momentum gate removed): the council judges GARP picks
+# against it, and (with prefilter_screen) it also gatekeeps the ranking — one growth
+# definition, shared. growth_screen_v2 mirrors growth_screen_v1 minus the momentum gate.
+council_screen_strategy: growth_screen_v2
+prefilter_screen: true
+
+rationale: >-
+  Great businesses compound revenue at high incremental returns on capital; the
+  discipline is refusing to overpay for that growth. Ranking survivors of the growth
+  screen on growth + quality + valuation + trend orders them without tuned weights, the
+  same rank-sum mechanic the value strategies use. Momentum drags dip names down the
+  order; it does not gate them out.

@@ -43,9 +43,9 @@ def test_council_strategies_are_the_single_ticker_ones():
 def test_lens_screens_are_derived_and_hidden():
     lens = lens_strategy_ids(STRAT_DIR)
     # exactly the screens referenced by a rank strategy's council_screen_strategy
-    # (growth_screen_v1 added Sprint 4C as growth_garp_v1's lens)
+    # (growth_screen_v1/v2 are growth_garp_v1/v2's lenses)
     assert lens == {"conservative_screen_v1", "magic_value_screen_v1",
-                    "growth_screen_v1"}
+                    "growth_screen_v1", "growth_screen_v2"}
 
 
 def test_every_live_strategy_gets_exactly_one_kind():
@@ -53,13 +53,15 @@ def test_every_live_strategy_gets_exactly_one_kind():
         "conservative_plus_v1": "rank",
         "magic_formula_v1": "rank",
         "magic_formula_momentum_v1": "rank",
-        "growth_garp_v1": "rank",             # Sprint 4C: the GARP rank strategy
+        "growth_garp_v1": "rank",             # Sprint 4C: the GARP rank strategy (now hidden)
+        "growth_garp_v2": "rank",             # 4C-FIX-1: non-gating-momentum GARP
         "magic_formula_raw_v1": "rank",       # RAW-1: canonical no-screen variant
         "dividend_aristocrats_v1": "council",
         "growth_v1": "council",
         "conservative_screen_v1": "lens",
         "magic_value_screen_v1": "lens",
         "growth_screen_v1": "lens",           # Sprint 4C: the GARP lens
+        "growth_screen_v2": "lens",           # 4C-FIX-1: the v2 lens (no momentum gate)
     }
     for sid, kind in expected.items():
         assert _kind_of(sid) == kind, sid
@@ -77,9 +79,10 @@ def test_discovery_is_cwd_independent(monkeypatch, tmp_path):
 # --------------------------------------------------------------------------- #
 def test_visible_rank_set_is_the_live_strategies():
     visible = {s.id for s in visible_rank_strategies(STRAT_DIR)}
-    # RAW-1 adds magic_formula_raw_v1 (visible) -> now four.
+    # 4C-FIX-1: growth_garp_v2 supersedes growth_garp_v1 (hidden) as the visible growth
+    # rank strategy; RAW-1's magic_formula_raw_v1 is visible too -> four.
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
-                       "growth_garp_v1", "magic_formula_raw_v1"}
+                       "growth_garp_v2", "magic_formula_raw_v1"}
 
 
 def test_hidden_flag_is_respected_and_screens_never_appear():
