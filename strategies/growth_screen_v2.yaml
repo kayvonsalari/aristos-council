@@ -1,0 +1,45 @@
+# Growth screen v2 — the council LENS for growth_garp_v2 (Sprint 4C-FIX-1).
+# =========================================================================
+# Copy of growth_screen_v1 with EXACTLY one change: the min_price_momentum criterion is
+# REMOVED as a gate.
+#
+# Rationale: growth_v1's original design marks momentum "NON-GATING — drags the score,
+# doesn't hard-veto a dip". In the rank world that intent is served by momentum_12m being
+# a RANK FACTOR, which naturally drags dip names down the order. A hard gate on top of the
+# factor DOUBLE-COUNTS and vetoes — it cost ADBE (-41% 12m) its cohort seat in the 07-09
+# baseline. Removing the gate restores the documented non-gating intent: dip names rank
+# low, they are not banished.
+#
+# The other four criteria (revenue CAGR, ROIC, PEG, market cap) are byte-identical to v1.
+id: growth_screen_v2
+name: Growth screen
+version: 2
+
+description: >-
+  Capital-efficient growth (revenue CAGR + ROIC) bought at a reasonable price (PEG),
+  scoped to mid/large caps — the screen lens for a Growth-at-a-Reasonable-Price rank
+  candidate. Momentum is NOT a gate here (v2): dip names are dragged down by the
+  momentum_12m rank factor, not vetoed by the screen.
+
+criteria:
+  - name: min_revenue_cagr          # durable top-line growth (in-house 3y CAGR)
+    threshold: 0.10
+  - name: min_roic                  # capital efficiency / quality gate
+    threshold: 0.12
+  - name: max_peg_ratio             # growth at a reasonable price
+    threshold: 2.0
+  - name: min_market_cap            # 5B USD; mid/large-cap scope
+    threshold: 5000000000
+
+policy:
+  partial_pass_allows_hold: true
+
+veto:
+  min_confidence: 0.6
+
+rationale: >-
+  Great businesses compound revenue at high incremental returns on capital; the
+  discipline is refusing to overpay for it. Revenue CAGR evidences the compounding, ROIC
+  that the growth creates value, and PEG keeps valuation honest. Momentum is expressed as
+  a rank factor in the strategy, not a screen gate — a dip name ranks low, it is not
+  screened out.

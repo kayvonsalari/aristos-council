@@ -6,6 +6,8 @@
 # Mirrors the growth_v1 single-ticker screen's criteria; kept as a separate LENS so the
 # rank strategy references a screen (like magic_value_screen_v1) without touching the
 # frozen growth_v1 config.
+#
+# superseded by growth_screen_v2 (momentum gate removed) — see its header.
 id: growth_screen_v1
 name: Growth screen
 version: 1
