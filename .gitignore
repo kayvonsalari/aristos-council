@@ -20,3 +20,5 @@ data_cache/
 # Frozen run records — raw vendor payloads captured for offline replay (Company Check
 # cohort context). NOT committed: vendor-data redistribution (ITEM 1).
 runs/
+universes/portfolio_watch_v1.yaml
+acceptance_out/

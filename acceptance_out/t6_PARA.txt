@@ -1,6 +1,0 @@
-Company Check — PARA · single-name diagnostic · NO VERDICT.
-Verdicts are cohort statements (see docs/SCOREBOARD.md).
-  strategy: magic_formula_momentum_v1  ·  lens screen: magic_value_screen_v1  ·  reference: growth_40_v1
-
-UNRATEABLE — no usable fundamentals or price history (possibly delisted)
-UNRATEABLE — no data, so no diagnosis and no verdict (a SELL would imply an assessment that cannot be made here).
