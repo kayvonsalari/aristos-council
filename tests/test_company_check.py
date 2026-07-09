@@ -273,3 +273,52 @@ def test_company_check_growth_garp_renders_criteria_and_non_gating_label():
     text = format_company_check(r)
     assert "min_price_momentum" in text and "non-gating" in text
     assert _no_verdict(text)
+
+
+# --------------------------------------------------------------------------- #
+# CCFIX-2 — screen-less strategy: no default-lens fallback.
+# --------------------------------------------------------------------------- #
+def test_screen_less_strategy_has_no_criteria_and_no_screen_exclusion_claim():
+    # magic_formula_raw_v1 declares no lens -> Company Check must NOT fall back to the
+    # default (growth_v1) lens and diagnose against the growth screen.
+    r = _check(_MU, ticker="MU", strat="magic_formula_raw_v1")
+    assert r.screen_less is True
+    assert r.screen == []                             # no criterion lines
+    assert r.screen_strategy_id == ""                 # NOT defaulted to growth_v1
+    assert any(g.name in ("sector", "min_market_cap") for g in r.gates)  # gates still render
+    text = format_company_check(r)
+    assert "no lens screen" in text and "screens nothing" in text
+    assert "a screen fail" not in text                # no screen-exclusion claim
+    # no growth/value criteria leaked from the default lens
+    assert "min_revenue_cagr" not in text and "min_roic" not in text
+    assert _no_verdict(text)
+
+
+def test_screen_less_gate_fail_names_the_gate_not_a_screen():
+    # a financial under RAW -> the sector GATE fails; the pointer names the gate, and
+    # never claims a screen exclusion (RAW screens nothing).
+    r = _check(_GS, ticker="GS", strat="magic_formula_raw_v1")
+    assert r.screen_less is True and r.screen == []
+    sector = next(g for g in r.gates if g.name == "sector")
+    assert sector.status == "FAIL"
+    assert "GATE fail" in r.pointer and "sector" in r.pointer
+    assert "screen fail" not in r.pointer
+
+
+def test_screened_strategies_are_unchanged():
+    # regression: strategies WITH a lens still render criteria and a lens id.
+    for strat in ("magic_formula_momentum_v1", "growth_garp_v2", "conservative_plus_v1"):
+        r = _check(_MU, ticker="MU", strat=strat)
+        assert r.screen_less is False
+        assert r.screen_strategy_id                    # non-empty lens id
+        assert len(r.screen) >= 1                       # criteria render
+
+
+def test_council_path_default_resolution_is_untouched():
+    # CCFIX-2 changes only Company Check's use of the default; the council path's
+    # resolve_council_screen_id keeps its blunt default exactly as before.
+    from aristos_council.pipeline import (
+        load_rank_strategy_from_id, resolve_council_screen_id)
+    raw = load_rank_strategy_from_id("magic_formula_raw_v1", STRAT_DIR)
+    assert resolve_council_screen_id(raw) == "growth_v1"          # default still there
+    assert resolve_council_screen_id(raw, "magic_value_screen_v1") == "magic_value_screen_v1"

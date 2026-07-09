@@ -112,6 +112,10 @@ class CompanyCheckResult:
     # True when the lens-screen min_market_cap tested the SAME floor as the rank gate, so
     # market cap is printed ONCE (under GATES) and the SCREEN references it (ITEM 3).
     market_cap_in_gates: bool = False
+    # True when the strategy declares NO lens screen (and none was passed): it screens
+    # nothing, so the SCREEN section says so rather than diagnosing against a default lens
+    # (CCFIX-2). Gates still apply.
+    screen_less: bool = False
 
     @property
     def display(self) -> str:
@@ -190,8 +194,7 @@ def run_company_check(
     """Diagnose ONE ticker under ``rank_strategy_id``'s lens screen + factors, with
     cohort context from the latest frozen run of ``reference_universe_id``. NEVER emits
     a verdict. ``adapter`` fetches the single name; tests inject a fake."""
-    from .pipeline import (
-        load_rank_strategy_from_id, load_screen_from_id, resolve_council_screen_id)
+    from .pipeline import load_rank_strategy_from_id, load_screen_from_id
     from .tools.criteria.registry import Evidence, run_screen
 
     strategies_dir = Path(strategies_dir) if strategies_dir else _STRATEGIES_DIR
@@ -200,8 +203,16 @@ def run_company_check(
     today = today or date.today()
 
     rank_strategy = load_rank_strategy_from_id(rank_strategy_id, strategies_dir)
-    screen_id = resolve_council_screen_id(rank_strategy, screen_strategy_id)
-    screen_strategy = load_screen_from_id(screen_id, strategies_dir)
+    # CCFIX-2: resolve the lens WITHOUT the blunt default. A strategy that declares no
+    # council_screen_strategy (and none passed explicitly) screens NOTHING — quality
+    # enters via ranking only; do not diagnose it against a default (growth) lens. (The
+    # council path keeps resolve_council_screen_id's default; that is out of scope here.)
+    resolved_screen_id = screen_strategy_id or rank_strategy.council_screen_strategy
+    screen_less = not resolved_screen_id
+    screen_strategy = (None if screen_less
+                       else load_screen_from_id(resolved_screen_id, strategies_dir))
+    screen_criteria = list(screen_strategy.criteria) if screen_strategy else []
+    screen_strategy_id_str = screen_strategy.id if screen_strategy else ""
 
     fi = gather_factor_inputs(adapter, ticker, today=today)
     f = fi.fundamentals
@@ -216,35 +227,37 @@ def run_company_check(
         di.note = "no usable fundamentals or price history (possibly delisted)"
         return CompanyCheckResult(
             ticker=ticker, company_name=company_name,
-            rank_strategy_id=rank_strategy.id, screen_strategy_id=screen_strategy.id,
+            rank_strategy_id=rank_strategy.id, screen_strategy_id=screen_strategy_id_str,
             reference_universe_id=reference_universe_id, unrateable=True,
             screen=[], gates=[], factors=[], divergence_flag=None,
             reference_available=False, reference_run_id=None, reference_run_date=None,
-            reference_cohort_n=0, data_integrity=di,
+            reference_cohort_n=0, data_integrity=di, screen_less=screen_less,
             pointer="UNRATEABLE — no data, so no diagnosis and no verdict "
                     "(a SELL would imply an assessment that cannot be made here).")
 
     # SCREEN — evaluate EVERY criterion (no short-circuit). Evidence built exactly as the
-    # rank stage builds it (dividends=[]), so this table matches the universe screen.
-    ev = Evidence(fundamentals=f, last_close=fi.last_close,
-                  return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
-    screen_result = run_screen(screen_strategy.criteria, ev, ticker=ticker)
-    # Gating is the strategy's own per-criterion is_gating flag (a confirmed fail caps the
-    # disposition at SELL); default non-gating. Data-driven — nothing hardcoded (4C).
-    gating_by_name = {getattr(cs, "name", None): bool(getattr(cs, "is_gating", False))
-                      for cs in screen_strategy.criteria}
+    # rank stage builds it (dividends=[]), so this table matches the universe screen. A
+    # screen-less strategy (CCFIX-2) has no criteria — the screen stays empty.
     screen_cells: list[ScreenCell] = []
     abstained: list[str] = []
-    for c in screen_result.criteria:
-        basis = getattr(c, "basis", "") or ""
-        if c.passed is None:
-            abstained.append(c.name)
-        screen_cells.append(ScreenCell(
-            name=c.name, observed=c.observed, threshold=c.threshold,
-            status=_STATUS[c.passed], basis=_BASIS_LABEL.get(basis, basis),
-            borderline=(c.passed is False
-                        and is_borderline_fail(c.observed, c.threshold)),
-            note=c.note, gating=gating_by_name.get(c.name, False)))
+    if not screen_less:
+        ev = Evidence(fundamentals=f, last_close=fi.last_close,
+                      return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
+        screen_result = run_screen(screen_criteria, ev, ticker=ticker)
+        # Gating is the strategy's own per-criterion is_gating flag (a confirmed fail caps
+        # the disposition at SELL); default non-gating. Data-driven — nothing hardcoded (4C).
+        gating_by_name = {getattr(cs, "name", None): bool(getattr(cs, "is_gating", False))
+                          for cs in screen_criteria}
+        for c in screen_result.criteria:
+            basis = getattr(c, "basis", "") or ""
+            if c.passed is None:
+                abstained.append(c.name)
+            screen_cells.append(ScreenCell(
+                name=c.name, observed=c.observed, threshold=c.threshold,
+                status=_STATUS[c.passed], basis=_BASIS_LABEL.get(basis, basis),
+                borderline=(c.passed is False
+                            and is_borderline_fail(c.observed, c.threshold)),
+                note=c.note, gating=gating_by_name.get(c.name, False)))
     di.abstained_criteria = abstained
 
     # GATES — sector / market-cap / coarse payout (rank-strategy universe filters).
@@ -303,18 +316,18 @@ def run_company_check(
             context=context))
     di.not_evaluated_factors = not_eval_factors
 
-    divergence = price_divergence_flag(fi, screen_strategy.criteria)
-    pointer = _pointer(screen_cells, gates)
+    divergence = price_divergence_flag(fi, screen_criteria)
+    pointer = _pointer(screen_cells, gates, screen_less=screen_less)
 
     return CompanyCheckResult(
         ticker=ticker, company_name=company_name,
-        rank_strategy_id=rank_strategy.id, screen_strategy_id=screen_strategy.id,
+        rank_strategy_id=rank_strategy.id, screen_strategy_id=screen_strategy_id_str,
         reference_universe_id=reference_universe_id, unrateable=False,
         screen=screen_cells, gates=gates, factors=factor_cells,
         divergence_flag=divergence, reference_available=cohort is not None,
         reference_run_id=ref_run_id, reference_run_date=ref_run_date,
         reference_cohort_n=cohort_n, data_integrity=di, pointer=pointer,
-        market_cap_in_gates=market_cap_in_gates)
+        market_cap_in_gates=market_cap_in_gates, screen_less=screen_less)
 
 
 def _universe_tickers(universe_id: str, universes_dir: Path) -> list[str]:
@@ -373,11 +386,23 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
     return gates
 
 
-def _pointer(screen: list[ScreenCell], gates: list[GateCell]) -> str:
+def _pointer(screen: list[ScreenCell], gates: list[GateCell],
+             screen_less: bool = False) -> str:
     """The closing pointer — never a verdict. Names the confirmed fails that would keep
-    the name OFF a universe list, or says it passes and points at a universe run."""
-    fails = [c.name for c in screen if c.status == "FAIL"] + \
-            [g.name for g in gates if g.status == "FAIL"]
+    the name OFF a universe list, or says it passes and points at a universe run. A
+    screen-less strategy (CCFIX-2) never claims a SCREEN exclusion — only the gates can
+    exclude, and it points that out explicitly."""
+    gate_fails = [g.name for g in gates if g.status == "FAIL"]
+    if screen_less:
+        if gate_fails:
+            return ("Would be EXCLUDED from a universe list (a GATE fail, NOT a SELL) on: "
+                    + ", ".join(gate_fails) + ". This strategy screens nothing — quality "
+                    "enters via ranking; a rank/verdict is a cohort statement, so run the "
+                    "universe to place it.")
+        return ("This strategy screens nothing (quality enters via ranking) and passes "
+                "the sector/cap gates — a verdict requires a universe run (a rank is a "
+                "cohort statement, never issued for one name).")
+    fails = [c.name for c in screen if c.status == "FAIL"] + gate_fails
     if fails:
         return ("Would be EXCLUDED from a universe list (a screen fail, NOT a SELL) on: "
                 + ", ".join(fails) + ". A rank/verdict is a cohort statement — run the "
@@ -418,7 +443,8 @@ def format_company_check(result: CompanyCheckResult) -> str:
         f"Company Check — {result.display} · single-name diagnostic · NO VERDICT.",
         "Verdicts are cohort statements (see docs/SCOREBOARD.md).",
         f"  strategy: {result.rank_strategy_id}  ·  lens screen: "
-        f"{result.screen_strategy_id}  ·  reference: {result.reference_universe_id}",
+        f"{result.screen_strategy_id or 'none'}  ·  reference: "
+        f"{result.reference_universe_id}",
         "",
     ]
     if result.unrateable:
@@ -426,20 +452,24 @@ def format_company_check(result: CompanyCheckResult) -> str:
         lines.append(result.pointer)
         return "\n".join(lines)
 
-    lines.append("SCREEN (all criteria evaluated for diagnosis; universe runs exclude "
-                 "on first confirmed fail):")
-    for c in result.screen:
-        tags = ["gating" if c.gating else "non-gating"]
-        if c.basis:
-            tags.append(c.basis)
-        if c.borderline:
-            tags.append("borderline")
-        tag = f"  [{'; '.join(tags)}]"
-        lines.append(f"  {c.status:<14} {c.name:<26} observed {_fmt_num(c.observed)} "
-                     f"vs threshold {_fmt_num(c.threshold)}{tag}")
-    if result.market_cap_in_gates:
-        lines.append("  (min_market_cap — same floor as the universe gate; shown once, "
-                     "under GATES below)")
+    if result.screen_less:
+        lines.append("SCREEN: no lens screen — this strategy screens nothing; quality "
+                     "enters via ranking only. Gates below still apply.")
+    else:
+        lines.append("SCREEN (all criteria evaluated for diagnosis; universe runs exclude "
+                     "on first confirmed fail):")
+        for c in result.screen:
+            tags = ["gating" if c.gating else "non-gating"]
+            if c.basis:
+                tags.append(c.basis)
+            if c.borderline:
+                tags.append("borderline")
+            tag = f"  [{'; '.join(tags)}]"
+            lines.append(f"  {c.status:<14} {c.name:<26} observed {_fmt_num(c.observed)} "
+                         f"vs threshold {_fmt_num(c.threshold)}{tag}")
+        if result.market_cap_in_gates:
+            lines.append("  (min_market_cap — same floor as the universe gate; shown "
+                         "once, under GATES below)")
     if result.gates:
         lines.append("")
         lines.append("GATES (sector / cap / payout):")

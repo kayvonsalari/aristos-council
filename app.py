@@ -1613,7 +1613,7 @@ def _render_company_check(result) -> None:
     st.caption("Single-name diagnostic · **NO VERDICT** — verdicts are cohort "
                "statements (see `docs/SCOREBOARD.md`).")
     st.caption(f"strategy: `{result.rank_strategy_id}` · lens screen: "
-               f"`{result.screen_strategy_id}` · reference: "
+               f"`{result.screen_strategy_id or 'none'}` · reference: "
                f"`{result.reference_universe_id or '—'}`")
 
     if result.unrateable:
@@ -1622,26 +1622,32 @@ def _render_company_check(result) -> None:
         st.info(result.pointer)
         return
 
-    # SCREEN — every criterion evaluated (no short-circuit).
-    st.subheader("Screen — all criteria evaluated for diagnosis")
-    st.caption("A universe run excludes on the FIRST confirmed fail; here every "
-               "criterion is evaluated so the whole picture is visible.")
     import pandas as pd
 
-    srows = [{"Criterion": c.name, "Observed": _cc_num(c.observed),
-              "Threshold": _cc_num(c.threshold), "Status": c.status,
-              "Gating": "gating" if c.gating else "non-gating",
-              "Basis": c.basis or "", "Borderline": "●" if c.borderline else ""}
-             for c in result.screen]
-    if srows:
-        sdf = pd.DataFrame(srows)
-        styler = sdf.style.map(
-            lambda v: f"color: {_CC_STATUS_HEX.get(v, '')}; font-weight: 700",
-            subset=["Status"])
-        st.dataframe(styler, hide_index=True, width="stretch")
-    if result.market_cap_in_gates:
-        st.caption("`min_market_cap` — same floor as the universe gate; shown once, "
-                   "under **Gates** below.")
+    # SCREEN — a screen-less strategy (CCFIX-2) screens nothing; say so rather than
+    # diagnosing against a default lens.
+    if result.screen_less:
+        st.subheader("Screen — none")
+        st.info("**No lens screen** — this strategy screens nothing; quality enters via "
+                "ranking only. Gates below still apply.")
+    else:
+        st.subheader("Screen — all criteria evaluated for diagnosis")
+        st.caption("A universe run excludes on the FIRST confirmed fail; here every "
+                   "criterion is evaluated so the whole picture is visible.")
+        srows = [{"Criterion": c.name, "Observed": _cc_num(c.observed),
+                  "Threshold": _cc_num(c.threshold), "Status": c.status,
+                  "Gating": "gating" if c.gating else "non-gating",
+                  "Basis": c.basis or "", "Borderline": "●" if c.borderline else ""}
+                 for c in result.screen]
+        if srows:
+            sdf = pd.DataFrame(srows)
+            styler = sdf.style.map(
+                lambda v: f"color: {_CC_STATUS_HEX.get(v, '')}; font-weight: 700",
+                subset=["Status"])
+            st.dataframe(styler, hide_index=True, width="stretch")
+        if result.market_cap_in_gates:
+            st.caption("`min_market_cap` — same floor as the universe gate; shown once, "
+                       "under **Gates** below.")
 
     if result.gates:
         st.subheader("Gates — sector / cap / payout")
