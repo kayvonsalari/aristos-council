@@ -18,10 +18,10 @@ snapshot_date,strategy,universe_id,ticker,aristos_verdict,combined_rank,price,st
 2026-07-05,magic_formula_momentum_v1,,KO,HOLD,42.0,84.14,1.8,24,85.97417,
 2026-07-05,magic_formula_momentum_v1,,PG,HOLD,42.0,151.41,2.08,23,163.43478,
 2026-07-05,magic_formula_momentum_v1,,ABBV,HOLD,43.0,261.07,1.74194,28,256.14285,
-"2026-07-05,magic_formula_momentum_v1,,GE,SELL,43.0,377.52,1.5,21,362.57144,""bottom quintile of 23-name universe (relative rank, not a short thesis)"""
-"2026-07-05,magic_formula_momentum_v1,,UNH,SELL,44.0,425.36,1.64286,26,411.8846,""bottom quintile of 23-name universe (relative rank, not a short thesis)"""
-"2026-07-05,magic_formula_momentum_v1,,MSFT,SELL,45.0,390.49,1.32143,55,561.1149,""bottom quintile of 23-name universe (relative rank, not a short thesis)"""
-"2026-07-05,magic_formula_momentum_v1,,META,SELL,46.0,582.9,1.31746,58,828.16864,""bottom quintile of 23-name universe (relative rank, not a short thesis)"""
+2026-07-05,magic_formula_momentum_v1,,GE,SELL,43.0,377.52,1.5,21,362.57144,"bottom quintile of 23-name universe (relative rank, not a short thesis)"
+2026-07-05,magic_formula_momentum_v1,,UNH,SELL,44.0,425.36,1.64286,26,411.8846,"bottom quintile of 23-name universe (relative rank, not a short thesis)"
+2026-07-05,magic_formula_momentum_v1,,MSFT,SELL,45.0,390.49,1.32143,55,561.1149,"bottom quintile of 23-name universe (relative rank, not a short thesis)"
+2026-07-05,magic_formula_momentum_v1,,META,SELL,46.0,582.9,1.31746,58,828.16864,"bottom quintile of 23-name universe (relative rank, not a short thesis)"
 2026-07-05,magic_formula_momentum_v1,,AVGO,EXCLUDED:min_roic,,360.45,1.3125,45,523.72894,screen: min_roic (observed 0.1118 vs threshold 0.12)
 2026-07-05,magic_formula_momentum_v1,,AMD,EXCLUDED:min_roic,,517.82,1.45098,48,508.3125,screen: min_roic (observed 0.02811 vs threshold 0.12)
 2026-07-05,magic_formula_momentum_v1,,CRM,EXCLUDED:min_roic,,166.11,1.58824,53,246.4419,screen: min_roic (observed 0.06622 vs threshold 0.12)
