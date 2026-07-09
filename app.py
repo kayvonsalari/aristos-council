@@ -1169,7 +1169,10 @@ def _ranked_rows(ranked, names: dict | None = None) -> tuple[list[dict], list[st
     marked with a trailing ``*`` when it was imputed (the value was absent). The Name
     column leads with 'Company Name (TICKER)' (ITEM 1), falling back to the bare
     ticker when the display name is unknown."""
+    from aristos_council.pipeline import tie_boundary_notes
+
     names = names or {}
+    tie_notes = tie_boundary_notes(ranked)          # display-only tie disclosure (ITEM 7)
     factor_names: list[str] = []
     for r in ranked:
         for f in r.factor_ranks:
@@ -1180,6 +1183,8 @@ def _ranked_rows(ranked, names: dict | None = None) -> tuple[list[dict], list[st
         # † marks a name that PASSED the screen while a criterion abstained (ITEM 3).
         label = display_name(r.ticker, names.get(r.ticker)) + \
             ("†" if r.screen_abstentions else "")
+        if r.ticker in tie_notes:
+            label += " " + tie_notes[r.ticker]
         row = {"#": i, "Name": label, "Verdict": r.verdict.upper(),
                "Combined": round(r.combined_rank, 1)}
         for f in factor_names:

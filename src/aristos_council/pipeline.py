@@ -304,6 +304,23 @@ class RankPipelineResult:
     names: dict[str, str] = field(default_factory=dict)
 
 
+def tie_boundary_notes(ranked: list[RankedTicker]) -> dict[str, str]:
+    """Ticker -> ``'(=<score> — tie broken alphabetically)'`` for each ranked name that
+    shares its combined score with the name ranked just ABOVE it AND received a DIFFERENT
+    verdict (the tie straddles a verdict boundary; the alphabetical tie-break decided
+    which side each fell on — e.g. MRK/PG both 20.0, HOLD/SELL, so PG is annotated).
+
+    Display-only (ITEM 7): the ordering, the cut, and the verdicts are all unchanged —
+    this only DISCLOSES that a boundary was decided by the tie-break."""
+    notes: dict[str, str] = {}
+    live = [r for r in ranked if not r.excluded]
+    for prev, cur in zip(live, live[1:]):
+        if cur.combined_rank == prev.combined_rank and cur.verdict != prev.verdict:
+            notes[cur.ticker] = (f"(={cur.combined_rank:.1f} — "
+                                 f"tie broken alphabetically)")
+    return notes
+
+
 def _disp(result: "RankPipelineResult", ticker: str) -> str:
     """The leading label for a report line: 'Company Name (TICKER)' or the bare ticker
     when the name is unknown (ITEM 1)."""
@@ -674,10 +691,12 @@ def format_cli_report(result: RankPipelineResult) -> str:
         "",
         f"=== RANKED ({m['rank_strategy_id']}) — verdict-of-record ===",
     ]
+    tie_notes = tie_boundary_notes(result.ranked)
     for i, r in enumerate(result.ranked, 1):
         disp = _disp(result, r.ticker) + ("†" if r.screen_abstentions else "")
+        tie = f"  {tie_notes[r.ticker]}" if r.ticker in tie_notes else ""
         lines.append(f"  {i:>2}  {_name_col(disp):<34} {r.verdict.upper():<5} "
-                     f"combined {r.combined_rank:>5.0f}")
+                     f"combined {r.combined_rank:>5.0f}{tie}")
     for foot in ranked_abstention_footnotes(result):
         lines.append(f"  {foot}")
     integrity = format_factor_integrity(result)
