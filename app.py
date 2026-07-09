@@ -1037,101 +1037,72 @@ def _run_overrides(strategy: Strategy) -> dict:
     return {"partial_pass_allows_hold": partial, "is_gating": is_gating}
 
 
-def render_strategy_tab(selected_path: Path | None) -> None:
-    # Honest scope: this editor knows only COUNCIL-strategy YAMLs (legacy schemas). The
-    # sidebar dropdown already lists council strategies only (the schema-split
-    # classifier hides rank + lens screens), so a v2 rank strategy can never land here.
-    st.info("**Edits council-strategy YAMLs (legacy schemas).** Rank strategies "
-            "are versioned files under `strategies/` — edit via the repo, not here.")
-    if selected_path is None:
-        st.caption("Pick a strategy in the sidebar to view or version it.")
+def render_strategy_tab(selected_path: Path | None = None) -> None:
+    """Dynamic Strategy VIEWER (Sprint 4C): renders the selected strategy ENTIRELY from
+    its YAML via ``strategy.detail`` — nothing strategy-specific is hardcoded, so a new
+    strategy dropped into ``strategies/`` appears fully rendered with zero UI changes.
+    Editing is done in the repo (configs are versioned, never mutated in place)."""
+    from aristos_council.strategy.detail import (
+        PROVENANCE_NOTE, strategy_detail)
+    from aristos_council.strategy.discovery import discover_strategies
+
+    st.subheader("Strategy — config viewer")
+    st.caption("Rendered entirely from the selected strategy's YAML. Add a strategy to "
+               "`strategies/` and it appears here with no UI changes; configs are "
+               "versioned, never edited in place.")
+
+    infos = discover_strategies(STRATEGIES_DIR)
+    if not infos:
+        st.error(f"No strategies found under {STRATEGIES_DIR}")
         return
+    labels = [f"{(i.display_name or i.name)} · {i.id} ({i.kind})" for i in infos]
+    choice = st.selectbox("Strategy config", labels, key="strat_view_select")
+    info = infos[labels.index(choice)]
+    d = strategy_detail(info.id, STRATEGIES_DIR)
 
-    strategy = load_strategy(selected_path)
-    new_id, _ = bump_version(strategy)
-    # Strategy-scoped widget keys: switching the dropdown re-renders the whole
-    # tab for the newly selected strategy, pre-filled from its YAML. One
-    # strategy on screen at a time — never both.
-    sid = strategy.id
+    # 1 — header
+    st.markdown(f"### {d.display_name}")
+    created = f" · created {d.created}" if d.created else ""
+    st.caption(f"`{d.id}` · version {d.version} · {d.kind}{created}")
 
-    # 1 — prominent header: which ruleset is on screen (changes with dropdown).
-    st.subheader(f"📋 Viewing: {strategy.name} ({strategy.id})")
-    st.caption(f"Version {strategy.version} · one strategy at a time — switch "
-               "in the sidebar to view another.")
-    if strategy.description:
-        st.caption(strategy.description.strip())
+    # 2 — description (verbatim)
+    if d.description:
+        st.markdown(d.description)
 
-    edit = st.toggle("✏️ Edit as a new version", value=False,
-                     key=f"strat_edit_{sid}")
-    if edit:
-        st.info(
-            f"Saving creates a NEW file `strategies/{new_id}.yaml`. The current "
-            "version is never modified — recorded verdicts reference their "
-            "strategy_id and must stay reproducible."
-        )
+    # 3 — screen criteria (name, threshold, gating/non-gating)
+    st.subheader(f"Screen criteria · {d.screen_source}")
+    if d.criteria:
+        st.dataframe(
+            [{"Criterion": c.name, "Threshold": _cc_num(c.threshold),
+              "Gating": "gating" if c.gating else "non-gating"} for c in d.criteria],
+            hide_index=True, width="stretch")
+    else:
+        st.caption("No screen criteria.")
 
-    # 2 — the screen's criteria, in their own card.
-    # CRITERIA — editable thresholds, generic from registry metadata.
-    with st.container(border=True):
-        st.markdown("### 🎯 Criteria")
-        st.caption("The screen's thresholds. 🔒 marks values fixed in code — "
-                   "shown for transparency, not editable here.")
-        edited = [_render_criterion(spec, edit, sid)
-                  for spec in strategy.criteria]
+    # 4 — gates (sector + rationale, market cap, payout)
+    if d.gates:
+        st.subheader("Gates")
+        for g in d.gates:
+            st.markdown(f"- **{g.name}** — {g.value}")
+            if g.rationale:
+                st.caption(f"↳ {g.rationale}")
 
-    # 3 — strategy-level settings, set APART from the criteria stack: a hard
-    # divider then a labelled two-card row, so Policy / Veto gate read as a
-    # distinct settings zone and never as trailing criteria. The Policy checkbox
-    # in particular sits in its own card, unmistakably separate from the
-    # per-criterion "unverifiable blocks" boxes above.
+    # 5 — rank factors + verdict cut
+    if d.factors:
+        st.subheader("Rank factors + verdict cut")
+        st.dataframe([{"Factor": f.name, "Direction": f.direction} for f in d.factors],
+                     hide_index=True, width="stretch")
+        st.caption(f"Verdict cut: {d.cut_rule}")
+
+    # 6 — policy flags (plain meanings from the shared glossary)
+    if d.policy:
+        st.subheader("Policy")
+        for p in d.policy:
+            st.markdown(f"- **{p.name}** = `{p.value}` — {p.meaning}")
+
+    # 7 — provenance footer
     st.divider()
-    st.markdown("#### Strategy settings")
-    col_policy, col_veto = st.columns(2)
-
-    with col_policy:
-        with st.container(border=True):
-            st.markdown("### ⚖️ Policy")
-            st.caption("Strategy-level conflict handling — NOT a per-criterion "
-                       "setting.")
-            partial_hold = st.checkbox(
-                "Partial pass allows HOLD",
-                value=strategy.policy.partial_pass_allows_hold,
-                disabled=not edit, key=f"p_partial_{sid}",
-                help="When a stock passes some but not all criteria, allow the "
-                     "council to weigh a HOLD rather than an outright SELL. "
-                     "Advisory to the Decision agent.")
-
-    with col_veto:
-        with st.container(border=True):
-            st.markdown("### 🚦 Veto gate")
-            st.caption("Deterministic human-review trigger.")
-            min_conf = st.number_input(
-                "Min confidence (below this, the run pauses for human review)",
-                value=float(strategy.veto.min_confidence), min_value=0.0,
-                max_value=1.0, step=0.05, format="%.2f", disabled=not edit,
-                key=f"v_conf_{sid}")
-
-    if not edit:
-        return
-
-    if st.button("💾 Save new version", type="primary", key=f"strat_save_{sid}"):
-        updates = {
-            "criteria": edited,
-            "policy": {"partial_pass_allows_hold": partial_hold},
-            "veto": {"min_confidence": min_conf},
-        }
-        try:
-            new = make_new_version(strategy, updates)
-            path = save_strategy(new, STRATEGIES_DIR)
-        except FileExistsError as exc:
-            st.error(str(exc))
-        except ValidationError as exc:
-            st.error(f"Invalid values — nothing was saved.\n\n{exc}")
-        else:
-            st.success(
-                f"Saved `{path.name}`. Pick it from the sidebar Strategy "
-                "dropdown to run a council under it."
-            )
+    st.caption(f"Source: `{d.path}` · {PROVENANCE_NOTE}")
 
 
 # --------------------------------------------------------------------------- #
@@ -1881,7 +1852,7 @@ def main() -> None:
         render_history(ticker)
 
     with tab_strategy:
-        render_strategy_tab(selected_path)
+        render_strategy_tab()
 
 
 def _available_tickers(reports_dir: Path) -> list[str]:

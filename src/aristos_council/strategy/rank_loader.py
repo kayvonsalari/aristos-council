@@ -56,6 +56,7 @@ class RankStrategy(BaseModel):
     # (legacy/superseded configs). Still fully loadable via the loader/CLI — hidden means
     # not listed, not removed. Default "" == visible. Presentation only.
     ui: str = ""
+    created: str = ""           # optional 'YYYY-MM-DD' provenance date (display-only)
     description: str = ""
     rationale: str = ""
     # The proven factors to rank on (>=1), validated against the factor registry.

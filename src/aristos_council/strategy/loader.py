@@ -103,6 +103,7 @@ class Strategy(BaseModel):
     # UI visibility (Sprint 4C): "hidden" -> not listed in dropdowns by default (still
     # loadable via CLI/loader). Presentation only.
     ui: str = ""
+    created: str = ""           # optional 'YYYY-MM-DD' provenance date (display-only)
     description: str = ""
     criteria: list[CriterionSpec] = Field(min_length=1)
     policy: StrategyPolicy = Field(default_factory=StrategyPolicy)

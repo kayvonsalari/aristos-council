@@ -361,7 +361,6 @@ def test_legacy_surfaces_appear_when_toggle_on():
     assert not at.exception
     assert any("Run council" in b.label for b in at.button)          # council flow back
     assert "Run a council" in _header_blob(at)                       # legacy sidebar back
-    assert "Edits council-strategy YAMLs" in _info_blob(at)          # Strategy editor back
     assert any("Report · Legacy" in str(t.label) for t in at.tabs)   # legacy tabs back
 
 
@@ -488,27 +487,28 @@ def test_human_number_formats_large_thresholds():
     assert app._human_number(25) is None
 
 
-def test_strategy_tab_renders_dividend_criteria_by_default():
-    at = _legacy_app(60)                              # Strategy tab is a legacy surface
-    assert not at.exception
-    blob = _markdown_blob(at)
-    assert "Minimum dividend yield" in blob           # registry label rendered
-    assert "Minimum revenue CAGR" not in blob
-
-
-def test_strategy_tab_switches_to_growth_criteria_generically():
+def test_strategy_tab_renders_criteria_and_provenance_by_default():
+    # 4C ITEM 3: the dynamic viewer renders the selected strategy's screen criteria and
+    # the provenance footer, all from YAML.
     at = _legacy_app(60)
-    sb = next(s for s in at.selectbox if s.label == "Strategy")
-    growth_label = next(o for o in sb.options if "growth_v1" in o)
-    sb.set_value(growth_label)
+    assert not at.exception
+    txt = _strategy_tab_text(at)
+    assert "Screen criteria" in txt
+    assert "configs are versioned; strategies are never mutated" in txt   # provenance
+
+
+def test_strategy_tab_switches_strategy_via_its_own_selector():
+    # Switching the viewer's own "Strategy config" selector to the GARP rank strategy
+    # renders rank factors + the verdict cut generically (no strategy-specific code).
+    at = _legacy_app(60)
+    sb = next(s for s in at.selectbox if s.label == "Strategy config")
+    sb.set_value(next(o for o in sb.options if "growth_garp_v1" in o))
     at.run()
     assert not at.exception
-    blob = _markdown_blob(at)
-    # dividend and growth declare different criteria -> the form re-renders with
-    # different fields automatically, no strategy-specific UI code.
-    assert "Minimum revenue CAGR" in blob
-    assert "Minimum ROIC" in blob
-    assert "Minimum dividend yield" not in blob
+    txt = _strategy_tab_text(at)
+    assert "Rank factors + verdict cut" in txt         # rank-only section rendered
+    assert "quintile" in txt                          # the configured cut rule
+    assert "growth_garp_v1" in txt                    # header names the switched-to strategy
 
 
 def test_growth_run_is_triggerable_and_reports_browsable_under_growth():
@@ -556,48 +556,80 @@ def _strategy_tab_text(at) -> str:
     return "\n".join(parts)
 
 
-def test_strategy_tab_header_names_selected_strategy_and_switches():
+def test_strategy_tab_shows_gates_rationale_and_policy_glossary():
+    # Switch to the flagship: its sector gate + rationale (post-send ITEM 2) and a policy
+    # flag with a plain glossary meaning render — all from YAML, one strategy at a time.
     at = _legacy_app(60)
-    assert not at.exception
-    assert "Viewing: Dividend Aristocrats (dividend_aristocrats_v1)" \
-        in _strategy_tab_text(at)
-    # switching the dropdown swaps the WHOLE tab to the other strategy
-    sb = next(s for s in at.selectbox if s.label == "Strategy")
-    sb.set_value(next(o for o in sb.options if "growth_v1" in o))
+    sb = next(s for s in at.selectbox if s.label == "Strategy config")
+    sb.set_value(next(o for o in sb.options if "magic_formula_momentum_v1" in o))
     at.run()
     assert not at.exception
     txt = _strategy_tab_text(at)
-    assert "Viewing: Growth at a Reasonable Price (growth_v1)" in txt
-    assert "Dividend Aristocrats (dividend_aristocrats_v1)" not in txt  # not both
+    assert "Gates" in txt and "Policy" in txt
+    assert "not computable on a comparable basis for financials" in txt   # sector rationale
+    assert "hard prefilter" in txt                     # prefilter_screen glossary meaning
+    # only ONE strategy on screen at a time (the header names it)
+    assert "growth_garp_v1" not in txt
 
 
-def test_strategy_tab_has_distinct_criteria_policy_and_veto_sections():
-    at = _legacy_app(60)
-    txt = _strategy_tab_text(at)
-    assert "Criteria" in txt and "Policy" in txt and "Veto gate" in txt
-    # the Policy flag lives in its own section as a checkbox, not a criterion box
-    assert any("Partial pass allows HOLD" in c.label for c in at.checkbox)
+def test_strategy_tab_lists_a_synthetic_strategy_with_zero_ui_changes(tmp_path):
+    # ACCEPTANCE: a brand-new strategy YAML dropped into strategies/ renders fully via
+    # strategy_detail with NO UI-code changes — every section derives from the YAML.
+    from aristos_council.strategy.detail import strategy_detail
 
+    (tmp_path / "synthetic_screen_v1.yaml").write_text(
+        "\n".join([
+            "id: synthetic_screen_v1",
+            "name: Synthetic screen",
+            "version: 1",
+            "criteria:",
+            "  - name: min_roic",
+            "    threshold: 0.12",
+            "  - name: min_price_momentum",
+            "    threshold: 0.0",
+            "",
+        ]), encoding="utf-8")
+    (tmp_path / "synthetic_v1.yaml").write_text(
+        "\n".join([
+            "id: synthetic_v1",
+            "name: Synthetic",
+            "display_name: Synthetic Demo",
+            "version: 3",
+            "created: '2026-07-09'",
+            "description: A synthetic strategy for the acceptance test.",
+            "factors:",
+            "  - name: roic",
+            "  - name: momentum_12m",
+            "cut: top_k",
+            "k: 5",
+            "min_market_cap: 3000000000",
+            "exclude_sectors:",
+            "  - Financials",
+            "sector_exclusion_rationale: banks are out.",
+            "council_screen_strategy: synthetic_screen_v1",
+            "prefilter_screen: true",
+            "",
+        ]), encoding="utf-8")
 
-def test_cagr_window_shown_once_and_locked_even_in_edit_mode():
-    # The shared in-house CAGR window (used by BOTH revenue CAGR and PEG) is
-    # surfaced EXACTLY ONCE, read-only/locked (disabled + 🔒), and stays locked
-    # even when editing (it is not strategy-configurable). It is not duplicated
-    # under max_peg_ratio — PEG reuses the same window, not its own.
-    at = _legacy_app(60)
-    sb = next(s for s in at.selectbox if s.label == "Strategy")
-    sb.set_value(next(o for o in sb.options if "growth_v1" in o))
-    at.run()
-    next(t for t in at.toggle if "Edit as a new version" in t.label).set_value(True)
-    at.run()
-    assert not at.exception
-    windows = [n for n in at.number_input if "CAGR window" in n.label]
-    assert len(windows) == 1                           # ONE shared window, not two
-    assert windows[0].disabled                         # locked even in edit mode
-    assert "🔒" in windows[0].label
-    # contrast: an editable threshold IS enabled in edit mode
-    thresholds = [n for n in at.number_input if n.label.startswith("Threshold")]
-    assert thresholds and any(not n.disabled for n in thresholds)
+    d = strategy_detail("synthetic_v1", tmp_path)
+    # 1 header
+    assert d.display_name == "Synthetic Demo" and d.version == 3 and d.created == "2026-07-09"
+    # 2 description
+    assert d.description == "A synthetic strategy for the acceptance test."
+    # 3 criteria (resolved from the referenced lens)
+    assert d.screen_source == "lens: synthetic_screen_v1"
+    assert any(c.name == "min_roic" for c in d.criteria)
+    # 4 gates (sector + rationale, market cap)
+    assert any(g.name == "sector" and "banks are out" in g.rationale for g in d.gates)
+    assert any(g.name == "min_market_cap" for g in d.gates)
+    # 5 factors + cut
+    assert {f.name for f in d.factors} == {"roic", "momentum_12m"}
+    assert "top_k" in d.cut_rule and "5" in d.cut_rule
+    # 6 policy (glossary-sourced meaning)
+    assert any(p.name == "prefilter_screen" and "hard prefilter" in p.meaning
+               for p in d.policy)
+    # 7 provenance
+    assert d.path.endswith("synthetic_v1.yaml")
 
 
 def test_available_tickers_lists_every_ticker_on_disk():
