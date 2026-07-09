@@ -31,7 +31,7 @@ from pydantic import ValidationError
 from aristos_council.data.adapter import (
     DataUnavailable, display_name, normalize_ticker)
 from aristos_council.demo_surface import (
-    is_validation_strategy, strategy_label, strategy_role, universe_label,
+    is_hidden_strategy, strategy_label, strategy_role, universe_label,
     universe_role, visible_universes)
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
@@ -1394,7 +1394,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # hidden by default (fully functional — one toggle-flip away), so the demo surface
     # shows only the live strategies and the scoreboard universes.
     rank_options = [o for o in list_rank_strategy_options(STRATEGIES_DIR)
-                    if show_validation or not is_validation_strategy(o[2].id)]
+                    if show_validation or not is_hidden_strategy(o[2])]
     if not rank_options:
         st.error(f"No rank strategies found under {STRATEGIES_DIR}")
         return
@@ -1574,7 +1574,7 @@ def render_company_check_tab(show_validation: bool = False) -> None:
                "**No verdict** — a verdict is a cohort statement (a universe run).")
 
     rank_options = [o for o in list_rank_strategy_options(STRATEGIES_DIR)
-                    if show_validation or not is_validation_strategy(o[2].id)]
+                    if show_validation or not is_hidden_strategy(o[2])]
     if not rank_options:
         st.error(f"No rank strategies found under {STRATEGIES_DIR}")
         return

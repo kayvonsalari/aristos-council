@@ -384,8 +384,9 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert len(uni) == 3                                             # exactly the three
 
     rank = _dropdown(at, "Rank strategy").options
-    assert not any("Classic Value" in o for o in rank)              # baseline hidden
-    assert len(rank) == 2                                            # exactly the two live
+    assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
+    assert any("GARP" in o for o in rank)                           # growth is live (4C)
+    assert len(rank) == 3                       # conservative_plus + flagship + GARP
 
 
 def test_validation_assets_revealed_when_toggle_on():

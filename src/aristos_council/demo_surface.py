@@ -19,7 +19,6 @@ _VALIDATION_UNIVERSE_IDS = frozenset({
     "defensive_16_v1",        # the known-trap bench
     "energy_watch_v1",        # cyclical-peak OBSERVATION universe (not a scoreboard one)
 })
-_VALIDATION_STRATEGY_IDS = frozenset({"magic_formula_v1"})    # the Classic Value baseline
 
 
 def is_validation_universe(universe_id: str) -> bool:
@@ -27,9 +26,14 @@ def is_validation_universe(universe_id: str) -> bool:
     return universe_id in _VALIDATION_UNIVERSE_IDS
 
 
-def is_validation_strategy(strategy_id: str) -> bool:
-    """True for a strategy shown only behind the validation toggle (the baseline)."""
-    return strategy_id in _VALIDATION_STRATEGY_IDS
+def is_hidden_strategy(strategy) -> bool:
+    """True for a ``ui: hidden`` strategy (Sprint 4C — legacy/superseded configs). Hidden
+    from the dropdown by default; revealed under the validation/legacy toggle. Accepts a
+    loaded strategy OR a discovery ``StrategyInfo`` (a ``.hidden`` bool wins if present,
+    else the ``.ui`` field)."""
+    if hasattr(strategy, "ui"):                 # a loaded strategy carries the raw field
+        return getattr(strategy, "ui", "") == "hidden"
+    return bool(getattr(strategy, "hidden", False))    # a discovery StrategyInfo
 
 
 def visible_universes(manifests, *, show_validation: bool):
@@ -41,9 +45,9 @@ def visible_universes(manifests, *, show_validation: bool):
 
 def visible_rank_strategies(strategies, *, show_validation: bool):
     """The rank strategies a dropdown should offer: all when the toggle is ON, else only
-    the live (non-baseline) strategies. Accepts objects with a ``.id``."""
+    the non-hidden (live) strategies. Accepts loaded strategies or StrategyInfos."""
     return [s for s in strategies
-            if show_validation or not is_validation_strategy(s.id)]
+            if show_validation or not is_hidden_strategy(s)]
 
 
 def universe_label(u) -> str:

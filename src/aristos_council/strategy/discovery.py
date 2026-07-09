@@ -34,6 +34,14 @@ class StrategyInfo:
     name: str
     path: Path
     kind: str          # "rank" | "council" | "lens"
+    # Presentation (Sprint 4C): the friendly dropdown label (falls back to name), and
+    # whether the config is UI-hidden (ui: hidden — legacy, not listed by default).
+    display_name: str = ""
+    hidden: bool = False
+
+    @property
+    def label(self) -> str:
+        return self.display_name or self.name
 
 
 def _raw_mapping(path: Path) -> dict | None:
@@ -51,7 +59,7 @@ def discover_strategies(strategies_dir: str | Path) -> list[StrategyInfo]:
     lens (lens iff referenced by a rank strategy's ``council_screen_strategy``)."""
     d = Path(strategies_dir)
     rank: list[StrategyInfo] = []
-    criteria: list[tuple[Path, str, str]] = []      # (path, id, name) — council or lens
+    criteria: list[tuple[Path, str, str, str, bool]] = []   # (path,id,name,display,hidden)
     lens_ids: set[str] = set()
 
     for p in sorted(d.glob("*.yaml")):
@@ -63,7 +71,9 @@ def discover_strategies(strategies_dir: str | Path) -> list[StrategyInfo]:
                 s = load_rank_strategy(p)
             except Exception:
                 continue                            # invalid rank YAML -> skip
-            rank.append(StrategyInfo(s.id, s.name, p, "rank"))
+            rank.append(StrategyInfo(s.id, s.name, p, "rank",
+                                     display_name=getattr(s, "display_name", ""),
+                                     hidden=getattr(s, "ui", "") == "hidden"))
             if s.council_screen_strategy:
                 lens_ids.add(s.council_screen_strategy)
         elif "criteria" in raw:
@@ -71,14 +81,21 @@ def discover_strategies(strategies_dir: str | Path) -> list[StrategyInfo]:
                 s = load_strategy(p)
             except Exception:
                 continue                            # invalid screen YAML -> skip
-            criteria.append((p, s.id, s.name))
+            criteria.append((p, s.id, s.name, getattr(s, "display_name", ""),
+                             getattr(s, "ui", "") == "hidden"))
 
     out = list(rank)
-    for path, sid, name in criteria:
+    for path, sid, name, display, hidden in criteria:
         out.append(StrategyInfo(sid, name, path,
-                                "lens" if sid in lens_ids else "council"))
+                                "lens" if sid in lens_ids else "council",
+                                display_name=display, hidden=hidden))
     out.sort(key=lambda si: si.id)
     return out
+
+
+def visible_rank_strategies(strategies_dir: str | Path) -> list[StrategyInfo]:
+    """RANK strategies that are NOT ui-hidden — the default dropdown set (Sprint 4C)."""
+    return [s for s in rank_strategies(strategies_dir) if not s.hidden]
 
 
 def rank_strategies(strategies_dir: str | Path) -> list[StrategyInfo]:

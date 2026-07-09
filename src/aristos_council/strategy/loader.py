@@ -100,6 +100,9 @@ class Strategy(BaseModel):
     # record key (never renamed); display-only, falling back to `name` then `id`.
     display_name: str = ""
     role: str = ""              # optional one-line role caption (display-only)
+    # UI visibility (Sprint 4C): "hidden" -> not listed in dropdowns by default (still
+    # loadable via CLI/loader). Presentation only.
+    ui: str = ""
     description: str = ""
     criteria: list[CriterionSpec] = Field(min_length=1)
     policy: StrategyPolicy = Field(default_factory=StrategyPolicy)

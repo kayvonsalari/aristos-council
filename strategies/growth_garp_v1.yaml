@@ -1,0 +1,44 @@
+# Growth at a Reasonable Price — rank strategy (Sprint 4C).
+# =========================================================
+# The RANK counterpart to the growth_v1 screen: it ranks growth/quality names on
+# proven factors and judges/prefilters them against growth_v1's criteria (its lens).
+# growth_v1 itself is a criteria-only config (a screen); this file is what makes the
+# GARP philosophy selectable in the rank dropdown, Company Check, and the universe run —
+# growth_v1's semantics stay frozen (this file references it, never edits it).
+#
+# Factors: durable top-line growth (revenue CAGR) + capital efficiency (ROIC) +
+# valuation (earnings yield) + trend (12m momentum) — the GARP quad, combined by the
+# same rank-sum mechanic as every other strategy (no tuned weights).
+
+id: growth_garp_v1
+name: Growth at a Reasonable Price
+display_name: Growth at a Reasonable Price (GARP)
+version: 1
+
+description: >-
+  Growth at a Reasonable Price: rank durable compounders on revenue growth, capital
+  efficiency (ROIC), valuation (earnings yield) and 12-month momentum, over names that
+  already pass the growth screen (revenue CAGR, ROIC, PEG, momentum floors, mid/large
+  cap). The growth mirror of the value+momentum flagship.
+
+factors:
+  - name: revenue_growth     # growth   — in-house 3y revenue CAGR
+  - name: roic               # quality  — through-cycle return on invested capital
+  - name: earnings_yield     # value    — EBIT/EV (reasonable price)
+  - name: momentum_12m       # trend    — equal rank weight, same combine
+
+cut: quintile                # top 20% BUY, middle 60% HOLD, bottom 20% SELL
+missing: worst               # as the flagship; survivors of the prefilter have the inputs
+min_market_cap: 5.0e9        # mid/large-cap scope (also enforced by the screen)
+
+# The growth screen is the lens: the council judges GARP picks against it, and (with
+# prefilter_screen) it also gatekeeps the ranking — one growth definition, shared.
+# growth_screen_v1 mirrors the frozen growth_v1 criteria without editing growth_v1.
+council_screen_strategy: growth_screen_v1
+prefilter_screen: true
+
+rationale: >-
+  Great businesses compound revenue at high incremental returns on capital; the
+  discipline is refusing to overpay for that growth. Ranking survivors of the growth
+  screen on growth + quality + valuation + trend orders them without tuned weights, the
+  same rank-sum mechanic the value strategies use.

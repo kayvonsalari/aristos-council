@@ -5,6 +5,7 @@
 id: magic_formula_v1
 name: Magic Formula
 display_name: Classic Value (baseline — for comparison)
+ui: hidden          # legacy/superseded — not listed in the dropdowns; still CLI-loadable
 version: 1
 description: >-
   Greenblatt's two-factor rank: return on invested capital (quality) + earnings

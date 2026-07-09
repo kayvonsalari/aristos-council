@@ -52,6 +52,10 @@ class RankStrategy(BaseModel):
     display_name: str = ""
     # Optional one-line role caption shown under the selected entry. Display-only.
     role: str = ""
+    # UI visibility (Sprint 4C): "hidden" -> not listed in the dropdowns by default
+    # (legacy/superseded configs). Still fully loadable via the loader/CLI — hidden means
+    # not listed, not removed. Default "" == visible. Presentation only.
+    ui: str = ""
     description: str = ""
     rationale: str = ""
     # The proven factors to rank on (>=1), validated against the factor registry.

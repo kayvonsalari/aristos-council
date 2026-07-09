@@ -15,6 +15,7 @@
 
 id: dividend_aristocrats_v1
 name: Dividend Aristocrats
+ui: hidden          # legacy/superseded — not listed in the dropdowns; still CLI-loadable
 version: 1
 
 description: >
