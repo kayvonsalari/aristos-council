@@ -1485,6 +1485,10 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 universe, rank_strategy.id, universe_id=universe_id,
                 council_mode=mode, ranker_only=ranker_only,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
+                # Freeze this run's raw inputs so Company Check's reference-cohort reader
+                # (_latest_reference_run) can replay it offline — without this the UI
+                # never wrote runs/ and cohort context was dead code (ITEM 1).
+                freeze_dir=ROOT / "runs",
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")

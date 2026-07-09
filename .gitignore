@@ -17,3 +17,6 @@ chroma/
 .chroma/
 data_cache/
 .aristos_cache/
+# Frozen run records — raw vendor payloads captured for offline replay (Company Check
+# cohort context). NOT committed: vendor-data redistribution (ITEM 1).
+runs/
