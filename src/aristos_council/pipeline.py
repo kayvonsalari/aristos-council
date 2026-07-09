@@ -178,6 +178,23 @@ def _shortlist(ranked: list[RankedTicker], runs_on: str, k: int) -> list[RankedT
     return [r for r in live if r.verdict == "buy"]   # buy_quintile (default)
 
 
+def _annotate_narration(rep: RunReport, r: RankedTicker) -> None:
+    """Append rank-semantics contradiction annotations to the narrative in place (ITEM 4).
+
+    Verifies the narrator's ordinal claims against ``r``'s authoritative rank table and
+    appends `[⚠ narration check: …]` lines on a contradiction — never rewrites the prose.
+    No-op when there is no rationale to check."""
+    from .narration_check import check_narration
+    d = getattr(rep, "decision", None)
+    if d is None or not getattr(d, "rationale", ""):
+        return
+    table = {"N": r.universe_size, "combined_position": r.rank_position,
+             "factors": dict(r.factor_ranks)}
+    annotations = check_narration(d.rationale, table)
+    if annotations:
+        d.rationale = d.rationale.rstrip() + "\n" + "\n".join(annotations)
+
+
 def _council_stage(
     shortlist: list[RankedTicker], screen_strategy, adapter, runners, mode: str, *,
     sentiment_adapter=None, sentiment_missing_key: bool = False,
@@ -205,8 +222,10 @@ def _council_stage(
             ticker=r.ticker, strategy_id=screen_strategy.id,
             ranker_verdict=Recommendation(r.verdict),
             ranker_explanation=r.explain(),
+            ranker_cohort_size=r.universe_size,
             ranker_imputed_fraction=imputed_fraction)))
         rep = report_from_state(result)
+        _annotate_narration(rep, r)                  # ITEM 4: rank-semantics post-check
         outcomes.append(CouncilOutcome(
             ticker=r.ticker, ranker_verdict=r.verdict,
             council_verdict=rep.council_verdict,

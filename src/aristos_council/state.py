@@ -336,6 +336,9 @@ class ResearchState(BaseModel):
     # decision can analyse it and state agreement. None for a standalone council run.
     ranker_verdict: Optional[Recommendation] = None
     ranker_explanation: str = ""
+    # Size of the ranked cohort (kept names) this name was ranked within — feeds the
+    # narrator's rank-semantics legend (N = <cohort size>). None on a standalone council.
+    ranker_cohort_size: Optional[int] = None
     # Fraction of the ranker's factors that were IMPUTED for this name (value absent,
     # judged on the mean of its present ranks). Threaded in by the rank pipeline so the
     # deterministic evidence-coverage score (see coverage.py) can discount an

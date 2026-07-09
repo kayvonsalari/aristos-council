@@ -48,6 +48,10 @@ class RankedTicker:
     combined_rank: float                # sum of factor ranks (lower = better)
     universe_size: int
     verdict: str = "hold"               # buy / hold / sell
+    # 1-based position among the ranked (kept) names, best-first — RECORDED from the
+    # existing sort (no effect on ordering/cut/tie-break). Used by the narration
+    # rank-semantics post-check. None until assigned; never set on excluded names.
+    rank_position: Optional[int] = None
     excluded: bool = False
     reason: str = ""
     # Factors whose value was NOT-EVAL under 'neutral' mode — imputed with the
@@ -195,4 +199,5 @@ def rank_universe(
     ranked.sort(key=lambda r: (r.combined_rank, r.ticker))
     for i, r in enumerate(ranked):
         r.verdict = _verdict_for_position(i, n, cut, k, percentile)
+        r.rank_position = i + 1          # record position (no effect on the sort/cut)
     return ranked + excluded

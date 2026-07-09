@@ -191,3 +191,34 @@ def test_mode_stamp_tells_the_truth_on_both_paths():
     assert narrator.meta["council_mode"] == "narrator"
     assert narrator.header == \
         "Verdict: deterministic ranker.  Narrative: LLM (non-judging)."
+
+
+# --------------------------------------------------------------------------- #
+# ITEM 4 — narrator rank-semantics legend + post-check
+# --------------------------------------------------------------------------- #
+def test_ranker_block_includes_rank_semantics_legend():
+    from aristos_council.agents.nodes import _ranker_block
+    from aristos_council.state import ResearchState
+
+    s = ResearchState(ticker="A", strategy_id="s", ranker_verdict=Recommendation.BUY,
+                      ranker_explanation="A: ... across a 23-name cohort -> BUY",
+                      ranker_cohort_size=23)
+    block = _ranker_block(s)
+    assert "Rank semantics: rank 1 = best" in block and "N = 23" in block
+    # no cohort size (standalone council) -> no legend
+    assert "Rank semantics" not in _ranker_block(
+        ResearchState(ticker="A", strategy_id="s", ranker_verdict=Recommendation.BUY))
+
+
+def test_post_check_annotates_a_contradictory_narration():
+    # A ranks BEST (position 1 of 2); a narration calling it "the worst in the cohort"
+    # contradicts the rank table and gets the machine annotation appended.
+    runners = _runners(DecisionOutput(
+        recommendation=Recommendation.BUY, confidence=0.8,
+        rationale="A is the worst name in the cohort."))
+    result = run_rank_pipeline(
+        UNIVERSE, "magic_formula_v1", council_mode="narrator", strategies_dir=STRAT_DIR,
+        adapter=_Adapter(), runners=runners, today=date(2026, 6, 30))
+    assert "A" in result.narratives
+    assert "narration check" in result.narratives["A"]
+    assert "A is the worst name in the cohort" in result.narratives["A"]

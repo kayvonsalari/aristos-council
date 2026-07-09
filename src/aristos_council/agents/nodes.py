@@ -434,8 +434,17 @@ def _ranker_block(state: ResearchState) -> str:
     if state.ranker_verdict is None:
         return ""
     expl = f" — {state.ranker_explanation}" if state.ranker_explanation else ""
+    # Rank-semantics legend (ITEM 4): the narrator kept inverting ordinals (rank 2 called
+    # "second-worst"). State the convention explicitly and confine ordinal claims to the
+    # rank table. Only when the cohort size is known (a ranker run).
+    legend = ""
+    if state.ranker_cohort_size is not None:
+        legend = (f"\nRank semantics: rank 1 = best on every factor; lower combined "
+                  f"rank-sum = better. N = {state.ranker_cohort_size}. Ordinal claims "
+                  f"(best, worst, second-, top-, bottom-) must be derived only from the "
+                  f"rank table.")
     return (f"\nRANKER VERDICT (the deterministic verdict-of-record for this name): "
-            f"{state.ranker_verdict.value.upper()}{expl}\n")
+            f"{state.ranker_verdict.value.upper()}{expl}{legend}\n")
 
 
 def _user_message(state: ResearchState, strategy: Strategy) -> str:
