@@ -32,9 +32,53 @@ from aristos_council.scoreboard import (
     score_snapshot,
     street_terciles,
     SnapshotRow,
+    append_rows,
 )
 
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
+
+
+# --------------------------------------------------------------------------- #
+# ITEM 5 — whole-row-quoting bug: writer never whole-row-quotes; commas in notes
+# round-trip; legacy whole-row-quoted rows are repaired on read.
+# --------------------------------------------------------------------------- #
+_COMMA_NOTE = "bottom quintile of 23-name universe (relative rank, not a short thesis)"
+
+
+def test_comma_in_notes_round_trips_and_is_not_whole_row_quoted(tmp_path):
+    import csv as _csv
+
+    row = SnapshotRow(
+        snapshot_date="2026-07-05", strategy="magic_formula_momentum_v1", universe_id="",
+        ticker="GE", aristos_verdict="SELL", combined_rank=43.0, price=377.52,
+        street_mean=1.5, n_analysts=21, target_mean=362.57144, notes=_COMMA_NOTE)
+    path = tmp_path / "verdict_consensus.csv"
+    append_rows([row], path)
+
+    # a strict CSV parse yields the full field row (NOT a single whole-row-quoted column)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header_fields = next(_csv.reader([lines[0]]))
+    data_fields = next(_csv.reader([lines[1]]))
+    assert not lines[1].startswith('"')                  # row is never whole-row-quoted
+    assert len(data_fields) == len(header_fields) > 1    # real fields, not one column
+    # and the value round-trips intact (comma preserved)
+    back = read_rows(path)[0]
+    assert back.ticker == "GE" and back.notes == _COMMA_NOTE and back.combined_rank == 43.0
+
+
+def test_legacy_whole_row_quoted_line_is_repaired_on_read(tmp_path):
+    # a row written the OLD (buggy) way: the entire row as one quoted field.
+    header = ("snapshot_date,strategy,universe_id,ticker,aristos_verdict,combined_rank,"
+              "price,street_mean,n_analysts,target_mean,notes")
+    inner = f'2026-07-05,magic_formula_momentum_v1,,GE,SELL,43.0,377.52,1.5,21,362.57144,"{_COMMA_NOTE}"'
+    quoted = '"' + inner.replace('"', '""') + '"'
+    path = tmp_path / "legacy.csv"
+    path.write_text(header + "\n" + quoted + "\n", encoding="utf-8")
+
+    rows = read_rows(path)
+    assert len(rows) == 1
+    assert rows[0].ticker == "GE" and rows[0].aristos_verdict == "SELL"
+    assert rows[0].combined_rank == 43.0 and rows[0].notes == _COMMA_NOTE
 
 
 # --------------------------------------------------------------------------- #

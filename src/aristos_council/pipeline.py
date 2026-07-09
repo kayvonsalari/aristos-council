@@ -510,9 +510,12 @@ def _append_agreement_csv(result: RankPipelineResult, path: Path) -> None:
     new = not path.exists()
     rows = agreement_csv_rows(result)
     with path.open("a", newline="", encoding="utf-8") as fh:
+        # QUOTE_MINIMAL (explicit) — a comma in dissent_notes quotes that FIELD only,
+        # never the whole row (ITEM 5).
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()) if rows else
                            ["ticker", "ranker_verdict", "council_verdict",
-                            "agreement", "council_mode", "dissent_notes"])
+                            "agreement", "council_mode", "dissent_notes"],
+                           quoting=csv.QUOTE_MINIMAL)
         if new:
             w.writeheader()
         for row in rows:

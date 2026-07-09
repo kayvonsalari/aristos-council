@@ -173,6 +173,28 @@ def build_snapshot_rows(result, consensus: dict[str, StreetConsensus], *,
 # --------------------------------------------------------------------------- #
 # CSV sink — append-only, never rewritten
 # --------------------------------------------------------------------------- #
+# Column order BEFORE company_name was inserted — the shape of the legacy rows a
+# whole-row-quoted line re-parses into (ITEM 5).
+_LEGACY_COLUMNS = [c for c in COLUMNS if c != "company_name"]
+
+
+def _repair_whole_row_quoted(d: dict, fieldnames: list[str]) -> dict:
+    """Repair a legacy WHOLE-ROW-QUOTED row (ITEM 5).
+
+    A row that was serialized as ONE quoted string reads back, under a strict CSV parser,
+    as a single column: the entire row text lands in the FIRST field and every other
+    field is empty/None. Detect that shape (ticker empty AND the first column carries
+    embedded commas) and re-parse the first column back into fields. A normal row is
+    returned unchanged — so this is a safe read-side normalization, and the next write
+    then emits the row with proper per-field quoting (never whole-row-quoted)."""
+    first = fieldnames[0] if fieldnames else "snapshot_date"
+    if not d.get("ticker") and "," in (d.get(first) or ""):
+        fields = next(csv.reader([d[first]]), [])
+        keys = _LEGACY_COLUMNS if len(fields) == len(_LEGACY_COLUMNS) else COLUMNS
+        return dict(zip(keys, fields))
+    return d
+
+
 def _upgrade_schema(path: Path) -> None:
     """One-time ADDITIVE column upgrade for an existing CSV whose header predates a new
     column (e.g. Item 1's ``universe_id``). Reads existing rows, rewrites with the full
@@ -184,9 +206,12 @@ def _upgrade_schema(path: Path) -> None:
         header = reader.fieldnames or []
         if set(COLUMNS) <= set(header):
             return                                    # already current (or a superset)
-        existing = list(reader)
+        existing = [_repair_whole_row_quoted(d, header) for d in reader]
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=COLUMNS, extrasaction="ignore")
+        # QUOTE_MINIMAL (explicit): only fields that NEED quoting (a comma in notes) are
+        # quoted — a row is never whole-row-quoted (ITEM 5).
+        w = csv.DictWriter(fh, fieldnames=COLUMNS, extrasaction="ignore",
+                           quoting=csv.QUOTE_MINIMAL)
         w.writeheader()
         for d in existing:
             w.writerow({c: d.get(c, "") for c in COLUMNS})
@@ -203,7 +228,9 @@ def append_rows(rows: list[SnapshotRow], path: str | Path) -> Path:
     if not new:
         _upgrade_schema(p)
     with p.open("a", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=COLUMNS, extrasaction="ignore")
+        # QUOTE_MINIMAL (explicit) — never whole-row-quote a row (ITEM 5).
+        w = csv.DictWriter(fh, fieldnames=COLUMNS, extrasaction="ignore",
+                           quoting=csv.QUOTE_MINIMAL)
         if new:
             w.writeheader()
         for row in rows:
@@ -220,7 +247,10 @@ def read_rows(path: str | Path, *, snapshot_date: Optional[date] = None,
     want_date = snapshot_date.isoformat() if snapshot_date else None
     out: list[SnapshotRow] = []
     with p.open(newline="", encoding="utf-8") as fh:
-        for d in csv.DictReader(fh):
+        reader = csv.DictReader(fh)
+        header = reader.fieldnames or []
+        for d in reader:
+            d = _repair_whole_row_quoted(d, header)   # tolerate legacy whole-row-quoting
             if want_date and d.get("snapshot_date") != want_date:
                 continue
             if strategy and d.get("strategy") != strategy:
