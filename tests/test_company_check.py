@@ -230,8 +230,8 @@ def test_market_cap_deduped_only_when_floors_match():
 
 
 # --------------------------------------------------------------------------- #
-# 4C ITEM 2 — Company Check under growth_garp_v1 (GARP) renders growth criteria
-# with a non-gating label on min_price_momentum.
+# 4C ITEM 2 / CCFIX-3 — Company Check under growth_garp_v1 (GARP) renders growth
+# criteria with gating labels derived from the screen RUNNER.
 # --------------------------------------------------------------------------- #
 class _GrowthAdapter(MarketDataAdapter):
     name = "fake"
@@ -254,7 +254,7 @@ class _GrowthAdapter(MarketDataAdapter):
         return []
 
 
-def test_company_check_growth_garp_renders_criteria_and_non_gating_label():
+def test_company_check_growth_garp_renders_criteria_with_gating_labels():
     r = run_company_check(
         "NVDA", "growth_garp_v1", "", adapter=_GrowthAdapter(),
         strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR, runs_dir=RUNS_DIR,
@@ -267,11 +267,13 @@ def test_company_check_growth_garp_renders_criteria_and_non_gating_label():
             "min_price_momentum"} <= names
     for c in r.screen:                                               # observed-vs-threshold present
         assert c.status in ("PASS", "FAIL", "NOT-EVALUATED")
-    # min_price_momentum is the non-gating criterion, visibly labelled.
+    # CCFIX-3: the prefilter EXCLUDES on any confirmed fail, so an EVALUATED criterion is
+    # GATING. min_price_momentum here evaluates (PASS) -> gating (the runner enforces it),
+    # NOT the old is_gating-flag "non-gating".
     mom = next(c for c in r.screen if c.name == "min_price_momentum")
-    assert mom.gating is False
+    assert mom.status in ("PASS", "FAIL") and mom.gating is True
     text = format_company_check(r)
-    assert "min_price_momentum" in text and "non-gating" in text
+    assert "min_price_momentum" in text and "gating" in text
     assert _no_verdict(text)
 
 
@@ -322,3 +324,113 @@ def test_council_path_default_resolution_is_untouched():
     raw = load_rank_strategy_from_id("magic_formula_raw_v1", STRAT_DIR)
     assert resolve_council_screen_id(raw) == "growth_v1"          # default still there
     assert resolve_council_screen_id(raw, "magic_value_screen_v1") == "magic_value_screen_v1"
+
+
+# --------------------------------------------------------------------------- #
+# CCFIX-3 — gating tag derives from the enforcing runner (prefilter excludes on any
+# confirmed fail; never on an abstention), not the disposition is_gating flag.
+# --------------------------------------------------------------------------- #
+def test_growth_criteria_tag_gating_under_v2():
+    # the v2 baseline excluded 31 names on exactly these criteria -> they are GATING.
+    r = run_company_check(
+        "NVDA", "growth_garp_v2", "", adapter=_GrowthAdapter(),
+        strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR, runs_dir=RUNS_DIR,
+        today=date(2026, 6, 30))
+    assert r.screen_strategy_id == "growth_screen_v2"
+    by = {c.name: c for c in r.screen}
+    for name in ("min_revenue_cagr", "min_roic", "max_peg_ratio"):
+        assert by[name].status in ("PASS", "FAIL")        # evaluated
+        assert by[name].gating is True                    # the runner excludes on a fail
+    assert "non-gating" not in format_company_check(r)     # no evaluated criterion is non-gating
+
+
+class _AbstainRoicAdapter(MarketDataAdapter):
+    """revenue present (min_revenue_cagr evaluates) but NO invested_capital -> min_roic
+    ABSTAINS -> genuinely non-gating (the runner will not exclude on an abstention)."""
+
+    name = "fake"
+
+    def get_fundamentals(self, ticker):
+        return Fundamentals(
+            ticker=ticker, market_cap=2e10, sector="Technology",
+            total_revenue=[200, 170, 145, 124], operating_income=[100, 88, 78, 68],
+            ebit=[100], pe_ratio=18, invested_capital=[])     # empty -> roic NOT-EVAL
+
+    def get_price_history(self, ticker, *, start, end):
+        return PriceHistory(ticker=ticker, bars=[
+            PriceBar(day=date(2026, 1, 1), open=c, high=c, low=c, close=c,
+                     adj_close=c, volume=1) for c in [100 + 0.2 * i for i in range(260)]])
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return []
+
+
+def test_abstaining_criterion_tags_non_gating():
+    r = run_company_check(
+        "X", "growth_garp_v2", "", adapter=_AbstainRoicAdapter(),
+        strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR, runs_dir=RUNS_DIR,
+        today=date(2026, 6, 30))
+    roic = next(c for c in r.screen if c.name == "min_roic")
+    assert roic.status == "NOT-EVALUATED"                 # abstains
+    assert roic.gating is False                           # runner would NOT exclude on it
+    cagr = next(c for c in r.screen if c.name == "min_revenue_cagr")
+    assert cagr.status in ("PASS", "FAIL") and cagr.gating is True   # evaluated -> gating
+    assert "non-gating" in format_company_check(r)        # the abstaining one is labelled
+
+
+class _PegMustFailAdapter(MarketDataAdapter):
+    """operating income DECLINING -> PEG growth <= 0 -> must-fail (passed False,
+    observed None) — the branch that used to render a bare '— vs threshold 2'."""
+
+    name = "fake"
+
+    def get_fundamentals(self, ticker):
+        return Fundamentals(
+            ticker=ticker, market_cap=2e10, sector="Technology",
+            total_revenue=[200, 170, 145, 124], operating_income=[68, 78, 88, 100],
+            ebit=[68], pe_ratio=18, invested_capital=[500] * 4,
+            tax_provision=[10] * 4, pretax_income=[60] * 4)
+
+    def get_price_history(self, ticker, *, start, end):
+        return PriceHistory(ticker=ticker, bars=[
+            PriceBar(day=date(2026, 1, 1), open=c, high=c, low=c, close=c,
+                     adj_close=c, volume=1) for c in [100 + 0.2 * i for i in range(260)]])
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return []
+
+
+def test_peg_must_fail_renders_its_reason_not_a_bare_threshold():
+    r = run_company_check(
+        "X", "growth_garp_v2", "", adapter=_PegMustFailAdapter(),
+        strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR, runs_dir=RUNS_DIR,
+        today=date(2026, 6, 30))
+    peg = next(c for c in r.screen if c.name == "max_peg_ratio")
+    assert peg.status == "FAIL" and peg.observed is None and peg.gating is True
+    assert peg.note                                       # a reason is present
+    text = format_company_check(r)
+    assert "not growing" in text                          # the reason renders
+    assert "max_peg_ratio               observed — vs threshold" not in text   # not the bare form
+
+
+def test_universe_run_screen_behaviour_is_unchanged():
+    # CCFIX-3 changes ONLY the Company Check tag/rendering — the screen RUNNER is
+    # untouched, so a rank run still excludes on the screen exactly as before.
+    from aristos_council.pipeline import run_rank_pipeline
+
+    class _A(MarketDataAdapter):
+        name = "fake"
+
+        def get_fundamentals(self, ticker):
+            return _MU if ticker == "MU" else _GOOD
+
+        def get_price_history(self, ticker, *, start, end):
+            return _rising()
+
+        def get_dividend_history(self, ticker, *, start, end):
+            return []
+
+    r = run_rank_pipeline(["MU", "GOOD"], "magic_formula_momentum_v1", ranker_only=True,
+                          strategies_dir=STRAT_DIR, adapter=_A(), today=date(2026, 6, 30))
+    assert any(t == "MU" and "min_roic" in why for t, why in r.excluded)   # screen unchanged
+    assert "GOOD" in {x.ticker for x in r.ranked}

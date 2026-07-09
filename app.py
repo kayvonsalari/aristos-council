@@ -1645,6 +1645,11 @@ def _render_company_check(result) -> None:
                 lambda v: f"color: {_CC_STATUS_HEX.get(v, '')}; font-weight: 700",
                 subset=["Status"])
             st.dataframe(styler, hide_index=True, width="stretch")
+        # A must-fail with no observed value (e.g. PEG growth <= 0) shows its REASON,
+        # not a bare "—" (CCFIX-3).
+        for c in result.screen:
+            if c.status == "FAIL" and c.observed is None:
+                st.caption(f"↳ **{c.name}**: {c.note or 'fails closed by design'}")
         if result.market_cap_in_gates:
             st.caption("`min_market_cap` — same floor as the universe gate; shown once, "
                        "under **Gates** below.")

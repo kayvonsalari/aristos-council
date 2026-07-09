@@ -244,20 +244,22 @@ def run_company_check(
         ev = Evidence(fundamentals=f, last_close=fi.last_close,
                       return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
         screen_result = run_screen(screen_criteria, ev, ticker=ticker)
-        # Gating is the strategy's own per-criterion is_gating flag (a confirmed fail caps
-        # the disposition at SELL); default non-gating. Data-driven — nothing hardcoded (4C).
-        gating_by_name = {getattr(cs, "name", None): bool(getattr(cs, "is_gating", False))
-                          for cs in screen_criteria}
         for c in screen_result.criteria:
             basis = getattr(c, "basis", "") or ""
             if c.passed is None:
                 abstained.append(c.name)
+            # GATING is the flag the screen RUNNER actually enforces (CCFIX-3): the
+            # prefilter EXCLUDES on any confirmed fail (passed is False) but NEVER on an
+            # abstention (passed is None). So an evaluated criterion is GATING (a fail
+            # would/does exclude); a criterion renders non-gating ONLY when it abstains,
+            # i.e. the runner genuinely would not exclude on it. NOT the disposition-
+            # ceiling is_gating flag (which the prefilter ignores).
             screen_cells.append(ScreenCell(
                 name=c.name, observed=c.observed, threshold=c.threshold,
                 status=_STATUS[c.passed], basis=_BASIS_LABEL.get(basis, basis),
                 borderline=(c.passed is False
                             and is_borderline_fail(c.observed, c.threshold)),
-                note=c.note, gating=gating_by_name.get(c.name, False)))
+                note=c.note, gating=c.passed is not None))
     di.abstained_criteria = abstained
 
     # GATES — sector / market-cap / coarse payout (rank-strategy universe filters).
@@ -465,8 +467,15 @@ def format_company_check(result: CompanyCheckResult) -> str:
             if c.borderline:
                 tags.append("borderline")
             tag = f"  [{'; '.join(tags)}]"
-            lines.append(f"  {c.status:<14} {c.name:<26} observed {_fmt_num(c.observed)} "
-                         f"vs threshold {_fmt_num(c.threshold)}{tag}")
+            if c.status == "FAIL" and c.observed is None:
+                # A must-fail with no observed value (e.g. PEG growth <= 0 — undefined,
+                # fails closed by design): render its REASON, not a bare "— vs threshold".
+                reason = c.note or "fails closed by design"
+                lines.append(f"  {c.status:<14} {c.name:<26} {reason}{tag}")
+            else:
+                lines.append(f"  {c.status:<14} {c.name:<26} observed "
+                             f"{_fmt_num(c.observed)} vs threshold "
+                             f"{_fmt_num(c.threshold)}{tag}")
         if result.market_cap_in_gates:
             lines.append("  (min_market_cap — same floor as the universe gate; shown "
                          "once, under GATES below)")
