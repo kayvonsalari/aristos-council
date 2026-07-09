@@ -1,0 +1,21 @@
+# Energy-watch-4 — cyclical-peak observation universe.
+# =====================================================
+# NOT a portfolio candidate list. Watches whether war-windfall trailing
+# earnings push excluded oil names through the magic_value screen at the
+# top of the cycle (Greenblatt cyclical trap; XOM is the live specimen,
+# 0.9pts below the ROIC floor pre-windfall). Feeds v2 question 2:
+# cyclical-peak input distortion. See v2 q1: NVDA extreme-CAGR PEG.
+id: energy_watch_v1
+display_name: Energy Watch (observation)
+role: cyclical-peak watch — observation only, never graded
+description: Energy cyclical-peak watch — majors and refiners, observation only.
+created: "2026-07-09"
+rationale: >-
+  observe magic_value_screen_v1 behaviour on oil majors and refiners as
+  Q2/Q3 2026 war-windfall earnings enter trailing fundamentals; expected
+  failure mode is screen admission at peak cycle. Not for allocation.
+tickers:
+  - CVX
+  - XOM
+  - MPC
+  - VLO

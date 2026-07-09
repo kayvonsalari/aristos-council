@@ -15,7 +15,10 @@ from __future__ import annotations
 # the "Show validation & legacy tools" toggle. They remain fully functional (the baseline
 # side-by-side is a demo exhibit one toggle-flip away, NOT deleted). Ids, not display
 # names, so the gate keys off the stable record key.
-_VALIDATION_UNIVERSE_IDS = frozenset({"defensive_16_v1"})     # the known-trap bench
+_VALIDATION_UNIVERSE_IDS = frozenset({
+    "defensive_16_v1",        # the known-trap bench
+    "energy_watch_v1",        # cyclical-peak OBSERVATION universe (not a scoreboard one)
+})
 _VALIDATION_STRATEGY_IDS = frozenset({"magic_formula_v1"})    # the Classic Value baseline
 
 

@@ -101,6 +101,8 @@ def test_visible_universes_hides_the_bench_by_default():
     assert off == {"growth_40_v1", "defensive_income_16_v1"}            # scoreboard only
     on = {u.id for u in visible_universes(manifests, show_validation=True)}
     assert "defensive_16_v1" in on                                      # bench revealed
+    # the energy-watch OBSERVATION universe is hidden by default, revealed under the toggle
+    assert "energy_watch_v1" not in off and "energy_watch_v1" in on
 
 
 def test_visible_rank_strategies_hides_the_baseline_by_default():
