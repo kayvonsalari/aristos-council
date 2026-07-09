@@ -44,16 +44,25 @@ deterministically. Its valid insights were extracted and hardened into rules (a 
 factor; a screen-as-prefilter); what remained was noise. The narrative layer is what an
 LLM demonstrably does well here, so that is the job it keeps.
 
-Three strategies run on one engine — each is a versioned YAML file, not code:
+The rank strategies run on one engine — each is a versioned YAML file, not code:
 - **Defensive income** (`conservative_plus_v1`) — van Vliet's Conservative Formula: low volatility,
   high net payout (dividends plus buybacks), momentum guard. For steady income portfolios.
-- **Classic value** (`magic_formula_v1`) — Greenblatt's Magic Formula: high return on capital,
-  bought at a high earnings yield. Preserved unchanged as the audited baseline.
 - **Value + momentum** (`magic_formula_momentum_v1`) — the flagship: Greenblatt's two factors plus
   a 12-month momentum rank (per the value-and-momentum literature), which keeps falling knives out
   of the top quintile.
+- **Growth at a Reasonable Price** (`growth_garp_v1`) — ranks durable compounders on revenue
+  growth, ROIC, valuation, and momentum, over names that pass a growth screen.
+- **Classic value** (`magic_formula_v1`) — Greenblatt's Magic Formula: high return on capital,
+  bought at a high earnings yield. The audited baseline, kept as a legacy config (unlisted).
 A strategy file declares its factors, screen, and verdict cut; the arithmetic behind every factor
 is unit-tested and documented in [The Calculations](docs/CALCULATIONS.md).
+
+The UI **discovers strategies dynamically** from `strategies/` — there is no hardcoded list. The
+visible set is currently three (**Defensive Income** `conservative_plus_v1`, **Value + Momentum**
+`magic_formula_momentum_v1`, **Growth at a Reasonable Price** `growth_garp_v1`); legacy configs
+(`magic_formula_v1`, `dividend_aristocrats_v1`) are marked `ui: hidden` and stay fully loadable via
+the loader/CLI but unlisted. A new strategy appears simply by adding a YAML to `strategies/` — never
+by editing a published one (configs are versioned and superseded, not mutated).
 
 New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — the plain-language
 walkthrough. Want the formulas? **[The Calculations](docs/CALCULATIONS.md)** — every
