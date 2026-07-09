@@ -389,6 +389,20 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert len(rank) == 3                       # conservative_plus + flagship + GARP
 
 
+def test_both_strategy_dropdowns_list_the_three_live_strategies():
+    # 4C ITEM 2: the universe-run selector AND the Company Check selector both populate
+    # from discovery with friendly display names; growth appears as GARP.
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    rank = _dropdown(at, "Rank strategy").options
+    cc = _dropdown(at, "Strategy (lens screen + factors)").options
+    for opts in (rank, cc):
+        assert any("GARP" in o for o in opts)                        # growth as GARP
+        assert not any("_" in o for o in opts)                       # display names, no ids
+        assert len(opts) == 3
+
+
 def test_validation_assets_revealed_when_toggle_on():
     at = _legacy_app(60)
     assert not at.exception

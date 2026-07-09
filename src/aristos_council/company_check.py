@@ -62,6 +62,7 @@ class ScreenCell:
     basis: str = ""                     # display label ("FCF (4y mean)" / "EPS fallback")
     borderline: bool = False
     note: str = ""
+    gating: bool = False                # is_gating on the strategy's CriterionSpec (4C)
 
 
 @dataclass
@@ -228,6 +229,10 @@ def run_company_check(
     ev = Evidence(fundamentals=f, last_close=fi.last_close,
                   return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
     screen_result = run_screen(screen_strategy.criteria, ev, ticker=ticker)
+    # Gating is the strategy's own per-criterion is_gating flag (a confirmed fail caps the
+    # disposition at SELL); default non-gating. Data-driven — nothing hardcoded (4C).
+    gating_by_name = {getattr(cs, "name", None): bool(getattr(cs, "is_gating", False))
+                      for cs in screen_strategy.criteria}
     screen_cells: list[ScreenCell] = []
     abstained: list[str] = []
     for c in screen_result.criteria:
@@ -239,7 +244,7 @@ def run_company_check(
             status=_STATUS[c.passed], basis=_BASIS_LABEL.get(basis, basis),
             borderline=(c.passed is False
                         and is_borderline_fail(c.observed, c.threshold)),
-            note=c.note))
+            note=c.note, gating=gating_by_name.get(c.name, False)))
     di.abstained_criteria = abstained
 
     # GATES — sector / market-cap / coarse payout (rank-strategy universe filters).
@@ -424,12 +429,12 @@ def format_company_check(result: CompanyCheckResult) -> str:
     lines.append("SCREEN (all criteria evaluated for diagnosis; universe runs exclude "
                  "on first confirmed fail):")
     for c in result.screen:
-        tags = []
+        tags = ["gating" if c.gating else "non-gating"]
         if c.basis:
             tags.append(c.basis)
         if c.borderline:
             tags.append("borderline")
-        tag = f"  [{'; '.join(tags)}]" if tags else ""
+        tag = f"  [{'; '.join(tags)}]"
         lines.append(f"  {c.status:<14} {c.name:<26} observed {_fmt_num(c.observed)} "
                      f"vs threshold {_fmt_num(c.threshold)}{tag}")
     if result.market_cap_in_gates:

@@ -227,3 +227,49 @@ def test_market_cap_deduped_only_when_floors_match():
     cons = _check(_MU, ticker="MU", strat="conservative_plus_v1")
     assert cons.market_cap_in_gates is False
     assert "min_market_cap" in {c.name for c in cons.screen}
+
+
+# --------------------------------------------------------------------------- #
+# 4C ITEM 2 — Company Check under growth_garp_v1 (GARP) renders growth criteria
+# with a non-gating label on min_price_momentum.
+# --------------------------------------------------------------------------- #
+class _GrowthAdapter(MarketDataAdapter):
+    name = "fake"
+
+    def get_fundamentals(self, ticker):
+        return Fundamentals(
+            ticker=ticker, company_name="NVIDIA Corporation", market_cap=2e12,
+            sector="Technology", total_revenue=[600, 400, 270, 170],
+            operating_income=[350, 250, 150, 90], ebit=[350],
+            tax_provision=[50, 40, 25, 15], pretax_income=[340, 240, 145, 88],
+            invested_capital=[300] * 4, pe_ratio=45, total_debt=1e10, total_cash=3e10)
+
+    def get_price_history(self, ticker, *, start, end):
+        return PriceHistory(ticker=ticker, bars=[
+            PriceBar(day=date(2026, 1, 1), open=100, high=100, low=100,
+                     close=100 + 0.2 * i, adj_close=100 + 0.2 * i, volume=1)
+            for i in range(260)])
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return []
+
+
+def test_company_check_growth_garp_renders_criteria_and_non_gating_label():
+    r = run_company_check(
+        "NVDA", "growth_garp_v1", "", adapter=_GrowthAdapter(),
+        strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR, runs_dir=RUNS_DIR,
+        today=date(2026, 6, 30))
+    assert r.rank_strategy_id == "growth_garp_v1"
+    assert r.screen_strategy_id == "growth_screen_v1"                 # the GARP lens
+    # the four growth criteria render (min_market_cap dedups into GATES).
+    names = {c.name for c in r.screen}
+    assert {"min_revenue_cagr", "max_peg_ratio", "min_roic",
+            "min_price_momentum"} <= names
+    for c in r.screen:                                               # observed-vs-threshold present
+        assert c.status in ("PASS", "FAIL", "NOT-EVALUATED")
+    # min_price_momentum is the non-gating criterion, visibly labelled.
+    mom = next(c for c in r.screen if c.name == "min_price_momentum")
+    assert mom.gating is False
+    text = format_company_check(r)
+    assert "min_price_momentum" in text and "non-gating" in text
+    assert _no_verdict(text)

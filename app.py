@@ -1659,6 +1659,7 @@ def _render_company_check(result) -> None:
 
     srows = [{"Criterion": c.name, "Observed": _cc_num(c.observed),
               "Threshold": _cc_num(c.threshold), "Status": c.status,
+              "Gating": "gating" if c.gating else "non-gating",
               "Basis": c.basis or "", "Borderline": "●" if c.borderline else ""}
              for c in result.screen]
     if srows:
