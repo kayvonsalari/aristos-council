@@ -35,6 +35,10 @@ exclude_sectors:             # ROIC invalid for banks; as magic_formula_v1
   - Financial Services
   - Financials
   - Utilities
+sector_exclusion_rationale: >-
+  EBIT/EV and ROIC are not computable on a comparable basis for financials
+  (Greenblatt exclusion). Note the factor block: roic abstains,
+  earnings_yield falls back to P/E.
 # Same council lens as the classic — the council judges value+quality, unchanged.
 council_screen_strategy: magic_value_screen_v1
 # Rank only names passing the lens's absolute floors (min_roic 12%) — closes the

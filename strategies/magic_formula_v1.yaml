@@ -26,6 +26,10 @@ exclude_sectors:
   - Financial Services      # yfinance label
   - Financials              # EODHD / GICS label
   - Utilities
+sector_exclusion_rationale: >-
+  EBIT/EV and ROIC are not computable on a comparable basis for financials
+  (Greenblatt exclusion). Note the factor block: roic abstains,
+  earnings_yield falls back to P/E.
 # Council judges a pick as a QUALITY-VALUE candidate (ROIC + valuation sanity), not
 # against the GARP growth screen.
 council_screen_strategy: magic_value_screen_v1

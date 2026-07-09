@@ -126,6 +126,42 @@ def test_gs_shaped_sector_gate_is_the_reason():
 
 
 # --------------------------------------------------------------------------- #
+# ITEM 2 — sector-exclusion rationale (config-driven, never hardcoded)
+# --------------------------------------------------------------------------- #
+class _Strat:
+    exclude_sectors = ["Financial Services"]
+    min_market_cap = None
+    max_payout_ratio = None
+
+    def __init__(self, rationale=""):
+        self.sector_exclusion_rationale = rationale
+
+
+def test_sector_rationale_renders_only_when_configured():
+    from aristos_council.company_check import _gate_cells
+    f = Fundamentals(ticker="GS", sector="Financial Services", market_cap=1e11)
+
+    # configured -> the rationale rides on the sector gate cell
+    configured = next(g for g in _gate_cells(_Strat("ROIC not computable for banks"), f)
+                      if g.name == "sector")
+    assert configured.status == "FAIL"
+    assert configured.rationale == "ROIC not computable for banks"
+
+    # not configured -> bare gate line, no rationale (never hardcoded)
+    bare = next(g for g in _gate_cells(_Strat(""), f) if g.name == "sector")
+    assert bare.status == "FAIL" and bare.rationale == ""
+
+
+def test_magic_formula_rationale_flows_into_the_report_verbatim():
+    r = _check(_GS, ticker="GS", strat="magic_formula_momentum_v1")
+    sector_gate = next(g for g in r.gates if g.name == "sector")
+    assert "not computable on a comparable basis for financials" in sector_gate.rationale
+    assert "earnings_yield falls back to P/E" in sector_gate.rationale
+    # and it renders into the text report after the gate line.
+    assert sector_gate.rationale in format_company_check(r)
+
+
+# --------------------------------------------------------------------------- #
 # PARA-shaped — no data: UNRATEABLE-style honest output, no fabricated values
 # --------------------------------------------------------------------------- #
 def test_para_shaped_unrateable_no_fabricated_values():

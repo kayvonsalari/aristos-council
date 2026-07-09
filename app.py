@@ -1665,6 +1665,9 @@ def _render_company_check(result) -> None:
             lambda v: f"color: {_CC_STATUS_HEX.get(v, '')}; font-weight: 700",
             subset=["Status"])
         st.dataframe(styler, hide_index=True, width="stretch")
+        for g in result.gates:                          # strategy-configured rationale (ITEM 2)
+            if g.rationale:
+                st.caption(f"↳ **{g.name}**: {g.rationale}")
 
     # FACTORS + cohort context.
     st.subheader("Factor values + cohort context")

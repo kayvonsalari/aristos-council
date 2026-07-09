@@ -69,6 +69,7 @@ class GateCell:
     name: str
     status: str                         # PASS | FAIL | NOT-EVALUATED
     detail: str
+    rationale: str = ""                 # optional human reason, rendered after the line
 
 
 @dataclass
@@ -331,8 +332,12 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
             gates.append(GateCell("sector", "NOT-EVALUATED",
                                   f"sector unknown; excludes {', '.join(sectors)}"))
         elif is_sector_excluded(sector, sectors):
-            gates.append(GateCell("sector", "FAIL",
-                                  f"sector '{sector}' is excluded by this strategy"))
+            # The optional rationale comes ONLY from strategy config — never hardcoded
+            # here (ITEM 2). Empty -> the gate line renders bare, as before.
+            gates.append(GateCell(
+                "sector", "FAIL",
+                f"sector '{sector}' is excluded by this strategy",
+                rationale=getattr(rank_strategy, "sector_exclusion_rationale", "") or ""))
         else:
             gates.append(GateCell("sector", "PASS",
                                   f"sector '{sector}' not excluded"))
@@ -435,6 +440,8 @@ def format_company_check(result: CompanyCheckResult) -> str:
         lines.append("GATES (sector / cap / payout):")
         for g in result.gates:
             lines.append(f"  {g.status:<14} {g.name:<26} {g.detail}")
+            if g.rationale:
+                lines.append(f"                 ↳ {g.rationale}")
 
     lines.append("")
     ref = (f"reference: latest run of {result.reference_universe_id} "

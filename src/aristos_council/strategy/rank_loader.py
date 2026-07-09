@@ -65,6 +65,10 @@ class RankStrategy(BaseModel):
     # Universe exclusions (applied by the caller before ranking).
     min_market_cap: float | None = None
     exclude_sectors: list[str] = Field(default_factory=list)
+    # Optional human rationale for the sector exclusion, surfaced by Company Check after
+    # the sector gate line (display-only — never read by the rank/screen logic). Empty
+    # -> the gate line renders bare, exactly as before.
+    sector_exclusion_rationale: str = ""
     # Payout-coverage gate (subsumed by prefilter_screen when that's on): exclude a
     # name whose payout_ratio EXCEEDS this. None -> no standalone payout gate.
     max_payout_ratio: float | None = None
