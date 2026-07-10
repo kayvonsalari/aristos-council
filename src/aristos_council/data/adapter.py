@@ -40,6 +40,35 @@ def sane_dividend_yield(v: float | None) -> float | None:
     return v
 
 
+def _fval(f, name):
+    """Read a field from a Fundamentals object OR a plain dict."""
+    return f.get(name) if isinstance(f, dict) else getattr(f, name, None)
+
+
+def implausible_fields(f) -> dict[str, str]:
+    """Cheap plausibility flags at the data boundary (VERIFY-2 ITEM 4): field -> reason
+    for values a real issuer never has. FLAGS ONLY — never silently corrects, never
+    fails; the caller surfaces the flag (Company Check data integrity) and withholds the
+    field from narrator evidence. Vendor junk is common on foreign listings (NVO's
+    dividend_yield arrived as 0.2393 = 23.9%; reality ~3.7%)."""
+    if f is None:
+        return {}
+    flags: dict[str, str] = {}
+    dy = _fval(f, "dividend_yield")
+    if isinstance(dy, (int, float)) and dy > 0.15:
+        flags["dividend_yield"] = (f"dividend_yield {dy:.4g} (>15%) — vendor value "
+                                   "implausible — flagged")
+    mc = _fval(f, "market_cap")
+    if isinstance(mc, (int, float)) and mc < 0:
+        flags["market_cap"] = (f"market_cap {mc:.4g} negative — vendor value "
+                               "implausible — flagged")
+    de = _fval(f, "debt_to_equity")
+    if isinstance(de, (int, float)) and abs(de) > 10000:
+        flags["debt_to_equity"] = (f"debt_to_equity {de:.4g} — unit-confused, vendor "
+                                   "value implausible — flagged")
+    return flags
+
+
 # --------------------------------------------------------------------------- #
 # Ticker normalization (provider-neutral, applied at INPUT)
 # --------------------------------------------------------------------------- #

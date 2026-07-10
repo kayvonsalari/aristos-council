@@ -26,7 +26,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from .data.adapter import display_name
+from .data.adapter import display_name, implausible_fields
 from .factors import (
     FACTOR_REGISTRY,
     FactorInputs,
@@ -89,6 +89,9 @@ class DataIntegrity:
     abstained_criteria: list[str] = field(default_factory=list)
     not_evaluated_factors: list[str] = field(default_factory=list)
     note: str = ""
+    # Implausible vendor values flagged at the data boundary (VERIFY-2 ITEM 4) — reason
+    # strings, e.g. "dividend_yield 0.2393 (>15%) — vendor value implausible — flagged".
+    implausible: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -220,7 +223,8 @@ def run_company_check(
 
     di = DataIntegrity(
         fundamentals_ok=f is not None,
-        price_ok=(fi.last_close is not None or fi.return_12m is not None))
+        price_ok=(fi.last_close is not None or fi.return_12m is not None),
+        implausible=list(implausible_fields(f).values()))       # VERIFY-2 ITEM 4
 
     # UNRATEABLE — no usable data at all. Honest, no fabricated values, no verdict.
     if is_unrateable(fi):
@@ -512,6 +516,8 @@ def format_company_check(result: CompanyCheckResult) -> str:
                      f"{', '.join(di.abstained_criteria)}")
     if di.not_evaluated_factors:
         lines.append(f"  factors not evaluated: {', '.join(di.not_evaluated_factors)}")
+    for flag in di.implausible:                                # VERIFY-2 ITEM 4
+        lines.append(f"  ⚠ {flag}")
 
     lines.append("")
     lines.append(result.pointer)

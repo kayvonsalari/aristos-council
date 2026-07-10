@@ -1698,6 +1698,8 @@ def _render_company_check(result) -> None:
         if di.not_evaluated_factors:
             st.markdown("- factors not evaluated: "
                         + ", ".join(di.not_evaluated_factors))
+        for flag in di.implausible:                          # VERIFY-2 ITEM 4
+            st.markdown(f"- ⚠ {flag}")
 
     st.info(result.pointer)
     # Unique, self-describing filename: ticker + strategy + run-start (ITEM 6).

@@ -340,6 +340,15 @@ def _scoped_fundamentals(output: object, allowed: set[str]) -> dict:
         d.pop("free_cash_flow")
         d["free_cash_flow_note"] = ("ttm_incl_one_offs — do not use for sustainability "
                                     "claims; cite free_cash_flow_annual instead")
+    # VERIFY-2 ITEM 4: withhold implausible vendor values from narration (NVO's 23.9%
+    # dividend_yield). They still surface, flagged, in Company Check's data integrity.
+    from ..data.adapter import implausible_fields
+    flagged = implausible_fields(output)
+    for name in flagged:
+        d.pop(name, None)
+    if flagged:
+        d["flagged_fields_note"] = ("vendor value implausible — flagged and withheld: "
+                                    + ", ".join(sorted(flagged)))
     return d
 
 
