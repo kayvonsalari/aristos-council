@@ -18,6 +18,7 @@ from __future__ import annotations
 _VALIDATION_UNIVERSE_IDS = frozenset({
     "defensive_16_v1",        # the known-trap bench
     "energy_watch_v1",        # cyclical-peak OBSERVATION universe (not a scoreboard one)
+    "financials_16_v1",       # FIN-1: EXPLORATORY financials cohort (not a scoreboard one)
 })
 
 

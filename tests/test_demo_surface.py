@@ -103,6 +103,8 @@ def test_visible_universes_hides_the_bench_by_default():
     assert "defensive_16_v1" in on                                      # bench revealed
     # the energy-watch OBSERVATION universe is hidden by default, revealed under the toggle
     assert "energy_watch_v1" not in off and "energy_watch_v1" in on
+    # FIN-1: the exploratory financials cohort is likewise hidden by default, revealed on
+    assert "financials_16_v1" not in off and "financials_16_v1" in on
 
 
 def test_visible_rank_strategies_hides_the_baseline_by_default():

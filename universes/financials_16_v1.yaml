@@ -1,0 +1,33 @@
+# Financials-16 — the financials_v1 lens's first universe.
+# ========================================================
+# US large-cap financials — banks, brokers, asset managers, payment networks, and
+# insurers — the pool the financials_v1 lens ranks on P/B + ROE + momentum. Deliberately
+# currency-clean (all-US) so the P/B and ROE fallbacks never mix accounts and price
+# currencies; foreign financials join as a later versioned universe once the VERIFY-2
+# ITEM 1 FX conversion layer has field history.
+id: financials_16_v1
+display_name: Financials 16
+role: exploratory universe — the financials lens's first cohort
+description: US large-cap financials — banks, brokers, asset managers, payment networks, insurers.
+created: "2026-07-10"
+rationale: >-
+  US large-cap financials incl. two payment networks (the lens's known odd corner) and
+  two insurers; currency-clean first universe by design — EU names join as a later
+  versioned universe after the FX conversion layer has field history.
+tickers:
+  - JPM
+  - BAC
+  - WFC
+  - C
+  - GS
+  - MS
+  - USB
+  - PNC
+  - SCHW
+  - BLK
+  - AXP
+  - V
+  - MA
+  - COF
+  - MET
+  - AIG
