@@ -33,6 +33,23 @@ from .tools.technical import (
 _ROIC_WINDOW = 4   # through-cycle window (matches the screen's ROIC window intent)
 
 
+@dataclass(frozen=True)
+class CurrencyConversion:
+    """A frozen FX conversion from the accounts' currency to the price currency, fetched
+    through the SAME adapter (so the rate is cached, frozen into run records, and
+    replayable). ``rate`` multiplies an accounts-currency amount to yield the price
+    currency (e.g. DKK amount x 0.1452 = USD)."""
+
+    rate: float
+    from_ccy: str          # financialCurrency (accounts)
+    to_ccy: str            # currency (price/listing)
+    as_of: str             # 'YYYY-MM-DD'
+
+    @property
+    def tag(self) -> str:
+        return f"{self.from_ccy}→{self.to_ccy} @ {self.rate:.4g} ({self.as_of})"
+
+
 @dataclass
 class FactorInputs:
     """The deterministic data a factor may read, per ticker — assembled from the
@@ -44,10 +61,15 @@ class FactorInputs:
     return_12m: Optional[float] = None
     annualized_volatility: Optional[float] = None
     last_close: Optional[float] = None     # for the screen-as-prefilter (yield etc.)
+    # Accounts->price FX (VERIFY-2 ITEM 1): set when financialCurrency != currency and the
+    # rate was fetched. ``fx_failed`` is True when the currencies differ but the rate
+    # could NOT be fetched — the EV route then ABSTAINS (never mixes currencies).
+    fx: Optional[CurrencyConversion] = None
+    fx_failed: bool = False
 
 
 # --- factor functions (pure; None == NOT-EVAL) ---------------------------- #
-def enterprise_value(f) -> Optional[float]:
+def enterprise_value(f, fx: "Optional[CurrencyConversion]" = None) -> Optional[float]:
     """EV = market cap + total debt − cash & short-term investments.
 
     None unless ALL of market_cap, total_debt, total_cash are present (a partial EV is
@@ -63,7 +85,11 @@ def enterprise_value(f) -> Optional[float]:
         return None
     if f.market_cap is None or f.total_debt is None or f.total_cash is None:
         return None
-    return f.market_cap + f.total_debt - f.total_cash
+    # market_cap is in the PRICE currency; total_debt/total_cash are in the ACCOUNTS
+    # currency. On a mismatch, convert debt & cash into the price currency (VERIFY-2
+    # ITEM 1) — never mix. rate == 1.0 when there is no conversion (same currency).
+    r = fx.rate if fx is not None else 1.0
+    return f.market_cap + f.total_debt * r - f.total_cash * r
 
 
 # --- Factor SOURCE tags (ITEM 1: silent fallbacks become disclosed fallbacks) ------- #
@@ -92,13 +118,24 @@ def _earnings_yield_outcome(fi: FactorInputs) -> tuple[Optional[float], str]:
     f = fi.fundamentals
     if f is None:
         return None, SRC_ABSTAINED
-    ebit = f.ebit[0] if f.ebit else None
+    # Currencies differ but the FX rate was unavailable: ABSTAIN on the EV route (VERIFY-2
+    # ITEM 1) — never silently compute a mixed-currency EV, never silently fall back.
+    if fi.fx_failed:
+        return None, SRC_ABSTAINED
+    # EBIT is in the ACCOUNTS currency; convert to the price currency on a mismatch so
+    # EBIT and EV share one currency. rate == 1.0 (no fx) leaves same-currency names
+    # byte-for-byte unchanged.
+    r = fi.fx.rate if fi.fx is not None else 1.0
+    ev_src = f"{SRC_EV}, {fi.fx.tag}" if fi.fx is not None else SRC_EV
+    ebit = f.ebit[0] * r if f.ebit else None
     if ebit is not None:
-        ev = enterprise_value(f)
+        ev = enterprise_value(f, fi.fx)
         if ev is not None:
-            return (ebit / ev, SRC_EV) if ev > 0 else (None, SRC_ABSTAINED)
+            return (ebit / ev, ev_src) if ev > 0 else (None, SRC_ABSTAINED)
         if f.market_cap and f.market_cap > 0:
-            return ebit / f.market_cap, SRC_EBIT_MCAP     # EV components missing -> proxy
+            proxy_src = (f"{SRC_EBIT_MCAP}, {fi.fx.tag}" if fi.fx is not None
+                         else SRC_EBIT_MCAP)
+            return ebit / f.market_cap, proxy_src         # EV components missing -> proxy
     if f.pe_ratio and f.pe_ratio > 0:
         return 1.0 / f.pe_ratio, SRC_PE
     return None, SRC_ABSTAINED
@@ -307,6 +344,25 @@ def compute_factors(fi: FactorInputs, names) -> dict[str, Optional[float]]:
             compute_factor_outcomes(fi, names).items()}
 
 
+def _fetch_fx_rate(adapter, from_ccy: str, to_ccy: str, *, today: date
+                   ) -> Optional[float]:
+    """The latest FX rate (units of ``to_ccy`` per 1 ``from_ccy``) via the SAME adapter's
+    price path — yfinance exposes it as the pair ticker ``<FROM><TO>=X`` (e.g. DKKUSD=X).
+    Going through get_price_history means the rate is cached, frozen into the run record,
+    and replayed offline exactly like every other input. None on any failure (VERIFY-2
+    ITEM 1 -> the EV route abstains)."""
+    from .data.adapter import TransientFetchError
+    pair = f"{from_ccy}{to_ccy}=X"
+    try:
+        ph = adapter.get_price_history(pair, start=today - timedelta(days=10), end=today)
+    except TransientFetchError:
+        raise
+    except Exception:
+        return None
+    closes = ph.closes if ph and ph.closes else []
+    return closes[-1] if closes else None
+
+
 def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
     """Fetch the deterministic inputs one ticker needs for factor ranking — the same
     adapter the council uses. Per-source DataUnavailable is swallowed (partial inputs
@@ -333,12 +389,31 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
         pass    # a delisted name can raise a RAW yfinance error ("no timezone found")
                 # rather than DataUnavailable — degrade to no-data, never crash the run
     snap = technical_snapshot(closes) if closes else None
+
+    # Currency-consistent EV (VERIFY-2 ITEM 1): if the accounts' currency differs from the
+    # price currency, fetch the FX rate (same adapter/cache/freeze path). On a mismatch
+    # with a failed fetch, mark fx_failed so the EV route abstains rather than mix. A
+    # single-currency name (all graded universes are US) never triggers this — byte-
+    # unchanged.
+    fx = None
+    fx_failed = False
+    if fundamentals is not None:
+        price_ccy = fundamentals.currency
+        acct_ccy = fundamentals.financial_currency
+        if price_ccy and acct_ccy and price_ccy != acct_ccy:
+            rate = _fetch_fx_rate(adapter, acct_ccy, price_ccy, today=today)
+            if rate is not None and rate > 0:
+                fx = CurrencyConversion(rate=rate, from_ccy=acct_ccy, to_ccy=price_ccy,
+                                        as_of=today.isoformat())
+            else:
+                fx_failed = True
+
     return FactorInputs(
         ticker=ticker, fundamentals=fundamentals,
         return_6m=total_return(closes, _TD_6M) if closes else None,
         return_12m=total_return(closes, _TD_12M) if closes else None,
         annualized_volatility=snap.annualized_volatility if snap else None,
-        last_close=closes[-1] if closes else None)
+        last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed)
 
 
 BORDERLINE_TOL = 0.05    # within 5% (relative) of the threshold
