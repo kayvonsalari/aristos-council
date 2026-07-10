@@ -310,8 +310,12 @@ def _is_screen_tool(name: str) -> bool:
 # (identity + universally-relevant context). The active strategy's criteria add
 # their own consumed fields on top (see _scoped_fundamentals). last_close is not
 # a Fundamentals field — it reaches agents via the get_price_history evidence.
+# VERIFY-2 ITEM 3: the annual FCF SERIES is the citable core field, NOT the headline TTM
+# free_cash_flow (which can embed one-off events — NVO's -12.04B Catalent charge — while
+# every year of the annual series is positive). The screens already use the annual series;
+# the headline is quarantined from narration in _scoped_fundamentals below.
 _CORE_FUNDAMENTALS_FIELDS = (
-    "ticker", "name", "market_cap", "pe_ratio", "free_cash_flow", "eps",
+    "ticker", "name", "market_cap", "pe_ratio", "free_cash_flow_annual", "eps",
 )
 
 
@@ -323,9 +327,20 @@ def _scoped_fundamentals(output: object, allowed: set[str]) -> dict:
     fields don't frame growth runs. Order follows the dataclass declaration.
     """
     if isinstance(output, dict):
-        return {k: v for k, v in output.items() if k in allowed}
-    names = [f.name for f in dataclass_fields(type(output))]
-    return {n: getattr(output, n) for n in names if n in allowed}
+        d = {k: v for k, v in output.items() if k in allowed}
+    else:
+        names = [f.name for f in dataclass_fields(type(output))]
+        d = {n: getattr(output, n) for n in names if n in allowed}
+    # VERIFY-2 ITEM 3: QUARANTINE the headline TTM free_cash_flow. It can embed one-off
+    # events (NVO: -12.04B, Catalent-era) sitting beside a positive free_cash_flow_annual
+    # series — the narrator built a value-trap argument on it. Withhold the value so
+    # narration cannot cite it, and point to the annual series (the sustainability basis
+    # the screens use). Display-only: the ledger keeps the full object; screens unchanged.
+    if "free_cash_flow" in d:
+        d.pop("free_cash_flow")
+        d["free_cash_flow_note"] = ("ttm_incl_one_offs — do not use for sustainability "
+                                    "claims; cite free_cash_flow_annual instead")
+    return d
 
 
 def _evidence_block(state: ResearchState, strategy: Strategy) -> str:

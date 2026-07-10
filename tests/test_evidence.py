@@ -106,3 +106,30 @@ def test_growth_screen_criteria_labels_are_growth_scoped():
     ev = _evidence_block(_state(GROWTH), GROWTH)
     assert "min_revenue_cagr" in ev
     assert "min_dividend_yield" not in ev
+
+
+# --- VERIFY-2 ITEM 3: quarantine the headline TTM free_cash_flow -------------- #
+_NVO = Fundamentals(
+    ticker="NVO", name="Novo Nordisk", market_cap=2e11, pe_ratio=25.0, eps=5.0,
+    free_cash_flow=-12.04e9,                      # headline TTM: Catalent one-off charge
+    free_cash_flow_annual=[80e9, 70e9, 60e9, 50e9],   # positive EVERY year
+    dividend_per_share=1.0, payout_ratio=0.5, dividend_yield=0.037,
+    dividends_paid=40e9, operating_cash_flow=90e9, capital_expenditure=-10e9,
+    dividend_streak_years=20, total_debt=1e10,
+)
+
+
+def test_headline_fcf_is_quarantined_and_annual_series_is_shown():
+    # conservative_screen consumes free_cash_flow (max_payout_ratio_fcf) — the exact path
+    # that used to hand the headline to narration.
+    cons = load_strategy(STRATEGY_DIR / "conservative_screen_v1.yaml")
+    ev = _evidence_block(_state(cons, _NVO), cons)
+    assert "free_cash_flow_annual" in ev                  # the sustainability basis is shown
+    assert '"free_cash_flow":' not in ev                  # the bare headline value is gone
+    assert "do not use for sustainability" in ev          # unmistakable quarantine note
+
+
+def test_growth_run_sees_the_annual_series_not_the_headline():
+    ev = _evidence_block(_state(GROWTH, _NVO), GROWTH)
+    assert "free_cash_flow_annual" in ev
+    assert '"free_cash_flow":' not in ev                  # never the headline
