@@ -207,6 +207,55 @@ def _dividend_streak(fi: FactorInputs) -> Optional[float]:
     return float(s) if s is not None else None
 
 
+def _price_to_book(fi: FactorInputs) -> Optional[float]:
+    """Financials VALUE leg — price / book value, LOWER is better (cheaper).
+
+    Prefers the vendor ``price_to_book`` (currency-consistent as the provider computes
+    it); falls back to ``market_cap / closing shareholders' equity``. ABSTAINS (None,
+    never excludes) when book equity is ≤ 0 or missing — a non-positive book makes P/B a
+    meaningless negative, so a value trap can't masquerade as cheap. A vendor value ≤ 0
+    (negative book) is likewise abstained rather than used.
+
+    Currency note: the vendor scalar is currency-clean; the fallback divides a
+    price-currency market cap by an accounts-currency equity, so it assumes the two
+    match — guaranteed for financials_16 (all-US, by design). A foreign name would need
+    the VERIFY-2 ITEM 1 FX layer, deferred to a later versioned universe (see the
+    universe rationale)."""
+    f = fi.fundamentals
+    if f is None:
+        return None
+    if f.price_to_book is not None and f.price_to_book > 0:
+        return f.price_to_book
+    if f.market_cap is not None and f.shareholders_equity:
+        eq = f.shareholders_equity[0]                  # closing (latest) book equity
+        if eq is not None and eq > 0:
+            return f.market_cap / eq
+    return None                                        # book ≤ 0 or missing -> abstain
+
+
+def _return_on_equity(fi: FactorInputs) -> Optional[float]:
+    """Financials QUALITY leg — return on equity, HIGHER is better.
+
+    Prefers the vendor ``return_on_equity`` (TTM). Falls back to the latest annual
+    ``net_income`` over the MEAN of opening+closing equity (NOT through-cycle averaged —
+    one convention for v1; smoothing is a possible v2 on scoreboard evidence). ABSTAINS
+    (None, never excludes) when equity is ≤ 0 or income is missing. Same currency note as
+    price_to_book — the fallback assumes accounts==price currency (true for
+    financials_16)."""
+    f = fi.fundamentals
+    if f is None:
+        return None
+    if f.return_on_equity is not None:
+        return f.return_on_equity
+    if f.net_income and f.shareholders_equity:
+        ni = f.net_income[0]                           # latest annual net income
+        eqs = f.shareholders_equity
+        avg_eq = (eqs[0] + eqs[1]) / 2.0 if len(eqs) >= 2 else eqs[0]
+        if ni is not None and avg_eq is not None and avg_eq > 0:
+            return ni / avg_eq
+    return None                                        # equity ≤ 0 / no income -> abstain
+
+
 @dataclass(frozen=True)
 class FactorDef:
     name: str
@@ -242,6 +291,16 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3y)"),
     "dividend_streak": FactorDef(
         "dividend_streak", _dividend_streak, "high", "Dividend-growth streak (years)"),
+    # Financials lens (FIN-1): the measures banks & insurers are actually priced by,
+    # since EBIT/EV and ROIC are not computable for them (the Greenblatt exclusion,
+    # inverted). Vendor value primary, derived fallback, abstain on non-positive book.
+    "price_to_book": FactorDef(
+        "price_to_book", _price_to_book, "low", "Price / book (low best)",
+        "vendor priceToBook; fallback market_cap / closing equity; abstains on book ≤ 0"),
+    "return_on_equity": FactorDef(
+        "return_on_equity", _return_on_equity, "high", "Return on equity",
+        "vendor returnOnEquity (TTM); fallback net_income / mean(opening+closing equity); "
+        "abstains on equity ≤ 0"),
 }
 
 

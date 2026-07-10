@@ -66,6 +66,20 @@ def implausible_fields(f) -> dict[str, str]:
     if isinstance(de, (int, float)) and abs(de) > 10000:
         flags["debt_to_equity"] = (f"debt_to_equity {de:.4g} — unit-confused, vendor "
                                    "value implausible — flagged")
+    # Financials-lens vendor fields (FIN-1). Thresholds are set ABOVE the lens's own
+    # known odd corner: payment networks (V, MA) carry a structurally HIGH but REAL P/B
+    # (~15-60), so only a value that can't be a real ratio (>100, a unit/data error) is
+    # flagged — the networks' genuine P/B must reach narration, not be withheld. A vendor
+    # ROE is a decimal; >300% is a near-zero-equity artifact / unit error, not a real
+    # return.
+    pb = _fval(f, "price_to_book")
+    if isinstance(pb, (int, float)) and pb > 100:
+        flags["price_to_book"] = (f"price_to_book {pb:.4g} (>100) — vendor value "
+                                  "implausible — flagged")
+    roe = _fval(f, "return_on_equity")
+    if isinstance(roe, (int, float)) and abs(roe) > 3.0:
+        flags["return_on_equity"] = (f"return_on_equity {roe:.4g} (>300%) — vendor value "
+                                     "implausible — flagged")
     return flags
 
 
@@ -214,6 +228,17 @@ class Fundamentals:
     # falls back to EBIT/market_cap (see factors.enterprise_value).
     total_cash: float | None = None
 
+    # --- Financials-lens vendor scalars (FIN-1) ----------------------------- #
+    # price_to_book (yfinance 'priceToBook') and return_on_equity ('returnOnEquity',
+    # a TTM DECIMAL, 0.15 == 15%) are the measures banks & insurers are actually
+    # priced by — the financials_v1 lens factors. The factor functions PREFER these
+    # vendor values and fall back to the derived series below when absent; both abstain
+    # on non-positive/absent book equity (see factors._price_to_book/_return_on_equity).
+    # Routed through implausible_fields (FIN-1 / VERIFY-2 ITEM 4): an absurd vendor
+    # value is flagged and withheld from narration, never used to fail a name.
+    price_to_book: float | None = None
+    return_on_equity: float | None = None
+
     # --- Annual income-statement & balance-sheet series (Sprint 4B) --------- #
     # NEWEST-FIRST lists of clean annual values (NaN years and the trailing
     # empty column dropped by the adapter). Empty when the provider has none —
@@ -225,6 +250,13 @@ class Fundamentals:
     tax_provision: list[float] = field(default_factory=list)
     pretax_income: list[float] = field(default_factory=list)
     invested_capital: list[float] = field(default_factory=list)
+    # Financials-lens derived series (FIN-1), NEWEST-FIRST. shareholders_equity backs
+    # BOTH the price_to_book fallback (market_cap / closing = [0]) and the
+    # return_on_equity fallback (net_income[0] / mean(opening+closing) = mean([0],[1])).
+    # net_income is the ROE-fallback numerator. Empty when the provider omits the
+    # statement -> the factor uses the vendor scalar or abstains, never crashes.
+    shareholders_equity: list[float] = field(default_factory=list)
+    net_income: list[float] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

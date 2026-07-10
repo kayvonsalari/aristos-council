@@ -161,6 +161,9 @@ class YFinanceAdapter(MarketDataAdapter):
             total_debt=_as_float(info.get("totalDebt")),
             debt_to_equity=_as_float(info.get("debtToEquity")),
             total_cash=_as_float(info.get("totalCash")),   # EV = mcap + debt − cash
+            # Financials-lens vendor scalars (FIN-1): the measures banks are priced by.
+            price_to_book=_as_float(info.get("priceToBook")),
+            return_on_equity=_as_float(info.get("returnOnEquity")),   # TTM decimal
             # Cash-flow-statement lines for the FCF payout basis (newest column). Cash
             # dividends paid is a NEGATIVE outflow -> stored as its absolute value.
             dividends_paid=_abs_or_none(_latest_cashflow(
@@ -182,6 +185,13 @@ class YFinanceAdapter(MarketDataAdapter):
             tax_provision=_annual_series(income, "Tax Provision"),
             pretax_income=_annual_series(income, "Pretax Income"),
             invested_capital=_annual_series(balance, "Invested Capital"),
+            # Financials-lens derived series (FIN-1), newest-first with the label aliases
+            # yfinance drifts between versions. These back the P/B and ROE fallbacks when
+            # the vendor scalars are absent.
+            shareholders_equity=_cashflow_series(
+                balance, "Stockholders Equity", "Total Stockholder Equity"),
+            net_income=_cashflow_series(
+                income, "Net Income", "Net Income Common Stockholders"),
         )
 
     # ------------------------------------------------------------------ #
