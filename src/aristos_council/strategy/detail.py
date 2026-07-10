@@ -114,6 +114,12 @@ def _gate_rows(s) -> list[GateRow]:
     if sectors:
         gates.append(GateRow("sector", "excludes " + ", ".join(sectors),
                              rationale=getattr(s, "sector_exclusion_rationale", "") or ""))
+    # Sector INCLUSION scope (FIN-1) — mirror of the exclusion row. Data-layer only; the
+    # tab walks the gates list, so this renders with zero UI-code changes.
+    include = getattr(s, "include_sectors", None) or []
+    if include:
+        gates.append(GateRow("sector_scope", "admits only " + ", ".join(include),
+                             rationale=getattr(s, "sector_inclusion_rationale", "") or ""))
     cap = getattr(s, "min_market_cap", None)
     if cap is not None:
         gates.append(GateRow("min_market_cap", f"≥ {cap:,.0f}"))

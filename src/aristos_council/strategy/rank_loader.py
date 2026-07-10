@@ -74,6 +74,15 @@ class RankStrategy(BaseModel):
     # the sector gate line (display-only — never read by the rank/screen logic). Empty
     # -> the gate line renders bare, exactly as before.
     sector_exclusion_rationale: str = ""
+    # Sector INCLUSION gate (FIN-1): the MIRROR of exclude_sectors. When non-empty, a
+    # name whose sector is NOT among these is gated OUT OF SCOPE (financials_v1 admits
+    # only financials, since P/B and ROE — not EBIT/EV — are their yardstick). CONFIRMED-
+    # ONLY like the exclusion gate: a missing/None sector is never gated. The existing
+    # exclude gate is untouched; the two are independent (a strategy sets one or neither).
+    include_sectors: list[str] = Field(default_factory=list)
+    # Display-only rationale for the inclusion gate, rendered by Company Check exactly
+    # like sector_exclusion_rationale. Empty -> the gate line renders bare.
+    sector_inclusion_rationale: str = ""
     # Payout-coverage gate (subsumed by prefilter_screen when that's on): exclude a
     # name whose payout_ratio EXCEEDS this. None -> no standalone payout gate.
     max_payout_ratio: float | None = None

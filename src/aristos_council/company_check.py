@@ -35,6 +35,7 @@ from .factors import (
     is_borderline_fail,
     is_payout_uncovered,
     is_sector_excluded,
+    is_sector_out_of_scope,
     is_unrateable,
     price_divergence_flag,
 )
@@ -365,6 +366,23 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
         else:
             gates.append(GateCell("sector", "PASS",
                                   f"sector '{sector}' not excluded"))
+    # Sector INCLUSION scope (FIN-1) — mirror of the exclusion gate. Confirmed-only:
+    # unknown sector NOT-EVALUATES, an out-of-scope sector FAILs with the scope message,
+    # an in-scope sector PASSes. Rendered exactly like the exclusion rationale.
+    include = getattr(rank_strategy, "include_sectors", []) or []
+    if include:
+        sector = getattr(f, "sector", None) if f else None
+        if sector is None:
+            gates.append(GateCell("sector_scope", "NOT-EVALUATED",
+                                  f"sector unknown; scope is {', '.join(include)}"))
+        elif is_sector_out_of_scope(sector, include):
+            gates.append(GateCell(
+                "sector_scope", "FAIL",
+                f"sector '{sector}' outside this strategy's scope",
+                rationale=getattr(rank_strategy, "sector_inclusion_rationale", "") or ""))
+        else:
+            gates.append(GateCell("sector_scope", "PASS",
+                                  f"sector '{sector}' within scope"))
     # Minimum market cap.
     floor = getattr(rank_strategy, "min_market_cap", None)
     if floor is not None:

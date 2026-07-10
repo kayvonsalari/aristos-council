@@ -1,0 +1,58 @@
+# Financials (banks & networks) — rank-based value + quality + momentum.
+# =====================================================================
+# The Greenblatt sector exclusion, INVERTED. The value lenses exclude financials
+# because EBIT/EV and ROIC are not computable on a comparable basis for businesses
+# where debt is the raw material (banks) or the balance sheet is the product
+# (insurers). This lens gives them their OWN table, ranked on the measures the
+# industry is actually priced by: price-to-book (value) and return-on-equity
+# (quality), plus 12-month momentum — one yardstick per table.
+#
+# RANK-FIRST BY DESIGN — NO screen criteria. The ROIC-floor lesson from the value
+# lenses (a floor added only on scoreboard evidence, never a priori) applies here:
+# quality enters through the ROE rank, and any hard floor (a min ROE, a max P/B) is a
+# deliberate v2 change justified by a frozen scoreboard, not guessed now.
+#
+# EXPLORATORY — this lens is NEVER on the prospective scoreboard until a run is
+# deliberately frozen and graded. First baseline is ranker-only (no LLM, no cost).
+
+id: financials_v1
+name: Financials (rank-based)
+display_name: Financials (banks & networks)
+version: 1
+
+description: >-
+  Banks, insurers, and payment networks ranked on the measures they are actually
+  priced by — price-to-book (value) and return-on-equity (quality) — with 12-month
+  momentum. The standing Greenblatt financials exclusion, inverted: EBIT/EV and ROIC
+  are not computable for these businesses, so they get their own one-yardstick table.
+
+factors:
+  - name: price_to_book       # value    (registry direction: low — cheaper better)
+  - name: return_on_equity    # quality  (registry direction: high)
+  - name: momentum_12m        # trend    — equal rank weight, same rank-sum combine
+
+cut: quintile                 # top 20% BUY, middle 60% HOLD, bottom 20% SELL
+missing: worst                # an abstaining factor (negative book) sits at worst rank
+min_market_cap: 5.0e9         # large-cap floor, as the value lenses
+
+# The sector INCLUSION gate (mirror of exclude_sectors): admit ONLY financials. A
+# confirmed out-of-scope sector is gated; a missing sector is never gated (confirmed-
+# only). No exclude_sectors here — the two gates are independent.
+include_sectors:
+  - Financial Services
+  - Financials
+sector_inclusion_rationale: >-
+  P/B and ROE are the measures financials are actually priced by; EBIT/EV and ROIC are
+  not computable for them (the standing Greenblatt exclusion, inverted). Note: payment
+  networks (V, MA) carry the sector label but are asset-light — their P/B reads
+  structurally high; known odd corner of this lens.
+
+# No council_screen_strategy and no prefilter_screen — rank-first, no lens.
+
+rationale: >-
+  Financials can't be ranked on the value lenses' yardsticks (EBIT/EV, ROIC assume a
+  non-financial balance sheet), so they get their own table on P/B and ROE — the
+  measures the industry prices them on — with momentum to order the survivors. One
+  yardstick per table: mixing measures inside a ranking compares nothing. Payment
+  networks (V, MA) are the known odd corner — asset-light, so their book-based P/B
+  reads structurally high; documented, never special-cased.

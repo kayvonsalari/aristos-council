@@ -364,6 +364,19 @@ def is_sector_excluded(sector: Optional[str], exclude_sectors) -> bool:
     return sector.strip().lower() in {s.strip().lower() for s in exclude_sectors}
 
 
+def is_sector_out_of_scope(sector: Optional[str], include_sectors) -> bool:
+    """Case-insensitive, CONFIRMED-ONLY sector INCLUSION gate — the MIRROR of
+    ``is_sector_excluded`` (FIN-1). True — the name is OUT OF SCOPE and must be gated —
+    only when ``include_sectors`` is non-empty AND ``sector`` is PRESENT and NOT among
+    them (financials_v1 admits only financials: P/B and ROE are their yardstick, EBIT/EV
+    and ROIC are not). An empty include list scopes nothing (every name in scope). A
+    missing/None sector is NEVER gated (same never-drop-on-unknown discipline as the
+    exclusion gate): absent provider data can't silently drop a name."""
+    if not include_sectors or not sector:
+        return False
+    return sector.strip().lower() not in {s.strip().lower() for s in include_sectors}
+
+
 def is_payout_uncovered(payout_ratio: Optional[float],
                         max_payout: Optional[float]) -> bool:
     """CONFIRMED-ONLY payout-coverage gate. True only when payout_ratio is PRESENT and

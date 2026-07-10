@@ -23,8 +23,8 @@ STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 
 def test_raw_is_discovered_visible_and_matches_the_flagship_factors_and_gates():
     visible = {s.id for s in visible_rank_strategies(STRAT_DIR)}
-    assert "magic_formula_raw_v1" in visible                          # visible (now four)
-    assert len(visible) == 4
+    assert "magic_formula_raw_v1" in visible                # visible (five with FIN-1)
+    assert len(visible) == 5
     assert any(s.id == "magic_formula_raw_v1" and s.kind == "rank"
                for s in rank_strategies(STRAT_DIR))
 

@@ -46,6 +46,7 @@ from .factors import (
     gather_factor_inputs,
     is_payout_uncovered,
     is_sector_excluded,
+    is_sector_out_of_scope,
     is_unrateable,
     price_divergence_flag,
     screen_evaluate,
@@ -126,6 +127,13 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             continue
         if f is not None and is_sector_excluded(f.sector, rank_strategy.exclude_sectors):
             excluded.append((t, f"sector excluded ({f.sector})"))
+            continue
+        # Sector INCLUSION gate (FIN-1): mirror of the exclusion gate. financials_v1
+        # admits ONLY financials; a confirmed out-of-scope sector is gated (a missing
+        # sector never is). Independent of exclude_sectors — a strategy sets one or none.
+        if f is not None and is_sector_out_of_scope(
+                f.sector, getattr(rank_strategy, "include_sectors", []) or []):
+            excluded.append((t, f"sector '{f.sector}' outside this strategy's scope"))
             continue
         if f is not None and is_payout_uncovered(f.payout_ratio,
                                                  rank_strategy.max_payout_ratio):

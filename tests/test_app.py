@@ -386,7 +386,8 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
     assert any("GARP" in o for o in rank)                           # growth is live (4C)
     assert any("RAW" in o for o in rank)                            # canonical raw (RAW-1)
-    assert len(rank) == 4                       # conservative_plus + flagship + GARP + RAW
+    assert any("Financials" in o for o in rank)                     # financials lens (FIN-1)
+    assert len(rank) == 5             # conservative_plus + flagship + GARP + RAW + Financials
 
 
 def test_both_strategy_dropdowns_list_the_live_strategies():
@@ -401,8 +402,9 @@ def test_both_strategy_dropdowns_list_the_live_strategies():
     for opts in (rank, cc):
         assert any("GARP" in o for o in opts)                        # growth as GARP
         assert any("RAW" in o for o in opts)                         # canonical raw
+        assert any("Financials" in o for o in opts)                  # financials lens (FIN-1)
         assert not any("_" in o for o in opts)                       # display names, no ids
-        assert len(opts) == 4
+        assert len(opts) == 5
 
 
 def test_validation_assets_revealed_when_toggle_on():

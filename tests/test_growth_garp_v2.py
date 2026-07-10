@@ -44,7 +44,7 @@ def test_growth_screen_v2_is_v1_minus_the_momentum_gate():
 def test_v2_is_visible_v1_hidden_and_lens_points_to_v2():
     visible = {s.id for s in visible_rank_strategies(STRAT_DIR)}
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
-                       "growth_garp_v2", "magic_formula_raw_v1"}
+                       "growth_garp_v2", "magic_formula_raw_v1", "financials_v1"}
     v2 = load_rank_strategy(STRAT_DIR / "growth_garp_v2.yaml")
     v1 = load_rank_strategy(STRAT_DIR / "growth_garp_v1.yaml")
     assert v2.council_screen_strategy == "growth_screen_v2" and v2.version == 2
