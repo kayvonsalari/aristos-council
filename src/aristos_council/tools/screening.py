@@ -757,6 +757,26 @@ def through_cycle_roic(
     tax_mean = sum(tax_points) / len(tax_points) if tax_points else None
     pretax_mean = sum(pretax_points) / len(pretax_points) if pretax_points else None
 
+    # VERIFY-2 ITEM 2: a loss-mixed pretax history can make the through-cycle effective
+    # tax rate degenerate — NOPAT collapses to a "-0" artifact (ENR.DE:
+    # pretax [2213, 1822, -3387, -603], mean ~11.25, rate blows up). ABSTAIN then,
+    # consistent with the PEG must-fail/abstain precedent; abstention never excludes.
+    #
+    # sign-mixed ALONE is NOT the trigger — a loss year inside a net-positive window is
+    # the through-cycle design (000660.KS / SK Hynix: dampen a peak OI using a negative
+    # prior year — that MUST keep computing). Abstain ONLY on a degenerate rate
+    # (tax_mean/pretax_mean ∉ [0, 0.6]) or a non-positive pretax sum.
+    # Abstain fixture: ENR.DE.  Must-compute fixture: 000660.KS.
+    if pretax_points:
+        degenerate = pretax_mean is not None and pretax_mean <= 0
+        if not degenerate and pretax_mean and pretax_mean > 0 and tax_mean is not None:
+            raw_rate = tax_mean / pretax_mean
+            degenerate = not (0.0 <= raw_rate <= 0.6)
+        if degenerate:
+            return None, ("loss-mixed history — effective tax rate not computable "
+                          "(degenerate through-cycle tax rate ∉[0,0.6] or non-positive "
+                          "pretax sum)")
+
     roic, base_note = nopat_roic(oi_mean, tax_mean, pretax_mean, ic_latest)
     if roic is None:
         return None, base_note

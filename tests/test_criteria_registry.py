@@ -227,13 +227,16 @@ def test_roic_uses_provided_invested_capital_for_negative_equity():
     assert r.observed is not None and r.observed > 0   # sane positive ROIC
 
 
-def test_roic_fails_on_negative_nopat():
-    # AMZN-2022-shape: negative operating income -> negative NOPAT -> ROIC<0 FAIL
+def test_roic_abstains_on_fully_loss_history():
+    # AMZN-2022-shape: a fully loss-making window (non-positive pretax sum) makes the
+    # through-cycle effective tax rate uncomputable -> ABSTAIN, not a fabricated negative
+    # (VERIFY-2 ITEM 2). Abstention never excludes.
     amzn = _fund("AMZN", operating_income=[-2000.0], tax_provision=[0.0],
                  pretax_income=[-3000.0], invested_capital=[150000.0])
     r = _crit("min_roic", amzn, 0.12)
-    assert r.passed is False                 # a determination, not NOT-EVAL
-    assert r.observed < 0
+    assert r.passed is None                  # NOT-EVAL, not a fabricated FAIL
+    assert r.observed is None
+    assert "effective tax rate not computable" in r.note
 
 
 def test_roic_not_eval_on_missing_invested_capital():
