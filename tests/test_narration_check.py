@@ -89,3 +89,67 @@ def test_no_ordinal_no_flag():
 def test_empty_or_degenerate_table_is_safe():
     assert check_narration("", _CONS_SO) == []
     assert check_narration("second-worst name, rank 2 out of 10", {"N": 0}) == []
+
+
+# --------------------------------------------------------------------------- #
+# NARR-CHK-1 — parser fixes: the three 2026-07-11 false positives must pass
+# silently; the 2026-07-10 ASML true positive must still flag.
+# --------------------------------------------------------------------------- #
+# garp_v2 run: NVDA is 1st/2nd/4th/6th on the four factors (rank-sum 13, best overall).
+_GARP_NVDA = {"N": 7, "combined_position": 1,
+              "factors": {"revenue_growth": 1, "roic": 2, "momentum_12m": 4,
+                          "earnings_yield": 6}}
+# LLY sits 2nd of 7 overall — "near-best" is an approximation, not a rank-1 claim.
+_GARP_LLY = {"N": 7, "combined_position": 2,
+             "factors": {"revenue_growth": 3, "roic": 2, "momentum_12m": 2,
+                         "earnings_yield": 4}}
+# 2026-07-10 growth run: NVO's rank-sum 8 beat ASML's 9, so ASML is 2nd overall, NOT best.
+_GROWTH_ASML = {"N": 10, "combined_position": 2,
+                "factors": {"revenue_growth": 3, "roic": 2, "momentum_12m": 4,
+                            "earnings_yield": 1}}
+
+
+def test_nvda_multi_factor_sentence_passes_silently():
+    # defect (b): ordinals bound to the factor each NAMES — all four are correct.
+    assert check_narration(
+        "1st on revenue_growth, 2nd on ROIC, 4th on momentum_12m, 6th on earnings_yield, "
+        "sum 13 lowest.", _GARP_NVDA) == []
+
+
+def test_lly_near_best_lines_pass_silently():
+    # a hedged superlative ("near-best") is an approximation, not a rank-1 claim.
+    assert check_narration("Rank 2/7 (near-best).\nRank 2/7 (near-best).", _GARP_LLY) == []
+
+
+def test_asml_best_combined_still_flags():
+    # the true positive stays caught: ASML claims the best combined rank-sum, but NVO's 8
+    # beats its 9 -> ASML is 2nd.
+    assert _flagged("ASML has the best combined rank-sum in the cohort.", _GROWTH_ASML)
+
+
+def test_correct_ordinals_in_arbitrary_factor_order_pass():
+    # factors named out of table-column order — each must validate against its own name.
+    assert check_narration(
+        "6th on earnings_yield, 1st on revenue_growth, 4th on momentum_12m, 2nd on ROIC.",
+        _GARP_NVDA) == []
+
+
+def test_genuine_numeric_contradiction_still_annotates():
+    # a digit ordinal that is wrong for the factor it names is still flagged.
+    assert _flagged("NVDA sits 1st on ROIC in the cohort.", _GARP_NVDA)
+
+
+def test_decimal_is_atomic_claim_not_truncated():
+    # defect (a): "31.4" must not split the sentence; the flagged claim carries it whole.
+    flags = check_narration(
+        "With a revenue CAGR of 31.4%, ASML has the best combined rank-sum.",
+        _GROWTH_ASML)
+    assert len(flags) == 1 and "contradicts rank table" in flags[0]
+    assert "31.4" in flags[0]                    # the decimal survived intact, not "31"
+
+
+def test_decimal_sentence_does_not_spuriously_split_or_flag():
+    # a correct sentence with a decimal stays one sentence and passes.
+    assert check_narration(
+        "NVDA posted a revenue CAGR of 31.4% and ranks 1st on revenue_growth.",
+        _GARP_NVDA) == []
