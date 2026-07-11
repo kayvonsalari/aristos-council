@@ -132,6 +132,55 @@ run up hard while a quality floor fails. It lives in the **Company Check** tab o
 Station (and as `examples/company_check.py` on the CLI); a passing name is pointed back to
 a universe run, because a verdict is a cohort statement.
 
+## Which lens for which company
+
+Different businesses are priced on different yardsticks, and mixing yardsticks inside one
+ranking compares nothing. So each lens (rank strategy) declares which sectors it can
+measure — a deliberate scoping choice, not an oversight.
+
+**The value lenses exclude banks and utilities.** Classic value and value+momentum rank on
+return on invested capital (ROIC) and earnings yield (EBIT/EV). Neither is computable on a
+comparable basis where debt is the raw material of the business (banks) or the balance
+sheet is mandated by regulation (utilities): a bank's "invested capital" and "enterprise
+value" are not the same kind of number as a factory's. Rather than compute a figure that
+can't be compared, the lens drops those sectors before ranking — a confirmed sector match,
+never a guess.
+
+> *Worked example — GS under value+momentum* (`reports/exploratory/company_check_GS_magic_formula_momentum_v1_2026-07-10.md`).
+> Goldman Sachs is gated with `sector 'Financial Services' is excluded by this strategy`;
+> its `min_roic` merely **abstains** (ROIC isn't computable for a bank — not-evaluated, not
+> failed) and earnings yield falls back to 1/PE (`0.05163 [fallback:pe]`). The name is set
+> aside, not judged badly — which is the point: a wrong-yardstick number would be worse
+> than none.
+
+**Financials get their own table — the gate, inverted.** So banks aren't simply
+uncovered, the `financials_v1` lens **inverts** the sector gate: it admits *only*
+financials and ranks them on the measures the industry is actually priced by — price-to-book
+(P/B) and return on equity (ROE), plus momentum. One yardstick per table: banks compete
+against banks on bank metrics.
+
+**The payment-network odd corner (V, MA).** Visa and Mastercard carry the "Financial
+Services" label but are asset-light networks, not balance-sheet lenders — so their book
+value is small and their P/B reads structurally high. In the financials baseline they rank
+*worst* on P/B (15th and 16th of 16) while topping ROE (2nd and 1st); Mastercard lands a
+SELL. That is the lens behaving, not a bug — a documented odd corner, never special-cased
+(`reports/exploratory/universe_financials_v1_ranker_2026-07-10.md`).
+
+**Utilities are covered by the defensive lens.** Defensive income ranks on low volatility,
+net payout yield, and momentum — measures that survive utility economics (a regulated
+utility has calm price action, a real dividend, and a payout history) where EBIT/EV and
+ROIC do not. Utilities aren't excluded there; they're ranked on yardsticks that fit.
+
+> *Worked example — DUK under defensive income* (`reports/exploratory/company_check_DUK_conservative_plus_v1_2026-07-10.md`).
+> Duke Energy passes the defensive screen cleanly — a 3.4% yield, a 19-year dividend-growth
+> streak, momentum intact (+11%), leverage within bounds — with only the cash-payout
+> coverage criterion abstaining (utilities run structural negative free cash flow, so the
+> FCF-basis check is not-evaluated rather than a false fail). A utility, measured on
+> measures that fit it.
+
+The full sector-scope tier table (excluded-by-design / supported-with-disclosed-distortion
+/ clean-fit) is in **[The Calculations §9](docs/CALCULATIONS.md#9-scope-where-the-metrics-apply)**.
+
 ## Architecture
 
 - **Decision core:** `rank_engine.py` (rank-sum + verdict cuts) + `factors.py` (factor

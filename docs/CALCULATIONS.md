@@ -244,6 +244,11 @@ file it ran under.
 The factors and screens are honest on operating businesses and disclose their limits
 elsewhere — a documented boundary beats an untested feature.
 
+> Plain-English rationale — why the value lenses exclude banks and utilities, how the
+> `financials_v1` lens inverts the gate to rank banks on P/B + ROE, why utilities are
+> covered by the defensive lens, and the V/MA payment-network odd corner, with the GS and
+> DUK worked examples — is in **[Which lens for which company](../README.md#which-lens-for-which-company)**.
+
 | Tier | Sectors | Why | Revisit trigger |
 |---|---|---|---|
 | **Excluded by design** | Financials (banks, insurers) | ROIC and EV are category errors for balance-sheet businesses; the sector exclusion fires by name. | A funded use case — basic P/B + ROE data is already free. |
