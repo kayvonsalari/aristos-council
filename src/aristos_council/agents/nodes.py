@@ -193,27 +193,31 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
             # Generic, registry-driven screen: the strategy's selected criteria
             # run against the gathered evidence. Logged under the historical
             # tool_name so the ledger/audit/reports are unchanged.
-            screen = run_screen(
-                strategy.criteria,
-                Evidence(fundamentals=fundamentals,
-                         dividends=dividends or [],
-                         last_close=last_close,
-                         # Provider declares its streak data shape (Option A); the
-                         # tag rides with the dividends so the criterion picks the
-                         # matching method via screening.streak_by_method.
-                         streak_method=adapter.dividend_streak_method,
-                         return_6m=return_6m, return_12m=return_12m),
-                ticker=state.ticker,
-            )
-            state.tool_calls.append(
-                ToolCall(
-                    call_id=_new_call_id(),
-                    tool_name=_SCREEN_LEDGER_TOOL,
-                    inputs={"ticker": state.ticker,
-                            "strategy_id": strategy.id},
-                    output=asdict(screen),
+            # SCREEN-LESS strategies (no criteria) log NO screen tool at all
+            # (NARR-FRAME-1): the evidence ledger then carries no screen block, so a
+            # rank-first strategy's narrator is never handed a foreign lens's criteria.
+            if strategy.criteria:
+                screen = run_screen(
+                    strategy.criteria,
+                    Evidence(fundamentals=fundamentals,
+                             dividends=dividends or [],
+                             last_close=last_close,
+                             # Provider declares its streak data shape (Option A); the
+                             # tag rides with the dividends so the criterion picks the
+                             # matching method via screening.streak_by_method.
+                             streak_method=adapter.dividend_streak_method,
+                             return_6m=return_6m, return_12m=return_12m),
+                    ticker=state.ticker,
                 )
-            )
+                state.tool_calls.append(
+                    ToolCall(
+                        call_id=_new_call_id(),
+                        tool_name=_SCREEN_LEDGER_TOOL,
+                        inputs={"ticker": state.ticker,
+                                "strategy_id": strategy.id},
+                        output=asdict(screen),
+                    )
+                )
 
         if prices is not None and prices.closes:
             snap = technical_snapshot(prices.closes)

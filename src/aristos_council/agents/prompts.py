@@ -230,6 +230,10 @@ def decision_system(strategy: Strategy,
         "justify caution (a HOLD pending resolution, lower confidence) but you "
         "must not cite them as if they were findings, and you must not treat a "
         "suspected answer as a known one.\n"
-        f"7. POLICY. partial_pass_allows_hold="
-        f"{strategy.policy.partial_pass_allows_hold}.\n"
+        # A SCREEN-LESS strategy (no criteria) has no partial-pass policy to state — the
+        # line is dropped so the narrator is never framed by a foreign lens's policy
+        # (NARR-FRAME-1). Screened strategies are byte-unchanged.
+        + (f"7. POLICY. partial_pass_allows_hold="
+           f"{strategy.policy.partial_pass_allows_hold}.\n"
+           if getattr(strategy, "criteria", None) else "")
     )

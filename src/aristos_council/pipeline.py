@@ -94,6 +94,26 @@ def resolve_council_screen_id(rank_strategy, explicit: Optional[str] = None,
     return rank_strategy.council_screen_strategy or default
 
 
+def _screenless_frame(rank_strategy):
+    """A screen-less council frame carrying the RANK strategy's OWN identity, for a
+    strategy that declares no lens (NARR-FRAME-1). The narrator/council is framed by the
+    strategy's own name + rationale — never the default GARP lens — with NO screen criteria
+    (so the evidence ledger carries no screen block, and the decision prompt drops the
+    partial-pass policy line). ``model_construct`` bypasses the ``criteria`` min-length
+    validator on purpose: screen-less IS zero criteria."""
+    from .strategy.loader import Strategy
+    base = (getattr(rank_strategy, "rationale", "") or "").strip()
+    note = "This strategy screens nothing; quality enters via ranking."
+    rationale = f"{base}\n{note}" if base else note
+    return Strategy.model_construct(
+        id=rank_strategy.id,
+        name=(getattr(rank_strategy, "display_name", "") or rank_strategy.name),
+        version=getattr(rank_strategy, "version", 1),
+        display_name=getattr(rank_strategy, "display_name", ""),
+        criteria=[],
+        rationale=rationale)
+
+
 def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None):
     from .data.adapter import TransientFetchError
 
@@ -407,8 +427,17 @@ def run_rank_pipeline(
         universe, universe_id,
         Path(universes_dir) if universes_dir else _UNIVERSES_DIR)
     rank_strategy = load_rank_strategy_from_id(strategy_id, strategies_dir)
-    screen_id = resolve_council_screen_id(rank_strategy, screen_strategy_id)
-    screen_strategy = load_screen_from_id(screen_id, strategies_dir)
+    # NARR-FRAME-1 (same root as CCFIX-2): resolve the lens WITHOUT the blunt default. A
+    # strategy that declares no council_screen_strategy (and none was passed) is
+    # SCREEN-LESS — the narrator/council is framed by the strategy's OWN identity, never
+    # the default GARP lens, and no screen criteria enter the evidence.
+    resolved_screen_id = screen_strategy_id or rank_strategy.council_screen_strategy
+    screen_less = not resolved_screen_id
+    screen_strategy = (None if screen_less
+                       else load_screen_from_id(resolved_screen_id, strategies_dir))
+    # The Strategy object that FRAMES the council: the real lens when screened, else a
+    # screen-less frame carrying the rank strategy's own identity (no criteria).
+    council_frame = _screenless_frame(rank_strategy) if screen_less else screen_strategy
 
     today = today or date.today()
     mode = council_mode or rank_strategy.council_mode
@@ -432,7 +461,8 @@ def run_rank_pipeline(
     if progress is not None:
         progress("Screening & ranking the universe…")
     prefilter = (screen_strategy.criteria
-                 if getattr(rank_strategy, "prefilter_screen", False) else None)
+                 if (screen_strategy is not None
+                     and getattr(rank_strategy, "prefilter_screen", False)) else None)
     ranked, prerank_excluded, screen_bases, names = _rank_stage(
         universe, rank_strategy, adapter, today=today, prefilter_criteria=prefilter)
     live = [r for r in ranked if not r.excluded]
@@ -454,7 +484,7 @@ def run_rank_pipeline(
         if runners is None:
             from .agents.runners import production_runners
             runners = production_runners()
-        council = _council_stage(shortlist, screen_strategy, adapter, runners, mode,
+        council = _council_stage(shortlist, council_frame, adapter, runners, mode,
                                  progress=progress)
         narratives = {o.ticker: _narrative_text(o) for o in council}
 
@@ -471,7 +501,8 @@ def run_rank_pipeline(
     executed_mode = "ranker-only" if ranker_only else mode
     meta = {
         "rank_strategy_id": rank_strategy.id,
-        "screen_strategy_id": screen_strategy.id,
+        # Screen-less strategies render "none" — never the leaked default lens (NARR-FRAME-1).
+        "screen_strategy_id": screen_strategy.id if screen_strategy is not None else "none",
         "universe_id": resolved_universe_id,
         "run_id": run_id,
         "council_mode": executed_mode,
