@@ -114,6 +114,19 @@ def test_strategy_tab_renders_financials_lens():
     assert "priced by" in scope[0].rationale       # the P/B-and-ROE rationale text
 
 
+# --- UNI-1 ITEM 3: Strategy tab shows the suggested-universe pairing --------- #
+def test_strategy_tab_shows_suggested_universes_as_display_names():
+    detail = strategy_detail("financials_v1", STRAT_DIR)
+    # resolved to the universe DISPLAY NAME, not the raw id
+    assert detail.suggested_universes == ["Financials 16"]
+
+
+def test_strategy_tab_omits_suggested_universes_when_field_absent():
+    # magic_formula_v1 declares no suggested_universes -> empty (header line not rendered)
+    detail = strategy_detail("magic_formula_v1", STRAT_DIR)
+    assert detail.suggested_universes == []
+
+
 # --- Company Check GATES surfaces the scope gate (mirror parity) ------------- #
 class _OneName(MarketDataAdapter):
     name = "fake"

@@ -82,6 +82,10 @@ class StrategyDetail:
     policy: list[PolicyRow]
     # 7 — provenance
     path: str
+    # Suggested universes (UNI-1 ITEM 3): the strategy's suggested_universes resolved to
+    # DISPLAY NAMES for the header line. Empty when the field is absent -> the tab renders
+    # exactly as before. Display-only, from YAML like everything else here.
+    suggested_universes: list[str] = field(default_factory=list)
 
 
 def _load_by_kind(path: Path, kind: str):
@@ -145,13 +149,31 @@ def _policy_rows(s) -> list[PolicyRow]:
     return rows
 
 
-def strategy_detail(strategy_id: str, strategies_dir: str | Path) -> StrategyDetail:
+def _suggested_universe_labels(s, universes_dir: Path) -> list[str]:
+    """Resolve a strategy's suggested_universes ids to universe DISPLAY NAMES (UNI-1
+    ITEM 3), preserving declared order. A missing manifest falls back to its bare id, so
+    a stale/cross-repo id never crashes the tab. Empty ids -> []."""
+    ids = list(getattr(s, "suggested_universes", []) or [])
+    if not ids:
+        return []
+    from ..demo_surface import universe_label
+    from ..universe import list_universes
+    by_id = {u.id: u for u in list_universes(universes_dir)}
+    return [universe_label(by_id[i]) if i in by_id else i for i in ids]
+
+
+def strategy_detail(strategy_id: str, strategies_dir: str | Path,
+                    universes_dir: str | Path | None = None) -> StrategyDetail:
     """Build the full detail model for one strategy id — resolving the screen criteria
     (a rank strategy's lens, or a council strategy's own criteria) and the gates/factors/
-    policy entirely from YAML. Raises KeyError if the id isn't discovered."""
+    policy entirely from YAML. ``universes_dir`` (default: ``strategies_dir``'s sibling
+    ``universes/``) resolves suggested-universe display names. Raises KeyError if the id
+    isn't discovered."""
     from .discovery import discover_strategies
 
     strategies_dir = Path(strategies_dir)
+    universes_dir = (Path(universes_dir) if universes_dir
+                     else strategies_dir.parent / "universes")
     infos = {i.id: i for i in discover_strategies(strategies_dir)}
     if strategy_id not in infos:
         raise KeyError(f"unknown strategy id '{strategy_id}'")
@@ -182,7 +204,8 @@ def strategy_detail(strategy_id: str, strategies_dir: str | Path) -> StrategyDet
         criteria=criteria, screen_source=screen_source,
         gates=_gate_rows(s), factors=factors,
         cut_rule=(_cut_rule(s) if info.kind == "rank" else "—"),
-        policy=_policy_rows(s), path=str(info.path))
+        policy=_policy_rows(s), path=str(info.path),
+        suggested_universes=_suggested_universe_labels(s, universes_dir))
 
 
 PROVENANCE_NOTE = ("configs are versioned; strategies are never mutated, "

@@ -1064,6 +1064,10 @@ def render_strategy_tab(selected_path: Path | None = None) -> None:
     st.markdown(f"### {d.display_name}")
     created = f" · created {d.created}" if d.created else ""
     st.caption(f"`{d.id}` · version {d.version} · {d.kind}{created}")
+    # UNI-1 ITEM 3: the strategy↔universe pairing, rendered from YAML (present only when
+    # the strategy declares suggested_universes; absent -> the header is unchanged).
+    if d.suggested_universes:
+        st.caption(f"Suggested universes: {', '.join(d.suggested_universes)}")
 
     # 2 — description (verbatim)
     if d.description:
