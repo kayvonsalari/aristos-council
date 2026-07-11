@@ -11,20 +11,25 @@ Pure functions (no Streamlit), so the labelling is unit-tested directly.
 
 from __future__ import annotations
 
-# Validation / baseline assets — HIDDEN from the default demo surface, revealed only by
-# the "Show validation & legacy tools" toggle. They remain fully functional (the baseline
-# side-by-side is a demo exhibit one toggle-flip away, NOT deleted). Ids, not display
-# names, so the gate keys off the stable record key.
-_VALIDATION_UNIVERSE_IDS = frozenset({
-    "defensive_16_v1",        # the known-trap bench
-    "energy_watch_v1",        # cyclical-peak OBSERVATION universe (not a scoreboard one)
-    "financials_16_v1",       # FIN-1: EXPLORATORY financials cohort (not a scoreboard one)
-})
+# A universe is BACKSTAGE (hidden from the default demo surface, revealed by the "Show
+# validation & legacy tools" toggle) when its ``role:`` marks it NEVER-GRADED — the
+# observation/watch universes (energy_watch, the portfolio_watch pattern) and the
+# known-trap control benches (defensive_16). FRONT-STAGE are the graded scoreboard
+# universes and the exploratory lens cohorts (financials_16) — the ones you actually run
+# to pick names. Role-DERIVED (UNI-1), never a hardcoded id list: a fresh universe yaml
+# dropped into universes/ is classified by what its manifest declares, with zero code
+# change here — the same dynamic-discovery contract 4C gave strategies.
+_OBSERVATIONAL_ROLE_MARKER = "never graded"
 
 
-def is_validation_universe(universe_id: str) -> bool:
-    """True for a universe shown only behind the validation toggle (the trap bench)."""
-    return universe_id in _VALIDATION_UNIVERSE_IDS
+def is_validation_universe(universe) -> bool:
+    """True for a universe shown only behind the validation toggle. Role-derived: a role
+    marked 'never graded' (an observation/watch universe or a known-trap control bench)
+    is backstage; a missing/blank role, a graded scoreboard universe, or an exploratory
+    lens cohort is front-stage. Accepts a manifest (reads ``.role``) or a bare role
+    string."""
+    role = universe if isinstance(universe, str) else (getattr(universe, "role", "") or "")
+    return _OBSERVATIONAL_ROLE_MARKER in role.lower()
 
 
 def is_hidden_strategy(strategy) -> bool:
@@ -41,7 +46,7 @@ def visible_universes(manifests, *, show_validation: bool):
     """The universe manifests a dropdown should offer: all of them when the validation
     toggle is ON, else only the non-validation (scoreboard) universes."""
     return [u for u in manifests
-            if show_validation or not is_validation_universe(u.id)]
+            if show_validation or not is_validation_universe(u)]
 
 
 def visible_rank_strategies(strategies, *, show_validation: bool):

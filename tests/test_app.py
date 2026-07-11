@@ -369,8 +369,10 @@ def _dropdown(at, label):
 
 
 def test_validation_assets_hidden_by_default(monkeypatch):
-    # ITEM 2: toggle OFF (default) -> universe dropdown = the two scoreboard universes +
-    # Custom; strategy dropdown = the two live strategies. Bench + baseline are hidden.
+    # ITEM 2 + UNI-1: toggle OFF (default) -> universe dropdown = the two graded scoreboard
+    # universes + the exploratory financials cohort (front-stage, role not 'never graded')
+    # + Custom; strategy dropdown = the live strategies. The never-graded trap bench +
+    # ui:hidden baseline stay hidden.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
@@ -378,9 +380,11 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     uni = _dropdown(at, "Universe").options
     assert any(o.startswith("Growth 40 ·") for o in uni)
     assert any(o.startswith("Defensive Income 16 ·") for o in uni)
+    assert any(o.startswith("Financials 16 ·") for o in uni)         # UNI-1: front-stage
     assert "Custom (paste tickers)" in uni
-    assert not any("Validation Bench" in o for o in uni)             # bench hidden
-    assert len(uni) == 3                                             # exactly the three
+    assert not any("Validation Bench" in o for o in uni)             # trap bench hidden
+    assert not any("Energy Watch" in o for o in uni)                 # observation hidden
+    assert len(uni) == 4                          # 2 scoreboard + financials + Custom
 
     rank = _dropdown(at, "Rank strategy").options
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
@@ -405,6 +409,22 @@ def test_both_strategy_dropdowns_list_the_live_strategies():
         assert any("Financials" in o for o in opts)                  # financials lens (FIN-1)
         assert not any("_" in o for o in opts)                       # display names, no ids
         assert len(opts) == 5
+
+
+def test_financials_16_is_front_stage_in_both_universe_selectors():
+    # UNI-1 ITEM 1: financials_16 has no observational role, so it is FRONT-stage (toggle
+    # off) in BOTH the Universe Run selector and the Company Check reference selector —
+    # both discover from universes/ via the same role-derived visible_universes.
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    uni = _dropdown(at, "Universe").options                          # Universe Run tab
+    ref = _dropdown(at, "Reference universe (for factor context)").options  # Company Check
+    assert any(o.startswith("Financials 16 ·") for o in uni)
+    assert any(o.startswith("Financials 16 ·") for o in ref)
+    # the never-graded trap bench stays backstage in both (default toggle off)
+    assert not any("Validation Bench" in o for o in uni)
+    assert not any("Validation Bench" in o for o in ref)
 
 
 def test_validation_assets_revealed_when_toggle_on():

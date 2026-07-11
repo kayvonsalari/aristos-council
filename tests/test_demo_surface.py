@@ -98,13 +98,44 @@ _RANKS = ("magic_formula_momentum_v1", "conservative_plus_v1", "magic_formula_v1
 def test_visible_universes_hides_the_bench_by_default():
     manifests = list_universes(UNIV_DIR)
     off = {u.id for u in visible_universes(manifests, show_validation=False)}
-    assert off == {"growth_40_v1", "defensive_income_16_v1"}            # scoreboard only
+    # UNI-1: front-stage is now ROLE-DERIVED — graded scoreboard universes AND the
+    # exploratory financials cohort (never-graded observation/control assets stay back).
+    assert off == {"growth_40_v1", "defensive_income_16_v1", "financials_16_v1"}
     on = {u.id for u in visible_universes(manifests, show_validation=True)}
     assert "defensive_16_v1" in on                                      # bench revealed
-    # the energy-watch OBSERVATION universe is hidden by default, revealed under the toggle
+    # the never-graded observation/control assets stay backstage (role-derived, UNI-1):
+    # the energy-watch OBSERVATION universe and the known-trap validation bench.
     assert "energy_watch_v1" not in off and "energy_watch_v1" in on
-    # FIN-1: the exploratory financials cohort is likewise hidden by default, revealed on
-    assert "financials_16_v1" not in off and "financials_16_v1" in on
+    assert "defensive_16_v1" not in off                                 # trap bench stays back
+    # UNI-1: the exploratory financials cohort (role: not 'never graded') is FRONT-stage now
+    assert "financials_16_v1" in off
+
+
+# --------------------------------------------------------------------------- #
+# UNI-1 ITEM 1 — dynamic universe discovery, role-derived backstage
+# --------------------------------------------------------------------------- #
+def _write_universe(dir_path, uid, role):
+    (dir_path / f"{uid}.yaml").write_text(
+        f"id: {uid}\ndisplay_name: {uid}\nrole: {role}\ntickers: [AAA, BBB]\n",
+        encoding="utf-8")
+
+
+def test_a_fresh_universe_is_discovered_front_stage_with_zero_code_change(tmp_path):
+    # A synthetic universe dropped into universes/ with NO 'never graded' marker is
+    # front-stage in the shared selector list — the same dynamic-discovery contract 4C
+    # gave strategies. No hardcoded id list to edit.
+    _write_universe(tmp_path, "synthetic_probe_v1", "exploratory probe — a fresh cohort")
+    manifests = list_universes(tmp_path)
+    off = {u.id for u in visible_universes(manifests, show_validation=False)}
+    assert "synthetic_probe_v1" in off
+
+
+def test_role_marked_observational_universe_stays_backstage(tmp_path):
+    _write_universe(tmp_path, "watch_probe_v1", "cyclical watch — observation only, never graded")
+    manifests = list_universes(tmp_path)
+    off = {u.id for u in visible_universes(manifests, show_validation=False)}
+    on = {u.id for u in visible_universes(manifests, show_validation=True)}
+    assert "watch_probe_v1" not in off and "watch_probe_v1" in on
 
 
 def test_visible_rank_strategies_hides_the_baseline_by_default():
