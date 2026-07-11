@@ -1,3 +1,4 @@
+<!-- Aristos Council: multi-agent equity research where the math judges and the AI narrates. -->
 # Aristos Council
 
 Most AI stock analysis gives you one model's snap opinion. Aristos went further: it built
