@@ -71,7 +71,9 @@ by editing a published one (configs are versioned and superseded, not mutated).
 
 New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — the plain-language
 walkthrough. Want the formulas? **[The Calculations](docs/CALCULATIONS.md)** — every
-factor, criterion, and guard, generated from the code.
+factor, criterion, and guard, generated from the code. Meeting a mark you don't recognize
+on a report? **[Marks on a Report](docs/REPORT_MARKS.md)** — the flags catalog: every
+annotation, what fired it, and what it does *not* mean.
 
 ## How a verdict is reached
 
