@@ -41,12 +41,12 @@ All factors are pure functions of adapter data; each returns a float or `None`
 | Factor | Formula | Direction | Notes |
 |---|---|---|---|
 | `earnings_yield` | EBIT / EV, where **EV = market cap + total debt − cash & short-term investments**; falls back to EBIT/market cap when EV components are missing, then 1/PE | high | Only a deeply cash-rich name whose cash exceeds market cap + debt (**EV ≤ 0**) **abstains** — a merely net-cash mega-cap (cash > debt but < market cap, e.g. NVDA/GOOGL) still has a large positive EV and ranks normally. EV is a refined proxy (see §6). |
-| `roic` | Through-cycle ROIC: NOPAT / invested capital, averaged over a 4-year window | high | Negative-equity-safe (uses provided invested capital, not equity). |
+| `roic` | Through-cycle ROIC (return on invested capital): **NOPAT** (net operating profit after tax — operating profit with taxes removed) / invested capital, averaged over a 4-year window | high | Negative-equity-safe (uses provided invested capital, not equity). |
 | `momentum_12m` / `momentum_6m` | Trailing total return over ~252 / ~126 trading days | high | Price-derived from the close series. |
 | `low_volatility` | Annualized volatility of daily returns | **low** | Pairs with momentum to exclude falling knives (a crashing name is high-vol *and* negative-momentum). |
 | `net_payout_yield` | (dividends + buybacks) / market cap; falls back to dividend yield where buyback data is unavailable on free data | high | The fallback under-credits heavy repurchasers — documented, not hidden. |
 | `dividend_streak` | Consecutive calendar years of dividend **increases** (see §3) | high | `None` when history is too short to derive. |
-| `revenue_growth` | Revenue CAGR over the fundamentals window, with a cyclical-base guard | high | |
+| `revenue_growth` | Revenue **CAGR** (compound annual growth rate — the smoothed year-over-year rate) over the fundamentals window, with a cyclical-base guard | high | |
 
 ## 3. Dividend streak — flat is not a cut (`tools/screening.py`)
 
@@ -78,13 +78,14 @@ strategy YAML, not code. Current registry (thresholds shown from the live strate
 | `min_dividend_streak` | 10 years | Cut history: T (cut 2022 → streak 0) and MMM (cut 2024) fail; PG/KO/JNJ/MCD pass. |
 | `max_debt_to_market_cap` | 1.0 | Balance-sheet risk: total debt ≤ market cap. VZ (~1.13×, $201B) fails. Uses debt/market-cap, **not** debt/equity — robust to negative-equity buyback names (MCD). |
 | `min_roic` | 0.12 (magic_value_screen) | The quality floor for value strategies. |
-| `revenue_cagr`, `peg_ratio` | growth_v1 | GARP criteria; PEG uses earnings-growth with a cyclical-base guard. |
+| `revenue_cagr`, `peg_ratio` | growth_v1 | GARP criteria; **PEG** (the P/E ratio divided by the earnings-growth rate — a valuation-against-growth measure, where roughly ≤1 reads as "reasonably priced for the growth") uses in-house earnings-growth with a cyclical-base guard. |
 
 **Growth-metric cyclicality guards** (the GARP screen, `growth_v1`). The three growth
 criteria are hardened against a single trough or peak year flattering a metric:
 `revenue_cagr` is a base-year-robust log-linear **trend** over the window — not a naive
 two-point endpoint ratio — and the note flags when the two diverge (a cyclical-base
-signal); `peg_ratio` winsorizes an extreme growth input, so a trough-inflated CAGR
+signal); `peg_ratio` winsorizes (caps an extreme value at a set percentile so one
+outlier can't dominate) an extreme growth input, so a trough-inflated CAGR
 cannot make a stock look spuriously cheap; and `roic` is computed on through-cycle
 (multi-year mean) operating income, not a single peak. Each degrades to **not-evaluated**
 rather than guessing when the statements are too short or earnings are negative.
@@ -246,7 +247,7 @@ elsewhere — a documented boundary beats an untested feature.
 | Tier | Sectors | Why | Revisit trigger |
 |---|---|---|---|
 | **Excluded by design** | Financials (banks, insurers) | ROIC and EV are category errors for balance-sheet businesses; the sector exclusion fires by name. | A funded use case — basic P/B + ROE data is already free. |
-| **Supported, distortion disclosed** | Deep cyclicals (energy, miners, autos, memory); REITs & utilities | Trailing metrics snapshot the cycle (4-year through-cycle averaging dampens, does not fix); payout/FCF semantics half-fit — REITs need FFO, utilities run structural negative FCF by regulated design (the documented council-era lesson). | An FFO / regulated-asset data source. |
+| **Supported, distortion disclosed** | Deep cyclicals (energy, miners, autos, memory); REITs & utilities | Trailing metrics snapshot the cycle (4-year through-cycle averaging dampens, does not fix); payout/FCF (free cash flow) semantics half-fit — REITs need **FFO** (funds from operations — the REIT-specific cash-earnings measure), utilities run structural negative FCF by regulated design (the documented council-era lesson). | An FFO / regulated-asset data source. |
 | **Clean fit** | Asset-light & industrial operating businesses — mature tech, staples, discretionary, pharma, industrials, retail, defence | Trailing fundamentals and cash-based coverage describe them well. | — (the current manifests, minus the distortion cases). |
 
 ## 10. Future work & data dependencies

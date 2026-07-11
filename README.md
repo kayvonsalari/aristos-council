@@ -20,8 +20,9 @@ personal analysis platform, sequenced by evidence and feedback rather than cover
 
 What it demonstrably does today — each point verifiable in this repo:
 - **Three validated rank strategies** (defensive income, classic value, value + momentum) on free
-  market data, with every verdict reproducible offline (`--replay`) and every cited figure traced to
-  its source tool call.
+  market data, with every verdict reproducible offline (`--replay` re-runs a past verdict against
+  its *frozen* inputs — the exact data snapshot saved at run time, so the result is bit-for-bit
+  repeatable without the network) and every cited figure traced to its source tool call.
 - **An LLM layer that explains but never judges** — demoted from judging by a pre-registered
   controlled experiment (0 agreements in 17 councils; dissent shown to be pick-independent), its
   valid insights hardened into deterministic rules instead.
@@ -49,11 +50,15 @@ The rank strategies run on one engine — each is a versioned YAML file, not cod
   high net payout (dividends plus buybacks), momentum guard. For steady income portfolios.
 - **Value + momentum** (`magic_formula_momentum_v1`) — the flagship: Greenblatt's two factors plus
   a 12-month momentum rank (per the value-and-momentum literature), which keeps falling knives out
-  of the top quintile.
+  of the top **quintile** (the ranked list cut into fifths; the top fifth is BUY).
 - **Growth at a Reasonable Price** (`growth_garp_v1`) — ranks durable compounders on revenue
-  growth, ROIC, valuation, and momentum, over names that pass a growth screen.
+  growth, **ROIC** (return on invested capital — the operating profit a business earns per dollar
+  of capital put to work; higher is better), valuation, and momentum, over names that pass a growth
+  screen.
 - **Classic value** (`magic_formula_v1`) — Greenblatt's Magic Formula: high return on capital,
-  bought at a high earnings yield. The audited baseline, kept as a legacy config (unlisted).
+  bought at a high **earnings yield** (operating profit as a percentage of the cost to buy the whole
+  business, debt included — the inverse of a P/E; higher means cheaper). The audited baseline, kept
+  as a legacy config (unlisted).
 A strategy file declares its factors, screen, and verdict cut; the arithmetic behind every factor
 is unit-tested and documented in [The Calculations](docs/CALCULATIONS.md).
 
@@ -80,8 +85,10 @@ factor, criterion, and guard, generated from the code.
    never silently disqualifies. Names with no data at all (delisted tickers) are declared
    **UNRATEABLE** and receive no verdict.
 2. **Rank (deterministic).** Survivors are ranked per factor across the universe
-   (1 = best), ranks are summed, lowest combined rank wins — Greenblatt's mechanic; no
-   tuned weights exist anywhere. A quintile cut assigns BUY / HOLD / SELL.
+   (1 = best), the per-factor ranks are summed (a **rank-sum**), and the lowest combined
+   rank wins — Greenblatt's mechanic; no tuned weights exist anywhere. A quintile cut
+   assigns BUY / HOLD / SELL. This deterministic call is the **verdict of record** — the
+   one the system stands behind; the LLM narrative that follows never changes it.
 3. **Gates (deterministic).** A confirmed gating-criterion failure caps the verdict at
    SELL no matter what any narrative says; a not-evaluated gating criterion yields
    INSUFFICIENT_EVIDENCE and unconditional human review. Gate firings are recorded.
@@ -114,7 +121,8 @@ factor, criterion, and guard, generated from the code.
 ## Company Check
 
 A single-name diagnostic that answers "why isn't this name on the list?" — and, by
-design, **issues no verdict** (a rank over a cohort of one would be fabricated). For one
+design, **issues no verdict** (a rank over a **cohort** of one — a cohort is the peer group
+a name is ranked within — would be fabricated). For one
 ticker under a chosen strategy it shows every screen criterion with its value and
 pass/fail/not-evaluated state (all criteria evaluated, not short-circuited at the first
 fail), the sector/market-cap/payout **gates**, each rank factor's value with its position

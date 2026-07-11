@@ -8,9 +8,12 @@ where they disagree, the recorded CSV and the code win.
 
 ## 1. Snapshot mechanics
 
-A snapshot is a quarterly, append-only freeze written to `snapshots/verdict_consensus.csv`.
-Each **row** is one name in one strategy on one snapshot date: the Aristos verdict of
-record, its combined rank, the price, and the street's `recommendationMean`, analyst count,
+A snapshot is a quarterly, append-only **freeze** (a saved, immutable copy of the inputs
+and verdicts as they stood that day, so the scored call can never be quietly rewritten)
+written to `snapshots/verdict_consensus.csv`. Each **row** is one name in one strategy on
+one snapshot date: the Aristos **verdict of record** (the deterministic ranker's call — the
+one the system stands behind), its combined rank, the price, and the street's
+`recommendationMean` (sell-side analysts' mean rating, 1 = strong buy … 5 = sell), analyst count,
 and mean target as observed that day. Every recorded verdict is **ranker-only** — the
 deterministic core, no LLM in the loop for any scored call. **EXCLUDED** rows (screen / cap
 / sector fail) and **UNRATEABLE** rows (no data) are part of the record, not omissions: an
@@ -22,8 +25,8 @@ snapshot is never rewritten.
 - **Aristos** buckets are the recorded verdict — BUY / HOLD / SELL — taken as issued. A SELL
   row carries the reading "bottom quintile of N — relative rank, not a short thesis"; it
   ranks last within its universe, it is not a borrow-and-short recommendation.
-- **Street** buckets are **terciles of `recommendationMean` WITHIN the snapshot universe** —
-  most-loved / middle / least-loved third. Absolute rating bands are not used because they
+- **Street** buckets are **terciles (thirds) of `recommendationMean` WITHIN the snapshot
+  universe** — most-loved / middle / least-loved third. Absolute rating bands are not used because they
   are structurally all-BUY: the observed calibration on 2026-07-05 spanned 1.30–2.71 across
   38 names with zero sells, so an absolute cut has no discriminating power. Tercile ties go
   to the more-loved bucket.
