@@ -40,13 +40,15 @@ All factors are pure functions of adapter data; each returns a float or `None`
 
 | Factor | Formula | Direction | Notes |
 |---|---|---|---|
-| `earnings_yield` | EBIT / EV, where **EV = market cap + total debt − cash & short-term investments**; falls back to EBIT/market cap when EV components are missing, then 1/PE | high | Only a deeply cash-rich name whose cash exceeds market cap + debt (**EV ≤ 0**) **abstains** — a merely net-cash mega-cap (cash > debt but < market cap, e.g. NVDA/GOOGL) still has a large positive EV and ranks normally. EV is a refined proxy (see §6). |
-| `roic` | Through-cycle ROIC (return on invested capital): **NOPAT** (net operating profit after tax — operating profit with taxes removed) / invested capital, averaged over a 4-year window | high | Negative-equity-safe (uses provided invested capital, not equity). |
+| `earnings_yield` | EBIT / EV, where **EV = market cap + total debt − cash & short-term investments**; falls back to EBIT/market cap when EV components are missing, then 1/PE | high | Only a deeply cash-rich name whose cash exceeds market cap + debt (**EV ≤ 0**) **abstains** — a merely net-cash mega-cap (cash > debt but < market cap, e.g. NVDA/GOOGL) still has a large positive EV and ranks normally. EV is a refined proxy (see §6). For a foreign issuer on a US listing, debt/cash/EBIT are **converted** from the accounts currency to the price currency before EV is formed (tagged `[ev, DKK→USD @ rate (date)]`); a failed FX fetch **abstains** rather than mix currencies (VERIFY-2). |
+| `roic` | Through-cycle ROIC (return on invested capital): **NOPAT** (net operating profit after tax — operating profit with taxes removed) / invested capital, averaged over a 4-year window | high | Negative-equity-safe (uses provided invested capital, not equity). A loss-mixed window whose through-cycle effective tax rate degenerates (∉ [0, 0.6]) or whose pretax sum is non-positive **abstains** rather than print a "−0" NOPAT (VERIFY-2); a single loss year inside a net-positive window still computes (the through-cycle design). |
 | `momentum_12m` / `momentum_6m` | Trailing total return over ~252 / ~126 trading days | high | Price-derived from the close series. |
 | `low_volatility` | Annualized volatility of daily returns | **low** | Pairs with momentum to exclude falling knives (a crashing name is high-vol *and* negative-momentum). |
 | `net_payout_yield` | (dividends + buybacks) / market cap; falls back to dividend yield where buyback data is unavailable on free data | high | The fallback under-credits heavy repurchasers — documented, not hidden. |
 | `dividend_streak` | Consecutive calendar years of dividend **increases** (see §3) | high | `None` when history is too short to derive. |
 | `revenue_growth` | Revenue **CAGR** (compound annual growth rate — the smoothed year-over-year rate) over the fundamentals window, with a cyclical-base guard | high | |
+| `price_to_book` | Price / book value: vendor `priceToBook`, else market cap / closing shareholders' equity | **low** | The financials-lens value leg (FIN-1). **Abstains** on non-positive or absent book equity — a negative-book value trap can't read as cheap. |
+| `return_on_equity` | Net income / equity: vendor `returnOnEquity` (TTM), else latest net income / mean(opening+closing equity) | high | The financials-lens quality leg (FIN-1). **Abstains** on non-positive equity or missing income. |
 
 ## 3. Dividend streak — flat is not a cut (`tools/screening.py`)
 
@@ -132,6 +134,16 @@ the two guards working — a real fail + momentum trips it; an abstention or a n
   is a different statement.
 - **Sector exclusion** — confirmed-only, case-insensitive (e.g. financials under Magic
   Formula, where ROIC is not meaningful). An unknown sector excludes nothing.
+- **Sector inclusion** (the mirror, `include_sectors`, FIN-1) — when set, admits **only**
+  the listed sectors and gates any confirmed out-of-scope name with `sector '<X>' outside
+  this strategy's scope`. `financials_v1` uses it to build a financials-only table.
+  Confirmed-only like the exclusion gate: a missing sector is never gated. The two gates
+  are independent — a strategy sets one or neither.
+- **Vendor sanity flags** (VERIFY-2 / FIN-1) — cheap boundary checks flag absurd vendor
+  values (dividend yield > 15%, negative market cap, unit-confused debt/equity > 10000,
+  P/B > 100, ROE > 300%). A flag **never corrects and never fails** a name: the value is
+  withheld from the narrator's evidence and surfaced in Company Check's DATA INTEGRITY, so
+  vendor junk can neither be quoted nor silently used.
 - **Disposition gate** — if a criterion designated *gating* is a confirmed failure, the
   verdict is capped at SELL regardless of any narrative; a *not-evaluated* gating
   criterion yields **INSUFFICIENT_EVIDENCE** (off the buy/hold/sell ladder, unconditional
@@ -251,7 +263,7 @@ elsewhere — a documented boundary beats an untested feature.
 
 | Tier | Sectors | Why | Revisit trigger |
 |---|---|---|---|
-| **Excluded by design** | Financials (banks, insurers) | ROIC and EV are category errors for balance-sheet businesses; the sector exclusion fires by name. | A funded use case — basic P/B + ROE data is already free. |
+| **Excluded from the value lenses; covered by `financials_v1`** | Financials (banks, insurers, payment networks) | ROIC and EV are category errors for balance-sheet businesses, so the value lenses exclude them by name — but the exploratory `financials_v1` lens (FIN-1) ranks them on price-to-book + return on equity + momentum instead, the gate inverted. | Grading `financials_v1` on the prospective scoreboard (today it is exploratory only). |
 | **Supported, distortion disclosed** | Deep cyclicals (energy, miners, autos, memory); REITs & utilities | Trailing metrics snapshot the cycle (4-year through-cycle averaging dampens, does not fix); payout/FCF (free cash flow) semantics half-fit — REITs need **FFO** (funds from operations — the REIT-specific cash-earnings measure), utilities run structural negative FCF by regulated design (the documented council-era lesson). | An FFO / regulated-asset data source. |
 | **Clean fit** | Asset-light & industrial operating businesses — mature tech, staples, discretionary, pharma, industrials, retail, defence | Trailing fundamentals and cash-based coverage describe them well. | — (the current manifests, minus the distortion cases). |
 
@@ -260,8 +272,11 @@ elsewhere — a documented boundary beats an untested feature.
 Honest direction of travel — each entry is what, its concrete requirement, and the
 trigger. No dates.
 
-- **Financials strategy** (P/B + ROE, banks-only universe): the data is already
-  sufficient on free tiers; the trigger is a real user, not budget.
+- **Financials strategy** (P/B + ROE, banks-only universe): **shipped** as the exploratory
+  `financials_v1` lens over `financials_16_v1` (FIN-1). Remaining work: grading it on the
+  prospective scoreboard, and a foreign-financials universe once the currency-conversion
+  layer (VERIFY-2) has field history — the first universe is deliberately all-US
+  (currency-clean) so the P/B and ROE fallbacks never mix currencies.
 - **Estimate-revision signals + point-in-time backtesting**: requires a paid
   fundamentals tier (~€50–150/mo class — Sharadar / EODHD upper tiers); trigger is the
   prospective scoreboard maturing enough to justify historical validation.

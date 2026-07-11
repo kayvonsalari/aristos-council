@@ -19,10 +19,11 @@ built to demonstrate that architecture; it is also the foundation the author int
 personal analysis platform, sequenced by evidence and feedback rather than coverage ambition.
 
 What it demonstrably does today — each point verifiable in this repo:
-- **Three validated rank strategies** (defensive income, classic value, value + momentum) on free
-  market data, with every verdict reproducible offline (`--replay` re-runs a past verdict against
-  its *frozen* inputs — the exact data snapshot saved at run time, so the result is bit-for-bit
-  repeatable without the network) and every cited figure traced to its source tool call.
+- **Five rank strategies on free market data** — three validated (defensive income, value +
+  momentum, growth-at-a-reasonable-price) plus two exploratory (a no-screen Greenblatt baseline and
+  a financials P/B+ROE lens) — with every verdict reproducible offline (`--replay` re-runs a past
+  verdict against its *frozen* inputs — the exact data snapshot saved at run time, so the result is
+  bit-for-bit repeatable without the network) and every cited figure traced to its source tool call.
 - **An LLM layer that explains but never judges** — demoted from judging by a pre-registered
   controlled experiment (0 agreements in 17 councils; dissent shown to be pick-independent), its
   valid insights hardened into deterministic rules instead.
@@ -32,8 +33,10 @@ What it demonstrably does today — each point verifiable in this repo:
 - **A prospective scoreboard:** verdicts and street consensus frozen quarterly (first freeze
   2026-07-05), graded on 6- and 12-month forward returns against pre-committed tests.
 
-What it deliberately is not (yet): broad-coverage — financials are excluded by design and several
-sectors carry disclosed metric distortions (see *Scope* in [The Calculations](docs/CALCULATIONS.md));
+What it deliberately is not (yet): broad-coverage — the value lenses exclude financials by design
+(the exploratory `financials_v1` lens now ranks them on price-to-book + return-on-equity instead of
+leaving them uncovered — see [Which lens for which company](#which-lens-for-which-company)), and
+several sectors carry disclosed metric distortions (see *Scope* in [The Calculations](docs/CALCULATIONS.md));
 not production infrastructure; not investment advice. Considered extensions and their concrete
 requirements are in *Future work* — documented boundaries are preferred to untested features.
 
@@ -51,10 +54,18 @@ The rank strategies run on one engine — each is a versioned YAML file, not cod
 - **Value + momentum** (`magic_formula_momentum_v1`) — the flagship: Greenblatt's two factors plus
   a 12-month momentum rank (per the value-and-momentum literature), which keeps falling knives out
   of the top **quintile** (the ranked list cut into fifths; the top fifth is BUY).
-- **Growth at a Reasonable Price** (`growth_garp_v1`) — ranks durable compounders on revenue
+- **Growth at a Reasonable Price** (`growth_garp_v2`) — ranks durable compounders on revenue
   growth, **ROIC** (return on invested capital — the operating profit a business earns per dollar
   of capital put to work; higher is better), valuation, and momentum, over names that pass a growth
-  screen.
+  screen. (v2 supersedes v1: its lens drops the momentum *gate* so dip names are ranked down, not
+  vetoed — the deviations are recorded in the YAML header.)
+- **Greenblatt RAW** (`magic_formula_raw_v1`) — canonical Magic Formula + momentum with **no
+  screens at all**: quality enters through ranking only, exactly as Greenblatt intends. The
+  exploratory comparison lens — the delta against value+momentum measures what the house screens
+  actually contribute.
+- **Financials** (`financials_v1`) — banks, insurers, and payment networks ranked on price-to-book +
+  return-on-equity + momentum: the value lenses' sector exclusion **inverted** so financials get
+  their own one-yardstick table. Exploratory.
 - **Classic value** (`magic_formula_v1`) — Greenblatt's Magic Formula: high return on capital,
   bought at a high **earnings yield** (operating profit as a percentage of the cost to buy the whole
   business, debt included — the inverse of a P/E; higher means cheaper). The audited baseline, kept
@@ -63,10 +74,12 @@ A strategy file declares its factors, screen, and verdict cut; the arithmetic be
 is unit-tested and documented in [The Calculations](docs/CALCULATIONS.md).
 
 The UI **discovers strategies dynamically** from `strategies/` — there is no hardcoded list. The
-visible set is currently three (**Defensive Income** `conservative_plus_v1`, **Value + Momentum**
-`magic_formula_momentum_v1`, **Growth at a Reasonable Price** `growth_garp_v1`); legacy configs
-(`magic_formula_v1`, `dividend_aristocrats_v1`) are marked `ui: hidden` and stay fully loadable via
-the loader/CLI but unlisted. A new strategy appears simply by adding a YAML to `strategies/` — never
+visible set is currently five (**Defensive Income** `conservative_plus_v1`, **Value + Momentum**
+`magic_formula_momentum_v1`, **Growth at a Reasonable Price** `growth_garp_v2`, **Greenblatt RAW**
+`magic_formula_raw_v1`, **Financials** `financials_v1`); superseded/legacy configs
+(`growth_garp_v1`, `magic_formula_v1`, `dividend_aristocrats_v1`) are marked `ui: hidden` and stay
+fully loadable via the loader/CLI but unlisted. A new strategy appears simply by adding a YAML to
+`strategies/` — never
 by editing a published one (configs are versioned and superseded, not mutated).
 
 New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — the plain-language
@@ -132,7 +145,12 @@ against a named, dated reference cohort (replayed offline from a past run — ne
 universe fetch), and the price-vs-fundamentals **divergence flag** when a name's price has
 run up hard while a quality floor fails. It lives in the **Company Check** tab of Council
 Station (and as `examples/company_check.py` on the CLI); a passing name is pointed back to
-a universe run, because a verdict is a cohort statement.
+a universe run, because a verdict is a cohort statement. The cohort context comes from a
+past run: a universe run (UI or CLI) **freezes its inputs** to `runs/<run_id>/`, and Company
+Check replays the latest frozen run of the chosen reference universe offline — no fresh
+fetch — so its factor positions are reproducible. Both a universe run and a Company Check
+can be saved from the UI as **timestamped** files (`universe_<strategy>_<mode>_<timestamp>.md`,
+`company_check_<ticker>_<strategy>_<timestamp>.txt`).
 
 ## Which lens for which company
 
@@ -189,7 +207,13 @@ The full sector-scope tier table (excluded-by-design / supported-with-disclosed-
   registry) + `tools/` (all arithmetic; pure, unit-tested) + screens in versioned YAML.
 - **Universes:** declared, versioned manifests (`universes/*.yaml`) — a rank verdict is
   universe-relative, so every run records the `universe_id` it ranked within (an ad-hoc
-  list is fingerprinted `adhoc:<hash>`).
+  list is fingerprinted `adhoc:<hash>`). Universes are **discovered dynamically** like
+  strategies: a manifest is front-stage in both selectors unless its `role:` marks it
+  observational (a never-graded watch/control set — `energy_watch`, the validation bench),
+  which keeps it behind the "show validation" toggle. A strategy may declare
+  `suggested_universes:` to surface its natural pairing first in the selectors — a
+  hierarchy, never a lock: any universe stays one-click selectable (cross-lens runs are a
+  deliberate capability).
 - **Orchestration:** LangGraph; `ResearchState` threaded through every node; LLMs behind
   a `Runner` seam (tiered models via `init_chat_model`), so the graph tests end-to-end
   with fakes — no API keys in CI.
@@ -274,13 +298,30 @@ Station's past-run browsing.
 
 **Phase 4 — audit, persistence & Council Station (complete):** a deep post-run **provenance audit** that resolves every cited figure's `field_path` against the tool-call ledger and feeds the data-quality veto; an append-only **verdict history** (`verdicts/`) powering the recommendation-flip and majority-override vetoes; full per-run **reports** (`reports/`); **strategy versioning** (edit-as-new-version, never mutating a published file); and **Council Station** — a local Streamlit UI to run the council, read the full deliberation, browse past runs across tickers, chart verdict/confidence history, and edit strategies. See `CLAUDE.md` for the sprint log.
 
-**Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator` by default; `second_opinion` survives behind the flag). Three rank strategies ship — Conservative Formula (defensive income), Greenblatt Magic Formula (classic value), and value+momentum — each running the same rank-sum engine with **no tuned weights**, an absolute-floor **screen-as-prefilter** (one definition per strategy), and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
+**Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator` by default; `second_opinion` survives behind the flag). Five rank strategies are now visible — Conservative Formula (defensive income), value+momentum (the flagship), GARP, a no-screen Greenblatt baseline, and a financials P/B+ROE lens — each running the same rank-sum engine with **no tuned weights**, an optional absolute-floor **screen-as-prefilter** (one definition per strategy), and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
 
 **Phase 6 — Prospective evaluation (running).** Verdicts and street consensus are frozen in quarterly snapshots (first freeze: 2026-07-05, growth_40; defensive follows the FCF payout fix) and scored on 6- and 12-month forward total returns. The pre-committed test is bucket ordering — BUY > HOLD > SELL, and street most-loved > least-loved — against the equal-weight universe. Standing caveat: single snapshots are anecdotes; the evidence is the ordering across repeated freezes. Next scoring: January 2027. Methodology: **[The Scoreboard](docs/SCOREBOARD.md)**.
 
-**565 unit tests**, green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
+**801 unit tests**, green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
 
 **Next:** SEC EDGAR filings RAG for the Fundamental specialist, nightly watchlist runs via GitHub Actions cron.
+
+### What changed (week of 2026-07-11)
+
+A **financials capability** landed end-to-end: two new factors — price-to-book and
+return-on-equity (vendor value with a derived fallback, abstaining on non-positive book) —
+plus an `include_sectors` gate that **inverts** the value lenses' financials exclusion, the
+`financials_v1` lens over a new all-US `financials_16_v1` universe, and a committed
+ranker-only baseline with GS/DUK worked examples. Data-integrity hardening shipped
+alongside it: currency-consistent enterprise value for foreign listings (convert, never
+mix; abstain on a failed FX fetch), loss-mixed ROIC abstention instead of a "−0" artifact,
+the vendor headline (TTM) free-cash-flow field quarantined from narration in favour of the
+annual series, and cheap vendor-sanity flags that withhold absurd values from the narrator.
+Selection got **strategy-aware**: both universe selectors now discover manifests dynamically
+(front-stage unless a `role:` marks them observational) and surface a strategy's
+`suggested_universes` first — a hierarchy, never a lock. Docs caught up: this README's plain-
+English glosses, the *Which lens for which company* section, and the new
+[Marks on a Report](docs/REPORT_MARKS.md) flags catalog.
 
 ## A note on honesty
 

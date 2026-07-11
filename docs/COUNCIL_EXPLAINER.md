@@ -79,15 +79,20 @@ not a cut), §4 the screen criteria with current thresholds, and §5 the guards.
 document and the code ever disagree, the code — and The Calculations, which is generated
 from it — win.
 
-Three rank strategies ship on one engine, each pinning its own factors and floors in a
+Five rank strategies are visible on one engine, each pinning its own factors and floors in a
 versioned YAML (a published strategy is never edited in place — a new version is created
 instead): **Conservative Formula** (defensive income — low volatility + net payout +
 12-month momentum, screened for covered income, real yield, leverage, and a
-momentum-breakdown floor), **Greenblatt Magic Formula** (classic value — earnings yield +
-return on capital, financials excluded), and **value + momentum** (the Magic Formula with a
-momentum factor added to demote falling knives). Each pairs with an absolute-floor lens
-screen run as a prefilter — the screen says who qualifies, the ranking orders survivors.
-The dividend-aristocrat and growth (GARP) screens remain available as standalone strategies.
+momentum-breakdown floor), **value + momentum** (the flagship — Greenblatt's earnings yield +
+return on capital with a momentum factor added to demote falling knives; financials excluded),
+**Growth at a Reasonable Price** (revenue growth + ROIC + valuation + momentum),
+**Greenblatt RAW** (the canonical Magic Formula + momentum with *no screens* — the
+exploratory comparison lens), and **Financials** (banks/insurers/networks ranked on
+price-to-book + return on equity + momentum, the value lenses' sector exclusion inverted).
+The value strategies pair with an absolute-floor lens screen run as a prefilter — the screen
+says who qualifies, the ranking orders survivors; the RAW and Financials lenses rank without
+one (quality enters through ranking). The classic Magic Formula, dividend-aristocrat, and
+growth (GARP) screens remain available as standalone/legacy configs.
 All thresholds are in [The Calculations §4](CALCULATIONS.md#4-screen-criteria-three-state-abstention-never-excludes).
 
 ### Data sources
@@ -126,7 +131,7 @@ per-run.
 
 If you are deciding whether to trust this system, the honest answer is that the trust does not
 come from the language models. It comes from the deterministic code that surrounds them and from
-an automated test suite — over 550 tests at last count — that runs the entire pipeline on every
+an automated test suite — over 800 tests at last count — that runs the entire pipeline on every
 change with fake models and fake data, no API keys and no network. Each guarantee below is
 enforced by that code and re-checked by those tests; none of it depends on a model behaving well
 on the day.
