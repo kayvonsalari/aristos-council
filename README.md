@@ -1,3 +1,4 @@
+<!-- cloud loop plumbing test -->
 # Aristos Council
 
 Most AI stock analysis gives you one model's snap opinion. Aristos went further: it built
