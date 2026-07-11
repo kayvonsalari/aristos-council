@@ -31,8 +31,8 @@ from pydantic import ValidationError
 from aristos_council.data.adapter import (
     DataUnavailable, display_name, normalize_ticker)
 from aristos_council.demo_surface import (
-    is_hidden_strategy, strategy_label, strategy_role, universe_label,
-    universe_role, visible_universes)
+    is_hidden_strategy, strategy_label, strategy_role, suggested_first,
+    universe_label, universe_role, visible_universes)
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
     RunReport,
@@ -1392,9 +1392,17 @@ def render_universe_tab(show_validation: bool = False) -> None:
     manifests = visible_universes(list_universes(UNIVERSES_DIR),
                                   show_validation=show_validation)
     CUSTOM = "Custom (paste tickers)"
-    source_labels = [f"{universe_label(u)} · {len(u.tickers)} names"
-                     for u in manifests] + [CUSTOM]
+    # UNI-1 ITEM 2: SUGGESTED universes for this strategy render first (a hierarchy, never
+    # a lock — every universe stays selectable). Absent field -> ordering is unchanged.
+    suggested, others = suggested_first(
+        manifests, getattr(rank_strategy, "suggested_universes", []))
+    ordered = suggested + others
+    source_labels = ([f"⭐ {universe_label(u)} · {len(u.tickers)} names" for u in suggested]
+                     + [f"{universe_label(u)} · {len(u.tickers)} names" for u in others]
+                     + [CUSTOM])
     source = st.selectbox("Universe", source_labels, key="uni_source")
+    if suggested:
+        st.caption("⭐ = suggested for this strategy · every universe stays selectable")
     if source == CUSTOM:
         raw = st.text_area(
             "Universe — tickers separated by spaces, commas, or newlines",
@@ -1402,7 +1410,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
         universe = _parse_universe(raw)
         universe_id = None                          # -> adhoc:<hash> in the record
     else:
-        picked = manifests[source_labels.index(source)]
+        picked = ordered[source_labels.index(source)]
         universe = list(picked.tickers)
         universe_id = picked.id
         st.caption(f"`{picked.id}` · {len(universe)} names")
@@ -1571,11 +1579,19 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     manifests = visible_universes(list_universes(UNIVERSES_DIR),
                                   show_validation=show_validation)
     NONE = "(none — raw values, no cohort context)"
-    ref_labels = [f"{universe_label(u)} · {len(u.tickers)} names"
-                  for u in manifests] + [NONE]
+    # UNI-1 ITEM 2: the selected strategy's SUGGESTED universes render first here too
+    # (same helper as the Universe Run tab — no drift). Absent field -> unchanged.
+    suggested, others = suggested_first(
+        manifests, getattr(rank_strategy, "suggested_universes", []))
+    ref_ordered = suggested + others
+    ref_labels = ([f"⭐ {universe_label(u)} · {len(u.tickers)} names" for u in suggested]
+                  + [f"{universe_label(u)} · {len(u.tickers)} names" for u in others]
+                  + [NONE])
     ref_choice = st.selectbox("Reference universe (for factor context)", ref_labels,
                               key="cc_reference")
-    reference = None if ref_choice == NONE else manifests[ref_labels.index(ref_choice)]
+    if suggested:
+        st.caption("⭐ = suggested for this strategy · every universe stays selectable")
+    reference = None if ref_choice == NONE else ref_ordered[ref_labels.index(ref_choice)]
     reference_id = "" if reference is None else reference.id
     if reference is not None:
         st.caption(f"`{reference.id}`")                  # the stable record key

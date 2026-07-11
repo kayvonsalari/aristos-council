@@ -59,6 +59,13 @@ class RankStrategy(BaseModel):
     created: str = ""           # optional 'YYYY-MM-DD' provenance date (display-only)
     description: str = ""
     rationale: str = ""
+    # Optional SUGGESTED universes (UNI-1): universe ids this strategy is naturally run
+    # on, surfaced FIRST in both universe selectors under a "Suggested" group. A
+    # HIERARCHY, never a lock — every other universe stays one-click selectable (cross-
+    # lens runs are a deliberate capability). Absent -> the selectors render as before.
+    # Display-only: never read by the rank/screen logic; ids are not validated (a missing
+    # id is simply skipped in the group).
+    suggested_universes: list[str] = Field(default_factory=list)
     # The proven factors to rank on (>=1), validated against the factor registry.
     factors: list[RankFactorSpec] = Field(min_length=1)
     # Verdict cut over the ranked universe.

@@ -22,6 +22,12 @@ description: >
   combines the ranks. Momentum + low-vol exclude actively-declining names by
   construction.
 
+# Suggested universes (UNI-1): surfaced first in the selectors; a hierarchy, never a
+# lock — cross-lens runs stay one-click. This defensive-income lens pairs with the
+# defensive-income scoreboard universe.
+suggested_universes:
+  - defensive_income_16_v1
+
 factors:
   - name: low_volatility      # lower realized vol ranks better (direction from registry)
   - name: net_payout_yield    # dividends (+ buybacks where available); div-yield fallback

@@ -23,6 +23,11 @@ description: >-
   the list). Momentum has equal rank weight and the same rank-sum combine as the
   other two factors.
 
+# Suggested universes (UNI-1): surfaced first in the selectors; a hierarchy, never a
+# lock — cross-lens runs stay one-click. This value+momentum lens pairs with Growth 40.
+suggested_universes:
+  - growth_40_v1
+
 factors:
   - name: roic               # quality  (registry direction: high)
   - name: earnings_yield     # value    (registry direction: high)

@@ -27,6 +27,13 @@ description: >-
   Comparison lens against magic_formula_momentum_v1: the delta measures what the house
   screens contribute. Exploratory — never on the prospective scoreboard.
 
+# Suggested universes (UNI-1): surfaced first in the selectors; a hierarchy, never a
+# lock — cross-lens runs stay one-click. The canonical no-screen variant is run on BOTH
+# scoreboard universes as a baseline.
+suggested_universes:
+  - growth_40_v1
+  - defensive_income_16_v1
+
 # Factors — copied EXACTLY from magic_formula_momentum_v1 (same three, same combine).
 factors:
   - name: roic               # quality  (registry direction: high)

@@ -378,9 +378,11 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert not at.exception
 
     uni = _dropdown(at, "Universe").options
-    assert any(o.startswith("Growth 40 ·") for o in uni)
-    assert any(o.startswith("Defensive Income 16 ·") for o in uni)
-    assert any(o.startswith("Financials 16 ·") for o in uni)         # UNI-1: front-stage
+    # substring (not startswith): the default strategy's suggested universe carries a ⭐
+    # prefix (UNI-1 ITEM 2), so match the name irrespective of the group marker.
+    assert any("Growth 40 · " in o for o in uni)
+    assert any("Defensive Income 16 · " in o for o in uni)
+    assert any("Financials 16 · " in o for o in uni)                 # UNI-1: front-stage
     assert "Custom (paste tickers)" in uni
     assert not any("Validation Bench" in o for o in uni)             # trap bench hidden
     assert not any("Energy Watch" in o for o in uni)                 # observation hidden
@@ -420,11 +422,28 @@ def test_financials_16_is_front_stage_in_both_universe_selectors():
     assert not at.exception
     uni = _dropdown(at, "Universe").options                          # Universe Run tab
     ref = _dropdown(at, "Reference universe (for factor context)").options  # Company Check
-    assert any(o.startswith("Financials 16 ·") for o in uni)
-    assert any(o.startswith("Financials 16 ·") for o in ref)
+    assert any("Financials 16 · " in o for o in uni)                 # (⭐-prefix-robust)
+    assert any("Financials 16 · " in o for o in ref)
     # the never-graded trap bench stays backstage in both (default toggle off)
     assert not any("Validation Bench" in o for o in uni)
     assert not any("Validation Bench" in o for o in ref)
+
+
+def test_suggested_universe_renders_first_for_selected_strategy():
+    # UNI-1 ITEM 2: select the financials lens -> its suggested universe (Financials 16)
+    # heads the Universe dropdown with the ⭐ marker; every other universe stays
+    # selectable below (a hierarchy, never a lock).
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    rank_dd = _dropdown(at, "Rank strategy")
+    fin_label = next(o for o in rank_dd.options if "Financials" in o)
+    rank_dd.set_value(fin_label).run()
+    assert not at.exception
+    uni = _dropdown(at, "Universe").options
+    assert uni[0] == "⭐ Financials 16 · 16 names"                   # suggested group first
+    assert not any(o.startswith("⭐") for o in uni[1:])             # only the suggested one
+    assert any(o.startswith("Growth 40 ·") for o in uni)           # cross-lens still selectable
 
 
 def test_validation_assets_revealed_when_toggle_on():

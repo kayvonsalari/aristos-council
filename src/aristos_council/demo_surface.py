@@ -56,6 +56,22 @@ def visible_rank_strategies(strategies, *, show_validation: bool):
             if show_validation or not is_hidden_strategy(s)]
 
 
+def suggested_first(manifests, suggested_ids):
+    """Split ``manifests`` into ``(suggested, others)`` for a strategy's universe
+    selectors (UNI-1). ``suggested`` are the manifests whose id is in ``suggested_ids``,
+    in that DECLARED order (an id with no matching manifest is skipped); ``others`` keep
+    their original order. NOTHING is dropped — every manifest lands in exactly one group,
+    so a non-suggested (cross-lens) universe stays selectable. An empty/absent
+    ``suggested_ids`` returns ``([], list(manifests))`` so the caller renders EXACTLY as
+    before (byte-unchanged)."""
+    ids = list(suggested_ids or [])
+    by_id = {u.id: u for u in manifests}
+    suggested = [by_id[i] for i in ids if i in by_id]
+    chosen = {u.id for u in suggested}
+    others = [u for u in manifests if u.id not in chosen]
+    return suggested, others
+
+
 def universe_label(u) -> str:
     """Friendly dropdown label for a universe manifest — its ``display_name`` if set,
     else the bare id (a graceful fallback that never crashes on an un-named manifest)."""

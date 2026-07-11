@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from aristos_council.demo_surface import (
-    strategy_label, strategy_role, universe_label, universe_role,
+    strategy_label, strategy_role, suggested_first, universe_label, universe_role,
     visible_rank_strategies, visible_universes)
 from aristos_council.strategy.rank_loader import load_rank_strategy
 from aristos_council.universe import list_universes, load_universe_by_id
@@ -136,6 +136,39 @@ def test_role_marked_observational_universe_stays_backstage(tmp_path):
     off = {u.id for u in visible_universes(manifests, show_validation=False)}
     on = {u.id for u in visible_universes(manifests, show_validation=True)}
     assert "watch_probe_v1" not in off and "watch_probe_v1" in on
+
+
+# --------------------------------------------------------------------------- #
+# UNI-1 ITEM 2 — suggested universes (hierarchy, never a lock)
+# --------------------------------------------------------------------------- #
+def test_suggested_first_orders_suggested_then_others_nothing_dropped():
+    manifests = list_universes(UNIV_DIR)
+    suggested, others = suggested_first(manifests, ["financials_16_v1"])
+    assert [u.id for u in suggested] == ["financials_16_v1"]        # suggested group first
+    assert "financials_16_v1" not in {u.id for u in others}
+    assert len(suggested) + len(others) == len(manifests)          # nothing dropped
+
+
+def test_suggested_first_preserves_declared_order_and_skips_missing_ids():
+    manifests = list_universes(UNIV_DIR)
+    suggested, _ = suggested_first(
+        manifests, ["growth_40_v1", "nope_v1", "defensive_income_16_v1"])
+    assert [u.id for u in suggested] == ["growth_40_v1", "defensive_income_16_v1"]
+
+
+def test_non_suggested_universe_remains_selectable():
+    # a cross-lens universe (Growth 40 under the financials lens) stays in the 'others'
+    # group — nothing is hidden or blocked.
+    manifests = list_universes(UNIV_DIR)
+    _, others = suggested_first(manifests, ["financials_16_v1"])
+    assert "growth_40_v1" in {u.id for u in others}
+
+
+def test_suggested_first_absent_field_is_byte_unchanged():
+    manifests = list_universes(UNIV_DIR)
+    suggested, others = suggested_first(manifests, [])
+    assert suggested == []
+    assert [u.id for u in others] == [u.id for u in manifests]     # order unchanged
 
 
 def test_visible_rank_strategies_hides_the_baseline_by_default():

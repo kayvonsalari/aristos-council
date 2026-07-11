@@ -26,6 +26,11 @@ description: >-
   momentum. The standing Greenblatt financials exclusion, inverted: EBIT/EV and ROIC
   are not computable for these businesses, so they get their own one-yardstick table.
 
+# Suggested universes (UNI-1): surfaced first in the selectors; a hierarchy, never a
+# lock — cross-lens runs stay one-click. This financials lens pairs with Financials 16.
+suggested_universes:
+  - financials_16_v1
+
 factors:
   - name: price_to_book       # value    (registry direction: low — cheaper better)
   - name: return_on_equity    # quality  (registry direction: high)
