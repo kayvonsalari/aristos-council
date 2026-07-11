@@ -217,7 +217,7 @@ def _annotate_narration(rep: RunReport, r: RankedTicker) -> None:
     if d is None or not getattr(d, "rationale", ""):
         return
     table = {"N": r.universe_size, "combined_position": r.rank_position,
-             "factors": dict(r.factor_ranks)}
+             "factors": dict(r.factor_ranks), "ticker": r.ticker}
     annotations = check_narration(d.rationale, table)
     if annotations:
         d.rationale = d.rationale.rstrip() + "\n" + "\n".join(annotations)

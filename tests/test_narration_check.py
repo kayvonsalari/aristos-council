@@ -153,3 +153,49 @@ def test_decimal_sentence_does_not_spuriously_split_or_flag():
     assert check_narration(
         "NVDA posted a revenue CAGR of 31.4% and ranks 1st on revenue_growth.",
         _GARP_NVDA) == []
+
+
+# --------------------------------------------------------------------------- #
+# NARR-CHK-2 — three new false-positive classes on the 2026-07-11 financials run
+# must pass silently; the ASML true positive + all NARR-CHK-1 fixtures stay as-is.
+# --------------------------------------------------------------------------- #
+# financials run: GS is 4th overall (combined 21), 3rd on momentum of 16.
+_FIN_GS = {"N": 16, "combined_position": 4, "ticker": "GS",
+           "factors": {"price_to_book": 11, "return_on_equity": 7, "momentum_12m": 3}}
+
+
+def test_theoretical_bound_arithmetic_aside_passes():
+    # class 1: "worst possible = 48" is cohort arithmetic (a theoretical bound), not a
+    # claim that GS is worst.
+    assert check_narration(
+        "GS carries a combined rank-sum of 20 (lower is better; worst possible = 48).",
+        _FIN_GS) == []
+
+
+def test_generic_hypothetical_superlative_not_bound_to_the_name_passes():
+    # class 2: "the best-ranked name" is a generic subject, not a claim that GS is best.
+    assert check_narration(
+        "Even the best-ranked name in the cohort is not insulated from sector-level "
+        "drawdowns.", _FIN_GS) == []
+
+
+def test_compound_relative_ordinal_third_best_passes():
+    # class 3: "third-best" is rank 3 (true here), not the bare "best" (rank 1).
+    assert check_narration(
+        "Momentum (rank 3/16 — top quartile): GS's aggregate earns the third-best "
+        "momentum rank.", _FIN_GS) == []
+
+
+def test_narr_chk2_does_not_lose_the_asml_true_positive():
+    # the ASML class of catch is preserved — a real "best combined rank-sum" on a
+    # non-rank-1 name still flags.
+    assert _flagged("ASML has the best combined rank-sum in the cohort.", _GROWTH_ASML)
+    # and a genuine financials contradiction still annotates.
+    assert _flagged("GS holds the best combined rank-sum in the cohort.", _FIN_GS)
+
+
+def test_loose_cohort_claim_that_names_the_ticker_still_flags():
+    # the legitimate catch survives: a claim that NAMES the narrated name and calls it
+    # "the worst in the cohort" (GS is 4th of 16, not worst) still annotates — this is the
+    # class the pipeline post-check test exercises.
+    assert _flagged("GS is the worst name in the cohort.", _FIN_GS)

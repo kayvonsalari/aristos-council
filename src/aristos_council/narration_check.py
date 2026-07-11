@@ -17,8 +17,16 @@ positives on real garp_v2 narration:
 - **Ordinals bind to the factor they NAME, not to a column position.** A sentence like
   "1st on revenue_growth, 2nd on roic, 4th on momentum_12m" states each ordinal against a
   named factor, in any order; each is validated against THAT factor's rank in the table.
-Hedged superlatives ("near-best", "almost worst") are approximations, not ordinal claims,
-and are left alone.
+
+A superlative is only a checkable claim when it is genuinely predicated of the narrated
+name's rank. These are NOT claims and are left alone (NARR-CHK-1/2):
+- **Hedged** — "near-best", "almost worst" (approximations).
+- **Theoretical bounds / cohort arithmetic** — "worst possible = 48", "best case" (a
+  hypothetical, not the name).
+- **Generic/hypothetical subjects** — "the best-ranked NAME in the cohort is not insulated
+  …" describes a role, not the narrated name (so the combined subject requires the explicit
+  "combined"/"rank-sum" metric word, not a bare "in the cohort").
+- **Spelled relative ordinals** — "third-best" is rank 3, never the bare "best" (rank 1).
 """
 
 from __future__ import annotations
@@ -40,10 +48,20 @@ _ORDINALS: tuple[tuple[str, Callable[[int], int]], ...] = (
     (r"best", lambda n: 1),
 )
 
-# A HEDGE immediately before a superlative downgrades it to an approximation ("near-best"
-# ≈ rank 2, NOT a claim of rank 1) — not a checkable ordinal claim. Matched against the
-# text ENDING just before the ordinal token.
-_HEDGE = re.compile(r"(?:near|nearly|almost|approx\w*|roughly|about|~)[-\s]?$", re.I)
+# A superlative is NOT a checkable ordinal claim when the text just BEFORE it is:
+#   - a HEDGE ("near-best" ≈ rank 2, not rank 1), or
+#   - a spelled RELATIVE-ORDINAL prefix ("third-best", "fourth-worst" — a specific rank,
+#     NOT the bare superlative; NARR-CHK-2 class 3 flagged "third-best" as "best"=rank 1).
+# Matched against the text ENDING just before the ordinal token. ("second-*" is handled by
+# its own specific pattern above, so it is intentionally absent here.)
+_SKIP_BEFORE = re.compile(
+    r"\b(?:near|nearly|almost|approx\w*|roughly|about|~"
+    r"|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)[-\s]?$", re.I)
+
+# A superlative is a THEORETICAL BOUND, not a claim about the name, when it is immediately
+# FOLLOWED by "possible"/"case"/… ("worst possible = 48" is cohort arithmetic, not a claim
+# that the name is worst; NARR-CHK-2 class 1). Matched against the text AFTER the token.
+_SKIP_AFTER = re.compile(r"^[-\s]?(?:possible|case|conceivable|imaginable)\b", re.I)
 
 # A DIGIT ordinal bound to a position: 1st, 2nd, 4th, 21st. Bound to whatever factor it
 # names within the same clause (defect-b fix). Guards: not a bare "12" (needs the suffix),
@@ -64,8 +82,14 @@ _FACTOR_SUBJECTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (r"momentum", ("momentum_12m", "momentum_6m")),
 )
 
-# A COMBINED/overall subject (checked only when no factor subject is present).
-_COMBINED_SUBJECT = re.compile(r"combined|rank[-\s]sum|in the cohort|overall", re.I)
+# Combined-position subjects (checked only when no factor subject is present). The EXPLICIT
+# metric word binds on its own — the ASML class of catch, "best combined rank-sum". A LOOSE
+# phrase ("in the cohort"/"overall") is too weak to bind a superlative by itself: it fired
+# on generic/hypothetical subjects ("the best-ranked NAME in the cohort is not insulated…",
+# NARR-CHK-2 class 2). It binds ONLY when the narrated name is NAMED in the text — a real
+# claim about THIS name generally names it, a generic role reference does not.
+_COMBINED_METRIC = re.compile(r"combined|rank[-\s]sum", re.I)
+_COMBINED_LOOSE = re.compile(r"in the cohort|overall", re.I)
 
 # "rank of 2 out of 10" / "rank 21 out of 23" / "rank 2/7" / "rank 5". NOT "rank-sum of 12"
 # (a value, not a position) — the hyphen blocks the whitespace this requires after "rank".
@@ -75,35 +99,50 @@ _RANK_CITE = re.compile(
 
 def _word_ordinal(text: str) -> Optional[tuple[int, Callable[[int], int]]]:
     """The earliest UN-HEDGED word-superlative token in ``text`` (specific tokens win a
-    tie) as ``(start, position_fn)``. A hedged superlative ("near-best") is skipped."""
+    tie) as ``(start, position_fn)``. A superlative that is hedged ("near-best"), a spelled
+    relative ordinal ("third-best"), or a theoretical bound ("worst possible") is skipped."""
     best: Optional[tuple[int, Callable[[int], int]]] = None
     for pat, fn in _ORDINALS:
         m = re.search(pat, text, re.I)
-        if not m or _HEDGE.search(text[:m.start()]):
+        if (not m or _SKIP_BEFORE.search(text[:m.start()])
+                or _SKIP_AFTER.match(text[m.end():])):
             continue
         if best is None or m.start() < best[0]:
             best = (m.start(), fn)
     return best
 
 
-def _subject_rank(sentence: str, factors: dict, combined_position: Optional[int]
-                  ) -> Optional[int]:
-    """The authoritative rank for the sentence's subject: a factor's rank if a factor
-    phrase is present, else the name's combined position if a combined phrase is present.
-    A named factor absent from the table -> ``None`` (undeterminable, never guessed)."""
+def _names_ticker(text: str, ticker: Optional[str]) -> bool:
+    """Does ``text`` name the narrated ticker (word-boundary, case-sensitive)? A rank claim
+    about THIS name generally names it; a generic role reference ("the best-ranked name")
+    does not — the discriminator for NARR-CHK-2 class 2."""
+    return bool(ticker) and re.search(rf"\b{re.escape(ticker)}\b", text) is not None
+
+
+def _subject_rank(text: str, factors: dict, combined_position: Optional[int],
+                  ticker: Optional[str] = None) -> Optional[int]:
+    """The authoritative rank for the text's subject: a factor's rank if a factor phrase is
+    present, else the name's combined position if a combined subject is present. The
+    combined position binds on an EXPLICIT metric word ("combined"/"rank-sum"), or on a
+    LOOSE phrase ("in the cohort") ONLY when the narrated name is named (else it is a
+    generic reference, not a claim about this name). A named factor absent from the table ->
+    ``None`` (undeterminable, never guessed)."""
     for pat, keys in _FACTOR_SUBJECTS:
-        if re.search(pat, sentence, re.I):
+        if re.search(pat, text, re.I):
             for k in keys:
                 if k in factors and factors[k] is not None:
                     return int(round(factors[k]))
             return None
-    if combined_position is not None and _COMBINED_SUBJECT.search(sentence):
-        return int(combined_position)
+    if combined_position is not None:
+        if _COMBINED_METRIC.search(text):
+            return int(combined_position)
+        if _COMBINED_LOOSE.search(text) and _names_ticker(text, ticker):
+            return int(combined_position)
     return None
 
 
 def _word_check(sentence: str, n: int, combined_position: Optional[int],
-                factors: dict) -> bool:
+                factors: dict, ticker: Optional[str] = None) -> bool:
     """Word-superlative claim vs the table (the original discipline, hedge-aware):
     - **citation vs ordinal**: an explicit ``rank R out of M`` with a superlative must
       agree (rank 2 is not "second-worst").
@@ -121,13 +160,13 @@ def _word_check(sentence: str, n: int, combined_position: Optional[int],
         m = int(cites[0][1]) if cites[0][1] else n
         return r != posfn(m)
     if not cites:                                # subject vs table (no explicit rank)
-        subj = _subject_rank(sentence, factors, combined_position)
+        subj = _subject_rank(sentence, factors, combined_position, ticker)
         return subj is not None and subj != posfn(n)
     return False                                 # >1 citation -> pairing ambiguous
 
 
 def _numeric_check(sentence: str, combined_position: Optional[int],
-                   factors: dict) -> bool:
+                   factors: dict, ticker: Optional[str] = None) -> bool:
     """Digit-ordinal claims bound to their NAMED factor, per clause (defect-b fix). Each
     comma/semicolon-separated clause states at most one ordinal about the factor it names;
     the ordinal is validated against THAT factor's rank — so factors named in any order
@@ -135,10 +174,10 @@ def _numeric_check(sentence: str, combined_position: Optional[int],
     (or a factor absent from the table), no ordinal, or more than one ordinal is skipped."""
     for clause in re.split(r"[,;]", sentence):
         nums = [int(m.group(1)) for m in _NUM_ORDINAL.finditer(clause)
-                if not _HEDGE.search(clause[:m.start()])]
+                if not _SKIP_BEFORE.search(clause[:m.start()])]
         if len(nums) != 1:
             continue
-        subj = _subject_rank(clause, factors, combined_position)
+        subj = _subject_rank(clause, factors, combined_position, ticker)
         if subj is not None and subj != nums[0]:
             return True
     return False
@@ -177,12 +216,13 @@ def check_narration(narrative: str, table: dict) -> list[str]:
         return []
     combined_position = table.get("combined_position")
     factors = table.get("factors", {}) or {}
+    ticker = table.get("ticker")
 
     flags: list[str] = []
     seen: set[str] = set()
     for sentence in _sentences(narrative):
-        if (_word_check(sentence, n, combined_position, factors)
-                or _numeric_check(sentence, combined_position, factors)):
+        if (_word_check(sentence, n, combined_position, factors, ticker)
+                or _numeric_check(sentence, combined_position, factors, ticker)):
             claim = _claim(sentence)
             if claim not in seen:
                 seen.add(claim)
