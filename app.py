@@ -1703,6 +1703,11 @@ def _render_company_check(result) -> None:
                     f"{format_factor_value(fc.factor, fc.value)} "
                     f"_[{fc.source}]_ — {fc.context}")
 
+    # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen reference run when the
+    # checked name had a recorded outcome; Company Check never issues one itself.
+    if result.verdict_of_record:
+        st.markdown(f"**VERDICT OF RECORD:** {result.verdict_of_record}")
+
     # Divergence flag — prominent.
     if result.divergence_flag:
         st.warning(f"**Price/fundamentals divergence** — {result.divergence_flag}")

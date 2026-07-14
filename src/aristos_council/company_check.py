@@ -113,6 +113,13 @@ class CompanyCheckResult:
     reference_cohort_n: int
     data_integrity: DataIntegrity
     pointer: str
+    # VERDICT OF RECORD (Spec 4D): the checked name's verdict+rank (or exclusion+reason)
+    # quoted VERBATIM from the latest frozen run of the reference universe — reported
+    # historical fact, NEVER recomputed from live data. The clause AFTER the label, e.g.
+    # "in the latest frozen run of financials_16_v1 (run 2026-07-10): SELL, rank 12 of 16."
+    # None when there is no reference, no frozen run, or the name was not in that run —
+    # in which case the closing boilerplate ("a verdict requires a universe run") stays.
+    verdict_of_record: Optional[str] = None
     # True when the lens-screen min_market_cap tested the SAME floor as the rank gate, so
     # market cap is printed ONCE (under GATES) and the SCREEN references it (ITEM 3).
     market_cap_in_gates: bool = False
@@ -156,14 +163,15 @@ def _latest_reference_run(runs_dir: Path, rank_strategy_id: str,
 def _cohort_ranked(reference_universe_id: str, rank_strategy_id: str, run_id: str, *,
                    runs_dir: Path, universes_dir: Path, strategies_dir: Path,
                    today: date):
-    """Replay the frozen run OFFLINE and return its ranked names (each carrying
-    factor_values). No network — a FrozenAdapter serves the recorded inputs."""
+    """Replay the frozen run OFFLINE and return the full pipeline result (ranked names —
+    each carrying factor_values — plus the excluded/unrateable partitions). No network —
+    a FrozenAdapter serves the recorded inputs, so the verdicts are byte-identical to the
+    original run (the VERDICT OF RECORD is that historical fact, not a live recompute)."""
     from .pipeline import run_rank_pipeline
-    res = run_rank_pipeline(
+    return run_rank_pipeline(
         None, rank_strategy_id, universe_id=reference_universe_id,
         universes_dir=universes_dir, strategies_dir=strategies_dir,
         ranker_only=True, replay_run_id=run_id, freeze_dir=runs_dir, today=today)
-    return res.ranked
 
 
 def _position_phrase(value: Optional[float], cohort_values: list[float], direction: str,
@@ -184,6 +192,33 @@ def _position_phrase(value: Optional[float], cohort_values: list[float], directi
     if better == 0:
         return f"ahead of all {n} {tail}"
     return f"ahead of {n - better} of {n} {tail}"
+
+
+def _verdict_of_record(ticker: str, cohort, cohort_result, cohort_n: int,
+                       reference_universe_id: str,
+                       ref_run_date: Optional[str]) -> Optional[str]:
+    """The clause quoted after "VERDICT OF RECORD:" — the checked name's outcome in the
+    latest frozen reference run, VERBATIM (Spec 4D). Ranked -> verdict + position; excluded
+    -> the recorded exclusion reason; not in the run (or no frozen run) -> None (the
+    closing boilerplate stays). NEVER recomputed from live data — the frozen replay's
+    verdicts are the original run's, reported as historical fact."""
+    if cohort_result is None:
+        return None
+    # Ranked in the frozen run: quote the verdict-of-record + 1-based position of <N>,
+    # matching the RANKED table's positional rank (best-first).
+    for pos, r in enumerate(cohort, 1):
+        if r.ticker == ticker:
+            return (f"in the latest frozen run of {reference_universe_id} "
+                    f"(run {ref_run_date}): {r.verdict.upper()}, "
+                    f"rank {pos} of {cohort_n}.")
+    # Excluded in the frozen run: quote the exclusion with its recorded reason.
+    for t, reason in cohort_result.excluded:
+        if t == ticker:
+            return (f"excluded in the latest frozen run of {reference_universe_id} "
+                    f"({ref_run_date}) — {reason}.")
+    # In the run but UNRATEABLE (no data -> no verdict), or not in the run at all: nothing
+    # to quote — no verdict of record exists for this name (house default: omit).
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -286,6 +321,7 @@ def run_company_check(
     # FACTORS — raw value + cohort position (from the latest frozen reference run).
     ref = _latest_reference_run(runs_dir, rank_strategy.id, _universe_tickers(
         reference_universe_id, universes_dir))
+    cohort_result = None
     cohort = None
     ref_run_id = ref_run_date = None
     cohort_n = 0
@@ -293,11 +329,14 @@ def run_company_check(
         ref_run_id, created = ref
         ref_run_date = (created[:10] if created else ref_run_id[:10])
         try:
-            cohort = _cohort_ranked(reference_universe_id, rank_strategy.id, ref_run_id,
-                                    runs_dir=runs_dir, universes_dir=universes_dir,
-                                    strategies_dir=strategies_dir, today=today)
-            cohort_n = len([r for r in cohort if not r.excluded])
+            cohort_result = _cohort_ranked(
+                reference_universe_id, rank_strategy.id, ref_run_id,
+                runs_dir=runs_dir, universes_dir=universes_dir,
+                strategies_dir=strategies_dir, today=today)
+            cohort = [r for r in cohort_result.ranked if not r.excluded]
+            cohort_n = len(cohort)
         except Exception:
+            cohort_result = None
             cohort = None                       # replay failed -> fall back to raw values
 
     factor_specs = [FactorSpec(fac.name, fac.direction, fac.missing)
@@ -323,8 +362,17 @@ def run_company_check(
             context=context))
     di.not_evaluated_factors = not_eval_factors
 
+    # VERDICT OF RECORD (Spec 4D) — quote the checked name's outcome VERBATIM from the
+    # frozen reference run. Company Check itself NEVER issues a verdict (a rank is a cohort
+    # statement); this only REPORTS one already recorded for this name in a past universe
+    # run. Renders only when a frozen run exists AND the name was in it (ranked or
+    # excluded); otherwise stays None and the closing boilerplate is kept.
+    verdict_of_record = _verdict_of_record(
+        ticker, cohort, cohort_result, cohort_n, reference_universe_id, ref_run_date)
+
     divergence = price_divergence_flag(fi, screen_criteria)
-    pointer = _pointer(screen_cells, gates, screen_less=screen_less)
+    pointer = _pointer(screen_cells, gates, screen_less=screen_less,
+                       has_record=verdict_of_record is not None)
 
     return CompanyCheckResult(
         ticker=ticker, company_name=company_name,
@@ -334,6 +382,7 @@ def run_company_check(
         divergence_flag=divergence, reference_available=cohort is not None,
         reference_run_id=ref_run_id, reference_run_date=ref_run_date,
         reference_cohort_n=cohort_n, data_integrity=di, pointer=pointer,
+        verdict_of_record=verdict_of_record,
         market_cap_in_gates=market_cap_in_gates, screen_less=screen_less)
 
 
@@ -410,12 +459,26 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
     return gates
 
 
+# The closing tail for a name that would appear on a universe list. Normally it says a
+# verdict requires a universe run; when a VERDICT OF RECORD is quoted above (Spec 4D), the
+# name ALREADY has one from a past run, so the boilerplate is REPLACED with a pointer to
+# it. Either way the sacred rule holds: a rank is a cohort statement, never issued LIVE for
+# one name.
+_NO_RECORD_TAIL = ("a verdict requires a universe run (a rank is a cohort statement, "
+                   "never issued for one name)")
+_RECORD_TAIL = ("see the VERDICT OF RECORD above, quoted from that frozen run (a rank is "
+                "a cohort statement, never issued live for one name)")
+
+
 def _pointer(screen: list[ScreenCell], gates: list[GateCell],
-             screen_less: bool = False) -> str:
+             screen_less: bool = False, has_record: bool = False) -> str:
     """The closing pointer — never a verdict. Names the confirmed fails that would keep
     the name OFF a universe list, or says it passes and points at a universe run. A
     screen-less strategy (CCFIX-2) never claims a SCREEN exclusion — only the gates can
-    exclude, and it points that out explicitly."""
+    exclude, and it points that out explicitly. When ``has_record`` (a VERDICT OF RECORD
+    was quoted above, Spec 4D), the "a verdict requires a universe run" boilerplate is
+    swapped for a pointer to that quoted record."""
+    tail = _RECORD_TAIL if has_record else _NO_RECORD_TAIL
     gate_fails = [g.name for g in gates if g.status == "FAIL"]
     if screen_less:
         if gate_fails:
@@ -424,15 +487,13 @@ def _pointer(screen: list[ScreenCell], gates: list[GateCell],
                     "enters via ranking; a rank/verdict is a cohort statement, so run the "
                     "universe to place it.")
         return ("This strategy screens nothing (quality enters via ranking) and passes "
-                "the sector/cap gates — a verdict requires a universe run (a rank is a "
-                "cohort statement, never issued for one name).")
+                f"the sector/cap gates — {tail}.")
     fails = [c.name for c in screen if c.status == "FAIL"] + gate_fails
     if fails:
         return ("Would be EXCLUDED from a universe list (a screen fail, NOT a SELL) on: "
                 + ", ".join(fails) + ". A rank/verdict is a cohort statement — run the "
                 "universe to place it.")
-    return ("Passes the screen — a verdict requires a universe run (a rank is a cohort "
-            "statement, never issued for one name).")
+    return f"Passes the screen — {tail}."
 
 
 # --------------------------------------------------------------------------- #
@@ -519,6 +580,12 @@ def format_company_check(result: CompanyCheckResult) -> str:
         lines.append(f"  {fc.label} ({fc.factor}): "
                      f"{format_factor_value(fc.factor, fc.value)} "
                      f"[{fc.source}] — {fc.context}")
+
+    # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen run, right after the
+    # factor block. Renders only when the checked name had a recorded outcome; otherwise
+    # nothing here and the closing boilerplate keeps "a verdict requires a universe run".
+    if result.verdict_of_record:
+        lines.append(f"VERDICT OF RECORD: {result.verdict_of_record}")
 
     if result.divergence_flag:
         lines.append("")
