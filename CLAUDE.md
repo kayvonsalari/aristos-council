@@ -130,6 +130,10 @@ LangGraph orchestration, Anthropic models, pydantic state.
    (`_non_usd_currency` in tools/screening.py), so `run_screen` stays equivalent
    to the frozen `run_strategy_screen` reference.
 
+## Documentation duty
+
+Every change that adds or alters user-visible functionality (new strategy, factor, gate, universe, UI element, report line, data source) carries a documentation duty: before finishing, assess which docs are affected (README, CALCULATIONS.md, REPORT_MARKS.md, strategy YAML rationales) and — do not silently edit them. Instead: (a) if working a spec that already includes doc items, do them as specced; (b) otherwise, list the proposed doc updates explicitly in the PR description or done-report as 'DOCS PROPOSED: …' with one line per change, and WAIT for owner approval before a docs commit. Never let functionality merge undocumented without at least the proposal list; never write docs the owner hasn't seen described. A gap sweep like DOCS-1 should not be needed again — this rule replaces it with a per-change duty.
+
 ## Criterion registry (how the screen works, Sprint 4A)
 
 The screen is a registry of named, pure criterion functions; strategies select
