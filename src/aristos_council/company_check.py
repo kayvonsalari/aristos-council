@@ -30,8 +30,10 @@ from .data.adapter import display_name, implausible_fields
 from .factors import (
     FACTOR_REGISTRY,
     FactorInputs,
+    asset_kind_display,
     compute_factor_outcomes,
     gather_factor_inputs,
+    is_asset_kind_out_of_scope,
     is_borderline_fail,
     is_payout_uncovered,
     is_sector_excluded,
@@ -398,6 +400,23 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
     """The rank-strategy universe gates as PASS/FAIL/NOT-EVALUATED rows (confirmed-only,
     exactly like the pipeline: a missing input NOT-EVALUATES, never silently excludes)."""
     gates: list[GateCell] = []
+    # Asset-kind scope (ETF-1 ITEM 2) — fires FIRST in the pipeline, so it leads here.
+    # Confirmed-only: unknown quoteType NOT-EVALUATES, an out-of-scope kind FAILs with the
+    # scope message, an in-scope kind PASSes. Rendered like the sector-scope rationale.
+    kinds = getattr(rank_strategy, "asset_kinds", []) or []
+    if kinds:
+        qt = getattr(f, "quote_type", None) if f else None
+        if qt is None:
+            gates.append(GateCell("asset_kind", "NOT-EVALUATED",
+                                  f"asset kind unknown; scope is {', '.join(kinds)}"))
+        elif is_asset_kind_out_of_scope(qt, kinds):
+            gates.append(GateCell(
+                "asset_kind", "FAIL",
+                f"asset kind '{asset_kind_display(qt)}' outside this strategy's scope",
+                rationale=getattr(rank_strategy, "asset_kind_rationale", "") or ""))
+        else:
+            gates.append(GateCell("asset_kind", "PASS",
+                                  f"asset kind '{asset_kind_display(qt)}' within scope"))
     # Sector exclusion.
     sectors = getattr(rank_strategy, "exclude_sectors", []) or []
     if sectors:

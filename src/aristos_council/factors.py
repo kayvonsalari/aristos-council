@@ -377,6 +377,61 @@ def is_sector_out_of_scope(sector: Optional[str], include_sectors) -> bool:
     return sector.strip().lower() not in {s.strip().lower() for s in include_sectors}
 
 
+# Vendor quoteType -> normalized asset kind (ETF-1 ITEM 2). yfinance reports
+# "EQUITY"/"ETF"/"MUTUALFUND"/"INDEX"/…; the gate reasons in lowercase kinds. An
+# UNKNOWN quoteType maps to its own lowercased form (so a new vendor type gates
+# honestly against an equity/etf lens rather than silently passing).
+_QUOTE_TYPE_KIND = {
+    "EQUITY": "equity",
+    "ETF": "etf",
+    "MUTUALFUND": "mutualfund",
+    "INDEX": "index",
+    "CURRENCY": "currency",
+    "CRYPTOCURRENCY": "cryptocurrency",
+}
+# Display form for the gate message ("asset kind 'ETF' outside this strategy's scope").
+_KIND_DISPLAY = {"equity": "Equity", "etf": "ETF", "mutualfund": "Mutual Fund",
+                 "index": "Index", "currency": "Currency",
+                 "cryptocurrency": "Cryptocurrency"}
+
+
+def normalize_asset_kind(quote_type: Optional[str]) -> Optional[str]:
+    """Vendor quoteType -> normalized lowercase asset kind, or None when absent."""
+    if not quote_type or not quote_type.strip():
+        return None
+    q = quote_type.strip().upper()
+    return _QUOTE_TYPE_KIND.get(q, q.lower())
+
+
+def asset_kind_display(quote_type: Optional[str]) -> str:
+    """The display form of a detected kind for the gate message (e.g. 'ETF')."""
+    kind = normalize_asset_kind(quote_type)
+    if kind is None:
+        return ""
+    return _KIND_DISPLAY.get(kind, kind.upper())
+
+
+def is_asset_kind_out_of_scope(quote_type: Optional[str], asset_kinds) -> bool:
+    """CONFIRMED-ONLY asset-kind gate (ETF-1 ITEM 2) — the wall between asset classes.
+
+    True — the name is OUT OF SCOPE and must be gated — only when ``asset_kinds`` is
+    non-empty AND the vendor ``quote_type`` is PRESENT and its normalized kind is NOT
+    among them (an equity lens admits only ``equity``; an ETF lens only ``etf``). A
+    missing/None quote_type is NEVER gated (same never-drop-on-unknown discipline as the
+    sector gate — absent provider data can't silently drop a name). An empty asset_kinds
+    scopes nothing (every kind in scope), so a strategy that omits it is unchanged.
+
+    This must fire BEFORE any screen or factor path: the vendor serves look-through
+    "fundamentals" for an index tracker happily, so an ETF leaking into a stock lens
+    would produce quiet garbage rather than an honest exclusion."""
+    if not asset_kinds or not quote_type:
+        return False
+    kind = normalize_asset_kind(quote_type)
+    if kind is None:
+        return False
+    return kind not in {k.strip().lower() for k in asset_kinds}
+
+
 def is_payout_uncovered(payout_ratio: Optional[float],
                         max_payout: Optional[float]) -> bool:
     """CONFIRMED-ONLY payout-coverage gate. True only when payout_ratio is PRESENT and

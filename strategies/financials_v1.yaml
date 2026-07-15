@@ -31,6 +31,14 @@ description: >-
 suggested_universes:
   - financials_16_v1
 
+# Asset-kind scope (ETF-1 ITEM 2): a stock lens admits ONLY equities. A financials
+# ETF leaking in would be ranked on the vendor's look-through "fundamentals" (quiet
+# garbage), so the confirmed-only kind gate walls it out before any factor path.
+asset_kinds:
+  - equity
+asset_kind_rationale: >-
+  P/B and ROE describe a bank or insurer's own balance sheet, not a fund's; an ETF
+  scored on look-through vendor fundamentals is quiet garbage, so it is gated out.
 factors:
   - name: price_to_book       # value    (registry direction: low — cheaper better)
   - name: return_on_equity    # quality  (registry direction: high)
