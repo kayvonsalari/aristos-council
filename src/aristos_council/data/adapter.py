@@ -239,6 +239,20 @@ class Fundamentals:
     price_to_book: float | None = None
     return_on_equity: float | None = None
 
+    # --- ETF asset-class fields (ETF-1) ------------------------------------- #
+    # quote_type is the vendor's instrument classification (yfinance ``quoteType``:
+    # "EQUITY", "ETF", "MUTUALFUND", "INDEX", …), used ONLY by the confirmed-only
+    # asset-kind gate — a missing value never gates (mirrors the sector-gate
+    # convention). net_expense_ratio (yfinance ``netExpenseRatio``, falling back to
+    # ``annualReportExpenseRatio``) is the fund's ongoing cost, and total_assets
+    # (``totalAssets``) is the fund size. Both are the ETF-lens factors; None when the
+    # provider omits them -> the factor abstains (never excludes). The expense-ratio
+    # value is the vendor-reported number as-is; the lens ranks it RELATIVELY (direction
+    # low), so its unit convention does not affect the ranking.
+    quote_type: str | None = None
+    net_expense_ratio: float | None = None
+    total_assets: float | None = None
+
     # --- Annual income-statement & balance-sheet series (Sprint 4B) --------- #
     # NEWEST-FIRST lists of clean annual values (NaN years and the trailing
     # empty column dropped by the adapter). Empty when the provider has none —
