@@ -218,17 +218,21 @@ def test_momentum_factor_renders_as_signed_percent():
 # --------------------------------------------------------------------------- #
 # ETFCHK-2 — plain-English gloss on the ETF expense-ratio line
 # --------------------------------------------------------------------------- #
+# ETFCHK-3: the vendor net_expense_ratio is a PERCENT (SCHD 0.06% -> 0.06), NOT a
+# fraction. VYM's 0.06% expense ratio arrives as 0.06 (probe 2026-07-15).
 _ETF = Fundamentals(
     ticker="VYM", company_name="Vanguard High Dividend Yield ETF",
-    net_expense_ratio=0.0006, total_assets=6.0e10, dividend_yield=0.028,
+    net_expense_ratio=0.06, total_assets=6.0e10, dividend_yield=0.028,
     quote_type="ETF")
 
 
 def test_expense_ratio_gloss_renders_for_etf_strategy():
     r = _check(_ETF, ticker="VYM", strat="etf_dividend_v1")
     text = format_company_check(r)
-    # the fee is spelled out in plain English, computed from the ratio (0.0006 -> €0.60).
+    # the fee is spelled out in plain English (ETFCHK-3: the 0.06% percent value 0.06
+    # is a €0.60 annual fee per €1,000, NOT €60.00).
     assert "the fund's annual fee: €0.60 per €1,000 held, charged every year" in text
+    assert "€60.00" not in text                              # the old 100×-off reading
     # the gloss lives ON the expense_ratio line, and the basis tag ([source]) and cohort
     # context (— …) around it are untouched.
     line = next(l for l in text.splitlines() if "(expense_ratio):" in l)
@@ -239,10 +243,11 @@ def test_expense_ratio_gloss_renders_for_etf_strategy():
 
 def test_expense_ratio_per_1000_arithmetic():
     from aristos_council.company_check import _expense_ratio_gloss
-    # 0.0006 -> €0.60, 0.0061 -> €6.10 (fee = ratio × €1,000, two decimals).
-    assert _expense_ratio_gloss(0.0006) == (
+    # ETFCHK-3 fixtures: the vendor value is a PERCENT, so fee = (value/100) × €1,000 ==
+    # value × 10. 0.06 -> €0.60, 0.61 -> €6.10 (two decimals).
+    assert _expense_ratio_gloss(0.06) == (
         " — the fund's annual fee: €0.60 per €1,000 held, charged every year")
-    assert _expense_ratio_gloss(0.0061) == (
+    assert _expense_ratio_gloss(0.61) == (
         " — the fund's annual fee: €6.10 per €1,000 held, charged every year")
     # a missing ratio has nothing to gloss.
     assert _expense_ratio_gloss(None) == ""

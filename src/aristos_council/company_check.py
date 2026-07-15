@@ -544,11 +544,17 @@ def format_factor_value(factor: str, value: Optional[float]) -> str:
 def _expense_ratio_gloss(value: Optional[float]) -> str:
     """Plain-English gloss for the ETF expense-ratio line (ETFCHK-2): the raw ratio reads
     as a bare number, so spell out what it costs — the fund's annual fee in euros per
-    €1,000 held, computed from the ratio (fee = ratio × €1,000). Empty when the value is
-    absent (nothing to gloss). Leading em-dash so it appends onto the value in the line."""
+    €1,000 held. Empty when the value is absent (nothing to gloss). Leading em-dash so it
+    appends onto the value in the line.
+
+    UNIT ASSUMPTION (ETFCHK-3): the vendor ``net_expense_ratio`` is a PERCENT, not a
+    fraction — SCHD's 0.06% expense ratio arrives as ``0.06`` (see the ETF coverage probe,
+    reports/exploratory/etf_coverage_probe_2026-07-15.md). So the annual fee per €1,000 is
+    ``(value / 100) × €1,000 == value × 10`` (0.06 -> €0.60, 0.61 -> €6.10). The earlier
+    ``value × €1,000`` treated it as a fraction and read 100× too high (0.06 -> €60.00)."""
     if value is None:
         return ""
-    per_1000 = value * 1000
+    per_1000 = value * 10   # (value percent / 100) × €1,000 held
     return (f" — the fund's annual fee: €{per_1000:.2f} per €1,000 held, "
             "charged every year")
 

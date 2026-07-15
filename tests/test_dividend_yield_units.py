@@ -77,3 +77,47 @@ def test_etf_absent_yield_is_not_evaluated_never_a_defaulted_zero():
     assert _dividend_yield({"quoteType": "ETF", "trailingAnnualDividendYield": 0.0,
                             "dividendYield": 0.0, "yield": 0.0}) is None       # all zero
     assert _dividend_yield({"quoteType": "ETF", "dividendYield": 0.0}) is None
+
+
+# --- ETFCHK-3: the LIVE-shape regression the ETFCHK-1 mocks missed ------------------ #
+# A realistic SCHD `.info` payload, close to what yfinance returns for the fund (the
+# "real payload shape", not a 2-key hand-built mock): the canonical `yield` carries the
+# true 3.3% distribution, while the equity dividend fields sit at a spurious 0.0.
+_SCHD_INFO = {
+    "symbol": "SCHD", "shortName": "Schwab US Dividend Equity ETF",
+    "longName": "Schwab U.S. Dividend Equity ETF", "quoteType": "ETF",
+    "yield": 0.033, "trailingAnnualDividendYield": 0.0,
+    "trailingAnnualDividendRate": 0.0, "dividendRate": 0.0,
+    "netExpenseRatio": 0.06, "totalAssets": 95734071296,
+    "currency": "USD", "regularMarketPrice": 27.5,
+}
+
+
+def test_schd_real_shape_reads_true_distribution_yield():
+    # The full live shape reads the true ~3.3%, NEVER the spurious equity 0.0.
+    assert abs(_dividend_yield(_SCHD_INFO) - 0.033) < 1e-9
+
+
+def test_schd_live_path_survives_a_dropped_quotetype():
+    # ROOT CAUSE (ETFCHK-3): yfinance flakily drops `quoteType` on a fetch, and the daily
+    # cache freezes that shape. With quoteType gone, the OLD code fell to the equity path,
+    # read trailingAnnualDividendYield == 0.0, and fabricated `0 [computed]`. The fund-only
+    # `yield` key must still route SCHD to the fund path -> the true 3.3%, never a 0.
+    info = {k: v for k, v in _SCHD_INFO.items() if k != "quoteType"}
+    assert "quoteType" not in info
+    assert abs(_dividend_yield(info) - 0.033) < 1e-9
+
+
+def test_schd_yield_survives_the_cache_serialisation_round_trip():
+    # The Company Check adapter reads through the daily cache; prove the cache layer does
+    # NOT normalise the true yield away (hypothesis 1 in the issue) — the value computed at
+    # fetch survives serialise -> deserialise byte-for-byte.
+    from aristos_council.data.adapter import Fundamentals
+    from aristos_council.data.cache import _deser_fundamentals, _ser_fundamentals
+
+    f = Fundamentals(ticker="SCHD", company_name="Schwab U.S. Dividend Equity ETF",
+                     quote_type="ETF", dividend_yield=_dividend_yield(_SCHD_INFO),
+                     net_expense_ratio=0.06, total_assets=95734071296)
+    round_tripped = _deser_fundamentals(_ser_fundamentals(f))
+    assert abs(round_tripped.dividend_yield - 0.033) < 1e-9
+    assert round_tripped.quote_type == "ETF"

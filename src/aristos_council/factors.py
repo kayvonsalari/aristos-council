@@ -219,7 +219,12 @@ def _expense_ratio(fi: FactorInputs) -> Optional[float]:
     """ETF expense ratio (``net_expense_ratio``) — the ongoing cost that compounds
     against the holder forever, so direction is LOW (cheaper ranks better). Vendor value
     as-is; the lens ranks it RELATIVELY, so its unit convention doesn't affect the rank.
-    None when absent -> the lens abstains."""
+    None when absent -> the lens abstains.
+
+    UNIT (ETFCHK-3): the vendor value is a PERCENT, not a fraction — SCHD's 0.06% arrives
+    as ``0.06``. Ranking is unit-invariant so this factor is untouched, but any absolute
+    presentation of the number (e.g. the fee gloss in company_check._expense_ratio_gloss)
+    MUST divide by 100 first."""
     f = fi.fundamentals
     return f.net_expense_ratio if f is not None else None
 
