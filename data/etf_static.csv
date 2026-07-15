@@ -30,3 +30,18 @@
 # matches no real fund, so it is never served. Real rows are added human-verified.
 ticker,expense_ratio,fund_size,distribution_yield,share_class,domicile,source,as_of
 EXMPL,0.06,1000000000,0.035,dist,US,example row — not real data,2026-06-01
+VHYL.L,0.29,7680000000,0.0463,dist,IE,EODHD fundamentals API,2026-07-15
+FUSD.L,0.25,1178880000,0.0143,dist,IE,EODHD fundamentals API,2026-07-15
+USDV.L,0.35,3699870000,0.0311,dist,IE,EODHD fundamentals API,2026-07-15
+ZPRG.DE,0.45,1044292480,0.0577,dist,IE,EODHD fundamentals API,2026-07-15
+TDIV.AS,0.38,8013193262,0.0318,dist,NL,EODHD fundamentals API,2026-07-15
+ISPA.DE,0.46,4564701434,0.0376,dist,DE,EODHD fundamentals API,2026-07-15
+SEDY.L,0.65,1266000000,0.0923,dist,IE,EODHD fundamentals API,2026-07-15
+IDVY.AS,0.40,1546513567,0.0456,dist,IE,EODHD fundamentals API,2026-07-15
+SPYW.DE,0.30,1666281346,0.0354,dist,IE,EODHD fundamentals API,2026-07-15
+EQQQ.L,0.30,13390438020,0.0101,dist,IE,EODHD fundamentals API,2026-07-15
+CNDX.L,0.30,,,acc,IE,EODHD fundamentals API — AUM implausible (270B) omitted pending EODHD-1 diagnosis,2026-07-15
+XDEM.DE,0.26,2175189956,0.0339,dist,IE,EODHD fundamentals API,2026-07-15
+IWMO.L,0.25,2619980000,0,acc,IE,EODHD fundamentals API,2026-07-15
+IUIT.L,0.15,9852580000,0,acc,IE,EODHD fundamentals API,2026-07-15
+SMH.L,0.35,8406000000,0,acc,IE,EODHD fundamentals API,2026-07-15

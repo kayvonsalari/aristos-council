@@ -34,9 +34,12 @@ asset_kind_rationale: >-
   Expense ratio and fund size are fund attributes; an operating company has none of
   them, so a non-ETF is gated out of this lens.
 
-# Suggested universe (UNI-1): the ITEM-4 all-US growth-ETF list.
+# Suggested universes (UNI-1): the ITEM-4 all-US growth-ETF list, plus the euro-
+# investable UCITS cohort (UCITS-1, observation only). Both are selectable; the all-US
+# list stays first (currency-clean, vendor-rich).
 suggested_universes:
   - etf_growth_us_v1
+  - etf_growth_ucits_v1
 
 factors:
   - name: expense_ratio        # cost    — LOWER ranks better (compounds against holder)
