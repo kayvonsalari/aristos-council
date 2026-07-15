@@ -291,13 +291,48 @@ def _dividend_yield(info: dict) -> float | None:
     ``trailingAnnualDividendYield`` has stayed a DECIMAL (0.0289). PREFER the decimal
     field; fall back to the percent field / 100. The >100% backstop then catches any
     further drift. (Do NOT read the raw ``dividendYield`` untouched — that was the 100x
-    bug: 2.89 compared as if it were 289%.)"""
+    bug: 2.89 compared as if it were 289%.)
+
+    FUNDS (ETF / mutual fund) take a distinct path (ETFCHK-1): their canonical
+    distribution yield is the ``yield`` key (a DECIMAL), and the equity dividend fields
+    are UNRELIABLE for a fund — yfinance frequently returns a spurious ``0.0`` in a flaky
+    ``info`` block for a fund that truly distributes (the same rule-3 flakiness that drops
+    ``dividendRate``). Reading that ``0.0`` fabricated a false ``0`` distribution yield
+    (Company Check rendered ``0 [computed]`` for SCHD). ``_fund_distribution_yield`` reads
+    the canonical field, prefers the first POSITIVE source, and NOT-EVALUATES (None) when
+    no positive source exists — never a defaulted ``0`` (the ``-0 ROIC`` bug class)."""
+    if _is_fund_quote_type(info.get("quoteType")):
+        return _fund_distribution_yield(info)
     trailing = _as_float(info.get("trailingAnnualDividendYield"))
     if trailing is not None:
         return sane_dividend_yield(trailing)
     pct = _as_float(info.get("dividendYield"))
     if pct is not None:
         return sane_dividend_yield(pct / 100.0)   # percent -> decimal
+    return None
+
+
+def _is_fund_quote_type(quote_type: object) -> bool:
+    """True for a pooled-fund vendor ``quoteType`` (ETF / mutual fund) — the kinds whose
+    distribution yield must come from the fund ``yield`` field, not the equity dividend
+    fields (ETFCHK-1). Missing/other kinds take the equity path unchanged."""
+    return isinstance(quote_type, str) and quote_type.strip().upper() in {
+        "ETF", "MUTUALFUND"}
+
+
+def _fund_distribution_yield(info: dict) -> float | None:
+    """A fund's trailing distribution yield as a DECIMAL (ETFCHK-1). The canonical source
+    is the ``yield`` key; the equity dividend fields are consulted only as fallbacks and
+    only when POSITIVE, since yfinance returns a spurious ``0.0`` there for funds that
+    truly distribute. Returns the FIRST PRESENT, POSITIVE source; a genuinely absent yield
+    (no positive source anywhere) is NOT-EVALUATED (None), NEVER a defaulted ``0`` — a
+    fabricated zero is the same fault class as the ``-0 ROIC`` bug (absent != zero)."""
+    pct = _as_float(info.get("dividendYield"))
+    for v in (_as_float(info.get("yield")),
+              _as_float(info.get("trailingAnnualDividendYield")),
+              (pct / 100.0) if pct is not None else None):   # percent -> decimal
+        if v is not None and v > 0:
+            return sane_dividend_yield(v)
     return None
 
 

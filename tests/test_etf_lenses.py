@@ -114,3 +114,59 @@ def test_dividend_lens_ranks_all_ten_etfs_none_excluded():
     # on that factor than VIG (0.0151, lowest). Lower factor-rank number == better.
     ranks = {r.ticker: r.factor_ranks["distribution_yield"] for r in result.ranked}
     assert ranks["SPYD"] < ranks["VIG"]
+
+
+# --------------------------------------------------------------------------- #
+# ETFCHK-1 — Company Check renders the TRUE ETF distribution yield, and an absent
+# yield renders NOT-EVALUATED (never a defaulted 0). The universe-run path (above) is
+# byte-unchanged: these render tests exercise the single-name diagnostic only.
+# --------------------------------------------------------------------------- #
+def _etf_company_check(dividend_yield):
+    from aristos_council.company_check import run_company_check
+    from aristos_council.data.adapter import MarketDataAdapter, PriceBar, PriceHistory
+
+    class _OneEtf(MarketDataAdapter):
+        name = "fake"
+
+        def get_fundamentals(self, ticker):
+            return Fundamentals(
+                ticker=ticker, company_name="Schwab US Dividend Equity ETF",
+                quote_type="ETF", dividend_yield=dividend_yield,
+                net_expense_ratio=0.06, total_assets=9.5e10)
+
+        def get_price_history(self, ticker, *, start, end):
+            return _flat()
+
+        def get_dividend_history(self, ticker, *, start, end):
+            return []
+
+    return run_company_check(
+        "SCHD", "etf_dividend_v1", "", adapter=_OneEtf(),
+        strategies_dir=STRAT_DIR, universes_dir=STRAT_DIR.parent / "universes",
+        runs_dir=STRAT_DIR.parent / "runs", today=date(2026, 6, 30))
+
+
+def test_company_check_renders_true_etf_distribution_yield():
+    from aristos_council.company_check import format_company_check
+
+    r = _etf_company_check(0.033)
+    dy = next(fc for fc in r.factors if fc.factor == "distribution_yield")
+    assert dy.value == 0.033 and dy.source == "computed"
+    text = format_company_check(r)
+    assert "0.033" in text
+    assert "distribution_yield" not in r.data_integrity.not_evaluated_factors
+
+
+def test_company_check_absent_etf_yield_is_not_evaluated_never_zero():
+    from aristos_council.company_check import format_company_check
+
+    r = _etf_company_check(None)
+    dy = next(fc for fc in r.factors if fc.factor == "distribution_yield")
+    assert dy.value is None and dy.source == "abstained"        # NOT-EVAL, not a 0
+    assert "distribution_yield" in r.data_integrity.not_evaluated_factors
+    # the rendered yield line must NOT fabricate a 0 [computed]; it abstains instead
+    text = format_company_check(r)
+    assert "Distribution yield (distribution_yield): 0 [computed]" not in text
+    yield_line = next(ln for ln in text.splitlines()
+                      if "(distribution_yield):" in ln)
+    assert "[abstained]" in yield_line and "[computed]" not in yield_line
