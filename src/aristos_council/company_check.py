@@ -541,6 +541,18 @@ def format_factor_value(factor: str, value: Optional[float]) -> str:
     return _fmt_num(value)
 
 
+def _expense_ratio_gloss(value: Optional[float]) -> str:
+    """Plain-English gloss for the ETF expense-ratio line (ETFCHK-2): the raw ratio reads
+    as a bare number, so spell out what it costs — the fund's annual fee in euros per
+    €1,000 held, computed from the ratio (fee = ratio × €1,000). Empty when the value is
+    absent (nothing to gloss). Leading em-dash so it appends onto the value in the line."""
+    if value is None:
+        return ""
+    per_1000 = value * 1000
+    return (f" — the fund's annual fee: €{per_1000:.2f} per €1,000 held, "
+            "charged every year")
+
+
 def format_company_check(result: CompanyCheckResult) -> str:
     """The text report the CLI prints — the SAME content the UI renders."""
     lines = [
@@ -596,8 +608,12 @@ def format_company_check(result: CompanyCheckResult) -> str:
            else "reference: none available — run the universe once for context")
     lines.append(f"FACTOR VALUES + CONTEXT ({ref}):")
     for fc in result.factors:
+        # ETFCHK-2: gloss the expense-ratio line with its plain-English per-€1,000 fee;
+        # the basis tag ([source]) and cohort context (— context) are untouched. Empty
+        # for every other factor, so stock-strategy output stays byte-for-byte identical.
+        gloss = _expense_ratio_gloss(fc.value) if fc.factor == "expense_ratio" else ""
         lines.append(f"  {fc.label} ({fc.factor}): "
-                     f"{format_factor_value(fc.factor, fc.value)} "
+                     f"{format_factor_value(fc.factor, fc.value)}{gloss} "
                      f"[{fc.source}] — {fc.context}")
 
     # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen run, right after the
