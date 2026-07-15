@@ -1,0 +1,33 @@
+# etf_dividend_ucits_v1 — euro-investable UCITS dividend-ETF universe (UCITS-1).
+# ==============================================================================
+# The 9 UCITS-domiciled, euro-investable dividend-oriented ETFs the etf_dividend_v1 lens
+# ranks over. Deferred from the all-US v1 (FIN-1 precedent) until the slow ETF fields had
+# a source: they now arrive from the committed static layer (ETF-STATIC-1), EODHD
+# fundamentals-API-sourced and dated. OBSERVATION ONLY — never graded on a scoreboard;
+# this cohort exists to watch how a euro-investable dividend lens behaves, not to rank
+# for a verdict of record.
+id: etf_dividend_ucits_v1
+display_name: Dividend ETFs (UCITS)
+role: euro-investable exploration — observation only
+description: >-
+  Euro-investable UCITS dividend-oriented ETFs for the etf_dividend_v1 lens. The slow
+  factor fields (expense ratio, fund size, distribution yield) are served from the
+  committed static layer (EODHD-fundamentals-API-sourced, dated), not the free vendor.
+created: "2026-07-15"
+rationale: >-
+  Euro-investable UCITS cohort — the deferred European counterpart to etf_dividend_us_v1.
+  Slow fields are static-layer/EODHD-sourced (ETF-STATIC-1), so a run replays them
+  byte-identically. Every name here is a DIST (distributing) share class, which is what a
+  dividend lens should rank; the dividend cohort's v2 should continue to prefer DIST share
+  classes so the distribution-yield factor reflects a real income stream rather than an
+  accumulating fund's structural zero.
+tickers:
+  - VHYL.L
+  - FUSD.L
+  - USDV.L
+  - ZPRG.DE
+  - TDIV.AS
+  - ISPA.DE
+  - SEDY.L
+  - IDVY.AS
+  - SPYW.DE

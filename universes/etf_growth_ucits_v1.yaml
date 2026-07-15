@@ -1,0 +1,34 @@
+# etf_growth_ucits_v1 — euro-investable UCITS growth-ETF universe (UCITS-1).
+# ==========================================================================
+# The 6 UCITS-domiciled, euro-investable growth-oriented ETFs the etf_growth_v1 lens ranks
+# over. Deferred from the all-US v1 (FIN-1 precedent) until the slow ETF fields had a
+# source: they now arrive from the committed static layer (ETF-STATIC-1), EODHD
+# fundamentals-API-sourced and dated. OBSERVATION ONLY — never graded on a scoreboard.
+#
+# Most names here are ACC (accumulating) share classes, so their distribution yield is a
+# TRUE zero — an accumulating fund reinvests rather than distributing. The lens ranks that
+# zero honestly; it is a PRODUCT FINDING (the share class does not distribute), not a
+# missing-data error, and it is distinct from an abstention (CNDX abstains on fund_size
+# because the vendor value was implausible and was deliberately withheld).
+id: etf_growth_ucits_v1
+display_name: Growth ETFs (UCITS)
+role: euro-investable exploration — observation only
+description: >-
+  Euro-investable UCITS growth-oriented ETFs for the etf_growth_v1 lens. The slow factor
+  fields (expense ratio, fund size, distribution yield) are served from the committed
+  static layer (EODHD-fundamentals-API-sourced, dated), not the free vendor. ACC share
+  classes rank on a true zero distribution yield — a product finding, not an error.
+created: "2026-07-15"
+rationale: >-
+  Euro-investable UCITS cohort — the deferred European counterpart to etf_growth_us_v1.
+  Slow fields are static-layer/EODHD-sourced (ETF-STATIC-1), so a run replays them
+  byte-identically. ACC (accumulating) share classes carry a true zero distribution yield
+  (they reinvest rather than distribute); the lens ranks that zero honestly as a product
+  finding, never a data error.
+tickers:
+  - EQQQ.L
+  - CNDX.L
+  - XDEM.DE
+  - IWMO.L
+  - IUIT.L
+  - SMH.L

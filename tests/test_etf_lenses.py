@@ -49,7 +49,7 @@ def test_etf_dividend_lens_shape():
     assert [f.name for f in s.factors] == [
         "distribution_yield", "expense_ratio", "fund_size", "momentum_12m"]
     assert s.missing == "neutral"                     # abstain, never exclude
-    assert s.suggested_universes == ["etf_dividend_us_v1"]
+    assert s.suggested_universes == ["etf_dividend_us_v1", "etf_dividend_ucits_v1"]
     assert s.council_screen_strategy is None          # rank-first, no screen
     assert s.prefilter_screen is False
 
@@ -60,7 +60,7 @@ def test_etf_growth_lens_shape_and_verbatim_honesty_note():
     assert s.asset_kinds == ["etf"]
     assert [f.name for f in s.factors] == ["expense_ratio", "momentum_12m", "fund_size"]
     assert s.missing == "neutral"
-    assert s.suggested_universes == ["etf_growth_us_v1"]
+    assert s.suggested_universes == ["etf_growth_us_v1", "etf_growth_ucits_v1"]
     # the honesty note travels with the lens, verbatim
     assert GROWTH_HONESTY_NOTE in s.rationale
 

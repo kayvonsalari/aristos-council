@@ -207,14 +207,65 @@ def test_default_path_points_at_repo_data_dir():
         Path(__file__).resolve().parents[1] / "data" / "etf_static.csv"
 
 
-def test_committed_seed_has_only_the_example_row():
+def test_committed_seed_carries_example_and_ucits_rows():
     rows = load_static(DEFAULT_STATIC_PATH)
-    # header-and-example-row only: real rows are human-verified and supplied separately,
-    # so no real fund is touched and every existing run replays byte-identically.
-    assert set(rows) == {"EXMPL"}
+    # the non-real example row is still present and unchanged...
     ex = rows["EXMPL"]
     assert ex.share_class == "dist" and ex.domicile == "US"
     assert ex.expense_ratio == 0.06 and ex.distribution_yield == 0.035
+    # ...alongside the 15 UCITS-1 EODHD-sourced rows (9 dividend + 6 growth).
+    ucits = [
+        "VHYL.L", "FUSD.L", "USDV.L", "ZPRG.DE", "TDIV.AS", "ISPA.DE", "SEDY.L",
+        "IDVY.AS", "SPYW.DE", "EQQQ.L", "CNDX.L", "XDEM.DE", "IWMO.L", "IUIT.L", "SMH.L",
+    ]
+    assert set(ucits) <= set(rows)
+    assert set(rows) == {"EXMPL", *ucits}
+
+
+def test_committed_ucits_rows_serve_with_eodhd_provenance():
+    # a real UCITS row (VHYL.L) fills the ETF factor fields the vendor omits, and every
+    # served number discloses the dated EODHD provenance receipt.
+    rows = load_static(DEFAULT_STATIC_PATH)
+    f, fill = apply_static_fill(
+        _etf(), kind="etf", row=rows["VHYL.L"], today=TODAY)
+    assert f.net_expense_ratio == 0.29
+    assert f.total_assets == 7680000000.0
+    assert f.dividend_yield == 0.0463
+    tag = "static: 2026-07-15, EODHD fundamentals API"
+    assert fill.filled["net_expense_ratio"] == tag
+    assert fill.filled["total_assets"] == tag
+    assert fill.filled["dividend_yield"] == tag
+
+
+def test_committed_acc_row_serves_true_zero_distribution_yield():
+    # an ACC share class (IWMO.L) has a TRUE zero distribution yield — a product finding
+    # (accumulating funds reinvest), not a missing field. It is SERVED (filled), not
+    # abstained, so the lens ranks the honest zero.
+    rows = load_static(DEFAULT_STATIC_PATH)
+    f, fill = apply_static_fill(_etf(), kind="etf", row=rows["IWMO.L"], today=TODAY)
+    assert f.dividend_yield == 0.0
+    assert fill.filled["dividend_yield"] == "static: 2026-07-15, EODHD fundamentals API"
+
+
+def test_committed_cndx_row_abstains_on_fund_size():
+    # CNDX.L's fund_size is deliberately BLANK (the API returned an implausible 270B),
+    # so the static layer has nothing to fill there — the field is neither filled nor
+    # marked stale; it simply abstains (stays None on the fundamentals).
+    rows = load_static(DEFAULT_STATIC_PATH)
+    cndx = rows["CNDX.L"]
+    assert cndx.fund_size is None                       # blank cell -> None
+    assert cndx.distribution_yield is None
+    assert cndx.expense_ratio == 0.30                   # the one field it does carry
+    assert "AUM implausible" in cndx.source             # anomaly documented on the row
+    f, fill = apply_static_fill(_etf(), kind="etf", row=cndx, today=TODAY)
+    assert f.total_assets is None                        # fund_size not filled -> abstains
+    assert "total_assets" not in fill.filled
+    assert "total_assets" not in fill.stale
+    # the factor abstains (None) — never a defaulted 0
+    fi = FactorInputs(ticker="CNDX.L", fundamentals=f, static=fill)
+    assert compute_factor_outcomes(fi, ["fund_size"])["fund_size"][0] is None
+    # the expense ratio it DOES carry still serves with provenance
+    assert f.net_expense_ratio == 0.30
 
 
 def test_load_static_skips_comments_and_tolerates_missing_file(tmp_path):
