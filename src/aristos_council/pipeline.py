@@ -235,6 +235,23 @@ def _annotate_narration(rep: RunReport, r: RankedTicker) -> None:
         d.rationale = d.rationale.rstrip() + "\n" + "\n".join(annotations)
 
 
+def _static_factor_evidence(r: RankedTicker) -> list[dict]:
+    """The factors the ranker SERVED FROM THE COMMITTED STATIC LAYER for this name
+    (ETF-STATIC-1), as ``{factor, value, provenance}`` entries for the narrator's evidence
+    ledger (NARR-STATIC-1). A static source tag reads ``static: <as_of>, <source>`` — the
+    as_of and source ride VERBATIM inside the provenance receipt, exactly as the report's
+    factor-integrity block discloses them. Vendor-computed factors (``computed``/``ev``/
+    ``fallback:…``) and abstained-or-stale-withheld factors (``abstained`` / the staleness
+    note) are OMITTED: the ledger carries only the raw values that WERE served from static,
+    never a phantom fill (the null≠false discipline)."""
+    out: list[dict] = []
+    for name, src in r.factor_sources.items():
+        if isinstance(src, str) and src.startswith("static:"):
+            out.append({"factor": name, "value": r.factor_values.get(name),
+                        "provenance": src})
+    return out
+
+
 def _council_stage(
     shortlist: list[RankedTicker], screen_strategy, adapter, runners, mode: str, *,
     sentiment_adapter=None, sentiment_missing_key: bool = False,
@@ -263,7 +280,8 @@ def _council_stage(
             ranker_verdict=Recommendation(r.verdict),
             ranker_explanation=r.explain(),
             ranker_cohort_size=r.universe_size,
-            ranker_imputed_fraction=imputed_fraction)))
+            ranker_imputed_fraction=imputed_fraction,
+            static_factor_evidence=_static_factor_evidence(r))))
         rep = report_from_state(result)
         _annotate_narration(rep, r)                  # ITEM 4: rank-semantics post-check
         outcomes.append(CouncilOutcome(
