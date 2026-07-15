@@ -207,6 +207,30 @@ def _dividend_streak(fi: FactorInputs) -> Optional[float]:
     return float(s) if s is not None else None
 
 
+def _distribution_yield(fi: FactorInputs) -> Optional[float]:
+    """ETF distribution yield — the fund's trailing distribution/dividend yield
+    (``dividend_yield``, a DECIMAL). Higher is better. The income leg of the dividend-ETF
+    lens. None when the provider omits it (the lens abstains, never excludes)."""
+    f = fi.fundamentals
+    return f.dividend_yield if f is not None else None
+
+
+def _expense_ratio(fi: FactorInputs) -> Optional[float]:
+    """ETF expense ratio (``net_expense_ratio``) — the ongoing cost that compounds
+    against the holder forever, so direction is LOW (cheaper ranks better). Vendor value
+    as-is; the lens ranks it RELATIVELY, so its unit convention doesn't affect the rank.
+    None when absent -> the lens abstains."""
+    f = fi.fundamentals
+    return f.net_expense_ratio if f is not None else None
+
+
+def _fund_size(fi: FactorInputs) -> Optional[float]:
+    """ETF fund size (``total_assets``) — net assets, a liquidity + closure-risk proxy;
+    higher ranks better. None when absent -> the lens abstains."""
+    f = fi.fundamentals
+    return f.total_assets if f is not None else None
+
+
 def _price_to_book(fi: FactorInputs) -> Optional[float]:
     """Financials VALUE leg — price / book value, LOWER is better (cheaper).
 
@@ -301,6 +325,19 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         "return_on_equity", _return_on_equity, "high", "Return on equity",
         "vendor returnOnEquity (TTM); fallback net_income / mean(opening+closing equity); "
         "abstains on equity ≤ 0"),
+    # ETF asset-class factors (ETF-1 ITEM 3). No fallbacks — abstain on a missing field
+    # (the lens declares missing: neutral, so a gap judges on the factors present, never
+    # excludes). expense_ratio is the only LOW-direction leg (cost compounds against the
+    # holder). Field coverage confirmed 100% on both ITEM-4 universes (ITEM 1 probe).
+    "distribution_yield": FactorDef(
+        "distribution_yield", _distribution_yield, "high",
+        "Distribution yield", "ETF trailing distribution/dividend yield (decimal)"),
+    "expense_ratio": FactorDef(
+        "expense_ratio", _expense_ratio, "low",
+        "Expense ratio (low best)", "ETF ongoing cost; ranked relatively, direction low"),
+    "fund_size": FactorDef(
+        "fund_size", _fund_size, "high",
+        "Fund size (total assets)", "ETF net assets — liquidity + closure-risk proxy"),
 }
 
 
@@ -375,6 +412,61 @@ def is_sector_out_of_scope(sector: Optional[str], include_sectors) -> bool:
     if not include_sectors or not sector:
         return False
     return sector.strip().lower() not in {s.strip().lower() for s in include_sectors}
+
+
+# Vendor quoteType -> normalized asset kind (ETF-1 ITEM 2). yfinance reports
+# "EQUITY"/"ETF"/"MUTUALFUND"/"INDEX"/…; the gate reasons in lowercase kinds. An
+# UNKNOWN quoteType maps to its own lowercased form (so a new vendor type gates
+# honestly against an equity/etf lens rather than silently passing).
+_QUOTE_TYPE_KIND = {
+    "EQUITY": "equity",
+    "ETF": "etf",
+    "MUTUALFUND": "mutualfund",
+    "INDEX": "index",
+    "CURRENCY": "currency",
+    "CRYPTOCURRENCY": "cryptocurrency",
+}
+# Display form for the gate message ("asset kind 'ETF' outside this strategy's scope").
+_KIND_DISPLAY = {"equity": "Equity", "etf": "ETF", "mutualfund": "Mutual Fund",
+                 "index": "Index", "currency": "Currency",
+                 "cryptocurrency": "Cryptocurrency"}
+
+
+def normalize_asset_kind(quote_type: Optional[str]) -> Optional[str]:
+    """Vendor quoteType -> normalized lowercase asset kind, or None when absent."""
+    if not quote_type or not quote_type.strip():
+        return None
+    q = quote_type.strip().upper()
+    return _QUOTE_TYPE_KIND.get(q, q.lower())
+
+
+def asset_kind_display(quote_type: Optional[str]) -> str:
+    """The display form of a detected kind for the gate message (e.g. 'ETF')."""
+    kind = normalize_asset_kind(quote_type)
+    if kind is None:
+        return ""
+    return _KIND_DISPLAY.get(kind, kind.upper())
+
+
+def is_asset_kind_out_of_scope(quote_type: Optional[str], asset_kinds) -> bool:
+    """CONFIRMED-ONLY asset-kind gate (ETF-1 ITEM 2) — the wall between asset classes.
+
+    True — the name is OUT OF SCOPE and must be gated — only when ``asset_kinds`` is
+    non-empty AND the vendor ``quote_type`` is PRESENT and its normalized kind is NOT
+    among them (an equity lens admits only ``equity``; an ETF lens only ``etf``). A
+    missing/None quote_type is NEVER gated (same never-drop-on-unknown discipline as the
+    sector gate — absent provider data can't silently drop a name). An empty asset_kinds
+    scopes nothing (every kind in scope), so a strategy that omits it is unchanged.
+
+    This must fire BEFORE any screen or factor path: the vendor serves look-through
+    "fundamentals" for an index tracker happily, so an ETF leaking into a stock lens
+    would produce quiet garbage rather than an honest exclusion."""
+    if not asset_kinds or not quote_type:
+        return False
+    kind = normalize_asset_kind(quote_type)
+    if kind is None:
+        return False
+    return kind not in {k.strip().lower() for k in asset_kinds}
 
 
 def is_payout_uncovered(payout_ratio: Optional[float],

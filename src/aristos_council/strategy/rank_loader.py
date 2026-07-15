@@ -90,6 +90,17 @@ class RankStrategy(BaseModel):
     # Display-only rationale for the inclusion gate, rendered by Company Check exactly
     # like sector_exclusion_rationale. Empty -> the gate line renders bare.
     sector_inclusion_rationale: str = ""
+    # Asset-kind gate (ETF-1 ITEM 2): the asset classes this strategy admits, e.g.
+    # ["equity"] or ["etf"]. When non-empty, a name whose CONFIRMED vendor quoteType
+    # normalizes to a kind NOT listed here is gated OUT OF SCOPE — the wall between
+    # asset classes, fired BEFORE any screen/factor path so an index tracker's
+    # look-through "fundamentals" can never leak into a stock lens. Confirmed-only: a
+    # missing kind never gates (mirrors the sector gate). Empty -> scopes nothing (every
+    # kind admitted), so a strategy that omits it is unchanged. Lowercase-validated.
+    asset_kinds: list[str] = Field(default_factory=list)
+    # Display-only rationale for the asset-kind gate, rendered by Company Check exactly
+    # like sector_inclusion_rationale. Empty -> the gate line renders bare.
+    asset_kind_rationale: str = ""
     # Payout-coverage gate (subsumed by prefilter_screen when that's on): exclude a
     # name whose payout_ratio EXCEEDS this. None -> no standalone payout gate.
     max_payout_ratio: float | None = None
@@ -127,6 +138,13 @@ class RankStrategy(BaseModel):
         if v not in ("second_opinion", "narrator"):
             raise ValueError(f"council_mode must be second_opinion|narrator, got {v!r}")
         return v
+
+    @field_validator("asset_kinds")
+    @classmethod
+    def _asset_kinds_lower(cls, v):
+        # Normalize to lowercase so the gate compares case-insensitively against the
+        # vendor quoteType's normalized kind (ETF-1 ITEM 2).
+        return [k.strip().lower() for k in v if k and k.strip()]
 
     @field_validator("id")
     @classmethod

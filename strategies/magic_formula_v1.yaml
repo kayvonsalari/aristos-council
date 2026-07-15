@@ -14,6 +14,14 @@ description: >-
 rationale: >-
   Highest factor-adjusted alpha of the four formulas in the 2024 Schwartz & Hanauer
   study; decades of out-of-sample validation across multiple markets.
+# Asset-kind scope (ETF-1 ITEM 2): a stock lens admits ONLY equities. An ETF/fund
+# leaking in would be ranked on the vendor's look-through "fundamentals" (quiet
+# garbage), so the confirmed-only kind gate walls it out before any factor path.
+asset_kinds:
+  - equity
+asset_kind_rationale: >-
+  EBIT/EV and ROIC describe an operating company's economics, not a fund's; an ETF
+  scored on look-through vendor fundamentals is quiet garbage, so it is gated out.
 factors:
   - name: roic            # quality  (registry direction: high)
   - name: earnings_yield  # value    (registry direction: high)

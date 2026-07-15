@@ -1,0 +1,28 @@
+# etf_dividend_us_v1 — all-US dividend-ETF universe (ETF-1 ITEM 4).
+# =================================================================
+# The 10 US-listed dividend-oriented ETFs the etf_dividend_v1 lens ranks over. ALL-US
+# deliberately (FIN-1 precedent): US listings are currency-clean and vendor-rich, so the
+# fields the lens ranks on are reliably present (ITEM-1 probe: 100% coverage, 251 closes
+# each). UCITS/European lines join as a later versioned universe once the coverage probe
+# has field history — never mixed into a currency-clean v1.
+id: etf_dividend_us_v1
+display_name: Dividend ETFs (US)
+role: exploratory universe — dividend-ETF lens
+description: All-US dividend-oriented ETFs for the etf_dividend_v1 lens.
+created: "2026-07-15"
+rationale: >-
+  All-US-first by design (FIN-1 precedent): currency-clean and vendor-rich, so expense
+  ratio, fund size and distribution yield are reliably present (ITEM-1 probe confirmed
+  100% coverage). European/UCITS dividend ETFs are deferred to a later versioned
+  universe once the coverage probe has field history for them.
+tickers:
+  - VIG
+  - VYM
+  - SCHD
+  - DVY
+  - SDY
+  - NOBL
+  - HDV
+  - SPYD
+  - DGRO
+  - FVD

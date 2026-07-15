@@ -42,8 +42,10 @@ def _log_sentiment_status() -> None:
         _log.info("sentiment (finnhub): no FINNHUB_API_KEY — sentiment abstains")
 
 from .factors import (
+    asset_kind_display,
     compute_factor_outcomes,
     gather_factor_inputs,
+    is_asset_kind_out_of_scope,
     is_payout_uncovered,
     is_sector_excluded,
     is_sector_out_of_scope,
@@ -139,6 +141,16 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         # ranked, no verdict, never reaches the council — applies on EVERY path.
         if is_unrateable(fi):
             excluded.append((t, "UNRATEABLE: no data — possibly delisted"))
+            continue
+        # ASSET-KIND gate (ETF-1 ITEM 2): the wall between asset classes, fired BEFORE
+        # market-cap/sector/screen/factor so an index tracker's look-through
+        # "fundamentals" can never leak into a stock lens (quiet garbage). Confirmed-only
+        # — a missing quoteType never gates; it sits AFTER UNRATEABLE so a no-data name
+        # (no kind) reads as UNRATEABLE, not kind-gated.
+        if f is not None and is_asset_kind_out_of_scope(
+                f.quote_type, getattr(rank_strategy, "asset_kinds", []) or []):
+            excluded.append((t, f"asset kind '{asset_kind_display(f.quote_type)}' "
+                                "outside this strategy's scope"))
             continue
         if (rank_strategy.min_market_cap is not None and f is not None
                 and f.market_cap is not None

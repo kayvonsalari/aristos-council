@@ -179,7 +179,7 @@ def test_para_shaped_unrateable_no_fabricated_values():
 # --------------------------------------------------------------------------- #
 _GOOD = Fundamentals(
     ticker="GOOD", company_name="Good Quality Corp", market_cap=8e10,
-    sector="Technology", ebit=[4000.0], pe_ratio=18.0,
+    sector="Technology", quote_type="EQUITY", ebit=[4000.0], pe_ratio=18.0,
     operating_income=[2000.0] * 4, tax_provision=[400.0] * 4,
     pretax_income=[1900.0] * 4, invested_capital=[8000.0] * 4,   # ROIC ~19.7% >= 12%
     total_revenue=[300.0, 280, 260, 240])

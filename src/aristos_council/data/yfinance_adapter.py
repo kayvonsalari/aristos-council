@@ -164,6 +164,14 @@ class YFinanceAdapter(MarketDataAdapter):
             # Financials-lens vendor scalars (FIN-1): the measures banks are priced by.
             price_to_book=_as_float(info.get("priceToBook")),
             return_on_equity=_as_float(info.get("returnOnEquity")),   # TTM decimal
+            # ETF asset-class fields (ETF-1). quote_type drives the confirmed-only
+            # asset-kind gate; net_expense_ratio / total_assets are the ETF-lens factors.
+            # netExpenseRatio is the current field; annualReportExpenseRatio is the older
+            # alias yfinance drifts to — prefer the former, fall back to the latter.
+            quote_type=(info.get("quoteType") or None),
+            net_expense_ratio=_as_float(info.get("netExpenseRatio")
+                                        or info.get("annualReportExpenseRatio")),
+            total_assets=_as_float(info.get("totalAssets")),
             # Cash-flow-statement lines for the FCF payout basis (newest column). Cash
             # dividends paid is a NEGATIVE outflow -> stored as its absolute value.
             dividends_paid=_abs_or_none(_latest_cashflow(

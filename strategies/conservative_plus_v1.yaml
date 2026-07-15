@@ -28,6 +28,15 @@ description: >
 suggested_universes:
   - defensive_income_16_v1
 
+# Asset-kind scope (ETF-1 ITEM 2): a stock lens admits ONLY equities. An ETF/fund
+# leaking in would be ranked on the vendor's look-through "fundamentals" (quiet
+# garbage), so the confirmed-only kind gate walls it out before any factor path.
+asset_kinds:
+  - equity
+asset_kind_rationale: >-
+  Net payout yield and the defensive screen describe an operating company, not a
+  fund; an ETF scored on look-through vendor fundamentals is quiet garbage, so it is
+  gated out.
 factors:
   - name: low_volatility      # lower realized vol ranks better (direction from registry)
   - name: net_payout_yield    # dividends (+ buybacks where available); div-yield fallback
