@@ -434,3 +434,137 @@ def test_universe_run_screen_behaviour_is_unchanged():
                           strategies_dir=STRAT_DIR, adapter=_A(), today=date(2026, 6, 30))
     assert any(t == "MU" and "min_roic" in why for t, why in r.excluded)   # screen unchanged
     assert "GOOD" in {x.ticker for x in r.ranked}
+
+
+# --------------------------------------------------------------------------- #
+# Spec 4D — VERDICT OF RECORD: quote the checked name's outcome verbatim from the latest
+# frozen run of the reference universe. Company Check still NEVER issues a verdict; it
+# only REPORTS one already recorded for this name in a past universe run.
+# --------------------------------------------------------------------------- #
+_FIN_TICKERS = ["JPM", "BAC", "WFC", "C", "GS", "MS", "USB", "PNC", "SCHW", "BLK",
+                "AXP", "V", "MA", "COF", "MET", "AIG"]          # financials_16_v1
+
+
+class _FinAdapter(MarketDataAdapter):
+    """The 16 financials of financials_16_v1, shaped for a deterministic P/B + ROE +
+    momentum ranking. GS is given the WORST P/B and ROE so it ranks strictly LAST (SELL,
+    rank 16 of 16). ``low_cap`` names get a sub-floor market cap so they are EXCLUDED
+    (below the 5B gate) in the frozen run."""
+
+    name = "fake"
+
+    def __init__(self, *, low_cap=()):
+        self._low_cap = set(low_cap)
+
+    def get_fundamentals(self, ticker):
+        i = _FIN_TICKERS.index(ticker) if ticker in _FIN_TICKERS else 99
+        if ticker == "GS":
+            pb, roe = 5.0, 0.02                     # worst on both -> ranked last
+        else:
+            pb, roe = 1.0 + 0.1 * i, 0.30 - 0.005 * i
+        cap = 2e9 if ticker in self._low_cap else 5e10
+        return Fundamentals(
+            ticker=ticker, company_name=f"{ticker} Corp", market_cap=cap,
+            sector="Financial Services", price_to_book=pb, return_on_equity=roe)
+
+    def get_price_history(self, ticker, *, start, end):
+        return _rising()
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return []
+
+
+def _freeze_financials_run(runs_dir, *, low_cap=()):
+    """Freeze one financials_v1 run over financials_16_v1 into ``runs_dir`` and return it."""
+    from aristos_council.pipeline import run_rank_pipeline
+    return run_rank_pipeline(
+        None, "financials_v1", universe_id="financials_16_v1", universes_dir=UNIV_DIR,
+        strategies_dir=STRAT_DIR, ranker_only=True, adapter=_FinAdapter(low_cap=low_cap),
+        today=date(2026, 6, 30), freeze_dir=runs_dir)
+
+
+def _fin_check(ticker, runs_dir, *, reference="financials_16_v1", low_cap=()):
+    return run_company_check(
+        ticker, "financials_v1", reference, adapter=_FinAdapter(low_cap=low_cap),
+        strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR, runs_dir=runs_dir,
+        today=date(2026, 6, 30))
+
+
+def test_verdict_of_record_quotes_verdict_and_rank(tmp_path):
+    runs = tmp_path / "runs"
+    _freeze_financials_run(runs)
+    r = _fin_check("GS", runs)
+    # GS ranks strictly last of all 16 -> bottom quintile SELL, rank 16 of 16, quoted
+    # verbatim (never recomputed): sourced from the frozen run, dated by its manifest.
+    assert r.verdict_of_record == (
+        f"in the latest frozen run of financials_16_v1 (run {r.reference_run_date}): "
+        f"SELL, rank 16 of 16.")
+    text = format_company_check(r)
+    assert f"VERDICT OF RECORD: {r.verdict_of_record}" in text
+    assert _no_verdict(text)                        # still never ISSUES a verdict
+
+
+def test_verdict_of_record_quotes_exclusion_with_reason(tmp_path):
+    runs = tmp_path / "runs"
+    _freeze_financials_run(runs, low_cap=("MET",))     # MET below the 5B cap -> excluded
+    r = _fin_check("MET", runs, low_cap=("MET",))
+    assert r.verdict_of_record == (
+        f"excluded in the latest frozen run of financials_16_v1 "
+        f"({r.reference_run_date}) — below min market cap.")
+    assert f"VERDICT OF RECORD: {r.verdict_of_record}" in format_company_check(r)
+
+
+def test_verdict_of_record_renders_nothing_without_reference(tmp_path):
+    runs = tmp_path / "runs"
+    _freeze_financials_run(runs)
+    r = _fin_check("GS", runs, reference="")           # no reference selected -> nothing
+    assert r.verdict_of_record is None
+    assert "VERDICT OF RECORD" not in format_company_check(r)
+
+
+def test_verdict_of_record_renders_nothing_for_name_not_in_run(tmp_path):
+    runs = tmp_path / "runs"
+    _freeze_financials_run(runs)
+    # AAPL isn't in financials_16_v1's frozen cohort -> no verdict of record to quote.
+    r = _fin_check("AAPL", runs)
+    assert r.verdict_of_record is None
+    assert "VERDICT OF RECORD" not in format_company_check(r)
+
+
+def test_verdict_of_record_renders_nothing_when_no_frozen_run(tmp_path):
+    runs = tmp_path / "runs"                            # empty -> no frozen run exists
+    runs.mkdir()
+    r = _fin_check("GS", runs)
+    assert r.verdict_of_record is None
+    assert "VERDICT OF RECORD" not in format_company_check(r)
+
+
+def test_closing_boilerplate_swaps_both_ways(tmp_path):
+    runs = tmp_path / "runs"
+    _freeze_financials_run(runs)
+    # No reference -> boilerplate STAYS ("a verdict requires a universe run").
+    no_ref = _fin_check("GS", runs, reference="")
+    assert "a verdict requires a universe run" in no_ref.pointer
+    assert "VERDICT OF RECORD above" not in no_ref.pointer
+    # A quoted verdict of record -> boilerplate REPLACED by a pointer to the record.
+    quoted = _fin_check("GS", runs)
+    assert quoted.verdict_of_record is not None
+    assert "a verdict requires a universe run" not in quoted.pointer
+    assert "VERDICT OF RECORD above" in quoted.pointer
+
+
+def test_factor_lines_byte_unchanged_when_record_renders(tmp_path):
+    from aristos_council.company_check import format_factor_value
+    runs = tmp_path / "runs"
+    _freeze_financials_run(runs)
+    r = _fin_check("GS", runs)
+    text = format_company_check(r)
+    # Every FACTOR VALUES line renders byte-for-byte as before — the new VERDICT OF RECORD
+    # line is separate and does not disturb them.
+    for fc in r.factors:
+        line = (f"  {fc.label} ({fc.factor}): "
+                f"{format_factor_value(fc.factor, fc.value)} "
+                f"[{fc.source}] — {fc.context}")
+        assert line in text
+        assert "VERDICT OF RECORD" not in line
+    assert "VERDICT OF RECORD:" in text
