@@ -13,7 +13,11 @@ from aristos_council.data.adapter import (
     MarketDataAdapter,
     PriceHistory,
 )
-from aristos_council.data.cache import CachingAdapter
+from aristos_council.data.cache import (
+    ADAPTER_SCHEMA_VERSION,
+    CachingAdapter,
+    _SCHEMAS,
+)
 
 TODAY = date(2026, 7, 5)
 
@@ -77,3 +81,36 @@ def test_corrupted_file_is_a_miss_not_a_crash(tmp_path):
     _write(cad, "AAPL", "{ not valid json at all")
     f = cad.get_fundamentals("AAPL")         # must not raise
     assert inner.calls == 1 and f.market_cap == 1e10
+
+
+# --- ETFCHK-4: explicit hand-bumped adapter schema-version token --------------- #
+def _current_marker():
+    return _SCHEMAS["fundamentals"]
+
+
+def test_marker_carries_the_adapter_version_token():
+    # the version lives in the marker (documented bump convention in cache.py)
+    assert _current_marker().startswith(f"v{ADAPTER_SCHEMA_VERSION}:")
+
+
+def test_older_version_same_fields_is_a_miss_and_refetches(tmp_path):
+    # The ETFCHK-4 case: SAME field set (the field-name marker would still match),
+    # only the adapter VERSION differs -> must be detected stale and refetched, so a
+    # payload with a mis-derived ETF yield is never silently served.
+    inner = _Counting()
+    cad = CachingAdapter(inner, cache_dir=tmp_path, today=TODAY)
+    fields_part = _current_marker().split(":", 1)[1]          # same field-name set
+    older = f"v{ADAPTER_SCHEMA_VERSION - 1}:{fields_part}"    # only the token is older
+    _write(cad, "AAPL", json.dumps(
+        {"_schema": older, "data": {"ticker": "AAPL", "market_cap": 5e9}}))
+    f = cad.get_fundamentals("AAPL")
+    assert inner.calls == 1                  # older version -> refetch
+    assert f.market_cap == 1e10              # the FRESH value, not the stale 5e9
+
+
+def test_same_version_still_hits(tmp_path):
+    inner = _Counting()
+    cad = CachingAdapter(inner, cache_dir=tmp_path, today=TODAY)
+    cad.get_fundamentals("AAPL")             # writes under current version marker
+    cad.get_fundamentals("AAPL")             # same version -> HIT, no refetch
+    assert inner.calls == 1
