@@ -7,6 +7,11 @@ auto-refreshes daily. ``refresh=True`` forces a fresh fetch.
 
 This speeds up the DATA step ONLY — it never caches LLM calls (verdicts must stay
 live), so it helps most on the screen-only ranking path where data is the main cost.
+
+Each entry carries a ``_schema`` marker (adapter-version token + DTO field-name set,
+see ``_schema_marker`` / ``ADAPTER_SCHEMA_VERSION``); an entry whose marker no longer
+matches is bypassed and refetched, so an adapter change automatically invalidates
+stale entries — manual cache deletion is never the remedy.
 """
 
 from __future__ import annotations
@@ -77,13 +82,39 @@ def _deser_dividends(d: list) -> list:
 DEFAULT_CACHE_DIR = ".aristos_cache"
 
 
+# --------------------------------------------------------------------------- #
+# ADAPTER SCHEMA VERSION — bump this integer whenever an adapter changes the
+# SHAPE or SEMANTICS of a cached payload WITHOUT changing the DTO field-name set.
+#
+# WHY a hand-bumped token (not just the field-name marker below): the field-set
+# marker only changes when a field is added/removed. An adapter fix that changes
+# how an EXISTING field is populated leaves the field set untouched, so the marker
+# would still match and a stale entry would keep being served. That is exactly the
+# ETFCHK-4 incident: pre-fix code cached ETF ``dividend_yield`` as None (rendered
+# 0 [computed]); two merged fixes changed how the field is DERIVED but not the
+# field set, so cached entries kept serving 0 until the cache dir was manually
+# deleted. Folding this version into the schema marker forces every pre-bump entry
+# to be detected as stale on read and refetched — manual deletion is never again
+# the remedy.
+#
+# BUMP CONVENTION: increment by 1 and add a one-line ``# vN: <what changed>`` entry
+# to the log below, whenever an adapter's normalization/derivation changes a cached
+# value's meaning without changing its DTO's fields. (Field ADD/REMOVE is already
+# caught by the field-name marker — no bump needed for those.)
+#   v1: initial field-name marker only (pre-ETFCHK-4).
+#   v2: ETF dividend_yield derivation fix (ETFCHK-4) — same field set, new value.
+ADAPTER_SCHEMA_VERSION = 2
+
+
 def _schema_marker(cls) -> str:
-    """A stable marker for a DTO's shape: its sorted field-name set. When the dataclass
-    gains a field (e.g. Fundamentals.total_cash), the marker changes, so an entry written
-    under the OLD shape is detected as stale on read (ITEM 2 — tonight's root cause: a
-    fundamentals entry cached before total_cash deserialised the field as None -> silent
-    EBIT/mcap fallback all day)."""
-    return ",".join(sorted(f.name for f in fields(cls)))
+    """A stable marker for a DTO's shape: an adapter-version token + its sorted
+    field-name set. The field-name set catches a field ADD/REMOVE (e.g.
+    Fundamentals.total_cash); the leading ``vN`` token (``ADAPTER_SCHEMA_VERSION``)
+    catches a shape/semantics change to an EXISTING field that leaves the field set
+    unchanged (ETFCHK-4: ETF dividend_yield re-derived — same fields, new value).
+    Either kind of change makes the marker differ, so an entry written under the OLD
+    shape is detected as stale on read and refetched, never silently deserialised."""
+    return f"v{ADAPTER_SCHEMA_VERSION}:" + ",".join(sorted(f.name for f in fields(cls)))
 
 
 # Schema marker per cache KIND — keyed by the DTO whose shape drift would silently
