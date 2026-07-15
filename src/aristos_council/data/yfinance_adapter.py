@@ -293,15 +293,17 @@ def _dividend_yield(info: dict) -> float | None:
     further drift. (Do NOT read the raw ``dividendYield`` untouched — that was the 100x
     bug: 2.89 compared as if it were 289%.)
 
-    FUNDS (ETF / mutual fund) take a distinct path (ETFCHK-1): their canonical
-    distribution yield is the ``yield`` key (a DECIMAL), and the equity dividend fields
-    are UNRELIABLE for a fund — yfinance frequently returns a spurious ``0.0`` in a flaky
-    ``info`` block for a fund that truly distributes (the same rule-3 flakiness that drops
+    FUNDS (ETF / mutual fund) take a distinct path (ETFCHK-1), routed by ``_looks_like_fund``
+    (quoteType OR the fund-only ``yield`` key — ETFCHK-3, robust to a dropped quoteType):
+    their canonical distribution yield is the ``yield`` key (a DECIMAL), and the equity
+    dividend fields are UNRELIABLE for a fund — yfinance frequently returns a spurious
+    ``0.0`` in a flaky ``info`` block for a fund that truly distributes (the same
+    rule-3 flakiness that drops
     ``dividendRate``). Reading that ``0.0`` fabricated a false ``0`` distribution yield
     (Company Check rendered ``0 [computed]`` for SCHD). ``_fund_distribution_yield`` reads
     the canonical field, prefers the first POSITIVE source, and NOT-EVALUATES (None) when
     no positive source exists — never a defaulted ``0`` (the ``-0 ROIC`` bug class)."""
-    if _is_fund_quote_type(info.get("quoteType")):
+    if _looks_like_fund(info):
         return _fund_distribution_yield(info)
     trailing = _as_float(info.get("trailingAnnualDividendYield"))
     if trailing is not None:
@@ -318,6 +320,28 @@ def _is_fund_quote_type(quote_type: object) -> bool:
     fields (ETFCHK-1). Missing/other kinds take the equity path unchanged."""
     return isinstance(quote_type, str) and quote_type.strip().upper() in {
         "ETF", "MUTUALFUND"}
+
+
+def _looks_like_fund(info: dict) -> bool:
+    """True when this ``info`` is a pooled fund, detected by EITHER signal (ETFCHK-3):
+
+    1. a fund ``quoteType`` (ETF / mutual fund), OR
+    2. the presence of the fund-only ``yield`` key.
+
+    Relying on ``quoteType`` ALONE regressed the live path: yfinance's ``.info`` FLAKILY
+    drops ``quoteType`` on a given fetch (the same rule-3 flakiness that empties the
+    summaryDetail block), and the daily cache then freezes that ``quoteType``-less shape
+    for the rest of the day. With no ``quoteType`` SCHD fell through to the equity path,
+    read a spurious ``trailingAnnualDividendYield == 0.0``, and fabricated a ``0``
+    distribution yield (``0 [computed]`` in Company Check) — while the universe run, whose
+    batch fetch caught a populated ``quoteType``, ranked the field correctly. yfinance
+    populates ``yield`` ONLY for pooled funds (an equity's ``info`` has no such key), so
+    its presence is an independent, reliable fund signal that survives the drop. ETFCHK-1's
+    mocks always set ``quoteType='ETF'``, so they never exercised the dropped-``quoteType``
+    live shape — this closes that gap."""
+    if _is_fund_quote_type(info.get("quoteType")):
+        return True
+    return "yield" in info and _as_float(info.get("yield")) is not None
 
 
 def _fund_distribution_yield(info: dict) -> float | None:
