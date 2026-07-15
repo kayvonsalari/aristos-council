@@ -21,6 +21,7 @@ from datetime import date, timedelta
 from typing import Callable, Optional
 
 from .data.adapter import DataUnavailable, Fundamentals
+from .etf_static import StaticFill, apply_static_fill, default_static_rows
 from .tools.screening import revenue_cagr, through_cycle_roic
 from .tools.technical import (
     _TD_6M,
@@ -66,6 +67,13 @@ class FactorInputs:
     # could NOT be fetched — the EV route then ABSTAINS (never mixes currencies).
     fx: Optional[CurrencyConversion] = None
     fx_failed: bool = False
+    # ETF static layer (ETF-STATIC-1): the outcome of filling slow ETF fields from the
+    # committed static CSV for THIS name. ``filled`` maps a Fundamentals field to its
+    # ``static: <as_of>, <source>`` provenance tag; ``stale`` maps a field withheld
+    # because its entry is >90 days old to the staleness note. None / empty for a stock
+    # or an ETF the layer didn't touch, so the ETF factors' source tags degrade to the
+    # generic computed/abstained exactly as before.
+    static: Optional[StaticFill] = None
 
 
 # --- factor functions (pure; None == NOT-EVAL) ---------------------------- #
@@ -236,6 +244,33 @@ def _fund_size(fi: FactorInputs) -> Optional[float]:
     return f.total_assets if f is not None else None
 
 
+# ETF factor SOURCE tags (ETF-STATIC-1). When a field was filled from the committed
+# static layer, disclose its provenance receipt (``static: <as_of>, <source>``) so the
+# report renders ``[static: …]`` exactly like the FX receipt; when the field was WITHHELD
+# because its static entry is stale, disclose the staleness note. Otherwise degrade to the
+# generic computed/abstained — byte-identical to the pre-static behaviour.
+def _etf_field_source(fi: FactorInputs, fund_field: str, value: Optional[float]) -> str:
+    st = fi.static
+    if st is not None:
+        if fund_field in st.filled:
+            return st.filled[fund_field]
+        if fund_field in st.stale:
+            return st.stale[fund_field]
+    return SRC_COMPUTED if value is not None else SRC_ABSTAINED
+
+
+def _distribution_yield_source(fi: FactorInputs) -> str:
+    return _etf_field_source(fi, "dividend_yield", _distribution_yield(fi))
+
+
+def _expense_ratio_source(fi: FactorInputs) -> str:
+    return _etf_field_source(fi, "net_expense_ratio", _expense_ratio(fi))
+
+
+def _fund_size_source(fi: FactorInputs) -> str:
+    return _etf_field_source(fi, "total_assets", _fund_size(fi))
+
+
 def _price_to_book(fi: FactorInputs) -> Optional[float]:
     """Financials VALUE leg — price / book value, LOWER is better (cheaper).
 
@@ -336,13 +371,16 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
     # holder). Field coverage confirmed 100% on both ITEM-4 universes (ITEM 1 probe).
     "distribution_yield": FactorDef(
         "distribution_yield", _distribution_yield, "high",
-        "Distribution yield", "ETF trailing distribution/dividend yield (decimal)"),
+        "Distribution yield", "ETF trailing distribution/dividend yield (decimal)",
+        source_fn=_distribution_yield_source),
     "expense_ratio": FactorDef(
         "expense_ratio", _expense_ratio, "low",
-        "Expense ratio (low best)", "ETF ongoing cost; ranked relatively, direction low"),
+        "Expense ratio (low best)", "ETF ongoing cost; ranked relatively, direction low",
+        source_fn=_expense_ratio_source),
     "fund_size": FactorDef(
         "fund_size", _fund_size, "high",
-        "Fund size (total assets)", "ETF net assets — liquidity + closure-risk proxy"),
+        "Fund size (total assets)", "ETF net assets — liquidity + closure-risk proxy",
+        source_fn=_fund_size_source),
 }
 
 
@@ -532,10 +570,16 @@ def _fetch_fx_rate(adapter, from_ccy: str, to_ccy: str, *, today: date
     return closes[-1] if closes else None
 
 
-def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
+def gather_factor_inputs(adapter, ticker: str, *, today: date,
+                         static_rows=None) -> FactorInputs:
     """Fetch the deterministic inputs one ticker needs for factor ranking — the same
     adapter the council uses. Per-source DataUnavailable is swallowed (partial inputs
-    -> NOT-EVAL factors), so one flaky name never aborts a universe ranking."""
+    -> NOT-EVAL factors), so one flaky name never aborts a universe ranking.
+
+    ``static_rows`` is the committed ETF static layer (``{TICKER: StaticRow}``); it
+    defaults to the loaded ``data/etf_static.csv`` and is injected explicitly in tests.
+    It fills slow ETF fields the vendor doesn't serve for ETF-kind names ONLY (see
+    ``etf_static.apply_static_fill``)."""
     from .data.adapter import TransientFetchError
 
     fundamentals = None
@@ -558,6 +602,17 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
         pass    # a delisted name can raise a RAW yfinance error ("no timezone found")
                 # rather than DataUnavailable — degrade to no-data, never crash the run
     snap = technical_snapshot(closes) if closes else None
+
+    # ETF static layer (ETF-STATIC-1): fill slow ETF fields the vendor doesn't serve from
+    # the committed CSV — ETF-kind names only, vendor value wins where present & plausible,
+    # stale entries abstain. A stock never reads it (kind != "etf" -> unchanged). The
+    # committed file makes this replay byte-identically in a frozen run.
+    static_fill = None
+    if fundamentals is not None:
+        rows = static_rows if static_rows is not None else default_static_rows()
+        fundamentals, static_fill = apply_static_fill(
+            fundamentals, kind=normalize_asset_kind(fundamentals.quote_type),
+            row=rows.get(ticker), today=today)
 
     # Currency-consistent EV (VERIFY-2 ITEM 1): if the accounts' currency differs from the
     # price currency, fetch the FX rate (same adapter/cache/freeze path). On a mismatch
@@ -582,7 +637,8 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date) -> FactorInputs:
         return_6m=total_return(closes, _TD_6M) if closes else None,
         return_12m=total_return(closes, _TD_12M) if closes else None,
         annualized_volatility=snap.annualized_volatility if snap else None,
-        last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed)
+        last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed,
+        static=static_fill)
 
 
 BORDERLINE_TOL = 0.05    # within 5% (relative) of the threshold

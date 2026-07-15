@@ -1,0 +1,32 @@
+# ETF static layer (ETF-STATIC-1) — human-verified, slow-moving ETF fields.
+#
+# Purpose: fills the ETF factor fields the free vendor serves unevenly (expense ratio,
+# fund size, distribution yield) for ETF-kind names ONLY. The adapter uses a value here
+# only when the vendor's is missing or implausible (vendor wins otherwise), and every
+# static-sourced number renders a provenance tag [static: <as_of>, <source>] in the
+# report. An entry whose as_of is more than 90 days old ABSTAINS ("static data stale —
+# refresh required") — it is never served silently. The file is committed, so a frozen
+# run replays it byte-identically.
+#
+# MONTHLY REFRESH RITUAL: once a month, open each fund's official factsheet (the `source`
+# named on its row), re-verify expense_ratio / fund_size / distribution_yield / share_class
+# / domicile against it, and set `as_of` to today's date (YYYY-MM-DD) on every row you
+# confirm. A row you cannot re-verify this cycle is left as-is and will cross the 90-day
+# staleness line on its own, abstaining until refreshed — do NOT bump `as_of` without
+# re-checking the numbers. All rows are human-entered; nothing here is scraped.
+#
+# COLUMNS:
+#   ticker              — normalized (upper-case) fund symbol.
+#   expense_ratio       — net expense ratio as a PERCENT, matching the vendor
+#                         netExpenseRatio convention (e.g. 0.06 == a 6bp / 0.06% fund).
+#   fund_size           — net assets (total assets), in the fund's reporting currency.
+#   distribution_yield  — trailing distribution yield as a DECIMAL (0.035 == 3.5%).
+#   share_class         — dist (distributing) or acc (accumulating).
+#   domicile            — legal domicile (e.g. US, IE, LU).
+#   source              — the factsheet / authority the row was verified against.
+#   as_of               — YYYY-MM-DD date the row was last human-verified.
+#
+# The row below is a NON-REAL EXAMPLE (ticker EXMPL) documenting the format only — it
+# matches no real fund, so it is never served. Real rows are added human-verified.
+ticker,expense_ratio,fund_size,distribution_yield,share_class,domicile,source,as_of
+EXMPL,0.06,1000000000,0.035,dist,US,example row — not real data,2026-06-01
