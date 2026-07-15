@@ -207,6 +207,30 @@ def _dividend_streak(fi: FactorInputs) -> Optional[float]:
     return float(s) if s is not None else None
 
 
+def _distribution_yield(fi: FactorInputs) -> Optional[float]:
+    """ETF distribution yield — the fund's trailing distribution/dividend yield
+    (``dividend_yield``, a DECIMAL). Higher is better. The income leg of the dividend-ETF
+    lens. None when the provider omits it (the lens abstains, never excludes)."""
+    f = fi.fundamentals
+    return f.dividend_yield if f is not None else None
+
+
+def _expense_ratio(fi: FactorInputs) -> Optional[float]:
+    """ETF expense ratio (``net_expense_ratio``) — the ongoing cost that compounds
+    against the holder forever, so direction is LOW (cheaper ranks better). Vendor value
+    as-is; the lens ranks it RELATIVELY, so its unit convention doesn't affect the rank.
+    None when absent -> the lens abstains."""
+    f = fi.fundamentals
+    return f.net_expense_ratio if f is not None else None
+
+
+def _fund_size(fi: FactorInputs) -> Optional[float]:
+    """ETF fund size (``total_assets``) — net assets, a liquidity + closure-risk proxy;
+    higher ranks better. None when absent -> the lens abstains."""
+    f = fi.fundamentals
+    return f.total_assets if f is not None else None
+
+
 def _price_to_book(fi: FactorInputs) -> Optional[float]:
     """Financials VALUE leg — price / book value, LOWER is better (cheaper).
 
@@ -301,6 +325,19 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         "return_on_equity", _return_on_equity, "high", "Return on equity",
         "vendor returnOnEquity (TTM); fallback net_income / mean(opening+closing equity); "
         "abstains on equity ≤ 0"),
+    # ETF asset-class factors (ETF-1 ITEM 3). No fallbacks — abstain on a missing field
+    # (the lens declares missing: neutral, so a gap judges on the factors present, never
+    # excludes). expense_ratio is the only LOW-direction leg (cost compounds against the
+    # holder). Field coverage confirmed 100% on both ITEM-4 universes (ITEM 1 probe).
+    "distribution_yield": FactorDef(
+        "distribution_yield", _distribution_yield, "high",
+        "Distribution yield", "ETF trailing distribution/dividend yield (decimal)"),
+    "expense_ratio": FactorDef(
+        "expense_ratio", _expense_ratio, "low",
+        "Expense ratio (low best)", "ETF ongoing cost; ranked relatively, direction low"),
+    "fund_size": FactorDef(
+        "fund_size", _fund_size, "high",
+        "Fund size (total assets)", "ETF net assets — liquidity + closure-risk proxy"),
 }
 
 

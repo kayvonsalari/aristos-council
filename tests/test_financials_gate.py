@@ -95,12 +95,17 @@ def test_pipeline_gates_out_of_scope_and_ranks_in_scope():
     assert all(r.ticker != "MSFT" for r in ranked if not r.excluded)
 
 
-# --- discovery: fifth visible rank strategy --------------------------------- #
-def test_financials_v1_is_the_fifth_visible_rank_strategy():
+# --- discovery: financials is a visible rank strategy ----------------------- #
+def test_financials_v1_is_a_visible_rank_strategy():
     vis = visible_rank_strategies(STRAT_DIR)
     ids = [s.id for s in vis]
     assert "financials_v1" in ids
-    assert len(vis) == 5
+    # ETF-1 ITEM 3 added two visible ETF lenses, so the visible set grew 5 -> 7:
+    # conservative_plus, financials, growth_garp_v2, magic_formula_momentum,
+    # magic_formula_raw + etf_dividend_v1, etf_growth_v1 (growth_garp_v1 /
+    # magic_formula_v1 stay hidden).
+    assert len(vis) == 7
+    assert {"etf_dividend_v1", "etf_growth_v1"} <= set(ids)
 
 
 # --- Strategy tab renders it with zero UI changes --------------------------- #

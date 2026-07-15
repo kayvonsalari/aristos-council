@@ -1,0 +1,45 @@
+# Dividend ETFs (rank-based, no screens — house doctrine) — ETF-1 ITEM 3.
+# ======================================================================
+# Rank a universe of dividend-oriented ETFs on income, cost, size, and trend; combine
+# the ranks; no screens, no floors. EXPLORATORY: this lens is never on the prospective
+# scoreboard until deliberately frozen. All-US-first (FIN-1 precedent: currency-clean and
+# vendor-rich; UCITS/European lines join as a later versioned universe once the coverage
+# probe has field history).
+id: etf_dividend_v1
+name: Dividend ETFs
+display_name: Dividend ETFs
+version: 1
+
+description: >-
+  Rank dividend-oriented ETFs on distribution yield (income), expense ratio (cost, ranked
+  low), fund size (liquidity + closure risk), and 12-month momentum (trend). Rank-first,
+  no screens; abstention on a missing field never excludes a fund.
+
+rationale: >-
+  Exploratory dividend-ETF lens. All-US-first by design (FIN-1 precedent): US-listed
+  funds are currency-clean and vendor-rich, so the fields the lens ranks on are reliably
+  present (ITEM-1 probe: 100% coverage). UCITS/European lines join as a later versioned
+  universe once the coverage probe has field history.
+
+# Asset-kind scope (ETF-1 ITEM 2): this lens admits ONLY ETFs. An equity leaking in
+# would be ranked on the wrong footing, so the confirmed-only kind gate walls it out
+# before any factor path.
+asset_kinds:
+  - etf
+asset_kind_rationale: >-
+  Distribution yield, expense ratio and fund size are fund attributes; an operating
+  company has none of them, so a non-ETF is gated out of this lens.
+
+# Suggested universe (UNI-1): the ITEM-4 all-US dividend-ETF list.
+suggested_universes:
+  - etf_dividend_us_v1
+
+factors:
+  - name: distribution_yield   # income  — higher ranks better
+  - name: expense_ratio        # cost    — LOWER ranks better (compounds against holder)
+  - name: fund_size            # size    — higher ranks better (liquidity, closure risk)
+  - name: momentum_12m         # trend   — higher ranks better
+
+cut: quintile
+missing: neutral               # abstention on a missing field: judge on what's present,
+                               # never exclude (house doctrine — no screens, no floors)
