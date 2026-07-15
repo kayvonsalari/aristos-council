@@ -42,6 +42,11 @@ class Universe(BaseModel):
     tickers: list[str] = Field(min_length=1)
     created: str = ""
     rationale: str = ""
+    # NOT a manifest field — never written to YAML. Set True at discovery time for a
+    # personal list found under ``universes/local/`` (UNIED-1). Drives the "(local)" tag
+    # in selectors; local lists are gitignored portfolio-class data, so they never ride a
+    # commit by default.
+    local: bool = False
 
     @field_validator("id")
     @classmethod
@@ -75,25 +80,38 @@ def load_universe(path: str | Path) -> Universe:
     return Universe.model_validate(raw)
 
 
+# Personal, gitignored lists live in this subdirectory of the universes dir (UNIED-1).
+LOCAL_SUBDIR = "local"
+
+
 def load_universe_by_id(universe_id: str, universes_dir: str | Path) -> Universe:
-    """Resolve a manifest id to its ``<universes_dir>/<id>.yaml``. A missing file is a
-    CLEAR error naming the id and the searched directory (not a bare FileNotFound)."""
+    """Resolve a manifest id to its ``<universes_dir>/<id>.yaml``, falling back to the
+    ``local/`` subdirectory (UNIED-1 personal lists). A missing file is a CLEAR error
+    naming the id and the searched directory (not a bare FileNotFound)."""
     d = Path(universes_dir)
     path = d / f"{universe_id}.yaml"
+    is_local = False
     if not path.exists():
-        known = ", ".join(u.id for u in list_universes(d)) or "(none)"
-        raise ValueError(f"unknown universe id '{universe_id}' — no {path.name} under "
-                         f"{d}. Known manifests: {known}")
+        local_path = d / LOCAL_SUBDIR / f"{universe_id}.yaml"
+        if local_path.exists():
+            path, is_local = local_path, True
+        else:
+            known = ", ".join(u.id for u in list_universes(d)) or "(none)"
+            raise ValueError(f"unknown universe id '{universe_id}' — no {path.name} under "
+                             f"{d}. Known manifests: {known}")
     u = load_universe(path)
     if u.id != universe_id:
         raise ValueError(f"universe file {path.name} declares id '{u.id}', not "
                          f"'{universe_id}' — the filename must match the id")
+    u.local = is_local
     return u
 
 
 def list_universes(universes_dir: str | Path) -> list[Universe]:
     """Every loadable manifest, id-sorted. Invalid YAMLs are skipped silently (the
-    loader is the gatekeeper), consistent with strategy discovery."""
+    loader is the gatekeeper), consistent with strategy discovery. Personal lists under
+    the ``local/`` subdirectory (UNIED-1) are discovered too and marked ``local=True`` so
+    selectors can tag them '(local)'."""
     d = Path(universes_dir)
     if not d.exists():
         return []
@@ -103,6 +121,15 @@ def list_universes(universes_dir: str | Path) -> list[Universe]:
             out.append(load_universe(p))
         except Exception:
             continue
+    local_dir = d / LOCAL_SUBDIR
+    if local_dir.exists():
+        for p in sorted(local_dir.glob("*.yaml")):
+            try:
+                u = load_universe(p)
+            except Exception:
+                continue
+            u.local = True
+            out.append(u)
     return sorted(out, key=lambda u: u.id)
 
 

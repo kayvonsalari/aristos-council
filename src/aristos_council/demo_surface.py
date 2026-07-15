@@ -74,8 +74,11 @@ def suggested_first(manifests, suggested_ids):
 
 def universe_label(u) -> str:
     """Friendly dropdown label for a universe manifest — its ``display_name`` if set,
-    else the bare id (a graceful fallback that never crashes on an un-named manifest)."""
-    return (getattr(u, "display_name", "") or "").strip() or u.id
+    else the bare id (a graceful fallback that never crashes on an un-named manifest). A
+    personal ``local=True`` list (UNIED-1) is tagged '(local)' so it reads as a saved
+    custom list in every selector, front-stage."""
+    base = (getattr(u, "display_name", "") or "").strip() or u.id
+    return f"{base} (local)" if getattr(u, "local", False) else base
 
 
 def universe_role(u) -> str:

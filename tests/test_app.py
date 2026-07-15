@@ -707,3 +707,50 @@ def test_screen_table_rows_map_pass_fail_noteval():
 def test_screen_table_rows_empty_when_no_screen():
     assert app._screen_table_rows(None) == []
     assert app._screen_table_rows({}) == []
+
+
+# --------------------------------------------------------------------------- #
+# Universe Editor (UNIED-1) — build/clone/run/save from the UI
+# --------------------------------------------------------------------------- #
+def test_universe_editor_section_renders():
+    # The editor lives inside the Universe Run tab as its own expander; its "Start from"
+    # clone selector + the two actions (Run once / Save) prove it rendered.
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    assert any(s.label == "Start from" for s in at.selectbox)
+    assert any("Universe Editor" in str(e.label) for e in at.expander)
+    assert any("Run once" in b.label for b in at.button)
+    assert any("Save to universes/local/" in b.label for b in at.button)
+
+
+def test_custom_paste_adhoc_option_unchanged():
+    # The existing ad-hoc Custom paste path is intact alongside the new editor — the
+    # editor's Run once reuses the SAME path (universe_id=None), it does not replace it.
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    assert "Custom (paste tickers)" in _dropdown(at, "Universe").options
+
+
+def test_saved_local_universe_appears_in_both_selectors():
+    # UNIED-1 Item 3: a saved local universe is discovered front-stage (default toggle
+    # off) in BOTH the Universe Run selector and the Company Check reference selector,
+    # tagged "(local)". Written into the real (gitignored) universes/local/ then removed.
+    from streamlit.testing.v1 import AppTest
+    local_dir = app.UNIVERSES_DIR / "local"
+    local_dir.mkdir(parents=True, exist_ok=True)
+    f = local_dir / "apptest_local_v1.yaml"
+    f.write_text(
+        "id: apptest_local_v1\ndisplay_name: Apptest Local\n"
+        "created: '2026-07-15'\nrationale: test\ntickers:\n  - AAPL\n  - MSFT\n",
+        encoding="utf-8")
+    try:
+        at = AppTest.from_file(str(_APP), default_timeout=60).run()
+        assert not at.exception
+        uni = _dropdown(at, "Universe").options
+        ref = _dropdown(at, "Reference universe (for factor context)").options
+        assert any("Apptest Local (local)" in o for o in uni)
+        assert any("Apptest Local (local)" in o for o in ref)
+    finally:
+        f.unlink(missing_ok=True)

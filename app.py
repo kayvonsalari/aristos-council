@@ -1501,7 +1501,132 @@ def render_universe_tab(show_validation: bool = False) -> None:
         st.divider()
         _render_universe_result(result)
 
+    st.divider()
+    render_universe_editor(rank_strategy, mode=mode, ranker_only=ranker_only,
+                           has_key=has_key, show_validation=show_validation)
+
     _render_snapshot_history()
+
+
+def render_universe_editor(rank_strategy, *, mode: str, ranker_only: bool,
+                           has_key: bool, show_validation: bool = False) -> None:
+    """Universe Editor (UNIED-1) — build a custom list from scratch or a clone, then Run
+    once (ad-hoc, no file) or Save it to ``universes/local/``. Reuses the tab's selected
+    rank strategy + run settings for Run once, so an editor run is the SAME ad-hoc
+    pipeline path as a Custom paste (fingerprinted, nothing written)."""
+    from aristos_council.universe import list_universes
+    from aristos_council.universe_editor import (
+        existing_universe_ids, graded_universe_ids, parse_ticker_lines,
+        save_local_universe, suggest_clone_id)
+
+    with st.expander("🛠 Universe Editor — build, clone & save a custom list"):
+        st.caption("Start blank or clone an existing universe, edit the tickers (one per "
+                   "line; `# comments` allowed), then **Run once** (ad-hoc — nothing "
+                   "written) or **Save** as a personal local universe. Local lists live "
+                   "in `universes/local/` and are gitignored by default — portfolio-class "
+                   "data never rides a commit.")
+
+        manifests = visible_universes(list_universes(UNIVERSES_DIR),
+                                      show_validation=show_validation)
+        graded = graded_universe_ids(SNAPSHOTS_CSV)
+        existing_ids = existing_universe_ids(UNIVERSES_DIR)
+
+        BLANK = "Blank (start empty)"
+        clone_labels = [BLANK]
+        by_label: dict[str, object] = {}
+        for u in manifests:
+            lbl = f"{universe_label(u)} · {len(u.tickers)} names"
+            clone_labels.append(lbl)
+            by_label[lbl] = u
+        clone_choice = st.selectbox("Start from", clone_labels, key="ed_clone_source")
+        base = by_label.get(clone_choice)
+
+        if base is not None and base.id in graded:
+            st.info(f"🔒 `{base.id}` is **graded — clone to modify**. It's a frozen "
+                    "scoreboard input; loading it makes an editable COPY under a new id "
+                    "(the graded original is never changed).")
+
+        # Load-into-editor: seed the editor fields from the chosen base (or clear for
+        # Blank). Set BEFORE the widgets below are instantiated, so they pick up the
+        # values on this same run (Streamlit's supported pre-instantiation write).
+        if st.button("⧉ Load into editor", key="ed_load"):
+            if base is None:
+                st.session_state.update(ed_name="", ed_rationale="", ed_tickers="",
+                                        ed_id="")
+            else:
+                st.session_state["ed_name"] = (base.display_name or "").strip()
+                st.session_state["ed_rationale"] = (base.rationale or "").strip()
+                st.session_state["ed_tickers"] = "\n".join(base.tickers)
+                st.session_state["ed_id"] = suggest_clone_id(base.id, existing_ids)
+
+        name = st.text_input("Display name", key="ed_name", placeholder="My Watchlist")
+        rationale = st.text_input("One-line rationale", key="ed_rationale",
+                                  placeholder="why this list exists")
+        raw = st.text_area("Tickers — one per line; `# comments` allowed",
+                           key="ed_tickers", height=160,
+                           placeholder="AAPL\nMSFT  # anchor\n# --- energy ---\nXOM")
+        tickers = parse_ticker_lines(raw)
+        st.caption(f"**{len(tickers)}** ticker(s) parsed. Unresolvable symbols aren't "
+                   "blocked — they surface as UNRATEABLE in the run.")
+
+        new_id = st.text_input("Save as id (must encode a version, e.g. `my_list_v1`)",
+                               key="ed_id", placeholder="my_watchlist_v1").strip()
+
+        CAP = 60
+        run_problems: list[str] = []
+        if not tickers:
+            run_problems.append("Add at least one ticker to run.")
+        if len(tickers) > CAP:
+            run_problems.append(f"List too large ({len(tickers)} > {CAP}) for an "
+                                "interactive run — trim it.")
+        if not ranker_only and not has_key:
+            run_problems.append("Narrator / second-opinion needs ANTHROPIC_API_KEY. Use "
+                                "**Ranker only** (above) to run with no LLM and no cost.")
+
+        col_run, col_save = st.columns(2)
+        with col_run:
+            run_once = st.button("▶ Run once (ad-hoc — nothing saved)", key="ed_run_once",
+                                 disabled=bool(run_problems))
+        with col_save:
+            save = st.button("💾 Save to universes/local/", key="ed_save",
+                             disabled=not (tickers and new_id))
+
+        for msg in run_problems:
+            st.info(msg)
+
+        if run_once and tickers:
+            # The EXISTING ad-hoc path: universe_id=None -> adhoc:<hex8> fingerprint, the
+            # same run_rank_pipeline entry the Custom paste uses. Nothing is written.
+            status = st.status("Starting ad-hoc run…", expanded=True)
+            try:
+                from aristos_council.pipeline import run_rank_pipeline
+
+                result = run_rank_pipeline(
+                    tickers, rank_strategy.id, universe_id=None, council_mode=mode,
+                    ranker_only=ranker_only, strategies_dir=STRATEGIES_DIR,
+                    universes_dir=UNIVERSES_DIR, freeze_dir=ROOT / "runs",
+                    progress=lambda m: status.update(label=m))
+            except Exception as exc:
+                status.update(label="Run failed", state="error")
+                st.exception(exc)
+            else:
+                status.update(label="Done.", state="complete")
+                st.session_state["uni_result"] = result
+                st.session_state["uni_run_start"] = datetime.now(timezone.utc)
+                st.rerun()
+
+        if save and tickers and new_id:
+            try:
+                created = datetime.now(ZoneInfo("Europe/Berlin")).date().isoformat()
+                path = save_local_universe(
+                    UNIVERSES_DIR, id=new_id, tickers=tickers, created=created,
+                    display_name=name, rationale=rationale, graded_ids=graded)
+            except (ValueError, ValidationError) as exc:
+                st.error(str(exc))
+            else:
+                st.success(f"Saved **{new_id}** → `{path.relative_to(ROOT)}` "
+                           f"({len(tickers)} names). It's now selectable everywhere, "
+                           "tagged (local), and gitignored by default.")
 
 
 def _render_snapshot_history() -> None:
