@@ -386,14 +386,20 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert "Custom (paste tickers)" in uni
     assert not any("Validation Bench" in o for o in uni)             # trap bench hidden
     assert not any("Energy Watch" in o for o in uni)                 # observation hidden
-    assert len(uni) == 4                          # 2 scoreboard + financials + Custom
+    assert any("Dividend ETFs (US)" in o for o in uni)               # ETF-1 exploratory cohort
+    assert any("Growth ETFs (US)" in o for o in uni)                 # ETF-1 exploratory cohort
+    # ETF-1 ITEM 4: 2 scoreboard + financials + 2 ETF cohorts + Custom.
+    assert len(uni) == 6
 
     rank = _dropdown(at, "Rank strategy").options
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
     assert any("GARP" in o for o in rank)                           # growth is live (4C)
     assert any("RAW" in o for o in rank)                            # canonical raw (RAW-1)
     assert any("Financials" in o for o in rank)                     # financials lens (FIN-1)
-    assert len(rank) == 5             # conservative_plus + flagship + GARP + RAW + Financials
+    assert any("Dividend ETFs" in o for o in rank)                  # ETF-1 dividend lens
+    assert any("Growth ETFs" in o for o in rank)                    # ETF-1 growth lens
+    # ETF-1 ITEM 3: 5 stock lenses + 2 visible ETF lenses.
+    assert len(rank) == 7
 
 
 def test_both_strategy_dropdowns_list_the_live_strategies():
@@ -410,7 +416,8 @@ def test_both_strategy_dropdowns_list_the_live_strategies():
         assert any("RAW" in o for o in opts)                         # canonical raw
         assert any("Financials" in o for o in opts)                  # financials lens (FIN-1)
         assert not any("_" in o for o in opts)                       # display names, no ids
-        assert len(opts) == 5
+        # ETF-1 ITEM 3: 5 stock lenses + 2 visible ETF lenses.
+        assert len(opts) == 7
 
 
 def test_financials_16_is_front_stage_in_both_universe_selectors():
