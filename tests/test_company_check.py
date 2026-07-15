@@ -215,6 +215,47 @@ def test_momentum_factor_renders_as_signed_percent():
     assert format_factor_value("momentum_12m", mom.value) in format_company_check(r)
 
 
+# --------------------------------------------------------------------------- #
+# ETFCHK-2 — plain-English gloss on the ETF expense-ratio line
+# --------------------------------------------------------------------------- #
+_ETF = Fundamentals(
+    ticker="VYM", company_name="Vanguard High Dividend Yield ETF",
+    net_expense_ratio=0.0006, total_assets=6.0e10, dividend_yield=0.028,
+    quote_type="ETF")
+
+
+def test_expense_ratio_gloss_renders_for_etf_strategy():
+    r = _check(_ETF, ticker="VYM", strat="etf_dividend_v1")
+    text = format_company_check(r)
+    # the fee is spelled out in plain English, computed from the ratio (0.0006 -> €0.60).
+    assert "the fund's annual fee: €0.60 per €1,000 held, charged every year" in text
+    # the gloss lives ON the expense_ratio line, and the basis tag ([source]) and cohort
+    # context (— …) around it are untouched.
+    line = next(l for l in text.splitlines() if "(expense_ratio):" in l)
+    assert "the fund's annual fee: €0.60 per €1,000 held" in line
+    assert "[" in line and "]" in line                       # basis/source tag intact
+    assert "no reference run available" in line               # cohort context intact
+
+
+def test_expense_ratio_per_1000_arithmetic():
+    from aristos_council.company_check import _expense_ratio_gloss
+    # 0.0006 -> €0.60, 0.0061 -> €6.10 (fee = ratio × €1,000, two decimals).
+    assert _expense_ratio_gloss(0.0006) == (
+        " — the fund's annual fee: €0.60 per €1,000 held, charged every year")
+    assert _expense_ratio_gloss(0.0061) == (
+        " — the fund's annual fee: €6.10 per €1,000 held, charged every year")
+    # a missing ratio has nothing to gloss.
+    assert _expense_ratio_gloss(None) == ""
+
+
+def test_stock_strategy_output_unchanged_by_gloss():
+    # a stock strategy has no expense_ratio factor, so the gloss never appears — its
+    # factor block is byte-for-byte what it was before ETFCHK-2.
+    text = format_company_check(_check(_MU, ticker="MU"))
+    assert "annual fee" not in text
+    assert "per €1,000 held" not in text
+
+
 def test_market_cap_deduped_only_when_floors_match():
     # Flagship: lens-screen floor (5B) == rank gate (5B) -> deduped to GATES only.
     flag = _check(_MU, ticker="MU")
