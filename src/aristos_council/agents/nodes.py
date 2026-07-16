@@ -156,6 +156,29 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
             lambda: adapter.get_fundamentals(state.ticker),
             source="fundamentals",
         )
+        # NARR-STATIC-1: surface the factor values the RANKER served from the committed
+        # static layer (ETF-STATIC-1) into the evidence ledger, each with its provenance
+        # receipt, so the narrator can AUDIT the lens's defining numbers (an ETF's
+        # yield/fee) instead of reporting them "not present anywhere in the ledger". The
+        # ranker computed these upstream (vendor-plausible values win; stale/abstained
+        # fields are already OMITTED from the packet), so this only PLUMBS them through —
+        # no recomputation, no phantom fill. Empty for a single-ticker council, so its
+        # ledger stays byte-unchanged.
+        if state.static_factor_evidence:
+            state.tool_calls.append(
+                ToolCall(
+                    call_id=_new_call_id(),
+                    tool_name=_STATIC_LAYER_LEDGER_TOOL,
+                    inputs={"ticker": state.ticker},
+                    output={
+                        "factors": state.static_factor_evidence,
+                        "note": ("factor values SERVED FROM THE COMMITTED STATIC LAYER "
+                                 "(ETF-STATIC-1); each carries its provenance receipt "
+                                 "[static: <as_of>, <source>]. Cite value + provenance "
+                                 "to audit the rank."),
+                    },
+                )
+            )
         # Strategy-scoped tool selection (Sprint 4E): only fetch dividend history
         # when the active strategy actually needs it. A growth run never sees
         # dividend events, so agents can't weave dividend narratives / cite
@@ -303,6 +326,11 @@ MAX_TOOL_OUTPUT_CHARS = 12000  # per tool call, in prompts only — ledger keeps
 _SCREEN_LEDGER_TOOL = "run_strategy_screen"
 _LEGACY_SCREEN_LEDGER_TOOLS = {"run_dividend_aristocrat_screen"}
 _SCREEN_DISPLAY_TOOL = "run_screen"
+
+# NARR-STATIC-1: the ledger tool_name under which the rank pipeline's static-sourced
+# factor values (ETF-STATIC-1) land in the narrator's evidence, each with its
+# ``static: <as_of>, <source>`` provenance receipt.
+_STATIC_LAYER_LEDGER_TOOL = "static_layer"
 
 
 def _is_screen_tool(name: str) -> bool:

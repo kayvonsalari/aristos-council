@@ -344,6 +344,16 @@ class ResearchState(BaseModel):
     # deterministic evidence-coverage score (see coverage.py) can discount an
     # imputation-heavy rank. None on a standalone council run (no ranker).
     ranker_imputed_fraction: Optional[float] = None
+    # NARR-STATIC-1: factor values the RANKER served from the COMMITTED static layer
+    # (ETF-STATIC-1) for THIS name, threaded in so the narrator's evidence ledger carries
+    # the lens's static-sourced defining numbers (an ETF's yield/fee) WITH their provenance
+    # receipts — the writer was flying blind, honestly reporting them "not present anywhere
+    # in the ledger". Each entry: {"factor": <name>, "value": <raw float>,
+    # "provenance": "static: <as_of>, <source>"}. Vendor-computed and abstained (incl.
+    # stale-withheld) factors are OMITTED — the ledger carries only what WAS served from
+    # static, never a phantom fill. Empty for a stock run / a run with no static-sourced
+    # factor, so the ledger stays byte-unchanged there. Rank-pipeline only.
+    static_factor_evidence: list[dict] = Field(default_factory=list)
     # Ephemeral per-run disposition overrides applied on top of the base strategy
     # (e.g. {"partial_pass_allows_hold": false,
     #        "criteria.min_dividend_growth_streak.is_gating": true}). Empty for a
