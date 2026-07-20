@@ -100,11 +100,12 @@ def test_financials_v1_is_a_visible_rank_strategy():
     vis = visible_rank_strategies(STRAT_DIR)
     ids = [s.id for s in vis]
     assert "financials_v1" in ids
-    # ETF-1 ITEM 3 added two visible ETF lenses, so the visible set grew 5 -> 7:
+    # ETF-1 ITEM 3 added two visible ETF lenses (5 -> 7); ETFCORE-1 ITEM 1 adds the
+    # core-market ETF lens (7 -> 8):
     # conservative_plus, financials, growth_garp_v2, magic_formula_momentum,
-    # magic_formula_raw + etf_dividend_v1, etf_growth_v1 (growth_garp_v1 /
+    # magic_formula_raw + etf_dividend_v1, etf_growth_v1, etf_core_v1 (growth_garp_v1 /
     # magic_formula_v1 stay hidden).
-    assert len(vis) == 7
+    assert len(vis) == 8
     assert {"etf_dividend_v1", "etf_growth_v1"} <= set(ids)
 
 
