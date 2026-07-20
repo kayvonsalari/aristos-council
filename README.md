@@ -11,6 +11,22 @@ panel of specialist LLM agents then writes the narrative around that verdict —
 story, the strategy fit, the open questions worth a human's attention — under a hard rule:
 **the language models explain; they do not judge, and they never do arithmetic.**
 
+## Why this is different — four promises you can check
+
+Most screeners tell you what to buy. Aristos shows its work so thoroughly you could catch it lying — and it never has to lie, because it is allowed to say "I don't know."
+
+**1. Every verdict replays.** The data behind each run is frozen with the result. Re-run it months later and it reproduces byte-for-byte. No "trust me" — history cannot be quietly rewritten.
+
+**2. Bad data gets refused, not used.** Wrong-currency figures are converted with the conversion receipt shown. Implausible vendor values are flagged and withheld. Missing fields abstain — the system says "not evaluated" instead of inventing a number.
+
+**3. The AI explains; it never decides — and even its explanations are audited.** Verdicts come from deterministic arithmetic. A language model writes the narrative, and an automatic fact-checker reads every sentence against the rank table, stamping a visible warning on anything that doesn't match.
+
+**4. It quotes its records instead of improvising.** Ask about one name and it cites the verdict of record — what the last frozen run actually concluded, with the date — like a filed document, not a fresh opinion.
+
+A prospective, append-only scoreboard is accumulating dated verdicts to test whether they were also *good* — that part only time can write.
+
+Details: [A note on honesty](#a-note-on-honesty).
+
 ## What this is — and what it isn't
 
 Aristos Council is a research prototype with one central claim: **AI-era investment tooling can be
