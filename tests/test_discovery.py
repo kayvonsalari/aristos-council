@@ -65,6 +65,7 @@ def test_every_live_strategy_gets_exactly_one_kind():
         "growth_screen_v2": "lens",           # 4C-FIX-1: the v2 lens (no momentum gate)
         "etf_dividend_v1": "rank",            # ETF-1 ITEM 3: dividend-ETF lens
         "etf_growth_v1": "rank",              # ETF-1 ITEM 3: growth-ETF lens
+        "etf_core_v1": "rank",                # ETFCORE-1 ITEM 1: core-market-ETF lens
     }
     for sid, kind in expected.items():
         assert _kind_of(sid) == kind, sid
@@ -86,9 +87,10 @@ def test_visible_rank_set_is_the_live_strategies():
     # rank strategy; RAW-1's magic_formula_raw_v1 is visible too; FIN-1 adds the
     # financials lens -> five.
     # ETF-1 ITEM 3: the two exploratory ETF lenses are visible too.
+    # ETFCORE-1 ITEM 1: the core-market ETF lens joins them.
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
                        "growth_garp_v2", "magic_formula_raw_v1", "financials_v1",
-                       "etf_dividend_v1", "etf_growth_v1"}
+                       "etf_dividend_v1", "etf_growth_v1", "etf_core_v1"}
 
 
 def test_hidden_flag_is_respected_and_screens_never_appear():

@@ -1,0 +1,36 @@
+# etf_core_ucits_v1 — euro-investable UCITS core-market-ETF universe (ETFCORE-1 ITEM 2).
+# ======================================================================================
+# The UCITS-domiciled, euro-investable broad-market ("core") ETFs the etf_core_v1 lens
+# ranks over. OBSERVATION ONLY — never graded on a scoreboard; this cohort exists to watch
+# how a euro-investable core lens behaves, not to rank for a verdict of record.
+#
+# ACC and DIST share classes are DELIBERATELY MIXED here: the core lens does not rank
+# distribution_yield, so a fund's share-class choice (accumulating vs distributing) does
+# not bias its rank. The slow factor fields (expense ratio, fund size) come from the
+# committed static layer where the free vendor is thin — rows to follow via the established
+# EODHD-fundamentals-API-sourced static CSV process (ETF-STATIC-1).
+id: etf_core_ucits_v1
+display_name: Core Market ETFs (UCITS)
+role: euro-investable exploration — observation only
+description: >-
+  Euro-investable UCITS broad-market ("core") ETFs for the etf_core_v1 lens. The slow
+  factor fields (expense ratio, fund size) are served from the committed static layer
+  (EODHD-fundamentals-API-sourced, dated) where the free vendor is thin — rows to follow
+  via the established static-CSV process. ACC and DIST share classes are deliberately mixed
+  since yield is not ranked by the core lens.
+created: "2026-07-20"
+rationale: >-
+  Euro-investable UCITS core cohort — the observation-only European counterpart the
+  etf_core_v1 lens ranks over. Slow fields are static-layer/EODHD-sourced (ETF-STATIC-1),
+  so a run replays them byte-identically. ACC and DIST share classes are deliberately mixed
+  because the core lens does not rank distribution_yield — yield is a share-class artefact
+  here, not the buying criterion, so mixing classes introduces no ranking bias.
+tickers:
+  - VWCE.DE
+  - IWDA.AS
+  - SXR8.DE
+  - CSPX.L
+  - VUSA.AS
+  - EUNL.DE
+  - SPYY.DE
+  - VGWL.DE

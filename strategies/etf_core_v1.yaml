@@ -1,0 +1,56 @@
+# Core Market ETFs (rank-based, no screens — house doctrine) — ETFCORE-1 ITEM 1.
+# ==============================================================================
+# HONESTY NOTE (verbatim, ETFCORE-1 ITEM 1): core funds differ mainly in what they track
+# and what they charge; tracking quality and index choice are not vendor-measurable — this
+# lens compares cost, scale and trend among self-declared broad-market funds, nothing more;
+# the fee factor matters MOST here because these are the largest, longest-held positions.
+#
+# Rank a universe of broad-market ("core") ETFs on cost, size, and trend; combine the
+# ranks; no screens, no floors. EXPLORATORY: never on the prospective scoreboard until
+# deliberately frozen. Modelled on etf_growth_v1 (same conventions, same kind-gate wiring).
+#
+# NOTE — deliberately NO distribution_yield factor: core funds mix accumulating (ACC) and
+# distributing (DIST) share classes, so yield is a share-class artefact, not the buying
+# criterion. Ranking on it would penalise ACC classes for a structural zero.
+id: etf_core_v1
+name: Core Market ETFs
+display_name: Core Market ETFs
+version: 1
+
+description: >-
+  Rank broad-market ("core") ETFs on expense ratio (cost, ranked low), fund size
+  (liquidity + closure risk), and 12-month momentum (trend). Rank-first, no screens;
+  abstention on a missing field never excludes a fund. No distribution_yield factor —
+  core cohorts mix ACC/DIST classes and yield is not the buying criterion.
+
+# The honesty note is carried VERBATIM here so it travels with every render of the lens.
+rationale: >-
+  core funds differ mainly in what they track and what they charge; tracking quality and
+  index choice are not vendor-measurable — this lens compares cost, scale and trend among
+  self-declared broad-market funds, nothing more; the fee factor matters MOST here because
+  these are the largest, longest-held positions. Exploratory (modelled on etf_growth_v1);
+  no distribution_yield factor because core cohorts mix ACC/DIST share classes and yield is
+  a share-class artefact, not the buying criterion.
+
+# Asset-kind scope (ETFCORE-1 ITEM 1): this lens admits ONLY ETFs. An equity leaking in
+# would be ranked on the wrong footing, so the confirmed-only kind gate walls it out
+# before any factor path.
+asset_kinds:
+  - etf
+asset_kind_rationale: >-
+  Expense ratio and fund size are fund attributes; an operating company has none of
+  them, so a non-ETF is gated out of this lens.
+
+# Suggested universes (UNI-1): the ETFCORE-1 euro-investable UCITS core cohort (UCITS,
+# observation only). Selectable, never a lock — every other universe stays one-click.
+suggested_universes:
+  - etf_core_ucits_v1
+
+factors:
+  - name: expense_ratio        # cost    — LOWER ranks better (compounds against holder)
+  - name: fund_size            # size    — higher ranks better (liquidity, closure risk)
+  - name: momentum_12m         # trend   — higher ranks better
+
+cut: quintile
+missing: neutral               # abstention on a missing field: judge on what's present,
+                               # never exclude (house doctrine — no screens, no floors)

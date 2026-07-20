@@ -103,7 +103,8 @@ def test_visible_universes_hides_the_bench_by_default():
     # observation/control assets stay back).
     assert off == {"growth_40_v1", "defensive_income_16_v1", "financials_16_v1",
                    "etf_dividend_us_v1", "etf_growth_us_v1",
-                   "etf_dividend_ucits_v1", "etf_growth_ucits_v1"}
+                   "etf_dividend_ucits_v1", "etf_growth_ucits_v1",
+                   "etf_core_ucits_v1"}
     on = {u.id for u in visible_universes(manifests, show_validation=True)}
     assert "defensive_16_v1" in on                                      # bench revealed
     # the never-graded observation/control assets stay backstage (role-derived, UNI-1):
