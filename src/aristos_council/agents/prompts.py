@@ -34,7 +34,13 @@ from ..strategy.loader import Strategy
 #        The narrator MAY report factor/screen values but MUST NOT reinterpret
 #        accounting or assert forward deterioration as fact (open questions only); in
 #        narrator mode specialists are pure ANALYSTS (no agrees_with_ranker question).
-PROMPT_VERSION = "v5"
+#   v6 = LENS-APPROPRIATE specialist framing (NARR-PROMPT-1): the FUNDAMENTAL brief is
+#        derived from what the lens ACTUALLY ranks instead of a hardcoded dividend/quality
+#        string, so a non-dividend ETF lens (etf_core_v1) is no longer framed with
+#        dividend-durability language. Templated per strategy KIND (stock / dividend-ETF /
+#        core-or-growth-ETF), interpolating the factor names — NO per-strategy-id prompt.
+#        Stock/screen lenses are byte-unchanged; only screen-less ETF rank frames diverge.
+PROMPT_VERSION = "v6"
 
 
 HARD_RULES = (
@@ -120,6 +126,47 @@ SPECIALIST_BRIEFS = {
 }
 
 
+def fundamental_brief_for_lens(strategy) -> str:
+    """The LENS-AWARE FUNDAMENTAL brief (NARR-PROMPT-1), derived from what the lens
+    ACTUALLY ranks so a non-dividend lens is never framed with dividend language.
+
+    ``strategy`` is a RANK strategy (duck-typed: ``.factors[*].name`` + ``.asset_kinds``);
+    the derivation is by strategy KIND, interpolating the factor names — never a
+    hand-written prompt per strategy id:
+
+    - STOCK lens (``asset_kinds`` has no ``etf``) -> "" so the DEFAULT stock brief
+      (``SPECIALIST_BRIEFS``) stands byte-for-byte: value lenses keep today's framing.
+    - DIVIDEND-ETF lens (an ETF lens that ranks ``distribution_yield``) -> assess payout
+      durability, cost, and size.
+    - CORE / GROWTH-ETF lens (an ETF lens with NO ``distribution_yield``) -> assess cost,
+      scale, and trend, and EXPLICITLY no dividend assessment (a broad-market/growth
+      cohort mixes accumulating and distributing share classes by design, so distribution
+      yield is a share-class artefact, not a buying criterion).
+    """
+    from ..factors import FACTOR_REGISTRY   # lazy: keep prompt load free of factor weight
+    asset_kinds = {k.strip().lower() for k in getattr(strategy, "asset_kinds", []) or []}
+    if "etf" not in asset_kinds:
+        return ""                           # stock lens -> keep today's brief verbatim
+    factor_names = [f.name for f in getattr(strategy, "factors", [])]
+    labels = "; ".join(FACTOR_REGISTRY[n].label
+                       for n in factor_names if n in FACTOR_REGISTRY)
+    if "distribution_yield" in factor_names:
+        return (
+            "You assess this FUND as an income holding on what the lens actually ranks "
+            f"— {labels}. Judge distribution/payout durability, cost (the expense ratio "
+            "compounds against the holder), and fund size (liquidity / closure risk) — "
+            "NOT single-company accounting. There is no screen; lean on the ranked factor "
+            "values in the evidence.")
+    return (
+        "You assess this FUND on what the lens actually ranks — "
+        f"{labels}. Judge cost (the expense ratio compounds against the holder), "
+        "scale / liquidity (fund size), and trend (price momentum). This is NOT an "
+        "income lens: do not assess dividends or payout. A broad-market / growth cohort "
+        "mixes accumulating and distributing share classes by design, so distribution "
+        "yield is a share-class artefact, not a buying criterion. There is no screen; "
+        "lean on the ranked factor values in the evidence.")
+
+
 def _ranker_analyst_note(strategy: Strategy) -> str:
     # STRATEGY-RELATIVE: the agrees_with_ranker question is judged against the ACTIVE
     # strategy's intent, never a hardcoded GARP/growth lens. A defensive candidate is
@@ -150,12 +197,18 @@ def specialist_system(who: SpecialistName, strategy: Strategy,
     # dropped (its fields are not emitted). In second_opinion mode it fires.
     ranker_note = ("" if council_mode == "narrator"
                    else f"{_ranker_analyst_note(strategy)}\n")
+    # LENS-AWARE FUNDAMENTAL brief (NARR-PROMPT-1): the screen-less rank frame stamps a
+    # lens-derived brief on `fundamental_brief`; every other role and every stock/screen
+    # lens (empty override) keep the default SPECIALIST_BRIEFS text byte-for-byte.
+    brief = SPECIALIST_BRIEFS[who]
+    if who == SpecialistName.FUNDAMENTAL:
+        brief = getattr(strategy, "fundamental_brief", "") or brief
     return (
         f"You are the {who.value.upper()} specialist on an investment research "
         f"council operating under the strategy '{strategy.name}' "
         f"(id {strategy.id}).\n"
         f"You judge each name AS A CANDIDATE FOR THIS STRATEGY, on its own terms.\n\n"
-        f"Your brief: {SPECIALIST_BRIEFS[who]}\n\n"
+        f"Your brief: {brief}\n\n"
         f"{HARD_RULES}\n"
         "5. ABSTAIN rather than guess when the evidence is insufficient for "
         "your domain.\n"

@@ -103,6 +103,7 @@ def _screenless_frame(rank_strategy):
     (so the evidence ledger carries no screen block, and the decision prompt drops the
     partial-pass policy line). ``model_construct`` bypasses the ``criteria`` min-length
     validator on purpose: screen-less IS zero criteria."""
+    from .agents.prompts import fundamental_brief_for_lens
     from .strategy.loader import Strategy
     base = (getattr(rank_strategy, "rationale", "") or "").strip()
     note = "This strategy screens nothing; quality enters via ranking."
@@ -113,7 +114,10 @@ def _screenless_frame(rank_strategy):
         version=getattr(rank_strategy, "version", 1),
         display_name=getattr(rank_strategy, "display_name", ""),
         criteria=[],
-        rationale=rationale)
+        rationale=rationale,
+        # NARR-PROMPT-1: frame the FUNDAMENTAL specialist by what THIS lens ranks (an ETF
+        # lens no longer imports dividend framing); "" for a stock lens -> default brief.
+        fundamental_brief=fundamental_brief_for_lens(rank_strategy))
 
 
 def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None):
