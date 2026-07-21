@@ -199,3 +199,44 @@ def test_loose_cohort_claim_that_names_the_ticker_still_flags():
     # "the worst in the cohort" (GS is 4th of 16, not worst) still annotates — this is the
     # class the pipeline post-check test exercises.
     assert _flagged("GS is the worst name in the cohort.", _FIN_GS)
+
+
+# --------------------------------------------------------------------------- #
+# NARR-CHK-4 — two live etf_core_v1 (2026-07-21) false positives on correct rank
+# prose must pass silently; a genuine ordinal inversion must still flag.
+# --------------------------------------------------------------------------- #
+# etf_core_v1 cohort of 5: this fund is 1st on fund_size, 2nd on expense_ratio, 5th (last)
+# on momentum_12m — combined 2nd overall.
+_ETF_CORE = {"N": 5, "combined_position": 2, "ticker": "VWCE",
+             "factors": {"fund_size": 1, "expense_ratio": 2, "momentum_12m": 5}}
+
+
+def test_multi_factor_word_superlatives_bind_per_clause_and_pass():
+    # false positive 1: "best" (fund_size, rank 1), "second-best" (expense_ratio, rank 2),
+    # "last" (momentum, rank 5) each bind to the factor their OWN clause names — all correct,
+    # so the sentence passes untouched. The old whole-sentence check paired "best" with
+    # momentum_12m (rank 5) and false-flagged.
+    assert check_narration(
+        "This means fund_size is the best in the cohort, expense_ratio is second-best, "
+        "and momentum_12m is last in the cohort.", _ETF_CORE) == []
+
+
+def test_negated_superlative_is_not_a_rank_claim_and_passes():
+    # false positive 2: "(Competitive, Not Best)" DISCLAIMS rank 1 — true of a rank-2 name —
+    # so the "Rank 2/5" citation must not be read as contradicting a (non-existent) rank-1
+    # claim. Bold/markdown wrapping does not change this.
+    assert check_narration(
+        "**Cost Factor — Rank 2/5 (Competitive, Not Best)**", _ETF_CORE) == []
+
+
+def test_true_word_superlative_inversion_still_flags():
+    # a genuinely wrong ordinal claim stays caught: this fund is rank 5/5 on momentum
+    # (last), yet the write-up calls it the strongest — a real inversion.
+    assert _flagged(
+        "VWCE's momentum rank 5/5 is described as the strongest in the cohort.", _ETF_CORE)
+
+
+def test_wrong_word_superlative_bound_to_its_factor_still_flags():
+    # per-clause binding does not weaken the catch: a clause that calls the rank-5 momentum
+    # factor "the best" (no citation) is flagged against that factor's actual rank.
+    assert _flagged("momentum_12m is the best in the cohort.", _ETF_CORE)
