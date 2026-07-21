@@ -7,12 +7,17 @@ path.
 """
 
 import importlib.util
+import sys
 from datetime import date
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "generate_etf_static_rows.py"
 _spec = importlib.util.spec_from_file_location("generate_etf_static_rows", SCRIPT)
 gen = importlib.util.module_from_spec(_spec)
+# Register before exec so the @dataclass decorator can resolve the module via
+# sys.modules during class creation (dataclasses._is_type calls
+# sys.modules.get(cls.__module__)); an unregistered module -> AttributeError.
+sys.modules[_spec.name] = gen
 _spec.loader.exec_module(gen)
 
 AS_OF = date(2026, 7, 21).isoformat()
