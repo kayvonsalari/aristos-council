@@ -57,7 +57,8 @@ def build_council(
             who.value,
             make_specialist_node(who, strategy, runners["specialist"], council_mode),
         )
-    g.add_node("critic", make_critic_node(strategy, runners["critic"]))
+    g.add_node("critic",
+               make_critic_node(strategy, runners["critic"], council_mode))
     g.add_node("decision",
                make_decision_node(strategy, runners["decision"], council_mode))
     g.add_node("audit", make_audit_node())

@@ -1126,11 +1126,15 @@ def _parse_universe(raw: str) -> list[str]:
     return out
 
 
-def _estimate_shortlist_size(n: int, rank_strategy) -> int:
+def _estimate_shortlist_size(n: int, rank_strategy, *,
+                             narrate_coverage: str = "buys_only") -> int:
     """Rough shortlist size for a pre-run cost hint (exact size is known only after
-    the free ranking pass, which exclusions shrink)."""
+    the free ranking pass, which exclusions shrink). ``narrate_coverage='all'``
+    narrates every ranked name, so the estimate is the whole (pre-screen) universe."""
     if n == 0:
         return 0
+    if narrate_coverage == "all":
+        return n
     runs_on = rank_strategy.council_runs_on
     if runs_on == "all":
         return n
@@ -1191,6 +1195,7 @@ def _universe_markdown(result) -> str:
              f"- ranked: {m['ranked_count']} / {m['universe_size']}"]
     if not m["ranker_only"]:
         lines.append(f"- shortlist: {len(m['shortlist'])} · est ${m['est_cost']:.2f}")
+        lines.append(f"- narration coverage: {m.get('narrate_coverage', 'buys_only')}")
     lines += ["", "## Ranked (verdict of record)", ""]
     rows, factor_names = _ranked_rows(result.ranked, result.names)
     if rows:
@@ -1248,7 +1253,8 @@ def _render_universe_result(result) -> None:
                  f"ranked {m['ranked_count']}/{m['universe_size']}")
     if not m["ranker_only"]:
         meta_bits += (f" · shortlist {len(m['shortlist'])} · "
-                      f"est ${m['est_cost']:.2f}")
+                      f"est ${m['est_cost']:.2f} · "
+                      f"narrate {m.get('narrate_coverage', 'buys_only')}")
     st.caption(meta_bits)
 
     # 2 — RANKED table: sortable, verdict palette, per-factor ranks (imputed *).
@@ -1442,6 +1448,18 @@ def render_universe_tab(show_validation: bool = False) -> None:
             help="narrator: the LLM explains the ranker verdict (default). "
                  "second_opinion: an independent comparison verdict — a pre-registered "
                  "experiment that returned a null result; kept behind this flag.")
+        # NARR-2 ITEM 2: which ranked names get narrated. buys_only (default, cheapest)
+        # for stock screens; all for core/ETF cohorts where the HOLDs are live
+        # candidates being compared, not rejects.
+        _cov_label = {"buys_only": "Narrate: BUYs only (cheapest)",
+                      "all": "Narrate: all ranked names"}
+        narrate_coverage = st.selectbox(
+            "Narration coverage", ["buys_only", "all"],
+            key="uni_coverage", disabled=ranker_only,
+            format_func=lambda c: _cov_label[c],
+            help="BUYs only: narrate the shortlist (cheapest — good for stock screens). "
+                 "all: narrate every ranked name — for core/ETF cohorts where the HOLDs "
+                 "are live options you're comparing, not rejects.")
 
     st.caption(f"**{len(universe)}** ticker(s) parsed.")
 
@@ -1459,7 +1477,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
                         "run with no LLM and no cost.")
 
     if not ranker_only and universe and len(universe) <= CAP:
-        est = estimate_cost(_estimate_shortlist_size(len(universe), rank_strategy))
+        est = estimate_cost(
+            _estimate_shortlist_size(len(universe), rank_strategy,
+                                     narrate_coverage=narrate_coverage))
         st.caption(f"Estimated council cost ≈ **${est:.2f}** — upper bound (pre-screen); "
                    "the exact shortlist (after the screen prefilter) is shown after ranking.")
 
@@ -1478,6 +1498,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
             result = run_rank_pipeline(
                 universe, rank_strategy.id, universe_id=universe_id,
                 council_mode=mode, ranker_only=ranker_only,
+                narrate_coverage=narrate_coverage,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 # Freeze this run's raw inputs so Company Check's reference-cohort reader
                 # (_latest_reference_run) can replay it offline — without this the UI
@@ -1503,13 +1524,15 @@ def render_universe_tab(show_validation: bool = False) -> None:
 
     st.divider()
     render_universe_editor(rank_strategy, mode=mode, ranker_only=ranker_only,
-                           has_key=has_key, show_validation=show_validation)
+                           has_key=has_key, show_validation=show_validation,
+                           narrate_coverage=narrate_coverage)
 
     _render_snapshot_history()
 
 
 def render_universe_editor(rank_strategy, *, mode: str, ranker_only: bool,
-                           has_key: bool, show_validation: bool = False) -> None:
+                           has_key: bool, show_validation: bool = False,
+                           narrate_coverage: str = "buys_only") -> None:
     """Universe Editor (UNIED-1) — build a custom list from scratch or a clone, then Run
     once (ad-hoc, no file) or Save it to ``universes/local/``. Reuses the tab's selected
     rank strategy + run settings for Run once, so an editor run is the SAME ad-hoc
@@ -1603,7 +1626,8 @@ def render_universe_editor(rank_strategy, *, mode: str, ranker_only: bool,
 
                 result = run_rank_pipeline(
                     tickers, rank_strategy.id, universe_id=None, council_mode=mode,
-                    ranker_only=ranker_only, strategies_dir=STRATEGIES_DIR,
+                    ranker_only=ranker_only, narrate_coverage=narrate_coverage,
+                    strategies_dir=STRATEGIES_DIR,
                     universes_dir=UNIVERSES_DIR, freeze_dir=ROOT / "runs",
                     progress=lambda m: status.update(label=m))
             except Exception as exc:
