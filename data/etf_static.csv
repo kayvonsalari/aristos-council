@@ -15,6 +15,13 @@
 # staleness line on its own, abstaining until refreshed — do NOT bump `as_of` without
 # re-checking the numbers. All rows are human-entered; nothing here is scraped.
 #
+# NEW ETF UNIVERSE? Run `scripts/generate_etf_static_rows.py <universe_id>` (needs
+# EODHD_API_KEY) — it prints paste-ready rows in this column order with the accumulated
+# sanity guards applied (fee from Ongoing_Charge, implausible fund size blanked, yield
+# converted to a fraction, dist/acc inferred, domicile mapped). Review the emitted rows,
+# then paste them under the header below via an issue/PR. The script never writes here —
+# a human verifies and commits, exactly as with the monthly refresh above.
+#
 # COLUMNS:
 #   ticker              — normalized (upper-case) fund symbol.
 #   expense_ratio       — net expense ratio as a PERCENT, matching the vendor
