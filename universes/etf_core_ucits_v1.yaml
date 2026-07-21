@@ -4,16 +4,31 @@
 # ranks over. OBSERVATION ONLY — never graded on a scoreboard; this cohort exists to watch
 # how a euro-investable core lens behaves, not to rank for a verdict of record.
 #
+# ONE LISTING PER DISTINCT FUND (ETFCORE-2 ITEM 1). The v1 list carried 8 tickers that were
+# only 5 distinct funds — three pairs of exchange twins (same fund, same ISIN, two listings):
+#   VWCE.DE  == VGWL.DE   (Vanguard FTSE All-World UCITS Acc, IE00BK5BQT80)
+#   SXR8.DE  == CSPX.L    (iShares Core S&P 500 UCITS Acc,     IE00B5BMR087)
+#   EUNL.DE  == IWDA.AS   (iShares Core MSCI World UCITS Acc,  IE00B4L5Y983)
+# Ranking the same fund against itself manufactures noise from listing-level price drift
+# (two exchanges quote the same NAV at slightly different times / FX marks / spreads), so a
+# duplicated fund would score twice on cost and size and split its own momentum rank on quote
+# artefacts rather than anything real. We keep ONE listing per fund and prefer the Xetra (.DE)
+# line where it exists (the deepest euro-book for these names); the dropped alternates are
+# recorded in `description` so nobody re-adds them thinking they were an oversight.
+#
 # ACC and DIST share classes are DELIBERATELY MIXED here: the core lens does not rank
 # distribution_yield, so a fund's share-class choice (accumulating vs distributing) does
 # not bias its rank. The slow factor fields (expense ratio, fund size) come from the
 # committed static layer where the free vendor is thin — rows to follow via the established
-# EODHD-fundamentals-API-sourced static CSV process (ETF-STATIC-1).
+# EODHD-fundamentals-API-sourced static CSV process (scripts/generate_etf_static_rows.py).
 id: etf_core_ucits_v1
 display_name: Core Market ETFs (UCITS)
 role: euro-investable exploration — observation only
 description: >-
-  Euro-investable UCITS broad-market ("core") ETFs for the etf_core_v1 lens. The slow
+  Euro-investable UCITS broad-market ("core") ETFs for the etf_core_v1 lens — ONE listing
+  per distinct fund (Xetra line preferred). The removed exchange twins also trade as:
+  VWCE.DE also trades as VGWL.DE; SXR8.DE also trades as CSPX.L; EUNL.DE also trades as
+  IWDA.AS — same fund, same ISIN, dropped so a fund is not ranked against itself. The slow
   factor fields (expense ratio, fund size) are served from the committed static layer
   (EODHD-fundamentals-API-sourced, dated) where the free vendor is thin — rows to follow
   via the established static-CSV process. ACC and DIST share classes are deliberately mixed
@@ -21,16 +36,15 @@ description: >-
 created: "2026-07-20"
 rationale: >-
   Euro-investable UCITS core cohort — the observation-only European counterpart the
-  etf_core_v1 lens ranks over. Slow fields are static-layer/EODHD-sourced (ETF-STATIC-1),
-  so a run replays them byte-identically. ACC and DIST share classes are deliberately mixed
-  because the core lens does not rank distribution_yield — yield is a share-class artefact
-  here, not the buying criterion, so mixing classes introduces no ranking bias.
+  etf_core_v1 lens ranks over, deduped to one listing per distinct fund (Xetra preferred):
+  ranking a fund against its own exchange twin only manufactures noise from listing-level
+  price drift. Slow fields are static-layer/EODHD-sourced (ETF-STATIC-1), so a run replays
+  them byte-identically. ACC and DIST share classes are deliberately mixed because the core
+  lens does not rank distribution_yield — yield is a share-class artefact here, not the
+  buying criterion, so mixing classes introduces no ranking bias.
 tickers:
   - VWCE.DE
-  - IWDA.AS
   - SXR8.DE
-  - CSPX.L
   - VUSA.AS
   - EUNL.DE
   - SPYY.DE
-  - VGWL.DE

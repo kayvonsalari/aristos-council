@@ -28,8 +28,9 @@ CORE_HONESTY_NOTE = (
     "trend among self-declared broad-market funds, nothing more; the fee factor matters "
     "MOST here because these are the largest, longest-held positions")
 
-CORE_UCITS = ["VWCE.DE", "IWDA.AS", "SXR8.DE", "CSPX.L", "VUSA.AS", "EUNL.DE",
-              "SPYY.DE", "VGWL.DE"]
+# ETFCORE-2 ITEM 1: deduped to ONE listing per distinct fund (Xetra line preferred). The
+# dropped exchange twins (VGWL.DE, CSPX.L, IWDA.AS) are the same funds by ISIN.
+CORE_UCITS = ["VWCE.DE", "SXR8.DE", "VUSA.AS", "EUNL.DE", "SPYY.DE"]
 
 
 # --- ITEM 1: the lens loads, is shaped as specced, carries the honesty note ---- #
@@ -54,11 +55,22 @@ def test_core_lens_is_a_visible_rank_strategy():
 
 
 # --- ITEM 2: the UCITS core universe is discovered, front-stage, observation-only #
-def test_core_ucits_universe_loads_with_all_eight_tickers():
+def test_core_ucits_universe_loads_with_five_distinct_funds():
     u = load_universe_by_id("etf_core_ucits_v1", UNIV_DIR)
     assert u.tickers == CORE_UCITS
     assert u.display_name == "Core Market ETFs (UCITS)"
     assert u.role == "euro-investable exploration — observation only"
+
+
+def test_core_ucits_universe_documents_removed_exchange_twins():
+    # ETFCORE-2 ITEM 1: the dropped alternates are recorded ("also trades as ...") and the
+    # file explains WHY one listing per fund (listing-level price drift is noise).
+    u = load_universe_by_id("etf_core_ucits_v1", UNIV_DIR)
+    text = (u.description + " " + u.rationale).lower()
+    for twin in ("vgwl.de", "cspx.l", "iwda.as"):
+        assert twin in text
+    assert "also trades as" in text
+    assert "drift" in text
 
 
 def test_core_ucits_universe_documents_static_layer_and_mixed_share_classes():
@@ -82,6 +94,34 @@ def test_core_lens_suggests_the_ucits_universe():
     assert "etf_core_ucits_v1" in s.suggested_universes
     for uid in s.suggested_universes:
         assert load_universe_by_id(uid, UNIV_DIR).id == uid
+
+
+def test_core_ucits_universe_has_no_duplicate_isins():
+    # ETFCORE-2 ITEM 1: the dedupe guarantee, enforced against the static layer. Once the
+    # static rows carry an ISIN (a future column), no two tickers in this universe may share
+    # one — a shared ISIN means the same fund is listed twice. Skip-if-absent: the static
+    # rows do not carry an ISIN yet, so this asserts nothing until they do (the check turns
+    # live the moment the column exists, catching a re-added exchange twin).
+    import pytest
+
+    from aristos_council.etf_static import DEFAULT_STATIC_PATH, load_static
+
+    u = load_universe_by_id("etf_core_ucits_v1", UNIV_DIR)
+    rows = load_static(DEFAULT_STATIC_PATH)
+    isins: dict[str, str] = {}
+    for ticker in u.tickers:
+        row = rows.get(ticker)
+        isin = getattr(row, "isin", None) if row is not None else None
+        if isin:
+            isins[ticker] = isin
+    if not isins:
+        pytest.skip("static rows do not carry an ISIN yet — dedupe check is dormant")
+    # invert: each ISIN must map to at most one ticker in this universe
+    by_isin: dict[str, list[str]] = {}
+    for ticker, isin in isins.items():
+        by_isin.setdefault(isin, []).append(ticker)
+    dupes = {isin: tks for isin, tks in by_isin.items() if len(tks) > 1}
+    assert not dupes, f"same fund listed under multiple tickers: {dupes}"
 
 
 # --- the asset-kind gate stays active (a stock mock is rejected) --------------- #
