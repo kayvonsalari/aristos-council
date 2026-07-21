@@ -433,7 +433,7 @@ def run_rank_pipeline(
     council_mode: str = "narrator", csv_path: str | Path | None = None,
     ranker_only: bool = False, strategies_dir: str | Path | None = None,
     screen_strategy_id: Optional[str] = None,
-    council_runs_on: Optional[str] = None,
+    council_runs_on: Optional[str] = None, narrate_coverage: str = "buys_only",
     adapter=None, runners=None, today: Optional[date] = None,
     use_cache: bool = True, progress: Optional[Callable[[str], None]] = None,
     freeze_dir: str | Path | None = None, replay_run_id: Optional[str] = None,
@@ -451,7 +451,12 @@ def run_rank_pipeline(
     (the council) runs only when ``ranker_only`` is False and bills API credits. When
     ``adapter``/``runners`` are None they are built from the environment
     (``ARISTOS_MARKET_PROVIDER``; ``ANTHROPIC_API_KEY`` for the council) — tests inject
-    fakes instead. ``progress`` receives per-phase status strings for a live UI."""
+    fakes instead. ``progress`` receives per-phase status strings for a live UI.
+
+    ``narrate_coverage`` (NARR-2) controls WHICH ranked names get an LLM narrative:
+    ``"buys_only"`` (default, cheapest — the strategy's usual BUY-tier shortlist) or
+    ``"all"`` (every ranked live name, for core/ETF cohorts where the HOLDs are live
+    candidates). Coverage only — the deterministic ranker verdicts are byte-unchanged."""
     strategies_dir = Path(strategies_dir) if strategies_dir else _STRATEGIES_DIR
     universe, resolved_universe_id = _resolve_universe(
         universe, universe_id,
@@ -498,7 +503,14 @@ def run_rank_pipeline(
     live = [r for r in ranked if not r.excluded]
     excluded, unrateable, fetch_errors = _split_exclusions(ranked, prerank_excluded)
 
-    shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
+    # NARR-2 ITEM 2: narration coverage. "buys_only" (default, cheapest) narrates the
+    # rank strategy's usual shortlist (the BUY tier); "all" narrates every ranked
+    # (live) name so an ETF/core cohort's HOLDs — live candidates, not rejects — are
+    # covered too. Presentation/coverage only: the ranker verdicts are byte-unchanged.
+    if narrate_coverage == "all":
+        shortlist = list(live)                        # every ranked name, best-first
+    else:
+        shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
     est = estimate_cost(len(shortlist))
 
     council: list[CouncilOutcome] = []
@@ -537,6 +549,7 @@ def run_rank_pipeline(
         "run_id": run_id,
         "council_mode": executed_mode,
         "council_runs_on": runs_on,
+        "narrate_coverage": narrate_coverage,
         "ranker_only": ranker_only,
         "universe_size": len(universe),
         "ranked_count": len(live),

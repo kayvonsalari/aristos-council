@@ -67,6 +67,9 @@ def main() -> None:
                    default=None)
     p.add_argument("--council-mode", choices=["second_opinion", "narrator"],
                    default=None)
+    p.add_argument("--narrate", choices=["buys_only", "all"], default="buys_only",
+                   help="which ranked names to narrate: buys_only (default, cheapest) "
+                        "or all (every ranked name — for core/ETF cohorts)")
     p.add_argument("--csv")
     p.add_argument("--no-cache", action="store_true")
     p.add_argument("--ranker-only", action="store_true",
@@ -94,7 +97,8 @@ def main() -> None:
     common = dict(strategies_dir=STRATEGIES_DIR, today=today,
                   screen_strategy_id=args.screen_strategy,
                   council_runs_on=args.council_runs_on,
-                  council_mode=args.council_mode)
+                  council_mode=args.council_mode,
+                  narrate_coverage=args.narrate)
     if args.replay:
         common["replay_run_id"] = args.replay
         common["freeze_dir"] = RUNS_DIR                  # locates the record

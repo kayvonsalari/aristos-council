@@ -29,7 +29,11 @@ from datetime import date, timedelta
 
 from ..data.adapter import DataUnavailable, MarketDataAdapter
 from ..data.sentiment import SentimentAdapter, SentimentDataUnavailable
-from ..presentation import dividend_view, recommendation_view
+from ..presentation import (
+    dividend_view,
+    format_factor_value,
+    recommendation_view,
+)
 from ..state import (
     CriticReport,
     Decision,
@@ -384,7 +388,42 @@ def _scoped_fundamentals(output: object, allowed: set[str]) -> dict:
     return d
 
 
-def _evidence_block(state: ResearchState, strategy: Strategy) -> str:
+# NARR-2: the money fields whose formatted display needs the instrument currency
+# (so a fund size / market cap reads "USD 149.8bn", never an unlabelled float).
+_CURRENCY_DISPLAY_FIELDS = ("market_cap", "fund_size", "total_assets",
+                            "enterprise_value")
+
+
+def _ledger_currency(state: ResearchState) -> str | None:
+    """The instrument's currency from the gathered fundamentals, for the narrator's
+    money formatting (NARR-2). None when absent — never invented."""
+    for tc in state.tool_calls:
+        if tc.tool_name == "get_fundamentals" and tc.ok and tc.output is not None:
+            out = tc.output
+            return (out.get("currency") if isinstance(out, dict)
+                    else getattr(out, "currency", None))
+    return None
+
+
+def _display_map(output, currency: str | None) -> dict:
+    """A ``{field: formatted_string}`` display map over the numeric fields of a tool
+    output (NARR-2), skipping fields without a formatting convention. Presentation
+    only — the raw numbers stay in the output for provenance/audit; the narrator is
+    told to quote the display strings in prose."""
+    fields = (output if isinstance(output, dict)
+              else {f.name: getattr(output, f.name)
+                    for f in dataclass_fields(type(output))})
+    out: dict = {}
+    for name, value in fields.items():
+        cur = currency if name in _CURRENCY_DISPLAY_FIELDS else None
+        disp = format_factor_value(name, value, currency=cur)
+        if disp is not None:
+            out[name] = disp
+    return out
+
+
+def _evidence_block(state: ResearchState, strategy: Strategy,
+                    *, narrator: bool = False) -> str:
     """Serialize the ledger for prompts, with a per-call size guard.
 
     The ledger itself is never truncated (it is the audit record); only the
@@ -394,11 +433,17 @@ def _evidence_block(state: ResearchState, strategy: Strategy) -> str:
 
     Strategy-scoped (Sprint 4D): the screen shows a neutral tool label, and the
     fundamentals are scoped to the active strategy's consumed fields plus a core.
+
+    NARR-2: in NARRATOR mode each numeric tool output carries a ``display`` map of
+    human-formatted strings (percent/price/currency) so the writer quotes
+    "22.0%" / "USD 149.8bn", not a raw float. Display-only: the raw values remain
+    for the provenance audit; non-narrator councils are byte-identical (default off).
     """
     allowed_fundamentals = (
         set(_CORE_FUNDAMENTALS_FIELDS)
         | consumed_fundamentals_fields(strategy.criteria)
     )
+    currency = _ledger_currency(state) if narrator else None
     lines = []
     for tc in state.tool_calls:
         output = tc.output
@@ -434,6 +479,25 @@ def _evidence_block(state: ResearchState, strategy: Strategy) -> str:
             output["note"] = ("cite latest_period.total / latest_period.<category> "
                               "(strong_buy/buy/hold/sell/strong_sell); the bullish "
                               "ratio lives in sentiment_snapshot, not here")
+        # NARR-2: in narrator mode attach human-formatted display strings so the
+        # writer quotes "22.0%" / "USD 149.8bn", not a raw float. The raw numbers
+        # stay untouched (a fresh dict is built — the ledger is never mutated) so
+        # the provenance audit still resolves against them.
+        if narrator and tc.ok and isinstance(output, dict):
+            if (tc.tool_name == _STATIC_LAYER_LEDGER_TOOL
+                    and isinstance(output.get("factors"), list)):
+                factors = []
+                for e in output["factors"]:
+                    fname = e.get("factor", "")
+                    cur = (currency if fname in _CURRENCY_DISPLAY_FIELDS else None)
+                    disp = format_factor_value(fname, e.get("value"), currency=cur)
+                    factors.append({**e, "display": disp} if disp is not None
+                                   else dict(e))
+                output = {**output, "factors": factors}
+            else:
+                disp = _display_map(output, currency)
+                if disp:
+                    output = {**output, "display": disp}
         # Agent-facing tool label is strategy-neutral; the stored tc.tool_name
         # (used by the audit) is untouched. _is_screen_tool so re-rendered OLD
         # reports (legacy ledger name) also get the neutral display label.
@@ -503,12 +567,20 @@ def _ranker_block(state: ResearchState) -> str:
             f"{state.ranker_verdict.value.upper()}{expl}{legend}\n")
 
 
-def _user_message(state: ResearchState, strategy: Strategy) -> str:
+def _user_message(state: ResearchState, strategy: Strategy,
+                  *, narrator: bool = False) -> str:
+    # NARR-2: in narrator mode the evidence carries human-formatted `display`
+    # strings; the note points the writer at them so prose never quotes raw floats.
+    display_note = (
+        "\nIn PROSE, quote the `display` string for any number (already formatted "
+        "with units/currency, e.g. \"22.0%\", \"USD 149.8bn\") — never a raw ratio "
+        "or an unlabelled large number.\n" if narrator else "")
     return (
         f"Ticker under review: {state.ticker}\n"
         f"{_ranker_block(state)}\n"
         f"EVIDENCE (one JSON tool call per line — the complete record):\n"
-        f"{_evidence_block(state, strategy)}\n"
+        f"{_evidence_block(state, strategy, narrator=narrator)}\n"
+        f"{display_note}"
     )
 
 
@@ -522,7 +594,7 @@ def make_specialist_node(who: SpecialistName, strategy: Strategy, runner,
         # run (all prior councils' spend wasted). Retry ONCE, then degrade THIS
         # specialist to ABSTAIN with a typed run issue — abstention exists for exactly
         # this. Scoped to the LLM parse; opinion construction stays outside.
-        user_msg = _user_message(state, strategy)
+        user_msg = _user_message(state, strategy, narrator=narrator)
         try:
             out: SpecialistOutput = runner.invoke(system, user_msg)
         except Exception:                                   # e.g. pydantic ValidationError
@@ -580,8 +652,10 @@ def consensus_stance(state: ResearchState) -> Stance:
     return Stance.NEUTRAL
 
 
-def make_critic_node(strategy: Strategy, runner):
+def make_critic_node(strategy: Strategy, runner,
+                     council_mode: str = "second_opinion"):
     system = _critic_system(strategy)
+    narrator = council_mode == "narrator"
 
     def critic(state: ResearchState) -> ResearchState:
         target = consensus_stance(state)
@@ -591,7 +665,7 @@ def make_critic_node(strategy: Strategy, runner):
             for o in state.specialist_opinions
         )
         user = (
-            f"{_user_message(state, strategy)}\n"
+            f"{_user_message(state, strategy, narrator=narrator)}\n"
             f"The emerging consensus is {target.value.upper()}. Argue the "
             f"opposite case.\n\nSpecialist opinions:\n{opinions}\n"
         )
@@ -639,7 +713,7 @@ def make_decision_node(strategy: Strategy, runner,
         else:
             critic = "no critic report"
         user = (
-            f"{_user_message(state, strategy)}\n"
+            f"{_user_message(state, strategy, narrator=narrator)}\n"
             f"Specialists:\n{opinions}\n\nCritic:\n{critic}\n"
         )
         out: DecisionOutput = runner.invoke(system, user)

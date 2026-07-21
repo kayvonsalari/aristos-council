@@ -58,6 +58,91 @@ def strip_provenance(text: str) -> str:
     return out.strip()
 
 
+# --------------------------------------------------------------------------- #
+# Number / currency formatting for narration (NARR-2)
+# --------------------------------------------------------------------------- #
+# Raw computed floats were being dumped into narrator prose ("return_12m of
+# 0.22034839989419663", "fund_size of 149819249726.0"). These helpers turn a
+# factor/field value into a HUMAN string, dispatched by the field's name so a
+# ratio, a price, and a large money amount each read correctly. Presentation
+# only — never applied to the ledger, the ranking, a factor value, or a verdict.
+
+# DECIMAL-RATIO fields (0.2203 -> "22.0%"): returns, momentum, volatility, yields,
+# and the value/quality ratios. Rendered to 1 decimal place.
+_PERCENT_FIELDS = frozenset({
+    "return_6m", "return_12m", "momentum_6m", "momentum_12m",
+    "annualized_volatility", "low_volatility", "pct_off_52w_high",
+    "distribution_yield", "dividend_yield", "net_payout_yield",
+    "earnings_yield", "roic", "revenue_growth", "return_on_equity",
+})
+# PERCENT-POINT fields: the vendor value is ALREADY in percent points, not a
+# decimal (expense_ratio 0.06 == 0.06%, per factors.py). Rendered as-is with a %.
+_PERCENT_POINT_FIELDS = frozenset({"expense_ratio", "net_expense_ratio"})
+# PRICE-like fields rendered to 2 decimals (a share price / moving average).
+_PRICE_FIELDS = frozenset({
+    "sma_50", "sma_200", "last_close", "last_adj_close", "price",
+})
+# Large MONEY amounts rendered with an explicit currency label + abbreviation.
+_CURRENCY_FIELDS = frozenset({
+    "fund_size", "total_assets", "market_cap", "enterprise_value",
+})
+# Plain ratios rendered as a 2-decimal NUMBER (not a percent): a P/E, P/B, PEG.
+_RATIO_FIELDS = frozenset({"pe_ratio", "price_to_book", "peg_ratio", "peg"})
+
+
+def format_percent(value: float, *, decimals: int = 1) -> str:
+    """A decimal ratio as a percent, e.g. ``0.22034 -> "22.0%"``."""
+    return f"{value * 100:.{decimals}f}%"
+
+
+def format_price(value: float, *, decimals: int = 2) -> str:
+    """A price / moving average, thousands-separated, e.g. ``1234.5 -> "1,234.50"``."""
+    return f"{value:,.{decimals}f}"
+
+
+def format_large_currency(value: float, currency: str | None = None) -> str:
+    """A large money amount with an EXPLICIT currency label and a readable
+    abbreviation, e.g. ``(149819249726.0, "USD") -> "USD 149.8bn"``.
+
+    The currency label is derived from the instrument's currency field and is
+    NEVER invented — when it is absent the amount is rendered thousands-separated
+    with no fabricated symbol (house rule: omit, never invent)."""
+    prefix = f"{currency} " if currency else ""
+    a = abs(value)
+    if a >= 1e12:
+        body = f"{value / 1e12:.1f}tn"
+    elif a >= 1e9:
+        body = f"{value / 1e9:.1f}bn"
+    elif a >= 1e6:
+        body = f"{value / 1e6:.1f}mn"
+    else:
+        body = f"{value:,.0f}"
+    return f"{prefix}{body}"
+
+
+def format_factor_value(name: str, value, *, currency: str | None = None):
+    """Format one factor/field value by NAME, or None when it isn't a number we
+    have a convention for (unknown fields are left alone — omit, never guess).
+
+    This is the single dispatch the narrator's evidence formatting drives, so a
+    ratio, a price, a percent-point fee, and a large money amount each render in
+    their own convention."""
+    if value is None or not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    key = name.lower()
+    if key in _CURRENCY_FIELDS:
+        return format_large_currency(float(value), currency)
+    if key in _PRICE_FIELDS:
+        return format_price(float(value))
+    if key in _PERCENT_POINT_FIELDS:
+        return f"{float(value):.2f}%"
+    if key in _PERCENT_FIELDS:
+        return format_percent(float(value))
+    if key in _RATIO_FIELDS:
+        return format_price(float(value))
+    return None                                    # unknown field -> no display
+
+
 # Screen-results status: shared labels + semantic colors (pass/fail/not-eval).
 SCREEN_STATUS = {True: "PASS", False: "FAIL", None: "NOT-EVAL"}
 SCREEN_STATUS_HEX = {"PASS": "#2E7D32", "FAIL": "#B23B3B", "NOT-EVAL": "#B8860B"}
