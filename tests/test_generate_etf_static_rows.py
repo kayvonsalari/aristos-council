@@ -148,6 +148,24 @@ def test_domicile_maps_known_names_and_passes_unknown_through():
 
 
 # --------------------------------------------------------------------------- #
+# EODHD exchange-suffix translation (query only — the emitted row keeps .DE)
+# --------------------------------------------------------------------------- #
+def test_eodhd_query_symbol_translates_xetra_suffix():
+    # EODHD's API 404s on .DE (confirmed live) and only recognizes .XETRA.
+    assert gen.eodhd_query_symbol("vwce.de") == "VWCE.XETRA"
+    assert gen.eodhd_query_symbol("SXR8.DE") == "SXR8.XETRA"
+
+
+def test_eodhd_query_symbol_leaves_other_suffixes_unchanged():
+    assert gen.eodhd_query_symbol("vhyl.l") == "VHYL.L"
+    assert gen.eodhd_query_symbol("vusa.as") == "VUSA.AS"
+
+
+def test_eodhd_query_symbol_handles_no_suffix():
+    assert gen.eodhd_query_symbol("smh") == "SMH"
+
+
+# --------------------------------------------------------------------------- #
 # a payload missing ETF_Data entirely degrades gracefully (all guards fire, no crash)
 # --------------------------------------------------------------------------- #
 def test_empty_payload_produces_a_row_of_blanks_with_notes():

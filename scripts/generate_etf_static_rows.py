@@ -31,6 +31,12 @@ Accumulated sanity guards (learned live; see CLAUDE.md rule 3 and the CNDX incid
 - **Domicile from ETF_Data.** ``ETF_Data.Domicile`` (a country name) is mapped to the
   two-letter code the CSV already uses (Ireland -> IE, ...); an unrecognized value passes
   through verbatim.
+- **Exchange-suffix translation for the EODHD query only.** EODHD's ``/fundamentals``
+  endpoint 404s on this repo's ``.DE`` (Xetra) suffix — it only recognizes ``.XETRA``
+  (confirmed live: VWCE.DE/SXR8.DE/EUNL.DE/SPYY.DE all 404, VWCE.XETRA/SXR8.XETRA/
+  EUNL.XETRA/SPYY.XETRA all 200). ``eodhd_query_symbol`` translates the suffix for the
+  outbound request ONLY; the emitted row keeps the original ``.DE`` ticker so it matches
+  the universe file / CSV convention.
 
 Pure by design: ``build_static_row`` / ``format_row`` take a parsed payload and an ``as_of``
 date and do NO network, so they are unit-tested offline (tests/test_generate_etf_static_rows.py).
@@ -83,6 +89,25 @@ _DOMICILE_CODES = {
     "usa": "US",
     "switzerland": "CH",
 }
+
+# EODHD spells some exchange suffixes differently from this repo's ticker convention.
+# Currently just Xetra: this repo (and the universe files) use ".DE"; EODHD's API only
+# recognizes ".XETRA" and 404s on ".DE" outright.
+_EODHD_EXCHANGE_OVERRIDES = {
+    "DE": "XETRA",
+}
+
+
+def eodhd_query_symbol(ticker: str) -> str:
+    """The symbol to send to EODHD, translating exchange suffixes EODHD spells
+    differently from this repo's convention (see ``_EODHD_EXCHANGE_OVERRIDES``). The
+    emitted CSV row uses the ORIGINAL ticker (``normalize_ticker`` in ``build_static_row``),
+    never this translated form — only the outbound query changes."""
+    symbol = normalize_ticker(ticker)
+    if "." not in symbol:
+        return symbol
+    root, suffix = symbol.rsplit(".", 1)
+    return f"{root}.{_EODHD_EXCHANGE_OVERRIDES.get(suffix, suffix)}"
 
 
 @dataclass
@@ -252,7 +277,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     for ticker in universe.tickers:
         symbol = normalize_ticker(ticker)
         try:
-            payload = fetch_payload(symbol, api_key)
+            payload = fetch_payload(eodhd_query_symbol(symbol), api_key)
         except (urllib.error.URLError, TimeoutError, ValueError,
                 json.JSONDecodeError) as exc:
             print(f"# SKIPPED {ticker}: {exc}", file=sys.stderr)

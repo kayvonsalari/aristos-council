@@ -213,13 +213,16 @@ def test_committed_seed_carries_example_and_ucits_rows():
     ex = rows["EXMPL"]
     assert ex.share_class == "dist" and ex.domicile == "US"
     assert ex.expense_ratio == 0.06 and ex.distribution_yield == 0.035
-    # ...alongside the 15 UCITS-1 EODHD-sourced rows (9 dividend + 6 growth).
+    # ...alongside the 15 UCITS-1 EODHD-sourced rows (9 dividend + 6 growth) and the 5
+    # etf_core_ucits_v1 core-market rows (ETFCORE-2 follow-up; dropped from PR #32).
     ucits = [
         "VHYL.L", "FUSD.L", "USDV.L", "ZPRG.DE", "TDIV.AS", "ISPA.DE", "SEDY.L",
         "IDVY.AS", "SPYW.DE", "EQQQ.L", "CNDX.L", "XDEM.DE", "IWMO.L", "IUIT.L", "SMH.L",
     ]
+    core = ["VWCE.DE", "SXR8.DE", "VUSA.AS", "EUNL.DE", "SPYY.DE"]
     assert set(ucits) <= set(rows)
-    assert set(rows) == {"EXMPL", *ucits}
+    assert set(core) <= set(rows)
+    assert set(rows) == {"EXMPL", *ucits, *core}
 
 
 def test_committed_ucits_rows_serve_with_eodhd_provenance():
