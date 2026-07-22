@@ -17,10 +17,15 @@ positives on real garp_v2 narration:
 - **Ordinals bind to the factor they NAME, not to a column position.** A sentence like
   "1st on revenue_growth, 2nd on roic, 4th on momentum_12m" states each ordinal against a
   named factor, in any order; each is validated against THAT factor's rank in the table.
+  This holds for WORD superlatives too (NARR-CHK-4): "fund_size is the best, expense_ratio
+  is second-best, momentum_12m is last" checks each superlative against the factor its OWN
+  clause names — never pairing "best" with a factor two clauses away.
 
 A superlative is only a checkable claim when it is genuinely predicated of the narrated
-name's rank. These are NOT claims and are left alone (NARR-CHK-1/2):
+name's rank. These are NOT claims and are left alone (NARR-CHK-1/2/4):
 - **Hedged** — "near-best", "almost worst" (approximations).
+- **Negated** — "not best", "never worst" (a rank-2 name is honestly "Competitive, Not
+  Best"; the negation disclaims the rank rather than asserting it).
 - **Theoretical bounds / cohort arithmetic** — "worst possible = 48", "best case" (a
   hypothetical, not the name).
 - **Generic/hypothetical subjects** — "the best-ranked NAME in the cohort is not insulated
@@ -38,24 +43,31 @@ from typing import Callable, Optional
 # Ordered SPECIFIC-FIRST so "second-worst" is matched before "worst", etc.
 # NB: only UNAMBIGUOUS superlatives. "top"/"bottom" are deliberately omitted — phrases
 # like "third from the bottom" are correct and must NOT be flagged; the observed error
-# class (best/worst/second-*) is fully covered without them. Spelled-out ordinals
-# ("third") are likewise NOT parsed here — only the digit ordinals below.
+# class (best/worst/second-*/strongest/weakest) is fully covered without them. "last"/
+# "first" are ALSO omitted — they are temporally overloaded ("last year", "first quarter")
+# and would mis-fire. Spelled-out ordinals ("third") are likewise NOT parsed here — only the
+# digit ordinals below. `strongest`/`weakest` are true superlative synonyms of best/worst
+# (NARR-CHK-4: a genuine "rank 5/5 … strongest" inversion must stay catchable).
 _ORDINALS: tuple[tuple[str, Callable[[int], int]], ...] = (
     (r"second[-\s]worst", lambda n: n - 1),
     (r"second[-\s]best", lambda n: 2),
     (r"best[-\s]in[-\s]cohort", lambda n: 1),
+    (r"strongest", lambda n: 1),
+    (r"weakest", lambda n: n),
     (r"worst", lambda n: n),
     (r"best", lambda n: 1),
 )
 
 # A superlative is NOT a checkable ordinal claim when the text just BEFORE it is:
-#   - a HEDGE ("near-best" ≈ rank 2, not rank 1), or
+#   - a HEDGE ("near-best" ≈ rank 2, not rank 1),
+#   - a NEGATION ("not best" / "never worst" DISCLAIMS the rank — "Competitive, Not Best" is
+#     true of a rank-2 name; NARR-CHK-4 class), or
 #   - a spelled RELATIVE-ORDINAL prefix ("third-best", "fourth-worst" — a specific rank,
 #     NOT the bare superlative; NARR-CHK-2 class 3 flagged "third-best" as "best"=rank 1).
 # Matched against the text ENDING just before the ordinal token. ("second-*" is handled by
 # its own specific pattern above, so it is intentionally absent here.)
 _SKIP_BEFORE = re.compile(
-    r"\b(?:near|nearly|almost|approx\w*|roughly|about|~"
+    r"\b(?:near|nearly|almost|approx\w*|roughly|about|~|not|never"
     r"|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)[-\s]?$", re.I)
 
 # A superlative is a THEORETICAL BOUND, not a claim about the name, when it is immediately
@@ -79,6 +91,8 @@ _FACTOR_SUBJECTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (r"net[-\s_]?payout|payout[-\s_]?yield", ("net_payout_yield",)),
     (r"price[-\s_]?to[-\s_]?book|p/b", ("price_to_book",)),
     (r"return on equity|\broe\b", ("return_on_equity",)),
+    (r"expense[-\s_]?ratio", ("expense_ratio",)),
+    (r"fund[-\s_]?size", ("fund_size",)),
     (r"momentum", ("momentum_12m", "momentum_6m")),
 )
 
@@ -143,26 +157,35 @@ def _subject_rank(text: str, factors: dict, combined_position: Optional[int],
 
 def _word_check(sentence: str, n: int, combined_position: Optional[int],
                 factors: dict, ticker: Optional[str] = None) -> bool:
-    """Word-superlative claim vs the table (the original discipline, hedge-aware):
+    """Word-superlative claim vs the table (hedge-, negation- and CLAUSE-aware). Each
+    comma/semicolon-separated clause states at most one superlative about the subject it
+    NAMES — so "fund_size is the best, expense_ratio is second-best, momentum_12m is last"
+    validates each ordinal against its own factor, never pairing "best" (about fund_size)
+    with a factor named two clauses away (the etf_core_v1 false positive, NARR-CHK-4). This
+    mirrors the per-clause binding `_numeric_check` already enforces. Within each clause:
     - **citation vs ordinal**: an explicit ``rank R out of M`` with a superlative must
       agree (rank 2 is not "second-worst").
     - **subject vs table**: a superlative about a named factor / the combined position must
       match that subject's actual rank.
-    Ambiguous sentences (no ordinal, or >1 citation, or no resolvable subject) are left
-    alone — the check never invents a contradiction."""
-    wo = _word_ordinal(sentence)
-    if wo is None:
-        return False
-    posfn = wo[1]
-    cites = _RANK_CITE.findall(sentence)
-    if len(cites) == 1:                          # citation vs ordinal
-        r = int(cites[0][0])
-        m = int(cites[0][1]) if cites[0][1] else n
-        return r != posfn(m)
-    if not cites:                                # subject vs table (no explicit rank)
-        subj = _subject_rank(sentence, factors, combined_position, ticker)
-        return subj is not None and subj != posfn(n)
-    return False                                 # >1 citation -> pairing ambiguous
+    A clause with no un-hedged/un-negated superlative, more than one citation, or no
+    resolvable subject is left alone — the check never invents a contradiction."""
+    for clause in re.split(r"[,;]", sentence):
+        wo = _word_ordinal(clause)
+        if wo is None:
+            continue
+        posfn = wo[1]
+        cites = _RANK_CITE.findall(clause)
+        if len(cites) == 1:                      # citation vs ordinal
+            r = int(cites[0][0])
+            m = int(cites[0][1]) if cites[0][1] else n
+            if r != posfn(m):
+                return True
+        elif not cites:                          # subject vs table (no explicit rank)
+            subj = _subject_rank(clause, factors, combined_position, ticker)
+            if subj is not None and subj != posfn(n):
+                return True
+        # >1 citation in the clause -> pairing ambiguous, skip
+    return False
 
 
 def _numeric_check(sentence: str, combined_position: Optional[int],
