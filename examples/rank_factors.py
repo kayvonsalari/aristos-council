@@ -29,7 +29,12 @@ from aristos_council.factors import (
     screen_prefilter_fail,
 )
 from aristos_council.strategy.loader import load_strategy
-from aristos_council.rank_engine import FactorSpec, RankedTicker, rank_universe
+from aristos_council.rank_engine import (
+    FactorSpec,
+    RankedTicker,
+    format_position_cell,
+    rank_universe,
+)
 from aristos_council.strategy.rank_loader import load_rank_strategy
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -129,10 +134,14 @@ def main() -> None:
         [FactorSpec(f.name, f.direction, f.missing) for f in strat.factors],
         cut=cut, k=k, percentile=strat.percentile, missing=strat.missing)
 
-    print(f"\n=== RANKED ({strat.id}, universe {sum(1 for r in ranked if not r.excluded)}) ===")
-    for i, r in enumerate([r for r in ranked if not r.excluded], 1):
-        print(f"  {i:>2}  {r.ticker:<10} {r.verdict.upper():<5} "
-              f"combined {r.combined_rank:>5.0f}   "
+    live = [r for r in ranked if not r.excluded]
+    m = len(live)
+    print(f"\n=== RANKED ({strat.id}, universe {m}) ===")
+    for r in live:
+        # RANK-DISPLAY-1: ordinal position first (#N of M, ties shared), rank-SUM as detail.
+        cell = format_position_cell(r.cohort_position, m, r.cohort_tied,
+                                    r.combined_rank, len(r.factor_ranks))
+        print(f"  {r.ticker:<10} {r.verdict.upper():<5} {cell}   "
               + "  ".join(f"{f}:{rk:.0f}" for f, rk in r.factor_ranks.items()))
     if unrateable:
         print("\n  UNRATEABLE (no data — possibly delisted; not ranked):")

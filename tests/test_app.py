@@ -240,7 +240,10 @@ def test_ranked_rows_marks_imputed_factors_with_a_star():
     rows, factors = app._ranked_rows([rt])
     assert factors == ["earnings_yield", "net_payout_yield"]
     row = rows[0]
-    assert row["Verdict"] == "BUY" and row["#"] == 1
+    assert row["Verdict"] == "BUY"
+    # RANK-DISPLAY-1: ordinal position first, rank-SUM as detail against its bounds
+    # (2 factors, cohort of 1 -> best 2 · worst 2; score = combined 3).
+    assert row["Position (score)"] == "#1 of 1 · score 3 (best 2 · worst 2)"
     assert row["earnings_yield"] == "1"                 # present, no star
     assert row["net_payout_yield"] == "2*"              # imputed -> star
 
@@ -265,7 +268,9 @@ def test_universe_markdown_has_sections_from_the_result():
     md = app._universe_markdown(result)
     assert "# Universe run — magic_formula_v1" in md
     assert "## Ranked (verdict of record)" in md
-    assert "| 1 | A | BUY |" in md                      # the ranked row for A
+    assert "Position (score)" in md                     # RANK-DISPLAY-1 header
+    # the ranked row for A: ordinal position first (1 factor, cohort of 1), then verdict
+    assert "#1 of 1 · score 1 (best 1 · worst 1) | A | BUY |" in md
     assert "## Excluded" in md and "min_roic" in md
     assert "## Unrateable" in md and "DEAD" in md
     assert "## Narrative" in md and "ranked #1 on ROIC." in md

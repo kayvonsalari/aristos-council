@@ -65,6 +65,20 @@ class RankedTicker:
     # the screen while a dividend-safety criterion could not be evaluated is legitimate
     # but must be VISIBLE (footnote in the ranked table).
     screen_abstentions: dict[str, str] = field(default_factory=dict)
+    # DISPLAY-ONLY cohort position (RANK-DISPLAY-1): 1-based, ties SHARING a position
+    # (competition ranking), so a bare rank-SUM is never misread as an ordinal. Kept at
+    # the END of the field list so the positional constructor order is unchanged. Distinct
+    # from rank_position (which stays sequential for the narration check). Never set on
+    # excluded names; cohort_tied is True when another ranked name shares this combined rank.
+    cohort_position: Optional[int] = None
+    cohort_tied: bool = False
+
+    def score_bounds(self) -> tuple[int, int]:
+        """(best, worst) possible combined rank-sum for this name's cohort: best = number
+        of factors (rank 1 on every factor), worst = factors × cohort size. Display-only
+        context so the rank-SUM reads against its scale (RANK-DISPLAY-1)."""
+        f = len(self.factor_ranks)
+        return f, f * self.universe_size
 
     def explain(self) -> str:
         n = self.universe_size
@@ -77,8 +91,16 @@ class RankedTicker:
         # "combined rank-sum N across an M-name cohort" — the ranker verdict IS a
         # cohort statement (a rank-sum over the universe), phrased so the narrator that
         # echoes this text reads cleanly (never "combined rank of N/M-name cohort").
-        return (f"{self.ticker}: {bits} -> combined rank-sum {self.combined_rank:.0f} "
-                f"across a {n}-name cohort -> {self.verdict.upper()}{tail}")
+        core = f"combined rank-sum {self.combined_rank:.0f} across a {n}-name cohort"
+        # RANK-DISPLAY-1: lead with the ORDINAL position (tie-shared) so the rank-sum is
+        # never misread as a position, and disclose the best/worst bounds. When the
+        # position was not assigned (a bare RankedTicker), the core phrasing stands.
+        if self.cohort_position is not None:
+            best, worst = self.score_bounds()
+            tie = " (tied)" if self.cohort_tied else ""
+            core = (f"#{self.cohort_position} of {n}{tie} — {core} "
+                    f"(best {best}, worst {worst})")
+        return (f"{self.ticker}: {bits} -> {core} -> {self.verdict.upper()}{tail}")
 
 
 def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
@@ -200,4 +222,63 @@ def rank_universe(
     for i, r in enumerate(ranked):
         r.verdict = _verdict_for_position(i, n, cut, k, percentile)
         r.rank_position = i + 1          # record position (no effect on the sort/cut)
+    assign_cohort_positions(ranked)      # display-only #N of M (RANK-DISPLAY-1)
     return ranked + excluded
+
+
+# --------------------------------------------------------------------------- #
+# Cohort position — display-only ordinal (RANK-DISPLAY-1)
+# --------------------------------------------------------------------------- #
+def cohort_positions(ranked: list[RankedTicker]) -> dict[str, tuple[int, bool]]:
+    """``{ticker: (position, tied)}`` over the LIVE ranked names (excluded/unrateable
+    dropped — they never inflate the cohort). Position is assigned after sorting by
+    combined rank, with TIES SHARING a position (competition ranking): a name's position
+    is 1 + the count of names with a strictly SMALLER combined rank. ``tied`` is True when
+    another ranked name shares this combined rank. Presentation only — combined_rank,
+    verdict, and rank_position are untouched."""
+    order = sorted((r for r in ranked if not r.excluded),
+                   key=lambda r: r.combined_rank)
+    out: dict[str, tuple[int, bool]] = {}
+    i = 0
+    while i < len(order):
+        j = i
+        while (j + 1 < len(order)
+               and order[j + 1].combined_rank == order[i].combined_rank):
+            j += 1
+        tied = j > i
+        for k in range(i, j + 1):
+            out[order[k].ticker] = (i + 1, tied)
+        i = j + 1
+    return out
+
+
+def assign_cohort_positions(ranked: list[RankedTicker]) -> None:
+    """Write the display-only ``cohort_position`` / ``cohort_tied`` onto the live ranked
+    names (see ``cohort_positions``). Excluded names keep ``cohort_position = None``."""
+    pos = cohort_positions(ranked)
+    for r in ranked:
+        if r.ticker in pos:
+            r.cohort_position, r.cohort_tied = pos[r.ticker]
+
+
+def format_score(v: float) -> str:
+    """A combined rank-sum for display: whole numbers bare (``11``), otherwise one
+    decimal (``11.5``) — the averaged-tie ranks are the only non-integers."""
+    return f"{v:.0f}" if float(v).is_integer() else f"{v:.1f}"
+
+
+def format_position_cell(position: Optional[int], cohort_size: int, tied: bool,
+                         combined_rank: float, n_factors: int) -> str:
+    """The ONE shared cohort-position string every rank-sum display uses (CLI ranked
+    table, Universe Run table, markdown download, Company Check): the ORDINAL first with
+    the rank-SUM as detail, e.g. ``#1 of 9 · score 11 (best 3 · worst 27)``. ``(tied)``
+    marks a shared position; ``best`` = number of factors, ``worst`` = factors × cohort
+    size. Falls back to a bare ``score S`` when no position is known (e.g. an excluded
+    name). Presentation only."""
+    score = format_score(combined_rank)
+    if position is None:
+        return f"score {score}"
+    best, worst = n_factors, n_factors * cohort_size
+    tie = " (tied)" if tied else ""
+    return (f"#{position} of {cohort_size}{tie} · score {score} "
+            f"(best {best} · worst {worst})")

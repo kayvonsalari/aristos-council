@@ -542,9 +542,13 @@ def test_verdict_of_record_quotes_verdict_and_rank(tmp_path):
     r = _fin_check("GS", runs)
     # GS ranks strictly last of all 16 -> bottom quintile SELL, rank 16 of 16, quoted
     # verbatim (never recomputed): sourced from the frozen run, dated by its manifest.
-    assert r.verdict_of_record == (
+    # RANK-DISPLAY-1: the ordinal position leads, with the rank-SUM as detail against its
+    # best/worst bounds (F factors -> best F · worst F×16) so it is never misread.
+    f = len(r.factors)
+    assert r.verdict_of_record.startswith(
         f"in the latest frozen run of financials_16_v1 (run {r.reference_run_date}): "
-        f"SELL, rank 16 of 16.")
+        f"SELL, rank 16 of 16 · score ")
+    assert r.verdict_of_record.endswith(f"(best {f} · worst {f * 16}).")
     text = format_company_check(r)
     assert f"VERDICT OF RECORD: {r.verdict_of_record}" in text
     assert _no_verdict(text)                        # still never ISSUES a verdict
