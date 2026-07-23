@@ -785,12 +785,14 @@ def format_cli_report(result: RankPipelineResult) -> str:
     ]
     tie_notes = tie_boundary_notes(result.ranked)
     positions = cohort_positions(result.ranked)      # tie-shared #N of M (RANK-DISPLAY-1)
-    m = len(result.ranked)                            # rateable cohort size (M)
+    cohort_m = len(result.ranked)                     # rateable cohort size (M); NOT `m`
+                                                      # (that is result.meta, used below)
     for r in result.ranked:
         disp = _disp(result, r.ticker) + ("†" if r.screen_abstentions else "")
         tie = f"  {tie_notes[r.ticker]}" if r.ticker in tie_notes else ""
         pos, tied = positions.get(r.ticker, (None, False))
-        cell = format_position_cell(pos, m, tied, r.combined_rank, len(r.factor_ranks))
+        cell = format_position_cell(pos, cohort_m, tied, r.combined_rank,
+                                    len(r.factor_ranks))
         lines.append(f"  {_name_col(disp):<34} {r.verdict.upper():<5} {cell}{tie}")
     for foot in ranked_abstention_footnotes(result):
         lines.append(f"  {foot}")
