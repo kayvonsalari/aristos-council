@@ -1144,28 +1144,36 @@ def _estimate_shortlist_size(n: int, rank_strategy, *,
 
 
 def _ranked_rows(ranked, names: dict | None = None) -> tuple[list[dict], list[str]]:
-    """Rows + the ordered factor columns for the ranked table. A per-factor rank is
-    marked with a trailing ``*`` when it was imputed (the value was absent). The Name
-    column leads with 'Company Name (TICKER)' (ITEM 1), falling back to the bare
+    """Rows + the ordered factor columns for the ranked table. The leading
+    ``Position (score)`` column shows the ordinal cohort position first with the
+    rank-SUM as detail — ``#1 of 9 · score 11 (best 3 · worst 27)`` — so the sum is
+    never misread as a position (RANK-DISPLAY-1; ties share a position). A per-factor
+    rank is marked with a trailing ``*`` when it was imputed (the value was absent). The
+    Name column leads with 'Company Name (TICKER)' (ITEM 1), falling back to the bare
     ticker when the display name is unknown."""
     from aristos_council.pipeline import tie_boundary_notes
+    from aristos_council.rank_engine import cohort_positions, format_position_cell
 
     names = names or {}
     tie_notes = tie_boundary_notes(ranked)          # display-only tie disclosure (ITEM 7)
+    positions = cohort_positions(ranked)            # tie-shared #N of M (RANK-DISPLAY-1)
+    m = sum(1 for r in ranked if not r.excluded)    # rateable cohort size (M)
     factor_names: list[str] = []
     for r in ranked:
         for f in r.factor_ranks:
             if f not in factor_names:
                 factor_names.append(f)
     rows: list[dict] = []
-    for i, r in enumerate(ranked, 1):
+    for r in ranked:
         # † marks a name that PASSED the screen while a criterion abstained (ITEM 3).
         label = display_name(r.ticker, names.get(r.ticker)) + \
             ("†" if r.screen_abstentions else "")
         if r.ticker in tie_notes:
             label += " " + tie_notes[r.ticker]
-        row = {"#": i, "Name": label, "Verdict": r.verdict.upper(),
-               "Combined": round(r.combined_rank, 1)}
+        pos, tied = positions.get(r.ticker, (None, False))
+        row = {"Position (score)": format_position_cell(
+                   pos, m, tied, r.combined_rank, len(r.factor_ranks)),
+               "Name": label, "Verdict": r.verdict.upper()}
         for f in factor_names:
             if f in r.factor_ranks:
                 row[f] = f"{r.factor_ranks[f]:.0f}" + \
@@ -1199,12 +1207,12 @@ def _universe_markdown(result) -> str:
     lines += ["", "## Ranked (verdict of record)", ""]
     rows, factor_names = _ranked_rows(result.ranked, result.names)
     if rows:
-        head = ["#", "Name", "Verdict", "Combined", *factor_names]
+        head = ["Position (score)", "Name", "Verdict", *factor_names]
         lines.append("| " + " | ".join(head) + " |")
         lines.append("|" + "---|" * len(head))
         for row in rows:
-            cells = [str(row["#"]), row["Name"], row["Verdict"],
-                     str(row["Combined"]), *[str(row[f]) for f in factor_names]]
+            cells = [row["Position (score)"], row["Name"], row["Verdict"],
+                     *[str(row[f]) for f in factor_names]]
             lines.append("| " + " | ".join(cells) + " |")
     else:
         lines.append("_(no names survived the screen)_")

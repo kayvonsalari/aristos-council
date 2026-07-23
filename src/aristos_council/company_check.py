@@ -41,7 +41,7 @@ from .factors import (
     is_unrateable,
     price_divergence_flag,
 )
-from .rank_engine import FactorSpec
+from .rank_engine import FactorSpec, cohort_positions, format_score
 
 _ROOT = Path(__file__).resolve().parents[2]
 _STRATEGIES_DIR = _ROOT / "strategies"
@@ -206,13 +206,20 @@ def _verdict_of_record(ticker: str, cohort, cohort_result, cohort_n: int,
     verdicts are the original run's, reported as historical fact."""
     if cohort_result is None:
         return None
-    # Ranked in the frozen run: quote the verdict-of-record + 1-based position of <N>,
-    # matching the RANKED table's positional rank (best-first).
-    for pos, r in enumerate(cohort, 1):
+    # Ranked in the frozen run: quote the verdict-of-record + the ordinal cohort position,
+    # matching the RANKED table (ties share a position, RANK-DISPLAY-1), with the combined
+    # rank-SUM as detail against its best/worst bounds so it is never misread as a position.
+    positions = cohort_positions(cohort)
+    for r in cohort:
         if r.ticker == ticker:
+            pos, tied = positions.get(ticker, (None, False))
+            tie = " (tied)" if tied else ""
+            best, worst = len(r.factor_ranks), len(r.factor_ranks) * cohort_n
             return (f"in the latest frozen run of {reference_universe_id} "
                     f"(run {ref_run_date}): {r.verdict.upper()}, "
-                    f"rank {pos} of {cohort_n}.")
+                    f"rank {pos} of {cohort_n}{tie} · "
+                    f"score {format_score(r.combined_rank)} "
+                    f"(best {best} · worst {worst}).")
     # Excluded in the frozen run: quote the exclusion with its recorded reason.
     for t, reason in cohort_result.excluded:
         if t == ticker:

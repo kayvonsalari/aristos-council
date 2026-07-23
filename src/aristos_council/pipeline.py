@@ -55,7 +55,13 @@ from .factors import (
 )
 from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
-from .rank_engine import FactorSpec, RankedTicker, rank_universe
+from .rank_engine import (
+    FactorSpec,
+    RankedTicker,
+    cohort_positions,
+    format_position_cell,
+    rank_universe,
+)
 from .reproducibility import estimate_cost
 from .state import Recommendation, ResearchState
 
@@ -778,11 +784,16 @@ def format_cli_report(result: RankPipelineResult) -> str:
         f"=== RANKED ({m['rank_strategy_id']}) — verdict-of-record ===",
     ]
     tie_notes = tie_boundary_notes(result.ranked)
-    for i, r in enumerate(result.ranked, 1):
+    positions = cohort_positions(result.ranked)      # tie-shared #N of M (RANK-DISPLAY-1)
+    cohort_m = len(result.ranked)                     # rateable cohort size (M); NOT `m`
+                                                      # (that is result.meta, used below)
+    for r in result.ranked:
         disp = _disp(result, r.ticker) + ("†" if r.screen_abstentions else "")
         tie = f"  {tie_notes[r.ticker]}" if r.ticker in tie_notes else ""
-        lines.append(f"  {i:>2}  {_name_col(disp):<34} {r.verdict.upper():<5} "
-                     f"combined {r.combined_rank:>5.0f}{tie}")
+        pos, tied = positions.get(r.ticker, (None, False))
+        cell = format_position_cell(pos, cohort_m, tied, r.combined_rank,
+                                    len(r.factor_ranks))
+        lines.append(f"  {_name_col(disp):<34} {r.verdict.upper():<5} {cell}{tie}")
     for foot in ranked_abstention_footnotes(result):
         lines.append(f"  {foot}")
     integrity = format_factor_integrity(result)
