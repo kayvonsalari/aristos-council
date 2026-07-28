@@ -233,13 +233,16 @@ def _annotate_narration(rep: RunReport, r: RankedTicker) -> None:
 
     Verifies the narrator's ordinal claims against ``r``'s authoritative rank table and
     appends `[⚠ narration check: …]` lines on a contradiction — never rewrites the prose.
-    No-op when there is no rationale to check."""
+    ``score`` carries the combined rank-SUM as the ranker computed it, decimals intact
+    (averaged ties give half-points), so prose that cites a different rank-sum than the table
+    is caught (NARR-CHK-5). No-op when there is no rationale to check."""
     from .narration_check import check_narration
     d = getattr(rep, "decision", None)
     if d is None or not getattr(d, "rationale", ""):
         return
     table = {"N": r.universe_size, "combined_position": r.rank_position,
-             "factors": dict(r.factor_ranks), "ticker": r.ticker}
+             "factors": dict(r.factor_ranks), "ticker": r.ticker,
+             "score": r.combined_rank}
     annotations = check_narration(d.rationale, table)
     if annotations:
         d.rationale = d.rationale.rstrip() + "\n" + "\n".join(annotations)

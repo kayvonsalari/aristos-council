@@ -325,3 +325,132 @@ def test_bare_fraction_without_a_resolvable_subject_binds_nothing():
     # no factor / combined subject in the clause -> no bare citation, so nothing to check.
     assert check_narration("The wrapper scored 4/5 on liquidity and reads as exceptional.",
                            _ETF_SXR8) == []
+
+
+# --------------------------------------------------------------------------- #
+# NARR-CHK-5 — the 2026-07-28 ETF Index Tracker run: two polarity/binding false
+# positives on TRUE prose must pass, and the rank-sum VALUE mismatch must flag
+# whether the prose number is an integer or a decimal.
+# --------------------------------------------------------------------------- #
+# VUSA: momentum_12m 5/5 and the combined score 9.5 are ON RECORD from the run; the other two
+# factor ranks are synthetic, chosen so they sum to that authoritative 9.5 (an averaged tie
+# gives the half-point).
+_ETF_VUSA = {"N": 5, "combined_position": 4, "ticker": "VUSA", "score": 9.5,
+             "factors": {"fund_size": 1, "expense_ratio": 3.5, "momentum_12m": 5}}
+# EUNL: expense_ratio 5/5 (worst), momentum_12m 3/5 (middling), tied #4 of 5 — all on record.
+_ETF_EUNL = {"N": 5, "combined_position": 4, "ticker": "EUNL", "score": 10,
+             "factors": {"fund_size": 2, "expense_ratio": 5, "momentum_12m": 3}}
+# SXR8's combined score in the same run was 6.5; the factor ranks are synthetic and sum to it.
+_ETF_SXR8_SCORED = {"N": 5, "combined_position": 2, "ticker": "SXR8", "score": 6.5,
+                    "factors": {"fund_size": 2, "expense_ratio": 1.5, "momentum_12m": 3}}
+
+
+def test_polarity_aware_superlative_on_a_worst_rank_passes():
+    # false positive 1 (verbatim): rank 5/5 IS the strongest NEGATIVE signal — "strongest"
+    # modifies "negative signal", not the fund's momentum standing, so the claim agrees with
+    # the table and must pass. The mirror image of the true inversion below.
+    assert check_narration(
+        "12-Month Momentum (rank 5/5): This is the ranker's strongest negative signal and "
+        "the central driver of the HOLD verdict.", _ETF_VUSA) == []
+
+
+def test_polarity_aware_superlative_variants_pass():
+    # the same reading for the other negative nouns the narrator reaches for — each is a
+    # rank-5-of-5 claim in disguise and each matches the table.
+    assert check_narration("Momentum (rank 5/5) is the strongest drag on the ranking.",
+                           _ETF_VUSA) == []
+    assert check_narration("Momentum rank 5/5 is the fund's strongest weakness.",
+                           _ETF_VUSA) == []
+    assert check_narration("Cost (rank 5/5) is EUNL's strongest downside.", _ETF_EUNL) == []
+
+
+def test_bad_direction_superlative_on_a_negative_noun_is_ambiguous_and_dropped():
+    # "its worst headwind" idiomatically means the most SEVERE headwind (rank 5), not the
+    # mildest (rank 1) — the direction cannot be read off the words, so no claim is asserted
+    # either way. Both the true and the false reading pass, deliberately.
+    assert check_narration("Cost rank 5/5 is EUNL's worst headwind.", _ETF_EUNL) == []
+    assert check_narration("Momentum rank 3/5 is EUNL's worst drag.", _ETF_EUNL) == []
+
+
+def test_polarity_inversion_does_not_lose_the_true_superlative_inversion():
+    # the discriminator: with no negative noun to modify, "the strongest" on a rank-5 momentum
+    # is still the NARR-CHK-4 inversion — this fixture must keep failing the check.
+    assert _flagged(
+        "VWCE's momentum rank 5/5 is described as the strongest in the cohort.", _ETF_CORE)
+    assert _flagged("VUSA's momentum rank 5/5 is the strongest in the cohort.", _ETF_VUSA)
+
+
+def test_polarity_word_does_not_excuse_a_wrong_rank():
+    # a mirrored superlative is still CHECKED, just against the mirror position: momentum is
+    # 3/5 here, so calling it the strongest negative (= rank 5) contradicts the table.
+    assert _flagged("Momentum rank 3/5 is the strongest negative signal.", _ETF_EUNL)
+
+
+def test_multi_factor_clause_with_an_unbound_superlative_passes():
+    # false positive 2 (verbatim): every clause matches the table — expense_ratio 5/5 (worst),
+    # momentum 3/5 (middling), tied #4 of 5 (near-bottom). "worst-in-cohort" modifies the COST
+    # rank, which sits on the other side of "and" from the only factor phrase the table
+    # vocabulary recognises, so the pairing is ambiguous and the check must stand down.
+    assert check_narration(
+        "EUNL's worst-in-cohort cost rank and middling momentum rank produce a near-bottom "
+        "combined ranking.", _ETF_EUNL) == []
+
+
+def test_superlative_still_binds_to_the_factor_in_its_own_phrase():
+    # the binding rule does not cost the catch: with no conjunction between them, a superlative
+    # and the factor it names still pair — momentum is 3/5, not the best.
+    assert _flagged("EUNL's momentum rank is the best in the cohort.", _ETF_EUNL)
+
+
+def test_prose_rank_sum_integer_vs_half_point_table_value_flags():
+    # the MISSED true positive: SXR8's authoritative score is 6.5, so prose asserting 6 is a
+    # numeric hallucination — an integer never "rounds to" the table value.
+    assert _flagged("SXR8 carries a combined rank-sum 6 across a 5-name cohort.",
+                    _ETF_SXR8_SCORED)
+    assert _flagged("Its combined rank-sum of 6 places it mid-cohort.", _ETF_SXR8_SCORED)
+
+
+def test_prose_rank_sum_10_vs_9_point_5_still_flags():
+    # the catch from the live run that must stay caught, now checked against the score itself.
+    assert _flagged("VUSA carries a combined rank-sum of 10 across a 5-name cohort.",
+                    _ETF_VUSA)
+
+
+def test_correct_prose_rank_sum_passes():
+    # the authoritative value, decimal or whole, is never flagged.
+    assert check_narration("VUSA carries a combined rank-sum of 9.5 in this cohort.",
+                           _ETF_VUSA) == []
+    assert check_narration("EUNL's combined rank-sum of 10 is near the bottom.",
+                           _ETF_EUNL) == []
+    assert check_narration("SXR8's overall score 6.5 leads the tracker sleeve.",
+                           _ETF_SXR8_SCORED) == []
+
+
+def test_rank_sum_value_check_is_off_without_an_authoritative_score():
+    # no score in the table -> nothing to compare against, so no value claim is invented.
+    assert check_narration("SXR8 carries a combined rank-sum 6 across a 5-name cohort.",
+                           _ETF_SXR8) == []
+
+
+def test_theoretical_rank_sum_bounds_are_not_score_claims():
+    # cohort arithmetic keeps its NARR-CHK-2 pass: the bounds are not this name's score.
+    assert check_narration(
+        "The best possible rank-sum is 3 and the worst possible rank-sum is 25.",
+        _ETF_SXR8_SCORED) == []
+    assert check_narration(
+        "EUNL carries a combined rank-sum of 10 (lower is better; worst possible = 15).",
+        _ETF_EUNL) == []
+
+
+def test_a_peers_rank_sum_is_not_this_names_score():
+    # a comparative aside cites ANOTHER name's rank-sum — not a claim about this one.
+    assert check_narration("VWCE's combined rank-sum of 5 beats this sleeve.",
+                           _ETF_SXR8_SCORED) == []
+
+
+def test_out_of_bounds_number_beside_the_metric_word_is_not_a_score_claim():
+    # 40 cannot be a rank-sum in a 3-factor, 5-name cohort (bounds 3..15), so the number is
+    # some other quantity and binds nothing — the check never invents a mismatch.
+    assert check_narration(
+        "Its total score of 40 on the provider's own 100-point scale is a different metric.",
+        _ETF_SXR8_SCORED) == []
