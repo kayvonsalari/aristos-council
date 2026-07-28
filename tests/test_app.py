@@ -393,7 +393,8 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert not any("Energy Watch" in o for o in uni)                 # observation hidden
     assert any("Dividend ETFs (US)" in o for o in uni)               # ETF-1 exploratory cohort
     assert any("Growth ETFs (US)" in o for o in uni)                 # ETF-1 exploratory cohort
-    assert any("Core Market ETFs (UCITS)" in o for o in uni)         # ETFCORE-1 cohort
+    assert any("ETF Index Tracker — UCITS" in o for o in uni)        # ETFCORE-1 cohort
+    assert not any("Core Market ETFs" in o for o in uni)             # UI-RENAME-1: old label gone
     # 2 scoreboard + financials + 2 US ETF cohorts + 3 UCITS ETF cohorts (dividend +
     # growth [UCITS-1] + core [ETFCORE-1], all front-stage) + Custom = 9. (These app
     # tests skip in CI — streamlit is not in the dev extra — so the count had lagged the
@@ -407,7 +408,8 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert any("Financials" in o for o in rank)                     # financials lens (FIN-1)
     assert any("Dividend ETFs" in o for o in rank)                  # ETF-1 dividend lens
     assert any("Growth ETFs" in o for o in rank)                    # ETF-1 growth lens
-    assert any("Core Market ETFs" in o for o in rank)               # ETFCORE-1 core lens
+    assert any("ETF Index Tracker" in o for o in rank)              # ETFCORE-1 lens (UI-RENAME-1)
+    assert not any("Core Market ETFs" in o for o in rank)           # old label gone
     # 5 stock lenses + 3 visible ETF lenses (dividend, growth, core [ETFCORE-1]).
     assert len(rank) == 8
 

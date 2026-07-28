@@ -22,7 +22,7 @@
 # committed static layer where the free vendor is thin — rows to follow via the established
 # EODHD-fundamentals-API-sourced static CSV process (scripts/generate_etf_static_rows.py).
 id: etf_core_ucits_v1
-display_name: Core Market ETFs (UCITS)
+display_name: ETF Index Tracker — UCITS
 role: euro-investable exploration — observation only
 description: >-
   Euro-investable UCITS broad-market ("core") ETFs for the etf_core_v1 lens — ONE listing
