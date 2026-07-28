@@ -240,3 +240,88 @@ def test_wrong_word_superlative_bound_to_its_factor_still_flags():
     # per-clause binding does not weaken the catch: a clause that calls the rank-5 momentum
     # factor "the best" (no citation) is flagged against that factor's actual rank.
     assert _flagged("momentum_12m is the best in the cohort.", _ETF_CORE)
+
+
+# --------------------------------------------------------------------------- #
+# NARR-CHK-4 (cont.) — the two residual gaps behind the same 2026-07-21
+# etf_core_v1 run: markdown emphasis defeating the hedge/negation skip, and the
+# SXR8 "momentum 5/5 is exceptional" inversion being uncatchable.
+# --------------------------------------------------------------------------- #
+# Same 5-name cohort, the SXR8 sleeve: momentum_12m is 5/5 (the rank the bullish specialist
+# called "exceptional"). The other ranks are synthetic — only the momentum 5/5 is on record.
+_ETF_SXR8 = {"N": 5, "combined_position": 3, "ticker": "SXR8",
+             "factors": {"fund_size": 2, "expense_ratio": 3, "momentum_12m": 5}}
+
+
+def test_markdown_emphasis_inside_a_hedge_still_passes():
+    # gap 1: "near-*best*" is the SAME hedge as the NARR-CHK-1 "near-best" fixture — the
+    # emphasis marker sat between the hedge and the token and defeated the adjacency
+    # `_SKIP_BEFORE` needs, so the rank-2 citation was read as contradicting a rank-1 claim
+    # the prose never made.
+    assert check_narration("Rank 2/5 (near-*best*).", _ETF_CORE) == []
+    assert check_narration("Rank 2/5 (near-`best`).", _ETF_CORE) == []
+    assert check_narration("Rank 2/5 (**near-best**).", _ETF_CORE) == []
+
+
+def test_markdown_emphasis_inside_a_negation_still_passes():
+    # gap 1, negation half: "**not** best" / "not **the** best" disclaim rank 1 exactly as
+    # "Not Best" does; an intervening emphasis marker (or article) must not turn a disclaimer
+    # into a claim.
+    assert check_narration("Cost — Rank 2/5: **not** best on fees.", _ETF_CORE) == []
+    assert check_narration("expense_ratio is not **the** best in the cohort.",
+                           _ETF_CORE) == []
+
+
+def test_backticked_factor_key_superlative_is_still_bound_and_flagged():
+    # stripping markdown must not LOSE a catch: the same wrong claim about the rank-5 factor
+    # is flagged whether or not the narrator code-quotes the key.
+    assert _flagged("`momentum_12m` is the best in the cohort.", _ETF_CORE)
+
+
+def test_bold_wrapped_true_inversion_still_flags_and_quotes_the_prose_verbatim():
+    # annotate-don't-rewrite: parsing sees the de-marked text, the annotation quotes the
+    # ORIGINAL sentence, emphasis markers included.
+    flags = check_narration(
+        "**SXR8's momentum rank 5/5 is the strongest in the cohort**", _ETF_SXR8)
+    assert len(flags) == 1 and "contradicts rank table" in flags[0]
+    assert "**SXR8's momentum rank 5/5" in flags[0]
+
+
+def test_sxr8_bare_cohort_citation_inversion_is_catchable():
+    # gap 2: the verbatim SXR8 phrasing. "rank" is elided and "exceptional" is not a
+    # best/worst synonym, so this slipped through entirely; momentum 5/5 is LAST, so calling
+    # it exceptional is the inversion class the issue requires stay catchable.
+    assert _flagged("SXR8's momentum 5/5 is exceptional.", _ETF_SXR8)
+    assert _flagged("Momentum 5/5 — outstanding versus the cohort.", _ETF_SXR8)
+
+
+def test_value_superlative_without_a_rank_citation_is_not_a_rank_claim():
+    # the FP guard that makes gap 2 safe: "exceptional" is routinely predicated of a VALUE.
+    # With no rank citation to bind it to, it is not a checkable ordinal claim — even when
+    # the clause names a factor whose rank is last.
+    assert check_narration(
+        "SXR8 has delivered exceptional momentum over the trailing year.", _ETF_SXR8) == []
+    assert check_narration("SXR8's expense ratio is outstanding at 7bps.", _ETF_SXR8) == []
+
+
+def test_negated_value_superlative_passes():
+    assert check_narration("SXR8's momentum 5/5 is not exceptional.", _ETF_SXR8) == []
+
+
+def test_correct_cited_value_superlative_passes():
+    # rank 1 genuinely IS exceptional — the citation agrees with the token, no flag.
+    assert check_narration("VWCE's fund_size 1/5 is exceptional.", _ETF_CORE) == []
+
+
+def test_bare_fraction_is_only_a_citation_at_cohort_size():
+    # the bare-citation gate: a `d/d` whose denominator is not the cohort size N is a
+    # fraction/date/rating, never a rank, so it binds nothing.
+    assert check_narration("SXR8's momentum 5/7 is exceptional.", _ETF_SXR8) == []
+    assert check_narration(
+        "The KIID dated 2026/07/21 calls momentum exceptional.", _ETF_SXR8) == []
+
+
+def test_bare_fraction_without_a_resolvable_subject_binds_nothing():
+    # no factor / combined subject in the clause -> no bare citation, so nothing to check.
+    assert check_narration("The wrapper scored 4/5 on liquidity and reads as exceptional.",
+                           _ETF_SXR8) == []
