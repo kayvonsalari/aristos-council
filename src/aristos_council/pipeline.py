@@ -58,8 +58,11 @@ from .persistence.reports import RunReport, report_from_state
 from .rank_engine import (
     FactorSpec,
     RankedTicker,
+    boundary_tie_facts,
+    boundary_tie_notes,
     cohort_positions,
     format_position_cell,
+    format_verdict_cell,
     rank_universe,
 )
 from .reproducibility import estimate_cost
@@ -228,18 +231,23 @@ def _shortlist(ranked: list[RankedTicker], runs_on: str, k: int) -> list[RankedT
     return [r for r in live if r.verdict == "buy"]   # buy_quintile (default)
 
 
-def _annotate_narration(rep: RunReport, r: RankedTicker) -> None:
+def _annotate_narration(rep: RunReport, r: RankedTicker,
+                        boundary_tie: Optional[dict] = None) -> None:
     """Append rank-semantics contradiction annotations to the narrative in place (ITEM 4).
 
     Verifies the narrator's ordinal claims against ``r``'s authoritative rank table and
     appends `[⚠ narration check: …]` lines on a contradiction — never rewrites the prose.
-    No-op when there is no rationale to check."""
+    No-op when there is no rationale to check. ``boundary_tie`` (VERDICT-TIE-1) is this
+    name's boundary-tie fact when its verdict split from a tie partner's on the alphabetical
+    tie-break: the annotated table is authoritative, so prose that ORDERS the name against a
+    partner it is TIED with ("decisively ranked below VWCE.DE") is a contradiction."""
     from .narration_check import check_narration
     d = getattr(rep, "decision", None)
     if d is None or not getattr(d, "rationale", ""):
         return
     table = {"N": r.universe_size, "combined_position": r.rank_position,
-             "factors": dict(r.factor_ranks), "ticker": r.ticker}
+             "factors": dict(r.factor_ranks), "ticker": r.ticker,
+             "boundary_tie": boundary_tie or {}}
     annotations = check_narration(d.rationale, table)
     if annotations:
         d.rationale = d.rationale.rstrip() + "\n" + "\n".join(annotations)
@@ -266,12 +274,16 @@ def _council_stage(
     shortlist: list[RankedTicker], screen_strategy, adapter, runners, mode: str, *,
     sentiment_adapter=None, sentiment_missing_key: bool = False,
     progress: Optional[Callable[[str], None]] = None,
+    boundary_ties: Optional[dict[str, dict]] = None,
 ) -> list[CouncilOutcome]:
     """Run the LLM council over the shortlist (matrix skipped — the ranker is the
     verdict-of-record). Shared by ``run_pipeline`` and ``run_rank_pipeline`` so the
     per-name invocation lives in ONE place. ``progress`` (optional) is called with a
     human status string before each name — the narrator phase is minutes, so the UI
-    needs a heartbeat."""
+    needs a heartbeat. ``boundary_ties`` (VERDICT-TIE-1) is ``boundary_tie_facts`` over the
+    WHOLE ranked cohort — the shortlist alone cannot see a tie partner that fell on the
+    other side of the boundary — threaded into each narrated name's evidence so the writer
+    can state honestly that the verdict split on the tie-break."""
     from .graph import build_council        # local import: avoids a heavy import cycle
 
     app = build_council(adapter, screen_strategy, runners,
@@ -285,15 +297,18 @@ def _council_stage(
             progress(f"Narrating {r.ticker} ({i} of {n})…")
         imputed_fraction = (len(r.imputed_factors) / len(r.factor_ranks)
                             if r.factor_ranks else 0.0)
+        boundary_tie = (boundary_ties or {}).get(r.ticker, {})
         result = ResearchState.model_validate(app.invoke(ResearchState(
             ticker=r.ticker, strategy_id=screen_strategy.id,
             ranker_verdict=Recommendation(r.verdict),
             ranker_explanation=r.explain(),
             ranker_cohort_size=r.universe_size,
             ranker_imputed_fraction=imputed_fraction,
+            ranker_boundary_tie=dict(boundary_tie),
             static_factor_evidence=_static_factor_evidence(r))))
         rep = report_from_state(result)
-        _annotate_narration(rep, r)                  # ITEM 4: rank-semantics post-check
+        # ITEM 4: rank-semantics post-check (+ VERDICT-TIE-1 tie-ordering check).
+        _annotate_narration(rep, r, boundary_tie)
         outcomes.append(CouncilOutcome(
             ticker=r.ticker, ranker_verdict=r.verdict,
             council_verdict=rep.council_verdict,
@@ -325,7 +340,8 @@ def run_pipeline(
     outcomes = _council_stage(
         shortlist, screen_strategy, adapter, runners, mode,
         sentiment_adapter=sentiment_adapter,
-        sentiment_missing_key=sentiment_missing_key)
+        sentiment_missing_key=sentiment_missing_key,
+        boundary_ties=boundary_tie_facts(ranked))
 
     return PipelineResult(ranked=ranked, shortlist=[r.ticker for r in shortlist],
                           council=outcomes, council_mode=mode, excluded=excluded)
@@ -373,20 +389,19 @@ class RankPipelineResult:
 
 
 def tie_boundary_notes(ranked: list[RankedTicker]) -> dict[str, str]:
-    """Ticker -> ``'(=<score> — tie broken alphabetically)'`` for each ranked name that
-    shares its combined score with the name ranked just ABOVE it AND received a DIFFERENT
-    verdict (the tie straddles a verdict boundary; the alphabetical tie-break decided
-    which side each fell on — e.g. MRK/PG both 20.0, HOLD/SELL, so PG is annotated).
+    """Ticker -> the rendered boundary-tie mark for EVERY member of a tie whose verdicts
+    differ, e.g. ``⚑ boundary (tied 10 with EUNL.DE — HOLD; tie broken alphabetically)``.
 
-    Display-only (ITEM 7): the ordering, the cut, and the verdicts are all unchanged —
-    this only DISCLOSES that a boundary was decided by the tie-break."""
-    notes: dict[str, str] = {}
-    live = [r for r in ranked if not r.excluded]
-    for prev, cur in zip(live, live[1:]):
-        if cur.combined_rank == prev.combined_rank and cur.verdict != prev.verdict:
-            notes[cur.ticker] = (f"(={cur.combined_rank:.1f} — "
-                                 f"tie broken alphabetically)")
-    return notes
+    VERDICT-TIE-1 supersedes the original ITEM 7 disclosure (which annotated only the LOWER
+    row with ``(=20.0 — tie broken alphabetically)``): the tie-break decided BOTH sides of
+    the boundary, so both sides carry the mark, and each names its tie partner(s), the shared
+    score, and the differing verdict. Thin re-export of
+    ``rank_engine.boundary_tie_notes`` — the detection and the wording live there, next to
+    ``format_verdict_cell``, so every ranked-table surface renders the same string.
+
+    Display-only: ordering, the alphabetical tie-break, the cut and the verdicts are all
+    unchanged — tied names KEEP their individual ranker verdicts."""
+    return boundary_tie_notes(ranked)
 
 
 def _disp(result: "RankPipelineResult", ticker: str) -> str:
@@ -537,7 +552,8 @@ def run_rank_pipeline(
             from .agents.runners import production_runners
             runners = production_runners()
         council = _council_stage(shortlist, council_frame, adapter, runners, mode,
-                                 progress=progress)
+                                 progress=progress,
+                                 boundary_ties=boundary_tie_facts(ranked))
         narratives = {o.ticker: _narrative_text(o) for o in council}
 
     # Freeze the captured inputs into a run record (ITEM 4). Replay runs record which
@@ -783,17 +799,20 @@ def format_cli_report(result: RankPipelineResult) -> str:
         "",
         f"=== RANKED ({m['rank_strategy_id']}) — verdict-of-record ===",
     ]
-    tie_notes = tie_boundary_notes(result.ranked)
+    tie_notes = boundary_tie_notes(result.ranked)     # VERDICT-TIE-1 boundary marks
     positions = cohort_positions(result.ranked)      # tie-shared #N of M (RANK-DISPLAY-1)
     cohort_m = len(result.ranked)                     # rateable cohort size (M); NOT `m`
                                                       # (that is result.meta, used below)
     for r in result.ranked:
         disp = _disp(result, r.ticker) + ("†" if r.screen_abstentions else "")
-        tie = f"  {tie_notes[r.ticker]}" if r.ticker in tie_notes else ""
         pos, tied = positions.get(r.ticker, (None, False))
         cell = format_position_cell(pos, cohort_m, tied, r.combined_rank,
                                     len(r.factor_ranks))
-        lines.append(f"  {_name_col(disp):<34} {r.verdict.upper():<5} {cell}{tie}")
+        # The boundary mark rides in the VERDICT cell (it qualifies the verdict, not the
+        # score). A marked row is intentionally wider than the 5-char verdict column — a
+        # tie that decided a verdict should break the eye's scan.
+        verdict = format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""))
+        lines.append(f"  {_name_col(disp):<34} {verdict:<5} {cell}")
     for foot in ranked_abstention_footnotes(result):
         lines.append(f"  {foot}")
     integrity = format_factor_integrity(result)
