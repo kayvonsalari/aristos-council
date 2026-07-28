@@ -79,9 +79,10 @@ not a cut), §4 the screen criteria with current thresholds, and §5 the guards.
 document and the code ever disagree, the code — and The Calculations, which is generated
 from it — win.
 
-Five rank strategies are visible on one engine, each pinning its own factors and floors in a
-versioned YAML (a published strategy is never edited in place — a new version is created
-instead): **Conservative Formula** (defensive income — low volatility + net payout +
+Eight lenses (rank strategies) are visible on one engine, each pinning its own factors and
+floors in a versioned YAML (a published strategy is never edited in place — a new version is
+created instead). Five rank over stocks: **Conservative Formula** (defensive income — low
+volatility + net payout +
 12-month momentum, screened for covered income, real yield, leverage, and a
 momentum-breakdown floor), **value + momentum** (the flagship — Greenblatt's earnings yield +
 return on capital with a momentum factor added to demote falling knives; financials excluded),
@@ -94,6 +95,17 @@ says who qualifies, the ranking orders survivors; the RAW and Financials lenses 
 one (quality enters through ranking). The classic Magic Formula, dividend-aristocrat, and
 growth (GARP) screens remain available as standalone/legacy configs.
 All thresholds are in [The Calculations §4](CALCULATIONS.md#4-screen-criteria-three-state-abstention-never-excludes).
+
+Three lenses rank **ETFs** rather than companies, on fund attributes — **Dividend ETFs**
+(distribution yield + expense ratio + fund size + momentum), **Growth ETFs** (expense ratio +
+momentum + fund size), and **ETF Index Tracker** (expense ratio + fund size + momentum, with
+deliberately *no* yield factor, because core cohorts mix accumulating and distributing share
+classes by design). All three are rank-first with no screens and no floors, all three are
+exploratory, and a confirmed-only **asset-kind gate** walls the classes apart so a fund can
+never leak into a stock lens or the reverse. Their honest limit is stated in each lens's own
+config: a fund's real quality is its index methodology and tracking accuracy, and no free
+vendor field measures either. Detail: [ETF lenses](../README.md#etf-lenses) and
+[The Calculations §2.1](CALCULATIONS.md#21-etf-factors).
 
 ### Data sources
 
@@ -131,7 +143,8 @@ per-run.
 
 If you are deciding whether to trust this system, the honest answer is that the trust does not
 come from the language models. It comes from the deterministic code that surrounds them and from
-an automated test suite — over 800 tests at last count — that runs the entire pipeline on every
+an automated test suite — over 900 tests at last count (927 passing, 6 skipped, as of
+2026-07-28) — that runs the entire pipeline on every
 change with fake models and fake data, no API keys and no network. Each guarantee below is
 enforced by that code and re-checked by those tests; none of it depends on a model behaving well
 on the day.
