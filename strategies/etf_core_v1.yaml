@@ -1,4 +1,4 @@
-# Core Market ETFs (rank-based, no screens — house doctrine) — ETFCORE-1 ITEM 1.
+# ETF Index Tracker (rank-based, no screens — house doctrine) — ETFCORE-1 ITEM 1.
 # ==============================================================================
 # HONESTY NOTE (verbatim, ETFCORE-1 ITEM 1): core funds differ mainly in what they track
 # and what they charge; tracking quality and index choice are not vendor-measurable — this
@@ -12,9 +12,13 @@
 # NOTE — deliberately NO distribution_yield factor: core funds mix accumulating (ACC) and
 # distributing (DIST) share classes, so yield is a share-class artefact, not the buying
 # criterion. Ranking on it would penalise ACC classes for a structural zero.
+# DISPLAY LABEL ONLY (UI-RENAME-1): `name`/`display_name` read "ETF Index Tracker" — the
+# lens screens broad-market index trackers, and the old "Core Market ETFs" collided with
+# the etf_core_ucits_v1 universe label. The `id` stays etf_core_v1: it is the stable record
+# key cited by frozen runs and by issues #42/#43, so renaming it would break provenance.
 id: etf_core_v1
-name: Core Market ETFs
-display_name: Core Market ETFs
+name: ETF Index Tracker
+display_name: ETF Index Tracker
 version: 1
 
 description: >-

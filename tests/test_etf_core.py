@@ -12,7 +12,9 @@ from pathlib import Path
 from aristos_council.data.adapter import (
     Fundamentals, MarketDataAdapter, PriceBar, PriceHistory,
 )
-from aristos_council.demo_surface import is_validation_universe
+from aristos_council.demo_surface import (
+    is_validation_universe, strategy_label, universe_label,
+)
 from aristos_council.pipeline import _rank_stage
 from aristos_council.strategy.discovery import visible_rank_strategies
 from aristos_council.strategy.rank_loader import load_rank_strategy
@@ -36,7 +38,10 @@ CORE_UCITS = ["VWCE.DE", "SXR8.DE", "VUSA.AS", "EUNL.DE", "SPYY.DE"]
 # --- ITEM 1: the lens loads, is shaped as specced, carries the honesty note ---- #
 def test_core_lens_shape_and_verbatim_honesty_note():
     s = load_rank_strategy(STRAT_DIR / "etf_core_v1.yaml")
-    assert s.display_name == "Core Market ETFs"
+    # UI-RENAME-1: the human-facing label is "ETF Index Tracker" (display string only —
+    # the id stays etf_core_v1, see test_core_lens_ids_are_never_renamed).
+    assert s.display_name == "ETF Index Tracker"
+    assert s.name == "ETF Index Tracker"          # narration/report headers print `name`
     assert s.asset_kinds == ["etf"]
     # three factors, cost/size/trend — and DELIBERATELY no distribution_yield
     assert [f.name for f in s.factors] == ["expense_ratio", "fund_size", "momentum_12m"]
@@ -54,11 +59,31 @@ def test_core_lens_is_a_visible_rank_strategy():
     assert "etf_core_v1" in ids
 
 
+# --- UI-RENAME-1: display label renamed, RECORD KEYS frozen -------------------- #
+def test_core_lens_ids_are_never_renamed():
+    # The rename is a DISPLAY-STRING change. Both ids are cited by the frozen 2026-07-21
+    # record and by issues #42/#43, so a renamed id would break provenance.
+    s = load_rank_strategy(STRAT_DIR / "etf_core_v1.yaml")
+    assert s.id == "etf_core_v1"
+    assert s.suggested_universes == ["etf_core_ucits_v1"]
+    assert load_universe_by_id("etf_core_ucits_v1", UNIV_DIR).id == "etf_core_ucits_v1"
+
+
+def test_core_lens_renders_the_new_label_in_pickers():
+    # The label helpers are what every dropdown/strategy-field renders through, so assert
+    # the new string arrives THERE (not just in the yaml) — and the old one is gone.
+    s = load_rank_strategy(STRAT_DIR / "etf_core_v1.yaml")
+    u = load_universe_by_id("etf_core_ucits_v1", UNIV_DIR)
+    assert strategy_label(s) == "ETF Index Tracker"
+    assert universe_label(u) == "ETF Index Tracker — UCITS"
+    assert "Core Market ETFs" not in strategy_label(s) + universe_label(u)
+
+
 # --- ITEM 2: the UCITS core universe is discovered, front-stage, observation-only #
 def test_core_ucits_universe_loads_with_five_distinct_funds():
     u = load_universe_by_id("etf_core_ucits_v1", UNIV_DIR)
     assert u.tickers == CORE_UCITS
-    assert u.display_name == "Core Market ETFs (UCITS)"
+    assert u.display_name == "ETF Index Tracker — UCITS"          # UI-RENAME-1
     assert u.role == "euro-investable exploration — observation only"
 
 
