@@ -109,11 +109,12 @@ def _screenless_frame(rank_strategy):
     (so the evidence ledger carries no screen block, and the decision prompt drops the
     partial-pass policy line). ``model_construct`` bypasses the ``criteria`` min-length
     validator on purpose: screen-less IS zero criteria."""
-    from .agents.prompts import fundamental_brief_for_lens
+    from .agents.prompts import lens_brief
     from .strategy.loader import Strategy
     base = (getattr(rank_strategy, "rationale", "") or "").strip()
     note = "This strategy screens nothing; quality enters via ranking."
     rationale = f"{base}\n{note}" if base else note
+    lens = lens_brief(rank_strategy)
     return Strategy.model_construct(
         id=rank_strategy.id,
         name=(getattr(rank_strategy, "display_name", "") or rank_strategy.name),
@@ -121,9 +122,11 @@ def _screenless_frame(rank_strategy):
         display_name=getattr(rank_strategy, "display_name", ""),
         criteria=[],
         rationale=rationale,
-        # NARR-PROMPT-1: frame the FUNDAMENTAL specialist by what THIS lens ranks (an ETF
-        # lens no longer imports dividend framing); "" for a stock lens -> default brief.
-        fundamental_brief=fundamental_brief_for_lens(rank_strategy))
+        # NARR-PROMPT-1: carry the DERIVED lens framing (kind + ranked-factor labels) so
+        # EVERY agent prompt — specialists, critic, narrator — is built from what THIS
+        # lens ranks and no agent imports dividend framing. "stock" -> today's prompts.
+        lens_kind=lens.kind,
+        lens_factor_labels=list(lens.factor_labels))
 
 
 def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None):
@@ -483,6 +486,16 @@ def run_rank_pipeline(
     # The Strategy object that FRAMES the council: the real lens when screened, else a
     # screen-less frame carrying the rank strategy's own identity (no criteria).
     council_frame = _screenless_frame(rank_strategy) if screen_less else screen_strategy
+    if not screen_less:
+        # NARR-PROMPT-1: a SCREENED frame is the lens YAML, which knows nothing about the
+        # rank strategy that selected it — stamp the derived lens framing onto a COPY so
+        # every agent is framed by what the active rank strategy ranks (an ETF rank
+        # strategy with a screen lens no longer inherits stock framing). A stock lens
+        # derives to "stock" -> the frame is unchanged in effect.
+        from .agents.prompts import lens_brief
+        _lens = lens_brief(rank_strategy)
+        council_frame = council_frame.model_copy(update={
+            "lens_kind": _lens.kind, "lens_factor_labels": list(_lens.factor_labels)})
 
     today = today or date.today()
     mode = council_mode or rank_strategy.council_mode

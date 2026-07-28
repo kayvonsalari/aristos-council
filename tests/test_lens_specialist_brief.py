@@ -14,6 +14,9 @@ names. These pin:
   - a GROWTH-lens brief also disclaims dividends (core & growth share the ETF template);
   - a STOCK/screen lens keeps today's brief byte-for-byte (the default stands);
   - the specialist prompt STRUCTURE (brief + hard rules + strategy intent) is unchanged.
+
+The cross-agent contract (the SAME builder framing the other specialists, the critic and
+the narrator) is pinned in ``test_lens_brief_all_agents.py``.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from aristos_council.agents.prompts import (
-    SPECIALIST_BRIEFS, fundamental_brief_for_lens, specialist_system)
+    SPECIALIST_BRIEFS, fundamental_brief_for_lens, lens_brief, specialist_system)
 from aristos_council.pipeline import _screenless_frame
 from aristos_council.state import SpecialistName
 from aristos_council.strategy.loader import load_strategy
@@ -93,15 +96,17 @@ def test_stock_screen_lens_keeps_todays_brief_verbatim():
     # the default brief is used verbatim (the interpolated ETF wording never appears)
     assert _DEFAULT_FUNDAMENTAL in sys
     assert "NOT an income lens" not in sys
-    # a screen strategy carries no override, so the default stands
-    assert getattr(stock, "fundamental_brief", "") == ""
+    # a screen strategy is classified STOCK, so the default brief stands
+    assert lens_brief(stock).is_stock
+    assert fundamental_brief_for_lens(stock) == ""
 
 
 def test_screenless_equity_lens_keeps_todays_brief():
     # a screen-less EQUITY rank frame (magic_formula_raw_v1) is a stock lens -> default
     raw = load_rank_strategy(STRAT_DIR / "magic_formula_raw_v1.yaml")
     frame = _screenless_frame(raw)
-    assert frame.fundamental_brief == ""
+    assert frame.lens_kind == "stock"
+    assert fundamental_brief_for_lens(frame) == ""
     assert _DEFAULT_FUNDAMENTAL in _fundamental_sys(frame)
 
 
@@ -121,9 +126,13 @@ def test_specialist_prompt_structure_unchanged_for_etf_lens():
     assert "STRATEGY INTENT" in sys
 
 
-def test_only_fundamental_brief_is_lens_aware():
-    # the other roles are unchanged — the override only touches FUNDAMENTAL
+def test_technical_brief_is_lens_neutral():
+    # TEST DELTA (NARR-PROMPT-1 completion): the fix is no longer FUNDAMENTAL-only —
+    # SENTIMENT and RISK now get lens-appropriate briefs too (see
+    # test_lens_brief_all_agents.py). TECHNICAL stays the default on every lens: a trend
+    # reads the same on a fund as on a stock, so there is nothing kind-specific to say.
     core = _core_frame()
-    for who in (SpecialistName.TECHNICAL, SpecialistName.SENTIMENT, SpecialistName.RISK):
-        sys = specialist_system(who, core, "narrator")
-        assert SPECIALIST_BRIEFS[who] in sys
+    tech = specialist_system(SpecialistName.TECHNICAL, core, "narrator")
+    assert SPECIALIST_BRIEFS[SpecialistName.TECHNICAL] in tech
+    # ...and it still receives the lens emphasis, from the same builder as everyone else
+    assert lens_brief(core).emphasis().strip() in tech
