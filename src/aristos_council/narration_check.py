@@ -24,14 +24,24 @@ positives on real garp_v2 narration:
 A superlative is only a checkable claim when it is genuinely predicated of the narrated
 name's rank. These are NOT claims and are left alone (NARR-CHK-1/2/4):
 - **Hedged** — "near-best", "almost worst" (approximations).
-- **Negated** — "not best", "never worst" (a rank-2 name is honestly "Competitive, Not
-  Best"; the negation disclaims the rank rather than asserting it).
+- **Negated** — "not best", "never worst", "not the best" (a rank-2 name is honestly
+  "Competitive, Not Best"; the negation disclaims the rank rather than asserting it).
 - **Theoretical bounds / cohort arithmetic** — "worst possible = 48", "best case" (a
   hypothetical, not the name).
 - **Generic/hypothetical subjects** — "the best-ranked NAME in the cohort is not insulated
   …" describes a role, not the narrated name (so the combined subject requires the explicit
   "combined"/"rank-sum" metric word, not a bare "in the cohort").
 - **Spelled relative ordinals** — "third-best" is rank 3, never the bare "best" (rank 1).
+- **Value superlatives with no rank citation** — "exceptional momentum" praises the VALUE,
+  not the rank; that word class only becomes a rank claim beside an explicit cohort
+  citation (see ``_CITED_ONLY_ORDINALS``).
+
+Markdown is stripped before parsing (NARR-CHK-4): the narrator emphasises heavily, and an
+emphasis marker sitting between a hedge/negation and its superlative ("`**not** best`",
+"`near-*best*`") otherwise defeats the adjacency the skip patterns rely on — a live latent
+false-positive generator. Only `*` and backticks are stripped; `_` is load-bearing in the
+factor keys the narrator quotes (`fund_size`, `momentum_12m`). Annotations always quote the
+ORIGINAL prose, markdown included — the check never rewrites what the model wrote.
 """
 
 from __future__ import annotations
@@ -58,6 +68,24 @@ _ORDINALS: tuple[tuple[str, Callable[[int], int]], ...] = (
     (r"best", lambda n: 1),
 )
 
+# Superlatives that are only a RANK claim when the clause also carries an explicit cohort
+# citation (NARR-CHK-4, the SXR8 "momentum 5/5 is exceptional" inversion). Unlike
+# best/worst/strongest, these words are routinely predicated of a VALUE rather than a rank
+# ("exceptional revenue growth of 40%" says nothing about a rank and must never be flagged),
+# so they are inert on the subject-vs-table path and live only on the citation-vs-ordinal
+# path — where the prose is demonstrably talking about the cited rank.
+_CITED_ONLY_ORDINALS: tuple[tuple[str, Callable[[int], int]], ...] = (
+    (r"exceptional", lambda n: 1),
+    (r"outstanding", lambda n: 1),
+    (r"unmatched", lambda n: 1),
+)
+
+# Markdown emphasis the narrator wraps prose in. Stripped before parsing so a marker between
+# a hedge/negation and its superlative cannot defeat the adjacency `_SKIP_BEFORE` requires
+# ("`near-*best*`", "`**not** best`"). `_` is NOT stripped — it is load-bearing in the factor
+# keys the narrator quotes verbatim (`fund_size`, `momentum_12m`).
+_MD_EMPHASIS = re.compile(r"[*`]+")
+
 # A superlative is NOT a checkable ordinal claim when the text just BEFORE it is:
 #   - a HEDGE ("near-best" ≈ rank 2, not rank 1),
 #   - a NEGATION ("not best" / "never worst" DISCLAIMS the rank — "Competitive, Not Best" is
@@ -65,10 +93,13 @@ _ORDINALS: tuple[tuple[str, Callable[[int], int]], ...] = (
 #   - a spelled RELATIVE-ORDINAL prefix ("third-best", "fourth-worst" — a specific rank,
 #     NOT the bare superlative; NARR-CHK-2 class 3 flagged "third-best" as "best"=rank 1).
 # Matched against the text ENDING just before the ordinal token. ("second-*" is handled by
-# its own specific pattern above, so it is intentionally absent here.)
+# its own specific pattern above, so it is intentionally absent here.) An optional article is
+# tolerated between the prefix and the token — "not THE best" disclaims rank 1 exactly as
+# "not best" does (NARR-CHK-4); markdown emphasis is already stripped by then.
 _SKIP_BEFORE = re.compile(
     r"\b(?:near|nearly|almost|approx\w*|roughly|about|~|not|never"
-    r"|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)[-\s]?$", re.I)
+    r"|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)"
+    r"(?:[-\s]+the)?[-\s]?$", re.I)
 
 # A superlative is a THEORETICAL BOUND, not a claim about the name, when it is immediately
 # FOLLOWED by "possible"/"case"/… ("worst possible = 48" is cohort arithmetic, not a claim
@@ -110,13 +141,32 @@ _COMBINED_LOOSE = re.compile(r"in the cohort|overall", re.I)
 _RANK_CITE = re.compile(
     r"\brank(?:\s+of)?\s+(\d+)(?:\s*(?:out\s+of|/)\s*(\d+))?", re.I)
 
+# A BARE cohort citation — "momentum 5/5", with the word "rank" elided (the SXR8 phrasing,
+# NARR-CHK-4). Deliberately narrow, because `d/d` is also dates, fractions and star ratings:
+# it counts only when the denominator EQUALS the cohort size N, the numerator is a valid
+# position within it, and the clause resolves a rank subject (a named factor / the combined
+# position). Used ONLY as a fallback when `_RANK_CITE` finds nothing in the clause. The
+# lookarounds keep it off `2026/07/21` and `3/4/5`.
+_BARE_CITE = re.compile(r"(?<![\d./])(\d+)\s*/\s*(\d+)(?![\d./])")
 
-def _word_ordinal(text: str) -> Optional[tuple[int, Callable[[int], int]]]:
+
+def _demark(text: str) -> str:
+    """``text`` with markdown emphasis (`*`, backticks) removed — see the module docstring.
+    Parsing only; annotations quote the original prose."""
+    return _MD_EMPHASIS.sub("", text)
+
+
+def _word_ordinal(text: str,
+                  include_cited_only: bool = False
+                  ) -> Optional[tuple[int, Callable[[int], int]]]:
     """The earliest UN-HEDGED word-superlative token in ``text`` (specific tokens win a
     tie) as ``(start, position_fn)``. A superlative that is hedged ("near-best"), a spelled
-    relative ordinal ("third-best"), or a theoretical bound ("worst possible") is skipped."""
+    relative ordinal ("third-best"), or a theoretical bound ("worst possible") is skipped.
+    ``include_cited_only`` admits the value-superlative class ("exceptional") — the caller
+    sets it only when the clause carries exactly one rank citation to bind it to."""
     best: Optional[tuple[int, Callable[[int], int]]] = None
-    for pat, fn in _ORDINALS:
+    tokens = _ORDINALS + (_CITED_ONLY_ORDINALS if include_cited_only else ())
+    for pat, fn in tokens:
         m = re.search(pat, text, re.I)
         if (not m or _SKIP_BEFORE.search(text[:m.start()])
                 or _SKIP_AFTER.match(text[m.end():])):
@@ -155,6 +205,21 @@ def _subject_rank(text: str, factors: dict, combined_position: Optional[int],
     return None
 
 
+def _clause_cites(clause: str, n: int, factors: dict, combined_position: Optional[int],
+                  ticker: Optional[str]) -> list[tuple[int, int]]:
+    """The rank citations in ``clause`` as ``(position, cohort_size)`` pairs. An explicit
+    "rank R out of M" wins; failing that, a BARE cohort citation ("momentum 5/5") counts only
+    under `_BARE_CITE`'s narrow gate — denominator == N, numerator a valid position, and a
+    resolvable rank subject in the clause — so fractions and dates never read as ranks."""
+    cites = [(int(r), int(m) if m else n) for r, m in _RANK_CITE.findall(clause)]
+    if cites:
+        return cites
+    if _subject_rank(clause, factors, combined_position, ticker) is None:
+        return []
+    return [(int(b.group(1)), int(b.group(2))) for b in _BARE_CITE.finditer(clause)
+            if int(b.group(2)) == n and 1 <= int(b.group(1)) <= n]
+
+
 def _word_check(sentence: str, n: int, combined_position: Optional[int],
                 factors: dict, ticker: Optional[str] = None) -> bool:
     """Word-superlative claim vs the table (hedge-, negation- and CLAUSE-aware). Each
@@ -168,16 +233,16 @@ def _word_check(sentence: str, n: int, combined_position: Optional[int],
     - **subject vs table**: a superlative about a named factor / the combined position must
       match that subject's actual rank.
     A clause with no un-hedged/un-negated superlative, more than one citation, or no
-    resolvable subject is left alone — the check never invents a contradiction."""
+    resolvable subject is left alone — the check never invents a contradiction. The
+    value-superlative class ("exceptional") is admitted on the citation path only."""
     for clause in re.split(r"[,;]", sentence):
-        wo = _word_ordinal(clause)
+        cites = _clause_cites(clause, n, factors, combined_position, ticker)
+        wo = _word_ordinal(clause, include_cited_only=len(cites) == 1)
         if wo is None:
             continue
         posfn = wo[1]
-        cites = _RANK_CITE.findall(clause)
         if len(cites) == 1:                      # citation vs ordinal
-            r = int(cites[0][0])
-            m = int(cites[0][1]) if cites[0][1] else n
+            r, m = cites[0]
             if r != posfn(m):
                 return True
         elif not cites:                          # subject vs table (no explicit rank)
@@ -231,6 +296,9 @@ def check_narration(narrative: str, table: dict) -> list[str]:
     bound to the factor each names. Correct ordinal statements (in any factor order) pass
     untouched; ambiguous or hedged sentences are left alone — the check never invents a
     contradiction, and never rewrites the prose.
+
+    Markdown emphasis is stripped for PARSING only; a flagged claim is quoted verbatim from
+    the narrative, emphasis markers included.
     """
     if not narrative:
         return []
@@ -244,8 +312,9 @@ def check_narration(narrative: str, table: dict) -> list[str]:
     flags: list[str] = []
     seen: set[str] = set()
     for sentence in _sentences(narrative):
-        if (_word_check(sentence, n, combined_position, factors, ticker)
-                or _numeric_check(sentence, combined_position, factors, ticker)):
+        parsed = _demark(sentence)
+        if (_word_check(parsed, n, combined_position, factors, ticker)
+                or _numeric_check(parsed, combined_position, factors, ticker)):
             claim = _claim(sentence)
             if claim not in seen:
                 seen.add(claim)
