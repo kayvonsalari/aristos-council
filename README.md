@@ -19,7 +19,7 @@ Most screeners tell you what to buy. Aristos shows its work so thoroughly you co
 
 **2. Bad data gets refused, not used.** Wrong-currency figures are converted with the conversion receipt shown. Implausible vendor values are flagged and withheld. Missing fields abstain — the system says "not evaluated" instead of inventing a number.
 
-**3. The AI explains; it never decides — and even its explanations are audited.** Verdicts come from deterministic arithmetic. A language model writes the narrative, and an automatic fact-checker reads every sentence against the rank table, stamping a visible warning on anything that doesn't match.
+**3. The AI explains; it never decides — and even its explanations are audited.** Verdicts come from deterministic arithmetic. A language model writes the narrative, and an automatic fact-checker reads every sentence against the rank table. When a claim contradicts the table it **annotates, it does not rewrite**: the model's prose is left exactly as written, a visible warning is appended beside it, and the table stays authoritative.
 
 **4. It quotes its records instead of improvising.** Ask about one name and it cites the verdict of record — what the last frozen run actually concluded, with the date — like a filed document, not a fresh opinion.
 
@@ -35,11 +35,14 @@ built to demonstrate that architecture; it is also the foundation the author int
 personal analysis platform, sequenced by evidence and feedback rather than coverage ambition.
 
 What it demonstrably does today — each point verifiable in this repo:
-- **Five rank strategies on free market data** — three validated (defensive income, value +
-  momentum, growth-at-a-reasonable-price) plus two exploratory (a no-screen Greenblatt baseline and
-  a financials P/B+ROE lens) — with every verdict reproducible offline (`--replay` re-runs a past
-  verdict against its *frozen* inputs — the exact data snapshot saved at run time, so the result is
-  bit-for-bit repeatable without the network) and every cited figure traced to its source tool call.
+- **Eight lenses (rank strategies) on free market data — five over stocks, three over ETFs.**
+  The stock lenses: three validated (defensive income, value + momentum,
+  growth-at-a-reasonable-price) plus two exploratory (a no-screen Greenblatt baseline and a
+  financials P/B+ROE lens). The three ETF lenses (dividend, growth, index tracker) are exploratory
+  and rank funds on fund attributes — see [ETF lenses](#etf-lenses). Every verdict is reproducible
+  offline (`--replay` re-runs a past verdict against its *frozen* inputs — the exact data snapshot
+  saved at run time, so the result is bit-for-bit repeatable without the network) and every cited
+  figure traces to its source tool call.
 - **An LLM layer that explains but never judges** — demoted from judging by a pre-registered
   controlled experiment (0 agreements in 17 councils; dissent shown to be pick-independent), its
   valid insights hardened into deterministic rules instead.
@@ -64,7 +67,8 @@ deterministically. Its valid insights were extracted and hardened into rules (a 
 factor; a screen-as-prefilter); what remained was noise. The narrative layer is what an
 LLM demonstrably does well here, so that is the job it keeps.
 
-The rank strategies run on one engine — each is a versioned YAML file, not code:
+The rank strategies run on one engine — each is a versioned YAML file, not code. Five rank
+over stocks:
 - **Defensive income** (`conservative_plus_v1`) — van Vliet's Conservative Formula: low volatility,
   high net payout (dividends plus buybacks), momentum guard. For steady income portfolios.
 - **Value + momentum** (`magic_formula_momentum_v1`) — the flagship: Greenblatt's two factors plus
@@ -86,16 +90,24 @@ The rank strategies run on one engine — each is a versioned YAML file, not cod
   bought at a high **earnings yield** (operating profit as a percentage of the cost to buy the whole
   business, debt included — the inverse of a P/E; higher means cheaper). The audited baseline, kept
   as a legacy config (unlisted).
+
+Three rank over ETFs — same engine, fund attributes instead of company fundamentals
+(**[ETF lenses](#etf-lenses)** has the detail):
+- **Dividend ETFs** (`etf_dividend_v1`) — distribution yield, expense ratio, fund size, momentum.
+- **Growth ETFs** (`etf_growth_v1`) — expense ratio, momentum, fund size.
+- **ETF Index Tracker** (`etf_core_v1`) — expense ratio, fund size, momentum; **no yield factor**.
+
 A strategy file declares its factors, screen, and verdict cut; the arithmetic behind every factor
 is unit-tested and documented in [The Calculations](docs/CALCULATIONS.md).
 
 The UI **discovers strategies dynamically** from `strategies/` — there is no hardcoded list. The
-visible set is currently five (**Defensive Income** `conservative_plus_v1`, **Value + Momentum**
-`magic_formula_momentum_v1`, **Growth at a Reasonable Price** `growth_garp_v2`, **Greenblatt RAW**
-`magic_formula_raw_v1`, **Financials** `financials_v1`); superseded/legacy configs
-(`growth_garp_v1`, `magic_formula_v1`, `dividend_aristocrats_v1`) are marked `ui: hidden` and stay
-fully loadable via the loader/CLI but unlisted. A new strategy appears simply by adding a YAML to
-`strategies/` — never
+visible set is currently eight — five stock lenses (**Defensive Income** `conservative_plus_v1`,
+**Value + Momentum** `magic_formula_momentum_v1`, **Growth at a Reasonable Price** `growth_garp_v2`,
+**Greenblatt RAW** `magic_formula_raw_v1`, **Financials** `financials_v1`) and three ETF lenses
+(**Dividend ETFs** `etf_dividend_v1`, **Growth ETFs** `etf_growth_v1`, **ETF Index Tracker**
+`etf_core_v1`); superseded/legacy configs (`growth_garp_v1`, `magic_formula_v1`,
+`dividend_aristocrats_v1`) are marked `ui: hidden` and stay fully loadable via the loader/CLI but
+unlisted. A new strategy appears simply by adding a YAML to `strategies/` — never
 by editing a published one (configs are versioned and superseded, not mutated).
 
 New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — the plain-language
@@ -172,7 +184,8 @@ can be saved from the UI as **timestamped** files (`universe_<strategy>_<mode>_<
 
 Different businesses are priced on different yardsticks, and mixing yardsticks inside one
 ranking compares nothing. So each lens (rank strategy) declares which sectors it can
-measure — a deliberate scoping choice, not an oversight.
+measure — a deliberate scoping choice, not an oversight. (Asset *class* is a separate,
+harder wall: see **[ETF lenses](#etf-lenses)**.)
 
 **The value lenses exclude banks and utilities.** Classic value and value+momentum rank on
 return on invested capital (ROIC) and earnings yield (EBIT/EV). Neither is computable on a
@@ -217,6 +230,81 @@ ROIC do not. Utilities aren't excluded there; they're ranked on yardsticks that 
 The full sector-scope tier table (excluded-by-design / supported-with-disclosed-distortion
 / clean-fit) is in **[The Calculations §9](docs/CALCULATIONS.md#9-scope-where-the-metrics-apply)**.
 
+## ETF lenses
+
+Three of the eight lenses rank **funds**, not companies. A fund has no ROIC and no earnings
+yield; what it has is a fee, a size, a distribution policy, and a price series. So the ETF
+lenses rank exactly those attributes — and nothing they cannot measure.
+
+**What these lenses honestly are.** A fund's real quality is its index methodology and its
+tracking accuracy, and **no free vendor field captures either**. Each ETF lens carries that
+admission verbatim in its own YAML `rationale`, so it travels with every render: the lens
+compares *cost, scale and trend among self-declared funds of a category, nothing more*. All
+three are **exploratory** — none is on the prospective scoreboard.
+
+**The asset-kind wall.** Each ETF lens declares `asset_kinds: [etf]`, and the gate fires
+*before* any screen or factor path: a vendor will happily serve look-through "fundamentals"
+for an index tracker, so an equity leaking into an ETF lens (or a fund into a stock lens)
+would produce quiet garbage instead of an honest exclusion. The gate is **confirmed-only** —
+a missing vendor `quoteType` never gates — and it renders as
+`asset kind 'ETF' outside this strategy's scope`.
+
+| Lens | Ranks on | Note |
+|---|---|---|
+| **Dividend ETFs** (`etf_dividend_v1`) | `distribution_yield` (income, high) · `expense_ratio` (cost, **low**) · `fund_size` (liquidity + closure risk, high) · `momentum_12m` (trend, high) | Payout / fee / size / trend. The UCITS cohort is all **DIST** (distributing) share classes — which is what a dividend lens should rank. |
+| **Growth ETFs** (`etf_growth_v1`) | `expense_ratio` (**low**) · `momentum_12m` (high) · `fund_size` (high) | Fee / trend / scale — no yield factor. Most names in its UCITS cohort are **ACC** (accumulating) share classes, whose distribution yield is a *true zero* (they reinvest rather than distribute): a product finding, never a data error. |
+| **ETF Index Tracker** (`etf_core_v1`) | `expense_ratio` (**low**) · `fund_size` (high) · `momentum_12m` (high) | Fee / fund-size / trend, with **deliberately no yield factor** — core cohorts mix ACC and DIST share classes *by design*, so yield there is a share-class artefact, not the buying criterion, and ranking on it would penalise an ACC class for a structural zero. The fee factor matters most here: these are the largest, longest-held positions. |
+
+All three are **rank-first with no screens and no floors** (`missing: neutral`): a fund missing
+one field is judged on the fields it has and is never excluded for the gap. Rank 1 is best on
+every factor; the per-factor ranks are summed exactly as for the stock lenses. Formulas and the
+unit conventions are in **[The Calculations §2.1](docs/CALCULATIONS.md#21-etf-factors)**.
+
+### The ETF universes
+
+Five declared, versioned manifests under `universes/`. There is no US core cohort — the index
+tracker ships with the UCITS one only.
+
+| Universe | Funds | For | Role |
+|---|---|---|---|
+| `etf_dividend_us_v1` | 10 | `etf_dividend_v1` | exploratory universe — dividend-ETF lens |
+| `etf_dividend_ucits_v1` | 9 | `etf_dividend_v1` | euro-investable exploration — observation only |
+| `etf_growth_us_v1` | 8 | `etf_growth_v1` | exploratory universe — growth-ETF lens |
+| `etf_growth_ucits_v1` | 6 | `etf_growth_v1` | euro-investable exploration — observation only |
+| `etf_core_ucits_v1` | 5 | `etf_core_v1` | euro-investable exploration — observation only |
+
+**All-US first, by deliberate sequencing.** The US lines came first because they are
+currency-clean and vendor-rich (a coverage probe confirmed 100% field coverage), and a
+UCITS/European cohort joined only as a *later versioned universe* — never mixed into a
+currency-clean v1. Where the free vendor is thin on the UCITS lines, the slow fields come from
+the committed **static layer** (dated, provenance-tagged — see
+[The Calculations §2.2](docs/CALCULATIONS.md#22-the-etf-static-layer)).
+
+**One listing per distinct fund — the dedup doctrine.** An ETF universe records each fund
+**once**, even when the same fund trades on several exchanges. Exchange twins are the same
+fund with the same ISIN under two tickers; ranking one against the other manufactures noise
+from listing-level price drift (two exchanges quote the same NAV at slightly different times,
+FX marks and spreads), so a duplicated fund would score twice on cost and size and split its
+own momentum rank on quote artefacts rather than anything real. Where a twin exists the deeper
+euro book — the Xetra (`.DE`) line — is preferred, and **the dropped alternate is recorded in
+the universe's `description`** so nobody re-adds it thinking it was an oversight. The core
+cohort went from 8 tickers to 5 distinct funds this way, with all three twins named on the
+manifest (`VWCE.DE` also trades as `VGWL.DE`; `SXR8.DE` as `CSPX.L`; `EUNL.DE` as `IWDA.AS`).
+
+**Graded vs exploration.** A universe is **graded** when it appears in the
+prospective-scoreboard snapshot CSV (`snapshots/verdict_consensus.csv`) — a frozen,
+pre-registered input to a forward-return test. A graded universe is therefore **clone-only** in
+the universe editor:
+loading it to modify makes an editable copy under a new id, and the graded original is never
+changed. Everything else is **exploration**: run it, read it, learn from it — but its verdicts
+are not scored, and the lenses over it say so in their own YAML (*"EXPLORATORY: never on the
+prospective scoreboard until deliberately frozen"*). **Every ETF lens and every ETF universe
+is exploration today**; the three cohorts marked *observation only* exist to watch how a
+euro-investable lens behaves, not to produce a verdict of record. (A separate, role-derived
+rule decides *visibility* rather than grading: a universe whose `role:` says **never graded** —
+the watch sets and known-trap control benches — sits behind the "Show validation & legacy
+tools" toggle. The ETF universes are front-stage.)
+
 ## Architecture
 
 - **Decision core:** `rank_engine.py` (rank-sum + verdict cuts) + `factors.py` (factor
@@ -236,6 +324,13 @@ The full sector-scope tier table (excluded-by-design / supported-with-disclosed-
 - **Data behind adapters:** provider-agnostic `MarketDataAdapter`
   (`yfinance` | `eodhd` | `hybrid` via `ARISTOS_MARKET_PROVIDER`); Finnhub behind a
   `SentimentAdapter`; per-adapter unit normalization with sanity guards.
+- **ETF static layer:** a committed, dated CSV (`data/etf_static.csv`) fills the slow ETF
+  fields the free vendor serves unevenly — vendor value always wins where present and
+  plausible, every static-sourced number carries a `[static: <as_of>, <source>]` receipt,
+  and an entry older than 90 days abstains rather than serve silently. Rows are generated
+  for review by `scripts/generate_etf_static_rows.py` and committed by a human, so a frozen
+  run replays them byte-identically. Details in
+  [The Calculations §2.2](docs/CALCULATIONS.md#22-the-etf-static-layer).
 - **Persistence & audit:** append-only verdict history, full per-run reports, deep
   provenance audit resolving every cited figure against the tool-call ledger. Every
   run stores the inputs it saw (`runs/<run_id>/`); any run can be replayed offline.
@@ -249,6 +344,11 @@ aristos-council/
 ├── app.py                        # Council Station — local Streamlit UI (Sprint 3)
 ├── src/aristos_council/
 │   ├── state.py                  # ResearchState + Figure/Provenance/veto types — the schema contract
+│   ├── rank_engine.py            # the decision core: rank-sum, verdict cuts, cohort-position display
+│   ├── factors.py                # factor registry (stock + ETF), asset-kind gate, disclosure flags
+│   ├── etf_static.py             # committed ETF static layer: vendor precedence, receipts, staleness
+│   ├── pipeline.py               # universe run: screen → rank → narrate; the shared CLI/UI entrypoint
+│   ├── narration_check.py        # rank-semantics post-check on the narrative (annotates, never rewrites)
 │   ├── graph.py                  # LangGraph wiring: gather → specialists → critic → decision → audit → veto
 │   ├── agents/                   # the deliberators (LLM-backed, behind a Runner seam)
 │   │   ├── nodes.py              # gather + specialist/critic/decision nodes, prompts, figure validation
@@ -272,10 +372,14 @@ aristos-council/
 │   │   ├── loader.py             # validated strategy YAML loader
 │   │   └── versioning.py         # edit-as-new-version; never mutates published files (Sprint 3)
 │   └── tools/                    # deterministic tools — ALL arithmetic lives here
-│       ├── screening.py          # dividend-aristocrat screen math
+│       ├── screening.py          # screen-criterion math (registry primitives, three-state)
 │       ├── technical.py          # price / technical snapshot
 │       └── sentiment_tools.py    # sentiment aggregation
-├── strategies/                   # versioned strategy YAMLs (dividend_aristocrats_v1, growth_v1)
+├── strategies/                   # versioned strategy YAMLs — 8 visible lenses + legacy/lens screens
+├── universes/                    # declared, versioned universe manifests (incl. the 5 ETF cohorts)
+├── data/etf_static.csv           # committed, dated ETF static layer (fee / size / distribution)
+├── scripts/                      # generate_etf_static_rows.py (static rows for review), diagnostics
+├── snapshots/                    # prospective-scoreboard freezes (verdict_consensus.csv)
 ├── verdicts/                     # committed run data — append-only verdict history per ticker
 ├── reports/                      # committed run data — full per-run reports (<TICKER>/<run_at>.json)
 ├── assets/                       # brand mark (SVG logo)
@@ -314,11 +418,11 @@ Station's past-run browsing.
 
 **Phase 4 — audit, persistence & Council Station (complete):** a deep post-run **provenance audit** that resolves every cited figure's `field_path` against the tool-call ledger and feeds the data-quality veto; an append-only **verdict history** (`verdicts/`) powering the recommendation-flip and majority-override vetoes; full per-run **reports** (`reports/`); **strategy versioning** (edit-as-new-version, never mutating a published file); and **Council Station** — a local Streamlit UI to run the council, read the full deliberation, browse past runs across tickers, chart verdict/confidence history, and edit strategies. See `CLAUDE.md` for the sprint log.
 
-**Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator` by default; `second_opinion` survives behind the flag). Five rank strategies are now visible — Conservative Formula (defensive income), value+momentum (the flagship), GARP, a no-screen Greenblatt baseline, and a financials P/B+ROE lens — each running the same rank-sum engine with **no tuned weights**, an optional absolute-floor **screen-as-prefilter** (one definition per strategy), and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
+**Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator` by default; `second_opinion` survives behind the flag). Eight lenses are now visible — five over stocks (Conservative Formula (defensive income), value+momentum (the flagship), GARP, a no-screen Greenblatt baseline, and a financials P/B+ROE lens) and three over ETFs (dividend, growth, index tracker — see [ETF lenses](#etf-lenses)) — each running the same rank-sum engine with **no tuned weights**, an optional absolute-floor **screen-as-prefilter** (one definition per strategy), a confirmed-only **asset-kind** gate walling the classes apart, and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
 
 **Phase 6 — Prospective evaluation (running).** Verdicts and street consensus are frozen in quarterly snapshots (first freeze: 2026-07-05, growth_40; defensive follows the FCF payout fix) and scored on 6- and 12-month forward total returns. The pre-committed test is bucket ordering — BUY > HOLD > SELL, and street most-loved > least-loved — against the equal-weight universe. Standing caveat: single snapshots are anecdotes; the evidence is the ordering across repeated freezes. Next scoring: January 2027. Methodology: **[The Scoreboard](docs/SCOREBOARD.md)**.
 
-**801 unit tests**, green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
+**927 unit tests passing** (6 skipped, as of 2026-07-28), green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
 
 **Next:** SEC EDGAR filings RAG for the Fundamental specialist, nightly watchlist runs via GitHub Actions cron.
 
