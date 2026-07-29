@@ -9,6 +9,14 @@ narrative — it never silently rewrites the model's prose. The rank table is au
 
 Rank convention: **rank 1 = best** on every factor; **lower combined rank-sum = better**.
 
+A second class of contradiction is checked when the run hands over a **boundary tie**
+(VERDICT-TIE-1): two ranked names shared a combined rank-sum with the verdict boundary
+between them, so the deterministic alphabetical tie-break — not a score difference — decided
+which side each fell on. The annotated table says TIED; prose that ORDERS the pair ("VWCE.DE
+is decisively ranked below EUNL.DE") therefore contradicts it in either direction and is
+annotated. Value comparisons between the same two names ("its fee is lower than EUNL.DE's")
+are NOT rank claims and are left alone — see ``_tie_order_check``.
+
 Two parser disciplines the check must honour (NARR-CHK-1), both learned from false
 positives on real garp_v2 narration:
 - **Decimals are atomic.** Sentence splitting must not break `digits.digits` — a claim
@@ -150,6 +158,20 @@ _RANK_CITE = re.compile(
 _BARE_CITE = re.compile(r"(?<![\d./])(\d+)\s*/\s*(\d+)(?![\d./])")
 
 
+# VERDICT-TIE-1 — a BOUNDARY TIE cannot be ordered. When two ranked names share a combined
+# rank-sum and the verdict boundary fell between them, the alphabetical tie-break (not a score
+# difference) decided which side each got: the annotated table says TIED, so prose ordering the
+# pair ("decisively ranked below VWCE.DE") contradicts it in EITHER direction. Deliberately
+# narrow, three conditions in the SAME clause — a rank/score word, an un-hedged comparative,
+# and the tie partner as that comparative's TARGET — so a legitimate VALUE comparison ("its
+# fee is lower than VWCE.DE's") is never flagged, nor is a comparison aimed at a THIRD name.
+_TIE_RANK_WORD = re.compile(r"rank\w*|scor\w*|position\w*|plac(?:e|ed|es|ing)\b|combined",
+                            re.I)
+_TIE_ORDER = re.compile(
+    r"\b(?:below|beneath|behind|ahead\s+of|above|outrank\w*|outscor\w*|trail\w*|lag\w*"
+    r"|(?:better|worse|weaker|stronger|higher|lower)\s+than)\b", re.I)
+
+
 def _demark(text: str) -> str:
     """``text`` with markdown emphasis (`*`, backticks) removed — see the module docstring.
     Parsing only; annotations quote the original prose."""
@@ -271,10 +293,39 @@ def _numeric_check(sentence: str, combined_position: Optional[int],
     return False
 
 
+def _tie_order_check(sentence: str, boundary_tie: dict) -> Optional[str]:
+    """The tie partner this sentence illegitimately ORDERS the narrated name against, or
+    ``None`` (VERDICT-TIE-1). Three conditions must hold in the SAME clause: a rank/score
+    word, an un-hedged comparative, and the tie partner as the comparative's TARGET (named
+    AFTER it). So "decisively ranked below EUNL.DE" is flagged, while "its fee is lower than
+    EUNL.DE's" (no rank word) and "VWCE.DE and EUNL.DE both score lower than SXR8.DE" (the
+    target is a third name) are left alone — the check never invents a contradiction. The
+    mirrored phrasing ("EUNL.DE ranks above it") is a deliberate false NEGATIVE: the doctrine
+    prefers a missed flag to a wrong one."""
+    partners = [str(p.get("ticker", "")) for p in (boundary_tie.get("partners") or [])]
+    partners = [p for p in partners if p]
+    if not partners:
+        return None
+    for clause in re.split(r"[,;]", sentence):
+        if not _TIE_RANK_WORD.search(clause):
+            continue
+        for m in _TIE_ORDER.finditer(clause):
+            if _SKIP_BEFORE.search(clause[:m.start()]):
+                continue
+            target = clause[m.end():]
+            named = next((p for p in partners
+                          if re.search(rf"(?<![\w.]){re.escape(p)}(?![\w])", target)), None)
+            if named is not None:
+                return named
+    return None
+
+
 def _sentences(text: str) -> list[str]:
-    # Split on sentence punctuation, but NEVER on a period between two digits (a decimal):
-    # "31.4" stays atomic, while "…high. Next…" still splits.
-    parts = re.split(r"(?<!\d)\.|\.(?!\d)|[!?\n]+", text)
+    # Split on sentence punctuation, but NEVER on a period INSIDE a word: "31.4" stays atomic
+    # (decimals-are-atomic) and so does a dotted ticker like "EUNL.DE" (VERDICT-TIE-1 — the
+    # tie partner is a European listing; a split ticker can never be matched in the prose).
+    # "…high. Next…" still splits: a real sentence end is followed by space/newline/end.
+    parts = re.split(r"(?<!\w)\.|\.(?!\w)|[!?\n]+", text)
     return [s.strip() for s in parts if s and s.strip()]
 
 
@@ -287,14 +338,22 @@ def _annotation(claim: str) -> str:
             f'table is authoritative]')
 
 
+def _tie_annotation(claim: str, partner: str, score: str) -> str:
+    return (f'[⚠ narration check: "{claim}" orders a TIED pair — tied with {partner} at '
+            f'combined rank-sum {score}; the verdict split on the alphabetical tie-break, '
+            f'not a score difference — table is authoritative]')
+
+
 def check_narration(narrative: str, table: dict) -> list[str]:
     """Return machine annotations for ordinal claims that contradict the rank ``table``.
 
     ``table``: ``{"N": cohort_size, "combined_position": int|None,
-    "factors": {factor_key: rank}}``. Each sentence is checked two ways — a word-superlative
-    claim (best/worst/second-*) against a citation or its subject, and any digit ordinals
-    bound to the factor each names. Correct ordinal statements (in any factor order) pass
-    untouched; ambiguous or hedged sentences are left alone — the check never invents a
+    "factors": {factor_key: rank}, "boundary_tie": {…}}``. Each sentence is checked three
+    ways — a word-superlative claim (best/worst/second-*) against a citation or its subject,
+    any digit ordinals bound to the factor each names, and (VERDICT-TIE-1) any attempt to
+    ORDER the name against a name it is TIED with, when ``boundary_tie`` says the verdict
+    split on the alphabetical tie-break. Correct ordinal statements (in any factor order)
+    pass untouched; ambiguous or hedged sentences are left alone — the check never invents a
     contradiction, and never rewrites the prose.
 
     Markdown emphasis is stripped for PARSING only; a flagged claim is quoted verbatim from
@@ -308,6 +367,7 @@ def check_narration(narrative: str, table: dict) -> list[str]:
     combined_position = table.get("combined_position")
     factors = table.get("factors", {}) or {}
     ticker = table.get("ticker")
+    boundary_tie = table.get("boundary_tie") or {}
 
     flags: list[str] = []
     seen: set[str] = set()
@@ -319,4 +379,12 @@ def check_narration(narrative: str, table: dict) -> list[str]:
             if claim not in seen:
                 seen.add(claim)
                 flags.append(_annotation(claim))
+            continue                      # at most ONE annotation per sentence
+        partner = _tie_order_check(parsed, boundary_tie)
+        if partner is not None:
+            claim = _claim(sentence)
+            if claim not in seen:
+                seen.add(claim)
+                flags.append(_tie_annotation(
+                    claim, partner, str(boundary_tie.get("score_display", ""))))
     return flags

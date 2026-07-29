@@ -564,7 +564,29 @@ def _ranker_block(state: ResearchState) -> str:
                   f"(best, worst, second-, top-, bottom-) must be derived only from the "
                   f"rank table.")
     return (f"\nRANKER VERDICT (the deterministic verdict-of-record for this name): "
-            f"{state.ranker_verdict.value.upper()}{expl}{legend}\n")
+            f"{state.ranker_verdict.value.upper()}{expl}{legend}"
+            f"{_boundary_tie_block(state)}\n")
+
+
+def _boundary_tie_block(state: ResearchState) -> str:
+    """The BOUNDARY TIE evidence line (VERDICT-TIE-1) — present only when this name's
+    verdict split from a name it is TIED with on the alphabetical tie-break. States the
+    shared score, the partner(s) and their verdict, and forbids ordering the pair: a tie is
+    not a ranking, so "decisively ranked below <partner>" is false however the verdicts
+    read. Empty (byte-unchanged prompt) for every other name."""
+    fact = state.ranker_boundary_tie or {}
+    partners = fact.get("partners") or []
+    if not partners:
+        return ""
+    who = ", ".join(f"{p.get('ticker')} ({str(p.get('verdict', '')).upper()})"
+                    for p in partners)
+    return (f"\nBOUNDARY TIE (a fact of the rank table — state it, do not smooth it over): "
+            f"this name's combined rank-sum {fact.get('score_display')} is TIED with "
+            f"{who}, so the verdict boundary fell BETWEEN equally-scored names and the "
+            f"deterministic alphabetical tie-break — not a score difference — decided which "
+            f"side each received. The verdicts stand as issued. Do NOT describe this name as "
+            f"ranked above, below, ahead of or behind a name it is tied with; say the scores "
+            f"are equal and the verdict split on the tie-break.")
 
 
 def _user_message(state: ResearchState, strategy: Strategy,

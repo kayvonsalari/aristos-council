@@ -344,6 +344,18 @@ class ResearchState(BaseModel):
     # deterministic evidence-coverage score (see coverage.py) can discount an
     # imputation-heavy rank. None on a standalone council run (no ranker).
     ranker_imputed_fraction: Optional[float] = None
+    # VERDICT-TIE-1: this name's BOUNDARY-TIE fact when it shares its combined rank-sum with
+    # another ranked name that received a DIFFERENT verdict — i.e. the alphabetical tie-break,
+    # not a score difference, put them on opposite sides of the verdict boundary (live
+    # 2026-07-28 ETF run: EUNL.DE HOLD / VWCE.DE SELL, both 10.0). Shape:
+    # {"score": float, "score_display": str, "verdict": str,
+    #  "partners": [{"ticker": str, "verdict": str}, …]} (rank_engine.boundary_tie_facts).
+    # Threaded in so the narrator can state the split honestly instead of implying the name
+    # was ranked decisively below/above a name it is TIED with. Empty for every name that is
+    # not a boundary-tie member (the overwhelming majority) and on a standalone council run,
+    # so the prompt is byte-unchanged there. Evidence only — no verdict, score or tie-break
+    # logic reads this.
+    ranker_boundary_tie: dict = Field(default_factory=dict)
     # NARR-STATIC-1: factor values the RANKER served from the COMMITTED static layer
     # (ETF-STATIC-1) for THIS name, threaded in so the narrator's evidence ledger carries
     # the lens's static-sourced defining numbers (an ETF's yield/fee) WITH their provenance

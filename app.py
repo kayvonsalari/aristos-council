@@ -1150,12 +1150,17 @@ def _ranked_rows(ranked, names: dict | None = None) -> tuple[list[dict], list[st
     never misread as a position (RANK-DISPLAY-1; ties share a position). A per-factor
     rank is marked with a trailing ``*`` when it was imputed (the value was absent). The
     Name column leads with 'Company Name (TICKER)' (ITEM 1), falling back to the bare
-    ticker when the display name is unknown."""
-    from aristos_council.pipeline import tie_boundary_notes
-    from aristos_council.rank_engine import cohort_positions, format_position_cell
+    ticker when the display name is unknown. The Verdict column carries the boundary-tie
+    mark when a tie spans a verdict boundary (VERDICT-TIE-1)."""
+    from aristos_council.rank_engine import (
+        boundary_tie_notes,
+        cohort_positions,
+        format_position_cell,
+        format_verdict_cell,
+    )
 
     names = names or {}
-    tie_notes = tie_boundary_notes(ranked)          # display-only tie disclosure (ITEM 7)
+    tie_notes = boundary_tie_notes(ranked)          # boundary-tie marks (VERDICT-TIE-1)
     positions = cohort_positions(ranked)            # tie-shared #N of M (RANK-DISPLAY-1)
     m = sum(1 for r in ranked if not r.excluded)    # rateable cohort size (M)
     factor_names: list[str] = []
@@ -1168,12 +1173,14 @@ def _ranked_rows(ranked, names: dict | None = None) -> tuple[list[dict], list[st
         # † marks a name that PASSED the screen while a criterion abstained (ITEM 3).
         label = display_name(r.ticker, names.get(r.ticker)) + \
             ("†" if r.screen_abstentions else "")
-        if r.ticker in tie_notes:
-            label += " " + tie_notes[r.ticker]
         pos, tied = positions.get(r.ticker, (None, False))
+        # VERDICT-TIE-1: a tie that spans a verdict boundary marks the VERDICT cell of EVERY
+        # member (it qualifies the verdict, not the score), naming the partner(s), the shared
+        # score and the differing verdict. A tie inside one verdict keeps "(tied)" only.
         row = {"Position (score)": format_position_cell(
                    pos, m, tied, r.combined_rank, len(r.factor_ranks)),
-               "Name": label, "Verdict": r.verdict.upper()}
+               "Name": label,
+               "Verdict": format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""))}
         for f in factor_names:
             if f in r.factor_ranks:
                 row[f] = f"{r.factor_ranks[f]:.0f}" + \
