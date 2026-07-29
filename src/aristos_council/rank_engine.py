@@ -267,6 +267,89 @@ def assign_cohort_positions(ranked: list[RankedTicker]) -> None:
             r.cohort_position, r.cohort_tied = pos[r.ticker]
 
 
+# --------------------------------------------------------------------------- #
+# Boundary ties — display + evidence disclosure (VERDICT-TIE-1)
+# --------------------------------------------------------------------------- #
+BOUNDARY_FLAG = "⚑"
+
+
+def tie_groups(ranked: list[RankedTicker]) -> list[list[RankedTicker]]:
+    """The groups of LIVE ranked names that share a combined score, best-first, each group
+    in the ranker's own order (score, then ticker — the alphabetical tie-break). Singletons
+    are omitted; excluded/unrateable names never participate. Display-only."""
+    order = sorted((r for r in ranked if not r.excluded),
+                   key=lambda r: (r.combined_rank, r.ticker))
+    groups: list[list[RankedTicker]] = []
+    i = 0
+    while i < len(order):
+        j = i
+        while (j + 1 < len(order)
+               and order[j + 1].combined_rank == order[i].combined_rank):
+            j += 1
+        if j > i:
+            groups.append(order[i:j + 1])
+        i = j + 1
+    return groups
+
+
+def boundary_tie_facts(ranked: list[RankedTicker]) -> dict[str, dict]:
+    """``{ticker: fact}`` for EVERY member of a tie group whose verdicts DIFFER — the case
+    where the alphabetical tie-break, not a score difference, decided which side of the
+    verdict boundary each name fell on (live 2026-07-28 ETF run: EUNL.DE and VWCE.DE both
+    10.0 at #4 of 5, HOLD vs SELL). A fact is
+    ``{"score": float, "score_display": str, "verdict": str,
+    "partners": [{"ticker": str, "verdict": str}, …]}``, where ``partners`` are the tied
+    names that received a DIFFERENT verdict (ticker-sorted) — the ones that make this row a
+    boundary case. A tie whose members all share one verdict is NOT a boundary case and is
+    absent here (the ``(tied)`` position marker already discloses it).
+
+    Display + evidence only (VERDICT-TIE-1): scores, the tie-break, the cut and the verdicts
+    are all untouched — tied names KEEP their individual ranker verdicts. This only makes
+    visible that chance drew the line."""
+    facts: dict[str, dict] = {}
+    for group in tie_groups(ranked):
+        if len({r.verdict for r in group}) < 2:
+            continue                      # tie inside ONE verdict — not a boundary case
+        for r in group:
+            partners = sorted((p for p in group if p.verdict != r.verdict),
+                              key=lambda p: p.ticker)
+            facts[r.ticker] = {
+                "score": r.combined_rank,
+                "score_display": format_score(r.combined_rank),
+                "verdict": r.verdict,
+                "partners": [{"ticker": p.ticker, "verdict": p.verdict}
+                             for p in partners],
+            }
+    return facts
+
+
+def format_boundary_tie_note(fact: dict) -> str:
+    """The boundary-tie mark as rendered, e.g.
+    ``⚑ boundary (tied 10 with EUNL.DE — HOLD; tie broken alphabetically)``. Names the tie
+    partner(s), the shared score, and the differing verdict — the three facts a reader needs
+    to see that the verdict split on the tie-break."""
+    partners = ", ".join(f"{p['ticker']} — {p['verdict'].upper()}"
+                         for p in fact["partners"])
+    return (f"{BOUNDARY_FLAG} boundary (tied {fact['score_display']} with {partners}"
+            f"; tie broken alphabetically)")
+
+
+def boundary_tie_notes(ranked: list[RankedTicker]) -> dict[str, str]:
+    """``{ticker: rendered note}`` for every boundary-tie member (see
+    ``boundary_tie_facts`` / ``format_boundary_tie_note``). Empty when no tie spans a
+    verdict boundary."""
+    return {t: format_boundary_tie_note(f)
+            for t, f in boundary_tie_facts(ranked).items()}
+
+
+def format_verdict_cell(verdict: str, note: str = "") -> str:
+    """The verdict cell every ranked table renders: the bare verdict (``SELL``), or the
+    verdict carrying its boundary-tie mark (``SELL ⚑ boundary (tied 10 with EUNL.DE —
+    HOLD; tie broken alphabetically)``). Without a note the output is byte-identical to the
+    bare ``verdict.upper()`` the tables printed before."""
+    return f"{verdict.upper()} {note}" if note else verdict.upper()
+
+
 def format_score(v: float) -> str:
     """A combined rank-sum for display: whole numbers bare (``11``), otherwise one
     decimal (``11.5``) — the averaged-tie ranks are the only non-integers."""

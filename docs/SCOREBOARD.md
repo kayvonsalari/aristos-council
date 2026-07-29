@@ -47,4 +47,25 @@ be −100%. The pre-committed test is bucket **ORDERING**, not any single name's
 Aristos BUY > HOLD > SELL, and street loved > middle > unloved. First freeze: 2026-07-05;
 first scoring: January 2027.
 
+## 5. Graded vs exploration — what is *not* on the scoreboard
+
+A universe is **graded** when it appears in `snapshots/verdict_consensus.csv`. That makes it a
+frozen, pre-registered input to a forward-return test, so the universe editor treats it as
+**clone-only**: loading it to modify produces an editable copy under a new id and the graded
+original is never changed. Everything else is **exploration** — run it, read it, learn from it,
+but its verdicts are not scored and must not be quoted as scoreboard evidence.
+
+Exploration is the honest default, not a lesser tier. A lens declares it in its own YAML — the
+ETF lenses word it *"EXPLORATORY: never on the prospective scoreboard until deliberately
+frozen"* — and a universe manifest declares it in `role:`. Today that includes:
+
+- the exploratory stock lenses — `magic_formula_raw_v1` (the no-screen Greenblatt comparison)
+  and `financials_v1` (P/B + ROE), the latter awaiting grading;
+- **all three ETF lenses** (`etf_dividend_v1`, `etf_growth_v1`, `etf_core_v1`) and **all five
+  ETF universes**. The three cohorts marked *observation only* exist to watch how a
+  euro-investable lens behaves, not to produce a verdict of record.
+
+A lens or universe joins the scoreboard only by a **deliberate freeze** — a snapshot written
+before the outcome is known. Nothing is graded retroactively.
+
 > One snapshot is an anecdote with arithmetic; ordering across repeated snapshots is the evidence.

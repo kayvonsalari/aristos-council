@@ -2,8 +2,8 @@
 
 Every number that decides a verdict, in one place. This document is generated from the
 code and points to it; where they disagree, the code wins. Sources:
-`src/aristos_council/rank_engine.py`, `factors.py`, `tools/screening.py`, `tools/technical.py`,
-and the strategy YAMLs under `strategies/`.
+`src/aristos_council/rank_engine.py`, `factors.py`, `etf_static.py`, `tools/screening.py`,
+`tools/technical.py`, and the strategy YAMLs under `strategies/`.
 
 The reading order mirrors a run: **screen → rank → gates → verdict**. The LLM layer
 appears nowhere in this document — by design, no language model computes or judges
@@ -33,6 +33,28 @@ van Vliet–Blitz Conservative Formula combine — there are no tuned point-weig
 Verdicts are **universe-relative**: the same name can rank differently in a different
 universe. That is a property of the method, not a bug — the universe is part of the input.
 
+### 1.1 Rank display semantics (RANK-DISPLAY-1)
+
+Two different numbers are easy to confuse — a name's **position** in the cohort and its
+**combined rank-sum** (the score). Every display therefore renders them through ONE shared
+formatter (`rank_engine.format_position_cell`), used by the CLI ranked table, the Universe Run
+table, the markdown download, and Company Check:
+
+```
+#1 of 9 · score 11 (best 3 · worst 27)
+```
+
+- **`rank 1 = best`** — on every factor, and a **lower** combined rank-sum is better.
+- **`#N of M`** — the 1-based cohort **position**, leading the cell so the rank-sum can never
+  be misread as a position. `M` is the **rateable** cohort size (excluded and UNRATEABLE names
+  are not in it). Ties **share** a position (competition ranking) and are marked `(tied)`.
+- **`score S`** — the combined rank-sum itself.
+- **`(best B · worst W)`** — the bounds that give the score its scale: `B` = number of factors
+  (rank 1 on all of them), `W` = factors × cohort size. Without them, "score 11" says nothing.
+- When no position is known (an excluded name), the cell degrades to a bare `score S`.
+
+This is **presentation only** — no verdict, rank, or gate reads any of it.
+
 ## 2. The factors (`factors.py`)
 
 All factors are pure functions of adapter data; each returns a float or `None`
@@ -49,6 +71,86 @@ All factors are pure functions of adapter data; each returns a float or `None`
 | `revenue_growth` | Revenue **CAGR** (compound annual growth rate — the smoothed year-over-year rate) over the fundamentals window, with a cyclical-base guard | high | |
 | `price_to_book` | Price / book value: vendor `priceToBook`, else market cap / closing shareholders' equity | **low** | The financials-lens value leg (FIN-1). **Abstains** on non-positive or absent book equity — a negative-book value trap can't read as cheap. |
 | `return_on_equity` | Net income / equity: vendor `returnOnEquity` (TTM), else latest net income / mean(opening+closing equity) | high | The financials-lens quality leg (FIN-1). **Abstains** on non-positive equity or missing income. |
+| `distribution_yield` | The fund's trailing distribution/dividend yield (`dividend_yield`, a DECIMAL) | high | ETF lenses only — the income leg of the dividend-ETF lens. See §2.1. |
+| `expense_ratio` | The fund's ongoing charge (`net_expense_ratio`), vendor value as-is | **low** | ETF lenses only — the sole LOW-direction ETF leg: cost compounds against the holder forever, so cheaper ranks better. See §2.1 for the percent-not-fraction unit trap. |
+| `fund_size` | The fund's net assets (`total_assets`) | high | ETF lenses only — a liquidity and closure-risk proxy. See §2.1. |
+
+### 2.1 ETF factors
+
+The three ETF lenses (`etf_dividend_v1`, `etf_growth_v1`, `etf_core_v1`) rank **fund
+attributes**, because a fund has no ROIC and no earnings yield. `momentum_12m` is the same
+price-derived factor the stock lenses use; the three above exist only for funds. Full lens
+descriptions are in the README's **[ETF lenses](../README.md#etf-lenses)**.
+
+- **`expense_ratio` — LOWER is better.** The one inverted ETF leg. **Unit trap (ETFCHK-3):
+  the vendor value is a PERCENT, not a fraction** — SCHD's 0.06% arrives as `0.06`. Ranking is
+  unit-invariant, so the factor is untouched by this; but any *absolute* presentation must
+  divide by 100 first. Company Check's plain-English gloss does exactly that, reporting the
+  annual fee per €1,000 held (`0.06` → €0.60 per €1,000, every year).
+- **`fund_size` — HIGHER is better.** Net assets, standing in for liquidity and closure risk,
+  not for quality. A big fund is not a good fund; it is a fund that can be traded and is
+  unlikely to be wound up.
+- **`distribution_yield` — HIGHER is better.** A DECIMAL. A true zero is a **product finding,
+  not a data gap**: an **ACC** (accumulating) share class reinvests rather than distributing,
+  so its zero is honest and is ranked as such — distinct from an abstention, where the value
+  is absent or was withheld. That distinction is why the index-tracker lens carries **no
+  `distribution_yield` factor at all**: its cohorts deliberately mix ACC and DIST classes, so
+  yield there is a share-class artefact and ranking on it would penalise an ACC class for a
+  structural zero.
+- **Abstention never excludes.** All three return `None` when the provider omits the field,
+  and the ETF lenses run `missing: neutral` with no screens and no floors: the rank is imputed
+  from the fund's present-factor ranks (marked `*`) and the fund stays in the table.
+- **What they cannot measure.** A fund's real quality is its index methodology and its tracking
+  accuracy; no free vendor field captures either. Each ETF lens carries that admission verbatim
+  in its own YAML `rationale` so it travels with every render.
+
+**Asset-kind gate.** Each ETF lens declares `asset_kinds: [etf]`, and the gate fires *before*
+any screen or factor path — a vendor serves look-through "fundamentals" for an index tracker
+happily, so a leak across asset classes would produce quiet garbage rather than an honest
+exclusion. Confirmed-only, like the sector gates: a missing vendor `quoteType` never gates. It
+renders as `asset kind 'ETF' outside this strategy's scope`
+(`factors.is_asset_kind_out_of_scope`).
+
+### 2.2 The ETF static layer
+
+Some fields the ETF lenses rank on — expense ratio, fund size, distribution yield — are served
+unevenly or not at all by the free vendor, yet they change rarely and are trivially
+human-verifiable from a factsheet. A committed, dated CSV (`data/etf_static.csv`, read by
+`etf_static.py`) fills those gaps for **ETF-kind names only**. A stock never reads it.
+
+Four disciplines, each matching the rest of the codebase:
+
+1. **Vendor precedence.** A vendor value that is present *and* plausible always wins; static
+   fills only what the vendor doesn't serve or serves implausibly. Plausibility is deliberately
+   loose — the lens ranks these relatively, so units don't matter: it rejects only what cannot
+   be real (a non-positive expense ratio or fund size, a distribution yield outside `[0, 1]`).
+2. **It shows its work.** Every static-sourced number carries the provenance receipt
+   `static: <as_of>, <source>` — e.g. `static: 2026-06-01, Schwab factsheet` — which flows
+   through the same factor-source path the FX receipt uses, so a report renders it as
+   `[static: <as_of>, <source>]`. It surfaces in the per-run FACTOR INTEGRITY block alongside
+   `computed` / `fallback:…` / `abstained`, and static-served values are handed to the narrator
+   as ledger entries carrying that receipt, so a cited fee can be audited back to the factsheet
+   and the date. **Only values actually served from static are tagged** — never a phantom fill.
+3. **No silent stale data.** An entry whose `as_of` is more than **90 days** old — or is
+   unparseable, since an unverifiable freshness cannot be trusted fresh — **abstains**: the
+   field is *not* filled and the note `static data stale — refresh required` is surfaced
+   instead. Stale data is never served quietly. The file's header records the monthly
+   re-verification ritual against each fund's official factsheet.
+4. **Replay-safe.** The CSV is committed, so a frozen run replays it byte-identically — the
+   static data lives in the record's world like every other frozen input. A *missing* file is
+   tolerated: the layer simply does nothing.
+
+**Where the rows come from.** `scripts/generate_etf_static_rows.py <universe_id>` fetches each
+ticker's EODHD `/fundamentals` payload and prints paste-ready CSV rows to STDOUT — it never
+writes to disk; a human reviews, verifies, and commits them. The script carries the guards
+learned live: the fee is read from `ETF_Data.Ongoing_Charge` **only** (EODHD's
+`NetExpenseRatio` returns a fake `0.0000` for a whole class of UCITS funds, and a phantom 0%
+fee is worse than a blank), an implausible `TotalAssets` outside `[1e7, 1.5e12]` is blanked
+rather than served (the mis-scaled-AUM lesson), the percent yield is converted to the CSV's
+decimal, and ACC/DIST is inferred from the yield (a true zero → `acc`) with a missing yield
+left blank — omit, never invent.
+
+The columns `share_class` and `domicile` are **descriptive only**: no factor reads them.
 
 ## 3. Dividend streak — flat is not a cut (`tools/screening.py`)
 
@@ -139,6 +241,11 @@ the two guards working — a real fail + momentum trips it; an abstention or a n
   this strategy's scope`. `financials_v1` uses it to build a financials-only table.
   Confirmed-only like the exclusion gate: a missing sector is never gated. The two gates
   are independent — a strategy sets one or neither.
+- **Asset-kind gate** (`asset_kinds`, ETF-1) — the wall between asset classes, fired **before**
+  screen, cap, sector, and factor paths so a fund's look-through "fundamentals" can never leak
+  into a stock lens (or an operating company into an ETF lens). Confirmed-only: a missing
+  vendor `quoteType` never gates. Renders as `asset kind 'ETF' outside this strategy's scope`.
+  A strategy that omits `asset_kinds` scopes nothing and is unchanged. See §2.1.
 - **Vendor sanity flags** (VERIFY-2 / FIN-1) — cheap boundary checks flag absurd vendor
   values (dividend yield > 15%, negative market cap, unit-confused debt/equity > 10000,
   P/B > 100, ROE > 300%). A flag **never corrects and never fails** a name: the value is
@@ -266,6 +373,13 @@ elsewhere — a documented boundary beats an untested feature.
 | **Excluded from the value lenses; covered by `financials_v1`** | Financials (banks, insurers, payment networks) | ROIC and EV are category errors for balance-sheet businesses, so the value lenses exclude them by name — but the exploratory `financials_v1` lens (FIN-1) ranks them on price-to-book + return on equity + momentum instead, the gate inverted. | Grading `financials_v1` on the prospective scoreboard (today it is exploratory only). |
 | **Supported, distortion disclosed** | Deep cyclicals (energy, miners, autos, memory); REITs & utilities | Trailing metrics snapshot the cycle (4-year through-cycle averaging dampens, does not fix); payout/FCF (free cash flow) semantics half-fit — REITs need **FFO** (funds from operations — the REIT-specific cash-earnings measure), utilities run structural negative FCF by regulated design (the documented council-era lesson). | An FFO / regulated-asset data source. |
 | **Clean fit** | Asset-light & industrial operating businesses — mature tech, staples, discretionary, pharma, industrials, retail, defence | Trailing fundamentals and cash-based coverage describe them well. | — (the current manifests, minus the distortion cases). |
+
+**ETFs are a separate axis, not a sector.** The tiers above scope *company* metrics; a fund is
+gated out of every stock lens by the asset-kind gate (§5) and ranked instead by the three ETF
+lenses on fund attributes (§2.1). Their disclosed boundary is not sectoral but methodological:
+**index methodology and tracking accuracy are not vendor-measurable on free data**, so the ETF
+lenses compare cost, scale and trend among self-declared funds of a category — and say so in
+their own YAML. All three are exploratory; none is on the prospective scoreboard.
 
 ## 10. Future work & data dependencies
 
