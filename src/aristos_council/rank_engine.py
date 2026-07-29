@@ -91,7 +91,13 @@ class RankedTicker:
         # "combined rank-sum N across an M-name cohort" — the ranker verdict IS a
         # cohort statement (a rank-sum over the universe), phrased so the narrator that
         # echoes this text reads cleanly (never "combined rank of N/M-name cohort").
-        core = f"combined rank-sum {self.combined_rank:.0f} across a {n}-name cohort"
+        # The rank-sum goes through `format_score`, the ONE display helper the ranked
+        # tables use, so an averaged-tie score reaches the narrator as the AUTHORITATIVE
+        # half-point (9.5, not a `:.0f`-rounded 10). Rounding it here handed the narrator a
+        # number the rank table contradicts, which the narration check then flagged as the
+        # narrator's hallucination (NARR-CHK-5); whole numbers render exactly as before.
+        core = (f"combined rank-sum {format_score(self.combined_rank)} "
+                f"across a {n}-name cohort")
         # RANK-DISPLAY-1: lead with the ORDINAL position (tie-shared) so the rank-sum is
         # never misread as a position, and disclose the best/worst bounds. When the
         # position was not assigned (a bare RankedTicker), the core phrasing stands.

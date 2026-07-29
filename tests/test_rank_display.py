@@ -116,6 +116,18 @@ def test_explain_leads_with_the_ordinal_after_ranking():
     assert "(best 2, worst 6)" in expl              # bounds disclosed
 
 
+def test_explain_keeps_a_half_point_rank_sum_intact():
+    # NARR-CHK-5: `explain()` is the ranker verdict the NARRATOR is handed, so an averaged-tie
+    # rank-sum must reach it as the authoritative half-point. The old `:.0f` rendered 6.5 as
+    # "6" (round-half-even), the narrator faithfully echoed "6", and the narration check then
+    # flagged the prose for contradicting the rank table — a contradiction the display made.
+    r = _rt("A", 6.5, factors=2, n=5)
+    assert "combined rank-sum 6.5 across a 5-name cohort" in r.explain()
+    # whole numbers are byte-unchanged (no ".0" tail).
+    assert "combined rank-sum 6 across a 5-name cohort" in _rt("B", 6, factors=2,
+                                                               n=5).explain()
+
+
 def test_excluded_ticker_explain_has_no_position():
     rows = [("A", {"f1": 1.0, "f2": 1.0}),
             ("B", {"f1": None, "f2": 2.0})]         # B missing f1 under exclude mode

@@ -243,13 +243,18 @@ def _annotate_narration(rep: RunReport, r: RankedTicker,
     No-op when there is no rationale to check. ``boundary_tie`` (VERDICT-TIE-1) is this
     name's boundary-tie fact when its verdict split from a tie partner's on the alphabetical
     tie-break: the annotated table is authoritative, so prose that ORDERS the name against a
-    partner it is TIED with ("decisively ranked below VWCE.DE") is a contradiction."""
+    partner it is TIED with ("decisively ranked below VWCE.DE") is a contradiction.
+
+    ``score`` hands the checker the authoritative combined rank-SUM, so a cited rank-sum
+    VALUE that contradicts the table ("a rank sum of 6" when the table says 6.5)
+    is caught (NARR-CHK-5)."""
     from .narration_check import check_narration
     d = getattr(rep, "decision", None)
     if d is None or not getattr(d, "rationale", ""):
         return
     table = {"N": r.universe_size, "combined_position": r.rank_position,
              "factors": dict(r.factor_ranks), "ticker": r.ticker,
+             "score": r.combined_rank,
              "boundary_tie": boundary_tie or {}}
     annotations = check_narration(d.rationale, table)
     if annotations:

@@ -44,6 +44,32 @@ name's rank. These are NOT claims and are left alone (NARR-CHK-1/2/4):
   not the rank; that word class only becomes a rank claim beside an explicit cohort
   citation (see ``_CITED_ONLY_ORDINALS``).
 
+A superlative also carries a POLARITY (NARR-CHK-5). "Strongest" asserts rank 1 only when it
+modifies a POSITIVE thing; when it modifies a NEGATIVE one ("the strongest negative signal",
+"the strongest drag") it asserts the WORST rank — the mirror position (``n + 1 - p``). The live
+VUSA line "12-Month Momentum (rank 5/5): … the ranker's strongest negative signal" is TRUE and
+must pass, while "rank 5/5 … the strongest in the cohort" stays a flagged inversion; the only
+difference is the noun the superlative modifies. A BAD-direction superlative on a negative noun
+("its worst headwind") is idiomatically the most severe one rather than the mildest, so it is
+ambiguous and dropped instead of mirrored — the check never guesses a direction.
+
+A superlative must also BIND to the subject it is checked against (NARR-CHK-5). The live EUNL
+line "its worst-in-cohort cost rank and middling momentum rank produce a near-bottom combined
+ranking" is true in every clause, yet was flagged: "worst" modifies the COST rank, but the only
+factor phrase in the table vocabulary was "momentum" (rank 3), so the check paired words from
+two different noun phrases. Two guards fix that on the subject-vs-table path, both instances of
+"ambiguous pairing is never a contradiction" (the discipline already applied to >1 citation):
+a COORDINATING CONJUNCTION between the superlative and the subject phrase breaks the binding
+(`_binds`), and a clause naming TWO OR MORE factors is skipped outright.
+
+Besides ordinal claims, the check verifies the cited combined rank-SUM VALUE against the
+table's authoritative score when one is supplied (NARR-CHK-5): "combined rank-sum 6" when the
+table says 6.5 is a numeric hallucination, and so is "rank-sum of 10" against 9.5 — the same
+class, so both must flag (an integer prose value never "rounds to" the authoritative
+half-point). Bounded so it cannot invent one: the number must sit inside the cohort's
+best/worst rank-sum bounds, theoretical-bound arithmetic ("worst possible = 48") is skipped,
+and a PEER's rank-sum ("NVO's rank-sum of 8") is skipped — only this name's score is checked.
+
 Markdown is stripped before parsing (NARR-CHK-4): the narrator emphasises heavily, and an
 emphasis marker sitting between a hedge/negation and its superlative ("`**not** best`",
 "`near-*best*`") otherwise defeats the adjacency the skip patterns rely on — a live latent
@@ -114,6 +140,27 @@ _SKIP_BEFORE = re.compile(
 # that the name is worst; NARR-CHK-2 class 1). Matched against the text AFTER the token.
 _SKIP_AFTER = re.compile(r"^[-\s]?(?:possible|case|conceivable|imaginable)\b", re.I)
 
+# A superlative that modifies a NEGATIVE noun asserts the MIRROR position (NARR-CHK-5): the
+# "strongest negative signal" / "biggest weakness" / "worst drag" of a name IS its worst rank,
+# so rank 5/5 + "strongest negative signal" agrees with the table. Matched against the text
+# AFTER the token (an article/intensifier may intervene: "the strongest single headwind" —
+# markdown emphasis is already stripped). Deliberately a NOUN-polarity list, not a sentiment
+# heuristic: only words that name a bad thing the rank can BE flip the direction.
+_POLARITY_INVERTING = re.compile(
+    r"^[-\s]?(?:(?:the|a|an|its|his|her|their|our|any|single|such)[-\s]+){0,3}"
+    r"(?:negative|negatives|bearish|downside|weakness|weaknesses|drag|drags|headwind"
+    r"|headwinds|detractor|detractors|drawback|drawbacks|liability|liabilities"
+    r"|concern|concerns|deficit|penalty|blemish)\b", re.I)
+
+# Only a GOOD-direction superlative mirrors cleanly on a negative noun: "the strongest
+# negative signal" / "the best of a weak set" unambiguously means the WORST rank. The
+# bad-direction tokens do NOT: "its worst headwind" idiomatically means the most severe one
+# (already the worst rank), not the mildest — so a bad-direction token on a negative noun is
+# AMBIGUOUS and the claim is dropped rather than guessed (never invent a contradiction).
+# Keyed by the pattern string, so the token tables above keep their two-column shape.
+_MIRRORABLE = frozenset({r"second[-\s]best", r"best[-\s]in[-\s]cohort", r"strongest",
+                         r"best", r"exceptional", r"outstanding", r"unmatched"})
+
 # A DIGIT ordinal bound to a position: 1st, 2nd, 4th, 21st. Bound to whatever factor it
 # names within the same clause (defect-b fix). Guards: not a bare "12" (needs the suffix),
 # so "momentum_12m" never reads as an ordinal.
@@ -144,6 +191,11 @@ _FACTOR_SUBJECTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 _COMBINED_METRIC = re.compile(r"combined|rank[-\s]sum", re.I)
 _COMBINED_LOOSE = re.compile(r"in the cohort|overall", re.I)
 
+# A COORDINATING CONJUNCTION separates two noun phrases, so a superlative on one side of it is
+# NOT predicated of a subject on the other (NARR-CHK-5, `_binds`).
+_CONJUNCTION = re.compile(
+    r"\b(?:and|or|but|while|whereas|versus|vs|though|although|yet|plus|alongside)\b", re.I)
+
 # "rank of 2 out of 10" / "rank 21 out of 23" / "rank 2/7" / "rank 5". NOT "rank-sum of 12"
 # (a value, not a position) — the hyphen blocks the whitespace this requires after "rank".
 _RANK_CITE = re.compile(
@@ -156,6 +208,34 @@ _RANK_CITE = re.compile(
 # position). Used ONLY as a fallback when `_RANK_CITE` finds nothing in the clause. The
 # lookarounds keep it off `2026/07/21` and `3/4/5`.
 _BARE_CITE = re.compile(r"(?<![\d./])(\d+)\s*/\s*(\d+)(?![\d./])")
+
+# The combined rank-SUM VALUE cited in prose — "combined rank-sum 6", "rank-sum of 10",
+# "overall score 9.5" (NARR-CHK-5). Decimal-safe on BOTH sides: the prose number may carry a
+# decimal, and an INTEGER prose value against an averaged-tie table value (6.5) is a mismatch,
+# never a rounding — that asymmetry is why "10 vs 9.5" was caught and "6 vs 6.5" was not. Only
+# the explicit combined-metric words bind: a bare "score" is used for too many other things
+# ("sentiment score 0.4"), and "combined rank" would collide with the ordinal POSITION.
+_SCORE_CITE = re.compile(
+    r"\b(?:rank[-\s]sum|(?:combined|overall|total)\s+score)\b"
+    r"[\s:=(]*(?:of|is|at|was|to)?[\s:=(]*(\d+(?:\.\d+)?)", re.I)
+
+# A cited rank-sum is NOT a claim about this name's score when what precedes it makes it
+# cohort arithmetic or a summary statistic — "worst possible rank-sum = 48" (the NARR-CHK-2
+# class 1 aside), "the best combined rank-sum of 9" (a superlative claim the word path owns),
+# "the average rank-sum is 9". Matched against the text ENDING just before the metric word.
+_SCORE_SKIP_BEFORE = re.compile(
+    r"\b(?:best|worst|lowest|highest|min|minimum|max|maximum|theoretical|possible"
+    r"|average|mean|median|between|from|range|as\s+low\s+as|as\s+high\s+as)"
+    r"(?:[-\s]+(?:possible|conceivable|case|combined|overall|total))*[-\s]*$", re.I)
+
+# A PEER's rank-sum ("NVO's rank-sum of 8 beat ASML's") is not this name's score, so a
+# possessive ticker other than the narrated one immediately before the metric word disarms the
+# value check. Uppercase words that are never a ticker are exempt (the narrator writes "the
+# ETF's combined rank-sum" about the name it IS narrating).
+_PEER_POSSESSIVE = re.compile(r"\b([A-Z][A-Z0-9]{1,5}(?:\.[A-Z]{1,2})?)'s\b")
+_NOT_A_TICKER = frozenset(
+    ("ETF", "ETFS", "FUND", "NAV", "TER", "AUM", "USD", "EUR", "GBP", "CHF", "US", "UK", "EU",
+     "ESG", "UCITS", "KIID", "AI", "IT", "ROIC", "PEG", "EPS", "CAGR", "BUY", "HOLD", "SELL"))
 
 
 # VERDICT-TIE-1 — a BOUNDARY TIE cannot be ordered. When two ranked names share a combined
@@ -178,23 +258,37 @@ def _demark(text: str) -> str:
     return _MD_EMPHASIS.sub("", text)
 
 
+def _mirror(fn: Callable[[int], int]) -> Callable[[int], int]:
+    """``fn``'s position reflected about the cohort — rank 1 <-> rank n (NARR-CHK-5). The
+    position a GOOD-direction superlative asserts when it modifies a NEGATIVE noun: the
+    "strongest negative signal" / "biggest drag" of a name is its WORST rank."""
+    return lambda n: n + 1 - fn(n)
+
+
 def _word_ordinal(text: str,
                   include_cited_only: bool = False
-                  ) -> Optional[tuple[int, Callable[[int], int]]]:
+                  ) -> Optional[tuple[int, int, Callable[[int], int]]]:
     """The earliest UN-HEDGED word-superlative token in ``text`` (specific tokens win a
-    tie) as ``(start, position_fn)``. A superlative that is hedged ("near-best"), a spelled
-    relative ordinal ("third-best"), or a theoretical bound ("worst possible") is skipped.
+    tie) as ``(start, end, position_fn)``. A superlative that is hedged ("near-best"), a
+    spelled relative ordinal ("third-best"), or a theoretical bound ("worst possible") is
+    skipped; a GOOD-direction one that modifies a NEGATIVE noun ("strongest negative signal")
+    keeps its claim but MIRRORS the position it asserts, and a BAD-direction one there ("worst
+    headwind") is dropped as directionally ambiguous (NARR-CHK-5).
     ``include_cited_only`` admits the value-superlative class ("exceptional") — the caller
     sets it only when the clause carries exactly one rank citation to bind it to."""
-    best: Optional[tuple[int, Callable[[int], int]]] = None
+    best: Optional[tuple[int, int, Callable[[int], int]]] = None
     tokens = _ORDINALS + (_CITED_ONLY_ORDINALS if include_cited_only else ())
     for pat, fn in tokens:
         m = re.search(pat, text, re.I)
         if (not m or _SKIP_BEFORE.search(text[:m.start()])
                 or _SKIP_AFTER.match(text[m.end():])):
             continue
+        if _POLARITY_INVERTING.match(text[m.end():]):
+            if pat not in _MIRRORABLE:
+                continue                     # "worst headwind" — direction ambiguous
+            fn = _mirror(fn)
         if best is None or m.start() < best[0]:
-            best = (m.start(), fn)
+            best = (m.start(), m.end(), fn)
     return best
 
 
@@ -205,26 +299,56 @@ def _names_ticker(text: str, ticker: Optional[str]) -> bool:
     return bool(ticker) and re.search(rf"\b{re.escape(ticker)}\b", text) is not None
 
 
-def _subject_rank(text: str, factors: dict, combined_position: Optional[int],
-                  ticker: Optional[str] = None) -> Optional[int]:
-    """The authoritative rank for the text's subject: a factor's rank if a factor phrase is
-    present, else the name's combined position if a combined subject is present. The
-    combined position binds on an EXPLICIT metric word ("combined"/"rank-sum"), or on a
-    LOOSE phrase ("in the cohort") ONLY when the narrated name is named (else it is a
-    generic reference, not a claim about this name). A named factor absent from the table ->
-    ``None`` (undeterminable, never guessed)."""
+def _subject(text: str, factors: dict, combined_position: Optional[int],
+             ticker: Optional[str] = None) -> Optional[tuple[int, int, int]]:
+    """The authoritative rank for the text's subject as ``(rank, start, end)`` — the span being
+    the subject PHRASE, so a caller can test whether a superlative/ordinal actually binds to it
+    (see `_binds`). A factor's rank if a factor phrase is present, else the name's combined
+    position if a combined subject is present. The combined position binds on an EXPLICIT
+    metric word ("combined"/"rank-sum"), or on a LOOSE phrase ("in the cohort") ONLY when the
+    narrated name is named (else it is a generic reference, not a claim about this name). A
+    named factor absent from the table -> ``None`` (undeterminable, never guessed)."""
     for pat, keys in _FACTOR_SUBJECTS:
-        if re.search(pat, text, re.I):
+        m = re.search(pat, text, re.I)
+        if m:
             for k in keys:
                 if k in factors and factors[k] is not None:
-                    return int(round(factors[k]))
+                    return int(round(factors[k])), m.start(), m.end()
             return None
     if combined_position is not None:
-        if _COMBINED_METRIC.search(text):
-            return int(combined_position)
-        if _COMBINED_LOOSE.search(text) and _names_ticker(text, ticker):
-            return int(combined_position)
+        m = _COMBINED_METRIC.search(text)
+        if m:
+            return int(combined_position), m.start(), m.end()
+        m = _COMBINED_LOOSE.search(text)
+        if m and _names_ticker(text, ticker):
+            return int(combined_position), m.start(), m.end()
     return None
+
+
+def _subject_rank(text: str, factors: dict, combined_position: Optional[int],
+                  ticker: Optional[str] = None) -> Optional[int]:
+    """`_subject`'s rank alone, for callers that only need to know a subject resolves."""
+    s = _subject(text, factors, combined_position, ticker)
+    return None if s is None else s[0]
+
+
+def _multi_factor_subject(text: str) -> bool:
+    """Does ``text`` name TWO OR MORE distinct factors? Then a single superlative/ordinal in it
+    cannot be bound to one of them (NARR-CHK-5). Ambiguous pairing is never a contradiction, so
+    the caller skips the clause — the same discipline as >1 rank citation."""
+    return sum(1 for pat, _ in _FACTOR_SUBJECTS if re.search(pat, text, re.I)) > 1
+
+
+def _binds(text: str, claim: tuple[int, int], subject_span: tuple[int, int]) -> bool:
+    """Is the superlative/ordinal at ``claim`` predicated of the subject phrase at
+    ``subject_span``, i.e. are they in the SAME noun phrase? A COORDINATING CONJUNCTION between
+    them means they are not (NARR-CHK-5, the EUNL false positive: "its worst-in-cohort cost rank
+    AND middling momentum rank …" — "worst" modifies the cost rank, and only the momentum phrase
+    was in the table vocabulary, so the flag paired words from two different phrases). Adjacent
+    in either order still binds ("momentum_12m is the best", "the best-in-cohort low
+    volatility")."""
+    lo, hi = sorted((claim, subject_span), key=lambda s: s[0])
+    return not _CONJUNCTION.search(text[lo[1]:hi[0]])
 
 
 def _clause_cites(clause: str, n: int, factors: dict, combined_position: Optional[int],
@@ -254,22 +378,26 @@ def _word_check(sentence: str, n: int, combined_position: Optional[int],
       agree (rank 2 is not "second-worst").
     - **subject vs table**: a superlative about a named factor / the combined position must
       match that subject's actual rank.
-    A clause with no un-hedged/un-negated superlative, more than one citation, or no
-    resolvable subject is left alone — the check never invents a contradiction. The
-    value-superlative class ("exceptional") is admitted on the citation path only."""
+    A clause with no un-hedged/un-negated superlative, more than one citation, more than one
+    named factor, or no resolvable subject is left alone — the check never invents a
+    contradiction. On the subject path the superlative must also BIND to the subject phrase
+    (no coordinating conjunction between them, `_binds`) — NARR-CHK-5. The value-superlative
+    class ("exceptional") is admitted on the citation path only."""
     for clause in re.split(r"[,;]", sentence):
         cites = _clause_cites(clause, n, factors, combined_position, ticker)
         wo = _word_ordinal(clause, include_cited_only=len(cites) == 1)
         if wo is None:
             continue
-        posfn = wo[1]
+        start, end, posfn = wo
         if len(cites) == 1:                      # citation vs ordinal
             r, m = cites[0]
             if r != posfn(m):
                 return True
         elif not cites:                          # subject vs table (no explicit rank)
-            subj = _subject_rank(clause, factors, combined_position, ticker)
-            if subj is not None and subj != posfn(n):
+            subj = _subject(clause, factors, combined_position, ticker)
+            if (subj is not None and not _multi_factor_subject(clause)
+                    and _binds(clause, (start, end), (subj[1], subj[2]))
+                    and subj[0] != posfn(n)):
                 return True
         # >1 citation in the clause -> pairing ambiguous, skip
     return False
@@ -281,14 +409,47 @@ def _numeric_check(sentence: str, combined_position: Optional[int],
     comma/semicolon-separated clause states at most one ordinal about the factor it names;
     the ordinal is validated against THAT factor's rank — so factors named in any order
     each check against the right rank, never a positional column. A clause with no factor
-    (or a factor absent from the table), no ordinal, or more than one ordinal is skipped."""
+    (or a factor absent from the table), no ordinal, more than one ordinal, more than one named
+    factor, or an ordinal that does not BIND to the subject phrase (NARR-CHK-5) is skipped."""
     for clause in re.split(r"[,;]", sentence):
-        nums = [int(m.group(1)) for m in _NUM_ORDINAL.finditer(clause)
-                if not _SKIP_BEFORE.search(clause[:m.start()])]
-        if len(nums) != 1:
+        ords_ = [m for m in _NUM_ORDINAL.finditer(clause)
+                 if not _SKIP_BEFORE.search(clause[:m.start()])]
+        if len(ords_) != 1 or _multi_factor_subject(clause):
             continue
-        subj = _subject_rank(clause, factors, combined_position, ticker)
-        if subj is not None and subj != nums[0]:
+        subj = _subject(clause, factors, combined_position, ticker)
+        if subj is None or not _binds(clause, ords_[0].span(), (subj[1], subj[2])):
+            continue
+        if subj[0] != int(ords_[0].group(1)):
+            return True
+    return False
+
+
+def _cites_a_peers_score(before: str, ticker: Optional[str]) -> bool:
+    """Does the text just before a rank-sum citation attribute it to ANOTHER name? Only the
+    last stretch is inspected — the possessive that governs the metric word ("NVO's rank-sum of
+    8"), not any ticker mentioned earlier in the sentence."""
+    m = _PEER_POSSESSIVE.search(before[-60:])
+    return bool(m) and m.group(1) != ticker and m.group(1) not in _NOT_A_TICKER
+
+
+def _score_check(sentence: str, score: Optional[float], n: int, factors: dict,
+                 ticker: Optional[str] = None) -> bool:
+    """Does ``sentence`` cite a combined rank-sum VALUE that contradicts the table's
+    authoritative ``score``? (NARR-CHK-5 — the SXR8 "combined rank-sum 6" against 6.5 and the
+    VUSA "rank-sum of 10" against 9.5 are the SAME class and both flag.) Runs only when the
+    table supplies a score, and never invents a claim: cohort arithmetic and superlative
+    phrasings are skipped (`_SCORE_SKIP_BEFORE`), a peer's score is skipped, and the cited
+    number must lie inside this cohort's rank-sum bounds (best = number of factors, worst =
+    factors × N) — outside them it is some other quantity, not this score."""
+    if score is None or not factors or n < 1:
+        return False
+    best, worst = len(factors), len(factors) * n
+    for m in _SCORE_CITE.finditer(sentence):
+        before = sentence[:m.start()]
+        if _SCORE_SKIP_BEFORE.search(before) or _cites_a_peers_score(before, ticker):
+            continue
+        cited = float(m.group(1))
+        if best <= cited <= worst and abs(cited - float(score)) > 1e-9:
             return True
     return False
 
@@ -348,13 +509,14 @@ def check_narration(narrative: str, table: dict) -> list[str]:
     """Return machine annotations for ordinal claims that contradict the rank ``table``.
 
     ``table``: ``{"N": cohort_size, "combined_position": int|None,
-    "factors": {factor_key: rank}, "boundary_tie": {…}}``. Each sentence is checked three
-    ways — a word-superlative claim (best/worst/second-*) against a citation or its subject,
-    any digit ordinals bound to the factor each names, and (VERDICT-TIE-1) any attempt to
-    ORDER the name against a name it is TIED with, when ``boundary_tie`` says the verdict
-    split on the alphabetical tie-break. Correct ordinal statements (in any factor order)
-    pass untouched; ambiguous or hedged sentences are left alone — the check never invents a
-    contradiction, and never rewrites the prose.
+    "factors": {factor_key: rank}, "score": float|None, "boundary_tie": {…}}``. Each sentence
+    is checked four ways — a word-superlative claim (best/worst/second-*) against a citation or
+    its subject, any digit ordinals bound to the factor each names, (when ``score`` is
+    supplied) a cited combined rank-SUM value against that authoritative score, and
+    (VERDICT-TIE-1) any attempt to ORDER the name against a name it is TIED with, when
+    ``boundary_tie`` says the verdict split on the alphabetical tie-break. Correct ordinal
+    statements (in any factor order) pass untouched; ambiguous or hedged sentences are left
+    alone — the check never invents a contradiction, and never rewrites the prose.
 
     Markdown emphasis is stripped for PARSING only; a flagged claim is quoted verbatim from
     the narrative, emphasis markers included.
@@ -367,6 +529,7 @@ def check_narration(narrative: str, table: dict) -> list[str]:
     combined_position = table.get("combined_position")
     factors = table.get("factors", {}) or {}
     ticker = table.get("ticker")
+    score = table.get("score")
     boundary_tie = table.get("boundary_tie") or {}
 
     flags: list[str] = []
@@ -374,7 +537,8 @@ def check_narration(narrative: str, table: dict) -> list[str]:
     for sentence in _sentences(narrative):
         parsed = _demark(sentence)
         if (_word_check(parsed, n, combined_position, factors, ticker)
-                or _numeric_check(parsed, combined_position, factors, ticker)):
+                or _numeric_check(parsed, combined_position, factors, ticker)
+                or _score_check(parsed, score, n, factors, ticker)):
             claim = _claim(sentence)
             if claim not in seen:
                 seen.add(claim)
