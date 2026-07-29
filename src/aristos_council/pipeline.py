@@ -587,6 +587,11 @@ def run_rank_pipeline(
     executed_mode = "ranker-only" if ranker_only else mode
     meta = {
         "rank_strategy_id": rank_strategy.id,
+        # The FRIENDLY name for report headers (REPORT-HTML-1) — display-only, and empty
+        # when the strategy declares none, so a renderer falls back to the id rather than
+        # inventing a label. The id stays the record key everywhere.
+        "rank_strategy_name": (getattr(rank_strategy, "display_name", "")
+                               or getattr(rank_strategy, "name", "") or ""),
         # Screen-less strategies render "none" — never the leaked default lens (NARR-FRAME-1).
         "screen_strategy_id": screen_strategy.id if screen_strategy is not None else "none",
         "universe_id": resolved_universe_id,

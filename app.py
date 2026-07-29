@@ -1144,51 +1144,13 @@ def _estimate_shortlist_size(n: int, rank_strategy, *,
 
 
 def _ranked_rows(ranked, names: dict | None = None) -> tuple[list[dict], list[str]]:
-    """Rows + the ordered factor columns for the ranked table. The leading
-    ``Position (score)`` column shows the ordinal cohort position first with the
-    rank-SUM as detail — ``#1 of 9 · score 11 (best 3 · worst 27)`` — so the sum is
-    never misread as a position (RANK-DISPLAY-1; ties share a position). A per-factor
-    rank is marked with a trailing ``*`` when it was imputed (the value was absent). The
-    Name column leads with 'Company Name (TICKER)' (ITEM 1), falling back to the bare
-    ticker when the display name is unknown. The Verdict column carries the boundary-tie
-    mark when a tie spans a verdict boundary (VERDICT-TIE-1)."""
-    from aristos_council.rank_engine import (
-        boundary_tie_notes,
-        cohort_positions,
-        format_position_cell,
-        format_verdict_cell,
-    )
+    """Rows + the ordered factor columns for the ranked table — a thin delegate to the
+    ONE shared builder (`rank_engine.ranked_table_rows`), so the screen table, the
+    markdown download and the HTML export render byte-identical cells (REPORT-HTML-1
+    moved the body there; behavior unchanged)."""
+    from aristos_council.rank_engine import ranked_table_rows
 
-    names = names or {}
-    tie_notes = boundary_tie_notes(ranked)          # boundary-tie marks (VERDICT-TIE-1)
-    positions = cohort_positions(ranked)            # tie-shared #N of M (RANK-DISPLAY-1)
-    m = sum(1 for r in ranked if not r.excluded)    # rateable cohort size (M)
-    factor_names: list[str] = []
-    for r in ranked:
-        for f in r.factor_ranks:
-            if f not in factor_names:
-                factor_names.append(f)
-    rows: list[dict] = []
-    for r in ranked:
-        # † marks a name that PASSED the screen while a criterion abstained (ITEM 3).
-        label = display_name(r.ticker, names.get(r.ticker)) + \
-            ("†" if r.screen_abstentions else "")
-        pos, tied = positions.get(r.ticker, (None, False))
-        # VERDICT-TIE-1: a tie that spans a verdict boundary marks the VERDICT cell of EVERY
-        # member (it qualifies the verdict, not the score), naming the partner(s), the shared
-        # score and the differing verdict. A tie inside one verdict keeps "(tied)" only.
-        row = {"Position (score)": format_position_cell(
-                   pos, m, tied, r.combined_rank, len(r.factor_ranks)),
-               "Name": label,
-               "Verdict": format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""))}
-        for f in factor_names:
-            if f in r.factor_ranks:
-                row[f] = f"{r.factor_ranks[f]:.0f}" + \
-                    ("*" if f in r.imputed_factors else "")
-            else:
-                row[f] = "—"
-        rows.append(row)
-    return rows, factor_names
+    return ranked_table_rows(ranked, names)
 
 
 def _confirmation_line(m: dict) -> str:
@@ -1361,17 +1323,33 @@ def _render_universe_result(result) -> None:
         else:
             st.caption("No names reached the council.")
 
-    # 6 — download the run as markdown (no new on-disk storage this sprint). Unique,
-    # self-describing filename: strategy + mode + run-start (Europe/Berlin) — ITEM 6.
-    from aristos_council.download_names import universe_download_name
+    # 6 — download the run (no new on-disk storage). Unique, self-describing filenames:
+    # strategy + mode + run-start (Europe/Berlin) — ITEM 6. TWO exports side by side
+    # (REPORT-HTML-1): the markdown stays the CANONICAL machine-readable record, the HTML
+    # is the self-contained presentation copy for people outside the repo.
+    from aristos_council.download_names import (
+        universe_download_name, universe_html_download_name)
+    from aristos_council.export.report_html import universe_report_html
 
     run_start = st.session_state.get("uni_run_start") or datetime.now(timezone.utc)
-    st.download_button(
-        "⬇ Download run as markdown",
-        data=_universe_markdown(result),
-        file_name=universe_download_name(m["rank_strategy_id"], m["council_mode"],
-                                         run_start),
-        mime="text/markdown", key="uni_download")
+    dl_md, dl_html = st.columns(2)
+    with dl_md:
+        st.download_button(
+            "⬇ Download run as markdown",
+            data=_universe_markdown(result),
+            file_name=universe_download_name(m["rank_strategy_id"], m["council_mode"],
+                                             run_start),
+            mime="text/markdown", key="uni_download")
+    with dl_html:
+        st.download_button(
+            "⬇ Download report (HTML)",
+            data=universe_report_html(result, run_start=run_start),
+            file_name=universe_html_download_name(m["rank_strategy_id"],
+                                                  m["council_mode"], run_start),
+            mime="text/html", key="uni_download_html")
+    st.caption("Markdown is the canonical machine-readable record. The HTML is one "
+               "self-contained file (no external requests) for sharing outside the "
+               "repo — open it in a browser and Print → PDF for paper.")
 
 
 def render_universe_tab(show_validation: bool = False) -> None:
@@ -1783,6 +1761,9 @@ def render_company_check_tab(show_validation: bool = False) -> None:
         else:
             st.session_state["cc_result"] = result
             st.session_state["cc_run_start"] = run_start
+            # The friendly name for the HTML export's header (the result carries only the
+            # id). Display-only; absent -> the export falls back to the id (never invents).
+            st.session_state["cc_strategy_name"] = strategy_label(rank_strategy)
 
     result = st.session_state.get("cc_result")
     if result is not None:
@@ -1891,15 +1872,32 @@ def _render_company_check(result) -> None:
             st.markdown(f"- ⚠ {flag}")
 
     st.info(result.pointer)
-    # Unique, self-describing filename: ticker + strategy + run-start (ITEM 6).
-    from aristos_council.download_names import company_check_download_name
+    # Unique, self-describing filenames: ticker + strategy + run-start (ITEM 6). A
+    # single-name file ALWAYS carries the ticker. Two exports side by side
+    # (REPORT-HTML-1): the text report stays canonical, the HTML is the shareable copy.
+    from aristos_council.download_names import (
+        company_check_download_name, company_check_html_download_name)
+    from aristos_council.export.report_html import company_check_html
 
     cc_run_start = st.session_state.get("cc_run_start") or datetime.now(timezone.utc)
-    st.download_button(
-        "⬇ Download check as text", data=format_company_check(result),
-        file_name=company_check_download_name(result.ticker, result.rank_strategy_id,
-                                              cc_run_start),
-        mime="text/plain", key="cc_download")
+    dl_txt, dl_html = st.columns(2)
+    with dl_txt:
+        st.download_button(
+            "⬇ Download check as text", data=format_company_check(result),
+            file_name=company_check_download_name(result.ticker, result.rank_strategy_id,
+                                                  cc_run_start),
+            mime="text/plain", key="cc_download")
+    with dl_html:
+        st.download_button(
+            "⬇ Download report (HTML)",
+            data=company_check_html(
+                result, run_start=cc_run_start,
+                strategy_display_name=st.session_state.get("cc_strategy_name", "")),
+            file_name=company_check_html_download_name(
+                result.ticker, result.rank_strategy_id, cc_run_start),
+            mime="text/html", key="cc_download_html")
+    st.caption("Text is the canonical record. The HTML is one self-contained file (no "
+               "external requests) for sharing outside the repo — Print → PDF for paper.")
 
 
 def _cc_num(v) -> str:

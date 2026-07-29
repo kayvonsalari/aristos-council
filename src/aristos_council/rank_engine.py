@@ -356,6 +356,50 @@ def format_score(v: float) -> str:
     return f"{v:.0f}" if float(v).is_integer() else f"{v:.1f}"
 
 
+def ranked_table_rows(ranked: list["RankedTicker"],
+                      names: Optional[dict] = None) -> tuple[list[dict], list[str]]:
+    """Rows + the ordered factor columns for THE ranked table — the ONE builder every
+    ranked-table surface renders (Universe Run tab, the markdown download, the HTML
+    export), so the three can never drift.
+
+    The leading ``Position (score)`` column shows the ordinal cohort position first with
+    the rank-SUM as detail — ``#1 of 9 · score 11 (best 3 · worst 27)`` — so the sum is
+    never misread as a position (RANK-DISPLAY-1; ties share a position). A per-factor rank
+    is marked with a trailing ``*`` when it was imputed (the value was absent). The Name
+    column leads with 'Company Name (TICKER)' (ITEM 1), falling back to the bare ticker
+    when the display name is unknown, and carries ``†`` when the name PASSED the screen
+    while a criterion abstained (ITEM 3). The Verdict column carries the boundary-tie mark
+    when a tie spans a verdict boundary (VERDICT-TIE-1). Presentation only."""
+    from .data.adapter import display_name
+
+    names = names or {}
+    tie_notes = boundary_tie_notes(ranked)          # boundary-tie marks (VERDICT-TIE-1)
+    positions = cohort_positions(ranked)            # tie-shared #N of M (RANK-DISPLAY-1)
+    m = sum(1 for r in ranked if not r.excluded)    # rateable cohort size (M)
+    factor_names: list[str] = []
+    for r in ranked:
+        for f in r.factor_ranks:
+            if f not in factor_names:
+                factor_names.append(f)
+    rows: list[dict] = []
+    for r in ranked:
+        label = display_name(r.ticker, names.get(r.ticker)) + \
+            ("†" if r.screen_abstentions else "")
+        pos, tied = positions.get(r.ticker, (None, False))
+        row = {"Position (score)": format_position_cell(
+                   pos, m, tied, r.combined_rank, len(r.factor_ranks)),
+               "Name": label,
+               "Verdict": format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""))}
+        for f in factor_names:
+            if f in r.factor_ranks:
+                row[f] = f"{r.factor_ranks[f]:.0f}" + \
+                    ("*" if f in r.imputed_factors else "")
+            else:
+                row[f] = "—"
+        rows.append(row)
+    return rows, factor_names
+
+
 def format_position_cell(position: Optional[int], cohort_size: int, tied: bool,
                          combined_rank: float, n_factors: int) -> str:
     """The ONE shared cohort-position string every rank-sum display uses (CLI ranked

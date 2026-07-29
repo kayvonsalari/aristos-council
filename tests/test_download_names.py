@@ -9,7 +9,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from aristos_council.download_names import (
-    company_check_download_name, mode_tag, universe_download_name)
+    company_check_download_name, company_check_html_download_name, mode_tag,
+    universe_download_name, universe_html_download_name)
 
 # 2026-07-09 15:30 UTC -> 17:30 Europe/Berlin (CEST, UTC+2 in July).
 _DT = datetime(2026, 7, 9, 15, 30, tzinfo=timezone.utc)
@@ -45,3 +46,38 @@ def test_company_check_filename_has_ticker_strategy_and_timestamp():
 def test_naive_run_start_is_treated_as_utc():
     naive = datetime(2026, 7, 9, 15, 30)                 # no tzinfo -> UTC
     assert company_check_download_name("MU", "s_v1", naive).endswith(f"{_STAMP}.txt")
+
+
+# --------------------------------------------------------------------------- #
+# HTML export (REPORT-HTML-1) — the SAME scheme and stamp, .html extension.
+# --------------------------------------------------------------------------- #
+def test_universe_html_name_matches_the_md_name_but_for_the_extension():
+    md = universe_download_name("etf_core_v1", "narrator", _DT)
+    htm = universe_html_download_name("etf_core_v1", "narrator", _DT)
+    assert htm == f"universe_etf_core_v1_narrator_{_STAMP}.html"
+    assert htm == md.removesuffix(".md") + ".html"        # same stamp, same order
+
+
+def test_universe_html_name_carries_no_ticker_it_is_a_cohort_file():
+    htm = universe_html_download_name("etf_core_v1", "ranker-only", _DT)
+    assert htm == f"universe_etf_core_v1_ranker_{_STAMP}.html"
+    # A universe report belongs to no single name — no ticker may appear in its name.
+    assert htm.startswith("universe_etf_core_v1_")
+    assert "SXR8" not in htm and "MU" not in htm
+
+
+def test_company_check_html_name_always_carries_the_ticker():
+    txt = company_check_download_name("MU", "magic_formula_momentum_v1", _DT)
+    htm = company_check_html_download_name("MU", "magic_formula_momentum_v1", _DT)
+    assert htm == f"company_check_MU_magic_formula_momentum_v1_{_STAMP}.html"
+    assert htm == txt.removesuffix(".txt") + ".html"
+    assert "_MU_" in htm                                  # single-name file: ticker REQUIRED
+
+
+def test_html_export_never_changes_the_canonical_names():
+    # The .md/.txt names are the frozen record keys — the new ext argument defaults must
+    # keep them byte-identical.
+    assert universe_download_name("s_v1", "narrator", _DT) == \
+        f"universe_s_v1_narrator_{_STAMP}.md"
+    assert company_check_download_name("MU", "s_v1", _DT) == \
+        f"company_check_MU_s_v1_{_STAMP}.txt"
