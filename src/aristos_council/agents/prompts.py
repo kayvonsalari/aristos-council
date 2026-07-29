@@ -11,6 +11,8 @@ USER message / evidence block) stays in nodes.py; it is plumbing, not instructio
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from ..state import SpecialistName
 from ..strategy.loader import Strategy
 
@@ -40,7 +42,16 @@ from ..strategy.loader import Strategy
 #        dividend-durability language. Templated per strategy KIND (stock / dividend-ETF /
 #        core-or-growth-ETF), interpolating the factor names — NO per-strategy-id prompt.
 #        Stock/screen lenses are byte-unchanged; only screen-less ETF rank frames diverge.
-PROMPT_VERSION = "v6"
+#   v7 = LENS BRIEF FOR EVERY AGENT (NARR-PROMPT-1, completing v6): v6 fixed only the
+#        FUNDAMENTAL specialist, so the stock-era emphasis still reached the other three
+#        specialists (RISK's "payout stretch"), the CRITIC (its open-question example
+#        asked whether "the dividend" was covered by FCF) and the NARRATOR (which carried
+#        no lens emphasis at all and echoed the specialists' imported framing — the live
+#        2026-07-21 etf_core_v1 narration). ONE builder (``lens_brief``) now derives the
+#        emphasis from the SELECTED strategy — its factor labels, its honesty note, its
+#        kind — and EVERY agent prompt is assembled from it. Stock/screen lenses keep
+#        today's wording byte-for-byte; only ETF lenses diverge.
+PROMPT_VERSION = "v7"
 
 
 HARD_RULES = (
@@ -83,6 +94,26 @@ HARD_RULES = (
 )
 
 
+# The shared, lens-neutral tail of the RISK brief. Hard-won wording (v2, FIX B) — the
+# same sentence for EVERY lens; only the downside CHECKLIST in front of it is derived
+# (see LensBrief.role_brief), so it is written ONCE here.
+_RISK_HONEST_TAIL = (
+    "You focus on downside and surface risks others "
+    "miss, but you assess them honestly — flag real risks without "
+    "manufacturing a bearish tilt where the evidence is neutral or absent. "
+    "Absent/unverifiable data is an open question, not a negative finding.")
+
+# The ACC/DIST doctrine, stated once: a core/growth cohort mixes accumulating and
+# distributing share classes, so a zero/absent distribution is structural, not a finding.
+_NO_INCOME_DOCTRINE = (
+    "This is NOT an income lens: do not assess dividends or payout. A broad-market / "
+    "growth cohort mixes accumulating and distributing share classes by design, so "
+    "distribution yield is a share-class artefact, not a buying criterion.")
+
+
+# The STOCK-lens briefs (the default). Kept byte-for-byte: a screen / equity rank lens
+# gets exactly these, so today's framing is unchanged. ETF lenses derive their own from
+# the LensBrief builder below.
 SPECIALIST_BRIEFS = {
     SpecialistName.FUNDAMENTAL:
         "You assess business quality and dividend durability: yield, payout "
@@ -119,58 +150,203 @@ SPECIALIST_BRIEFS = {
         "action.",
     SpecialistName.RISK:
         "You assess downside: payout stretch, volatility, data-quality flags, "
-        "anything unverifiable. You focus on downside and surface risks others "
-        "miss, but you assess them honestly — flag real risks without "
-        "manufacturing a bearish tilt where the evidence is neutral or absent. "
-        "Absent/unverifiable data is an open question, not a negative finding.",
+        f"anything unverifiable. {_RISK_HONEST_TAIL}",
 }
 
 
-def fundamental_brief_for_lens(strategy) -> str:
-    """The LENS-AWARE FUNDAMENTAL brief (NARR-PROMPT-1), derived from what the lens
-    ACTUALLY ranks so a non-dividend lens is never framed with dividend language.
+# --------------------------------------------------------------------------- #
+# THE LENS BRIEF — the SINGLE source of the strategy emphasis EVERY agent sees
+# --------------------------------------------------------------------------- #
+# NARR-PROMPT-1: the emphasis is DERIVED from the selected strategy (its factor
+# labels, its honesty note, its kind) — never hand-written per strategy id, and never
+# hard-coded to dividends. Every LLM agent in the graph (the four specialists, the
+# critic, the decision/narrator) assembles its prompt from this one object, so a
+# correction here reaches all of them.
+LENS_STOCK = "stock"                  # operating companies (screen or equity rank lens)
+LENS_ETF_INCOME = "etf_income"        # an ETF lens that RANKS distribution yield
+LENS_ETF_NO_INCOME = "etf_no_income"  # a core/growth ETF lens with NO yield factor
 
-    ``strategy`` is a RANK strategy (duck-typed: ``.factors[*].name`` + ``.asset_kinds``);
-    the derivation is by strategy KIND, interpolating the factor names — never a
-    hand-written prompt per strategy id:
 
-    - STOCK lens (``asset_kinds`` has no ``etf``) -> "" so the DEFAULT stock brief
-      (``SPECIALIST_BRIEFS``) stands byte-for-byte: value lenses keep today's framing.
-    - DIVIDEND-ETF lens (an ETF lens that ranks ``distribution_yield``) -> assess payout
-      durability, cost, and size.
-    - CORE / GROWTH-ETF lens (an ETF lens with NO ``distribution_yield``) -> assess cost,
-      scale, and trend, and EXPLICITLY no dividend assessment (a broad-market/growth
-      cohort mixes accumulating and distributing share classes by design, so distribution
-      yield is a share-class artefact, not a buying criterion).
+@dataclass(frozen=True)
+class LensBrief:
+    """The framing EVERY agent receives, derived from the ACTIVE strategy.
+
+    ``kind`` is one of the three ``LENS_*`` constants, ``factor_labels`` are the ranked
+    factors' registry labels (interpolated into the prose — no per-strategy text), and
+    ``honesty_note`` is the strategy's OWN rationale, carried verbatim.
+    """
+
+    kind: str = LENS_STOCK
+    factor_labels: tuple[str, ...] = ()
+    honesty_note: str = ""
+
+    @property
+    def is_stock(self) -> bool:
+        return self.kind == LENS_STOCK
+
+    @property
+    def is_income(self) -> bool:
+        return self.kind == LENS_ETF_INCOME
+
+    @property
+    def ranks(self) -> str:
+        """The ranked factors as a human list ('Expense ratio (low best); ...')."""
+        return "; ".join(self.factor_labels)
+
+    # --- the block injected into EVERY agent prompt -------------------------- #
+    def emphasis(self, *, include_honesty: bool = False) -> str:
+        """The lens emphasis block. Empty for a STOCK lens, so screen/equity prompts
+        stay byte-identical to v6; ETF lenses get the derived framing.
+
+        ``include_honesty`` adds the strategy's own honesty note — set for the agents
+        whose prompt does NOT already carry a STRATEGY INTENT section (critic, decision).
+        """
+        if self.is_stock:
+            return ""
+        ranked = f" on: {self.ranks}." if self.factor_labels else "."
+        focus = ("Income (distribution) durability, cost (the expense ratio compounds "
+                 "against the holder) and fund size (liquidity / closure risk) are the "
+                 "emphasis; single-company accounting is not."
+                 if self.is_income else
+                 "The emphasis is cost (the expense ratio compounds against the "
+                 "holder), scale / liquidity (fund size) and trend. "
+                 f"{_NO_INCOME_DOCTRINE}")
+        note = (f"HONESTY NOTE (this strategy's own, verbatim): {self.honesty_note}\n"
+                if include_honesty and self.honesty_note else "")
+        return (
+            "LENS EMPHASIS (derived from the ACTIVE strategy — judge every name on "
+            "THIS, and import no other style's framing):\n"
+            f"This lens ranks FUNDS, not operating companies{ranked} {focus}\n"
+            f"{note}\n")
+
+    # --- per-role briefs ---------------------------------------------------- #
+    def role_brief(self, who: SpecialistName) -> str:
+        """The specialist brief for ``who`` under this lens (the stock default when the
+        lens has nothing kind-specific to say — the roles are lens-neutral there)."""
+        default = SPECIALIST_BRIEFS[who]
+        if self.is_stock:
+            return default
+        if who == SpecialistName.FUNDAMENTAL:
+            if self.is_income:
+                return (
+                    "You assess this FUND as an income holding on what the lens actually "
+                    f"ranks — {self.ranks}. Judge distribution/payout durability, cost "
+                    "(the expense ratio compounds against the holder), and fund size "
+                    "(liquidity / closure risk) — NOT single-company accounting. There "
+                    "is no screen; lean on the ranked factor values in the evidence.")
+            return (
+                "You assess this FUND on what the lens actually ranks — "
+                f"{self.ranks}. Judge cost (the expense ratio compounds against the "
+                "holder), scale / liquidity (fund size), and trend (price momentum). "
+                f"{_NO_INCOME_DOCTRINE} There is no screen; lean on the ranked factor "
+                "values in the evidence.")
+        if who == SpecialistName.SENTIMENT:
+            return (
+                f"{default}\n"
+                "A FUND has no company news feed and no analyst coverage of its own: if "
+                "the evidence carries no sentiment output for it, ABSTAIN — do not read "
+                "price action, flows, or the holdings' reputations as sentiment.")
+        if who == SpecialistName.RISK:
+            checklist = (
+                "distribution durability (is the trailing payout still intact), fee "
+                "drag, fund size / liquidity and closure risk, data-quality flags, "
+                "anything unverifiable"
+                if self.is_income else
+                "fee drag (it compounds against the holder), fund size / liquidity and "
+                "closure risk, trend reversal, data-quality flags, anything "
+                "unverifiable")
+            disclaimer = ("" if self.is_income else
+                          f" {_NO_INCOME_DOCTRINE} An absent or zero distribution is a "
+                          "share-class fact, not a risk finding.")
+            return f"You assess downside: {checklist}. {_RISK_HONEST_TAIL}{disclaimer}"
+        return default                       # TECHNICAL: trend reads the same either way
+
+    # --- critic / decision framing derived from the same object -------------- #
+    def open_question_example(self) -> str:
+        """The CRITIC's illustrative open question — lens-appropriate, so a core lens is
+        never shown a dividend-coverage example it does not measure."""
+        if self.is_stock:
+            return ("'Is the dividend covered by free cash flow once the share count "
+                    "is known?'")
+        if self.is_income:
+            return ("'Is the trailing distribution yield still representative after "
+                    "the most recent distribution change?'")
+        return ("'Is the headline expense ratio the full cost of holding this fund?'")
+
+    def ranker_attack_examples(self) -> str:
+        """The CRITIC's 'why might the ranker be wrong' examples, per lens kind."""
+        if self.is_stock:
+            return ("cheap BECAUSE it is dying, momentum about to reverse, a factor "
+                    "that is lying (a buyback masking dilution, a trailing number a "
+                    "forward event has already broken)")
+        if self.is_income:
+            return ("a trailing distribution the fund has already cut, momentum about "
+                    "to reverse, a headline fee that understates the true cost of "
+                    "holding, size that is thinner than the rank suggests")
+        return ("momentum about to reverse, a headline fee that understates the true "
+                "cost of holding, size that is thinner than the rank suggests")
+
+    def dissent_examples(self) -> str:
+        """The second-opinion RANKER CHECK's strategy-specific concern examples."""
+        if self.is_stock:
+            return ("e.g. for a defensive name: thin dividend coverage, or expensive-"
+                    "for-a-defensive valuation — NOT 'it fails to grow like a growth "
+                    "stock'")
+        if self.is_income:
+            return ("e.g. for an income fund: a distribution the fund has already cut, "
+                    "or a fee that outweighs the yield edge — NOT 'it fails to grow "
+                    "like a growth fund'")
+        return ("e.g. for a core/growth fund: a fee that outweighs the rank edge, or "
+                "size too thin to trade — NOT 'it pays no distribution'")
+
+
+def _derive_lens(strategy) -> tuple[str, tuple[str, ...]]:
+    """Classify a RANK strategy by SHAPE (never by id) into a lens kind + factor labels.
+
+    ETF lens (``asset_kinds`` contains ``etf``) ranking ``distribution_yield`` -> income;
+    any other ETF lens -> no-income (core/growth); everything else -> stock.
     """
     from ..factors import FACTOR_REGISTRY   # lazy: keep prompt load free of factor weight
     asset_kinds = {k.strip().lower() for k in getattr(strategy, "asset_kinds", []) or []}
     if "etf" not in asset_kinds:
-        return ""                           # stock lens -> keep today's brief verbatim
-    factor_names = [f.name for f in getattr(strategy, "factors", [])]
-    labels = "; ".join(FACTOR_REGISTRY[n].label
-                       for n in factor_names if n in FACTOR_REGISTRY)
-    if "distribution_yield" in factor_names:
-        return (
-            "You assess this FUND as an income holding on what the lens actually ranks "
-            f"— {labels}. Judge distribution/payout durability, cost (the expense ratio "
-            "compounds against the holder), and fund size (liquidity / closure risk) — "
-            "NOT single-company accounting. There is no screen; lean on the ranked factor "
-            "values in the evidence.")
-    return (
-        "You assess this FUND on what the lens actually ranks — "
-        f"{labels}. Judge cost (the expense ratio compounds against the holder), "
-        "scale / liquidity (fund size), and trend (price momentum). This is NOT an "
-        "income lens: do not assess dividends or payout. A broad-market / growth cohort "
-        "mixes accumulating and distributing share classes by design, so distribution "
-        "yield is a share-class artefact, not a buying criterion. There is no screen; "
-        "lean on the ranked factor values in the evidence.")
+        return LENS_STOCK, ()
+    names = [f.name for f in getattr(strategy, "factors", [])]
+    labels = tuple(FACTOR_REGISTRY[n].label for n in names if n in FACTOR_REGISTRY)
+    kind = LENS_ETF_INCOME if "distribution_yield" in names else LENS_ETF_NO_INCOME
+    return kind, labels
+
+
+def lens_brief(strategy) -> LensBrief:
+    """THE brief builder — the single source every agent prompt is assembled from.
+
+    Accepts either a RANK strategy (duck-typed ``.asset_kinds`` + ``.factors``, from
+    which the kind and labels are DERIVED) or a council frame / screen ``Strategy``
+    (which carries the derived ``lens_kind`` + ``lens_factor_labels`` stamped by
+    ``pipeline._screenless_frame``). A screen strategy carries neither -> STOCK, so
+    every published screen lens keeps today's prompts byte-for-byte.
+    """
+    kind = (getattr(strategy, "lens_kind", "") or "").strip()
+    labels = tuple(getattr(strategy, "lens_factor_labels", ()) or ())
+    if not kind:
+        kind, labels = _derive_lens(strategy)
+    return LensBrief(kind=kind or LENS_STOCK, factor_labels=labels,
+                     honesty_note=(getattr(strategy, "rationale", "") or "").strip())
+
+
+def fundamental_brief_for_lens(strategy) -> str:
+    """The FUNDAMENTAL brief for a lens, or "" for a stock lens (which keeps the default
+    ``SPECIALIST_BRIEFS`` text byte-for-byte). Thin view over ``lens_brief`` — kept
+    because ``pipeline._screenless_frame`` and the lens tests read it by name."""
+    brief = lens_brief(strategy)
+    return "" if brief.is_stock else brief.role_brief(SpecialistName.FUNDAMENTAL)
 
 
 def _ranker_analyst_note(strategy: Strategy) -> str:
     # STRATEGY-RELATIVE: the agrees_with_ranker question is judged against the ACTIVE
     # strategy's intent, never a hardcoded GARP/growth lens. A defensive candidate is
-    # assessed on defensive merits; a value candidate on value merits.
+    # assessed on defensive merits; a value candidate on value merits. The illustrative
+    # concern comes from the LENS BRIEF (v7), so a fund lens is not shown a stock example.
+    examples = lens_brief(strategy).dissent_examples()
     return (
         "6. RANKER CHECK. You are an ANALYST, not a voter — your stance is useful "
         "context but it does NOT decide the verdict. When the evidence includes a "
@@ -182,9 +358,8 @@ def _ranker_analyst_note(strategy: Strategy) -> str:
         "if your domain has no opinion, with a one-line `dissent_note` for the why — "
         "ESPECIALLY a forward-looking risk the ranker's TRAILING factors cannot see "
         "yet (an un-priced headline, a guidance cut, a patent cliff), or a concern "
-        "specific to THIS strategy (e.g. for a defensive name: thin dividend coverage, "
-        "or expensive-for-a-defensive valuation — NOT 'it fails to grow like a growth "
-        "stock'). If you ABSTAIN (insufficient data), set `agrees_with_ranker` to "
+        f"specific to THIS strategy ({examples}). If you ABSTAIN (insufficient data), "
+        "set `agrees_with_ranker` to "
         "null — never agree by default; a data-less specialist must not inflate the "
         "council's apparent consensus.\n"
     )
@@ -197,18 +372,19 @@ def specialist_system(who: SpecialistName, strategy: Strategy,
     # dropped (its fields are not emitted). In second_opinion mode it fires.
     ranker_note = ("" if council_mode == "narrator"
                    else f"{_ranker_analyst_note(strategy)}\n")
-    # LENS-AWARE FUNDAMENTAL brief (NARR-PROMPT-1): the screen-less rank frame stamps a
-    # lens-derived brief on `fundamental_brief`; every other role and every stock/screen
-    # lens (empty override) keep the default SPECIALIST_BRIEFS text byte-for-byte.
-    brief = SPECIALIST_BRIEFS[who]
-    if who == SpecialistName.FUNDAMENTAL:
-        brief = getattr(strategy, "fundamental_brief", "") or brief
+    # LENS BRIEF (v7): EVERY specialist's brief AND the shared emphasis block come from
+    # the one builder, so no role carries imported (dividend/stock-era) framing. A
+    # stock/screen lens yields the default SPECIALIST_BRIEFS text and an EMPTY emphasis
+    # block, so those prompts are byte-for-byte unchanged.
+    brief = lens_brief(strategy)
+    emphasis = brief.emphasis()               # specialists already get STRATEGY INTENT
     return (
         f"You are the {who.value.upper()} specialist on an investment research "
         f"council operating under the strategy '{strategy.name}' "
         f"(id {strategy.id}).\n"
         f"You judge each name AS A CANDIDATE FOR THIS STRATEGY, on its own terms.\n\n"
-        f"Your brief: {brief}\n\n"
+        f"{emphasis}"
+        f"Your brief: {brief.role_brief(who)}\n\n"
         f"{HARD_RULES}\n"
         "5. ABSTAIN rather than guess when the evidence is insufficient for "
         "your domain.\n"
@@ -219,28 +395,32 @@ def specialist_system(who: SpecialistName, strategy: Strategy,
 
 
 def critic_system(strategy: Strategy) -> str:
+    # LENS BRIEF (v7): the critic is framed by the SAME builder as the specialists —
+    # emphasis + honesty note (it carries no STRATEGY INTENT section of its own), and its
+    # illustrative open question / ranker attacks are lens-derived. A stock/screen lens
+    # yields an empty emphasis block and today's examples, so it is byte-unchanged.
+    brief = lens_brief(strategy)
     return (
         "You are the CRITIC on an investment research council operating under "
         f"the strategy '{strategy.name}' (id {strategy.id}). Your job is to "
         "argue the strongest case AGAINST the emerging consensus before any "
         "verdict — attack weak reasoning, mis-weighted figures, convenient "
         "assumptions, and missing evidence. You do not vote.\n\n"
+        f"{brief.emphasis(include_honesty=True)}"
         f"{HARD_RULES}\n"
         "5. OPEN QUESTIONS. When your concern is quantitative but the evidence "
         "cannot support it — a computation you are not allowed to perform, a "
         "figure that looks stale, data that is absent — put it in "
         "`open_questions`, phrased as a question for human resolution (e.g. "
-        "'Is the dividend covered by free cash flow once the share count is "
-        "known?'). You may NOT state the suspected answer as a fact, estimate "
+        f"{brief.open_question_example()}). You may NOT state the suspected "
+        "answer as a fact, estimate "
         "the missing number, or perform the computation yourself. A sharp "
         "unresolved question is more valuable to this council than a "
         "fabricated certainty.\n"
         "6. ATTACK THE RANKER. When a RANKER VERDICT is in the evidence, sharpen "
-        "your counter-case on IT: why might the ranker's BUY be wrong — cheap "
-        "BECAUSE it is dying, momentum about to reverse, a factor that is lying "
-        "(a buyback masking dilution, a trailing number a forward event has "
-        "already broken)? The ranker sees only trailing data; you find what it "
-        "cannot.\n"
+        "your counter-case on IT: why might the ranker's BUY be wrong — "
+        f"{brief.ranker_attack_examples()}? The ranker sees only trailing data; "
+        "you find what it cannot.\n"
     )
 
 
@@ -272,9 +452,15 @@ def decision_system(strategy: Strategy,
             "or DISAGREEING with the ranker on the merits. Your disagreement (e.g. a "
             "forward risk the ranker's trailing factors miss) is the signal the "
             "council exists to provide; never bend your call to match the ranker.\n\n")
+    # LENS BRIEF (v7): the narrator/second opinion is framed by the SAME builder as the
+    # specialists and the critic. Before this it received NO lens emphasis at all, so it
+    # inherited whatever framing the specialist theses carried — the live 2026-07-21
+    # etf_core_v1 narration that "the strategy brief emphasises dividend durability".
+    # A stock/screen lens yields an empty block -> byte-unchanged.
     return (
         f"{role}"
         f"Operating under the strategy '{strategy.name}' (id {strategy.id}).\n\n"
+        f"{lens_brief(strategy).emphasis(include_honesty=True)}"
         f"{HARD_RULES}\n"
         "5. DISSENT. List every specialist whose stance your call overrides in "
         "`dissent` — dissent must never be silently dropped.\n"

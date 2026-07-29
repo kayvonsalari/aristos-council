@@ -114,12 +114,14 @@ class Strategy(BaseModel):
     scoring: ScoringConfig = Field(default_factory=ScoringConfig)
     rationale: str = ""
     notes: str = ""
-    # LENS-AWARE FUNDAMENTAL brief (NARR-PROMPT-1): a specialist-brief override the
-    # screen-less rank frame (pipeline._screenless_frame) stamps so an ETF/core lens is
-    # framed by what it RANKS, not the default dividend/quality stock brief. NEVER set from
-    # a strategy YAML (it is not read by the screen/loader) and defaults empty, so every
-    # published strategy is byte-unchanged and only the derived frame carries it.
-    fundamental_brief: str = ""
+    # LENS FRAMING (NARR-PROMPT-1): the DERIVED lens kind + ranked-factor labels that
+    # the council frame (pipeline._screenless_frame / run_rank_pipeline) stamps, so
+    # agents/prompts.lens_brief can frame EVERY agent by what the active lens actually
+    # ranks instead of the default dividend/quality stock brief. NEVER set from a strategy
+    # YAML (they are not read by the screen/loader) and default empty/stock, so every
+    # published strategy is byte-unchanged and only the derived frame carries them.
+    lens_kind: str = ""
+    lens_factor_labels: list[str] = Field(default_factory=list)
 
     @field_validator("id")
     @classmethod
