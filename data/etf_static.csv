@@ -9,34 +9,50 @@
 # run replays it byte-identically.
 #
 # MONTHLY REFRESH RITUAL: once a month, open each fund's official factsheet (the `source`
-# named on its row), re-verify expense_ratio / fund_size / distribution_yield / share_class
-# / domicile against it, and set `as_of` to today's date (YYYY-MM-DD) on every row you
-# confirm. A row you cannot re-verify this cycle is left as-is and will cross the 90-day
-# staleness line on its own, abstaining until refreshed — do NOT bump `as_of` without
+# named on its row), re-verify expense_ratio / fund_size / fund_size_currency /
+# distribution_yield / share_class / domicile against it, and set `as_of` to today's date
+# (YYYY-MM-DD) on every row you confirm. A row you cannot re-verify this cycle is left
+# as-is and will cross the 90-day staleness line on its own, abstaining until refreshed —
+# do NOT bump `as_of` without
 # re-checking the numbers. All rows are human-entered; nothing here is scraped.
 #
 # NEW ETF UNIVERSE? Run `scripts/generate_etf_static_rows.py <universe_id>` (needs
 # EODHD_API_KEY) — it prints paste-ready rows in this column order with the accumulated
-# sanity guards applied (fee from Ongoing_Charge, implausible fund size blanked, yield
-# converted to a fraction, dist/acc inferred, domicile mapped). Review the emitted rows,
-# then paste them under the header below via an issue/PR. The script never writes here —
+# sanity guards applied (fee from Ongoing_Charge, implausible fund size blanked, a fund size
+# with no base currency blanked, yield converted to a fraction, dist/acc inferred, domicile
+# mapped). Review the emitted rows, then paste them under the header below via an issue/PR.
+# The script never writes here —
 # a human verifies and commits, exactly as with the monthly refresh above.
 #
 # COLUMNS:
 #   ticker              — normalized (upper-case) fund symbol.
 #   expense_ratio       — net expense ratio as a PERCENT, matching the vendor
 #                         netExpenseRatio convention (e.g. 0.06 == a 6bp / 0.06% fund).
-#   fund_size           — net assets (total assets), in the fund's reporting currency.
+#   fund_size           — net assets (total assets), in the fund's BASE currency, named in
+#                         the fund_size_currency column below (NOT the listing currency:
+#                         IQQH's 4.17bn is USD though it lists on XETRA in EUR). Enter the
+#                         amount exactly as the factsheet reports it; the ranker converts to
+#                         EUR at a dated FX rate and shows the receipt.
 #   distribution_yield  — trailing distribution yield as a DECIMAL (0.035 == 3.5%).
 #   share_class         — dist (distributing) or acc (accumulating).
 #   domicile            — legal domicile (e.g. US, IE, LU).
 #   source              — the factsheet / authority the row was verified against.
 #   as_of               — YYYY-MM-DD date the row was last human-verified.
+#   fund_size_currency  — DATA-HYGIENE-1. The 3-letter base currency fund_size is quoted in
+#                         (USD/EUR/GBP…). REQUIRED for every new fund_size: the ranker
+#                         normalises fund_size to EUR at a dated FX rate and discloses the
+#                         receipt, and it ABSTAINS on the field if the rate is unavailable
+#                         rather than mix currencies. This column was ADDED LAST, after the
+#                         rows below were committed, so those 8-cell rows still parse: they
+#                         carry NO currency and are served UNCONVERTED and FLAGGED
+#                         ("fund size currency unverified — not normalised to EUR") — they
+#                         are NOT silently reinterpreted as EUR. Fill a row's currency (and
+#                         re-verify its amount) at the next monthly refresh to clear the flag.
 #
 # The row below is a NON-REAL EXAMPLE (ticker EXMPL) documenting the format only — it
 # matches no real fund, so it is never served. Real rows are added human-verified.
-ticker,expense_ratio,fund_size,distribution_yield,share_class,domicile,source,as_of
-EXMPL,0.06,1000000000,0.035,dist,US,example row — not real data,2026-06-01
+ticker,expense_ratio,fund_size,distribution_yield,share_class,domicile,source,as_of,fund_size_currency
+EXMPL,0.06,1000000000,0.035,dist,US,example row — not real data,2026-06-01,USD
 VHYL.L,0.29,7680000000,0.0463,dist,IE,EODHD fundamentals API,2026-07-15
 FUSD.L,0.25,1178880000,0.0143,dist,IE,EODHD fundamentals API,2026-07-15
 USDV.L,0.35,3699870000,0.0311,dist,IE,EODHD fundamentals API,2026-07-15

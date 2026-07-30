@@ -389,9 +389,15 @@ def _scoped_fundamentals(output: object, allowed: set[str]) -> dict:
 
 
 # NARR-2: the money fields whose formatted display needs the instrument currency
-# (so a fund size / market cap reads "USD 149.8bn", never an unlabelled float).
-_CURRENCY_DISPLAY_FIELDS = ("market_cap", "fund_size", "total_assets",
-                            "enterprise_value")
+# (so a market cap reads "USD 149.8bn", never an unlabelled float).
+#
+# DATA-HYGIENE-1 removed fund_size / total_assets from this set: a fund's net assets are
+# reported in the FUND'S BASE currency, which is NOT the listing currency this label comes
+# from (IQQH's assets are USD while it lists on XETRA in EUR), and the ranker further
+# normalises the served value to EUR. Labelling it with the listing currency would fabricate
+# a unit, so the amount renders unlabelled and the field's provenance receipt states the
+# currency, the FX rate and the rate's date instead (see fund_currency).
+_CURRENCY_DISPLAY_FIELDS = ("market_cap", "enterprise_value")
 
 
 def _ledger_currency(state: ResearchState) -> str | None:
