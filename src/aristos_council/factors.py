@@ -16,12 +16,13 @@ declares each factor's NATURAL direction (is higher or lower better?).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import Callable, Optional
 
 from .data.adapter import DataUnavailable, Fundamentals
 from .etf_static import StaticFill, apply_static_fill, default_static_rows
+from .presentation import format_large_currency
 from .tools.screening import revenue_cagr, through_cycle_roic
 from .tools.technical import (
     _TD_6M,
@@ -51,6 +52,108 @@ class CurrencyConversion:
         return f"{self.from_ccy}→{self.to_ccy} @ {self.rate:.4g} ({self.as_of})"
 
 
+# --------------------------------------------------------------------------- #
+# fund_size base-currency normalisation (DATA-HYGIENE-1)
+# --------------------------------------------------------------------------- #
+# The ONE currency cross-fund fund_size is compared in. Ranking is unit-invariant only
+# when every value shares a currency — and it did NOT: EODHD reports an ETF's total
+# assets in the FUND'S BASE currency (live: IQQH.DE's 4.17bn is USD) while the same
+# cohort's other funds report EUR, so the rank silently mixed units. EUR because the
+# report already speaks euros (the expense-ratio fee gloss, the Europe/Berlin display).
+FUND_SIZE_CURRENCY = "EUR"
+
+# Abstention notes (DATA-HYGIENE-1). Both are prefixed with SRC_ABSTAINED at the source
+# site so the factor-integrity block counts them as abstentions exactly as today, while
+# the per-name report line still discloses WHY.
+FUND_SIZE_CCY_UNKNOWN = (
+    f"fund base currency unknown — not normalised to {FUND_SIZE_CURRENCY}")
+FUND_SIZE_FX_UNAVAILABLE = (
+    "{from_ccy}→" + FUND_SIZE_CURRENCY + " rate unavailable — fund size not normalised")
+
+
+@dataclass(frozen=True)
+class FundSizeConversion:
+    """The receipt for ONE fund's fund_size normalisation to ``FUND_SIZE_CURRENCY``.
+
+    ``note`` is set ONLY on an abstention (base currency unknown, or the FX rate could
+    not be fetched) — ``ok`` is its inverse, and an abstaining conversion makes the
+    fund_size factor return None rather than rank a mixed-currency number. On success
+    the receipt carries the SOURCE amount, its currency, the rate and the rate's date,
+    so the report can show its work: ``4.2bn USD @ 0.86 EUR/USD, 2026-07-29``."""
+
+    from_ccy: Optional[str] = None
+    source_amount: Optional[float] = None
+    rate: Optional[float] = None
+    as_of: Optional[str] = None
+    note: Optional[str] = None
+
+    @property
+    def ok(self) -> bool:
+        return self.note is None
+
+    @property
+    def native(self) -> bool:
+        """Already in the target currency — no FX applied (rate 1.0)."""
+        return self.ok and self.from_ccy == FUND_SIZE_CURRENCY
+
+    @property
+    def tag(self) -> str:
+        """The provenance receipt appended to the fund_size source tag. Empty on an
+        abstention (the note is disclosed instead)."""
+        if not self.ok:
+            return ""
+        amount = (format_large_currency(self.source_amount)
+                  if self.source_amount is not None else "?")
+        if self.native:
+            return f"{amount} {FUND_SIZE_CURRENCY} native"
+        return (f"{amount} {self.from_ccy} @ {self.rate:.4g} "
+                f"{FUND_SIZE_CURRENCY}/{self.from_ccy}, {self.as_of}")
+
+
+def normalize_fund_size(total_assets: Optional[float], from_ccy: Optional[str], *,
+                        rate_lookup: Callable[[str], Optional[float]], as_of: str
+                        ) -> tuple[Optional[float], Optional[FundSizeConversion]]:
+    """Convert a fund's total assets into ``FUND_SIZE_CURRENCY``; abstain, never guess.
+
+    Returns ``(value, receipt)``:
+
+    - ``total_assets is None`` -> ``(None, None)``: nothing to normalise. The factor
+      abstains EXACTLY as it did before this fix (no new note, no new value).
+    - unknown/blank ``from_ccy`` -> the value is returned UNCHANGED with an ABSTAINING
+      receipt: the currency is not assumed (the listing currency is not the fund's base
+      currency), so the factor withholds the number instead of ranking it.
+    - already ``FUND_SIZE_CURRENCY`` -> unchanged, with a native receipt (no FX fetched).
+    - otherwise -> ``rate_lookup(from_ccy)`` supplies units of target per 1 source; a
+      missing/non-positive rate ABSTAINS (never a partial conversion).
+
+    ``rate_lookup`` is injected so this is pure and testable against a pinned FX rate.
+    """
+    if total_assets is None:
+        return None, None
+    ccy = (from_ccy or "").strip().upper()
+    if not ccy:
+        return total_assets, FundSizeConversion(note=FUND_SIZE_CCY_UNKNOWN)
+    if ccy == FUND_SIZE_CURRENCY:
+        return total_assets, FundSizeConversion(
+            from_ccy=ccy, source_amount=total_assets, rate=1.0, as_of=as_of)
+    rate = rate_lookup(ccy)
+    if rate is None or rate <= 0:
+        return total_assets, FundSizeConversion(
+            from_ccy=ccy, source_amount=total_assets,
+            note=FUND_SIZE_FX_UNAVAILABLE.format(from_ccy=ccy))
+    return total_assets * rate, FundSizeConversion(
+        from_ccy=ccy, source_amount=total_assets, rate=rate, as_of=as_of)
+
+
+def fund_size_currency(fundamentals, static_fill: Optional[StaticFill]) -> Optional[str]:
+    """Which currency THIS name's ``total_assets`` is denominated in — the static row's
+    declared currency when the static layer filled the field, otherwise the provider's
+    stated fund base currency. None when neither states it (-> abstain)."""
+    if static_fill is not None and "total_assets" in static_fill.filled:
+        return static_fill.fund_size_currency
+    return getattr(fundamentals, "fund_currency", None)
+
+
 @dataclass
 class FactorInputs:
     """The deterministic data a factor may read, per ticker — assembled from the
@@ -74,6 +177,12 @@ class FactorInputs:
     # or an ETF the layer didn't touch, so the ETF factors' source tags degrade to the
     # generic computed/abstained exactly as before.
     static: Optional[StaticFill] = None
+    # fund_size EUR normalisation receipt (DATA-HYGIENE-1). Set by gather_factor_inputs
+    # whenever the name HAS a fund size: ok -> ``fundamentals.total_assets`` is already the
+    # converted (EUR) amount and the receipt is appended to the factor's source tag;
+    # abstaining -> the factor withholds the number. None (the default) preserves the
+    # pre-fix behaviour for a directly-constructed FactorInputs and for stocks.
+    fund_size_ccy: Optional[FundSizeConversion] = None
 
 
 # --- factor functions (pure; None == NOT-EVAL) ---------------------------- #
@@ -239,9 +348,19 @@ def _expense_ratio(fi: FactorInputs) -> Optional[float]:
 
 def _fund_size(fi: FactorInputs) -> Optional[float]:
     """ETF fund size (``total_assets``) — net assets, a liquidity + closure-risk proxy;
-    higher ranks better. None when absent -> the lens abstains."""
+    higher ranks better. None when absent -> the lens abstains.
+
+    CURRENCY (DATA-HYGIENE-1): the value is comparable across a cohort only in ONE
+    currency, so ``gather_factor_inputs`` normalises it to EUR and records the receipt on
+    ``fi.fund_size_ccy``. An ABSTAINING receipt (fund base currency unknown, or the FX
+    rate unavailable) withholds the number — a mixed-currency rank is worse than a gap."""
     f = fi.fundamentals
-    return f.total_assets if f is not None else None
+    if f is None:
+        return None
+    conv = fi.fund_size_ccy
+    if conv is not None and not conv.ok:
+        return None
+    return f.total_assets
 
 
 # ETF factor SOURCE tags (ETF-STATIC-1). When a field was filled from the committed
@@ -268,7 +387,21 @@ def _expense_ratio_source(fi: FactorInputs) -> str:
 
 
 def _fund_size_source(fi: FactorInputs) -> str:
-    return _etf_field_source(fi, "total_assets", _fund_size(fi))
+    """The fund_size source tag, EXTENDED with the currency receipt (DATA-HYGIENE-1).
+
+    An abstaining conversion renders ``abstained: <why>`` — prefixed with
+    ``SRC_ABSTAINED`` so the factor-integrity block counts it as an abstention exactly as
+    today while the per-name line still says why. A successful conversion appends the
+    receipt to whatever the value's own source was, so the report reads
+    ``[computed: 4.2bn USD @ 0.86 EUR/USD, 2026-07-29]`` (or ``[static: <as_of>,
+    <source>, 4.2bn USD @ …]`` when the number came from the static layer)."""
+    conv = fi.fund_size_ccy
+    if conv is not None and not conv.ok:
+        return f"{SRC_ABSTAINED}: {conv.note}"
+    base = _etf_field_source(fi, "total_assets", _fund_size(fi))
+    if conv is not None and base != SRC_ABSTAINED:
+        return f"{base}, {conv.tag}"
+    return base
 
 
 def _price_to_book(fi: FactorInputs) -> Optional[float]:
@@ -614,6 +747,22 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
             fundamentals, kind=normalize_asset_kind(fundamentals.quote_type),
             row=rows.get(ticker), today=today)
 
+    # fund_size base-currency normalisation (DATA-HYGIENE-1): an ETF's total assets are
+    # reported in the FUND'S base currency, so a cross-fund rank must compare ONE currency.
+    # Convert to EUR through the same adapter/cache/freeze FX path; abstain (withhold the
+    # number, flagged) when the base currency is unknown or the rate can't be fetched. A
+    # name with no fund size at all is untouched — it abstains exactly as before.
+    fund_size_ccy = None
+    if fundamentals is not None and fundamentals.total_assets is not None:
+        normalized, fund_size_ccy = normalize_fund_size(
+            fundamentals.total_assets,
+            fund_size_currency(fundamentals, static_fill),
+            rate_lookup=lambda ccy: _fetch_fx_rate(
+                adapter, ccy, FUND_SIZE_CURRENCY, today=today),
+            as_of=today.isoformat())
+        if fund_size_ccy is not None and fund_size_ccy.ok:
+            fundamentals = replace(fundamentals, total_assets=normalized)
+
     # Currency-consistent EV (VERIFY-2 ITEM 1): if the accounts' currency differs from the
     # price currency, fetch the FX rate (same adapter/cache/freeze path). On a mismatch
     # with a failed fetch, mark fx_failed so the EV route abstains rather than mix. A
@@ -638,7 +787,7 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
         return_12m=total_return(closes, _TD_12M) if closes else None,
         annualized_volatility=snap.annualized_volatility if snap else None,
         last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed,
-        static=static_fill)
+        static=static_fill, fund_size_ccy=fund_size_ccy)
 
 
 BORDERLINE_TOL = 0.05    # within 5% (relative) of the threshold

@@ -685,6 +685,14 @@ def _source_label(src: str) -> str:
     return _SOURCE_LABELS.get(src, src)
 
 
+def _is_abstained(src: str) -> bool:
+    """Is this source tag an ABSTENTION? ``"abstained"`` or a REASONED abstention
+    (``"abstained: fund base currency unknown — …"``, DATA-HYGIENE-1) — a factor that
+    discloses WHY it withheld a number is still counted as abstained here, exactly as a
+    bare one, so the integrity block's abstention count never splits on prose."""
+    return src == "abstained" or src.startswith("abstained:")
+
+
 def factor_integrity(result: RankPipelineResult) -> list[dict]:
     """Per-factor source breakdown across the RANKED names (ITEM 1). For each factor:
     ``{factor, total, by_source: {source_tag: [tickers]}}`` — the data behind the
@@ -711,14 +719,15 @@ def format_integrity_entry(e: dict) -> str:
     'EV 21/23 · EBIT/mcap proxy 2/23 (HD, CAT) · abstained 0'. Fallback tickers are named
     when ≤5, counted otherwise. Shared by the CLI report and the Universe Run tab."""
     total, bs = e["total"], e["by_source"]
-    primary = [s for s in bs if not s.startswith("fallback:") and s != "abstained"]
+    primary = [s for s in bs if not s.startswith("fallback:") and not _is_abstained(s)]
     fallbacks = [s for s in bs if s.startswith("fallback:")]
     parts = [f"{_source_label(s)} {len(bs[s])}/{total}" for s in primary]
     for s in fallbacks:
         tks = bs[s]
         named = f" ({', '.join(tks)})" if len(tks) <= 5 else ""
         parts.append(f"{_source_label(s)} {len(tks)}/{total}{named}")
-    ab = bs.get("abstained", [])
+    # Every abstention bucket (bare or reasoned) folded into ONE count.
+    ab = [t for s in bs if _is_abstained(s) for t in bs[s]]
     named = f" ({', '.join(ab)})" if 0 < len(ab) <= 5 else ""
     parts.append(f"abstained {len(ab)}{named}")
     return " · ".join(parts)

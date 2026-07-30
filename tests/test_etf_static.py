@@ -23,6 +23,7 @@ from pathlib import Path
 from aristos_council.data.adapter import (
     Fundamentals,
     MarketDataAdapter,
+    PriceBar,
     PriceHistory,
 )
 from aristos_council.etf_static import (
@@ -41,13 +42,17 @@ from aristos_council.factors import (
 
 TODAY = date(2026, 7, 15)
 
-# A fresh (well within 90 days) and a stale (>90 days) row for the same fund shape.
+# A fresh (well within 90 days) and a stale (>90 days) row for the same fund shape. Both
+# declare the fund's BASE currency (DATA-HYGIENE-1) — a row that doesn't is LEGACY, and
+# ``tests/test_fund_size_currency.py`` pins its abstention.
 FRESH = StaticRow(ticker="SCHD", expense_ratio=0.06, fund_size=6.0e10,
                   distribution_yield=0.035, share_class="dist", domicile="US",
-                  source="Schwab factsheet", as_of="2026-06-01")
+                  source="Schwab factsheet", as_of="2026-06-01",
+                  fund_size_currency="USD")
 STALE = StaticRow(ticker="SCHD", expense_ratio=0.06, fund_size=6.0e10,
                   distribution_yield=0.035, share_class="dist", domicile="US",
-                  source="Schwab factsheet", as_of="2026-01-01")
+                  source="Schwab factsheet", as_of="2026-01-01",
+                  fund_size_currency="USD")
 
 ETF_FIELDS = ["expense_ratio", "fund_size", "distribution_yield"]
 
@@ -167,7 +172,11 @@ def test_missing_row_is_untouched():
 # gather_factor_inputs integration + a fake adapter
 # --------------------------------------------------------------------------- #
 class _FakeAdapter(MarketDataAdapter):
+    """No price history for the name itself; a PINNED FX rate for a currency pair ticker
+    (``USDEUR=X``), so the fund_size EUR normalisation is deterministic offline."""
+
     name = "fake"
+    FX_RATE = 0.86                     # EUR per 1 USD
 
     def __init__(self, fundamentals):
         self._f = fundamentals
@@ -176,6 +185,11 @@ class _FakeAdapter(MarketDataAdapter):
         return self._f
 
     def get_price_history(self, ticker, *, start, end):
+        if ticker.endswith("=X"):
+            return PriceHistory(ticker=ticker, bars=[
+                PriceBar(day=date(2026, 7, 14), open=self.FX_RATE, high=self.FX_RATE,
+                         low=self.FX_RATE, close=self.FX_RATE,
+                         adj_close=self.FX_RATE, volume=0)])
         return PriceHistory(ticker=ticker, bars=[])
 
     def get_dividend_history(self, ticker, *, start, end):
@@ -187,8 +201,12 @@ def test_gather_fills_etf_from_injected_static_rows():
     fi = gather_factor_inputs(adapter, "SCHD", today=TODAY,
                               static_rows={"SCHD": FRESH})
     assert fi.fundamentals.net_expense_ratio == 0.06
-    assert compute_factor_outcomes(fi, ["fund_size"])["fund_size"][1] == \
-        "static: 2026-06-01, Schwab factsheet"
+    # the static receipt is EXTENDED with the fund_size currency receipt (DATA-HYGIENE-1):
+    # the row declares USD, so the ranked value is the EUR conversion and the source shows
+    # its work — source amount, rate, rate date.
+    assert compute_factor_outcomes(fi, ["fund_size"])["fund_size"] == (
+        6.0e10 * 0.86,
+        "static: 2026-06-01, Schwab factsheet, 60.0bn USD @ 0.86 EUR/USD, 2026-07-15")
 
 
 def test_gather_leaves_stock_untouched():

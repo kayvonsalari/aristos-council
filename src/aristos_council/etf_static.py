@@ -40,9 +40,11 @@ STALE_AFTER_DAYS = 90
 # the render sites and the tests agree on it exactly.
 STALE_NOTE = "static data stale — refresh required"
 
-# CSV column -> the Fundamentals attribute the static value fills. ``share_class`` and
-# ``domicile`` are DESCRIPTIVE metadata carried on the row (no factor reads them), so they
-# map to nothing here — only these three numeric fields fill the ETF factor inputs.
+# CSV column -> the Fundamentals attribute the static value fills. ``share_class``,
+# ``domicile`` and ``fund_size_currency`` are METADATA carried on the row (no factor reads
+# them directly — the currency is consumed by the fund_size normalisation, not filled onto
+# Fundamentals), so they map to nothing here; only these three numeric fields fill the ETF
+# factor inputs.
 STATIC_TO_FUNDAMENTALS: dict[str, str] = {
     "expense_ratio": "net_expense_ratio",
     "fund_size": "total_assets",
@@ -60,7 +62,14 @@ class StaticRow:
     """One committed, human-verified static entry for an ETF. Numeric fields are None
     when the file leaves the cell blank (nothing to fill); ``share_class``/``domicile``
     are descriptive. ``as_of`` is 'YYYY-MM-DD' — the date the human verified the row,
-    which the staleness guard reads."""
+    which the staleness guard reads.
+
+    ``fund_size_currency`` (DATA-HYGIENE-1) is the fund's BASE currency — the one its
+    ``fund_size`` is denominated in, which is NOT necessarily its listing currency (live:
+    IQQH.DE lists in EUR, reports 4.17bn USD). It is the LAST column so a row written
+    before the column existed still parses cell-for-cell; such a legacy row leaves it
+    None, which FLAGS the fund size as un-normalisable rather than reinterpreting it (see
+    ``fund_size_currency_missing``)."""
 
     ticker: str
     expense_ratio: Optional[float]
@@ -70,12 +79,20 @@ class StaticRow:
     domicile: Optional[str]
     source: str
     as_of: str
+    fund_size_currency: Optional[str] = None
 
     @property
     def tag(self) -> str:
         """The provenance receipt, e.g. ``static: 2026-06-01, iShares factsheet`` — the
         report wraps it as ``[static: <as_of>, <source>]`` (the FX-receipt convention)."""
         return f"static: {self.as_of}, {self.source}"
+
+    @property
+    def fund_size_currency_missing(self) -> bool:
+        """Does this row carry a fund size WITHOUT declaring its currency? True for a
+        legacy row (written before the column existed) — the explicit flag that its fund
+        size cannot be normalised, so the factor abstains instead of guessing."""
+        return self.fund_size is not None and not self.fund_size_currency
 
 
 @dataclass(frozen=True)
@@ -87,6 +104,10 @@ class StaticFill:
 
     filled: dict[str, str]
     stale: dict[str, str]
+    # The static row's declared fund BASE currency, carried only when this fill actually
+    # supplied ``total_assets`` (DATA-HYGIENE-1). None = the row didn't declare one (a
+    # legacy row), which makes the fund_size factor abstain rather than assume a currency.
+    fund_size_currency: Optional[str] = None
 
     @property
     def touched(self) -> bool:
@@ -132,7 +153,10 @@ def load_static(path=DEFAULT_STATIC_PATH) -> dict[str, StaticRow]:
             share_class=(rec.get("share_class") or "").strip() or None,
             domicile=(rec.get("domicile") or "").strip() or None,
             source=(rec.get("source") or "").strip(),
-            as_of=(rec.get("as_of") or "").strip())
+            as_of=(rec.get("as_of") or "").strip(),
+            # Absent column (legacy row) or blank cell -> None: flagged, never assumed.
+            fund_size_currency=((rec.get("fund_size_currency") or "").strip().upper()
+                                or None))
     return rows
 
 
@@ -213,4 +237,9 @@ def apply_static_fill(fundamentals, *, kind: Optional[str], row: Optional[Static
         filled[fund_field] = row.tag
     if updates:
         fundamentals = replace(fundamentals, **updates)
-    return fundamentals, StaticFill(filled=filled, stale=stale_fields)
+    return fundamentals, StaticFill(
+        filled=filled, stale=stale_fields,
+        # Carried ONLY when this fill supplied the fund size — a vendor-served
+        # total_assets must not borrow the static row's currency (DATA-HYGIENE-1).
+        fund_size_currency=(row.fund_size_currency if "total_assets" in filled
+                            else None))

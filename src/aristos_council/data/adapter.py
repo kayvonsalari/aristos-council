@@ -252,6 +252,13 @@ class Fundamentals:
     quote_type: str | None = None
     net_expense_ratio: float | None = None
     total_assets: float | None = None
+    # The fund's BASE currency — the one ``total_assets`` is denominated in (DATA-HYGIENE-1).
+    # DISTINCT from ``currency`` (the LISTING currency): live, IQQH.DE lists in EUR on XETRA
+    # while its 4.17bn total assets are USD, so ranking fund_size across a mixed cohort was
+    # silently comparing different currencies. Set ONLY when the provider STATES the fund's
+    # currency; None means unknown — the fund_size factor then ABSTAINS (never assumes the
+    # listing currency, never converts on a guess). See factors.normalize_fund_size.
+    fund_currency: str | None = None
 
     # --- Annual income-statement & balance-sheet series (Sprint 4B) --------- #
     # NEWEST-FIRST lists of clean annual values (NaN years and the trailing

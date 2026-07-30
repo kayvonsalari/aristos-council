@@ -31,6 +31,18 @@ Accumulated sanity guards (learned live; see CLAUDE.md rule 3 and the CNDX incid
 - **Domicile from ETF_Data.** ``ETF_Data.Domicile`` (a country name) is mapped to the
   two-letter code the CSV already uses (Ireland -> IE, ...); an unrecognized value passes
   through verbatim.
+- **Null sentinels cleaned (DATA-HYGIENE-1).** EODHD serves the literal string ``"NA"``
+  as a null on XETRA ETF records. Every cell read here goes through the adapter's ONE
+  ``clean_sentinel`` helper first, so a sentinel becomes a BLANK cell (which abstains),
+  never the text "NA" pasted into the CSV.
+- **Fund base currency emitted (DATA-HYGIENE-1).** EODHD reports ``TotalAssets`` in the
+  FUND'S BASE currency (live: IQQH.DE lists in EUR, reports 4.17bn USD), so the row now
+  carries a ``fund_size_currency`` cell. It is read ONLY from a fund-currency field
+  (``eodhd_adapter.FUND_CURRENCY_CANDIDATES``) — NEVER from ``General::CurrencyCode``,
+  which is the LISTING currency and is exactly what mis-labelled IQQH. When no candidate
+  field is present the cell is left BLANK with a note: the human verifier fills it from
+  the factsheet, and until then the fund_size factor abstains rather than mixing
+  currencies.
 - **Exchange-suffix translation for the EODHD query only.** EODHD's ``/fundamentals``
   endpoint 404s on this repo's ``.DE`` (Xetra) suffix — it only recognizes ``.XETRA``
   (confirmed live: VWCE.DE/SXR8.DE/EUNL.DE/SPYY.DE all 404, VWCE.XETRA/SXR8.XETRA/
@@ -57,6 +69,7 @@ from pathlib import Path
 from typing import Optional
 
 from aristos_council.data.adapter import normalize_ticker
+from aristos_council.data.eodhd_adapter import clean_sentinel, fund_base_currency
 from aristos_council.universe import load_universe_by_id
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,8 +77,12 @@ UNIVERSES_DIR = ROOT / "universes"
 _BASE_URL = "https://eodhd.com/api"
 
 # The CSV column order, kept in lock-step with data/etf_static.csv's header.
+# ``fund_size_currency`` is LAST (DATA-HYGIENE-1): appended rather than inserted next to
+# fund_size so every row written before the column existed still parses cell-for-cell —
+# a mid-header insert would have re-read old rows' distribution_yield as a currency,
+# which is precisely the silent reinterpretation this fix forbids.
 COLUMNS = ["ticker", "expense_ratio", "fund_size", "distribution_yield",
-           "share_class", "domicile", "source", "as_of"]
+           "share_class", "domicile", "source", "as_of", "fund_size_currency"]
 
 SOURCE_BASE = "EODHD fundamentals API"
 
@@ -123,6 +140,9 @@ class StaticRowDraft:
     domicile: Optional[str]
     as_of: str
     notes: list[str] = field(default_factory=list)
+    # The fund's BASE currency (the one fund_size is denominated in), read only from a
+    # fund-currency field — blank when EODHD doesn't state it (a note says so).
+    fund_size_currency: Optional[str] = None
 
     @property
     def source(self) -> str:
@@ -135,10 +155,13 @@ class StaticRowDraft:
 
 def _parse_num(raw: object) -> Optional[float]:
     """EODHD returns numbers as strings, numbers, or null/empty. Coerce to float; None on
-    missing/unparseable/NaN so an absent field stays absent (never a phantom 0)."""
+    missing/unparseable/NaN so an absent field stays absent (never a phantom 0).
+
+    Sentinel-cleaned first (DATA-HYGIENE-1): ``"NA"``/``"N/A"``/``"-"``/``""`` are the
+    provider's nulls, so they land as None explicitly instead of relying on ``float()``
+    to raise."""
+    raw = clean_sentinel(raw)
     if raw is None:
-        return None
-    if isinstance(raw, str) and raw.strip() == "":
         return None
     try:
         f = float(raw)  # type: ignore[arg-type]
@@ -149,11 +172,12 @@ def _parse_num(raw: object) -> Optional[float]:
 
 def _domicile_code(raw: object) -> Optional[str]:
     """Map an ETF_Data.Domicile country name to the CSV's short code; pass an unrecognized
-    value through verbatim; None when absent."""
-    if not isinstance(raw, str) or not raw.strip():
+    value through verbatim; None when absent OR sentinel-filled ("NA" must never be pasted
+    into the CSV as a domicile — DATA-HYGIENE-1)."""
+    raw = clean_sentinel(raw)
+    if not isinstance(raw, str) or not raw:
         return None
-    text = raw.strip()
-    return _DOMICILE_CODES.get(text.lower(), text)
+    return _DOMICILE_CODES.get(raw.lower(), raw)
 
 
 def build_static_row(ticker: str, payload: dict, *, as_of: str) -> StaticRowDraft:
@@ -196,6 +220,15 @@ def build_static_row(ticker: str, payload: dict, *, as_of: str) -> StaticRowDraf
 
     domicile = _domicile_code(etf.get("Domicile"))
 
+    # --- fund base currency: the currency TotalAssets is denominated in ----------------- #
+    # Never the listing currency (General::CurrencyCode) — see the module docstring. A
+    # missing base currency leaves the cell blank + a note; the fund_size factor then
+    # abstains until a human fills it from the factsheet.
+    fund_ccy, _ccy_field = fund_base_currency(payload or {})
+    if fund_size is not None and fund_ccy is None:
+        notes.append("fund base currency not reported by EODHD — fund_size_currency "
+                     "blank; fill from the factsheet (the factor abstains until then)")
+
     return StaticRowDraft(
         ticker=normalize_ticker(ticker),
         expense_ratio=expense_ratio,
@@ -205,6 +238,7 @@ def build_static_row(ticker: str, payload: dict, *, as_of: str) -> StaticRowDraf
         domicile=domicile,
         as_of=as_of,
         notes=notes,
+        fund_size_currency=fund_ccy,
     )
 
 
@@ -229,6 +263,7 @@ def format_row(draft: StaticRowDraft) -> str:
         draft.domicile or "",
         draft.source,
         draft.as_of,
+        draft.fund_size_currency or "",
     ]
     return ",".join(cells)
 

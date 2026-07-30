@@ -24,7 +24,13 @@ AS_OF = date(2026, 7, 21).isoformat()
 
 
 def _payload(**etf_data):
-    """An EODHD /fundamentals payload carrying only the ETF_Data fields under test."""
+    """An EODHD /fundamentals payload carrying only the ETF_Data fields under test.
+
+    ``Currency`` defaults to USD so the fund-base-currency guard (DATA-HYGIENE-1) is
+    satisfied and the OTHER guards can be pinned in isolation; the currency guard has its
+    own cases below, which pass ``Currency=None`` to remove it."""
+    etf_data = {"Currency": "USD", **etf_data}
+    etf_data = {k: v for k, v in etf_data.items() if v is not None}
     return {"General": {"Name": "Test Fund"}, "ETF_Data": dict(etf_data)}
 
 
@@ -43,6 +49,7 @@ def test_wellformed_payload_produces_correct_row():
     assert draft.distribution_yield == 0.0463      # percent -> fraction
     assert draft.share_class == "dist"             # positive yield
     assert draft.domicile == "IE"                  # country name -> code
+    assert draft.fund_size_currency == "USD"       # fund BASE currency, from ETF_Data
     assert draft.notes == []                       # nothing blanked
     assert draft.source == gen.SOURCE_BASE         # no note appended
 
@@ -54,7 +61,10 @@ def test_format_row_matches_csv_column_order():
                  Yield="4.63", Domicile="Ireland"),
         as_of=AS_OF)
     line = gen.format_row(draft)
-    assert line == f"VHYL.L,0.29,7680000000,0.0463,dist,IE,{gen.SOURCE_BASE},{AS_OF}"
+    # fund_size_currency is the LAST cell (appended, never inserted — old rows must keep
+    # parsing cell-for-cell).
+    assert line == (f"VHYL.L,0.29,7680000000,0.0463,dist,IE,{gen.SOURCE_BASE},{AS_OF},USD")
+    assert gen.COLUMNS[-1] == "fund_size_currency"
 
 
 # --------------------------------------------------------------------------- #
@@ -174,6 +184,60 @@ def test_empty_payload_produces_a_row_of_blanks_with_notes():
     assert draft.fund_size is None
     assert draft.distribution_yield is None
     assert draft.share_class is None
+    assert draft.fund_size_currency is None
     assert any("fake-zero" in n for n in draft.notes)   # fee note fires
+    # no fund size -> no currency note either (nothing to normalise, nothing to flag)
+    assert not any("base currency" in n for n in draft.notes)
     line = gen.format_row(draft)
-    assert line == f"X.DE,,,,,,{draft.source},{AS_OF}"
+    assert line == f"X.DE,,,,,,{draft.source},{AS_OF},"
+
+
+# --------------------------------------------------------------------------- #
+# fund base currency + null sentinels (DATA-HYGIENE-1)
+# --------------------------------------------------------------------------- #
+def test_fund_base_currency_read_from_etf_data():
+    draft = gen.build_static_row(
+        "iqqh.de", _payload(Ongoing_Charge="0.65", TotalAssets="4172812800",
+                            Currency="usd", Yield="0"),
+        as_of=AS_OF)
+    assert draft.fund_size_currency == "USD"           # upper-cased
+    assert draft.notes == []
+
+
+def test_missing_fund_base_currency_blanks_the_cell_with_a_note():
+    # No fund-currency field: the cell stays BLANK and the row says why. The listing
+    # currency is NOT borrowed (that is the IQQH mislabelling this fix prevents).
+    payload = {"General": {"Name": "F", "CurrencyCode": "EUR"},
+               "ETF_Data": {"Ongoing_Charge": "0.20", "TotalAssets": "1.0e10"}}
+    draft = gen.build_static_row("eunl.de", payload, as_of=AS_OF)
+    assert draft.fund_size_currency is None
+    assert any("fund base currency not reported" in n for n in draft.notes)
+    assert "fund base currency not reported" in draft.source
+    assert gen.format_row(draft).endswith(f",{AS_OF},")   # blank currency cell
+
+
+def test_na_sentinels_are_cleaned_not_pasted_into_the_row():
+    # EODHD's literal "NA" on XETRA records must land as an ABSENT cell, never the text.
+    payload = {"General": {"Name": "F", "ISIN": "NA"},
+               "ETF_Data": {"Ongoing_Charge": "NA", "TotalAssets": " NA ",
+                            "Yield": "n/a", "Domicile": "NA", "Currency": "-"}}
+    draft = gen.build_static_row("spyd.de", payload, as_of=AS_OF)
+    assert draft.expense_ratio is None
+    assert draft.fund_size is None
+    assert draft.distribution_yield is None
+    assert draft.share_class is None
+    assert draft.domicile is None                      # NOT the string "NA"
+    assert draft.fund_size_currency is None
+    # every data cell (all but the free-text source note) is blank — no sentinel text
+    cells = gen.format_row(draft).split(",")
+    assert cells[1:6] == ["", "", "", "", ""] and cells[-1] == ""
+
+
+def test_padded_numeric_strings_still_parse():
+    draft = gen.build_static_row(
+        "x.de", _payload(Ongoing_Charge=" 0.20 ", TotalAssets=" 1.0e10 ",
+                         Yield=" 4.63 "),
+        as_of=AS_OF)
+    assert draft.expense_ratio == 0.20
+    assert draft.fund_size == 1.0e10
+    assert draft.distribution_yield == 0.0463

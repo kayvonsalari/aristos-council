@@ -172,6 +172,11 @@ class YFinanceAdapter(MarketDataAdapter):
             net_expense_ratio=_as_float(info.get("netExpenseRatio")
                                         or info.get("annualReportExpenseRatio")),
             total_assets=_as_float(info.get("totalAssets")),
+            # fund_currency (the currency total_assets is denominated in) is DELIBERATELY
+            # left None: yfinance's ``info`` states the LISTING currency only, and reading
+            # that as the fund's base currency is exactly the mislabelling DATA-HYGIENE-1
+            # exists to stop (IQQH.DE lists in EUR, reports USD assets). Unknown -> the
+            # fund_size factor abstains; declare it on a static row instead.
             # Cash-flow-statement lines for the FCF payout basis (newest column). Cash
             # dividends paid is a NEGATIVE outflow -> stored as its absolute value.
             dividends_paid=_abs_or_none(_latest_cashflow(

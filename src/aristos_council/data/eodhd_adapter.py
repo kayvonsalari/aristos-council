@@ -25,6 +25,15 @@ through splits, so it is the only correct input to the year-over-year streak.
 Key handling: read from EODHD_API_KEY env var (or constructor); never hard-code.
 HTTP errors / empty arrays map to DataUnavailable — never a silent zero.
 
+Null sentinels (DATA-HYGIENE-1)
+------------------------------
+EODHD uses the LITERAL STRING ``"NA"`` as a null on XETRA ETF records (observed on
+``General::ISIN``; suspected on the yield / expense fields — SPYD.DE
+distribution_yield and EUDF.DE expense_ratio both abstained). Every string cell is
+therefore routed through ``clean_sentinel`` BEFORE any parsing, so a sentinel becomes
+``None`` — which then abstains exactly as a real null does. There is ONE helper and it
+is applied uniformly; no code path downstream should ever see ``"NA"``.
+
 Uses urllib from the stdlib (same choice as finnhub_adapter): one GET does not
 justify another dependency.
 """
@@ -54,6 +63,93 @@ _NOT_READY = (
     "EODHDAdapter implements get_dividend_history and get_fundamentals; "
     "get_price_history is deferred to the next step."
 )
+
+# --------------------------------------------------------------------------- #
+# Null sentinels (DATA-HYGIENE-1)
+# --------------------------------------------------------------------------- #
+# The literal strings EODHD serves INSTEAD of a null. Compared case-insensitively on
+# the trimmed cell, so "na", " NA ", "N/A" and "-" all read as absent. The empty
+# string is included: a blank cell is an absence, never a value.
+NULL_SENTINELS: frozenset[str] = frozenset({"NA", "N/A", "NONE", "-", ""})
+
+
+def clean_sentinel(value: object) -> object:
+    """Map EODHD's null sentinels onto ``None`` — the ONE helper, applied at the
+    boundary before any parsing.
+
+    A string cell whose trimmed, upper-cased form is in ``NULL_SENTINELS`` becomes
+    ``None``; any other string is returned TRIMMED (stray whitespace in a provider
+    cell must not reach a comparison). Non-strings (numbers, None, dicts, lists) pass
+    through untouched — this cleans sentinels, it does not coerce types.
+
+    Abstention semantics are unchanged: the ``None`` this produces abstains exactly
+    as a real provider null already did. It never manufactures a value.
+    """
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    return None if text.upper() in NULL_SENTINELS else text
+
+
+def clean_str(mapping: object, key: str) -> str | None:
+    """A STRING field read from an EODHD sub-object with sentinels cleaned — ``None``
+    when the object is missing, the key is absent, or the cell is a sentinel."""
+    if not isinstance(mapping, dict):
+        return None
+    cleaned = clean_sentinel(mapping.get(key))
+    return cleaned if isinstance(cleaned, str) else None
+
+
+def sentinel_fields(payload: object, *, _prefix: str = "") -> list[str]:
+    """Dotted paths of every STRING cell in a payload that carries a null sentinel.
+
+    Diagnostic only (used by ``scripts/probe_etf_fund_size_currency.py``) so a probe
+    can report WHICH fields a provider sentinel-filled — e.g.
+    ``["General.ISIN", "ETF_Data.Yield"]``. Recurses into nested dicts; list cells are
+    not descended into (no sentinel has been observed inside one, and the report wants
+    named fields, not indices)."""
+    if not isinstance(payload, dict):
+        return []
+    out: list[str] = []
+    for key in sorted(payload):
+        value = payload[key]
+        path = f"{_prefix}{key}"
+        if isinstance(value, dict):
+            out.extend(sentinel_fields(value, _prefix=f"{path}."))
+        elif isinstance(value, str) and clean_sentinel(value) is None:
+            out.append(path)
+    return out
+
+
+# The candidate fields for a FUND's BASE currency — the currency ``ETF_Data::TotalAssets``
+# is denominated in — in probe order. DELIBERATELY EXCLUDES ``General::CurrencyCode``:
+# that is the LISTING currency, and the two differ exactly where this matters (live:
+# IQQH.DE lists in EUR on XETRA while its 4.17bn total assets are USD). Reading the
+# listing currency as the base currency would silently reinterpret the number — the
+# failure this fix exists to prevent — so an unknown base currency ABSTAINS instead.
+FUND_CURRENCY_CANDIDATES: tuple[tuple[str, str], ...] = (
+    ("ETF_Data", "Currency"),
+    ("ETF_Data", "Fund_Currency"),
+    ("ETF_Data", "Base_Currency"),
+    ("ETF_Data", "TotalAssets_Currency"),
+    ("ETF_Data", "CurrencyCode"),
+)
+
+
+def fund_base_currency(payload: object) -> tuple[str | None, str | None]:
+    """``(currency, field_path)`` — the FUND's base currency and which field supplied it.
+
+    Pure; sentinel-cleaned; ``(None, None)`` when no candidate field is present, which
+    makes the fund_size factor ABSTAIN rather than assume a currency (see
+    ``FUND_CURRENCY_CANDIDATES`` for why the listing currency is not a fallback).
+    The returned code is upper-cased; nothing is converted here."""
+    if not isinstance(payload, dict):
+        return None, None
+    for block, key in FUND_CURRENCY_CANDIDATES:
+        value = clean_str(payload.get(block), key)
+        if value:
+            return value.upper(), f"{block}::{key}"
+    return None, None
 
 
 def _parse_ex_date(raw: object) -> date | None:
@@ -86,7 +182,12 @@ def _adjusted_amount(row: dict) -> float | None:
 
 def _coerce_float(value: object) -> float | None:
     """EODHD returns numbers as strings, numbers, or null. Coerce to float;
-    None on missing/unparseable/NaN so Fundamentals fields stay Optional."""
+    None on missing/unparseable/NaN so Fundamentals fields stay Optional.
+
+    Sentinel cleaning first (DATA-HYGIENE-1): ``"NA"``/``"N/A"``/``"-"``/``""`` become
+    None EXPLICITLY rather than relying on ``float()`` to raise, and a padded numeric
+    string (``" 4.63 "``) still parses."""
+    value = clean_sentinel(value)
     if value is None:
         return None
     try:
@@ -139,15 +240,21 @@ def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
     # info["freeCashflow"]; take the newest yearly value.
     fcf_series = _annual_series(cashflow_yearly, "freeCashFlow")
 
+    # Every string cell goes through clean_str (DATA-HYGIENE-1): EODHD's literal "NA"
+    # must land as None (abstains), never as a phantom name/sector/currency code.
+    listing_ccy = clean_str(general, "CurrencyCode")
+
     return Fundamentals(
         ticker=ticker,
-        name=(general.get("Name") or None),
+        name=clean_str(general, "Name"),
         market_cap=_coerce_float(highlights.get("MarketCapitalization")),
-        sector=(general.get("Sector") or None),   # rank-engine sector exclusions
+        sector=clean_str(general, "Sector"),      # rank-engine sector exclusions
         # Listing/price currency (General) and statements currency (Income stmt).
-        currency=(general.get("CurrencyCode") or None),
-        financial_currency=(income.get("currency_symbol")
-                            or general.get("CurrencyCode") or None),
+        currency=listing_ccy,
+        financial_currency=(clean_str(income, "currency_symbol") or listing_ccy),
+        # The FUND's base currency (ETF_Data), NOT the listing currency — None unless
+        # the provider states it, so fund_size abstains instead of being reinterpreted.
+        fund_currency=fund_base_currency(data)[0],
         # EODHD's Highlights::DividendYield is already a DECIMAL (0.0289); the
         # backstop is a no-op unless a future response drifts to percent (>100%).
         dividend_yield=sane_dividend_yield(_coerce_float(highlights.get("DividendYield"))),
