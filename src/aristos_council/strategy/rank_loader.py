@@ -77,7 +77,7 @@ class RankStrategy(BaseModel):
     # Universe exclusions (applied by the caller before ranking).
     min_market_cap: float | None = None
     exclude_sectors: list[str] = Field(default_factory=list)
-    # Optional human rationale for the sector exclusion, surfaced by Company Check after
+    # Optional human rationale for the sector exclusion, surfaced by Fund Profile after
     # the sector gate line (display-only — never read by the rank/screen logic). Empty
     # -> the gate line renders bare, exactly as before.
     sector_exclusion_rationale: str = ""
@@ -87,7 +87,7 @@ class RankStrategy(BaseModel):
     # ONLY like the exclusion gate: a missing/None sector is never gated. The existing
     # exclude gate is untouched; the two are independent (a strategy sets one or neither).
     include_sectors: list[str] = Field(default_factory=list)
-    # Display-only rationale for the inclusion gate, rendered by Company Check exactly
+    # Display-only rationale for the inclusion gate, rendered by Fund Profile exactly
     # like sector_exclusion_rationale. Empty -> the gate line renders bare.
     sector_inclusion_rationale: str = ""
     # Asset-kind gate (ETF-1 ITEM 2): the asset classes this strategy admits, e.g.
@@ -98,7 +98,7 @@ class RankStrategy(BaseModel):
     # missing kind never gates (mirrors the sector gate). Empty -> scopes nothing (every
     # kind admitted), so a strategy that omits it is unchanged. Lowercase-validated.
     asset_kinds: list[str] = Field(default_factory=list)
-    # Display-only rationale for the asset-kind gate, rendered by Company Check exactly
+    # Display-only rationale for the asset-kind gate, rendered by Fund Profile exactly
     # like sector_inclusion_rationale. Empty -> the gate line renders bare.
     asset_kind_rationale: str = ""
     # Payout-coverage gate (subsumed by prefilter_screen when that's on): exclude a

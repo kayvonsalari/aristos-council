@@ -1493,7 +1493,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 council_mode=mode, ranker_only=ranker_only,
                 narrate_coverage=narrate_coverage,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                # Freeze this run's raw inputs so Company Check's reference-cohort reader
+                # Freeze this run's raw inputs so Fund Profile's reference-cohort reader
                 # (_latest_reference_run) can replay it offline — without this the UI
                 # never wrote runs/ and cohort context was dead code (ITEM 1).
                 freeze_dir=ROOT / "runs",
@@ -1676,7 +1676,7 @@ def _render_snapshot_history() -> None:
 _CC_STATUS_HEX = {"PASS": "#2E7D32", "FAIL": "#B23B3B", "NOT-EVALUATED": "#B8860B"}
 
 
-def _company_check_adapter():
+def _fund_profile_adapter():
     """A cached yfinance adapter for the single-name fetch (free — no keys, no LLM)."""
     from datetime import date as _date
 
@@ -1686,16 +1686,19 @@ def _company_check_adapter():
                           today=_date.today())
 
 
-def render_company_check_tab(show_validation: bool = False) -> None:
-    """Single-name diagnostic — 'why isn't X on the list?'. NO verdict is ever shown
-    (a rank over one name is fabricated); this reports the screen, the gates, factor
-    values with NAMED-cohort context, and the price-divergence flag."""
-    from aristos_council.company_check import run_company_check
+def render_fund_profile_tab(show_validation: bool = False) -> None:
+    """Single-name profile — what an instrument IS and how it sits against a NAMED,
+    VISIBLE comparison group. NO verdict is ever shown (a rank over one name is
+    fabricated); this reports the identity, the screen, the gates, the full reference
+    cohort, factor values with medians, and the price-divergence flag."""
+    from aristos_council.fund_profile import (
+        detect_asset_kind, run_fund_profile, strategies_for_asset_kind)
     from aristos_council.universe import list_universes
 
-    st.subheader("Company Check — single-name diagnostic")
-    st.caption("Why isn't a name on the list? Every screen criterion with values, each "
-               "factor vs a named reference cohort, and the price-divergence flag. "
+    st.subheader("Fund Profile — single-name profile")
+    st.caption("What is this instrument, and how does it sit against a named comparison "
+               "group? Identity, every screen criterion with values, the FULL reference "
+               "cohort, and each factor next to that cohort's median. "
                "**No verdict** — a verdict is a cohort statement (a universe run).")
 
     rank_options = [o for o in list_rank_strategy_options(STRATEGIES_DIR)
@@ -1704,21 +1707,41 @@ def render_company_check_tab(show_validation: bool = False) -> None:
         st.error(f"No rank strategies found under {STRATEGIES_DIR}")
         return
 
-    ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
+    ticker = normalize_ticker(st.text_input("Ticker", value="", key="fp_ticker",
                                             placeholder="MU"))
 
-    # Strategy — default magic_formula_momentum_v1 (the flagship) when present. The
-    # dropdown shows the friendly display_name; the id is a small caption.
-    ids = [s.id for _, _, s in rank_options]
-    default_ix = ids.index("magic_formula_momentum_v1") \
-        if "magic_formula_momentum_v1" in ids else 0
-    labels = [strategy_label(s) for _, _, s in rank_options]
-    choice = st.selectbox("Strategy (lens screen + factors)", labels, index=default_ix,
-                          key="cc_strategy")
-    rank_strategy = rank_options[labels.index(choice)][2]
-    st.caption(f"`{rank_strategy.id}`")                  # the stable record key
-    if strategy_role(rank_strategy):
-        st.caption(f"↳ {strategy_role(rank_strategy)}")
+    # Strategy — scoped to the DETECTED asset kind (FUND-PROFILE-1 rule 7): an ETF ticker
+    # offers ETF strategies, an equity ticker equity ones. Detection failure widens back to
+    # the full list — never a guess about which asset class the reader meant. NOTHING is
+    # pre-selected: the previous default silently profiled a fund under a stock lens.
+    try:
+        kind = detect_asset_kind(_fund_profile_adapter(), ticker) if ticker else None
+    except Exception:
+        kind = None            # no provider installed / no keys -> widen, never break
+    scoped_ids = {s.id for s in strategies_for_asset_kind(
+        [s for _, _, s in rank_options], kind)}
+    scoped = [o for o in rank_options if o[2].id in scoped_ids]
+    if kind and len(scoped) < len(rank_options):
+        st.caption(f"Detected asset kind: **{kind}** — showing the {len(scoped)} "
+                   f"strategies scoped to it.")
+    elif ticker and kind is None:
+        st.caption("Asset kind could not be detected — showing every strategy "
+                   "(no guess is made about the asset class).")
+
+    labels = [strategy_label(s) for _, _, s in scoped]
+    choice = st.selectbox("Strategy (lens screen + factors)", labels, index=None,
+                          placeholder="Choose a strategy…", key="fp_strategy")
+    # NOTHING is pre-selected (rule 7): the old default silently profiled whatever was
+    # typed under the flagship stock lens. The rest of the form still renders — only the
+    # run is withheld until the reader has chosen the lens.
+    rank_strategy = scoped[labels.index(choice)][2] if choice is not None else None
+    if rank_strategy is None:
+        st.info("Pick a strategy to profile this name under — nothing is pre-selected, "
+                "because the lens decides which screen and factors apply.")
+    else:
+        st.caption(f"`{rank_strategy.id}`")              # the stable record key
+        if strategy_role(rank_strategy):
+            st.caption(f"↳ {strategy_role(rank_strategy)}")
 
     # Reference universe — manifests only (context comes from a persisted run; never a
     # fresh universe fetch). A 'None' option runs raw values with no cohort position.
@@ -1728,13 +1751,14 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     # UNI-1 ITEM 2: the selected strategy's SUGGESTED universes render first here too
     # (same helper as the Universe Run tab — no drift). Absent field -> unchanged.
     suggested, others = suggested_first(
-        manifests, getattr(rank_strategy, "suggested_universes", []))
+        manifests,
+        getattr(rank_strategy, "suggested_universes", []) if rank_strategy else [])
     ref_ordered = suggested + others
     ref_labels = ([f"⭐ {universe_label(u)} · {len(u.tickers)} names" for u in suggested]
                   + [f"{universe_label(u)} · {len(u.tickers)} names" for u in others]
                   + [NONE])
     ref_choice = st.selectbox("Reference universe (for factor context)", ref_labels,
-                              key="cc_reference")
+                              key="fp_reference")
     if suggested:
         st.caption("⭐ = suggested for this strategy · every universe stays selectable")
     reference = None if ref_choice == NONE else ref_ordered[ref_labels.index(ref_choice)]
@@ -1744,46 +1768,55 @@ def render_company_check_tab(show_validation: bool = False) -> None:
         if universe_role(reference):
             st.caption(f"↳ {universe_role(reference)}")
 
-    run = st.button("▶ Run company check (free — no LLM)", type="primary",
-                    disabled=not ticker, key="cc_run")
+    run = st.button("▶ Run fund profile (free — no LLM)", type="primary",
+                    disabled=not ticker or rank_strategy is None, key="fp_run")
     if run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         try:
-            with st.spinner(f"Diagnosing {ticker}…"):
-                adapter = _company_check_adapter()
-                result = run_company_check(
+            with st.spinner(f"Profiling {ticker}…"):
+                adapter = _fund_profile_adapter()
+                result = run_fund_profile(
                     ticker, rank_strategy.id, reference_id, adapter=adapter,
                     strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                     runs_dir=ROOT / "runs")
         except Exception as exc:
             st.exception(exc)
-            st.session_state.pop("cc_result", None)
+            st.session_state.pop("fp_result", None)
         else:
-            st.session_state["cc_result"] = result
-            st.session_state["cc_run_start"] = run_start
+            st.session_state["fp_result"] = result
+            st.session_state["fp_run_start"] = run_start
             # The friendly name for the HTML export's header (the result carries only the
             # id). Display-only; absent -> the export falls back to the id (never invents).
-            st.session_state["cc_strategy_name"] = strategy_label(rank_strategy)
+            st.session_state["fp_strategy_name"] = strategy_label(rank_strategy)
 
-    result = st.session_state.get("cc_result")
+    result = st.session_state.get("fp_result")
     if result is not None:
         st.divider()
-        _render_company_check(result)
+        _render_fund_profile(result)
 
 
-def _render_company_check(result) -> None:
-    from aristos_council.company_check import format_company_check
+def _render_fund_profile(result) -> None:
+    from aristos_council.fund_profile import format_fund_profile, identity_rows
 
-    st.markdown(f"### Company Check — {result.display}")
-    st.caption("Single-name diagnostic · **NO VERDICT** — verdicts are cohort "
+    st.markdown(f"### Fund Profile — {result.display}")
+    st.caption("Single-name profile · **NO VERDICT** — verdicts are cohort "
                "statements (see `docs/SCOREBOARD.md`).")
     st.caption(f"strategy: `{result.rank_strategy_id}` · lens screen: "
                f"`{result.screen_strategy_id or 'none'}` · reference: "
                f"`{result.reference_universe_id or '—'}`")
 
+    # IDENTITY (FUND-PROFILE-1 rule 6) — what this instrument IS, every field with its
+    # provenance and every absence stated rather than filled in.
+    irows = identity_rows(result.identity)
+    if irows:
+        st.subheader("Identity")
+        for r in irows:
+            tag = f" _[{r.source}]_" if r.source else ""
+            st.markdown(f"- **{r.label}**: {r.value}{tag}")
+
     if result.unrateable:
         st.warning(f"⚪ **UNRATEABLE** — {result.data_integrity.note}. No data, so no "
-                   "diagnosis and no verdict.")
+                   "profile and no verdict.")
         st.info(result.pointer)
         return
 
@@ -1831,6 +1864,31 @@ def _render_company_check(result) -> None:
             if g.rationale:
                 st.caption(f"↳ **{g.name}**: {g.rationale}")
 
+    # REFERENCE COHORT (rule 3) — the comparison group, in full, by ticker + name with its
+    # rank and score. A comparison against an invisible group is an assertion, not a
+    # comparison; the profiled name and its ±2 neighbours lead the table.
+    if result.cohort_members:
+        st.subheader("Reference cohort")
+        st.caption(f"**{result.cohort_display_name}** (`{result.reference_universe_id}`) · "
+                   f"run {result.reference_run_date} · run id "
+                   f"`{result.reference_run_id}` · {result.reference_cohort_n} ranked, "
+                   f"{result.cohort_excluded_n} excluded · declared sector: "
+                   f"{result.cohort_sector or 'none declared'}")
+        cdf = pd.DataFrame([{
+            "Rank": (f"#{m.position}" + (" (tied)" if m.tied else "")
+                     if m.position is not None else "—"),
+            "Ticker": m.ticker, "Name": m.display, "Verdict": m.verdict,
+            "Score": m.score, "": "← this name" if m.is_profiled else ""}
+            for m in result.cohort_members])
+        st.dataframe(cdf, hide_index=True, width="stretch")
+        if result.cohort_note:
+            st.caption(result.cohort_note)
+
+    # FIT (rule 4) — exactly one plain-English sentence when the cohort is not a confirmed
+    # sector match, rendered ADJACENT to the values it qualifies.
+    if result.fit_warning:
+        st.warning(f"**Fit** — {result.fit_warning}")
+
     # FACTORS + cohort context.
     st.subheader("Factor values + cohort context")
     if result.reference_available:
@@ -1841,15 +1899,18 @@ def _render_company_check(result) -> None:
     else:
         st.caption("No reference run available — showing raw values. Run the universe "
                    "once (Universe Run tab) to get cohort context.")
-    from aristos_council.company_check import format_factor_value
+    from aristos_council.fund_profile import format_factor_value, format_median
 
     for fc in result.factors:
         st.markdown(f"- **{fc.label}** (`{fc.factor}`): "
                     f"{format_factor_value(fc.factor, fc.value)} "
                     f"_[{fc.source}]_ — {fc.context}")
+        med = format_median(fc, result.reference_run_date)
+        if med:
+            st.caption(f"↳ {med}")
 
     # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen reference run when the
-    # checked name had a recorded outcome; Company Check never issues one itself.
+    # profiled name had a recorded outcome; Fund Profile never issues one itself.
     if result.verdict_of_record:
         st.markdown(f"**VERDICT OF RECORD:** {result.verdict_of_record}")
 
@@ -1876,26 +1937,26 @@ def _render_company_check(result) -> None:
     # single-name file ALWAYS carries the ticker. Two exports side by side
     # (REPORT-HTML-1): the text report stays canonical, the HTML is the shareable copy.
     from aristos_council.download_names import (
-        company_check_download_name, company_check_html_download_name)
-    from aristos_council.export.report_html import company_check_html
+        fund_profile_download_name, fund_profile_html_download_name)
+    from aristos_council.export.report_html import fund_profile_html
 
-    cc_run_start = st.session_state.get("cc_run_start") or datetime.now(timezone.utc)
+    fp_run_start = st.session_state.get("fp_run_start") or datetime.now(timezone.utc)
     dl_txt, dl_html = st.columns(2)
     with dl_txt:
         st.download_button(
-            "⬇ Download check as text", data=format_company_check(result),
-            file_name=company_check_download_name(result.ticker, result.rank_strategy_id,
-                                                  cc_run_start),
-            mime="text/plain", key="cc_download")
+            "⬇ Download profile as text", data=format_fund_profile(result),
+            file_name=fund_profile_download_name(result.ticker, result.rank_strategy_id,
+                                                 fp_run_start),
+            mime="text/plain", key="fp_download")
     with dl_html:
         st.download_button(
             "⬇ Download report (HTML)",
-            data=company_check_html(
-                result, run_start=cc_run_start,
-                strategy_display_name=st.session_state.get("cc_strategy_name", "")),
-            file_name=company_check_html_download_name(
-                result.ticker, result.rank_strategy_id, cc_run_start),
-            mime="text/html", key="cc_download_html")
+            data=fund_profile_html(
+                result, run_start=fp_run_start,
+                strategy_display_name=st.session_state.get("fp_strategy_name", "")),
+            file_name=fund_profile_html_download_name(
+                result.ticker, result.rank_strategy_id, fp_run_start),
+            mime="text/html", key="fp_download_html")
     st.caption("Text is the canonical record. The HTML is one self-contained file (no "
                "external requests) for sharing outside the repo — Print → PDF for paper.")
 
@@ -2021,27 +2082,27 @@ def main() -> None:
         st.success(pending)
 
     if not show_legacy:
-        # v2-ONLY landing: Universe Run + Company Check (both first-class, not legacy).
+        # v2-ONLY landing: Universe Run + Fund Profile (both first-class, not legacy).
         # Validation assets hidden (show_validation=False).
-        tab_universe, tab_company = st.tabs(["Universe Run", "Company Check"])
+        tab_universe, tab_profile = st.tabs(["Universe Run", "Fund Profile"])
         with tab_universe:
             render_universe_tab(show_validation=False)
-        with tab_company:
-            render_company_check_tab(show_validation=False)
+        with tab_profile:
+            render_fund_profile_tab(show_validation=False)
         return
 
-    # Legacy ON: Universe Run FIRST (Streamlit default-selects it), Company Check next
+    # Legacy ON: Universe Run FIRST (Streamlit default-selects it), Fund Profile next
     # (first-class), then the pre-v2 council browsers (Legacy), the YAML editor last.
     # The toggle is ON here, so validation assets (bench + baseline) are revealed.
-    tab_universe, tab_company, tab_report, tab_history, tab_strategy = st.tabs(
-        ["Universe Run", "Company Check", "Report · Legacy", "History · Legacy",
+    tab_universe, tab_profile, tab_report, tab_history, tab_strategy = st.tabs(
+        ["Universe Run", "Fund Profile", "Report · Legacy", "History · Legacy",
          "Strategy · Legacy"])
 
     with tab_universe:
         render_universe_tab(show_validation=True)
 
-    with tab_company:
-        render_company_check_tab(show_validation=True)
+    with tab_profile:
+        render_fund_profile_tab(show_validation=True)
 
     with tab_report:
         st.info(f"**Legacy.** {_LEGACY_BANNER}")

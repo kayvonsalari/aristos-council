@@ -377,7 +377,7 @@ def _scoped_fundamentals(output: object, allowed: set[str]) -> dict:
         d["free_cash_flow_note"] = ("ttm_incl_one_offs — do not use for sustainability "
                                     "claims; cite free_cash_flow_annual instead")
     # VERIFY-2 ITEM 4: withhold implausible vendor values from narration (NVO's 23.9%
-    # dividend_yield). They still surface, flagged, in Company Check's data integrity.
+    # dividend_yield). They still surface, flagged, in Fund Profile's data integrity.
     from ..data.adapter import implausible_fields
     flagged = implausible_fields(output)
     for name in flagged:

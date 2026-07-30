@@ -48,7 +48,7 @@ def _fval(f, name):
 def implausible_fields(f) -> dict[str, str]:
     """Cheap plausibility flags at the data boundary (VERIFY-2 ITEM 4): field -> reason
     for values a real issuer never has. FLAGS ONLY — never silently corrects, never
-    fails; the caller surfaces the flag (Company Check data integrity) and withholds the
+    fails; the caller surfaces the flag (Fund Profile data integrity) and withholds the
     field from narrator evidence. Vendor junk is common on foreign listings (NVO's
     dividend_yield arrived as 0.2393 = 23.9%; reality ~3.7%)."""
     if f is None:
@@ -103,7 +103,7 @@ def normalize_ticker(raw: str) -> str:
 def display_name(ticker: str, company_name: str | None) -> str:
     """A report line's leading label: ``"Micron Technology (MU)"`` when the company
     name is known, else the bare ``ticker``. One place so every surface (ranked table,
-    excluded, unrateable, narratives, snapshot divergence map, Company Check) renders
+    excluded, unrateable, narratives, snapshot divergence map, Fund Profile) renders
     the same shape and degrades identically when the provider omits the name."""
     name = (company_name or "").strip()
     return f"{name} ({ticker})" if name else ticker

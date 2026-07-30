@@ -9,6 +9,9 @@ id: energy_watch_v1
 display_name: Energy Watch (observation)
 role: cyclical-peak watch — observation only, never graded
 description: Energy cyclical-peak watch — majors and refiners, observation only.
+# FUND-PROFILE-1 — the cohort's declared sector, in the vendor's GICS spelling (see
+# financials_16_v1 for the rule this drives).
+sector: Energy
 created: "2026-07-09"
 rationale: >-
   observe magic_value_screen_v1 behaviour on oil majors and refiners as

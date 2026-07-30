@@ -31,3 +31,16 @@ tickers:
   - SEDY.L
   - IDVY.AS
   - SPYW.DE
+# FUND-PROFILE-1 — declared sector for the cohort and per instrument (see
+# etf_growth_ucits_v1 for the rule and the hand-maintenance note).
+sector: UCITS Dividend ETFs
+instrument_sectors:
+  VHYL.L: UCITS Dividend ETFs
+  FUSD.L: UCITS Dividend ETFs
+  USDV.L: UCITS Dividend ETFs
+  ZPRG.DE: UCITS Dividend ETFs
+  TDIV.AS: UCITS Dividend ETFs
+  ISPA.DE: UCITS Dividend ETFs
+  SEDY.L: UCITS Dividend ETFs
+  IDVY.AS: UCITS Dividend ETFs
+  SPYW.DE: UCITS Dividend ETFs

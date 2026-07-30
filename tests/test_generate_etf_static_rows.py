@@ -54,7 +54,9 @@ def test_format_row_matches_csv_column_order():
                  Yield="4.63", Domicile="Ireland"),
         as_of=AS_OF)
     line = gen.format_row(draft)
-    assert line == f"VHYL.L,0.29,7680000000,0.0463,dist,IE,{gen.SOURCE_BASE},{AS_OF}"
+    # FUND-PROFILE-1 added the DESCRIPTIVE sector + isin columns; the generator emits them
+    # BLANK on purpose (a sector is editorial, an ISIN a registry fact — neither generated).
+    assert line == f"VHYL.L,0.29,7680000000,0.0463,dist,IE,{gen.SOURCE_BASE},{AS_OF},,"
 
 
 # --------------------------------------------------------------------------- #
@@ -176,4 +178,4 @@ def test_empty_payload_produces_a_row_of_blanks_with_notes():
     assert draft.share_class is None
     assert any("fake-zero" in n for n in draft.notes)   # fee note fires
     line = gen.format_row(draft)
-    assert line == f"X.DE,,,,,,{draft.source},{AS_OF}"
+    assert line == f"X.DE,,,,,,{draft.source},{AS_OF},,"

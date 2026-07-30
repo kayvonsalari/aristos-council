@@ -403,7 +403,7 @@ def ranked_table_rows(ranked: list["RankedTicker"],
 def format_position_cell(position: Optional[int], cohort_size: int, tied: bool,
                          combined_rank: float, n_factors: int) -> str:
     """The ONE shared cohort-position string every rank-sum display uses (CLI ranked
-    table, Universe Run table, markdown download, Company Check): the ORDINAL first with
+    table, Universe Run table, markdown download, Fund Profile): the ORDINAL first with
     the rank-SUM as detail, e.g. ``#1 of 9 · score 11 (best 3 · worst 27)``. ``(tied)``
     marks a shared position; ``best`` = number of factors, ``worst`` = factors × cohort
     size. Falls back to a bare ``score S`` when no position is known (e.g. an excluded

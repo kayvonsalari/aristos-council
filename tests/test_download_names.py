@@ -9,7 +9,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from aristos_council.download_names import (
-    company_check_download_name, company_check_html_download_name, mode_tag,
+    company_check_download_name, company_check_html_download_name,
+    fund_profile_download_name, fund_profile_html_download_name, mode_tag,
     universe_download_name, universe_html_download_name)
 
 # 2026-07-09 15:30 UTC -> 17:30 Europe/Berlin (CEST, UTC+2 in July).
@@ -36,16 +37,24 @@ def test_ranker_only_universe_filename_tags_ranker():
     assert name == f"universe_conservative_plus_v1_ranker_{_STAMP}.md"
 
 
-def test_company_check_filename_has_ticker_strategy_and_timestamp():
-    name = company_check_download_name("MU", "magic_formula_momentum_v1", _DT)
-    assert name == f"company_check_MU_magic_formula_momentum_v1_{_STAMP}.txt"
+def test_fund_profile_filename_has_ticker_strategy_and_timestamp():
+    name = fund_profile_download_name("MU", "magic_formula_momentum_v1", _DT)
+    assert name == f"fund_profile_MU_magic_formula_momentum_v1_{_STAMP}.txt"
     stamp = name.removesuffix(".txt").rsplit("_", 2)
     datetime.strptime(stamp[-2] + "_" + stamp[-1], "%Y-%m-%d_%H%M")
 
 
 def test_naive_run_start_is_treated_as_utc():
     naive = datetime(2026, 7, 9, 15, 30)                 # no tzinfo -> UTC
-    assert company_check_download_name("MU", "s_v1", naive).endswith(f"{_STAMP}.txt")
+    assert fund_profile_download_name("MU", "s_v1", naive).endswith(f"{_STAMP}.txt")
+
+
+def test_company_check_aliases_emit_the_new_fund_profile_prefix():
+    # FUND-PROFILE-1: the old internal ids stay importable so nothing breaks, but they
+    # delegate — there is ONE filename scheme, never two competing prefixes.
+    assert company_check_download_name is fund_profile_download_name
+    assert company_check_html_download_name is fund_profile_html_download_name
+    assert company_check_download_name("MU", "s_v1", _DT).startswith("fund_profile_MU_")
 
 
 # --------------------------------------------------------------------------- #
@@ -66,18 +75,19 @@ def test_universe_html_name_carries_no_ticker_it_is_a_cohort_file():
     assert "SXR8" not in htm and "MU" not in htm
 
 
-def test_company_check_html_name_always_carries_the_ticker():
-    txt = company_check_download_name("MU", "magic_formula_momentum_v1", _DT)
-    htm = company_check_html_download_name("MU", "magic_formula_momentum_v1", _DT)
-    assert htm == f"company_check_MU_magic_formula_momentum_v1_{_STAMP}.html"
+def test_fund_profile_html_name_always_carries_the_ticker():
+    txt = fund_profile_download_name("MU", "magic_formula_momentum_v1", _DT)
+    htm = fund_profile_html_download_name("MU", "magic_formula_momentum_v1", _DT)
+    assert htm == f"fund_profile_MU_magic_formula_momentum_v1_{_STAMP}.html"
     assert htm == txt.removesuffix(".txt") + ".html"
     assert "_MU_" in htm                                  # single-name file: ticker REQUIRED
 
 
 def test_html_export_never_changes_the_canonical_names():
-    # The .md/.txt names are the frozen record keys — the new ext argument defaults must
-    # keep them byte-identical.
+    # The universe .md name is a frozen record key — the ext argument defaults must keep it
+    # byte-identical. (The single-name prefix was deliberately renamed by FUND-PROFILE-1;
+    # universe outputs were NOT touched.)
     assert universe_download_name("s_v1", "narrator", _DT) == \
         f"universe_s_v1_narrator_{_STAMP}.md"
-    assert company_check_download_name("MU", "s_v1", _DT) == \
-        f"company_check_MU_s_v1_{_STAMP}.txt"
+    assert fund_profile_download_name("MU", "s_v1", _DT) == \
+        f"fund_profile_MU_s_v1_{_STAMP}.txt"

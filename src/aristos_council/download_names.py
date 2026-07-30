@@ -45,13 +45,16 @@ def universe_download_name(strategy_id: str, council_mode: str,
     return f"universe_{strategy_id}_{mode_tag(council_mode)}_{_stamp(run_start)}.{ext}"
 
 
-def company_check_download_name(ticker: str, strategy_id: str,
-                                run_start: datetime, *, ext: str = "txt") -> str:
-    """The Company Check download name. A SINGLE-NAME file, so the ticker is REQUIRED and
+def fund_profile_download_name(ticker: str, strategy_id: str,
+                               run_start: datetime, *, ext: str = "txt") -> str:
+    """The Fund Profile download name. A SINGLE-NAME file, so the ticker is REQUIRED and
     always present. ``ext`` selects the export (``txt`` = the canonical text record,
-    ``html`` = the presentation export); the default keeps the existing name
-    byte-identical."""
-    return f"company_check_{ticker}_{strategy_id}_{_stamp(run_start)}.{ext}"
+    ``html`` = the presentation export).
+
+    FUND-PROFILE-1 renamed the prefix ``company_check_`` -> ``fund_profile_`` with the
+    feature; the scheme (ticker + strategy + Europe/Berlin stamp) is unchanged, so a folder
+    of downloads still sorts and reads the same way."""
+    return f"fund_profile_{ticker}_{strategy_id}_{_stamp(run_start)}.{ext}"
 
 
 def universe_html_download_name(strategy_id: str, council_mode: str,
@@ -61,8 +64,14 @@ def universe_html_download_name(strategy_id: str, council_mode: str,
     return universe_download_name(strategy_id, council_mode, run_start, ext="html")
 
 
-def company_check_html_download_name(ticker: str, strategy_id: str,
-                                     run_start: datetime) -> str:
-    """The Company Check SELF-CONTAINED HTML export name (REPORT-HTML-1) — the same
+def fund_profile_html_download_name(ticker: str, strategy_id: str,
+                                    run_start: datetime) -> str:
+    """The Fund Profile SELF-CONTAINED HTML export name (REPORT-HTML-1) — the same
     scheme and stamp as the text report, ``.html`` extension, ticker required."""
-    return company_check_download_name(ticker, strategy_id, run_start, ext="html")
+    return fund_profile_download_name(ticker, strategy_id, run_start, ext="html")
+
+
+# DEPRECATED internal aliases (FUND-PROFILE-1). Old callers keep working and now emit the
+# NEW ``fund_profile_`` prefix — one filename scheme, never two competing ones.
+company_check_download_name = fund_profile_download_name
+company_check_html_download_name = fund_profile_html_download_name

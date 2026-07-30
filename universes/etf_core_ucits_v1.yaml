@@ -48,3 +48,12 @@ tickers:
   - VUSA.AS
   - EUNL.DE
   - SPYY.DE
+# FUND-PROFILE-1 — declared sector for the cohort and per instrument (see
+# etf_growth_ucits_v1 for the rule and the hand-maintenance note).
+sector: UCITS Index Tracker ETFs
+instrument_sectors:
+  VWCE.DE: UCITS Index Tracker ETFs
+  SXR8.DE: UCITS Index Tracker ETFs
+  VUSA.AS: UCITS Index Tracker ETFs
+  EUNL.DE: UCITS Index Tracker ETFs
+  SPYY.DE: UCITS Index Tracker ETFs

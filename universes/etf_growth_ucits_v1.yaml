@@ -32,3 +32,18 @@ tickers:
   - IWMO.L
   - IUIT.L
   - SMH.L
+# FUND-PROFILE-1 — the COHORT's declared sector, and the same declaration per instrument.
+# The vendor serves no sector for an ETF, so a fund's category has to be declared by hand;
+# these restate what this manifest already asserts about its members ("euro-investable UCITS
+# growth-oriented ETFs"). A rank against this cohort is shown only for a member of a frozen
+# run or a name whose own declared sector matches — otherwise the reader gets a fit warning
+# instead of a silent category error. REFINE BY HAND as narrower funds arrive (a clean-energy
+# tracker is not the same sector as a broad growth tracker).
+sector: UCITS Growth ETFs
+instrument_sectors:
+  EQQQ.L: UCITS Growth ETFs
+  CNDX.L: UCITS Growth ETFs
+  XDEM.DE: UCITS Growth ETFs
+  IWMO.L: UCITS Growth ETFs
+  IUIT.L: UCITS Growth ETFs
+  SMH.L: UCITS Growth ETFs

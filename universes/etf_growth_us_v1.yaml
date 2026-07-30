@@ -24,3 +24,15 @@ tickers:
   - VONG
   - MGK
   - IWY
+# FUND-PROFILE-1 — declared sector for the cohort and per instrument (see
+# etf_growth_ucits_v1 for the rule and the hand-maintenance note).
+sector: US Growth ETFs
+instrument_sectors:
+  VUG: US Growth ETFs
+  QQQ: US Growth ETFs
+  IWF: US Growth ETFs
+  SPYG: US Growth ETFs
+  SCHG: US Growth ETFs
+  VONG: US Growth ETFs
+  MGK: US Growth ETFs
+  IWY: US Growth ETFs

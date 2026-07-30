@@ -40,9 +40,10 @@ STALE_AFTER_DAYS = 90
 # the render sites and the tests agree on it exactly.
 STALE_NOTE = "static data stale — refresh required"
 
-# CSV column -> the Fundamentals attribute the static value fills. ``share_class`` and
-# ``domicile`` are DESCRIPTIVE metadata carried on the row (no factor reads them), so they
-# map to nothing here — only these three numeric fields fill the ETF factor inputs.
+# CSV column -> the Fundamentals attribute the static value fills. ``share_class``,
+# ``domicile``, ``sector`` and ``isin`` are DESCRIPTIVE metadata carried on the row (no
+# factor reads them — see ``static_descriptive``), so they map to nothing here; only these
+# three numeric fields fill the ETF factor inputs.
 STATIC_TO_FUNDAMENTALS: dict[str, str] = {
     "expense_ratio": "net_expense_ratio",
     "fund_size": "total_assets",
@@ -70,6 +71,13 @@ class StaticRow:
     domicile: Optional[str]
     source: str
     as_of: str
+    # FUND-PROFILE-1 — DESCRIPTIVE, optional, hand-maintained. ``sector`` is the fund's
+    # display sector (the cohort-fit key: a rank is shown only against a matching-sector
+    # reference group); ``isin`` is shown in the identity header when known. Neither
+    # fills a factor input, and neither is ever inferred — blank means "not assigned" /
+    # "not known". Both are dated by this row's ``as_of``, so a stale row serves neither.
+    sector: Optional[str] = None
+    isin: Optional[str] = None
 
     @property
     def tag(self) -> str:
@@ -94,6 +102,13 @@ class StaticFill:
 
 
 _EMPTY_FILL = StaticFill(filled={}, stale={})
+
+
+def _parse_str(raw: Optional[str]) -> Optional[str]:
+    """A trimmed descriptive cell, or None when blank/absent (an older row that predates
+    the column reads as absent, never as an empty declaration)."""
+    text = (raw or "").strip()
+    return text or None
 
 
 def _parse_float(raw: Optional[str]) -> Optional[float]:
@@ -132,7 +147,9 @@ def load_static(path=DEFAULT_STATIC_PATH) -> dict[str, StaticRow]:
             share_class=(rec.get("share_class") or "").strip() or None,
             domicile=(rec.get("domicile") or "").strip() or None,
             source=(rec.get("source") or "").strip(),
-            as_of=(rec.get("as_of") or "").strip())
+            as_of=(rec.get("as_of") or "").strip(),
+            sector=_parse_str(rec.get("sector")),
+            isin=_parse_str(rec.get("isin")))
     return rows
 
 
@@ -163,6 +180,37 @@ def is_stale(row: StaticRow, today: date, *, max_age_days: int = STALE_AFTER_DAY
     if d is None:
         return True
     return (today - d).days > max_age_days
+
+
+@dataclass(frozen=True)
+class StaticDescriptive:
+    """The DESCRIPTIVE static fields for one name (FUND-PROFILE-1) — sector and ISIN —
+    under the SAME freshness discipline as the numeric fill: a stale entry serves NOTHING
+    and reports the staleness note instead. ``tag`` is the provenance receipt to render
+    next to whichever field was served."""
+
+    sector: Optional[str] = None
+    isin: Optional[str] = None
+    tag: str = ""
+    stale_note: str = ""
+
+
+_EMPTY_DESCRIPTIVE = StaticDescriptive()
+
+
+def static_descriptive(row: Optional[StaticRow], today: date, *,
+                       max_age_days: int = STALE_AFTER_DAYS) -> StaticDescriptive:
+    """Read the descriptive fields off a static row — sector + ISIN with the row's
+    provenance receipt. No row -> nothing. A STALE row (rule: never serve stale silently)
+    -> nothing served and the staleness note reported, so a fund whose row has gone
+    unverified reads as 'sector not assigned' rather than as quietly-old data."""
+    if row is None:
+        return _EMPTY_DESCRIPTIVE
+    if is_stale(row, today, max_age_days=max_age_days):
+        return StaticDescriptive(stale_note=STALE_NOTE)
+    if row.sector is None and row.isin is None:
+        return _EMPTY_DESCRIPTIVE
+    return StaticDescriptive(sector=row.sector, isin=row.isin, tag=row.tag)
 
 
 def _vendor_plausible(fund_field: str, value) -> bool:

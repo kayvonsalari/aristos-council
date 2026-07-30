@@ -231,7 +231,7 @@ def _expense_ratio(fi: FactorInputs) -> Optional[float]:
 
     UNIT (ETFCHK-3): the vendor value is a PERCENT, not a fraction — SCHD's 0.06% arrives
     as ``0.06``. Ranking is unit-invariant so this factor is untouched, but any absolute
-    presentation of the number (e.g. the fee gloss in company_check._expense_ratio_gloss)
+    presentation of the number (e.g. the fee gloss in fund_profile._expense_ratio_gloss)
     MUST divide by 100 first."""
     f = fi.fundamentals
     return f.net_expense_ratio if f is not None else None

@@ -6,7 +6,7 @@ single ``.html`` file — all CSS inline, no external requests, no JS, no build 
 can be mailed, opened anywhere, and printed to PDF by the browser.
 
 HARD CONSTRAINT: this is a PRESENTATION layer, nothing else. The universe ``.md`` report
-and the Company Check ``.txt`` report stay CANONICAL and byte-identical (frozen monthly
+and the Fund Profile ``.txt`` report stay CANONICAL and byte-identical (frozen monthly
 records and the narration-check fixtures depend on them) — this module reads the same
 structured result and writes a second export beside them. It never mutates the result and
 never rewrites the model's prose.
@@ -516,22 +516,26 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
 
 
 # --------------------------------------------------------------------------- #
-# Company Check
+# Fund Profile
 # --------------------------------------------------------------------------- #
-def company_check_html(result, *, run_start: Optional[datetime] = None,
-                       strategy_display_name: str = "") -> str:
-    """The single-name diagnostic as ONE self-contained HTML file (REPORT-HTML-1).
+def fund_profile_html(result, *, run_start: Optional[datetime] = None,
+                      strategy_display_name: str = "") -> str:
+    """The single-name profile as ONE self-contained HTML file (REPORT-HTML-1).
 
-    Renders the same content as the canonical ``.txt`` report — every screen criterion with
-    its observed value and three-valued status, the gates, each factor's value with its
-    source badge and cohort context, the verdict OF RECORD (quoted, never recomputed), the
-    divergence flag, and the data-integrity block with its ⚠ flags as callouts. NO verdict
-    is ever issued here: a rank over a class of one is a fabricated verdict.
+    Renders the same content as the canonical ``.txt`` report — the identity header, every
+    screen criterion with its observed value and three-valued status, the gates, the FULL
+    membership of the reference cohort, the fit warning when the cohort is not a confirmed
+    sector match, each factor's value with its source badge, cohort context and the cohort
+    median, the verdict OF RECORD (quoted, never recomputed), the divergence flag, and the
+    data-integrity block with its ⚠ flags as callouts. NO verdict is ever issued here: a
+    rank over a class of one is a fabricated verdict.
     """
-    from ..company_check import (
-        # The SAME gloss the .txt renders, so the two cannot drift.
+    from ..fund_profile import (
+        # The SAME gloss/builders the .txt renders, so the surfaces cannot drift.
         _expense_ratio_gloss,
         format_factor_value,
+        format_median,
+        identity_rows,
     )
 
     stamp = _local_stamp(run_start)
@@ -540,7 +544,7 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
 
     parts.append(
         '<header class="doc">'
-        '<p class="kicker">Aristos Council · company check · single-name diagnostic</p>'
+        '<p class="kicker">Aristos Council · fund profile · single-name profile</p>'
         f"<h1>{_esc(result.display)}</h1>"
         + _kv([
             ("strategy", f'<code>{_esc(result.rank_strategy_id)}</code>'
@@ -554,12 +558,24 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
           "from a universe run, never from a class of one.</p>"
         "</header>")
 
+    # ----- identity (FUND-PROFILE-1 rule 6): what this instrument IS, with provenance.
+    rows = identity_rows(getattr(result, "identity", None))
+    if rows:
+        parts.append(
+            '<section class="section"><h2>Identity</h2>'
+            + _kv([(r.label,
+                    _esc(r.value)
+                    + (f' <span class="badge">[{_esc(r.source)}]</span>'
+                       if r.source else ""))
+                   for r in rows])
+            + "</section>")
+
     if result.unrateable:
         parts.append(_callout(f"UNRATEABLE — {result.data_integrity.note}. No data, so no "
-                              "diagnosis and no verdict.", kind="alert"))
+                              "profile and no verdict.", kind="alert"))
         parts.append(f'<p class="note">{_inline(result.pointer)}</p>')
         parts.append(_footer())
-        return _document(title=f"Company Check — {result.display}", body="\n".join(parts))
+        return _document(title=f"Fund Profile — {result.display}", body="\n".join(parts))
 
     # ----- screen: every criterion evaluated (a universe run stops at the first fail).
     parts.append('<section class="section"><h2>Screen</h2>')
@@ -611,6 +627,37 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
         parts.append('<section class="section"><h2>Gates — sector / cap / payout</h2>'
                      + _table(["Status", "Gate", "Detail"], body) + "</section>")
 
+    # ----- the reference cohort, in full (rule 3): a comparison group the reader can see.
+    members = getattr(result, "cohort_members", None) or []
+    if members:
+        body = []
+        for m in members:
+            pos = f"#{m.position}" if m.position is not None else "—"
+            if m.tied:
+                pos += " (tied)"
+            ticker = (f"<strong>{_esc(m.ticker)}</strong>" if m.is_profiled
+                      else f'<span class="mono">{_esc(m.ticker)}</span>')
+            name = _esc(m.display) + (" ← this name" if m.is_profiled else "")
+            body.append([f'<span class="pos">{_esc(pos)}</span>', ticker, name,
+                         _verdict_cell(m.verdict), f'<span class="mono">{_esc(m.score)}'
+                                                   "</span>"])
+        parts.append(
+            '<section class="section"><h2>Reference cohort</h2>'
+            f'<p class="note">{_esc(result.cohort_display_name)} '
+            f"({result.reference_universe_id}) · "
+            f"run {_esc(result.reference_run_date or '')}"
+            f" · run id {_esc(result.reference_run_id or '')} · "
+            f"{result.reference_cohort_n} ranked, {result.cohort_excluded_n} excluded · "
+            f"declared sector: {_esc(result.cohort_sector or 'none declared')}</p>"
+            + (f'<p class="note">{_esc(result.cohort_note)}.</p>'
+               if result.cohort_note else "")
+            + _table(["Rank", "Ticker", "Name", "Verdict", "Score"], body)
+            + "</section>")
+
+    # ----- the fit warning (rule 4): ONE plain sentence when the cohort is not a match.
+    if getattr(result, "fit_warning", None):
+        parts.append(_callout(result.fit_warning, kind="alert", label="fit"))
+
     # ----- factor values + cohort context (source as a badge — [static: …] included).
     ref = (f"reference: latest run of {result.reference_universe_id} "
            f"(run {result.reference_run_date}, {result.reference_cohort_n} ranked)"
@@ -619,11 +666,14 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
     items = []
     for fc in result.factors:
         gloss = _expense_ratio_gloss(fc.value) if fc.factor == "expense_ratio" else ""
-        items.append(
-            f"<strong>{_esc(fc.label)}</strong> "
-            f'<span class="mono">({_esc(fc.factor)})</span>: '
-            f"{_esc(format_factor_value(fc.factor, fc.value))}{_esc(gloss)} "
-            f'<span class="badge">[{_esc(fc.source)}]</span> — {_inline(fc.context)}')
+        item = (f"<strong>{_esc(fc.label)}</strong> "
+                f'<span class="mono">({_esc(fc.factor)})</span>: '
+                f"{_esc(format_factor_value(fc.factor, fc.value))}{_esc(gloss)} "
+                f'<span class="badge">[{_esc(fc.source)}]</span> — {_inline(fc.context)}')
+        med = format_median(fc, result.reference_run_date)
+        if med:
+            item += f'<div class="note">↳ {_esc(med)}</div>'
+        items.append(item)
     parts.append('<section class="section"><h2>Factor values + cohort context</h2>'
                  f'<p class="note">{_esc(ref)}</p>' + _bullets(items))
     if result.verdict_of_record:
@@ -653,12 +703,16 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
 
     parts.append(f'<p class="note">{_inline(result.pointer)}</p>')
     parts.append(_footer())
-    title = f"Company Check — {result.display}" + (f" — {stamp}" if stamp else "")
+    title = f"Fund Profile — {result.display}" + (f" — {stamp}" if stamp else "")
     return _document(title=title, body="\n".join(parts))
+
+
+# DEPRECATED internal alias (FUND-PROFILE-1) — the export is user-visibly "Fund Profile".
+company_check_html = fund_profile_html
 
 
 def _num(value) -> str:
     """A screen cell's number, formatted exactly as the .txt report formats it (one source
-    of truth — company_check._fmt_num)."""
-    from ..company_check import _fmt_num
+    of truth — fund_profile._fmt_num)."""
+    from ..fund_profile import _fmt_num
     return _fmt_num(value)

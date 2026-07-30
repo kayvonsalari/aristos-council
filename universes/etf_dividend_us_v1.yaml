@@ -26,3 +26,17 @@ tickers:
   - SPYD
   - DGRO
   - FVD
+# FUND-PROFILE-1 — declared sector for the cohort and per instrument (see
+# etf_growth_ucits_v1 for the rule and the hand-maintenance note).
+sector: US Dividend ETFs
+instrument_sectors:
+  VIG: US Dividend ETFs
+  VYM: US Dividend ETFs
+  SCHD: US Dividend ETFs
+  DVY: US Dividend ETFs
+  SDY: US Dividend ETFs
+  NOBL: US Dividend ETFs
+  HDV: US Dividend ETFs
+  SPYD: US Dividend ETFs
+  DGRO: US Dividend ETFs
+  FVD: US Dividend ETFs

@@ -63,9 +63,12 @@ ROOT = Path(__file__).resolve().parents[1]
 UNIVERSES_DIR = ROOT / "universes"
 _BASE_URL = "https://eodhd.com/api"
 
-# The CSV column order, kept in lock-step with data/etf_static.csv's header.
+# The CSV column order, kept in lock-step with data/etf_static.csv's header. ``sector`` and
+# ``isin`` (FUND-PROFILE-1) are DESCRIPTIVE and hand-assigned — this script emits them BLANK
+# on purpose: a sector is an editorial classification and an ISIN a registry fact, neither of
+# which a generator may invent. The human fills them in when pasting the row.
 COLUMNS = ["ticker", "expense_ratio", "fund_size", "distribution_yield",
-           "share_class", "domicile", "source", "as_of"]
+           "share_class", "domicile", "source", "as_of", "sector", "isin"]
 
 SOURCE_BASE = "EODHD fundamentals API"
 
@@ -229,6 +232,8 @@ def format_row(draft: StaticRowDraft) -> str:
         draft.domicile or "",
         draft.source,
         draft.as_of,
+        "",                     # sector — hand-assigned (never generated)
+        "",                     # isin — hand-verified (never generated)
     ]
     return ",".join(cells)
 

@@ -10,7 +10,7 @@
 #
 # MONTHLY REFRESH RITUAL: once a month, open each fund's official factsheet (the `source`
 # named on its row), re-verify expense_ratio / fund_size / distribution_yield / share_class
-# / domicile against it, and set `as_of` to today's date (YYYY-MM-DD) on every row you
+# / domicile / sector / isin against it, and set `as_of` to today's date (YYYY-MM-DD) on every row you
 # confirm. A row you cannot re-verify this cycle is left as-is and will cross the 90-day
 # staleness line on its own, abstaining until refreshed — do NOT bump `as_of` without
 # re-checking the numbers. All rows are human-entered; nothing here is scraped.
@@ -32,28 +32,35 @@
 #   domicile            — legal domicile (e.g. US, IE, LU).
 #   source              — the factsheet / authority the row was verified against.
 #   as_of               — YYYY-MM-DD date the row was last human-verified.
+#   sector              — OPTIONAL display sector for the fund (FUND-PROFILE-1), e.g.
+#                         "Global Equity" or "Clean Energy". BLANK = not assigned, and
+#                         Fund Profile then shows NO sector rank (never a guessed one).
+#                         Dated by as_of like every other cell: a stale row serves no
+#                         sector at all.
+#   isin                — OPTIONAL ISIN, shown in the Fund Profile identity header when
+#                         known. BLANK = not known; never invented.
 #
 # The row below is a NON-REAL EXAMPLE (ticker EXMPL) documenting the format only — it
 # matches no real fund, so it is never served. Real rows are added human-verified.
-ticker,expense_ratio,fund_size,distribution_yield,share_class,domicile,source,as_of
-EXMPL,0.06,1000000000,0.035,dist,US,example row — not real data,2026-06-01
-VHYL.L,0.29,7680000000,0.0463,dist,IE,EODHD fundamentals API,2026-07-15
-FUSD.L,0.25,1178880000,0.0143,dist,IE,EODHD fundamentals API,2026-07-15
-USDV.L,0.35,3699870000,0.0311,dist,IE,EODHD fundamentals API,2026-07-15
-ZPRG.DE,0.45,1044292480,0.0577,dist,IE,EODHD fundamentals API,2026-07-15
-TDIV.AS,0.38,8013193262,0.0318,dist,NL,EODHD fundamentals API,2026-07-15
-ISPA.DE,0.46,4564701434,0.0376,dist,DE,EODHD fundamentals API,2026-07-15
-SEDY.L,0.65,1266000000,0.0923,dist,IE,EODHD fundamentals API,2026-07-15
-IDVY.AS,0.40,1546513567,0.0456,dist,IE,EODHD fundamentals API,2026-07-15
-SPYW.DE,0.30,1666281346,0.0354,dist,IE,EODHD fundamentals API,2026-07-15
-EQQQ.L,0.30,13390438020,0.0101,dist,IE,EODHD fundamentals API,2026-07-15
-CNDX.L,0.30,,,acc,IE,EODHD fundamentals API — AUM implausible (270B) omitted pending EODHD-1 diagnosis,2026-07-15
-XDEM.DE,0.26,2175189956,0.0339,dist,IE,EODHD fundamentals API,2026-07-15
-IWMO.L,0.25,2619980000,0,acc,IE,EODHD fundamentals API,2026-07-15
-IUIT.L,0.15,9852580000,0,acc,IE,EODHD fundamentals API,2026-07-15
-SMH.L,0.35,8406000000,0,acc,IE,EODHD fundamentals API,2026-07-15
-VWCE.DE,0.19,24771393536,,,IE,EODHD fundamentals API,2026-07-21
-SXR8.DE,0.07,149819249726,,,IE,EODHD fundamentals API,2026-07-21
-VUSA.AS,0.07,42990840000,0.0182,dist,IE,EODHD fundamentals API,2026-07-21
-EUNL.DE,0.2,101700000000,0,acc,IE,EODHD fundamentals API,2026-07-21
-SPYY.DE,0.12,1850650000,0.0263,dist,IE,EODHD fundamentals API,2026-07-21
+ticker,expense_ratio,fund_size,distribution_yield,share_class,domicile,source,as_of,sector,isin
+EXMPL,0.06,1000000000,0.035,dist,US,example row — not real data,2026-06-01,Example Sector,IE00EXAMPLE0
+VHYL.L,0.29,7680000000,0.0463,dist,IE,EODHD fundamentals API,2026-07-15,,
+FUSD.L,0.25,1178880000,0.0143,dist,IE,EODHD fundamentals API,2026-07-15,,
+USDV.L,0.35,3699870000,0.0311,dist,IE,EODHD fundamentals API,2026-07-15,,
+ZPRG.DE,0.45,1044292480,0.0577,dist,IE,EODHD fundamentals API,2026-07-15,,
+TDIV.AS,0.38,8013193262,0.0318,dist,NL,EODHD fundamentals API,2026-07-15,,
+ISPA.DE,0.46,4564701434,0.0376,dist,DE,EODHD fundamentals API,2026-07-15,,
+SEDY.L,0.65,1266000000,0.0923,dist,IE,EODHD fundamentals API,2026-07-15,,
+IDVY.AS,0.40,1546513567,0.0456,dist,IE,EODHD fundamentals API,2026-07-15,,
+SPYW.DE,0.30,1666281346,0.0354,dist,IE,EODHD fundamentals API,2026-07-15,,
+EQQQ.L,0.30,13390438020,0.0101,dist,IE,EODHD fundamentals API,2026-07-15,,
+CNDX.L,0.30,,,acc,IE,EODHD fundamentals API — AUM implausible (270B) omitted pending EODHD-1 diagnosis,2026-07-15,,
+XDEM.DE,0.26,2175189956,0.0339,dist,IE,EODHD fundamentals API,2026-07-15,,
+IWMO.L,0.25,2619980000,0,acc,IE,EODHD fundamentals API,2026-07-15,,
+IUIT.L,0.15,9852580000,0,acc,IE,EODHD fundamentals API,2026-07-15,,
+SMH.L,0.35,8406000000,0,acc,IE,EODHD fundamentals API,2026-07-15,,
+VWCE.DE,0.19,24771393536,,,IE,EODHD fundamentals API,2026-07-21,,
+SXR8.DE,0.07,149819249726,,,IE,EODHD fundamentals API,2026-07-21,,
+VUSA.AS,0.07,42990840000,0.0182,dist,IE,EODHD fundamentals API,2026-07-21,,
+EUNL.DE,0.2,101700000000,0,acc,IE,EODHD fundamentals API,2026-07-21,,
+SPYY.DE,0.12,1850650000,0.0263,dist,IE,EODHD fundamentals API,2026-07-21,,

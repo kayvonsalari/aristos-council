@@ -300,7 +300,7 @@ def _dividend_yield(info: dict) -> float | None:
     ``0.0`` in a flaky ``info`` block for a fund that truly distributes (the same
     rule-3 flakiness that drops
     ``dividendRate``). Reading that ``0.0`` fabricated a false ``0`` distribution yield
-    (Company Check rendered ``0 [computed]`` for SCHD). ``_fund_distribution_yield`` reads
+    (Fund Profile rendered ``0 [computed]`` for SCHD). ``_fund_distribution_yield`` reads
     the canonical field, prefers the first POSITIVE source, and NOT-EVALUATES (None) when
     no positive source exists — never a defaulted ``0`` (the ``-0 ROIC`` bug class)."""
     if _looks_like_fund(info):
@@ -333,7 +333,7 @@ def _looks_like_fund(info: dict) -> bool:
     summaryDetail block), and the daily cache then freezes that ``quoteType``-less shape
     for the rest of the day. With no ``quoteType`` SCHD fell through to the equity path,
     read a spurious ``trailingAnnualDividendYield == 0.0``, and fabricated a ``0``
-    distribution yield (``0 [computed]`` in Company Check) — while the universe run, whose
+    distribution yield (``0 [computed]`` in Fund Profile) — while the universe run, whose
     batch fetch caught a populated ``quoteType``, ranked the field correctly. yfinance
     populates ``yield`` ONLY for pooled funds (an equity's ``info`` has no such key), so
     its presence is an independent, reliable fund signal that survives the drop. ETFCHK-1's

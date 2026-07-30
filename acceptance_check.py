@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT / "src"))
 OUT = ROOT / "acceptance_out"
 OUT.mkdir(exist_ok=True)
 
-from aristos_council.company_check import format_company_check, run_company_check
+from aristos_council.fund_profile import format_fund_profile, run_fund_profile
 from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
 from aristos_council.data.provider import select_market_adapter
 from aristos_council.pipeline import run_rank_pipeline
@@ -106,12 +106,12 @@ def t2() -> None:
         f"drift dissolved the MRK/PG tie — ODD, note it)")
 
 
-# ---------- helper: run a company check, save text, return it ---------------
+# ---------- helper: run a fund profile, save text, return it ----------------
 def cc(ticker: str, strategy: str, reference: str, fname: str) -> str:
-    res = run_company_check(ticker, strategy, reference, adapter=adapter(),
-                            strategies_dir=STRATS, universes_dir=UNIS,
-                            runs_dir=RUNS, today=date.today())
-    text = format_company_check(res)
+    res = run_fund_profile(ticker, strategy, reference, adapter=adapter(),
+                           strategies_dir=STRATS, universes_dir=UNIS,
+                           runs_dir=RUNS, today=date.today())
+    text = format_fund_profile(res)
     (OUT / fname).write_text(text, encoding="utf-8")
     return text
 

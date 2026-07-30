@@ -79,10 +79,10 @@ def test_snapshot_cli_rejects_positional_and_universe_id_together(monkeypatch, c
     assert "mutually exclusive" in capsys.readouterr().err
 
 
-def test_company_check_cli_rejects_pasted_path(monkeypatch, capsys):
-    mod = _load("_cc_cli", "examples/company_check.py")
+def test_fund_profile_cli_rejects_pasted_path(monkeypatch, capsys):
+    mod = _load("_fp_cli", "examples/fund_profile.py")
     monkeypatch.setattr(sys, "argv",
-                        ["cc", _PASTE, "--strategy", "magic_formula_momentum_v1"])
+                        ["fp", _PASTE, "--strategy", "magic_formula_momentum_v1"])
     with pytest.raises(SystemExit):
         mod.main()
     assert _PASTE in capsys.readouterr().err

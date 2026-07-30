@@ -9,6 +9,11 @@ id: financials_16_v1
 display_name: Financials 16
 role: exploratory universe — the financials lens's first cohort
 description: US large-cap financials — banks, brokers, asset managers, payment networks, insurers.
+# FUND-PROFILE-1 — the COHORT's declared sector. Fund Profile shows an ordinal rank against
+# this cohort only for a member of a frozen run, or a name whose own sector matches this
+# string; anything else gets a fit warning and rank-free values. Deliberately the vendor's
+# GICS spelling, so a US financial that is NOT in this list still matches honestly.
+sector: Financial Services
 created: "2026-07-10"
 rationale: >-
   US large-cap financials incl. two payment networks (the lens's known odd corner) and
