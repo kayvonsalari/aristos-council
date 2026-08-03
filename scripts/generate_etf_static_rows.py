@@ -31,6 +31,16 @@ Accumulated sanity guards (learned live; see CLAUDE.md rule 3 and the CNDX incid
 - **Domicile from ETF_Data.** ``ETF_Data.Domicile`` (a country name) is mapped to the
   two-letter code the CSV already uses (Ireland -> IE, ...); an unrecognized value passes
   through verbatim.
+- **Fund base currency required for a fund size (DATA-HYGIENE-1).** ``TotalAssets`` is
+  quoted in the FUND'S base currency, not the listing's (IQQH's 4.17bn is USD though it
+  lists on XETRA in EUR). The row therefore carries a ``fund_size_currency`` cell probed
+  from the payload's fund-level currency field; when none is present the fund size is
+  BLANKED with a note (abstain, never guess), keeping the raw number in the note so the
+  human can verify amount + currency from the factsheet. The LISTING currency
+  (``General::CurrencyCode``) is deliberately NOT used as a substitute.
+- **Null sentinels cleaned.** EODHD writes the literal string ``"NA"`` where a value is
+  absent; every field read here goes through the adapter's ``clean_sentinel``, so a
+  placeholder becomes an absence instead of a fake value.
 - **Exchange-suffix translation for the EODHD query only.** EODHD's ``/fundamentals``
   endpoint 404s on this repo's ``.DE`` (Xetra) suffix — it only recognizes ``.XETRA``
   (confirmed live: VWCE.DE/SXR8.DE/EUNL.DE/SPYY.DE all 404, VWCE.XETRA/SXR8.XETRA/
@@ -57,6 +67,8 @@ from pathlib import Path
 from typing import Optional
 
 from aristos_council.data.adapter import normalize_ticker
+from aristos_council.data.eodhd_adapter import clean_sentinel
+from aristos_council.fund_currency import normalize_currency_code
 from aristos_council.universe import load_universe_by_id
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,8 +76,11 @@ UNIVERSES_DIR = ROOT / "universes"
 _BASE_URL = "https://eodhd.com/api"
 
 # The CSV column order, kept in lock-step with data/etf_static.csv's header.
+# ``fund_size_currency`` is LAST (DATA-HYGIENE-1): appending it means the rows committed
+# before it existed still parse correctly (csv maps by position), so no human-verified row
+# had to be rewritten.
 COLUMNS = ["ticker", "expense_ratio", "fund_size", "distribution_yield",
-           "share_class", "domicile", "source", "as_of"]
+           "share_class", "domicile", "source", "as_of", "fund_size_currency"]
 
 SOURCE_BASE = "EODHD fundamentals API"
 
@@ -89,6 +104,48 @@ _DOMICILE_CODES = {
     "usa": "US",
     "switzerland": "CH",
 }
+
+# --- fund BASE-currency probe (DATA-HYGIENE-1) -------------------------------------- #
+# EODHD reports ``ETF_Data.TotalAssets`` in the FUND'S BASE CURRENCY, not in the currency of
+# the listing we queried. Verified live: IQQH's 4,172,812,800 matches Citywire's "4.2bn USD"
+# (base currency USD) while the German factsheets quote EUR. Without the currency the number
+# is not comparable across a cohort, so the row must carry it — or abstain.
+#
+# Probe order below; the FIRST field present with a usable 3-letter code wins. The
+# candidates are the fund-level currency keys to look for in an ETF payload; an absent one
+# is simply skipped, so an extra candidate can never invent a value (which of them EODHD
+# actually serves is the live-probe question recorded in the PR).
+#
+# DELIBERATELY NOT A CANDIDATE: ``General::CurrencyCode``. That is the LISTING/price
+# currency of the symbol queried — precisely the value that mis-states a fund's base
+# currency (IQQH lists on XETRA in EUR while its assets are reported in USD), so reading it
+# here would relabel a USD amount as EUR: the exact error this change exists to remove.
+# When no fund-level currency is found we ABSTAIN (blank the fund size with a note) rather
+# than guess.
+_FUND_CCY_PATHS: tuple[tuple[str, ...], ...] = (
+    ("ETF_Data", "Currency"),
+    ("ETF_Data", "Currency_Code"),
+    ("ETF_Data", "Fund_Currency"),
+    ("ETF_Data", "Base_Currency"),
+)
+
+
+def fund_base_currency(payload: dict) -> Optional[str]:
+    """The fund's BASE currency (the currency ``TotalAssets`` is quoted in), or None.
+
+    Probes ``_FUND_CCY_PATHS`` in order, sentinel-cleans each candidate ("NA" is an
+    absence) and returns the first usable 3-letter code, upper-cased. None when no
+    fund-level currency field is present — the caller then abstains on fund_size instead of
+    assuming one. Pure: no network."""
+    for path in _FUND_CCY_PATHS:
+        node: object = payload or {}
+        for segment in path:
+            node = (node or {}).get(segment) if isinstance(node, dict) else None
+        code = normalize_currency_code(clean_sentinel(node))
+        if code is not None:
+            return code
+    return None
+
 
 # EODHD spells some exchange suffixes differently from this repo's ticker convention.
 # Currently just Xetra: this repo (and the universe files) use ".DE"; EODHD's API only
@@ -123,6 +180,10 @@ class StaticRowDraft:
     domicile: Optional[str]
     as_of: str
     notes: list[str] = field(default_factory=list)
+    # The fund's base currency, in which ``fund_size`` is quoted (DATA-HYGIENE-1). None
+    # only when the payload carried no fund-level currency — in which case ``fund_size`` is
+    # blanked too (abstain, never guess), so a currency-less size is never emitted.
+    fund_size_currency: Optional[str] = None
 
     @property
     def source(self) -> str:
@@ -134,11 +195,12 @@ class StaticRowDraft:
 
 
 def _parse_num(raw: object) -> Optional[float]:
-    """EODHD returns numbers as strings, numbers, or null/empty. Coerce to float; None on
-    missing/unparseable/NaN so an absent field stays absent (never a phantom 0)."""
+    """EODHD returns numbers as strings, numbers, null/empty, or a null SENTINEL ("NA").
+    Sentinel-clean first (the SAME helper the adapter uses — DATA-HYGIENE-1), then coerce to
+    float; None on missing/unparseable/NaN so an absent field stays absent (never a phantom
+    0)."""
+    raw = clean_sentinel(raw)
     if raw is None:
-        return None
-    if isinstance(raw, str) and raw.strip() == "":
         return None
     try:
         f = float(raw)  # type: ignore[arg-type]
@@ -149,10 +211,10 @@ def _parse_num(raw: object) -> Optional[float]:
 
 def _domicile_code(raw: object) -> Optional[str]:
     """Map an ETF_Data.Domicile country name to the CSV's short code; pass an unrecognized
-    value through verbatim; None when absent."""
-    if not isinstance(raw, str) or not raw.strip():
+    value through verbatim; None when absent (or a null sentinel — "NA" is not a country)."""
+    text = clean_sentinel(raw)
+    if not isinstance(text, str) or not text:
         return None
-    text = raw.strip()
     return _DOMICILE_CODES.get(text.lower(), text)
 
 
@@ -181,6 +243,16 @@ def build_static_row(ticker: str, payload: dict, *, as_of: str) -> StaticRowDraf
                      "outside 1e7..1.5e12 / verify from factsheet")
         fund_size = None
 
+    # --- fund size currency: no base currency -> ABSTAIN on the size (DATA-HYGIENE-1) --- #
+    # TotalAssets is quoted in the FUND'S base currency; without it the amount cannot be
+    # ranked against another fund's. An unlabelled size is blanked with the raw number kept
+    # in the note, so the human verifying the row can fill BOTH cells from the factsheet.
+    fund_size_currency = fund_base_currency(payload or {})
+    if fund_size is not None and fund_size_currency is None:
+        notes.append(f"fund base currency unavailable — fund size ({fund_size:g}) blanked; "
+                     "verify amount + currency from factsheet")
+        fund_size = None
+
     # --- yield: percent -> fraction ----------------------------------------------------- #
     yield_pct = _parse_num(etf.get("Yield"))
     distribution_yield = None if yield_pct is None else round(yield_pct / 100.0, 4)
@@ -205,6 +277,9 @@ def build_static_row(ticker: str, payload: dict, *, as_of: str) -> StaticRowDraf
         domicile=domicile,
         as_of=as_of,
         notes=notes,
+        # Emitted only alongside a size (a blanked size carries no currency, and vice
+        # versa is impossible — the guard above blanks a currency-less size).
+        fund_size_currency=(fund_size_currency if fund_size is not None else None),
     )
 
 
@@ -229,6 +304,7 @@ def format_row(draft: StaticRowDraft) -> str:
         draft.domicile or "",
         draft.source,
         draft.as_of,
+        draft.fund_size_currency or "",
     ]
     return ",".join(cells)
 

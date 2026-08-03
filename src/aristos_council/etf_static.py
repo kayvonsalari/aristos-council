@@ -33,6 +33,8 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
+from .fund_currency import normalize_currency_code
+
 # An entry older than this ABSTAINS rather than serving silently.
 STALE_AFTER_DAYS = 90
 
@@ -40,9 +42,11 @@ STALE_AFTER_DAYS = 90
 # the render sites and the tests agree on it exactly.
 STALE_NOTE = "static data stale — refresh required"
 
-# CSV column -> the Fundamentals attribute the static value fills. ``share_class`` and
-# ``domicile`` are DESCRIPTIVE metadata carried on the row (no factor reads them), so they
-# map to nothing here — only these three numeric fields fill the ETF factor inputs.
+# CSV column -> the Fundamentals attribute the static value fills. ``share_class``,
+# ``domicile`` and ``fund_size_currency`` are metadata carried on the row (no factor reads
+# them directly — the currency is a UNIT for fund_size, consumed by the EUR normalisation
+# in ``factors``), so they map to nothing here: only these three numeric fields fill the
+# ETF factor inputs.
 STATIC_TO_FUNDAMENTALS: dict[str, str] = {
     "expense_ratio": "net_expense_ratio",
     "fund_size": "total_assets",
@@ -60,7 +64,14 @@ class StaticRow:
     """One committed, human-verified static entry for an ETF. Numeric fields are None
     when the file leaves the cell blank (nothing to fill); ``share_class``/``domicile``
     are descriptive. ``as_of`` is 'YYYY-MM-DD' — the date the human verified the row,
-    which the staleness guard reads."""
+    which the staleness guard reads.
+
+    ``fund_size_currency`` (DATA-HYGIENE-1) is the fund's BASE currency, in which
+    ``fund_size`` is quoted — the vendor reports total assets in the fund's own currency,
+    not the listing's, so the amount is meaningless for a cross-fund ranking without it.
+    It is the LAST column and defaults to None so rows written before the column existed
+    still load: such a row is FLAGGED as currency-unverified and passed through
+    unconverted, never silently reinterpreted as EUR (see ``fund_currency``)."""
 
     ticker: str
     expense_ratio: Optional[float]
@@ -70,6 +81,7 @@ class StaticRow:
     domicile: Optional[str]
     source: str
     as_of: str
+    fund_size_currency: Optional[str] = None
 
     @property
     def tag(self) -> str:
@@ -83,10 +95,16 @@ class StaticFill:
     """The outcome of applying the static layer to ONE name: which Fundamentals fields
     were filled from static (field -> provenance tag) and which were WITHHELD because the
     entry is stale (field -> the staleness note). Both empty for a name the layer didn't
-    touch (a stock, or an ETF with no matching row)."""
+    touch (a stock, or an ETF with no matching row).
+
+    ``fund_size_currency`` (DATA-HYGIENE-1) is the base currency of a fund_size THIS FILL
+    served, so the caller can normalise it to EUR at a dated FX rate; None when fund_size
+    did not come from static or the row carries no currency (-> flagged unverified, never
+    assumed). No FX happens here — this module stays pure/offline."""
 
     filled: dict[str, str]
     stale: dict[str, str]
+    fund_size_currency: Optional[str] = None
 
     @property
     def touched(self) -> bool:
@@ -132,7 +150,12 @@ def load_static(path=DEFAULT_STATIC_PATH) -> dict[str, StaticRow]:
             share_class=(rec.get("share_class") or "").strip() or None,
             domicile=(rec.get("domicile") or "").strip() or None,
             source=(rec.get("source") or "").strip(),
-            as_of=(rec.get("as_of") or "").strip())
+            as_of=(rec.get("as_of") or "").strip(),
+            # DATA-HYGIENE-1: the LAST column, added after the first rows were committed.
+            # A pre-column row (8 cells under a 9-column header) yields None here — csv
+            # maps by position, so appending the column can never shift an existing row's
+            # values — and is flagged currency-unverified downstream.
+            fund_size_currency=normalize_currency_code(rec.get("fund_size_currency")))
     return rows
 
 
@@ -213,4 +236,9 @@ def apply_static_fill(fundamentals, *, kind: Optional[str], row: Optional[Static
         filled[fund_field] = row.tag
     if updates:
         fundamentals = replace(fundamentals, **updates)
-    return fundamentals, StaticFill(filled=filled, stale=stale_fields)
+    # DATA-HYGIENE-1: report the base currency of a fund_size WE served, so the caller can
+    # normalise it to EUR at a dated rate. A vendor-served or withheld fund_size, or a row
+    # with no currency cell, reports None — the caller flags it, never assumes EUR.
+    fund_ccy = row.fund_size_currency if "total_assets" in filled else None
+    return fundamentals, StaticFill(filled=filled, stale=stale_fields,
+                                    fund_size_currency=fund_ccy)

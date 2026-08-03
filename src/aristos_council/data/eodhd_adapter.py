@@ -22,6 +22,13 @@ Raw values jump at splits (Nestlé 2002: value 0.64 vs unadjustedValue 6.40) and
 would manufacture false streak breaks. The adjusted ``value`` is continuous
 through splits, so it is the only correct input to the year-over-year streak.
 
+Null sentinels (DATA-HYGIENE-1)
+-------------------------------
+EODHD writes the literal string ``"NA"`` where a field has no value (observed live on
+``General::ISIN`` for XETRA ETF records). ``clean_sentinel`` — applied uniformly to every
+string field and inside ``_coerce_float`` — maps that family of placeholders to None
+BEFORE parsing, so an absence abstains instead of leaking a fake value downstream.
+
 Key handling: read from EODHD_API_KEY env var (or constructor); never hard-code.
 HTTP errors / empty arrays map to DataUnavailable — never a silent zero.
 
@@ -56,8 +63,47 @@ _NOT_READY = (
 )
 
 
+# --- EODHD null sentinels (DATA-HYGIENE-1) --------------------------------------- #
+# EODHD writes a literal PLACEHOLDER STRING where a field has no value, instead of JSON
+# null — confirmed live on XETRA ETF records (``General::ISIN == "NA"``) and suspected on
+# the fund yield / expense fields (SPYD.DE distribution_yield and EUDF.DE expense_ratio
+# both abstained). A placeholder is an ABSENCE, so it must become None BEFORE any parsing:
+# a string "NA" that reaches a factor or a report is a fabricated value, and the null≠false
+# discipline (CLAUDE.md rule 3) says an absence ABSTAINS — it never becomes a phantom fail
+# or a phantom zero. Matching is case-insensitive and trimmed.
+_NULL_SENTINELS = frozenset({"NA", "N/A", "NONE", "-", ""})
+
+
+def clean_sentinel(value: object) -> object:
+    """Map an EODHD null-sentinel string to None; pass every other value through.
+
+    The ONE helper for this, applied uniformly at the EODHD boundary (every string-typed
+    field, and every numeric field before coercion). ``"NA"``, ``"N/A"``, ``"None"``,
+    ``"-"`` and ``""`` are absences in any case, with any surrounding whitespace. A
+    non-sentinel string comes back TRIMMED (leading/trailing whitespace in a vendor string
+    is never meaningful); a non-string (number, None, dict, list) comes back UNCHANGED, so
+    the helper is safe to apply everywhere without inspecting the field's type first.
+
+    Nothing is invented and no abstention semantics change: a cleaned field is None, which
+    abstains exactly as a missing key already does.
+    """
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    return None if text.upper() in _NULL_SENTINELS else text
+
+
+def _clean_str(value: object) -> str | None:
+    """``clean_sentinel`` for a field the DTO types as ``str | None`` (drops a non-string
+    rather than smuggling it into a string field)."""
+    cleaned = clean_sentinel(value)
+    return cleaned if isinstance(cleaned, str) else None
+
+
 def _parse_ex_date(raw: object) -> date | None:
-    """Parse an EODHD ``date`` (YYYY-MM-DD) to a date; None if absent/malformed."""
+    """Parse an EODHD ``date`` (YYYY-MM-DD) to a date; None if absent/malformed
+    (or a null sentinel — ``"NA"`` is an absent date, not a parse error)."""
+    raw = clean_sentinel(raw)
     if not isinstance(raw, str):
         return None
     try:
@@ -76,7 +122,7 @@ def _adjusted_amount(row: dict) -> float | None:
     if not isinstance(row, dict):
         return None
     try:
-        amount = float(row.get("value"))
+        amount = float(clean_sentinel(row.get("value")))   # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
     if amount != amount or amount <= 0:   # NaN or non-positive -> not a real payment
@@ -85,8 +131,10 @@ def _adjusted_amount(row: dict) -> float | None:
 
 
 def _coerce_float(value: object) -> float | None:
-    """EODHD returns numbers as strings, numbers, or null. Coerce to float;
-    None on missing/unparseable/NaN so Fundamentals fields stay Optional."""
+    """EODHD returns numbers as strings, numbers, null, or a null SENTINEL ("NA").
+    Sentinel-clean first (DATA-HYGIENE-1), then coerce to float; None on
+    missing/unparseable/NaN so Fundamentals fields stay Optional."""
+    value = clean_sentinel(value)
     if value is None:
         return None
     try:
@@ -124,6 +172,11 @@ def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
     ``financial_currency`` are carried through verbatim and NEVER converted — a
     non-USD listing must let the USD-denominated ``min_market_cap`` criterion
     abstain (NOT-EVAL), exactly as the SK Hynix run required.
+
+    SENTINELS (DATA-HYGIENE-1): every string-typed field goes through
+    ``clean_sentinel``, so EODHD's literal ``"NA"`` placeholder becomes None and abstains
+    instead of leaking the string into a report (numeric fields are cleaned inside
+    ``_coerce_float``).
     """
     general = data.get("General") or {}
     highlights = data.get("Highlights") or {}
@@ -141,13 +194,16 @@ def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
 
     return Fundamentals(
         ticker=ticker,
-        name=(general.get("Name") or None),
+        name=_clean_str(general.get("Name")),
         market_cap=_coerce_float(highlights.get("MarketCapitalization")),
-        sector=(general.get("Sector") or None),   # rank-engine sector exclusions
+        sector=_clean_str(general.get("Sector")),   # rank-engine sector exclusions
+        # Instrument identity. Carried for cross-checking only (no factor reads it) — and
+        # the field the "NA" sentinel was first observed on live.
+        isin=_clean_str(general.get("ISIN")),
         # Listing/price currency (General) and statements currency (Income stmt).
-        currency=(general.get("CurrencyCode") or None),
-        financial_currency=(income.get("currency_symbol")
-                            or general.get("CurrencyCode") or None),
+        currency=_clean_str(general.get("CurrencyCode")),
+        financial_currency=(_clean_str(income.get("currency_symbol"))
+                            or _clean_str(general.get("CurrencyCode"))),
         # EODHD's Highlights::DividendYield is already a DECIMAL (0.0289); the
         # backstop is a no-op unless a future response drifts to percent (>100%).
         dividend_yield=sane_dividend_yield(_coerce_float(highlights.get("DividendYield"))),

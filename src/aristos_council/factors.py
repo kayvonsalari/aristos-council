@@ -16,12 +16,21 @@ declares each factor's NATURAL direction (is higher or lower better?).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import Callable, Optional
 
 from .data.adapter import DataUnavailable, Fundamentals
 from .etf_static import StaticFill, apply_static_fill, default_static_rows
+from .fund_currency import (
+    FUND_SIZE_CCY,
+    FX_UNAVAILABLE_NOTE,
+    UNVERIFIED_CCY_NOTE,
+    FundSizeConversion,
+    convert_fund_size,
+    needs_conversion,
+    normalize_currency_code,
+)
 from .tools.screening import revenue_cagr, through_cycle_roic
 from .tools.technical import (
     _TD_6M,
@@ -74,6 +83,21 @@ class FactorInputs:
     # or an ETF the layer didn't touch, so the ETF factors' source tags degrade to the
     # generic computed/abstained exactly as before.
     static: Optional[StaticFill] = None
+    # fund_size base-currency normalisation (DATA-HYGIENE-1). The vendor reports an ETF's
+    # total assets in the FUND'S base currency, so a cross-fund ranking must compare ONE
+    # currency. Exactly one of these is set for a served fund_size:
+    #   fund_size_fx                 — converted to EUR; carries the dated receipt.
+    #   fund_size_fx_failed          — source currency known, rate unavailable -> the value
+    #                                  is WITHHELD (total_assets set to None) and the
+    #                                  factor abstains; never a mixed-currency number.
+    #   fund_size_currency_unverified — no source currency known (a static row written
+    #                                  before the currency column, or a vendor value): the
+    #                                  amount is served UNCONVERTED exactly as before and
+    #                                  FLAGGED, never relabelled EUR.
+    # A fund_size already in EUR needs none of them (nothing to convert).
+    fund_size_fx: Optional[FundSizeConversion] = None
+    fund_size_fx_failed: bool = False
+    fund_size_currency_unverified: bool = False
 
 
 # --- factor functions (pure; None == NOT-EVAL) ---------------------------- #
@@ -239,7 +263,12 @@ def _expense_ratio(fi: FactorInputs) -> Optional[float]:
 
 def _fund_size(fi: FactorInputs) -> Optional[float]:
     """ETF fund size (``total_assets``) — net assets, a liquidity + closure-risk proxy;
-    higher ranks better. None when absent -> the lens abstains."""
+    higher ranks better. None when absent -> the lens abstains.
+
+    CURRENCY (DATA-HYGIENE-1): the value read here is already normalised — the fetch edge
+    (``gather_factor_inputs``) converted it to EUR at a dated rate, withheld it (None) when
+    its currency was known but the rate wasn't, or left it unconverted-and-FLAGGED when no
+    source currency is known. The receipt rides on ``_fund_size_source``."""
     f = fi.fundamentals
     return f.total_assets if f is not None else None
 
@@ -267,8 +296,31 @@ def _expense_ratio_source(fi: FactorInputs) -> str:
     return _etf_field_source(fi, "net_expense_ratio", _expense_ratio(fi))
 
 
+def _with_fx_receipt(base: str, receipt: str) -> str:
+    """Append a currency receipt to a factor's source tag (DATA-HYGIENE-1).
+
+    ``computed`` takes the receipt as its detail (``computed: 4.17bn USD @ 0.86 EUR/USD,
+    2026-07-29``); a receipt-bearing base like ``static: 2026-07-21, EODHD`` keeps its own
+    receipt and the conversion is appended after an em dash, so the tag still STARTS with
+    ``static:`` — the marker the narrator's static-evidence ledger and the report's
+    provenance badge both match on (pipeline._static_factor_evidence)."""
+    return f"{base}: {receipt}" if base == SRC_COMPUTED else f"{base} — {receipt}"
+
+
 def _fund_size_source(fi: FactorInputs) -> str:
-    return _etf_field_source(fi, "total_assets", _fund_size(fi))
+    """The fund_size source tag, extended with its currency disclosure (DATA-HYGIENE-1).
+
+    Three currency outcomes ride on the tag: the dated conversion receipt, the
+    unavailable-rate abstention note (the value was withheld), or the currency-unverified
+    flag on a value served unconverted. Everything else is unchanged."""
+    if fi.fund_size_fx_failed:
+        return FX_UNAVAILABLE_NOTE                    # value withheld -> abstained
+    base = _etf_field_source(fi, "total_assets", _fund_size(fi))
+    if fi.fund_size_fx is not None:
+        return _with_fx_receipt(base, fi.fund_size_fx.tag)
+    if fi.fund_size_currency_unverified:
+        return _with_fx_receipt(base, UNVERIFIED_CCY_NOTE)
+    return base
 
 
 def _price_to_book(fi: FactorInputs) -> Optional[float]:
@@ -379,7 +431,10 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         source_fn=_expense_ratio_source),
     "fund_size": FactorDef(
         "fund_size", _fund_size, "high",
-        "Fund size (total assets)", "ETF net assets — liquidity + closure-risk proxy",
+        "Fund size (total assets, EUR)",
+        "ETF net assets — liquidity + closure-risk proxy; normalised to EUR at a dated FX "
+        "rate (DATA-HYGIENE-1), abstains when the rate is unavailable, flagged when the "
+        "fund's base currency is unknown",
         source_fn=_fund_size_source),
 }
 
@@ -579,7 +634,11 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
     ``static_rows`` is the committed ETF static layer (``{TICKER: StaticRow}``); it
     defaults to the loaded ``data/etf_static.csv`` and is injected explicitly in tests.
     It fills slow ETF fields the vendor doesn't serve for ETF-kind names ONLY (see
-    ``etf_static.apply_static_fill``)."""
+    ``etf_static.apply_static_fill``).
+
+    A served ``fund_size`` is then normalised to EUR (DATA-HYGIENE-1) — converted at a
+    dated rate, withheld when the rate is unavailable, or flagged when its base currency
+    is unknown. See the ``FactorInputs.fund_size_fx*`` fields."""
     from .data.adapter import TransientFetchError
 
     fundamentals = None
@@ -614,6 +673,33 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
             fundamentals, kind=normalize_asset_kind(fundamentals.quote_type),
             row=rows.get(ticker), today=today)
 
+    # fund_size base-currency normalisation (DATA-HYGIENE-1): the vendor reports an ETF's
+    # total assets in the FUND'S base currency (IQQH's 4.17bn is USD though it lists on
+    # XETRA in EUR), so a cross-fund ranking must be brought into ONE currency. The source
+    # currency comes from the static row that served the value; the rate comes through the
+    # SAME cached/frozen adapter price path as the accounts->price FX receipt.
+    fund_size_fx = None
+    fund_size_fx_failed = False
+    fund_size_currency_unverified = False
+    if fundamentals is not None and fundamentals.total_assets is not None:
+        fund_ccy = normalize_currency_code(
+            static_fill.fund_size_currency if static_fill is not None else None)
+        if fund_ccy is None:
+            # No known base currency: serve the amount exactly as before, but FLAG it —
+            # never relabel an unknown currency as EUR (the pre-column static rows).
+            fund_size_currency_unverified = True
+        elif needs_conversion(fund_ccy):
+            rate = _fetch_fx_rate(adapter, fund_ccy, FUND_SIZE_CCY, today=today)
+            fund_size_fx = convert_fund_size(fundamentals.total_assets, fund_ccy, rate,
+                                             today.isoformat())
+            if fund_size_fx is not None:
+                fundamentals = replace(fundamentals, total_assets=fund_size_fx.value)
+            else:
+                # Currency known, rate unavailable -> WITHHOLD (abstain), never mix.
+                fundamentals = replace(fundamentals, total_assets=None)
+                fund_size_fx_failed = True
+        # else: already EUR — nothing to convert, the static receipt stands alone.
+
     # Currency-consistent EV (VERIFY-2 ITEM 1): if the accounts' currency differs from the
     # price currency, fetch the FX rate (same adapter/cache/freeze path). On a mismatch
     # with a failed fetch, mark fx_failed so the EV route abstains rather than mix. A
@@ -638,7 +724,9 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
         return_12m=total_return(closes, _TD_12M) if closes else None,
         annualized_volatility=snap.annualized_volatility if snap else None,
         last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed,
-        static=static_fill)
+        static=static_fill, fund_size_fx=fund_size_fx,
+        fund_size_fx_failed=fund_size_fx_failed,
+        fund_size_currency_unverified=fund_size_currency_unverified)
 
 
 BORDERLINE_TOL = 0.05    # within 5% (relative) of the threshold

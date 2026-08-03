@@ -252,6 +252,11 @@ class Fundamentals:
     quote_type: str | None = None
     net_expense_ratio: float | None = None
     total_assets: float | None = None
+    # Instrument identifier (EODHD ``General::ISIN``), carried for identity/cross-checking
+    # only — no factor or criterion reads it. None when the provider omits it, AND when it
+    # writes its literal ``"NA"`` placeholder: DATA-HYGIENE-1 cleans that sentinel to None
+    # at the adapter boundary, because a sentinel is an absence, never the string "NA".
+    isin: str | None = None
 
     # --- Annual income-statement & balance-sheet series (Sprint 4B) --------- #
     # NEWEST-FIRST lists of clean annual values (NaN years and the trailing

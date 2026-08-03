@@ -2,6 +2,9 @@
 
 These pin the accumulated sanity guards against mocked EODHD payloads; NO live network is
 touched (only ``build_static_row`` / ``format_row`` are exercised, never ``fetch_payload``).
+DATA-HYGIENE-1 added one more guard, pinned here too: a fund size is emitted ONLY with its
+base currency (probed from the payload's fund-level currency field, never from the listing
+currency), otherwise it is blanked with a note.
 The script lives under ``scripts/`` (not on the src import path), so it is loaded by file
 path.
 """
@@ -34,12 +37,14 @@ def _payload(**etf_data):
 def test_wellformed_payload_produces_correct_row():
     draft = gen.build_static_row(
         "vhyl.l",
+        # DATA-HYGIENE-1: a fund size is only emitted alongside its base currency.
         _payload(Ongoing_Charge="0.2900", TotalAssets="7680000000.00",
-                 Yield="4.6300", Domicile="Ireland"),
+                 Currency="USD", Yield="4.6300", Domicile="Ireland"),
         as_of=AS_OF)
     assert draft.ticker == "VHYL.L"                 # normalized (upper-cased)
     assert draft.expense_ratio == 0.29             # from Ongoing_Charge, kept as percent
     assert draft.fund_size == 7680000000.0
+    assert draft.fund_size_currency == "USD"       # the unit the size is quoted in
     assert draft.distribution_yield == 0.0463      # percent -> fraction
     assert draft.share_class == "dist"             # positive yield
     assert draft.domicile == "IE"                  # country name -> code
@@ -50,11 +55,11 @@ def test_wellformed_payload_produces_correct_row():
 def test_format_row_matches_csv_column_order():
     draft = gen.build_static_row(
         "vhyl.l",
-        _payload(Ongoing_Charge="0.29", TotalAssets="7680000000",
+        _payload(Ongoing_Charge="0.29", TotalAssets="7680000000", Currency="USD",
                  Yield="4.63", Domicile="Ireland"),
         as_of=AS_OF)
     line = gen.format_row(draft)
-    assert line == f"VHYL.L,0.29,7680000000,0.0463,dist,IE,{gen.SOURCE_BASE},{AS_OF}"
+    assert line == (f"VHYL.L,0.29,7680000000,0.0463,dist,IE,{gen.SOURCE_BASE},{AS_OF},USD")
 
 
 # --------------------------------------------------------------------------- #
@@ -97,14 +102,17 @@ def test_implausible_fund_size_is_blanked_with_a_note():
 
 
 def test_plausible_boundary_fund_sizes_are_kept():
-    lo = gen.build_static_row("a.de", _payload(Ongoing_Charge="0.1", TotalAssets="1e7"),
-                              as_of=AS_OF)
-    hi = gen.build_static_row("b.de", _payload(Ongoing_Charge="0.1", TotalAssets="1.5e12"),
-                              as_of=AS_OF)
+    lo = gen.build_static_row(
+        "a.de", _payload(Ongoing_Charge="0.1", TotalAssets="1e7", Currency="EUR"),
+        as_of=AS_OF)
+    hi = gen.build_static_row(
+        "b.de", _payload(Ongoing_Charge="0.1", TotalAssets="1.5e12", Currency="EUR"),
+        as_of=AS_OF)
     assert lo.fund_size == 1e7 and hi.fund_size == 1.5e12
     assert lo.notes == [] and hi.notes == []
     too_small = gen.build_static_row(
-        "c.de", _payload(Ongoing_Charge="0.1", TotalAssets="9e6"), as_of=AS_OF)
+        "c.de", _payload(Ongoing_Charge="0.1", TotalAssets="9e6", Currency="EUR"),
+        as_of=AS_OF)
     assert too_small.fund_size is None
     assert any("implausible" in n for n in too_small.notes)
 
@@ -174,6 +182,61 @@ def test_empty_payload_produces_a_row_of_blanks_with_notes():
     assert draft.fund_size is None
     assert draft.distribution_yield is None
     assert draft.share_class is None
+    assert draft.fund_size_currency is None
     assert any("fake-zero" in n for n in draft.notes)   # fee note fires
     line = gen.format_row(draft)
-    assert line == f"X.DE,,,,,,{draft.source},{AS_OF}"
+    # trailing empty cell: fund_size_currency, the LAST column (DATA-HYGIENE-1).
+    assert line == f"X.DE,,,,,,{draft.source},{AS_OF},"
+
+
+# --------------------------------------------------------------------------- #
+# DATA-HYGIENE-1 — a fund size REQUIRES its base currency (never guessed)
+# --------------------------------------------------------------------------- #
+def test_fund_size_without_a_base_currency_is_blanked_with_a_note():
+    # EODHD quotes TotalAssets in the FUND'S base currency; with no currency field the
+    # amount is not comparable across a cohort, so it ABSTAINS (blanked) — the raw number
+    # rides in the note so a human can verify amount + currency from the factsheet.
+    draft = gen.build_static_row(
+        "iqqh.de", _payload(Ongoing_Charge="0.65", TotalAssets="4172812800", Yield="0.5"),
+        as_of=AS_OF)
+    assert draft.fund_size is None
+    assert draft.fund_size_currency is None
+    assert any("fund base currency unavailable" in n for n in draft.notes)
+    assert "4.17281e+09" in draft.source or "4172812800" in draft.source
+    # the other fields are unaffected — the fund still ranks on what IS known.
+    assert draft.expense_ratio == 0.65
+    assert draft.distribution_yield == 0.005
+
+
+def test_listing_currency_is_not_used_as_the_fund_base_currency():
+    # General::CurrencyCode is the LISTING currency (IQQH lists on XETRA in EUR while its
+    # assets are reported in USD). Reading it here would relabel USD as EUR — the exact
+    # error this change removes — so it must NOT satisfy the currency requirement.
+    payload = {"General": {"Name": "iShares Global Clean Energy", "CurrencyCode": "EUR"},
+               "ETF_Data": {"Ongoing_Charge": "0.65", "TotalAssets": "4172812800"}}
+    assert gen.fund_base_currency(payload) is None
+    draft = gen.build_static_row("iqqh.de", payload, as_of=AS_OF)
+    assert draft.fund_size is None and draft.fund_size_currency is None
+
+
+def test_fund_base_currency_probe_order_and_sentinels():
+    # the first candidate present with a usable code wins...
+    assert gen.fund_base_currency({"ETF_Data": {"Currency": "usd"}}) == "USD"
+    assert gen.fund_base_currency({"ETF_Data": {"Fund_Currency": " gbp "}}) == "GBP"
+    assert gen.fund_base_currency({"ETF_Data": {"Base_Currency": "EUR"}}) == "EUR"
+    # ...a null SENTINEL is an absence, and so is an uninterpretable code.
+    assert gen.fund_base_currency({"ETF_Data": {"Currency": "NA"}}) is None
+    assert gen.fund_base_currency({"ETF_Data": {"Currency": "$"}}) is None
+    assert gen.fund_base_currency({}) is None
+    # a sentinel in the first candidate does not stop the probe.
+    assert gen.fund_base_currency(
+        {"ETF_Data": {"Currency": "NA", "Fund_Currency": "CHF"}}) == "CHF"
+
+
+def test_generator_columns_match_the_committed_csv_header():
+    # the emitted column order must stay in lock-step with data/etf_static.csv's header.
+    csv_path = Path(__file__).resolve().parents[1] / "data" / "etf_static.csv"
+    header = next(ln.strip() for ln in csv_path.read_text(encoding="utf-8").splitlines()
+                  if ln.strip() and not ln.lstrip().startswith("#"))
+    assert header.split(",") == gen.COLUMNS
+    assert gen.COLUMNS[-1] == "fund_size_currency"      # appended LAST (see load_static)
