@@ -8,6 +8,8 @@ downloads sorts and reads cleanly. Pure functions — unit-tested without Stream
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -28,6 +30,16 @@ def mode_tag(council_mode: str) -> str:
     return _MODE_TAG.get(council_mode, council_mode)
 
 
+def slugify(text: str) -> str:
+    """ASCII, lowercase, hyphen-separated slug (UI-FIX-1). Accented/umlaut letters fold
+    to their closest ASCII form (NFKD strips the combining mark); anything else
+    non-alphanumeric (spaces, parentheses, em dashes, …) collapses to a single hyphen,
+    with leading/trailing hyphens stripped. Empty input -> empty output — the caller
+    omits the segment rather than inventing a name."""
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
+
+
 def _stamp(run_start: datetime) -> str:
     """Run-start as ``YYYY-MM-DD_HHMM`` in Europe/Berlin. A naive datetime is treated as
     UTC (that's how run-start is captured)."""
@@ -37,12 +49,19 @@ def _stamp(run_start: datetime) -> str:
 
 
 def universe_download_name(strategy_id: str, council_mode: str,
-                           run_start: datetime, *, ext: str = "md") -> str:
+                           run_start: datetime, *, ext: str = "md",
+                           universe_display_name: str = "") -> str:
     """The universe run's download name. A COHORT file: it carries the strategy id, the
     mode and the stamp — never a ticker (no single name owns it). ``ext`` selects the
-    export (``md`` = the canonical markdown record, ``html`` = the presentation export);
-    the default keeps the existing name byte-identical."""
-    return f"universe_{strategy_id}_{mode_tag(council_mode)}_{_stamp(run_start)}.{ext}"
+    export (``md`` = the canonical markdown record, ``html`` = the presentation export).
+
+    ``universe_display_name`` (UI-FIX-1) prefixes a slug of the universe's friendly name
+    (e.g. ``universe_dividend-etfs-us_...``) so a folder of downloads/persisted runs
+    reads which cohort each file holds. Blank (ad-hoc runs with no named manifest) omits
+    the segment — the default keeps the pre-UI-FIX-1 name byte-identical."""
+    slug = slugify(universe_display_name)
+    prefix = f"universe_{slug}_" if slug else "universe_"
+    return f"{prefix}{strategy_id}_{mode_tag(council_mode)}_{_stamp(run_start)}.{ext}"
 
 
 def company_check_download_name(ticker: str, strategy_id: str,
@@ -55,10 +74,12 @@ def company_check_download_name(ticker: str, strategy_id: str,
 
 
 def universe_html_download_name(strategy_id: str, council_mode: str,
-                                run_start: datetime) -> str:
+                                run_start: datetime, *,
+                                universe_display_name: str = "") -> str:
     """The universe run's SELF-CONTAINED HTML export name (REPORT-HTML-1) — the same
     scheme and stamp as the markdown, ``.html`` extension, no ticker."""
-    return universe_download_name(strategy_id, council_mode, run_start, ext="html")
+    return universe_download_name(strategy_id, council_mode, run_start, ext="html",
+                                  universe_display_name=universe_display_name)
 
 
 def company_check_html_download_name(ticker: str, strategy_id: str,
@@ -66,3 +87,10 @@ def company_check_html_download_name(ticker: str, strategy_id: str,
     """The Company Check SELF-CONTAINED HTML export name (REPORT-HTML-1) — the same
     scheme and stamp as the text report, ``.html`` extension, ticker required."""
     return company_check_download_name(ticker, strategy_id, run_start, ext="html")
+
+
+def scoreboard_snapshots_download_name(now: datetime) -> str:
+    """The persisted-snapshots CSV export name (UI-FIX-1). A COHORT-less, ticker-less
+    file (it's the whole scoreboard store), stamped with the moment it was downloaded —
+    the store is append-only and has no single 'run start' of its own."""
+    return f"scoreboard_snapshots_{_stamp(now)}.csv"

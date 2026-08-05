@@ -22,3 +22,7 @@ data_cache/
 runs/
 universes/portfolio_watch_v1.yaml
 acceptance_out/
+# Auto-persisted universe-run .md/.html (UI-FIX-1) — a disposable, byte-identical
+# recovery copy of what the download buttons serve, not the committed report record
+# (reports/<TICKER>/*.json stays committed; only this subdirectory is ignored).
+reports/universe_runs/

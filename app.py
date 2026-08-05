@@ -74,6 +74,9 @@ STRATEGIES_DIR = ROOT / "strategies"
 UNIVERSES_DIR = ROOT / "universes"
 VERDICTS_DIR = ROOT / "verdicts"
 REPORTS_DIR = ROOT / "reports"
+# Auto-persisted universe-run .md/.html (UI-FIX-1) — gitignored, a disposable copy of
+# what the download buttons serve, kept apart from the committed reports/<TICKER>/ tree.
+UNIVERSE_RUNS_DIR = REPORTS_DIR / "universe_runs"
 SNAPSHOTS_CSV = ROOT / "snapshots" / "verdict_consensus.csv"
 ASSETS_DIR = ROOT / "assets"
 LOGO_PATH = ASSETS_DIR / "aristos_council_logo.svg"
@@ -1217,8 +1220,39 @@ def _universe_markdown(result) -> str:
     return "\n".join(lines)
 
 
+def _persist_universe_run(result, run_start: datetime,
+                          universe_display_name: str) -> tuple[Path, Path]:
+    """Auto-persist this run's markdown + HTML to reports/universe_runs/ (UI-FIX-1) the
+    moment the run completes, before rendering — a Streamlit restart before download
+    must never again destroy a completed (possibly paid) run. Byte-identical to what the
+    download buttons serve: both read the SAME builder functions."""
+    from aristos_council.download_names import (
+        universe_download_name, universe_html_download_name)
+    from aristos_council.export.report_html import universe_report_html
+    from aristos_council.persistence.universe_runs import save_universe_run
+
+    m = result.meta
+    md_name = universe_download_name(m["rank_strategy_id"], m["council_mode"], run_start,
+                                     universe_display_name=universe_display_name)
+    html_name = universe_html_download_name(
+        m["rank_strategy_id"], m["council_mode"], run_start,
+        universe_display_name=universe_display_name)
+    md_bytes = _universe_markdown(result).encode("utf-8")
+    html_bytes = universe_report_html(result, run_start=run_start).encode("utf-8")
+    return save_universe_run(md_bytes, html_bytes, md_name=md_name, html_name=html_name,
+                             out_dir=UNIVERSE_RUNS_DIR)
+
+
 def _render_universe_result(result) -> None:
     m = result.meta
+
+    # UI-FIX-1: where this run landed on disk, prominent — the first thing a user sees
+    # so a completed (possibly paid) run is never mistaken for session-only output.
+    persisted = st.session_state.get("uni_persisted_paths")
+    if persisted:
+        md_path, html_path = persisted
+        st.success(f"💾 Saved to: `{md_path.relative_to(ROOT)}` and "
+                  f"`{html_path.relative_to(ROOT)}`")
 
     # ITEM 6: the confirmation line first — a wrong dropdown is visible immediately.
     st.caption(_confirmation_line(m))
@@ -1323,29 +1357,32 @@ def _render_universe_result(result) -> None:
         else:
             st.caption("No names reached the council.")
 
-    # 6 — download the run (no new on-disk storage). Unique, self-describing filenames:
-    # strategy + mode + run-start (Europe/Berlin) — ITEM 6. TWO exports side by side
-    # (REPORT-HTML-1): the markdown stays the CANONICAL machine-readable record, the HTML
-    # is the self-contained presentation copy for people outside the repo.
+    # 6 — download the run (a convenience copy; UI-FIX-1 already auto-persisted the same
+    # bytes above). Unique, self-describing filenames: universe display-name slug +
+    # strategy + mode + run-start (Europe/Berlin) — ITEM 6 / UI-FIX-1. TWO exports side
+    # by side (REPORT-HTML-1): the markdown stays the CANONICAL machine-readable record,
+    # the HTML is the self-contained presentation copy for people outside the repo.
     from aristos_council.download_names import (
         universe_download_name, universe_html_download_name)
     from aristos_council.export.report_html import universe_report_html
 
     run_start = st.session_state.get("uni_run_start") or datetime.now(timezone.utc)
+    uni_display_name = st.session_state.get("uni_universe_display_name", "")
+    md_name = universe_download_name(m["rank_strategy_id"], m["council_mode"], run_start,
+                                     universe_display_name=uni_display_name)
+    html_name = universe_html_download_name(
+        m["rank_strategy_id"], m["council_mode"], run_start,
+        universe_display_name=uni_display_name)
     dl_md, dl_html = st.columns(2)
     with dl_md:
         st.download_button(
-            "⬇ Download run as markdown",
-            data=_universe_markdown(result),
-            file_name=universe_download_name(m["rank_strategy_id"], m["council_mode"],
-                                             run_start),
+            f"⬇ Download run as markdown — {md_name}",
+            data=_universe_markdown(result), file_name=md_name,
             mime="text/markdown", key="uni_download")
     with dl_html:
         st.download_button(
-            "⬇ Download report (HTML)",
-            data=universe_report_html(result, run_start=run_start),
-            file_name=universe_html_download_name(m["rank_strategy_id"],
-                                                  m["council_mode"], run_start),
+            f"⬇ Download report (HTML) — {html_name}",
+            data=universe_report_html(result, run_start=run_start), file_name=html_name,
             mime="text/html", key="uni_download_html")
     st.caption("Markdown is the canonical machine-readable record. The HTML is one "
                "self-contained file (no external requests) for sharing outside the "
@@ -1412,10 +1449,12 @@ def render_universe_tab(show_validation: bool = False) -> None:
             key="uni_universe", height=120, placeholder="AAPL MSFT GOOGL AMZN META …")
         universe = _parse_universe(raw)
         universe_id = None                          # -> adhoc:<hash> in the record
+        universe_display_name = ""                   # no manifest -> nothing to slug
     else:
         picked = ordered[source_labels.index(source)]
         universe = list(picked.tickers)
         universe_id = picked.id
+        universe_display_name = picked.display_name
         st.caption(f"`{picked.id}` · {len(universe)} names")
         if universe_role(picked):
             st.caption(f"↳ {universe_role(picked)}")
@@ -1509,6 +1548,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
             status.update(label="Done.", state="complete")
             st.session_state["uni_result"] = result
             st.session_state["uni_run_start"] = run_start
+            st.session_state["uni_universe_display_name"] = universe_display_name
+            # UI-FIX-1: persist BEFORE rendering — a completed (possibly paid) run must
+            # survive a restart even if nobody clicks a download button.
+            st.session_state["uni_persisted_paths"] = _persist_universe_run(
+                result, run_start, universe_display_name)
 
     result = st.session_state.get("uni_result")
     if result is not None:
@@ -1519,8 +1563,6 @@ def render_universe_tab(show_validation: bool = False) -> None:
     render_universe_editor(rank_strategy, mode=mode, ranker_only=ranker_only,
                            has_key=has_key, show_validation=show_validation,
                            narrate_coverage=narrate_coverage)
-
-    _render_snapshot_history()
 
 
 def render_universe_editor(rank_strategy, *, mode: str, ranker_only: bool,
@@ -1628,8 +1670,15 @@ def render_universe_editor(rank_strategy, *, mode: str, ranker_only: bool,
                 st.exception(exc)
             else:
                 status.update(label="Done.", state="complete")
+                run_start = datetime.now(timezone.utc)
                 st.session_state["uni_result"] = result
-                st.session_state["uni_run_start"] = datetime.now(timezone.utc)
+                st.session_state["uni_run_start"] = run_start
+                # An ad-hoc run has no manifest display_name; the editor's own (optional)
+                # "Display name" field is the nearest thing to one — blank omits the slug.
+                st.session_state["uni_universe_display_name"] = name.strip()
+                # UI-FIX-1: persist BEFORE rendering (ad-hoc runs included — SCOPE item 1).
+                st.session_state["uni_persisted_paths"] = _persist_universe_run(
+                    result, run_start, name.strip())
                 st.rerun()
 
         if save and tickers and new_id:
@@ -1646,19 +1695,29 @@ def render_universe_editor(rank_strategy, *, mode: str, ranker_only: bool,
                            "tagged (local), and gitignored by default.")
 
 
-def _render_snapshot_history() -> None:
+def render_scoreboard_tab() -> None:
     """Minimal, read-only listing of the persisted rank-run records — the append-only
     snapshot store (date · strategy · universe · rows), labeled with universe_id, plus
     a raw-CSV download. Rank runs aren't saved as single-ticker reports, so this is
-    where they're retrievable; it's a listing, NOT a new report renderer."""
+    where they're retrievable; it's a listing, NOT a new report renderer.
+
+    UI-FIX-1: its own top-level tab (moved off the Universe Run flow, where it was
+    easy to miss and easy to confuse with a just-completed run's own downloads).
+    Content unchanged — only the placement moved."""
     from aristos_council.scoreboard import read_rows
 
+    st.subheader("Scoreboard — persisted rank-run snapshots")
+    st.caption("The prospective scoreboard's raw material: one row per ranked name "
+               "per graded run, scored later on forward returns.")
     if not SNAPSHOTS_CSV.exists():
+        st.info("No snapshots persisted yet.")
         return
     rows = read_rows(SNAPSHOTS_CSV)
     if not rows:
+        st.info("No snapshots persisted yet.")
         return
-    with st.expander(f"📸 Persisted snapshots (rank-run records) · {len(rows)} rows"):
+    with st.expander(f"📸 Persisted snapshots (rank-run records) · {len(rows)} rows",
+                     expanded=True):
         agg: dict[tuple, int] = {}
         for r in rows:
             key = (r.snapshot_date, r.strategy, r.universe_id or "—")
@@ -1666,9 +1725,12 @@ def _render_snapshot_history() -> None:
         table = [{"snapshot_date": d, "strategy": s, "universe_id": u, "rows": n}
                  for (d, s, u), n in sorted(agg.items(), reverse=True)]
         st.dataframe(table, hide_index=True, width="stretch")
+        from aristos_council.download_names import scoreboard_snapshots_download_name
+
+        csv_name = scoreboard_snapshots_download_name(datetime.now(timezone.utc))
         st.download_button(
-            "⬇ Download snapshot CSV", data=SNAPSHOTS_CSV.read_bytes(),
-            file_name="verdict_consensus.csv", mime="text/csv", key="snap_csv_dl")
+            f"⬇ Download snapshot CSV — {csv_name}", data=SNAPSHOTS_CSV.read_bytes(),
+            file_name=csv_name, mime="text/csv", key="snap_csv_dl")
         st.caption("Scored later on forward returns via "
                    "`examples/score_snapshot.py` (the prospective scoreboard).")
 
@@ -1880,21 +1942,23 @@ def _render_company_check(result) -> None:
     from aristos_council.export.report_html import company_check_html
 
     cc_run_start = st.session_state.get("cc_run_start") or datetime.now(timezone.utc)
+    cc_txt_name = company_check_download_name(result.ticker, result.rank_strategy_id,
+                                               cc_run_start)
+    cc_html_name = company_check_html_download_name(
+        result.ticker, result.rank_strategy_id, cc_run_start)
     dl_txt, dl_html = st.columns(2)
     with dl_txt:
         st.download_button(
-            "⬇ Download check as text", data=format_company_check(result),
-            file_name=company_check_download_name(result.ticker, result.rank_strategy_id,
-                                                  cc_run_start),
+            f"⬇ Download check as text — {cc_txt_name}",
+            data=format_company_check(result), file_name=cc_txt_name,
             mime="text/plain", key="cc_download")
     with dl_html:
         st.download_button(
-            "⬇ Download report (HTML)",
+            f"⬇ Download report (HTML) — {cc_html_name}",
             data=company_check_html(
                 result, run_start=cc_run_start,
                 strategy_display_name=st.session_state.get("cc_strategy_name", "")),
-            file_name=company_check_html_download_name(
-                result.ticker, result.rank_strategy_id, cc_run_start),
+            file_name=cc_html_name,
             mime="text/html", key="cc_download_html")
     st.caption("Text is the canonical record. The HTML is one self-contained file (no "
                "external requests) for sharing outside the repo — Print → PDF for paper.")
@@ -2021,27 +2085,33 @@ def main() -> None:
         st.success(pending)
 
     if not show_legacy:
-        # v2-ONLY landing: Universe Run + Company Check (both first-class, not legacy).
-        # Validation assets hidden (show_validation=False).
-        tab_universe, tab_company = st.tabs(["Universe Run", "Company Check"])
+        # v2-ONLY landing: Universe Run + Company Check + Scoreboard (all first-class,
+        # not legacy). Validation assets hidden (show_validation=False).
+        tab_universe, tab_company, tab_scoreboard = st.tabs(
+            ["Universe Run", "Company Check", "Scoreboard"])
         with tab_universe:
             render_universe_tab(show_validation=False)
         with tab_company:
             render_company_check_tab(show_validation=False)
+        with tab_scoreboard:
+            render_scoreboard_tab()
         return
 
-    # Legacy ON: Universe Run FIRST (Streamlit default-selects it), Company Check next
-    # (first-class), then the pre-v2 council browsers (Legacy), the YAML editor last.
-    # The toggle is ON here, so validation assets (bench + baseline) are revealed.
-    tab_universe, tab_company, tab_report, tab_history, tab_strategy = st.tabs(
-        ["Universe Run", "Company Check", "Report · Legacy", "History · Legacy",
-         "Strategy · Legacy"])
+    # Legacy ON: Universe Run FIRST (Streamlit default-selects it), Company Check +
+    # Scoreboard next (first-class), then the pre-v2 council browsers (Legacy), the
+    # YAML editor last. The toggle is ON here, so validation assets are revealed.
+    tab_universe, tab_company, tab_scoreboard, tab_report, tab_history, tab_strategy = \
+        st.tabs(["Universe Run", "Company Check", "Scoreboard", "Report · Legacy",
+                 "History · Legacy", "Strategy · Legacy"])
 
     with tab_universe:
         render_universe_tab(show_validation=True)
 
     with tab_company:
         render_company_check_tab(show_validation=True)
+
+    with tab_scoreboard:
+        render_scoreboard_tab()
 
     with tab_report:
         st.info(f"**Legacy.** {_LEGACY_BANNER}")

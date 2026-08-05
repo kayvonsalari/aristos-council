@@ -1,0 +1,55 @@
+diff --git a/.github/workflows/claude.yml b/.github/workflows/claude.yml
+index 0bcd0af..456026a 100644
+--- a/.github/workflows/claude.yml
++++ b/.github/workflows/claude.yml
+@@ -1,32 +1,40 @@
+ name: Claude
+ 
+-# Cloud agent that works issues and PR comments mentioning @claude.
+-# Prerequisites (one-time, repo admin — see the setup notes in the PR/commit that added
+-# this file):
++# Cloud agent that works issues and PR comments — now GATED so it only runs when you
++# OPT IN, never automatically on issue open (cost control).
++#
++# Prerequisites (one-time, repo admin):
+ #   1. Install the Claude GitHub App on this repo: https://github.com/apps/claude
+ #   2. Add a repository secret ANTHROPIC_API_KEY (Settings → Secrets and variables →
+ #      Actions), value from https://console.anthropic.com
+-# Until both exist, this workflow triggers but the job fails at auth — harmless.
++#   3. Create a label named exactly "claude" (Issues → Labels → New label).
++#
++# HOW IT FIRES NOW (deliberate only — every trigger is a manual human action):
++#   - Add the "claude" label to an issue  → runs on that issue.
++#   - Comment "@claude ..." on an issue or PR → runs on that thread.
++# It NO LONGER fires when an issue is opened or assigned, so writing "@claude — one item"
++# in an issue body costs nothing until you choose to label it.
+ 
+ on:
++  issues:
++    types: [labeled]
+   issue_comment:
+     types: [created]
+   pull_request_review_comment:
+     types: [created]
+-  issues:
+-    types: [opened, assigned]
+   pull_request_review:
+     types: [submitted]
+ 
+-# Only spin up a run when @claude is actually mentioned (cost control): the action also
+-# guards internally, but this stops the runner from starting on unrelated comments.
+ jobs:
+   claude:
++    # Run only on a deliberate opt-in: the "claude" label was just added, OR someone
++    # explicitly mentioned @claude in a comment/review (a typed human action, not an
++    # automatic event). Opening or assigning an issue no longer triggers a run.
+     if: |
++      (github.event_name == 'issues' && github.event.label.name == 'claude') ||
+       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
++      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+     runs-on: ubuntu-latest
+     permissions:
+       contents: write
