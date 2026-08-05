@@ -766,3 +766,112 @@ def test_saved_local_universe_appears_in_both_selectors():
         assert any("Apptest Local (local)" in o for o in ref)
     finally:
         f.unlink(missing_ok=True)
+
+
+# --------------------------------------------------------------------------- #
+# UI-FIX-1 — auto-persist run outputs, self-describing filenames, Scoreboard tab
+# --------------------------------------------------------------------------- #
+def _fixture_universe_result(universe_id="growth_40_v1"):
+    from aristos_council.pipeline import RankPipelineResult
+    from aristos_council.rank_engine import RankedTicker
+
+    rt = RankedTicker(ticker="A", factor_ranks={"earnings_yield": 1.0},
+                      factor_values={}, combined_rank=1.0, universe_size=1,
+                      verdict="buy")
+    return RankPipelineResult(
+        ranked=[rt], excluded=[], unrateable=[], narratives={"A": "ranked #1."},
+        header="Verdict: deterministic ranker.  Narrative: LLM (non-judging).",
+        meta={"rank_strategy_id": "magic_formula_v1",
+              "screen_strategy_id": "magic_value_screen_v1",
+              "universe_id": universe_id, "council_mode": "narrator",
+              "ranker_only": False, "universe_size": 1, "ranked_count": 1,
+              "shortlist": ["A"], "est_cost": 0.05}, council_mode="narrator")
+
+
+def test_persist_universe_run_writes_files_matching_the_download_bytes(monkeypatch,
+                                                                        tmp_path):
+    # A completed named-manifest run auto-persists .md + .html BEFORE any download
+    # click — the fix for the two lost paid runs. Bytes must match what the download
+    # buttons would serve (same builder functions), and the names must carry the
+    # universe display-name slug (ITEM 2).
+    from datetime import datetime, timezone
+
+    monkeypatch.setattr(app, "UNIVERSE_RUNS_DIR", tmp_path / "universe_runs")
+    result = _fixture_universe_result()
+    run_start = datetime(2026, 8, 5, 10, 0, tzinfo=timezone.utc)
+
+    md_path, html_path = app._persist_universe_run(result, run_start, "Growth 40")
+
+    assert md_path.exists() and html_path.exists()
+    assert md_path.parent == tmp_path / "universe_runs"
+    assert "growth-40" in md_path.name and "growth-40" in html_path.name
+    assert md_path.read_text(encoding="utf-8") == app._universe_markdown(result)
+
+    from aristos_council.export.report_html import universe_report_html
+    assert html_path.read_text(encoding="utf-8") == \
+        universe_report_html(result, run_start=run_start)
+
+
+def test_persist_universe_run_ad_hoc_run_persists_too(monkeypatch, tmp_path):
+    # An ad-hoc run (Custom paste, or an Editor "Run once" with no Display name typed)
+    # carries universe_display_name="" — SCOPE item 1 explicitly requires it persists
+    # exactly like a named-manifest run, just without the slug segment.
+    from datetime import datetime, timezone
+
+    monkeypatch.setattr(app, "UNIVERSE_RUNS_DIR", tmp_path / "universe_runs")
+    result = _fixture_universe_result(universe_id="adhoc:deadbeef")
+    run_start = datetime(2026, 8, 5, 10, 0, tzinfo=timezone.utc)
+
+    md_path, html_path = app._persist_universe_run(result, run_start, "")
+
+    assert md_path.exists() and html_path.exists()
+    assert md_path.name == "universe_magic_formula_v1_narrator_2026-08-05_1200.md"
+    assert html_path.name == "universe_magic_formula_v1_narrator_2026-08-05_1200.html"
+
+
+def test_saved_to_banner_shows_the_persisted_paths():
+    # UI-FIX-1: the paths are printed prominently in the result header, before the rest
+    # of the run renders — the first thing a user sees is where the run landed on disk.
+    from datetime import datetime, timezone
+
+    from streamlit.testing.v1 import AppTest
+
+    md_p = app.ROOT / "reports" / "universe_runs" / "x.md"
+    html_p = app.ROOT / "reports" / "universe_runs" / "x.html"
+    at = AppTest.from_file(str(_APP), default_timeout=60)
+    at.session_state["uni_result"] = _fixture_universe_result()
+    at.session_state["uni_run_start"] = datetime(2026, 8, 5, 10, 0, tzinfo=timezone.utc)
+    at.session_state["uni_persisted_paths"] = (md_p, html_p)
+    at.session_state["uni_universe_display_name"] = "Growth 40"
+    at = at.run()
+    assert not at.exception
+    blob = " ".join(str(getattr(s, "value", "")) for s in at.success)
+    assert "Saved to:" in blob
+    assert "reports" in blob and "universe_runs" in blob and "x.md" in blob
+    assert "x.html" in blob
+
+
+def test_scoreboard_is_its_own_top_level_tab():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    assert any(str(t.label) == "Scoreboard" for t in at.tabs)
+    # The real committed snapshots/verdict_consensus.csv has rows, so the panel itself
+    # (unchanged content — an expander with the persisted-snapshots table) renders.
+    assert any("Persisted snapshots" in str(e.label) for e in at.expander)
+
+
+def test_scoreboard_panel_is_no_longer_wired_into_universe_run():
+    # Source-level regression guard: the panel moved OFF the Universe Run flow (ITEM 4).
+    # AppTest can't distinguish "which tab" an element came from (all tab bodies execute
+    # in one script run), so this pins the actual wiring instead.
+    import inspect
+
+    uni_src = inspect.getsource(app.render_universe_tab)
+    assert "render_scoreboard_tab" not in uni_src
+    assert "_render_snapshot_history" not in uni_src   # the old name is gone entirely
+    assert not hasattr(app, "_render_snapshot_history")
+
+    main_src = inspect.getsource(app.main)
+    assert "render_scoreboard_tab" in main_src
+    assert '"Scoreboard"' in main_src
