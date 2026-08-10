@@ -16,7 +16,9 @@ from aristos_council.company_check import format_company_check, run_company_chec
 from aristos_council.data.adapter import Fundamentals, MarketDataAdapter, PriceBar, PriceHistory
 
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
-UNIV_DIR = Path(__file__).resolve().parents[1] / "universes"
+# The reference cohort these tests freeze a run over (financials_16_v1) is no longer
+# shipped product data (FUND-UI-2 deleted the demo cohorts); it lives on as a fixture.
+UNIV_DIR = Path(__file__).resolve().parent / "fixtures" / "universes"
 RUNS_DIR = Path(__file__).resolve().parents[1] / "runs"
 
 _STRAT = "magic_formula_momentum_v1"          # lens: magic_value_screen (min_roic, min_cap)

@@ -31,19 +31,25 @@ from aristos_council.etf_baselines import (
 from aristos_council.pipeline import run_rank_pipeline
 
 _DEFAULT_OUT = Path(__file__).resolve().parents[1] / "reports" / "exploratory"
+# The stock cohort the kind-leak mirror is run over (growth_40_v1) is no longer shipped
+# product data — FUND-UI-2 removed the demo cohorts from universes/ — but the mirror is
+# only meaningful against THAT list, so it is read from the kept fixture copy.
+_FIXTURE_UNIVERSES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "universes"
 
 # (rank_strategy_id, universe_id) baselines.
 BASELINES = [
     ("etf_dividend_v1", "etf_dividend_us_v1"),
     ("etf_growth_v1", "etf_growth_us_v1"),
 ]
-# (rank_strategy_id, universe_id, expectation) mirrors.
+# (rank_strategy_id, universe_id, expectation, universes_dir | None) mirrors.
 MIRRORS = [
     ("magic_formula_momentum_v1", "etf_dividend_us_v1",
-     "flagship equity lens on the dividend-ETF universe -> 0 ranked, 10 kind-gated"),
+     "flagship equity lens on the dividend-ETF universe -> 0 ranked, 10 kind-gated",
+     None),
     ("etf_dividend_v1", "growth_40_v1",
      "ETF dividend lens on the stock universe -> 0 ranked, all kind-gated, "
-     "PARA/WBA UNRATEABLE"),
+     "PARA/WBA UNRATEABLE",
+     _FIXTURE_UNIVERSES),
 ]
 
 
@@ -65,8 +71,9 @@ def main() -> None:
         out.write_text(md, encoding="utf-8")
         print(f"wrote {out}  (ranked {len(result.ranked)})")
 
-    for strat, uni, expectation in MIRRORS:
-        result = run_rank_pipeline(None, strat, universe_id=uni, ranker_only=True)
+    for strat, uni, expectation, universes_dir in MIRRORS:
+        result = run_rank_pipeline(None, strat, universe_id=uni, ranker_only=True,
+                                   universes_dir=universes_dir)
         md = format_mirror_markdown(result, expectation=expectation)
         out = args.out_dir / f"etf_mirror_{strat}_on_{uni}_{_stamp(today)}.md"
         out.write_text(md, encoding="utf-8")
