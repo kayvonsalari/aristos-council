@@ -72,6 +72,31 @@ def suggest_clone_id(base_id: str, existing_ids) -> str:
     return f"{stem}_v{n}"
 
 
+_SLUG_STRIP = re.compile(r"[^a-z0-9]+")
+
+
+def slugify_list_name(name: str) -> str:
+    """A display name -> the stem of its file id ("My Portfolio" -> ``my_portfolio``).
+    Empty when the name carries no usable characters, so the caller can fall back."""
+    return _SLUG_STRIP.sub("_", (name or "").strip().lower()).strip("_")
+
+
+def list_id_from_name(name: str, existing_ids=()) -> str:
+    """The id for a list the user simply NAMED (FUND-UI-2).
+
+    Saving a list is "type a name, press save": the id is derived here rather than typed,
+    so no version ceremony reaches the UI. The file id still encodes a version (the
+    ``Universe`` validator demands it, and every record key in this repo carries one) —
+    it is just not the user's problem. A name whose ``_v1`` is taken gets the next free
+    version, so naming a second list the same thing never overwrites the first by
+    accident; overwriting is an explicit, separate act (``save_local_universe(...,
+    overwrite=True)``).
+    """
+    stem = slugify_list_name(name) or "my_list"
+    first = f"{stem}_v1"
+    return first if first not in set(existing_ids) else suggest_clone_id(first, existing_ids)
+
+
 def graded_universe_ids(snapshots_csv: str | Path) -> set[str]:
     """The graded/scoreboard set — universe ids that appear in the prospective-scoreboard
     snapshot CSV. A graded universe is a frozen, pre-registered input to a forward-return
@@ -88,6 +113,12 @@ def existing_universe_ids(universes_dir: str | Path) -> set[str]:
     """Every universe id currently discoverable (top-level manifests + local lists) — the
     collision set a new save must avoid."""
     return {u.id for u in list_universes(universes_dir)}
+
+
+def local_universe_ids(universes_dir: str | Path) -> set[str]:
+    """The ids of PERSONAL lists (``universes/local/``) — the only ones an in-place save
+    may rewrite. A top-level manifest is not yours to overwrite from the editor."""
+    return {u.id for u in list_universes(universes_dir) if getattr(u, "local", False)}
 
 
 def local_dir(universes_dir: str | Path) -> Path:
@@ -125,12 +156,21 @@ def _dump_manifest_yaml(u: Universe, *, created: str) -> str:
 def save_local_universe(universes_dir: str | Path, *, id: str, tickers: list[str],
                         created: str, display_name: str = "", rationale: str = "",
                         description: str = "", role: str = "",
-                        graded_ids: set[str] | frozenset[str] | None = None) -> Path:
+                        graded_ids: set[str] | frozenset[str] | None = None,
+                        overwrite: bool = False) -> Path:
     """Validate and write a personal list to ``universes/local/<id>.yaml``.
+
+    ``overwrite=True`` rewrites one of YOUR OWN lists in place — a list is a plain,
+    editable ticker list (FUND-UI-2), so adding a new holding must not force a new id.
+    It is still refused for a GRADED id and for a top-level manifest (neither is yours to
+    rewrite), and past runs stay interpretable because each run records the exact
+    membership it graded (``universe.member_hash``), not just the list id.
 
     Raises ``ValueError`` (nothing written) when:
     - ``id`` is in ``graded_ids`` — graded, clone-only ("graded — clone to modify");
-    - ``id`` collides with an existing universe id (top-level or local);
+    - ``id`` collides with an existing universe id and ``overwrite`` is False;
+    - ``overwrite`` is True but the id names a top-level (shipped) manifest, not a
+      personal list;
     - the manifest is invalid (id must encode ``_v<n>``, at least one valid ticker) — the
       ``Universe`` model is the single validator, reused so the file stays loadable.
 
@@ -152,9 +192,14 @@ def save_local_universe(universes_dir: str | Path, *, id: str, tickers: list[str
                  created=created, rationale=rationale.strip())
 
     if u.id in existing_universe_ids(universes_dir):
-        raise ValueError(
-            f"universe id '{u.id}' already exists — pick a new id (saved ids must be "
-            "unique; clone into a fresh version like '..._v2').")
+        if not overwrite:
+            raise ValueError(
+                f"universe id '{u.id}' already exists — pick a new id (saved ids must be "
+                "unique; clone into a fresh version like '..._v2').")
+        if u.id not in local_universe_ids(universes_dir):
+            raise ValueError(
+                f"universe '{u.id}' is a top-level manifest, not one of your saved "
+                "lists — save your edits under a new name instead.")
 
     d = ensure_local_dir(universes_dir)
     path = d / f"{u.id}.yaml"
