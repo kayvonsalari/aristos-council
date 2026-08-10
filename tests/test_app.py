@@ -875,3 +875,34 @@ def test_scoreboard_panel_is_no_longer_wired_into_universe_run():
     main_src = inspect.getsource(app.main)
     assert "render_scoreboard_tab" in main_src
     assert '"Scoreboard"' in main_src
+
+
+# --------------------------------------------------------------------------- #
+# STRAT-PICKER-1 — the Universe Run picker names the cohort's asset class, and an
+# AD-HOC cohort (which declares none) filters NOTHING. The primary dropdown itself is
+# never trimmed: a runnable strategy is always offered (the live 2026-08-10 bug was an
+# ad-hoc stock cohort offered a single lens).
+# --------------------------------------------------------------------------- #
+def _caption_blob(at) -> str:
+    return "\n".join(c.value for c in at.caption if isinstance(c.value, str))
+
+
+def test_named_equity_cohort_states_its_derived_asset_class():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    # default: the flagship + its suggested Growth 40 — an equity cohort by derivation
+    assert "Cohort asset class: **equity**" in _caption_blob(at)
+
+
+def test_adhoc_cohort_filters_nothing_and_says_so():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    uni_dd = _dropdown(at, "Universe")
+    uni_dd.set_value("Custom (paste tickers)").run()
+    assert not at.exception
+    blob = _caption_blob(at)
+    assert "Ad-hoc cohort" in blob and "nothing is filtered out" in blob
+    # and the strategy dropdown still offers every live lens (5 stock + 3 ETF)
+    assert len(_dropdown(at, "Rank strategy").options) == 8

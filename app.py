@@ -58,6 +58,12 @@ from aristos_council.presentation import (
     strip_provenance,
 )
 from aristos_council.state import Stance
+from aristos_council.strategy.applicability import (
+    applicable_rank_strategies,
+    cohort_asset_kind,
+    cohort_scope_note,
+    out_of_scope_note,
+)
 from aristos_council.strategy.loader import Strategy, load_strategy
 from aristos_council.strategy.overrides import applied_overrides, effective_strategy
 from aristos_council.tools.criteria.registry import REGISTRY
@@ -1462,6 +1468,22 @@ def render_universe_tab(show_validation: bool = False) -> None:
             st.caption(picked.description)
         with st.expander("Tickers in this manifest"):
             st.write(", ".join(universe))
+
+    # STRAT-PICKER-1: which lenses can HONESTLY grade this cohort. The cohort's asset
+    # class is DERIVED from the lenses that declare it (applicability.py); an AD-HOC
+    # cohort declares nothing, so it is UNKNOWN and NOTHING is filtered out — the live
+    # 2026-08-10 bug was an ad-hoc stock cohort offered a single lens while five stock
+    # lenses sat unreachable in strategies/. The primary dropdown above stays complete
+    # either way (never hide a runnable strategy); this only names what applies and warns
+    # on a CONFIRMED mismatch, which the run-time asset-kind gate would exclude anyway.
+    all_rank_strategies = [s for _, _, s in rank_options]
+    cohort_kind = cohort_asset_kind(universe_id, all_rank_strategies)
+    applicable = applicable_rank_strategies(all_rank_strategies, cohort_kind)
+    st.caption(cohort_scope_note(cohort_kind, len(applicable),
+                                 adhoc=universe_id is None))
+    scope_warning = out_of_scope_note(rank_strategy, cohort_kind)
+    if scope_warning:
+        st.warning(scope_warning)
 
     col_a, col_b = st.columns(2)
     with col_a:
