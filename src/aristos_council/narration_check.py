@@ -73,6 +73,24 @@ half-point). Bounded so it cannot invent one: the number must sit inside the coh
 best/worst rank-sum bounds, theoretical-bound arithmetic ("worst possible = 48") is skipped,
 and a PEER's rank-sum ("NVO's rank-sum of 8") is skipped — only this name's score is checked.
 
+Two claims in one sentence are TWO claims (NARR-CHK-FP-2). The narrator's closing synthesis
+enumerates cautions — "(1) … (2) … (3) …" — and an enumeration marker is a claim boundary
+exactly as a comma is: read as one blob, a superlative or ordinal from item (1) pairs with a
+subject from item (2) and stamps prose in which every item is true (live on the 2026-08-10
+GOOGL narration, whose "(1) … places it 4th of 21 (2) momentum_12m rank 2 out of 21 …" bound
+"4th" — the COMBINED position — to the momentum rank). Markers are split BEFORE the
+comma/semicolon split, so per-claim checking is the rule everywhere (see ``_clauses``).
+
+A claim about ANOTHER name is checked against THAT name's row (NARR-CHK-FP-2). The same
+GOOGL synthesis compared itself with "the identically scored MSFT" — true of MSFT's row,
+false of GOOGL's, so it was stamped. When the caller supplies the cohort's other rows
+(``table['peers']``), a clause that names exactly one PEER and not the narrated name is
+resolved against that peer's factors/position/score, and a cross-name VERDICT claim ("MSFT
+received HOLD") is checked against the peer's actual verdict. Ambiguous attribution (two
+peers, or the narrated name AND a peer in one clause) is SKIPPED — never checked against the
+wrong row. With no ``peers`` supplied the behavior is exactly as before: everything resolves
+against the narrated name.
+
 Markdown is stripped before parsing (NARR-CHK-4): the narrator emphasises heavily, and an
 emphasis marker sitting between a hedge/negation and its superlative ("`**not** best`",
 "`near-*best*`") otherwise defeats the adjacency the skip patterns rely on — a live latent
@@ -266,6 +284,29 @@ _TIE_ORDER = re.compile(
     r"|(?:better|worse|weaker|stronger|higher|lower)\s+than)\b", re.I)
 
 
+# NARR-CHK-FP-2 — an ENUMERATION MARKER is a claim boundary. "(1)", "(2)", "(iii)", "(a)"
+# and bullet glyphs each open a NEW claim, so a superlative/ordinal in one item can never
+# bind to a subject in another (the GOOGL synthesis false positive). Deliberately narrow:
+# only a SINGLE digit/roman/letter inside parentheses, so the narrator's real parentheticals
+# ("(lower is better)", "(rank 2/7)", "(low best)") are untouched, and NOT bare "1." — that
+# would collide with decimals and sentence ends.
+_ENUM_MARKER = re.compile(r"\(\s*(?:\d{1,2}|[ivx]{1,4}|[a-h])\s*\)|[•‣▪]", re.I)
+
+# A cross-name VERDICT claim (NARR-CHK-FP-2): "MSFT received HOLD". Verdicts are checked
+# UPPERCASE-only — the tables and prose render them upper (``format_verdict_cell``), and a
+# lowercase "hold"/"buy" is an ordinary English word ("hold the position"), so requiring the
+# upper form keeps the check off prose that isn't quoting a verdict.
+_VERDICT_TOKEN = re.compile(r"\b(BUY|HOLD|SELL)\b")
+# The claim must ASSERT the verdict (a verb attributing it), and must not be hypothetical or
+# a reference to the tier/boundary itself ("would be a BUY", "the BUY tier", "the BUY cut").
+_VERDICT_ASSERTED = re.compile(
+    r"\b(?:received|receives|got|gets|was|is|are|rated|carries|carried|earned|earns"
+    r"|issued|assigned|scored|lands|landed|sits|sat)\b", re.I)
+_VERDICT_HYPOTHETICAL = re.compile(
+    r"\b(?:would|could|should|might|may|if|were|unless|tier|tiers|threshold|boundary"
+    r"|cut|band|bands|either|any|not|never)\b", re.I)
+
+
 def _demark(text: str) -> str:
     """``text`` with markdown emphasis (`*`, backticks) removed — see the module docstring.
     Parsing only; annotations quote the original prose."""
@@ -387,8 +428,56 @@ def _clause_cites(clause: str, n: int, factors: dict, combined_position: Optiona
             if int(b.group(2)) == n and 1 <= int(b.group(1)) <= n]
 
 
-def _word_check(sentence: str, n: int, combined_position: Optional[int],
-                factors: dict, ticker: Optional[str] = None) -> bool:
+def _clauses(text: str) -> list[str]:
+    """``text`` split into single CLAIMS: enumeration items first (NARR-CHK-FP-2), then the
+    comma/semicolon clauses within each. One superlative/ordinal per claim, checked against
+    the subject its OWN claim names — never a subject from a neighbouring enumeration item."""
+    out: list[str] = []
+    for item in _ENUM_MARKER.split(text):
+        out.extend(re.split(r"[,;]", item))
+    return [c for c in out if c and c.strip()]
+
+
+def _items(text: str) -> list[str]:
+    """``text`` split into enumeration ITEMS only (commas kept). A cross-name claim spans
+    clauses inside one item — "the identically scored MSFT, which received HOLD" — so the
+    verdict check reads items, not comma-clauses."""
+    return [i for i in _ENUM_MARKER.split(text) if i and i.strip()]
+
+
+def _own_row(ticker: Optional[str], factors: dict, combined_position: Optional[int],
+             score: Optional[float] = None) -> dict:
+    """The narrated name's authoritative row, in the shape the per-clause checks read."""
+    return {"ticker": ticker, "factors": factors or {},
+            "combined_position": combined_position, "score": score, "verdict": ""}
+
+
+def _subject_row(clause: str, own: dict, peers: Optional[dict]) -> Optional[dict]:
+    """Whose row this clause's claim must be checked against (NARR-CHK-FP-2).
+
+    The narrated name's row by default. A clause that names exactly ONE peer from
+    ``peers`` — and not the narrated name — is a CROSS-NAME claim and resolves to that
+    peer's row (the live GOOGL synthesis compared itself with "the identically scored
+    MSFT": true of MSFT's row, false of GOOGL's). ``None`` when attribution is ambiguous
+    (two peers, or the narrated name AND a peer in one clause): the check never guesses
+    whose claim it is, and a missed flag beats a wrong one. With no ``peers`` supplied the
+    narrated row is always returned — behavior identical to before."""
+    if not peers:
+        return own
+    ticker = own.get("ticker")
+    named = [t for t in peers if t and t != ticker and _names_ticker(clause, t)]
+    if not named:
+        return own
+    if len(named) > 1 or _names_ticker(clause, ticker):
+        return None
+    row = peers.get(named[0]) or {}
+    return {"ticker": named[0], "factors": row.get("factors") or {},
+            "combined_position": row.get("combined_position"),
+            "score": row.get("score"), "verdict": row.get("verdict") or ""}
+
+
+def _word_check(sentence: str, n: int, own: dict,
+                peers: Optional[dict] = None) -> bool:
     """Word-superlative claim vs the table (hedge-, negation- and CLAUSE-aware). Each
     comma/semicolon-separated clause states at most one superlative about the subject it
     NAMES — so "fund_size is the best, expense_ratio is second-best, momentum_12m is last"
@@ -403,8 +492,15 @@ def _word_check(sentence: str, n: int, combined_position: Optional[int],
     named factor, or no resolvable subject is left alone — the check never invents a
     contradiction. On the subject path the superlative must also BIND to the subject phrase
     (no coordinating conjunction between them, `_binds`) — NARR-CHK-5. The value-superlative
-    class ("exceptional") is admitted on the citation path only."""
-    for clause in re.split(r"[,;]", sentence):
+    class ("exceptional") is admitted on the citation path only. Clauses are per-CLAIM
+    (enumeration items split before commas) and resolve against the row of the name they
+    name (NARR-CHK-FP-2)."""
+    for clause in _clauses(sentence):
+        row = _subject_row(clause, own, peers)
+        if row is None:                          # ambiguous attribution -> not our claim
+            continue
+        factors, combined_position = row["factors"], row["combined_position"]
+        ticker = row["ticker"]
         cites = _clause_cites(clause, n, factors, combined_position, ticker)
         wo = _word_ordinal(clause, include_cited_only=len(cites) == 1)
         if wo is None:
@@ -424,20 +520,24 @@ def _word_check(sentence: str, n: int, combined_position: Optional[int],
     return False
 
 
-def _numeric_check(sentence: str, combined_position: Optional[int],
-                   factors: dict, ticker: Optional[str] = None) -> bool:
+def _numeric_check(sentence: str, own: dict, peers: Optional[dict] = None) -> bool:
     """Digit-ordinal claims bound to their NAMED factor, per clause (defect-b fix). Each
     comma/semicolon-separated clause states at most one ordinal about the factor it names;
     the ordinal is validated against THAT factor's rank — so factors named in any order
     each check against the right rank, never a positional column. A clause with no factor
     (or a factor absent from the table), no ordinal, more than one ordinal, more than one named
-    factor, or an ordinal that does not BIND to the subject phrase (NARR-CHK-5) is skipped."""
-    for clause in re.split(r"[,;]", sentence):
+    factor, or an ordinal that does not BIND to the subject phrase (NARR-CHK-5) is skipped.
+    Enumeration items are separate claims and a cross-name ordinal is checked against the
+    NAMED name's row (NARR-CHK-FP-2: "the identically scored MSFT is 5th on roic")."""
+    for clause in _clauses(sentence):
+        row = _subject_row(clause, own, peers)
+        if row is None:
+            continue
         ords_ = [m for m in _NUM_ORDINAL.finditer(clause)
                  if not _SKIP_BEFORE.search(clause[:m.start()])]
         if len(ords_) != 1 or _multi_factor_subject(clause):
             continue
-        subj = _subject(clause, factors, combined_position, ticker)
+        subj = _subject(clause, row["factors"], row["combined_position"], row["ticker"])
         if subj is None or not _binds(clause, ords_[0].span(), (subj[1], subj[2])):
             continue
         if subj[0] != int(ords_[0].group(1)):
@@ -453,26 +553,65 @@ def _cites_a_peers_score(before: str, ticker: Optional[str]) -> bool:
     return bool(m) and m.group(1) != ticker and m.group(1) not in _NOT_A_TICKER
 
 
-def _score_check(sentence: str, score: Optional[float], n: int, factors: dict,
-                 ticker: Optional[str] = None) -> bool:
+def _score_check(sentence: str, n: int, own: dict,
+                 peers: Optional[dict] = None) -> bool:
     """Does ``sentence`` cite a combined rank-sum VALUE that contradicts the table's
-    authoritative ``score``? (NARR-CHK-5 — the SXR8 "combined rank-sum 6" against 6.5 and the
+    authoritative score? (NARR-CHK-5 — the SXR8 "combined rank-sum 6" against 6.5 and the
     VUSA "rank-sum of 10" against 9.5 are the SAME class and both flag.) Runs only when the
     table supplies a score, and never invents a claim: cohort arithmetic and superlative
     phrasings are skipped (`_SCORE_SKIP_BEFORE`), a peer's score is skipped, and the cited
     number must lie inside this cohort's rank-sum bounds (best = number of factors, worst =
-    factors × N) — outside them it is some other quantity, not this score."""
-    if score is None or not factors or n < 1:
+    factors × N) — outside them it is some other quantity, not this score. Per CLAIM, and a
+    cross-name citation is compared with that name's own score (NARR-CHK-FP-2)."""
+    if n < 1:
         return False
-    best, worst = len(factors), len(factors) * n
-    for m in _SCORE_CITE.finditer(sentence):
-        before = sentence[:m.start()]
-        if _SCORE_SKIP_BEFORE.search(before) or _cites_a_peers_score(before, ticker):
+    for clause in _clauses(sentence):
+        row = _subject_row(clause, own, peers)
+        if row is None:
             continue
-        cited = float(m.group(1))
-        if best <= cited <= worst and abs(cited - float(score)) > 1e-9:
-            return True
+        score, factors = row["score"], row["factors"]
+        if score is None or not factors:
+            continue
+        best, worst = len(factors), len(factors) * n
+        for m in _SCORE_CITE.finditer(clause):
+            before = clause[:m.start()]
+            if (_SCORE_SKIP_BEFORE.search(before)
+                    or _cites_a_peers_score(before, row["ticker"])):
+                continue
+            cited = float(m.group(1))
+            if best <= cited <= worst and abs(cited - float(score)) > 1e-9:
+                return True
     return False
+
+
+def _verdict_check(sentence: str, own: dict,
+                   peers: Optional[dict] = None) -> Optional[tuple[str, str, str]]:
+    """A CROSS-NAME verdict claim that contradicts the table, as ``(peer, claimed,
+    actual)`` — or ``None`` (NARR-CHK-FP-2).
+
+    The live GOOGL synthesis leaned on "the identically scored MSFT that received HOLD".
+    That is a checkable fact about MSFT, so it is checked against MSFT's row — and, before
+    this, was not checkable at all. Read per enumeration ITEM (the peer and the verdict word
+    sit in different comma-clauses of one item), and deliberately narrow: exactly one peer
+    named, the narrated name NOT named, an UPPERCASE verdict token, an attributing verb, and
+    no hypothetical/tier language ("would be a BUY", "the BUY tier") — otherwise skipped.
+    The narrated name's OWN verdict is out of scope: it is the report's headline, stated by
+    the ranker, not a comparison the writer could get wrong about someone else."""
+    if not peers:
+        return None
+    for item in _items(sentence):
+        row = _subject_row(item, own, peers)
+        if row is None or row.get("ticker") == own.get("ticker"):
+            continue                             # own-name claim -> not this check's job
+        actual = (row.get("verdict") or "").strip()
+        if not actual:
+            continue                             # no authoritative verdict -> nothing to say
+        if _VERDICT_HYPOTHETICAL.search(item) or not _VERDICT_ASSERTED.search(item):
+            continue
+        for m in _VERDICT_TOKEN.finditer(item):
+            if m.group(1).lower() != actual.lower():
+                return row["ticker"], m.group(1), actual.upper()
+    return None
 
 
 def _tie_order_check(sentence: str, boundary_tie: dict) -> Optional[str]:
@@ -526,18 +665,31 @@ def _tie_annotation(claim: str, partner: str, score: str) -> str:
             f'not a score difference — table is authoritative]')
 
 
+def _verdict_annotation(claim: str, peer: str, claimed: str, actual: str) -> str:
+    return (f'[⚠ narration check: "{claim}" misstates {peer}\'s verdict — it says '
+            f'{claimed.upper()}, the table says {actual.upper()}; table is authoritative]')
+
+
 def check_narration(narrative: str, table: dict) -> list[str]:
     """Return machine annotations for ordinal claims that contradict the rank ``table``.
 
     ``table``: ``{"N": cohort_size, "combined_position": int|None,
-    "factors": {factor_key: rank}, "score": float|None, "boundary_tie": {…}}``. Each sentence
-    is checked four ways — a word-superlative claim (best/worst/second-*) against a citation or
-    its subject, any digit ordinals bound to the factor each names, (when ``score`` is
-    supplied) a cited combined rank-SUM value against that authoritative score, and
-    (VERDICT-TIE-1) any attempt to ORDER the name against a name it is TIED with, when
-    ``boundary_tie`` says the verdict split on the alphabetical tie-break. Correct ordinal
+    "factors": {factor_key: rank}, "score": float|None, "boundary_tie": {…},
+    "peers": {ticker: {"factors": …, "combined_position": …, "score": …, "verdict": …}}}``.
+    Each sentence is checked five ways — a word-superlative claim (best/worst/second-*)
+    against a citation or its subject, any digit ordinals bound to the factor each names,
+    (when ``score`` is supplied) a cited combined rank-SUM value against that authoritative
+    score, (when ``peers`` is supplied) a CROSS-NAME verdict claim against that name's actual
+    verdict, and (VERDICT-TIE-1) any attempt to ORDER the name against a name it is TIED
+    with, when ``boundary_tie`` says the verdict split on the alphabetical tie-break.
+
+    Claims are read PER CLAIM: enumeration markers ("(1) … (2) …") split before commas, and a
+    clause naming exactly one peer is resolved against THAT peer's row (NARR-CHK-FP-2 — the
+    2026-08-10 GOOGL synthesis was stamped though every claim in it was true). Correct
     statements (in any factor order) pass untouched; ambiguous or hedged sentences are left
-    alone — the check never invents a contradiction, and never rewrites the prose.
+    alone — the check never invents a contradiction, and never rewrites the prose. ``peers``
+    is optional: with none supplied every claim resolves against the narrated name, exactly
+    as before.
 
     Markdown emphasis is stripped for PARSING only; a flagged claim is quoted verbatim from
     the narrative, emphasis markers included.
@@ -547,24 +699,30 @@ def check_narration(narrative: str, table: dict) -> list[str]:
     n = table.get("N")
     if not n or n < 1:
         return []
-    combined_position = table.get("combined_position")
-    factors = table.get("factors", {}) or {}
-    ticker = table.get("ticker")
-    score = table.get("score")
+    own = _own_row(table.get("ticker"), table.get("factors", {}) or {},
+                   table.get("combined_position"), table.get("score"))
+    peers = table.get("peers") or {}
     boundary_tie = table.get("boundary_tie") or {}
 
     flags: list[str] = []
     seen: set[str] = set()
     for sentence in _sentences(narrative):
         parsed = _strip_polarity_descriptors(_demark(sentence))
-        if (_word_check(parsed, n, combined_position, factors, ticker)
-                or _numeric_check(parsed, combined_position, factors, ticker)
-                or _score_check(parsed, score, n, factors, ticker)):
+        if (_word_check(parsed, n, own, peers)
+                or _numeric_check(parsed, own, peers)
+                or _score_check(parsed, n, own, peers)):
             claim = _claim(sentence)
             if claim not in seen:
                 seen.add(claim)
                 flags.append(_annotation(claim))
             continue                      # at most ONE annotation per sentence
+        cross = _verdict_check(parsed, own, peers)
+        if cross is not None:
+            claim = _claim(sentence)
+            if claim not in seen:
+                seen.add(claim)
+                flags.append(_verdict_annotation(claim, *cross))
+            continue
         partner = _tie_order_check(parsed, boundary_tie)
         if partner is not None:
             claim = _claim(sentence)

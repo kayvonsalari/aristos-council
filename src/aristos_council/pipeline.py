@@ -234,8 +234,36 @@ def _shortlist(ranked: list[RankedTicker], runs_on: str, k: int) -> list[RankedT
     return [r for r in live if r.verdict == "buy"]   # buy_quintile (default)
 
 
+def _peer_rows(cohort: Optional[list[RankedTicker]],
+               ticker: str) -> dict[str, dict]:
+    """Every OTHER live name's authoritative row, keyed by ticker (NARR-CHK-FP-2).
+
+    The narrator compares the name it writes about with its cohort ("the identically scored
+    MSFT that received HOLD"), and such a claim is only checkable against the row of the name
+    it NAMES — checked against the narrated name's row it read as a contradiction though it
+    was true (live on the 2026-08-10 GOOGL narration). Positions come from
+    ``cohort_positions`` over the LIVE cohort, the same tie-shared ordinal every ranked table
+    displays, so a peer claim is judged by exactly what the reader sees. Empty when no cohort
+    is supplied — the check then behaves exactly as before. Never derived from the SHORTLIST
+    alone: positions taken over a subset would be the wrong ordinals, and a wrong row is
+    worse than no row."""
+    live = [r for r in (cohort or []) if not r.excluded]
+    if not live:
+        return {}
+    positions = cohort_positions(live)
+    out: dict[str, dict] = {}
+    for r in live:
+        if r.ticker == ticker:
+            continue
+        pos, _tied = positions.get(r.ticker, (None, False))
+        out[r.ticker] = {"factors": dict(r.factor_ranks), "combined_position": pos,
+                         "score": r.combined_rank, "verdict": r.verdict}
+    return out
+
+
 def _annotate_narration(rep: RunReport, r: RankedTicker,
-                        boundary_tie: Optional[dict] = None) -> None:
+                        boundary_tie: Optional[dict] = None,
+                        cohort: Optional[list[RankedTicker]] = None) -> None:
     """Append rank-semantics contradiction annotations to the narrative in place (ITEM 4).
 
     Verifies the narrator's ordinal claims against ``r``'s authoritative rank table and
@@ -264,7 +292,10 @@ def _annotate_narration(rep: RunReport, r: RankedTicker,
     table = {"N": r.universe_size, "combined_position": r.cohort_position,
              "factors": dict(r.factor_ranks), "ticker": r.ticker,
              "score": r.combined_rank,
-             "boundary_tie": boundary_tie or {}}
+             "boundary_tie": boundary_tie or {},
+             # NARR-CHK-FP-2: the cohort's other rows, so a CROSS-NAME claim is judged
+             # against the name it names instead of stamping honest prose.
+             "peers": _peer_rows(cohort, r.ticker)}
     annotations = check_narration(d.rationale, table)
     if annotations:
         d.rationale = d.rationale.rstrip() + "\n" + "\n".join(annotations)
@@ -308,6 +339,7 @@ def _council_stage(
     sentiment_adapter=None, sentiment_missing_key: bool = False,
     progress: Optional[Callable[[str], None]] = None,
     boundary_ties: Optional[dict[str, dict]] = None,
+    cohort: Optional[list[RankedTicker]] = None,
 ) -> list[CouncilOutcome]:
     """Run the LLM council over the shortlist (matrix skipped — the ranker is the
     verdict-of-record). Shared by ``run_pipeline`` and ``run_rank_pipeline`` so the
@@ -340,8 +372,10 @@ def _council_stage(
             ranker_boundary_tie=dict(boundary_tie),
             static_factor_evidence=_static_factor_evidence(r))))
         rep = report_from_state(result)
-        # ITEM 4: rank-semantics post-check (+ VERDICT-TIE-1 tie-ordering check).
-        _annotate_narration(rep, r, boundary_tie)
+        # ITEM 4: rank-semantics post-check (+ VERDICT-TIE-1 tie-ordering check). The whole
+        # ranked cohort rides along so a CROSS-NAME claim is checked against the row of the
+        # name it names (NARR-CHK-FP-2); the shortlist alone cannot see a compared peer.
+        _annotate_narration(rep, r, boundary_tie, cohort=cohort)
         outcomes.append(CouncilOutcome(
             ticker=r.ticker, ranker_verdict=r.verdict,
             council_verdict=rep.council_verdict,
@@ -374,7 +408,7 @@ def run_pipeline(
         shortlist, screen_strategy, adapter, runners, mode,
         sentiment_adapter=sentiment_adapter,
         sentiment_missing_key=sentiment_missing_key,
-        boundary_ties=boundary_tie_facts(ranked))
+        boundary_ties=boundary_tie_facts(ranked), cohort=ranked)
 
     return PipelineResult(ranked=ranked, shortlist=[r.ticker for r in shortlist],
                           council=outcomes, council_mode=mode, excluded=excluded)
@@ -596,7 +630,8 @@ def run_rank_pipeline(
             runners = production_runners()
         council = _council_stage(shortlist, council_frame, adapter, runners, mode,
                                  progress=progress,
-                                 boundary_ties=boundary_tie_facts(ranked))
+                                 boundary_ties=boundary_tie_facts(ranked),
+                                 cohort=ranked)
         narratives = {o.ticker: _narrative_text(o) for o in council}
 
     # Freeze the captured inputs into a run record (ITEM 4). Replay runs record which
