@@ -906,3 +906,56 @@ def test_adhoc_cohort_filters_nothing_and_says_so():
     assert "Ad-hoc cohort" in blob and "nothing is filtered out" in blob
     # and the strategy dropdown still offers every live lens (5 stock + 3 ETF)
     assert len(_dropdown(at, "Rank strategy").options) == 8
+
+
+# --------------------------------------------------------------------------- #
+# FUND-RUN-1 — one cohort, N strategies, ONE combined grid. The "also grade with"
+# multiselect is scoped to the cohort's APPLICABLE set (STRAT-PICKER-1) minus the
+# primary, and a multi-lens run is deterministic (no key, no cost).
+# --------------------------------------------------------------------------- #
+def _multiselect(at, label):
+    return next(m for m in at.multiselect if m.label.startswith(label))
+
+
+def test_multi_strategy_selector_offers_the_other_applicable_lenses():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    ms = _multiselect(at, "Also grade with")
+    # default cohort is equity (Growth 40): the four OTHER stock lenses, no ETF lens and
+    # not the primary (the flagship) itself.
+    assert len(ms.options) == 4
+    assert not any("ETF" in o for o in ms.options)
+    assert not any("Value + Momentum" in o for o in ms.options)   # the primary
+    assert any("RAW" in o for o in ms.options)
+    assert any("GARP" in o for o in ms.options)
+
+
+def test_etf_cohort_offers_only_etf_lenses_in_the_multi_selector():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    rank_dd = _dropdown(at, "Rank strategy")
+    rank_dd.set_value(next(o for o in rank_dd.options if "ETF Index Tracker" in o)).run()
+    assert not at.exception
+    uni_dd = _dropdown(at, "Universe")
+    uni_dd.set_value(next(o for o in uni_dd.options if "ETF Index Tracker — UCITS" in o))
+    at.run()
+    assert not at.exception
+    assert "Cohort asset class: **etf**" in _caption_blob(at)
+    ms = _multiselect(at, "Also grade with")
+    assert ms.options and all("ETF" in o for o in ms.options)     # ETF lenses only
+
+
+def test_selecting_a_second_lens_makes_the_run_deterministic():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    ms = _multiselect(at, "Also grade with")
+    ms.set_value([next(o for o in ms.options if "RAW" in o)]).run()
+    assert not at.exception
+    blob = _caption_blob(at)
+    assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
+    # the run button says how many lenses will run, and is not gated on an API key
+    assert any("Run 2 strategies (free)" in b.label for b in at.button)
+    assert not any("ANTHROPIC_API_KEY" in str(getattr(i, "value", "")) for i in at.info)

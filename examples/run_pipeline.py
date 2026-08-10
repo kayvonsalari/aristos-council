@@ -59,7 +59,11 @@ def main() -> None:
     force_utf8_stdout()          # the '⚠' divergence flag must not crash a cp1252 console
     p.add_argument("tickers", nargs="*")
     p.add_argument("--file")
-    p.add_argument("--rank-strategy", default="conservative_plus_v1")
+    p.add_argument("--rank-strategy", default="conservative_plus_v1",
+                   help="one rank strategy, or several comma-separated for a MULTI-LENS "
+                        "re-grade (FUND-RUN-1): one cohort, N strategies, ONE combined "
+                        "grid — deterministic and free (no LLM, narration stays a "
+                        "single-strategy choice)")
     p.add_argument("--screen-strategy", default=None,
                    help="council lens; defaults to the rank strategy's "
                         "council_screen_strategy (same philosophy)")
@@ -107,6 +111,25 @@ def main() -> None:
         if not args.no_cache:
             adapter = CachingAdapter(adapter, cache_dir=DEFAULT_CACHE_DIR, today=today)
         common["adapter"] = adapter
+
+    # FUND-RUN-1: several comma-separated rank strategies -> ONE combined grid, purely
+    # deterministic (each column is that strategy's own ranker-only run). A single
+    # strategy takes the unchanged path below.
+    rank_ids = [s.strip() for s in args.rank_strategy.split(",") if s.strip()]
+    if len(rank_ids) > 1 and args.replay:
+        # A frozen record replays ONE run's inputs; replaying it under other strategies
+        # would silently read a record that was never captured for them.
+        p.error("--replay takes a single --rank-strategy (a frozen record belongs to the "
+                "run that produced it)")
+    if len(rank_ids) > 1:
+        from aristos_council.pipeline import (
+            format_multi_strategy_grid, run_multi_strategy_pipeline)
+        multi = run_multi_strategy_pipeline(
+            universe, rank_ids, strategies_dir=STRATEGIES_DIR, today=today,
+            adapter=common.get("adapter"),
+            progress=lambda msg: print(f"  {msg}"))
+        print(format_multi_strategy_grid(multi))
+        return
 
     # STAGE 1 sizing (free) up front so the spend can be gated before any council.
     sizing = run_rank_pipeline(universe, args.rank_strategy, ranker_only=True, **common)
