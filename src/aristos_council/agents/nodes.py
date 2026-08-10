@@ -160,14 +160,14 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
             lambda: adapter.get_fundamentals(state.ticker),
             source="fundamentals",
         )
-        # NARR-STATIC-1: surface the factor values the RANKER served from the committed
-        # static layer (ETF-STATIC-1) into the evidence ledger, each with its provenance
-        # receipt, so the narrator can AUDIT the lens's defining numbers (an ETF's
-        # yield/fee) instead of reporting them "not present anywhere in the ledger". The
-        # ranker computed these upstream (vendor-plausible values win; stale/abstained
-        # fields are already OMITTED from the packet), so this only PLUMBS them through —
-        # no recomputation, no phantom fill. Empty for a single-ticker council, so its
-        # ledger stays byte-unchanged.
+        # NARR-STATIC-1 (broadened by NARR-LEDGER-1): surface this name's fee/size/yield
+        # absolutes into the evidence ledger, each with its ACTUAL provenance receipt —
+        # static-served (ETF-STATIC-1) or vendor-computed alike — so the narrator can AUDIT
+        # the lens's defining numbers (an ETF's yield/fee) instead of reporting them "not
+        # present anywhere in the ledger". The ranker computed these upstream (vendor-
+        # plausible values win; abstained/stale-withheld fields are already OMITTED from the
+        # packet), so this only PLUMBS them through — no recomputation, no phantom fill.
+        # Empty for a single-ticker council, so its ledger stays byte-unchanged.
         if state.static_factor_evidence:
             state.tool_calls.append(
                 ToolCall(
@@ -176,10 +176,10 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                     inputs={"ticker": state.ticker},
                     output={
                         "factors": state.static_factor_evidence,
-                        "note": ("factor values SERVED FROM THE COMMITTED STATIC LAYER "
-                                 "(ETF-STATIC-1); each carries its provenance receipt "
-                                 "[static: <as_of>, <source>]. Cite value + provenance "
-                                 "to audit the rank."),
+                        "note": ("factor absolute values (fee/size/yield), from whichever "
+                                 "source actually served them; each carries its provenance "
+                                 "receipt verbatim — [static: <as_of>, <source>] or "
+                                 "[computed]. Cite value + provenance to audit the rank."),
                     },
                 )
             )

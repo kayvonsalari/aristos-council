@@ -270,20 +270,36 @@ def _annotate_narration(rep: RunReport, r: RankedTicker,
         d.rationale = d.rationale.rstrip() + "\n" + "\n".join(annotations)
 
 
+# The ETF lens's absolute-value factors (NARR-LEDGER-1, absorbs NARR-STATIC-2): the fee/
+# size/yield numbers a reader actually wants to AUDIT against a real-world unit ("is 0.07%
+# actually cheap?", "is EUR 50bn actually large?"). Every other rank factor (momentum,
+# growth, quality, …) is already auditable via its rank alone, so this set stays narrow.
+_ABSOLUTE_LEDGER_FACTORS = ("expense_ratio", "fund_size", "distribution_yield")
+
+
 def _static_factor_evidence(r: RankedTicker) -> list[dict]:
-    """The factors the ranker SERVED FROM THE COMMITTED STATIC LAYER for this name
-    (ETF-STATIC-1), as ``{factor, value, provenance}`` entries for the narrator's evidence
-    ledger (NARR-STATIC-1). A static source tag reads ``static: <as_of>, <source>`` — the
-    as_of and source ride VERBATIM inside the provenance receipt, exactly as the report's
-    factor-integrity block discloses them. Vendor-computed factors (``computed``/``ev``/
-    ``fallback:…``) and abstained-or-stale-withheld factors (``abstained`` / the staleness
-    note) are OMITTED: the ledger carries only the raw values that WERE served from static,
-    never a phantom fill (the null≠false discipline)."""
+    """Absolute values for this name's fee/size/yield factors (NARR-LEDGER-1, absorbs
+    NARR-STATIC-2), as ``{factor, value, provenance}`` entries for the narrator's evidence
+    ledger — WHATEVER their source. NARR-STATIC-1 plumbed only the STATIC-served subset
+    (``src.startswith("static:")``); a vendor-COMPUTED fee/AUM/yield — the common case,
+    since the static layer is a FALLBACK for a field the vendor already served plausibly
+    (``etf_static.apply_static_fill``) — never reached the narrator at all, so the writer
+    honestly reported it "not present anywhere in the ledger" for most names. Each entry now
+    carries its ACTUAL provenance tag (``static: <as_of>, <source>``, ``computed``, or either
+    with a currency receipt appended — see ``factors._with_fx_receipt``), exactly as the
+    report's factor-integrity block discloses it — never rewritten to look more authoritative
+    than it is. A factor absent from this name's rank set, or genuinely abstained/stale-
+    withheld (value is None either way), is OMITTED — never a phantom fill (the null≠false
+    discipline). A stock lens (none of these three factors ranked) leaves the ledger empty,
+    same as before."""
     out: list[dict] = []
     for name, src in r.factor_sources.items():
-        if isinstance(src, str) and src.startswith("static:"):
-            out.append({"factor": name, "value": r.factor_values.get(name),
-                        "provenance": src})
+        if name not in _ABSOLUTE_LEDGER_FACTORS or not isinstance(src, str):
+            continue
+        value = r.factor_values.get(name)
+        if value is None:
+            continue
+        out.append({"factor": name, "value": value, "provenance": src})
     return out
 
 

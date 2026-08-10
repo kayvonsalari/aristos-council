@@ -13,6 +13,13 @@ verbatim (``static: <as_of>, <source>``), (c) the as_of date (it rides inside th
 exactly as the report's factor-integrity block discloses it. Vendor-computed values flow
 as before; abstained (incl. stale-withheld) fields stay abstentions and are never filled;
 a stock lens (no static-sourced factor) leaves the ledger byte-unchanged.
+
+NARR-LEDGER-1 (2026-08) broadened ``_static_factor_evidence`` beyond the static-only
+subset tested here — a vendor-COMPUTED fee/AUM/yield (the common case; static is a
+FALLBACK) now reaches the ledger too, with its actual ``computed`` tag. See
+``tests/test_narrator_ledger_evidence.py``. The plumbing mechanics pinned in THIS file
+(ledger wiring, byte-unchanged for a stock lens, the end-to-end static case) are
+unaffected and stay exactly as before.
 """
 
 from __future__ import annotations
@@ -76,26 +83,29 @@ def _ranked(sources: dict[str, str], values: dict) -> RankedTicker:
 
 
 # --------------------------------------------------------------------------- #
-# _static_factor_evidence — selects ONLY the static-sourced factors
+# _static_factor_evidence — selects the fee/size/yield triad, from ANY real source
+# (broadened by NARR-LEDGER-1; see test_narrator_ledger_evidence.py for the full fixture)
 # --------------------------------------------------------------------------- #
-def test_static_factor_evidence_selects_only_static_sourced_factors():
+def test_static_factor_evidence_selects_the_absolute_triad_regardless_of_source():
     r = _ranked(
         sources={"distribution_yield": _TAG,          # served from static
-                 "expense_ratio": "computed",          # vendor-computed
-                 "fund_size": "abstained",             # abstained (no value)
-                 "momentum_12m": STALE_NOTE},          # static entry stale -> withheld
+                 "expense_ratio": "computed",          # vendor-computed (now included)
+                 "fund_size": "abstained",             # abstained (no value) -> omitted
+                 "momentum_12m": STALE_NOTE},          # not in the triad -> omitted
         values={"distribution_yield": 0.035, "expense_ratio": 0.06,
                 "fund_size": None, "momentum_12m": None})
 
     ev = _static_factor_evidence(r)
 
-    # ONLY the static-served factor, with its raw value + verbatim provenance receipt.
-    assert ev == [{"factor": "distribution_yield", "value": 0.035, "provenance": _TAG}]
-    # vendor-computed, abstained, and stale-withheld are OMITTED (never a phantom fill).
-    named = {e["factor"] for e in ev}
-    assert "expense_ratio" not in named
-    assert "fund_size" not in named
-    assert "momentum_12m" not in named
+    # both real-value triad factors, each with its OWN actual provenance tag.
+    by_name = {e["factor"]: e for e in ev}
+    assert by_name["distribution_yield"] == {
+        "factor": "distribution_yield", "value": 0.035, "provenance": _TAG}
+    assert by_name["expense_ratio"] == {
+        "factor": "expense_ratio", "value": 0.06, "provenance": "computed"}
+    # abstained (no value) and non-triad factors are OMITTED (never a phantom fill).
+    assert "fund_size" not in by_name
+    assert "momentum_12m" not in by_name
 
 
 def test_static_factor_evidence_empty_for_a_stock_lens():
@@ -199,13 +209,15 @@ def test_narrator_sees_static_value_and_tag_end_to_end():
     # The static-served value + verbatim provenance receipt are in the narrator's prompt.
     assert "0.035" in decision.user
     assert _TAG in decision.user
-    # The static_layer ledger entry names ONLY the static-served factor — the vendor-
-    # computed (expense_ratio, momentum_12m) and abstained (fund_size) factors are not
+    # The static_layer ledger entry names the two ABSOLUTE-triad factors with a real value
+    # (NARR-LEDGER-1: distribution_yield static-sourced, expense_ratio vendor-computed) —
+    # fund_size is abstained (no value) and momentum_12m isn't in the triad, so neither is
     # injected there.
     static_line = next(ln for ln in decision.user.splitlines()
                        if '"tool": "static_layer"' in ln)
     assert "distribution_yield" in static_line
-    for other in ("expense_ratio", "fund_size", "momentum_12m"):
+    assert "expense_ratio" in static_line
+    for other in ("fund_size", "momentum_12m"):
         assert other not in static_line
 
 
