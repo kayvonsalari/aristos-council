@@ -5,8 +5,9 @@ misread that names ranked 11-20 exist in a 10-name cohort. The fix is display-on
 the ORDINAL position first with the sum as detail — ``#1 of 9 · score 11 (best 3 · worst
 27)`` — with ties sharing a position, M = the rateable (ranked) cohort only, and the
 best/worst bounds derived from the factor count and M. The deterministic ranking
-(combined_rank values, verdicts, the sequential rank_position the narration check reads)
-is byte-unchanged.
+(combined_rank values, verdicts, the sequential rank_position) is byte-unchanged. NOTE:
+the narration check reads `cohort_position` (the tie-shared ordinal below), not
+`rank_position` — see NARR-EVIDENCE-1 in test_narration_coverage.py.
 """
 
 from __future__ import annotations

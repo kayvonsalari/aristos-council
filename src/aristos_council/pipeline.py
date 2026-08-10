@@ -247,12 +247,21 @@ def _annotate_narration(rep: RunReport, r: RankedTicker,
 
     ``score`` hands the checker the authoritative combined rank-SUM, so a cited rank-sum
     VALUE that contradicts the table ("a rank sum of 6" when the table says 6.5)
-    is caught (NARR-CHK-5)."""
+    is caught (NARR-CHK-5).
+
+    ``combined_position`` is ``r.cohort_position`` (NARR-EVIDENCE-1) — the SAME tie-shared
+    ordinal ``ranked_table_rows``/``RankedTicker.explain`` render and the narrator is
+    actually handed (via ``ranker_explanation``), not the sequential ``rank_position``. The
+    two diverge on every name after a tie: an honest "#1 of 3" from a name tied for the top
+    spot was being checked against its sequential position (2), stamping a false
+    contradiction on the opening rank line of every narration downstream of a tie — live on
+    the 2026-08-04 bond and equity runs. One source of truth for the position a claim is
+    checked against, matching the one every ranked-table surface already displays."""
     from .narration_check import check_narration
     d = getattr(rep, "decision", None)
     if d is None or not getattr(d, "rationale", ""):
         return
-    table = {"N": r.universe_size, "combined_position": r.rank_position,
+    table = {"N": r.universe_size, "combined_position": r.cohort_position,
              "factors": dict(r.factor_ranks), "ticker": r.ticker,
              "score": r.combined_rank,
              "boundary_tie": boundary_tie or {}}
