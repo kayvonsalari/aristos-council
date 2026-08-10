@@ -111,7 +111,7 @@ def test_no_stray_hardcoded_dividend_framing_in_the_package():
     # The stock-era phrasings may live ONLY in agents/prompts.py, where they are the
     # STOCK-lens defaults the builder selects — nowhere else may hand-write framing.
     offenders = sorted(
-        str(p.relative_to(PKG)) for p in PKG.rglob("*.py")
+        p.relative_to(PKG).as_posix() for p in PKG.rglob("*.py")
         if any(phrase in p.read_text(encoding="utf-8")
                for phrase in _DIVIDEND_FRAMING))
     assert offenders == ["agents/prompts.py"]
