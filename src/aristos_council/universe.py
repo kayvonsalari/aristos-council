@@ -133,10 +133,22 @@ def list_universes(universes_dir: str | Path) -> list[Universe]:
     return sorted(out, key=lambda u: u.id)
 
 
+def member_hash(tickers: list[str]) -> str:
+    """A stable ``hex8`` fingerprint of a MEMBERSHIP: sha256 over the sorted, normalized,
+    de-duped tickers. Order-insensitive by construction, so the same set pasted in a
+    different order fingerprints identically.
+
+    Stamped on every run record (FUND-UI-2) next to the member list itself: a saved list
+    is EDITABLE, so ``my_portfolio_v1`` in June and in August are different cohorts, and
+    a rank verdict is universe-relative. The hash is what makes a past run interpretable
+    after the list moved on — without it, the id alone lies by omission.
+    """
+    norm = sorted({normalize_ticker(t) for t in tickers if normalize_ticker(t)})
+    return hashlib.sha256(",".join(norm).encode("utf-8")).hexdigest()[:8]
+
+
 def adhoc_universe_id(tickers: list[str]) -> str:
     """A stable id for an ad-hoc list: ``adhoc:<hex8>`` over the SORTED, normalized,
     de-duped tickers — so identical ad-hoc runs (regardless of paste order) link, while
     never masquerading as a named manifest."""
-    norm = sorted({normalize_ticker(t) for t in tickers if normalize_ticker(t)})
-    digest = hashlib.sha256(",".join(norm).encode("utf-8")).hexdigest()[:8]
-    return f"adhoc:{digest}"
+    return f"adhoc:{member_hash(tickers)}"

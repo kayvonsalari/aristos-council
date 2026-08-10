@@ -276,6 +276,43 @@ def test_universe_markdown_has_sections_from_the_result():
     assert "## Narrative" in md and "ranked #1 on ROIC." in md
 
 
+def test_universe_markdown_records_the_exact_cohort_graded():
+    # FUND-UI-2: a saved list is editable, so the record — not the id — is what keeps a
+    # past run interpretable. The membership rides the canonical markdown record.
+    from aristos_council.pipeline import RankPipelineResult
+    result = RankPipelineResult(
+        ranked=[], excluded=[], unrateable=[], narratives={},
+        header="Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran).",
+        meta={"rank_strategy_id": "magic_formula_v1",
+              "screen_strategy_id": "magic_value_screen_v1",
+              "universe_id": "my_portfolio_v1", "council_mode": "ranker-only",
+              "ranker_only": True, "universe_size": 3, "ranked_count": 0,
+              "shortlist": [], "est_cost": 0.0,
+              "universe_members": ["AAPL", "MSFT", "NVDA"],
+              "universe_member_hash": "abcd1234"},
+        council_mode="ranker-only")
+    md = app._universe_markdown(result)
+    assert "## Cohort graded (exact membership)" in md
+    assert "`my_portfolio_v1` · 3 names · members `abcd1234`" in md
+    assert "AAPL, MSFT, NVDA" in md
+
+
+def test_universe_markdown_omits_the_cohort_section_for_a_pre_fund_ui_2_record():
+    # An older saved result carries no members — the section is skipped rather than
+    # rendering an empty, misleading "graded nothing" block.
+    from aristos_council.pipeline import RankPipelineResult
+    result = RankPipelineResult(
+        ranked=[], excluded=[], unrateable=[], narratives={},
+        header="h",
+        meta={"rank_strategy_id": "magic_formula_v1",
+              "screen_strategy_id": "magic_value_screen_v1",
+              "universe_id": "growth_40_v1", "council_mode": "ranker-only",
+              "ranker_only": True, "universe_size": 40, "ranked_count": 0,
+              "shortlist": [], "est_cost": 0.0},
+        council_mode="ranker-only")
+    assert "## Cohort graded" not in app._universe_markdown(result)
+
+
 def test_rank_dropdown_order_baseline_label_and_no_v2_heading():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
