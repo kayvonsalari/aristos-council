@@ -49,8 +49,11 @@ class RankedTicker:
     universe_size: int
     verdict: str = "hold"               # buy / hold / sell
     # 1-based position among the ranked (kept) names, best-first — RECORDED from the
-    # existing sort (no effect on ordering/cut/tie-break). Used by the narration
-    # rank-semantics post-check. None until assigned; never set on excluded names.
+    # existing sort (no effect on ordering/cut/tie-break). SEQUENTIAL, never tie-shared —
+    # kept for callers that need a strict ordering (e.g. sanity-checking sort order in
+    # tests). NOT what the narration check reads (NARR-EVIDENCE-1: it must match what the
+    # narrator was actually shown and what the ranked table actually displays — that's
+    # `cohort_position`, below). None until assigned; never set on excluded names.
     rank_position: Optional[int] = None
     excluded: bool = False
     reason: str = ""
@@ -65,11 +68,14 @@ class RankedTicker:
     # the screen while a dividend-safety criterion could not be evaluated is legitimate
     # but must be VISIBLE (footnote in the ranked table).
     screen_abstentions: dict[str, str] = field(default_factory=dict)
-    # DISPLAY-ONLY cohort position (RANK-DISPLAY-1): 1-based, ties SHARING a position
-    # (competition ranking), so a bare rank-SUM is never misread as an ordinal. Kept at
-    # the END of the field list so the positional constructor order is unchanged. Distinct
-    # from rank_position (which stays sequential for the narration check). Never set on
-    # excluded names; cohort_tied is True when another ranked name shares this combined rank.
+    # Cohort position (RANK-DISPLAY-1): 1-based, ties SHARING a position (competition
+    # ranking), so a bare rank-SUM is never misread as an ordinal. Kept at the END of the
+    # field list so the positional constructor order is unchanged. This is the ordinal
+    # `explain()` renders (so it's what the narrator is actually handed) and what
+    # `ranked_table_rows` displays — the single source of truth the narration check
+    # verifies claims against too (NARR-EVIDENCE-1; see `rank_position` above for why a
+    # second, sequential field still exists). Never set on excluded names; cohort_tied is
+    # True when another ranked name shares this combined rank.
     cohort_position: Optional[int] = None
     cohort_tied: bool = False
 

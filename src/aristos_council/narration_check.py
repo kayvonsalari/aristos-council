@@ -43,6 +43,9 @@ name's rank. These are NOT claims and are left alone (NARR-CHK-1/2/4):
 - **Value superlatives with no rank citation** — "exceptional momentum" praises the VALUE,
   not the rank; that word class only becomes a rank claim beside an explicit cohort
   citation (see ``_CITED_ONLY_ORDINALS``).
+- **Factor-polarity descriptors** — "(low best)", "(high = best)" (NARR-CHK-FP-1) — the
+  pipeline's own direction label, describing which way a factor is favourable, not a claim
+  about this name's rank; stripped whole before parsing (see ``_POLARITY_DESCRIPTOR``).
 
 A superlative also carries a POLARITY (NARR-CHK-5). "Strongest" asserts rank 1 only when it
 modifies a POSITIVE thing; when it modifies a NEGATIVE one ("the strongest negative signal",
@@ -119,6 +122,17 @@ _CITED_ONLY_ORDINALS: tuple[tuple[str, Callable[[int], int]], ...] = (
 # ("`near-*best*`", "`**not** best`"). `_` is NOT stripped — it is load-bearing in the factor
 # keys the narrator quotes verbatim (`fund_size`, `momentum_12m`).
 _MD_EMPHASIS = re.compile(r"[*`]+")
+
+# A factor-POLARITY descriptor — "(low best)", "(high = best)", "(lower is better)" — is the
+# pipeline's OWN direction label (factors.py's "Expense ratio (low best)", "Price / book (low
+# best)"), quoted verbatim by the narrator. It is a DESCRIPTION of which direction is
+# favourable, never a claim about this name's rank (NARR-CHK-FP-1). Left in, the bare
+# "best"/"better"/"worst" token inside it binds to the factor named just before the
+# parenthetical and reads as a rank-1 claim — the live false positive on "fees (low = best)"
+# (Gernot's EUDF run) and "expense ratio (low best)" (Karin's VUSA run). Stripped whole,
+# before any ordinal search, so no token inside it can ever be matched.
+_POLARITY_DESCRIPTOR = re.compile(
+    r"\(\s*(?:low|high|lower|higher)\s*(?:=|is)?\s*(?:best|better|worst)\s*\)", re.I)
 
 # A superlative is NOT a checkable ordinal claim when the text just BEFORE it is:
 #   - a HEDGE ("near-best" ≈ rank 2, not rank 1),
@@ -256,6 +270,13 @@ def _demark(text: str) -> str:
     """``text`` with markdown emphasis (`*`, backticks) removed — see the module docstring.
     Parsing only; annotations quote the original prose."""
     return _MD_EMPHASIS.sub("", text)
+
+
+def _strip_polarity_descriptors(text: str) -> str:
+    """``text`` with factor-polarity descriptors ("(low best)", "(high = best)") removed
+    (NARR-CHK-FP-1) — parsing only, see `_POLARITY_DESCRIPTOR`. Annotations still quote the
+    original prose."""
+    return _POLARITY_DESCRIPTOR.sub("", text)
 
 
 def _mirror(fn: Callable[[int], int]) -> Callable[[int], int]:
@@ -535,7 +556,7 @@ def check_narration(narrative: str, table: dict) -> list[str]:
     flags: list[str] = []
     seen: set[str] = set()
     for sentence in _sentences(narrative):
-        parsed = _demark(sentence)
+        parsed = _strip_polarity_descriptors(_demark(sentence))
         if (_word_check(parsed, n, combined_position, factors, ticker)
                 or _numeric_check(parsed, combined_position, factors, ticker)
                 or _score_check(parsed, score, n, factors, ticker)):
