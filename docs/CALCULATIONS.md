@@ -131,6 +131,11 @@ Four disciplines, each matching the rest of the codebase:
    `computed` / `fallback:…` / `abstained`, and static-served values are handed to the narrator
    as ledger entries carrying that receipt, so a cited fee can be audited back to the factsheet
    and the date. **Only values actually served from static are tagged** — never a phantom fill.
+   As of NARR-LEDGER-1, the narrator's ledger is not limited to the static-served subset: the
+   expense_ratio / fund_size / distribution_yield triad is surfaced from ANY source with a real
+   value — vendor-`computed` included, the common case since static is a fallback — each with
+   its own actual provenance tag, so a cited fee can be audited whether it came from the
+   factsheet or the vendor.
 3. **No silent stale data.** An entry whose `as_of` is more than **90 days** old — or is
    unparseable, since an unverifiable freshness cannot be trusted fresh — **abstains**: the
    field is *not* filled and the note `static data stale — refresh required` is surfaced
