@@ -476,10 +476,10 @@ def _dropdown(at, label):
 
 
 def test_validation_assets_hidden_by_default(monkeypatch):
-    # ITEM 2 + UNI-1: toggle OFF (default) -> universe dropdown = the two graded scoreboard
-    # universes + the exploratory financials cohort (front-stage, role not 'never graded')
-    # + Custom; strategy dropdown = the live strategies. The never-graded trap bench +
-    # ui:hidden baseline stay hidden.
+    # ITEM 2 + UNI-1, as the one flow renders it (FUND-UI-2): toggle OFF (default) -> the
+    # List selector offers "New list" plus the front-stage lists, and the strategy picker
+    # offers the live strategies. Never-graded/validation assets and the ui:hidden
+    # baseline stay hidden.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
