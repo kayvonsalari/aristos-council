@@ -217,10 +217,48 @@ def test_single_ticker_dropdown_excludes_rank_and_lens():
     assert "conservative_screen_v1" not in ids         # lens -> hidden
 
 
-def test_parse_universe_normalizes_dedupes_and_orders():
-    got = app._parse_universe("aapl, msft\nGOOGL aapl , ,brk.b")
-    assert got == ["AAPL", "MSFT", "GOOGL", "BRK.B"]    # upper, de-duped, order kept
-    assert app._parse_universe("") == []
+def test_the_one_flow_parses_tickers_through_the_editor_parser():
+    # FUND-UI-2: one flow, one parser. app._parse_universe (the old Custom-paste
+    # parser) is gone — the editor's comment-tolerant parse_ticker_lines is a superset of
+    # it and now serves the single ticker box, so a pasted line keeps working exactly as
+    # it did while `# comments` also survive.
+    from aristos_council.universe_editor import parse_ticker_lines
+
+    assert not hasattr(app, "_parse_universe")
+    assert parse_ticker_lines("aapl, msft\nGOOGL aapl , ,brk.b") == \
+        ["AAPL", "MSFT", "GOOGL", "BRK.B"]              # upper, de-duped, order kept
+    assert parse_ticker_lines("") == []
+
+
+def test_saved_list_labels_disambiguate_a_shared_name():
+    from aristos_council.universe import Universe
+
+    a = Universe(id="mine_v1", display_name="My Portfolio", tickers=["AAPL", "MSFT"])
+    b = Universe(id="mine_v2", display_name="My Portfolio", tickers=["NVDA", "AMD"])
+    solo = Universe(id="other_v1", display_name="Watchlist", tickers=["XOM"])
+    labels = app.saved_list_labels([a, b, solo])
+    assert len(set(labels)) == 3                       # a label names exactly one list
+    assert labels[0].endswith("(mine_v1)") and labels[1].endswith("(mine_v2)")
+    assert labels[2] == "Watchlist · 1 names"          # unique -> left alone
+
+
+def test_run_problems_gate_the_one_run_button():
+    # Every reason the Run button can be disabled, as plain sentences — pure, so the one
+    # flow's guards are tested rather than eyeballed in a browser.
+    assert app.run_problems(["AAPL"], n_strategies=1, ranker_only=True,
+                            has_key=False) == []
+    assert "Pick at least one strategy." in app.run_problems(
+        ["AAPL"], n_strategies=0, ranker_only=True, has_key=True)
+    assert "Add at least one ticker." in app.run_problems(
+        [], n_strategies=1, ranker_only=True, has_key=True)
+    too_many = app.run_problems([f"T{i}" for i in range(app.UNIVERSE_CAP + 1)],
+                                n_strategies=1, ranker_only=True, has_key=True)
+    assert any("too large" in p for p in too_many)
+    # An LLM run without a key is blocked; the free ranker path stays available.
+    assert any("ANTHROPIC_API_KEY" in p for p in app.run_problems(
+        ["AAPL"], n_strategies=1, ranker_only=False, has_key=False))
+    assert app.run_problems(["AAPL"], n_strategies=3, ranker_only=True,
+                            has_key=False) == []          # multi-lens cannot spend
 
 
 def test_estimate_shortlist_size_tracks_the_cut():
@@ -313,19 +351,18 @@ def test_universe_markdown_omits_the_cohort_section_for_a_pre_fund_ui_2_record()
     assert "## Cohort graded" not in app._universe_markdown(result)
 
 
-def test_rank_dropdown_order_baseline_label_and_no_v2_heading():
+def test_strategy_picker_order_baseline_label_and_run_heading():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    rank_dd = next(s for s in at.selectbox if s.label == "Rank strategy")
-    opts = list(rank_dd.options)
+    opts = list(_strategy_picker(at).options)
     assert "momentum" in opts[0].lower()                        # flagship first
     # the baseline (magic_formula_v1) is HIDDEN by default now (ITEM 2) — it carries its
     # 'baseline — for comparison' label only under the validation toggle (asserted in
     # test_validation_assets_revealed_when_toggle_on).
     assert not any("baseline" in o.lower() for o in opts)
     heads = " ".join(str(getattr(e, "value", "")) for e in at.subheader)
-    assert "Universe Run — screen, rank, verdict" in heads and "v2" not in heads
+    assert "Run — pick strategies, pick tickers, run" in heads and "v2" not in heads
 
 
 def test_confirmation_line_states_strategy_universe_and_mode():
@@ -353,19 +390,47 @@ def test_confirmation_line_is_in_the_persisted_markdown():
     assert "Running magic_formula_momentum_v1 on growth_40_v1 in ranker-only." in md
 
 
-def test_universe_run_tab_renders_with_rank_dropdown():
-    # The app renders (all tabs) with the new Universe Run tab present and a rank-
-    # strategy dropdown — no run triggered, so nothing hits the network.
+def _strategy_picker(at):
+    """The ONE strategy picker of the run flow (FUND-UI-2) — a multiselect, so several
+    lenses can grade the same list in one go."""
+    return next(m for m in at.multiselect if m.label == "Strategies")
+
+
+def test_run_tab_renders_the_one_flow():
+    # FUND-UI-2: the whole run UX is strategies + tickers + run. Their presence proves
+    # the tab rendered; no run is triggered, so nothing hits the network.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    # The "Rank strategy" selectbox only exists inside render_universe_tab, so its
-    # presence proves the tab rendered.
-    rank_dd = next(s for s in at.selectbox if s.label == "Rank strategy")
-    # Options are the FRIENDLY display names now (ITEM 1) — the technical id is demoted
-    # to a caption, so it never appears in the label (no ids/underscores/_v1).
-    assert any("Value + Momentum" in o for o in rank_dd.options)
-    assert not any("_" in o for o in rank_dd.options)
+    picker = _strategy_picker(at)
+    # Options are the FRIENDLY display names (ITEM 1) — the technical id is demoted to a
+    # caption, so it never appears in the label (no ids/underscores/_v1).
+    assert any("Value + Momentum" in o for o in picker.options)
+    assert not any("_" in o for o in picker.options)
+    assert picker.value                                    # a strategy is pre-selected
+    assert any(t.label.startswith("Tickers") for t in at.text_area)
+    assert any(s.label == "List" for s in at.selectbox)
+    assert any(b.label.startswith("▶ Run") for b in at.button)
+
+
+def test_the_separate_universe_edit_run_section_is_gone():
+    # FUND-UI-2: ONE flow. The old bottom "Universe Editor" expander had its own clone
+    # selector, its own Run-once button and its own save path — a second way to do the
+    # same thing, which is what the issue asks to remove.
+    import inspect
+
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    assert not hasattr(app, "render_universe_editor")
+    assert "render_universe_editor" not in inspect.getsource(app.render_universe_tab)
+    assert not any(s.label == "Start from" for s in at.selectbox)
+    assert not any("Run once" in b.label for b in at.button)
+    assert not any("Universe Editor" in str(e.label) for e in at.expander)
+    # ...and exactly ONE run button in the flow (Company Check's own button is a
+    # different tab's, and is excluded by label).
+    assert len([b for b in at.button
+                if b.label in ("▶ Run", "▶ Run ranker (free)")]) == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -394,8 +459,8 @@ def test_legacy_hidden_by_default_and_toggle_defaults_off():
     assert "Run a council" not in _header_blob(at)
     assert "Edits council-strategy YAMLs" not in _info_blob(at)
     assert not any("Legacy" in str(t.label) for t in at.tabs)
-    # the v2 product IS the landing (the Universe Run rank dropdown renders)
-    assert any(s.label == "Rank strategy" for s in at.selectbox)
+    # the v2 product IS the landing (the run flow's strategy picker renders)
+    assert any(m.label == "Strategies" for m in at.multiselect)
 
 
 def test_legacy_surfaces_appear_when_toggle_on():
@@ -419,26 +484,12 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
 
-    uni = _dropdown(at, "Universe").options
-    # substring (not startswith): the default strategy's suggested universe carries a ⭐
-    # prefix (UNI-1 ITEM 2), so match the name irrespective of the group marker.
-    assert any("Growth 40 · " in o for o in uni)
-    assert any("Defensive Income 16 · " in o for o in uni)
-    assert any("Financials 16 · " in o for o in uni)                 # UNI-1: front-stage
-    assert "Custom (paste tickers)" in uni
-    assert not any("Validation Bench" in o for o in uni)             # trap bench hidden
-    assert not any("Energy Watch" in o for o in uni)                 # observation hidden
-    assert any("Dividend ETFs (US)" in o for o in uni)               # ETF-1 exploratory cohort
-    assert any("Growth ETFs (US)" in o for o in uni)                 # ETF-1 exploratory cohort
-    assert any("ETF Index Tracker — UCITS" in o for o in uni)        # ETFCORE-1 cohort
-    assert not any("Core Market ETFs" in o for o in uni)             # UI-RENAME-1: old label gone
-    # 2 scoreboard + financials + 2 US ETF cohorts + 3 UCITS ETF cohorts (dividend +
-    # growth [UCITS-1] + core [ETFCORE-1], all front-stage) + Custom = 9. (These app
-    # tests skip in CI — streamlit is not in the dev extra — so the count had lagged the
-    # UCITS-1 additions; corrected to the live front-stage set here.)
-    assert len(uni) == 9
+    lists = _dropdown(at, "List").options
+    assert lists[0] == "New list"                                    # always startable
+    assert not any("Validation Bench" in o for o in lists)           # trap bench hidden
+    assert not any("Energy Watch" in o for o in lists)               # observation hidden
 
-    rank = _dropdown(at, "Rank strategy").options
+    rank = _strategy_picker(at).options
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
     assert any("GARP" in o for o in rank)                           # growth is live (4C)
     assert any("RAW" in o for o in rank)                            # canonical raw (RAW-1)
@@ -458,7 +509,7 @@ def test_both_strategy_dropdowns_list_the_live_strategies():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    rank = _dropdown(at, "Rank strategy").options
+    rank = _strategy_picker(at).options
     cc = _dropdown(at, "Strategy (lens screen + factors)").options
     for opts in (rank, cc):
         assert any("GARP" in o for o in opts)                        # growth as GARP
@@ -469,45 +520,26 @@ def test_both_strategy_dropdowns_list_the_live_strategies():
         assert len(opts) == 8
 
 
-def test_financials_16_is_front_stage_in_both_universe_selectors():
-    # UNI-1 ITEM 1: financials_16 has no observational role, so it is FRONT-stage (toggle
-    # off) in BOTH the Universe Run selector and the Company Check reference selector —
-    # both discover from universes/ via the same role-derived visible_universes.
+def test_the_same_lists_are_offered_to_the_run_flow_and_company_check():
+    # Both surfaces read the same list set through the same role-derived
+    # visible_universes — the run flow offers them for editing, Company Check as factor
+    # context. Neither invents its own set.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    uni = _dropdown(at, "Universe").options                          # Universe Run tab
-    ref = _dropdown(at, "Reference universe (for factor context)").options  # Company Check
-    assert any("Financials 16 · " in o for o in uni)                 # (⭐-prefix-robust)
-    assert any("Financials 16 · " in o for o in ref)
+    lists = [o for o in _dropdown(at, "List").options if o != "New list"]
+    ref = [o for o in _dropdown(at, "Reference universe (for factor context)").options
+           if not o.startswith("(none")]
+    assert {o.lstrip("⭐ ") for o in lists} == {o.lstrip("⭐ ") for o in ref}
     # the never-graded trap bench stays backstage in both (default toggle off)
-    assert not any("Validation Bench" in o for o in uni)
+    assert not any("Validation Bench" in o for o in lists)
     assert not any("Validation Bench" in o for o in ref)
-
-
-def test_suggested_universe_renders_first_for_selected_strategy():
-    # UNI-1 ITEM 2: select the financials lens -> its suggested universe (Financials 16)
-    # heads the Universe dropdown with the ⭐ marker; every other universe stays
-    # selectable below (a hierarchy, never a lock).
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
-    assert not at.exception
-    rank_dd = _dropdown(at, "Rank strategy")
-    fin_label = next(o for o in rank_dd.options if "Financials" in o)
-    rank_dd.set_value(fin_label).run()
-    assert not at.exception
-    uni = _dropdown(at, "Universe").options
-    assert uni[0] == "⭐ Financials 16 · 16 names"                   # suggested group first
-    assert not any(o.startswith("⭐") for o in uni[1:])             # only the suggested one
-    assert any(o.startswith("Growth 40 ·") for o in uni)           # cross-lens still selectable
 
 
 def test_validation_assets_revealed_when_toggle_on():
     at = _legacy_app(60)
     assert not at.exception
-    uni = _dropdown(at, "Universe").options
-    assert any("Validation Bench" in o for o in uni)                 # bench revealed
-    rank = _dropdown(at, "Rank strategy").options
+    rank = _strategy_picker(at).options
     assert any("Classic Value" in o for o in rank)                  # baseline revealed
 
 
@@ -759,32 +791,48 @@ def test_screen_table_rows_empty_when_no_screen():
 
 
 # --------------------------------------------------------------------------- #
-# Universe Editor (UNIED-1) — build/clone/run/save from the UI
+# The one run flow (FUND-UI-2) — pick strategies, edit the list, run
 # --------------------------------------------------------------------------- #
-def test_universe_editor_section_renders():
-    # The editor lives inside the Universe Run tab as its own expander; its "Start from"
-    # clone selector + the two actions (Run once / Save) prove it rendered.
+def test_ticker_list_is_editable_in_the_run_flow_and_savable():
+    # The list editor IS the run flow now: one ticker box, plus save actions beside it.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    assert any(s.label == "Start from" for s in at.selectbox)
-    assert any("Universe Editor" in str(e.label) for e in at.expander)
-    assert any("Run once" in b.label for b in at.button)
-    assert any("Save to universes/local/" in b.label for b in at.button)
+    box = next(t for t in at.text_area if t.label.startswith("Tickers"))
+    assert "# comments" in box.label                     # the comment-tolerant parser
+    assert any("Save this list" in str(e.label) for e in at.expander)
+    assert any(b.label == "Save changes" for b in at.button)
+    assert any(b.label == "Save as new list" for b in at.button)
+    assert any(t.label == "List name" for t in at.text_input)
 
 
-def test_custom_paste_adhoc_option_unchanged():
-    # The existing ad-hoc Custom paste path is intact alongside the new editor — the
-    # editor's Run once reuses the SAME path (universe_id=None), it does not replace it.
+def test_selecting_a_saved_list_loads_it_into_the_editor():
+    # Selecting a list is how you load it — no separate "load into editor" step, and no
+    # second run path for edited lists.
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
-    assert not at.exception
-    assert "Custom (paste tickers)" in _dropdown(at, "Universe").options
+    local_dir = app.UNIVERSES_DIR / "local"
+    local_dir.mkdir(parents=True, exist_ok=True)
+    f = local_dir / "apptest_load_v1.yaml"
+    f.write_text(
+        "id: apptest_load_v1\ndisplay_name: Apptest Load\n"
+        "created: '2026-08-10'\nrationale: test\ntickers:\n  - AAPL\n  - MSFT\n",
+        encoding="utf-8")
+    try:
+        at = AppTest.from_file(str(_APP), default_timeout=60).run()
+        assert not at.exception
+        dd = _dropdown(at, "List")
+        label = next(o for o in dd.options if "Apptest Load (local)" in o)
+        dd.set_value(label).run()
+        assert not at.exception
+        box = next(t for t in at.text_area if t.label.startswith("Tickers"))
+        assert box.value.split() == ["AAPL", "MSFT"]
+    finally:
+        f.unlink(missing_ok=True)
 
 
 def test_saved_local_universe_appears_in_both_selectors():
-    # UNIED-1 Item 3: a saved local universe is discovered front-stage (default toggle
-    # off) in BOTH the Universe Run selector and the Company Check reference selector,
+    # UNIED-1 Item 3: a saved local list is discovered front-stage (default toggle off)
+    # in BOTH the run flow's List selector and the Company Check reference selector,
     # tagged "(local)". Written into the real (gitignored) universes/local/ then removed.
     from streamlit.testing.v1 import AppTest
     local_dir = app.UNIVERSES_DIR / "local"
@@ -797,7 +845,7 @@ def test_saved_local_universe_appears_in_both_selectors():
     try:
         at = AppTest.from_file(str(_APP), default_timeout=60).run()
         assert not at.exception
-        uni = _dropdown(at, "Universe").options
+        uni = _dropdown(at, "List").options
         ref = _dropdown(at, "Reference universe (for factor context)").options
         assert any("Apptest Local (local)" in o for o in uni)
         assert any("Apptest Local (local)" in o for o in ref)
@@ -876,16 +924,45 @@ def test_saved_to_banner_shows_the_persisted_paths():
     md_p = app.ROOT / "reports" / "universe_runs" / "x.md"
     html_p = app.ROOT / "reports" / "universe_runs" / "x.html"
     at = AppTest.from_file(str(_APP), default_timeout=60)
-    at.session_state["uni_result"] = _fixture_universe_result()
+    at.session_state["uni_results"] = [("magic_formula_v1", _fixture_universe_result())]
+    at.session_state["uni_persisted"] = {"magic_formula_v1": (md_p, html_p)}
     at.session_state["uni_run_start"] = datetime(2026, 8, 5, 10, 0, tzinfo=timezone.utc)
-    at.session_state["uni_persisted_paths"] = (md_p, html_p)
-    at.session_state["uni_universe_display_name"] = "Growth 40"
+    at.session_state["uni_universe_display_name"] = "My Portfolio"
     at = at.run()
     assert not at.exception
     blob = " ".join(str(getattr(s, "value", "")) for s in at.success)
     assert "Saved to:" in blob
     assert "reports" in blob and "universe_runs" in blob and "x.md" in blob
     assert "x.html" in blob
+
+
+def test_each_strategy_result_renders_its_own_section_and_paths():
+    # FUND-UI-2: several strategies over one list produce one result section each, with
+    # per-strategy download keys and per-strategy persisted paths (no key collision, and
+    # no section showing another run's files).
+    from datetime import datetime, timezone
+
+    from streamlit.testing.v1 import AppTest
+
+    a = _fixture_universe_result()
+    b = _fixture_universe_result()
+    b.meta = dict(b.meta, rank_strategy_id="magic_formula_momentum_v1",
+                  rank_strategy_name="Value + Momentum")
+    at = AppTest.from_file(str(_APP), default_timeout=60)
+    at.session_state["uni_results"] = [("magic_formula_v1", a),
+                                       ("magic_formula_momentum_v1", b)]
+    at.session_state["uni_persisted"] = {
+        "magic_formula_v1": (app.ROOT / "reports" / "universe_runs" / "a.md",
+                             app.ROOT / "reports" / "universe_runs" / "a.html"),
+        "magic_formula_momentum_v1": (app.ROOT / "reports" / "universe_runs" / "b.md",
+                                      app.ROOT / "reports" / "universe_runs" / "b.html")}
+    at.session_state["uni_run_start"] = datetime(2026, 8, 10, 10, 0, tzinfo=timezone.utc)
+    at = at.run()
+    assert not at.exception
+    blob = " ".join(str(getattr(s, "value", "")) for s in at.success)
+    assert "a.md" in blob and "b.md" in blob
+    md_blob = " ".join(str(getattr(m, "value", "")) for m in at.markdown)
+    assert "Value + Momentum" in md_blob                  # per-strategy section heading
 
 
 def test_scoreboard_is_its_own_top_level_tab():

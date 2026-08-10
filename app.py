@@ -21,6 +21,7 @@ writes the verdict log + full run report after it, mirroring run_council.py.
 from __future__ import annotations
 
 import base64
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -1120,20 +1121,45 @@ def render_strategy_tab(selected_path: Path | None = None) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Universe Run tab — the v2 rank pipeline (screen -> rank -> gates -> narrator)
+# Run tab — the ONE run flow: strategies + a ticker list + run (FUND-UI-2), over the v2
+# rank pipeline (screen -> rank -> gates -> narrator)
 # --------------------------------------------------------------------------- #
-def _parse_universe(raw: str) -> list[str]:
-    """Whitespace/comma/newline-separated tickers -> normalized, de-duped, ordered."""
-    if not raw:
-        return []
-    seen: set[str] = set()
-    out: list[str] = []
-    for tok in raw.replace(",", " ").split():
-        nt = normalize_ticker(tok)
-        if nt and nt not in seen:
-            seen.add(nt)
-            out.append(nt)
-    return out
+# The interactive run cap — one number, shared by the guard and its message (it used to
+# be re-declared per section, which is how the run flow and the editor drifted apart).
+UNIVERSE_CAP = 60
+
+
+def saved_list_labels(saved) -> list[str]:
+    """Selector labels for the saved ticker lists — friendly name + size, with the id
+    appended ONLY where two lists would otherwise share a label. Same discipline as the
+    strategy picker: a label must name exactly one thing, or picking one silently loads
+    another."""
+    base = [f"{universe_label(u)} · {len(u.tickers)} names" for u in saved]
+    times = Counter(base)
+    return [b if times[b] == 1 else f"{b} ({u.id})" for u, b in zip(saved, base)]
+
+
+def run_problems(universe: list[str], *, n_strategies: int, ranker_only: bool,
+                 has_key: bool, cap: int = UNIVERSE_CAP) -> list[str]:
+    """Why the Run button is disabled, in plain sentences (empty list = runnable).
+
+    Pure, so the one run flow's guards are unit-tested rather than eyeballed in a
+    browser. A multi-strategy run is deterministic by construction, so it never asks for
+    an API key.
+    """
+    problems: list[str] = []
+    if n_strategies < 1:
+        problems.append("Pick at least one strategy.")
+    if not universe:
+        problems.append("Add at least one ticker.")
+    if len(universe) > cap:
+        problems.append(f"List too large ({len(universe)} > {cap}) for an interactive "
+                        "run — trim it.")
+    if not ranker_only and not has_key:
+        problems.append("Narrator / second-opinion needs ANTHROPIC_API_KEY (set it "
+                        "in the environment or a local .env). Use **Ranker only** to "
+                        "run with no LLM and no cost.")
+    return problems
 
 
 def _estimate_shortlist_size(n: int, rank_strategy, *,
@@ -1266,12 +1292,17 @@ def _persist_universe_run(result, run_start: datetime,
                              out_dir=UNIVERSE_RUNS_DIR)
 
 
-def _render_universe_result(result) -> None:
+def _render_universe_result(result, *, key_ns: str = "",
+                            persisted: tuple[Path, Path] | None = None) -> None:
+    """One run's result. ``key_ns`` namespaces the widget keys so several results (one
+    per selected strategy) can render on the same page without colliding; ``persisted``
+    is that run's on-disk pair, passed in rather than read from session state so each
+    section shows ITS OWN paths."""
     m = result.meta
+    ns = f"_{key_ns}" if key_ns else ""
 
     # UI-FIX-1: where this run landed on disk, prominent — the first thing a user sees
     # so a completed (possibly paid) run is never mistaken for session-only output.
-    persisted = st.session_state.get("uni_persisted_paths")
     if persisted:
         md_path, html_path = persisted
         st.success(f"💾 Saved to: `{md_path.relative_to(ROOT)}` and "
@@ -1401,12 +1432,12 @@ def _render_universe_result(result) -> None:
         st.download_button(
             f"⬇ Download run as markdown — {md_name}",
             data=_universe_markdown(result), file_name=md_name,
-            mime="text/markdown", key="uni_download")
+            mime="text/markdown", key=f"uni_download{ns}")
     with dl_html:
         st.download_button(
             f"⬇ Download report (HTML) — {html_name}",
             data=universe_report_html(result, run_start=run_start), file_name=html_name,
-            mime="text/html", key="uni_download_html")
+            mime="text/html", key=f"uni_download_html{ns}")
     st.caption("Markdown is the canonical machine-readable record. The HTML is one "
                "self-contained file (no external requests) for sharing outside the "
                "repo — open it in a browser and Print → PDF for paper.")
@@ -1419,74 +1450,132 @@ def render_universe_tab(show_validation: bool = False) -> None:
 
     from aristos_council.universe import list_universes
 
-    st.subheader("Universe Run — screen, rank, verdict")
-    st.caption("Screen → rank → gates issue the verdict of record; the LLM only "
-               "narrates. Pick a rank strategy and a universe (a saved manifest or a "
-               "custom list).")
+    from aristos_council.universe_editor import (
+        existing_universe_ids, graded_universe_ids, list_id_from_name,
+        parse_ticker_lines, save_local_universe)
 
-    # Behind the validation toggle: the baseline strategy + the trap bench universe are
-    # hidden by default (fully functional — one toggle-flip away), so the demo surface
-    # shows only the live strategies and the scoreboard universes.
-    # ONE picker (FUND-UI-2): visibility filter, order and label->strategy mapping all
-    # live in strategy/picker.py, shared with Company Check — no second implementation to
-    # drift, and a display_name shared by two configs (GARP v1/v2) no longer resolves to
-    # the wrong one.
+    st.subheader("Run — pick strategies, pick tickers, run")
+    st.caption("Screen → rank → gates issue the verdict of record; the LLM only "
+               "narrates. Pick one or more strategies, edit the ticker list, run. "
+               "That is the whole flow (FUND-UI-2).")
+
+    # 1 — STRATEGIES. ONE picker (FUND-UI-2): the visibility filter, the ordering and the
+    # label->strategy mapping all live in strategy/picker.py, shared with Company Check, so
+    # there is no second implementation to drift and a display_name shared by two configs
+    # (GARP v1/v2) can no longer resolve to the wrong one. Every compatible strategy is
+    # offered for ANY ticker list — no per-section "relevant strategies" filtering; the
+    # run-time asset-kind gate excludes individual names honestly instead.
     choices = strategy_choices([s for _, _, s in list_rank_strategy_options(STRATEGIES_DIR)],
                                show_validation=show_validation)
     if not choices:
         st.error(f"No rank strategies found under {STRATEGIES_DIR}")
         return
-    # Dropdowns render the FRIENDLY display_name; the technical id lives only in a small
+    # The picker renders FRIENDLY display names; the technical id lives only in a small
     # caption (ids are the stable record keys — never renamed, never in the label).
     labels = choice_labels(choices)
-    choice = st.selectbox("Rank strategy", labels, key="uni_strategy")
-    rank_strategy = resolve(choices, choice) or choices[0].strategy
-    st.caption(f"`{rank_strategy.id}`")                  # the stable record key
-    if strategy_role(rank_strategy):
-        st.caption(f"↳ {strategy_role(rank_strategy)}")
-    if getattr(rank_strategy, "description", ""):
-        st.caption(rank_strategy.description.strip())
+    picked_labels = st.multiselect(
+        "Strategies", labels, default=[labels[default_index(choices)]],
+        key="uni_strategies",
+        help="Pick one to run the full flow (narration included), or several to grade the "
+             "same list under several lenses in one go (deterministic ranker only — no "
+             "LLM, no cost).")
+    strategies = resolve_all(choices, picked_labels)
+    multi = len(strategies) > 1
+    for s in strategies:
+        bits = f"`{s.id}`"                               # the stable record key
+        if strategy_role(s):
+            bits += f" · {strategy_role(s)}"
+        st.caption(bits)
+    if len(strategies) == 1 and getattr(strategies[0], "description", ""):
+        st.caption(strategies[0].description.strip())
+    rank_strategy = strategies[0] if strategies else choices[0].strategy
 
-    # Universe source: a declared manifest (recorded by id) or a custom paste
-    # (recorded as adhoc:<hash>). The manifest is the reproducible, versioned input.
-    manifests = visible_universes(list_universes(UNIVERSES_DIR),
-                                  show_validation=show_validation)
-    CUSTOM = "Custom (paste tickers)"
-    # UNI-1 ITEM 2: SUGGESTED universes for this strategy render first (a hierarchy, never
-    # a lock — every universe stays selectable). Absent field -> ordering is unchanged.
-    suggested, others = suggested_first(
-        manifests, getattr(rank_strategy, "suggested_universes", []))
-    ordered = suggested + others
-    source_labels = ([f"⭐ {universe_label(u)} · {len(u.tickers)} names" for u in suggested]
-                     + [f"{universe_label(u)} · {len(u.tickers)} names" for u in others]
-                     + [CUSTOM])
-    source = st.selectbox("Universe", source_labels, key="uni_source")
-    if suggested:
-        st.caption("⭐ = suggested for this strategy · every universe stays selectable")
-    if source == CUSTOM:
-        raw = st.text_area(
-            "Universe — tickers separated by spaces, commas, or newlines",
-            key="uni_universe", height=120, placeholder="AAPL MSFT GOOGL AMZN META …")
-        universe = _parse_universe(raw)
-        universe_id = None                          # -> adhoc:<hash> in the record
-        universe_display_name = ""                   # no manifest -> nothing to slug
-    else:
-        picked = ordered[source_labels.index(source)]
-        universe = list(picked.tickers)
-        universe_id = picked.id
-        universe_display_name = picked.display_name
-        st.caption(f"`{picked.id}` · {len(universe)} names")
-        if universe_role(picked):
-            st.caption(f"↳ {universe_role(picked)}")
-        if picked.description:
-            st.caption(picked.description)
-        with st.expander("Tickers in this manifest"):
-            st.write(", ".join(universe))
+    # 2 — TICKERS. A list is a plain, editable ticker list: pick one of yours (or start a
+    # new one), edit it here, run it. Selecting a list LOADS it into the editor — there is
+    # no separate "universe edit runs" section any more, and no manifest ceremony.
+    saved = visible_universes(list_universes(UNIVERSES_DIR),
+                              show_validation=show_validation)
+    NEW_LIST = "New list"
+    list_labels = [NEW_LIST] + saved_list_labels(saved)
+    list_choice = st.selectbox("List", list_labels, key="uni_list",
+                               help="Your saved ticker lists. Selecting one loads it "
+                                    "below, where you can edit it before running.")
+    picked_list = (saved[list_labels.index(list_choice) - 1]
+                   if list_choice != NEW_LIST else None)
+    # Load-on-select: seed the editor from the chosen list (or clear it for a new one).
+    # Written BEFORE the widgets below are instantiated — Streamlit's supported
+    # pre-instantiation write — and only when the SELECTION changed, so typing is never
+    # overwritten on a rerun.
+    if st.session_state.get("uni_loaded_list") != list_choice:
+        st.session_state["uni_loaded_list"] = list_choice
+        if picked_list is not None:
+            st.session_state["uni_tickers"] = "\n".join(picked_list.tickers)
+            st.session_state["uni_list_name"] = (picked_list.display_name
+                                                 or picked_list.id)
+    raw = st.text_area(
+        "Tickers — one per line; spaces/commas fine, `# comments` allowed",
+        key="uni_tickers", height=180,
+        placeholder="AAPL\nMSFT  # anchor\n# --- energy ---\nXOM")
+    universe = parse_ticker_lines(raw)
+
+    # A list runs under its own id only while it still IS that list; an edited (or new)
+    # list runs ad-hoc — `adhoc:<hex8>` — rather than filing a changed cohort under a name
+    # whose past verdicts were graded on different members. Either way the run record
+    # carries the exact membership (FUND-UI-2), so nothing is lost by not saving.
+    unchanged = picked_list is not None and universe == list(picked_list.tickers)
+    universe_id = picked_list.id if unchanged else None
+    universe_display_name = picked_list.display_name if unchanged else ""
+    if picked_list is not None and not unchanged:
+        st.caption(f"Edited — runs as an ad-hoc list (fingerprinted). Save it below to "
+                   f"keep the changes in **{universe_label(picked_list)}**.")
+
+    graded = graded_universe_ids(SNAPSHOTS_CSV)
+    is_mine = (picked_list is not None and getattr(picked_list, "local", False)
+               and picked_list.id not in graded)
+    with st.expander("💾 Save this list"):
+        st.caption("Lists live in `universes/local/` and are gitignored by default — "
+                   "portfolio-class data never rides a commit.")
+        name = st.text_input("List name", key="uni_list_name",
+                             placeholder="My Portfolio")
+        col_save, col_saveas = st.columns(2)
+        with col_save:
+            save_over = st.button("Save changes", key="uni_save_over",
+                                  disabled=not (is_mine and universe),
+                                  help=None if is_mine else
+                                  "Only your own saved lists can be updated in place.")
+        with col_saveas:
+            save_new = st.button("Save as new list", key="uni_save_new",
+                                 disabled=not (universe and name.strip()))
+        if save_over or save_new:
+            try:
+                created = datetime.now(ZoneInfo("Europe/Berlin")).date().isoformat()
+                if save_over:
+                    path = save_local_universe(
+                        UNIVERSES_DIR, id=picked_list.id, tickers=universe,
+                        created=created, display_name=name.strip() or picked_list.id,
+                        graded_ids=graded, overwrite=True)
+                else:
+                    new_id = list_id_from_name(name,
+                                               existing_universe_ids(UNIVERSES_DIR))
+                    path = save_local_universe(
+                        UNIVERSES_DIR, id=new_id, tickers=universe, created=created,
+                        display_name=name.strip(), graded_ids=graded)
+            except (ValueError, ValidationError) as exc:
+                st.error(str(exc))
+            else:
+                st.success(f"Saved **{name.strip() or path.stem}** → "
+                           f"`{path.relative_to(ROOT)}` ({len(universe)} names).")
+
+    st.caption(f"**{len(universe)}** ticker(s).")
 
     col_a, col_b = st.columns(2)
     with col_a:
         ranker_only = st.checkbox("Ranker only — no LLM, no cost", value=False,
-                                  key="uni_ranker_only")
+                                  key="uni_ranker_only", disabled=multi)
+        if multi:
+            # Several lenses over one list is a DETERMINISTIC comparison: it cannot
+            # spend, so the LLM settings are off rather than quietly multiplied by N.
+            ranker_only = True
     with col_b:
         # Value stays "second_opinion" (behavior unchanged); only its LABEL flags it as
         # the experimental null-result mode.
@@ -1513,206 +1602,76 @@ def render_universe_tab(show_validation: bool = False) -> None:
                  "all: narrate every ranked name — for core/ETF cohorts where the HOLDs "
                  "are live options you're comparing, not rejects.")
 
-    st.caption(f"**{len(universe)}** ticker(s) parsed.")
-
-    CAP = 60
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    problems: list[str] = []
-    if not universe:
-        problems.append("Enter at least one ticker.")
-    if len(universe) > CAP:
-        problems.append(f"Universe too large ({len(universe)} > {CAP}) for an "
-                        f"interactive run — trim it.")
-    if not ranker_only and not has_key:
-        problems.append("Narrator / second-opinion needs ANTHROPIC_API_KEY (set it "
-                        "in the environment or a local .env). Use **Ranker only** to "
-                        "run with no LLM and no cost.")
+    problems = run_problems(universe, n_strategies=len(strategies),
+                            ranker_only=ranker_only, has_key=has_key)
 
-    if not ranker_only and universe and len(universe) <= CAP:
+    if not ranker_only and strategies and universe and len(universe) <= UNIVERSE_CAP:
         est = estimate_cost(
             _estimate_shortlist_size(len(universe), rank_strategy,
                                      narrate_coverage=narrate_coverage))
         st.caption(f"Estimated council cost ≈ **${est:.2f}** — upper bound (pre-screen); "
                    "the exact shortlist (after the screen prefilter) is shown after ranking.")
+    if multi:
+        st.caption(f"**{len(strategies)}** strategies × **{len(universe)}** name(s) — "
+                   "deterministic ranker only (no narration, no cost); one result "
+                   "section per strategy.")
 
     for msg in problems:
         st.info(msg)
 
-    label = "▶ Run ranker (free)" if ranker_only else "▶ Run universe"
+    label = "▶ Run ranker (free)" if ranker_only else "▶ Run"
     run = st.button(label, type="primary", disabled=bool(problems), key="uni_run")
 
     if run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         status = st.status("Starting…", expanded=True)
+        results: list[tuple[str, object]] = []
+        persisted: dict[str, tuple[Path, Path]] = {}
         try:
             from aristos_council.pipeline import run_rank_pipeline
 
-            result = run_rank_pipeline(
-                universe, rank_strategy.id, universe_id=universe_id,
-                council_mode=mode, ranker_only=ranker_only,
-                narrate_coverage=narrate_coverage,
-                strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                # Freeze this run's raw inputs so Company Check's reference-cohort reader
-                # (_latest_reference_run) can replay it offline — without this the UI
-                # never wrote runs/ and cohort context was dead code (ITEM 1).
-                freeze_dir=ROOT / "runs",
-                progress=lambda msg: status.update(label=msg))
+            for i, strategy in enumerate(strategies, start=1):
+                prefix = (f"[{i}/{len(strategies)}] {strategy_label(strategy)} — "
+                          if multi else "")
+                result = run_rank_pipeline(
+                    universe, strategy.id, universe_id=universe_id,
+                    council_mode=mode, ranker_only=ranker_only,
+                    narrate_coverage=narrate_coverage,
+                    strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
+                    # Freeze this run's raw inputs so Company Check's reference-cohort
+                    # reader (_latest_reference_run) can replay it offline — without this
+                    # the UI never wrote runs/ and cohort context was dead code (ITEM 1).
+                    freeze_dir=ROOT / "runs",
+                    progress=lambda msg, p=prefix: status.update(label=p + msg))
+                results.append((strategy.id, result))
+                # UI-FIX-1: persist BEFORE rendering — a completed (possibly paid) run
+                # must survive a restart even if nobody clicks a download button. Per
+                # strategy, so a multi-lens run leaves N recoverable records, not one.
+                persisted[strategy.id] = _persist_universe_run(
+                    result, run_start, universe_display_name)
         except Exception as exc:
             status.update(label="Run failed", state="error")
             # Finnhub scope-fence (sprint item 4): a live crash on Finnhub is a
             # SEPARATE bug with its own spec — capture the traceback and STOP,
             # do not paper over it. Sentiment should degrade to abstention upstream.
             st.exception(exc)
-            st.session_state.pop("uni_result", None)
+            st.session_state.pop("uni_results", None)
         else:
             status.update(label="Done.", state="complete")
-            st.session_state["uni_result"] = result
+            st.session_state["uni_results"] = results
+            st.session_state["uni_persisted"] = persisted
             st.session_state["uni_run_start"] = run_start
             st.session_state["uni_universe_display_name"] = universe_display_name
-            # UI-FIX-1: persist BEFORE rendering — a completed (possibly paid) run must
-            # survive a restart even if nobody clicks a download button.
-            st.session_state["uni_persisted_paths"] = _persist_universe_run(
-                result, run_start, universe_display_name)
 
-    result = st.session_state.get("uni_result")
-    if result is not None:
+    results = st.session_state.get("uni_results") or []
+    persisted = st.session_state.get("uni_persisted") or {}
+    for strategy_id, result in results:
         st.divider()
-        _render_universe_result(result)
-
-    st.divider()
-    render_universe_editor(rank_strategy, mode=mode, ranker_only=ranker_only,
-                           has_key=has_key, show_validation=show_validation,
-                           narrate_coverage=narrate_coverage)
-
-
-def render_universe_editor(rank_strategy, *, mode: str, ranker_only: bool,
-                           has_key: bool, show_validation: bool = False,
-                           narrate_coverage: str = "buys_only") -> None:
-    """Universe Editor (UNIED-1) — build a custom list from scratch or a clone, then Run
-    once (ad-hoc, no file) or Save it to ``universes/local/``. Reuses the tab's selected
-    rank strategy + run settings for Run once, so an editor run is the SAME ad-hoc
-    pipeline path as a Custom paste (fingerprinted, nothing written)."""
-    from aristos_council.universe import list_universes
-    from aristos_council.universe_editor import (
-        existing_universe_ids, graded_universe_ids, parse_ticker_lines,
-        save_local_universe, suggest_clone_id)
-
-    with st.expander("🛠 Universe Editor — build, clone & save a custom list"):
-        st.caption("Start blank or clone an existing universe, edit the tickers (one per "
-                   "line; `# comments` allowed), then **Run once** (ad-hoc — nothing "
-                   "written) or **Save** as a personal local universe. Local lists live "
-                   "in `universes/local/` and are gitignored by default — portfolio-class "
-                   "data never rides a commit.")
-
-        manifests = visible_universes(list_universes(UNIVERSES_DIR),
-                                      show_validation=show_validation)
-        graded = graded_universe_ids(SNAPSHOTS_CSV)
-        existing_ids = existing_universe_ids(UNIVERSES_DIR)
-
-        BLANK = "Blank (start empty)"
-        clone_labels = [BLANK]
-        by_label: dict[str, object] = {}
-        for u in manifests:
-            lbl = f"{universe_label(u)} · {len(u.tickers)} names"
-            clone_labels.append(lbl)
-            by_label[lbl] = u
-        clone_choice = st.selectbox("Start from", clone_labels, key="ed_clone_source")
-        base = by_label.get(clone_choice)
-
-        if base is not None and base.id in graded:
-            st.info(f"🔒 `{base.id}` is **graded — clone to modify**. It's a frozen "
-                    "scoreboard input; loading it makes an editable COPY under a new id "
-                    "(the graded original is never changed).")
-
-        # Load-into-editor: seed the editor fields from the chosen base (or clear for
-        # Blank). Set BEFORE the widgets below are instantiated, so they pick up the
-        # values on this same run (Streamlit's supported pre-instantiation write).
-        if st.button("⧉ Load into editor", key="ed_load"):
-            if base is None:
-                st.session_state.update(ed_name="", ed_rationale="", ed_tickers="",
-                                        ed_id="")
-            else:
-                st.session_state["ed_name"] = (base.display_name or "").strip()
-                st.session_state["ed_rationale"] = (base.rationale or "").strip()
-                st.session_state["ed_tickers"] = "\n".join(base.tickers)
-                st.session_state["ed_id"] = suggest_clone_id(base.id, existing_ids)
-
-        name = st.text_input("Display name", key="ed_name", placeholder="My Watchlist")
-        rationale = st.text_input("One-line rationale", key="ed_rationale",
-                                  placeholder="why this list exists")
-        raw = st.text_area("Tickers — one per line; `# comments` allowed",
-                           key="ed_tickers", height=160,
-                           placeholder="AAPL\nMSFT  # anchor\n# --- energy ---\nXOM")
-        tickers = parse_ticker_lines(raw)
-        st.caption(f"**{len(tickers)}** ticker(s) parsed. Unresolvable symbols aren't "
-                   "blocked — they surface as UNRATEABLE in the run.")
-
-        new_id = st.text_input("Save as id (must encode a version, e.g. `my_list_v1`)",
-                               key="ed_id", placeholder="my_watchlist_v1").strip()
-
-        CAP = 60
-        run_problems: list[str] = []
-        if not tickers:
-            run_problems.append("Add at least one ticker to run.")
-        if len(tickers) > CAP:
-            run_problems.append(f"List too large ({len(tickers)} > {CAP}) for an "
-                                "interactive run — trim it.")
-        if not ranker_only and not has_key:
-            run_problems.append("Narrator / second-opinion needs ANTHROPIC_API_KEY. Use "
-                                "**Ranker only** (above) to run with no LLM and no cost.")
-
-        col_run, col_save = st.columns(2)
-        with col_run:
-            run_once = st.button("▶ Run once (ad-hoc — nothing saved)", key="ed_run_once",
-                                 disabled=bool(run_problems))
-        with col_save:
-            save = st.button("💾 Save to universes/local/", key="ed_save",
-                             disabled=not (tickers and new_id))
-
-        for msg in run_problems:
-            st.info(msg)
-
-        if run_once and tickers:
-            # The EXISTING ad-hoc path: universe_id=None -> adhoc:<hex8> fingerprint, the
-            # same run_rank_pipeline entry the Custom paste uses. Nothing is written.
-            status = st.status("Starting ad-hoc run…", expanded=True)
-            try:
-                from aristos_council.pipeline import run_rank_pipeline
-
-                result = run_rank_pipeline(
-                    tickers, rank_strategy.id, universe_id=None, council_mode=mode,
-                    ranker_only=ranker_only, narrate_coverage=narrate_coverage,
-                    strategies_dir=STRATEGIES_DIR,
-                    universes_dir=UNIVERSES_DIR, freeze_dir=ROOT / "runs",
-                    progress=lambda m: status.update(label=m))
-            except Exception as exc:
-                status.update(label="Run failed", state="error")
-                st.exception(exc)
-            else:
-                status.update(label="Done.", state="complete")
-                run_start = datetime.now(timezone.utc)
-                st.session_state["uni_result"] = result
-                st.session_state["uni_run_start"] = run_start
-                # An ad-hoc run has no manifest display_name; the editor's own (optional)
-                # "Display name" field is the nearest thing to one — blank omits the slug.
-                st.session_state["uni_universe_display_name"] = name.strip()
-                # UI-FIX-1: persist BEFORE rendering (ad-hoc runs included — SCOPE item 1).
-                st.session_state["uni_persisted_paths"] = _persist_universe_run(
-                    result, run_start, name.strip())
-                st.rerun()
-
-        if save and tickers and new_id:
-            try:
-                created = datetime.now(ZoneInfo("Europe/Berlin")).date().isoformat()
-                path = save_local_universe(
-                    UNIVERSES_DIR, id=new_id, tickers=tickers, created=created,
-                    display_name=name, rationale=rationale, graded_ids=graded)
-            except (ValueError, ValidationError) as exc:
-                st.error(str(exc))
-            else:
-                st.success(f"Saved **{new_id}** → `{path.relative_to(ROOT)}` "
-                           f"({len(tickers)} names). It's now selectable everywhere, "
-                           "tagged (local), and gitignored by default.")
+        if len(results) > 1:
+            st.markdown(f"## {result.meta.get('rank_strategy_name') or strategy_id}")
+        _render_universe_result(result, key_ns=strategy_id,
+                                persisted=persisted.get(strategy_id))
 
 
 def render_scoreboard_tab() -> None:
@@ -2104,10 +2063,11 @@ def main() -> None:
         st.success(pending)
 
     if not show_legacy:
-        # v2-ONLY landing: Universe Run + Company Check + Scoreboard (all first-class,
-        # not legacy). Validation assets hidden (show_validation=False).
+        # v2-ONLY landing: Run + Company Check + Scoreboard (all first-class, not
+        # legacy). Validation assets hidden (show_validation=False). The first tab is
+        # named for what it does — there is ONE run flow now (FUND-UI-2).
         tab_universe, tab_company, tab_scoreboard = st.tabs(
-            ["Universe Run", "Company Check", "Scoreboard"])
+            ["Run", "Company Check", "Scoreboard"])
         with tab_universe:
             render_universe_tab(show_validation=False)
         with tab_company:
@@ -2116,11 +2076,11 @@ def main() -> None:
             render_scoreboard_tab()
         return
 
-    # Legacy ON: Universe Run FIRST (Streamlit default-selects it), Company Check +
+    # Legacy ON: Run FIRST (Streamlit default-selects it), Company Check +
     # Scoreboard next (first-class), then the pre-v2 council browsers (Legacy), the
     # YAML editor last. The toggle is ON here, so validation assets are revealed.
     tab_universe, tab_company, tab_scoreboard, tab_report, tab_history, tab_strategy = \
-        st.tabs(["Universe Run", "Company Check", "Scoreboard", "Report · Legacy",
+        st.tabs(["Run", "Company Check", "Scoreboard", "Report · Legacy",
                  "History · Legacy", "Strategy · Legacy"])
 
     with tab_universe:
