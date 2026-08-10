@@ -31,7 +31,7 @@ from pydantic import ValidationError
 from aristos_council.data.adapter import (
     DataUnavailable, display_name, normalize_ticker)
 from aristos_council.demo_surface import (
-    is_hidden_strategy, strategy_label, strategy_role, suggested_first,
+    strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
@@ -59,6 +59,13 @@ from aristos_council.presentation import (
 )
 from aristos_council.state import Stance
 from aristos_council.strategy.loader import Strategy, load_strategy
+from aristos_council.strategy.picker import (
+    choice_labels,
+    default_index,
+    resolve,
+    resolve_all,
+    strategy_choices,
+)
 from aristos_council.strategy.overrides import applied_overrides, effective_strategy
 from aristos_council.tools.criteria.registry import REGISTRY
 from aristos_council.strategy.versioning import (
@@ -1404,23 +1411,20 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # Behind the validation toggle: the baseline strategy + the trap bench universe are
     # hidden by default (fully functional — one toggle-flip away), so the demo surface
     # shows only the live strategies and the scoreboard universes.
-    rank_options = [o for o in list_rank_strategy_options(STRATEGIES_DIR)
-                    if show_validation or not is_hidden_strategy(o[2])]
-    if not rank_options:
+    # ONE picker (FUND-UI-2): visibility filter, order and label->strategy mapping all
+    # live in strategy/picker.py, shared with Company Check — no second implementation to
+    # drift, and a display_name shared by two configs (GARP v1/v2) no longer resolves to
+    # the wrong one.
+    choices = strategy_choices([s for _, _, s in list_rank_strategy_options(STRATEGIES_DIR)],
+                               show_validation=show_validation)
+    if not choices:
         st.error(f"No rank strategies found under {STRATEGIES_DIR}")
         return
-    # Present the flagship first, the baseline last (ITEM 7). Unknown ids keep id-order.
-    _rank_priority = ["magic_formula_momentum_v1", "conservative_plus_v1",
-                      "magic_formula_v1"]
-    rank_options = sorted(
-        rank_options,
-        key=lambda o: (_rank_priority.index(o[2].id) if o[2].id in _rank_priority
-                       else len(_rank_priority), o[2].id))
     # Dropdowns render the FRIENDLY display_name; the technical id lives only in a small
     # caption (ids are the stable record keys — never renamed, never in the label).
-    labels = [strategy_label(s) for _, _, s in rank_options]
+    labels = choice_labels(choices)
     choice = st.selectbox("Rank strategy", labels, key="uni_strategy")
-    rank_strategy = rank_options[labels.index(choice)][2]
+    rank_strategy = resolve(choices, choice) or choices[0].strategy
     st.caption(f"`{rank_strategy.id}`")                  # the stable record key
     if strategy_role(rank_strategy):
         st.caption(f"↳ {strategy_role(rank_strategy)}")
@@ -1760,24 +1764,23 @@ def render_company_check_tab(show_validation: bool = False) -> None:
                "factor vs a named reference cohort, and the price-divergence flag. "
                "**No verdict** — a verdict is a cohort statement (a universe run).")
 
-    rank_options = [o for o in list_rank_strategy_options(STRATEGIES_DIR)
-                    if show_validation or not is_hidden_strategy(o[2])]
-    if not rank_options:
+    # The SAME picker the run flow uses (FUND-UI-2) — one implementation, so ordering,
+    # the hidden-config filter and the default can no longer drift between the two tabs.
+    choices = strategy_choices([s for _, _, s in list_rank_strategy_options(STRATEGIES_DIR)],
+                               show_validation=show_validation)
+    if not choices:
         st.error(f"No rank strategies found under {STRATEGIES_DIR}")
         return
 
     ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
                                             placeholder="MU"))
 
-    # Strategy — default magic_formula_momentum_v1 (the flagship) when present. The
-    # dropdown shows the friendly display_name; the id is a small caption.
-    ids = [s.id for _, _, s in rank_options]
-    default_ix = ids.index("magic_formula_momentum_v1") \
-        if "magic_formula_momentum_v1" in ids else 0
-    labels = [strategy_label(s) for _, _, s in rank_options]
-    choice = st.selectbox("Strategy (lens screen + factors)", labels, index=default_ix,
-                          key="cc_strategy")
-    rank_strategy = rank_options[labels.index(choice)][2]
+    # Strategy — the flagship pre-selected when offered. The dropdown shows the friendly
+    # display_name; the id is a small caption.
+    labels = choice_labels(choices)
+    choice = st.selectbox("Strategy (lens screen + factors)", labels,
+                          index=default_index(choices), key="cc_strategy")
+    rank_strategy = resolve(choices, choice) or choices[0].strategy
     st.caption(f"`{rank_strategy.id}`")                  # the stable record key
     if strategy_role(rank_strategy):
         st.caption(f"↳ {strategy_role(rank_strategy)}")
