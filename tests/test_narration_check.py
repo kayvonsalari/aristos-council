@@ -422,6 +422,49 @@ def test_correct_prose_rank_sum_passes():
                            _ETF_VUSA) == []
     assert check_narration("EUNL's combined rank-sum of 10 is near the bottom.",
                            _ETF_EUNL) == []
+
+
+# --------------------------------------------------------------------------- #
+# NARR-CHK-FP-1 — a factor-polarity descriptor ("(low best)", "(high = best)") is the
+# pipeline's OWN direction label (factors.py: "Expense ratio (low best)", "Price / book
+# (low best)"), quoted verbatim by the narrator. It DESCRIBES which direction is favourable
+# and is not a claim about this name's rank. Pre-fix, the bare "best" inside it bound to the
+# factor named just before the parenthetical. Seen live: Gernot's EUDF run (fee sentence) and
+# Karin's equity run (VUSA).
+# --------------------------------------------------------------------------- #
+# EUDF: expense_ratio rank 4/5 (pricey) — if "(low best)" bound as a rank-1 claim, this would
+# have false-flagged pre-fix.
+_ETF_EUDF = {"N": 5, "combined_position": 3, "ticker": "EUDF",
+             "factors": {"expense_ratio": 4, "fund_size": 2, "momentum_12m": 3}}
+
+
+def test_polarity_descriptor_fee_sentence_is_not_a_rank_claim():
+    # Gernot's EUDF run: describing the fee's polarity is not a claim that EUDF's fee IS best.
+    assert check_narration(
+        "EUDF's expense ratio (low best) comes in at 0.29%, among the pricier UCITS "
+        "wrappers.", _ETF_EUDF) == []
+
+
+def test_polarity_descriptor_variant_phrasings_are_not_rank_claims():
+    # Karin's VUSA run, plus common variant wordings of the same descriptor.
+    for descriptor in ("(low best)", "(low = best)", "(lower is better)"):
+        sentence = f"VUSA's expense ratio {descriptor} sits at 0.07%."
+        assert check_narration(sentence, _ETF_VUSA) == [], descriptor
+
+
+def test_polarity_descriptor_high_direction_is_not_a_rank_claim():
+    # the high-direction mirror ("(high best)") — VUSA's momentum rank is 5/5 (worst), so
+    # pre-fix the descriptor's "best" would have bound to "momentum" as a rank-1 claim.
+    for descriptor in ("(high best)", "(high = best)", "(higher is better)"):
+        sentence = f"VUSA's 12-month momentum {descriptor} trails the cohort badly."
+        assert check_narration(sentence, _ETF_VUSA) == [], descriptor
+
+
+def test_polarity_descriptor_does_not_excuse_a_genuine_rank_claim_about_the_same_factor():
+    # negative control: stripping the descriptor must not swallow a REAL claim about the very
+    # factor it describes — EUDF's expense_ratio rank is 4/5, not 1, so this stays flagged.
+    assert _flagged(
+        "EUDF's expense ratio (low best) is genuinely the best in the cohort.", _ETF_EUDF)
     assert check_narration("SXR8's overall score 6.5 leads the tracker sleeve.",
                            _ETF_SXR8_SCORED) == []
 
