@@ -58,6 +58,12 @@ from aristos_council.presentation import (
     strip_provenance,
 )
 from aristos_council.state import Stance
+from aristos_council.strategy.applicability import (
+    applicable_rank_strategies,
+    cohort_asset_kind,
+    cohort_scope_note,
+    out_of_scope_note,
+)
 from aristos_council.strategy.loader import Strategy, load_strategy
 from aristos_council.strategy.overrides import applied_overrides, effective_strategy
 from aristos_council.tools.criteria.registry import REGISTRY
@@ -1243,6 +1249,132 @@ def _persist_universe_run(result, run_start: datetime,
                              out_dir=UNIVERSE_RUNS_DIR)
 
 
+def _multi_columns(multi_result) -> dict[str, str]:
+    """strategy_id -> its column header: the friendly display name, with the id appended
+    ONLY when two selected strategies share a label (GARP v1/v2 do) — a column must never
+    silently swallow another's cells."""
+    ids = multi_result.strategy_ids
+    labels = {sid: (multi_result.strategy_names.get(sid) or sid) for sid in ids}
+    seen: dict[str, int] = {}
+    for lbl in labels.values():
+        seen[lbl] = seen.get(lbl, 0) + 1
+    return {sid: (lbl if seen[lbl] == 1 else f"{lbl} ({sid})")
+            for sid, lbl in labels.items()}
+
+
+def _multi_grid_rows(multi_result) -> list[dict]:
+    """The combined grid as table rows (FUND-RUN-1) — one row per name, one column per
+    strategy, plus the rank-sum. Pure, so the table and the markdown download read the
+    SAME cells. ``‡`` marks a rank-sum over FEWER lenses than the run used (nothing is
+    imputed for a strategy that excluded the name), so a smaller sum is never misread."""
+    columns = _multi_columns(multi_result)
+    rows = []
+    for row in multi_result.rows:
+        rs = "—" if row.rank_sum is None else str(row.rank_sum)
+        if row.rank_sum is not None and not row.comparable:
+            rs = f"{rs}‡"
+        cells = {"Name": row.display, "Rank-sum": rs,
+                 "Graded by": f"{row.graded} of {len(multi_result.strategy_ids)}"}
+        for sid, header in columns.items():
+            cells[header] = row.cells[sid].render()
+        rows.append(cells)
+    return rows
+
+
+def _multi_strategy_markdown(multi_result) -> str:
+    """The multi-lens re-grade as a self-contained markdown doc (the download). The
+    per-strategy runs are persisted individually by the existing single-run sink; this is
+    the COMBINED view, which has no on-disk format of its own."""
+    m = multi_result.meta
+    ids = multi_result.strategy_ids
+    lines = [f"# Multi-lens re-grade — {len(ids)} strategies", "",
+             f"**Running {', '.join(ids)} on {m.get('universe_id') or 'adhoc'} in "
+             f"{m['council_mode']}.**", "",
+             "_Verdict: deterministic ranker. No LLM ran — narration is a per-strategy "
+             "run._", "",
+             f"- names in cohort: {m.get('universe_size', 0)}",
+             f"- ranked by ALL {len(ids)} strategies: {m.get('graded_by_all', 0)}", "",
+             "## Combined grid", ""]
+    rows = _multi_grid_rows(multi_result)
+    if rows:
+        head = list(rows[0].keys())
+        lines.append("| " + " | ".join(head) + " |")
+        lines.append("|" + "---|" * len(head))
+        for row in rows:
+            lines.append("| " + " | ".join(str(row[h]) for h in head) + " |")
+    else:
+        lines.append("_(no names reported)_")
+    lines += ["", "Rank-sum adds the per-strategy cohort POSITIONS and is comparable only "
+                  "across names ranked by ALL strategies (‡ = ranked by fewer; nothing "
+                  "imputed for an exclusion).", ""]
+    for sid in ids:
+        res = multi_result.results[sid]
+        lines += [f"## {multi_result.strategy_names.get(sid) or sid} (`{sid}`)", ""]
+        lines.append(f"- ranked: {res.meta['ranked_count']} / "
+                     f"{res.meta['universe_size']}")
+        if res.excluded:
+            lines += ["", "Excluded (screen / cap / sector):", ""]
+            lines += [f"- **{display_name(t, res.names.get(t))}** — {why}"
+                      for t, why in res.excluded]
+        if res.unrateable:
+            lines += ["", "Unrateable (no data — no verdict):", ""]
+            lines += [f"- **{display_name(t, res.names.get(t))}** — {why}"
+                      for t, why in res.unrateable]
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _render_multi_strategy_result(multi_result) -> None:
+    """The combined grid (FUND-RUN-1) — presentation only: every cell is the
+    verdict-of-record a single run of that strategy produces."""
+    m = multi_result.meta
+    ids = multi_result.strategy_ids
+
+    persisted = st.session_state.get("uni_multi_persisted")
+    if persisted:
+        paths = ", ".join(f"`{md.relative_to(ROOT)}`" for md, _html in persisted)
+        st.success(f"💾 Saved the {len(persisted)} per-strategy run(s) to: {paths}")
+
+    st.markdown(f"### Combined grid — {len(ids)} strategies × "
+                f"{m.get('universe_size', 0)} names")
+    st.caption(f"Running {', '.join(ids)} on {m.get('universe_id') or 'adhoc'} in "
+               f"{m['council_mode']}.")
+    st.caption("**Verdict: deterministic ranker.** No LLM ran — narration stays a "
+               "per-strategy run.")
+    rows = _multi_grid_rows(multi_result)
+    if rows:
+        st.dataframe(rows, width="stretch", hide_index=True)
+    else:
+        st.info("No names reported.")
+    st.caption(f"Rank-sum adds the per-strategy cohort POSITIONS; comparable only across "
+               f"the {m.get('graded_by_all', 0)} name(s) ranked by ALL {len(ids)} "
+               f"strategies (‡ = ranked by fewer — nothing is imputed for an exclusion).")
+
+    for sid in ids:
+        res = multi_result.results[sid]
+        label = multi_result.strategy_names.get(sid) or sid
+        with st.expander(f"{label} — exclusions & unrateable "
+                         f"({len(res.excluded)} excluded, "
+                         f"{len(res.unrateable)} unrateable)"):
+            if res.excluded:
+                st.markdown("**Excluded (failed rule + observed value):**")
+                for t, why in res.excluded:
+                    st.markdown(f"- **{display_name(t, res.names.get(t))}** — {why}")
+            if res.unrateable:
+                st.markdown("**Unrateable (no data — no verdict):**")
+                for t, why in res.unrateable:
+                    st.markdown(f"- **{display_name(t, res.names.get(t))}** — {why}")
+            if not res.excluded and not res.unrateable:
+                st.caption("Every name was rateable and ranked.")
+
+    run_start = st.session_state.get("uni_run_start") or datetime.now(timezone.utc)
+    st.download_button(
+        "⬇ Download combined grid (markdown)",
+        data=_multi_strategy_markdown(multi_result).encode("utf-8"),
+        file_name=f"multi_lens_regrade_{run_start.strftime('%Y%m%d_%H%M')}.md",
+        mime="text/markdown", key="uni_multi_download")
+
+
 def _render_universe_result(result) -> None:
     m = result.meta
 
@@ -1463,6 +1595,44 @@ def render_universe_tab(show_validation: bool = False) -> None:
         with st.expander("Tickers in this manifest"):
             st.write(", ".join(universe))
 
+    # STRAT-PICKER-1: which lenses can HONESTLY grade this cohort. The cohort's asset
+    # class is DERIVED from the lenses that declare it (applicability.py); an AD-HOC
+    # cohort declares nothing, so it is UNKNOWN and NOTHING is filtered out — the live
+    # 2026-08-10 bug was an ad-hoc stock cohort offered a single lens while five stock
+    # lenses sat unreachable in strategies/. The primary dropdown above stays complete
+    # either way (never hide a runnable strategy); this only names what applies and warns
+    # on a CONFIRMED mismatch, which the run-time asset-kind gate would exclude anyway.
+    all_rank_strategies = [s for _, _, s in rank_options]
+    cohort_kind = cohort_asset_kind(universe_id, all_rank_strategies)
+    applicable = applicable_rank_strategies(all_rank_strategies, cohort_kind)
+    st.caption(cohort_scope_note(cohort_kind, len(applicable),
+                                 adhoc=universe_id is None))
+    scope_warning = out_of_scope_note(rank_strategy, cohort_kind)
+    if scope_warning:
+        st.warning(scope_warning)
+
+    # FUND-RUN-1: one cohort, N strategies, ONE combined grid. Five lenses used to mean
+    # five manual runs and five reports to eyeball side by side (2026-08-04, 2026-08-10).
+    # The pool is the APPLICABLE set for this cohort (STRAT-PICKER-1 above) minus the
+    # primary — so an ad-hoc stock cohort offers every stock lens, and an ETF cohort only
+    # the ETF lenses. A multi-lens run is DETERMINISTIC: no narration, no cost.
+    extra_pool = [s for s in applicable if s.id != rank_strategy.id]
+    extra_labels = [strategy_label(s) for s in extra_pool]
+    extra_choice = st.multiselect(
+        "Also grade with (one combined grid — deterministic, free)", extra_labels,
+        key="uni_extra_strategies",
+        help="Grade this SAME cohort under several lenses in one run and read them in one "
+             "combined grid (per-strategy rank + rank-sum; exclusions carry the failed "
+             "rule and the observed value). Deterministic only — no LLM, no cost; "
+             "narration stays a single-strategy run.")
+    extra_ids = [extra_pool[extra_labels.index(lbl)].id for lbl in extra_choice]
+    multi_ids = [rank_strategy.id] + extra_ids
+    multi = len(multi_ids) > 1
+    if multi:
+        st.caption(f"Multi-lens re-grade: **{len(multi_ids)}** strategies × "
+                   f"**{len(universe)}** name(s) — deterministic ranker only "
+                   f"(no narration, no cost).")
+
     col_a, col_b = st.columns(2)
     with col_a:
         ranker_only = st.checkbox("Ranker only — no LLM, no cost", value=False,
@@ -1503,12 +1673,15 @@ def render_universe_tab(show_validation: bool = False) -> None:
     if len(universe) > CAP:
         problems.append(f"Universe too large ({len(universe)} > {CAP}) for an "
                         f"interactive run — trim it.")
-    if not ranker_only and not has_key:
+    # A multi-lens run is deterministic by construction (FUND-RUN-1), so it needs no key
+    # and shows no cost estimate — same footing as the Ranker-only checkbox.
+    deterministic = ranker_only or multi
+    if not deterministic and not has_key:
         problems.append("Narrator / second-opinion needs ANTHROPIC_API_KEY (set it "
                         "in the environment or a local .env). Use **Ranker only** to "
                         "run with no LLM and no cost.")
 
-    if not ranker_only and universe and len(universe) <= CAP:
+    if not deterministic and universe and len(universe) <= CAP:
         est = estimate_cost(
             _estimate_shortlist_size(len(universe), rank_strategy,
                                      narrate_coverage=narrate_coverage))
@@ -1518,10 +1691,40 @@ def render_universe_tab(show_validation: bool = False) -> None:
     for msg in problems:
         st.info(msg)
 
-    label = "▶ Run ranker (free)" if ranker_only else "▶ Run universe"
+    if multi:
+        label = f"▶ Run {len(multi_ids)} strategies (free)"
+    else:
+        label = "▶ Run ranker (free)" if ranker_only else "▶ Run universe"
     run = st.button(label, type="primary", disabled=bool(problems), key="uni_run")
 
-    if run:
+    if run and multi:
+        run_start = datetime.now(timezone.utc)
+        status = st.status("Starting…", expanded=True)
+        try:
+            from aristos_council.pipeline import run_multi_strategy_pipeline
+
+            multi_result = run_multi_strategy_pipeline(
+                universe, multi_ids, universe_id=universe_id,
+                strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
+                freeze_dir=ROOT / "runs",
+                progress=lambda msg: status.update(label=msg))
+        except Exception as exc:
+            status.update(label="Run failed", state="error")
+            st.exception(exc)
+            st.session_state.pop("uni_multi_result", None)
+        else:
+            status.update(label="Done.", state="complete")
+            st.session_state["uni_multi_result"] = multi_result
+            st.session_state["uni_run_start"] = run_start
+            st.session_state["uni_universe_display_name"] = universe_display_name
+            # Each column is a complete run of that strategy — persist them with the SAME
+            # helper a single run uses, so no completed run lives only in the session.
+            st.session_state["uni_persisted_paths"] = None
+            st.session_state["uni_multi_persisted"] = [
+                _persist_universe_run(res, run_start, universe_display_name)
+                for res in multi_result.results.values()]
+            st.session_state.pop("uni_result", None)
+    elif run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         status = st.status("Starting…", expanded=True)
         try:
@@ -1553,6 +1756,13 @@ def render_universe_tab(show_validation: bool = False) -> None:
             # survive a restart even if nobody clicks a download button.
             st.session_state["uni_persisted_paths"] = _persist_universe_run(
                 result, run_start, universe_display_name)
+            st.session_state.pop("uni_multi_result", None)
+            st.session_state.pop("uni_multi_persisted", None)
+
+    multi_result = st.session_state.get("uni_multi_result")
+    if multi_result is not None:
+        st.divider()
+        _render_multi_strategy_result(multi_result)
 
     result = st.session_state.get("uni_result")
     if result is not None:

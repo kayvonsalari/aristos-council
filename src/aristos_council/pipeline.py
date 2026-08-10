@@ -234,8 +234,36 @@ def _shortlist(ranked: list[RankedTicker], runs_on: str, k: int) -> list[RankedT
     return [r for r in live if r.verdict == "buy"]   # buy_quintile (default)
 
 
+def _peer_rows(cohort: Optional[list[RankedTicker]],
+               ticker: str) -> dict[str, dict]:
+    """Every OTHER live name's authoritative row, keyed by ticker (NARR-CHK-FP-2).
+
+    The narrator compares the name it writes about with its cohort ("the identically scored
+    MSFT that received HOLD"), and such a claim is only checkable against the row of the name
+    it NAMES — checked against the narrated name's row it read as a contradiction though it
+    was true (live on the 2026-08-10 GOOGL narration). Positions come from
+    ``cohort_positions`` over the LIVE cohort, the same tie-shared ordinal every ranked table
+    displays, so a peer claim is judged by exactly what the reader sees. Empty when no cohort
+    is supplied — the check then behaves exactly as before. Never derived from the SHORTLIST
+    alone: positions taken over a subset would be the wrong ordinals, and a wrong row is
+    worse than no row."""
+    live = [r for r in (cohort or []) if not r.excluded]
+    if not live:
+        return {}
+    positions = cohort_positions(live)
+    out: dict[str, dict] = {}
+    for r in live:
+        if r.ticker == ticker:
+            continue
+        pos, _tied = positions.get(r.ticker, (None, False))
+        out[r.ticker] = {"factors": dict(r.factor_ranks), "combined_position": pos,
+                         "score": r.combined_rank, "verdict": r.verdict}
+    return out
+
+
 def _annotate_narration(rep: RunReport, r: RankedTicker,
-                        boundary_tie: Optional[dict] = None) -> None:
+                        boundary_tie: Optional[dict] = None,
+                        cohort: Optional[list[RankedTicker]] = None) -> None:
     """Append rank-semantics contradiction annotations to the narrative in place (ITEM 4).
 
     Verifies the narrator's ordinal claims against ``r``'s authoritative rank table and
@@ -264,7 +292,10 @@ def _annotate_narration(rep: RunReport, r: RankedTicker,
     table = {"N": r.universe_size, "combined_position": r.cohort_position,
              "factors": dict(r.factor_ranks), "ticker": r.ticker,
              "score": r.combined_rank,
-             "boundary_tie": boundary_tie or {}}
+             "boundary_tie": boundary_tie or {},
+             # NARR-CHK-FP-2: the cohort's other rows, so a CROSS-NAME claim is judged
+             # against the name it names instead of stamping honest prose.
+             "peers": _peer_rows(cohort, r.ticker)}
     annotations = check_narration(d.rationale, table)
     if annotations:
         d.rationale = d.rationale.rstrip() + "\n" + "\n".join(annotations)
@@ -308,6 +339,7 @@ def _council_stage(
     sentiment_adapter=None, sentiment_missing_key: bool = False,
     progress: Optional[Callable[[str], None]] = None,
     boundary_ties: Optional[dict[str, dict]] = None,
+    cohort: Optional[list[RankedTicker]] = None,
 ) -> list[CouncilOutcome]:
     """Run the LLM council over the shortlist (matrix skipped — the ranker is the
     verdict-of-record). Shared by ``run_pipeline`` and ``run_rank_pipeline`` so the
@@ -340,8 +372,10 @@ def _council_stage(
             ranker_boundary_tie=dict(boundary_tie),
             static_factor_evidence=_static_factor_evidence(r))))
         rep = report_from_state(result)
-        # ITEM 4: rank-semantics post-check (+ VERDICT-TIE-1 tie-ordering check).
-        _annotate_narration(rep, r, boundary_tie)
+        # ITEM 4: rank-semantics post-check (+ VERDICT-TIE-1 tie-ordering check). The whole
+        # ranked cohort rides along so a CROSS-NAME claim is checked against the row of the
+        # name it names (NARR-CHK-FP-2); the shortlist alone cannot see a compared peer.
+        _annotate_narration(rep, r, boundary_tie, cohort=cohort)
         outcomes.append(CouncilOutcome(
             ticker=r.ticker, ranker_verdict=r.verdict,
             council_verdict=rep.council_verdict,
@@ -374,7 +408,7 @@ def run_pipeline(
         shortlist, screen_strategy, adapter, runners, mode,
         sentiment_adapter=sentiment_adapter,
         sentiment_missing_key=sentiment_missing_key,
-        boundary_ties=boundary_tie_facts(ranked))
+        boundary_ties=boundary_tie_facts(ranked), cohort=ranked)
 
     return PipelineResult(ranked=ranked, shortlist=[r.ticker for r in shortlist],
                           council=outcomes, council_mode=mode, excluded=excluded)
@@ -596,7 +630,8 @@ def run_rank_pipeline(
             runners = production_runners()
         council = _council_stage(shortlist, council_frame, adapter, runners, mode,
                                  progress=progress,
-                                 boundary_ties=boundary_tie_facts(ranked))
+                                 boundary_ties=boundary_tie_facts(ranked),
+                                 cohort=ranked)
         narratives = {o.ticker: _narrative_text(o) for o in council}
 
     # Freeze the captured inputs into a run record (ITEM 4). Replay runs record which
@@ -938,3 +973,217 @@ def agreement_csv_rows(result: PipelineResult) -> list[dict]:
         "agreement": o.agreement or "", "council_mode": result.council_mode,
         "dissent_notes": " | ".join(o.dissent_notes),
     } for o in result.council]
+
+
+# --------------------------------------------------------------------------- #
+# FUND-RUN-1 — ONE cohort, N strategies, ONE combined grid
+# --------------------------------------------------------------------------- #
+# Re-grading a cohort through five lenses meant five manual runs and five separate
+# reports to eyeball side by side (hit 2026-08-04 and 2026-08-10). This runs the SAME
+# deterministic stage once per strategy over the SAME cohort and combines the results
+# into one grid. Strictly DETERMINISTIC: every per-strategy run is ranker-only, so a
+# multi-lens re-grade costs nothing and narration stays where it was — a per-strategy,
+# optional single-strategy run. No new decision logic: each column is exactly the
+# verdict-of-record that a single run of that strategy would produce, and the grid only
+# arranges them.
+_RANKED, _EXCLUDED, _UNRATEABLE, _FETCH_ERROR, _ABSENT = (
+    "ranked", "excluded", "unrateable", "fetch_error", "absent")
+
+
+@dataclass
+class MultiStrategyCell:
+    """One (ticker, strategy) outcome — the cell of the combined grid.
+
+    ``status`` is the axis the name landed on under THIS strategy: ranked (with its
+    cohort position, verdict and rank-sum score), excluded (the failed rule + observed
+    value, verbatim from the run), unrateable (no data — no verdict), fetch_error
+    (transient; rerun), or absent (the strategy never reported the name)."""
+
+    strategy_id: str
+    status: str = _ABSENT
+    position: Optional[int] = None
+    cohort_size: int = 0
+    verdict: str = ""
+    score: Optional[float] = None
+    reason: str = ""
+
+    def render(self) -> str:
+        """The cell as one honest line — each axis reads distinctly (an exclusion is not
+        a bad rank, and no-data is not an exclusion)."""
+        if self.status == _RANKED:
+            pos = f"#{self.position} of {self.cohort_size}" if self.position else "ranked"
+            return f"{pos} · {self.verdict.upper()}"
+        if self.status == _EXCLUDED:
+            return f"excluded — {self.reason}"
+        if self.status == _UNRATEABLE:
+            return f"UNRATEABLE — {self.reason}"
+        if self.status == _FETCH_ERROR:
+            return f"fetch failed (rerun) — {self.reason}"
+        return "—"
+
+
+@dataclass
+class MultiStrategyRow:
+    """One name across every strategy in the run.
+
+    ``rank_sum`` adds the per-strategy cohort POSITIONS over the strategies that actually
+    RANKED the name — nothing is imputed for a strategy that excluded it (the null≠false
+    discipline: an exclusion is not a worst rank). ``comparable`` is False when the name
+    was not ranked by every strategy, so a smaller sum over fewer lenses is never read as
+    a better one."""
+
+    ticker: str
+    display: str
+    cells: dict[str, MultiStrategyCell] = field(default_factory=dict)
+    rank_sum: Optional[int] = None
+    graded: int = 0
+    comparable: bool = True
+
+
+@dataclass
+class MultiStrategyResult:
+    """A whole multi-lens re-grade: the per-strategy results, kept whole (each is exactly
+    what a single run of that strategy produces), plus the combined ``rows`` grid and the
+    run ``meta``."""
+
+    strategy_ids: list[str]
+    strategy_names: dict[str, str]
+    results: dict[str, RankPipelineResult]
+    rows: list[MultiStrategyRow]
+    meta: dict
+
+
+def combine_rank_results(results: dict[str, RankPipelineResult],
+                         strategy_ids: Optional[list[str]] = None
+                         ) -> list[MultiStrategyRow]:
+    """The combined grid over per-strategy results — pure, so it is testable without a
+    run. Ordered: names every strategy ranked first (best rank-sum first), then the
+    partially-ranked ones, then the never-ranked, ties broken by ticker so the grid is
+    reproducible."""
+    ids = [s for s in (strategy_ids if strategy_ids is not None else list(results))
+           if s in results]
+    names: dict[str, str] = {}
+    cells: dict[str, dict[str, MultiStrategyCell]] = {}
+
+    def _cell(ticker: str, cell: MultiStrategyCell) -> None:
+        cells.setdefault(ticker, {})[cell.strategy_id] = cell
+
+    for sid in ids:
+        res = results[sid]
+        names.update(res.names or {})
+        positions = cohort_positions(res.ranked)
+        cohort_m = len(res.ranked)
+        for r in res.ranked:
+            pos, _tied = positions.get(r.ticker, (None, False))
+            _cell(r.ticker, MultiStrategyCell(
+                strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,
+                verdict=r.verdict, score=r.combined_rank))
+        for status, pairs in ((_EXCLUDED, res.excluded),
+                              (_UNRATEABLE, res.unrateable),
+                              (_FETCH_ERROR, res.fetch_errors)):
+            for ticker, reason in pairs:
+                _cell(ticker, MultiStrategyCell(strategy_id=sid, status=status,
+                                                reason=reason))
+
+    rows: list[MultiStrategyRow] = []
+    for ticker in sorted(cells):
+        by_sid = {sid: cells[ticker].get(sid, MultiStrategyCell(strategy_id=sid))
+                  for sid in ids}
+        ranked_cells = [c for c in by_sid.values()
+                        if c.status == _RANKED and c.position is not None]
+        rows.append(MultiStrategyRow(
+            ticker=ticker, display=display_name(ticker, names.get(ticker)),
+            cells=by_sid,
+            rank_sum=sum(c.position for c in ranked_cells) if ranked_cells else None,
+            graded=len(ranked_cells),
+            comparable=len(ranked_cells) == len(ids) and bool(ids)))
+    rows.sort(key=lambda row: (-row.graded,
+                               row.rank_sum if row.rank_sum is not None else 10**9,
+                               row.ticker))
+    return rows
+
+
+def run_multi_strategy_pipeline(
+    universe: Optional[list[str]] = None, strategy_ids: Optional[list[str]] = None, *,
+    universe_id: Optional[str] = None, universes_dir: str | Path | None = None,
+    strategies_dir: str | Path | None = None, adapter=None,
+    today: Optional[date] = None, use_cache: bool = True,
+    progress: Optional[Callable[[str], None]] = None,
+    freeze_dir: str | Path | None = None,
+) -> MultiStrategyResult:
+    """Grade ONE cohort under N rank strategies and return the combined grid (FUND-RUN-1).
+
+    Each strategy is run through the SAME ``run_rank_pipeline`` entry the CLI and the
+    Universe Run tab already use, with ``ranker_only=True`` — deterministic, free, no LLM.
+    So a column here is byte-identical to that strategy's own single run, and narration
+    stays a separate, optional, per-strategy choice (unchanged).
+
+    The adapter is built ONCE and shared across the strategies, so the second lens reads
+    the same cohort out of the cache instead of re-fetching it. Duplicate ids are collapsed
+    (first occurrence wins); the order given is the column order.
+    """
+    ids: list[str] = []
+    for sid in list(strategy_ids or []):
+        if sid and sid not in ids:
+            ids.append(sid)
+    if not ids:
+        raise ValueError("run_multi_strategy_pipeline needs at least one strategy id")
+
+    today = today or date.today()
+    if adapter is None:
+        adapter = _build_adapter(today=today, use_cache=use_cache)
+
+    results: dict[str, RankPipelineResult] = {}
+    names: dict[str, str] = {}
+    for i, sid in enumerate(ids, 1):
+        if progress is not None:
+            progress(f"Grading with {sid} ({i} of {len(ids)})…")
+        res = run_rank_pipeline(
+            list(universe) if universe else None, sid, universe_id=universe_id,
+            universes_dir=universes_dir, strategies_dir=strategies_dir,
+            ranker_only=True, adapter=adapter, today=today, use_cache=use_cache,
+            freeze_dir=freeze_dir)
+        results[sid] = res
+        names[sid] = res.meta.get("rank_strategy_name", "") or sid
+
+    rows = combine_rank_results(results, ids)
+    first = results[ids[0]]
+    meta = {
+        "strategy_ids": list(ids),
+        "universe_id": first.meta.get("universe_id"),
+        "universe_size": first.meta.get("universe_size", 0),
+        "council_mode": "ranker-only",
+        "ranker_only": True,
+        "graded_by_all": sum(1 for row in rows if row.comparable),
+    }
+    return MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
+                               results=results, rows=rows, meta=meta)
+
+
+def format_multi_strategy_grid(result: MultiStrategyResult) -> str:
+    """The combined grid as text (the CLI print and the UI download read this ONE
+    builder, so they cannot drift). One row per name: rank-sum, then one cell per
+    strategy. A name not ranked by every strategy carries ‡ — its smaller sum is over
+    fewer lenses and is NOT a better one."""
+    ids = result.strategy_ids
+    m = result.meta
+    lines = [
+        f"=== COMBINED GRID — {len(ids)} strategies over "
+        f"{m.get('universe_size', 0)} name(s) in "
+        f"{m.get('universe_id') or 'adhoc'} ===",
+        "  Verdict: deterministic ranker (no LLM ran — narration is per-strategy).",
+        "",
+    ]
+    head = f"  {'name':<24} {'rank-sum':<10}" + "".join(f"{sid:<34}" for sid in ids)
+    lines.append(head)
+    for row in result.rows:
+        rs = "—" if row.rank_sum is None else str(row.rank_sum)
+        if row.rank_sum is not None and not row.comparable:
+            rs = f"{rs}‡"
+        cells = "".join(f"{row.cells[sid].render():<34}" for sid in ids)
+        lines.append(f"  {_name_col(row.display, 24):<24} {rs:<10}{cells}")
+    lines.append("")
+    lines.append(f"  rank-sum = sum of the per-strategy cohort POSITIONS; comparable only "
+                 f"across the {m.get('graded_by_all', 0)} name(s) ranked by ALL {len(ids)} "
+                 f"strategies (‡ = ranked by fewer, nothing imputed).")
+    return "\n".join(lines)
