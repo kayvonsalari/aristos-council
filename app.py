@@ -1757,6 +1757,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
             st.session_state["uni_persisted_paths"] = _persist_universe_run(
                 result, run_start, universe_display_name)
             st.session_state.pop("uni_multi_result", None)
+            st.session_state.pop("uni_multi_persisted", None)
 
     multi_result = st.session_state.get("uni_multi_result")
     if multi_result is not None:
