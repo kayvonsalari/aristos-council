@@ -13,7 +13,10 @@
 
 id: conservative_plus_v1
 name: Conservative Formula+ (rank-based)
-display_name: Defensive Income (Conservative Formula+)
+# DISPLAY LABEL ONLY (FUND-UI-2): plain name; the method ("Conservative Formula+") is
+# already the `name` above and the description below, so it does not belong in the
+# picker label too. The `id` is the stable record key.
+display_name: Defensive Income
 version: 1
 
 description: >

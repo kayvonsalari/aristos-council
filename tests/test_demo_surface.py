@@ -56,14 +56,19 @@ def test_universe_display_names_and_roles():
 # Strategies — friendly names, ids untouched
 # --------------------------------------------------------------------------- #
 def test_strategy_display_names():
-    assert strategy_label(_strategy("magic_formula_momentum_v1")) == \
-        "Value + Momentum (flagship)"
-    assert strategy_label(_strategy("conservative_plus_v1")) == \
-        "Defensive Income (Conservative Formula+)"
-    assert strategy_label(_strategy("magic_formula_v1")) == \
-        "Classic Value (baseline — for comparison)"
-    # ids are the stable record keys — unchanged.
+    # FUND-UI-2: PLAIN names — what the strategy is, not its rank in the line-up or the
+    # method behind it. The qualifiers moved to `role` (its own caption) or were already
+    # in `name`/`description`.
+    assert strategy_label(_strategy("magic_formula_momentum_v1")) == "Value + Momentum"
+    assert strategy_role(_strategy("magic_formula_momentum_v1")) == "flagship"
+    assert strategy_label(_strategy("conservative_plus_v1")) == "Defensive Income"
+    assert strategy_label(_strategy("magic_formula_v1")) == "Classic Value"
+    assert "baseline" in strategy_role(_strategy("magic_formula_v1"))
+    assert strategy_label(_strategy("financials_v1")) == "Financials"
+    assert strategy_label(_strategy("growth_garp_v2")) == "Growth"
+    # ids are the stable record keys — unchanged by every rename above.
     assert _strategy("magic_formula_v1").id == "magic_formula_v1"
+    assert _strategy("growth_garp_v2").id == "growth_garp_v2"
 
 
 def test_no_underscores_or_version_in_user_facing_labels():

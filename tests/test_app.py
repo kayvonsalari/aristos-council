@@ -491,7 +491,7 @@ def test_validation_assets_hidden_by_default(monkeypatch):
 
     rank = _strategy_picker(at).options
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
-    assert any("GARP" in o for o in rank)                           # growth is live (4C)
+    assert "Growth" in rank                                         # growth is live (4C)
     assert any("RAW" in o for o in rank)                            # canonical raw (RAW-1)
     assert any("Financials" in o for o in rank)                     # financials lens (FIN-1)
     assert any("Dividend ETFs" in o for o in rank)                  # ETF-1 dividend lens
@@ -502,17 +502,18 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert len(rank) == 8
 
 
-def test_both_strategy_dropdowns_list_the_live_strategies():
-    # 4C ITEM 2: the universe-run selector AND the Company Check selector both populate
-    # from discovery with friendly display names; growth appears as GARP. RAW-1 makes it
-    # four (the canonical no-screen variant is visible).
+def test_both_strategy_pickers_offer_the_same_live_strategies():
+    # FUND-UI-2: the run flow's picker and the Company Check picker are the SAME
+    # implementation now, so they offer the same set in the same order — a fix to one
+    # can no longer leave the other behind.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
     rank = _strategy_picker(at).options
     cc = _dropdown(at, "Strategy (lens screen + factors)").options
+    assert list(rank) == list(cc)
     for opts in (rank, cc):
-        assert any("GARP" in o for o in opts)                        # growth as GARP
+        assert "Growth" in opts                                      # plain names now
         assert any("RAW" in o for o in opts)                         # canonical raw
         assert any("Financials" in o for o in opts)                  # financials lens (FIN-1)
         assert not any("_" in o for o in opts)                       # display names, no ids

@@ -17,7 +17,9 @@
 
 id: financials_v1
 name: Financials (rank-based)
-display_name: Financials (banks & networks)
+# DISPLAY LABEL ONLY (FUND-UI-2): plain name; "banks & networks" is scope, and it is in
+# the description below. The `id` is the stable record key.
+display_name: Financials
 version: 1
 
 description: >-

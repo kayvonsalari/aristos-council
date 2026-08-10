@@ -45,7 +45,7 @@ def test_raw_is_discovered_visible_and_matches_the_flagship_factors_and_gates():
 def test_raw_strategy_tab_renders_with_no_screen_criteria():
     # 4C ITEM 3 guarantee: the generic Strategy-tab builder renders it with zero UI code.
     d = strategy_detail("magic_formula_raw_v1", STRAT_DIR)
-    assert d.display_name == "Magic Formula RAW (canonical, no screens)"
+    assert d.display_name == "Magic Formula RAW"      # FUND-UI-2: plain name
     assert d.criteria == [] and d.screen_source == "own criteria"     # no screen
     assert {f.name for f in d.factors} == {"roic", "earnings_yield", "momentum_12m"}
     assert "quintile" in d.cut_rule

@@ -17,7 +17,10 @@
 
 id: magic_formula_raw_v1
 name: Magic Formula RAW
-display_name: Magic Formula RAW (canonical, no screens)
+# DISPLAY LABEL ONLY (FUND-UI-2): plain name; "canonical, no screens" is the strategy's
+# ROLE, not part of what it is called. The `id` is the stable record key.
+display_name: Magic Formula RAW
+role: canonical — no screens, gates only
 version: 1
 created: "2026-07-09"
 

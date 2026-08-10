@@ -58,7 +58,9 @@ def test_v2_is_visible_v1_hidden_and_lens_points_to_v2():
 
 def test_v2_renders_in_the_strategy_tab_with_zero_ui_changes():
     d = strategy_detail("growth_garp_v2", STRAT_DIR)
-    assert d.display_name == "Growth at a Reasonable Price (GARP)" and d.version == 2
+    # FUND-UI-2 renamed the LABEL to the plain "Growth" (the id, the `name` and the
+    # description still carry the GARP method); version and behaviour are untouched.
+    assert d.display_name == "Growth" and d.version == 2
     assert d.screen_source == "lens: growth_screen_v2"
     # the lens has NO momentum criterion in v2
     assert "min_price_momentum" not in {c.name for c in d.criteria}
