@@ -1,0 +1,970 @@
+{
+  "run_date": "2026-08-16",
+  "source": "ft",
+  "base_universe": "growth_40_v1",
+  "cohort_size": 55,
+  "lenses": [
+    "conservative_plus_v1",
+    "magic_formula_momentum_v1",
+    "growth_garp_v2",
+    "magic_formula_raw_v1",
+    "financials_v1"
+  ],
+  "scouted": [
+    {
+      "symbol": "BABA",
+      "source": "ft",
+      "company": "Alibaba Group Holding \u2014 AI/Cloud/E-commerce",
+      "date_added": "2026-08-08",
+      "story": "\"Alibaba's latest AI model puts it back in the great game\", FT (Lex), Aug 7 2026",
+      "display": "Alibaba Group Holding Limited (BABA)",
+      "rank_sum": 32,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.008481 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.008481 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.06421 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.06421 vs threshold 0.12)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.05649 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.05649 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 32,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#32 of 47 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Cyclical' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Cyclical' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "XOM",
+      "source": "ft",
+      "company": "ExxonMobil \u2014 Oil & Gas",
+      "date_added": "2026-08-08",
+      "story": "\"Exxon nears peak impunity on climate obligations\", FT (Lex), Aug 7 2026",
+      "display": "XOM",
+      "rank_sum": 4,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_streak (observed 4 vs threshold 10.0) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 4 vs threshold 10.0) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.1111 vs threshold 0.12) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.1111 vs threshold 0.12) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed -0.05914 vs threshold 0.1) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.05914 vs threshold 0.1) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 4,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#4 of 47 \u00b7 BUY"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Energy' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Energy' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "SBRY.L",
+      "source": "ft",
+      "company": "J Sainsbury plc \u2014 Food Retail",
+      "date_added": "2026-08-08",
+      "story": "\"Sainsbury's strikes deal to sell Argos for \u00a3120mn to Swift Partners\", FT, Jul 31 2026",
+      "display": "J Sainsbury plc (SBRY.L)",
+      "rank_sum": 44,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.0004073 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.0004073 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.07472 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.07472 vs threshold 0.12)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.02174 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.02174 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 44,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#44 of 47 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Defensive' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Defensive' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "PFE",
+      "source": "ft",
+      "company": "Pfizer Inc \u2014 Pharmaceuticals",
+      "date_added": "2026-08-08",
+      "story": "\"Pfizer grapples with 'a world of hurt' after Covid triumph\", FT, Aug 8 2026",
+      "display": "PFE",
+      "rank_sum": 28,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 1,
+          "cohort_size": 8,
+          "reason": "",
+          "rendered": "#1 of 8 \u00b7 BUY"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.1198 vs threshold 0.12) [borderline]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.1198 vs threshold 0.12) [borderline]"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed -0.1285 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.1285 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 27,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#27 of 47 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Healthcare' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Healthcare' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "TCOM",
+      "source": "ft",
+      "company": "Trip.com Group \u2014 Online Travel",
+      "date_added": "2026-08-08",
+      "story": "\"China's biggest travel site grapples with watchdog's reservations\", FT, Aug 8 2026",
+      "display": "Trip.com Group Limited (TCOM)",
+      "rank_sum": 35,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.00667 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.00667 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.04673 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.04673 vs threshold 0.12)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.04673 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.04673 vs threshold 0.12)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 35,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#35 of 47 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Cyclical' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Cyclical' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "BRK.B",
+      "source": "ft",
+      "company": "Berkshire Hathaway Inc \u2014 Diversified Holding Company/Insurance",
+      "date_added": "2026-08-09",
+      "story": "\"Greg Abel finally puts Buffett's cash pile to work\", FT, Aug 8 2026",
+      "display": "BRK.B",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      }
+    },
+    {
+      "symbol": "3908.HK",
+      "source": "ft",
+      "company": "China International Capital Corp \u2014 Investment Banking/Capital Markets",
+      "date_added": "2026-08-09",
+      "story": "\"The bank behind China's AI listings bonanza\", FT, Aug 8 2026",
+      "display": "China International Capital Corporation Limited (3908.HK)",
+      "rank_sum": 2,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_streak (observed 0 vs threshold 10.0)",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 0 vs threshold 10.0)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.02186 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.02186 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "financials_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 2,
+          "cohort_size": 2,
+          "reason": "",
+          "rendered": "#2 of 2 \u00b7 HOLD"
+        }
+      }
+    },
+    {
+      "symbol": "005380.KS",
+      "source": "ft",
+      "company": "Hyundai Motor \u2014 Automobiles",
+      "date_added": "2026-08-09",
+      "story": "\"Asian carmakers cash in as high petrol prices lift US demand for hybrids\", FT, Aug 9 2026",
+      "display": "Hyundai Motor Company (005380.KS)",
+      "rank_sum": 16,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_streak (observed 0 vs threshold 10.0) [\u26a0 price diverging: +119% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 0 vs threshold 10.0) [\u26a0 price diverging: +119% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.03255 vs threshold 0.12) [\u26a0 price diverging: +119% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.03255 vs threshold 0.12) [\u26a0 price diverging: +119% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.09254 vs threshold 0.1) [\u26a0 price diverging: +119% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.09254 vs threshold 0.1) [\u26a0 price diverging: +119% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 16,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#16 of 47 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Cyclical' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Cyclical' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "META",
+      "source": "ft",
+      "company": "Meta Platforms \u2014 Social Media/Digital Advertising",
+      "date_added": "2026-08-09",
+      "story": "\"Meta told to pay nearly $1bn penalty over social media harm to children\", FT, Aug 7 2026",
+      "display": "Meta Platforms, Inc. (META)",
+      "rank_sum": 55,
+      "graded": 3,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.00356 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.00356 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 24,
+          "cohort_size": 31,
+          "reason": "",
+          "rendered": "#24 of 31 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 5,
+          "cohort_size": 8,
+          "reason": "",
+          "rendered": "#5 of 8 \u00b7 HOLD"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 26,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#26 of 47 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Communication Services' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Communication Services' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "TKMS.DE",
+      "source": "ft",
+      "company": "TKMS \u2014 Aerospace & Defence (Naval/Submarines)",
+      "date_added": "2026-08-09",
+      "story": "\"'Don't underestimate us': German shipbuilder boss steers TKMS to large order wins\", FT, Aug 9 2026",
+      "display": "TKMS AG & Co KGaA (TKMS.DE)",
+      "rank_sum": 86,
+      "graded": 3,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 31,
+          "cohort_size": 31,
+          "reason": "",
+          "rendered": "#31 of 31 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 8,
+          "cohort_size": 8,
+          "reason": "",
+          "rendered": "#8 of 8 \u00b7 SELL"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 47,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#47 of 47 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Industrials' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Industrials' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "KER.PA",
+      "source": "ft",
+      "company": "Kering SA \u2014 Personal & Household Goods (Luxury)",
+      "date_added": "2026-08-09",
+      "story": "\"Gucci is breaking luxury's penny-pinching taboo\", FT (Lex), Aug 9 2026",
+      "display": "KER.PA",
+      "rank_sum": 36,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.01117 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.01117 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.09497 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.09497 vs threshold 0.12)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed -0.1068 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.1068 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 36,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#36 of 47 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Cyclical' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Cyclical' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "SRL.AX",
+      "source": "ft",
+      "company": "Sunrise Energy Metals \u2014 Mining (Rare Earths/Scandium)",
+      "date_added": "2026-08-09",
+      "story": "\"US backs Australian rare earth miner to cut out China\", FT, Aug 9 2026",
+      "display": "Sunrise Energy Metals Limited (SRL.AX)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +962% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +962% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      }
+    },
+    {
+      "symbol": "FRAS.L",
+      "source": "ft",
+      "company": "Frasers Group plc \u2014 Retail (sports & multi-brand luxury)",
+      "date_added": "2026-08-13",
+      "story": "\"Frasers buys Harvey Nichols for \u00a340mn as Mike Ashley pushes into luxury\", FT, Aug 13 2026",
+      "display": "Frasers Group Plc (FRAS.L)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      }
+    },
+    {
+      "symbol": "GS",
+      "source": "ft",
+      "company": "Goldman Sachs Group \u2014 Investment bank / asset management",
+      "date_added": "2026-08-13",
+      "story": "\"Goldman Sachs to acquire ETF provider Neos for up to $2.3bn\", FT, Aug 12 2026",
+      "display": "GS",
+      "rank_sum": 1,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_debt_to_market_cap (observed 2.965 vs threshold 1.0) [\u26a0 price diverging: +42% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_debt_to_market_cap (observed 2.965 vs threshold 1.0) [\u26a0 price diverging: +42% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.07983 vs threshold 0.1) [\u26a0 price diverging: +42% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.07983 vs threshold 0.1) [\u26a0 price diverging: +42% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "financials_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 1,
+          "cohort_size": 2,
+          "reason": "",
+          "rendered": "#1 of 2 \u00b7 BUY"
+        }
+      }
+    },
+    {
+      "symbol": "HLAG.DE",
+      "source": "ft",
+      "company": "Hapag-Lloyd AG \u2014 Container shipping",
+      "date_added": "2026-08-13",
+      "story": "\"Maersk chief calls for investment push to ease trade strains\", FT, Aug 13 2026",
+      "display": "Hapag-Lloyd Aktiengesellschaft (HLAG.DE)",
+      "rank_sum": 21,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_streak (observed 0 vs threshold 10.0)",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 0 vs threshold 10.0)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 7,
+          "cohort_size": 31,
+          "reason": "",
+          "rendered": "#7 of 31 \u00b7 BUY"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed -0.1637 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.1637 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 14,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#14 of 47 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Industrials' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Industrials' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "MAERSK",
+      "source": "ft",
+      "company": "A.P. Moller-Maersk A/S \u2014 Container shipping & logistics",
+      "date_added": "2026-08-13",
+      "story": "\"Maersk chief calls for investment push to ease trade strains\", FT, Aug 13 2026",
+      "display": "MAERSK",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      }
+    },
+    {
+      "symbol": "RIO.L",
+      "source": "ft",
+      "company": "Rio Tinto plc \u2014 Diversified mining / aluminium",
+      "date_added": "2026-08-13",
+      "story": "\"Rio Tinto gets $1.8bn bailout for Australia's biggest aluminium smelter\", FT, Aug 12 2026",
+      "display": "Rio Tinto Group (RIO.L)",
+      "rank_sum": 2,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.000493 vs threshold 0.015) [\u26a0 price diverging: +58% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.000493 vs threshold 0.015) [\u26a0 price diverging: +58% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 1,
+          "cohort_size": 31,
+          "reason": "",
+          "rendered": "#1 of 31 \u00b7 BUY"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.01039 vs threshold 0.1) [\u26a0 price diverging: +58% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.01039 vs threshold 0.1) [\u26a0 price diverging: +58% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 1,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#1 of 47 \u00b7 BUY"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Basic Materials' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Basic Materials' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "VWS.CO",
+      "source": "ft",
+      "company": "Vestas Wind Systems A/S \u2014 Wind turbine manufacturing",
+      "date_added": "2026-08-13",
+      "story": "\"Vestas shares soar as wind turbine orders bounce back\", FT, Aug 12 2026",
+      "display": "Vestas Wind Systems A/S (VWS.CO)",
+      "rank_sum": 51,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.003619 vs threshold 0.015) [\u26a0 price diverging: +77% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.003619 vs threshold 0.015) [\u26a0 price diverging: +77% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 21,
+          "cohort_size": 31,
+          "reason": "",
+          "rendered": "#21 of 31 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.09448 vs threshold 0.1) [\u26a0 price diverging: +77% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.09448 vs threshold 0.1) [\u26a0 price diverging: +77% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 30,
+          "cohort_size": 47,
+          "reason": "",
+          "rendered": "#30 of 47 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Industrials' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Industrials' outside this strategy's scope"
+        }
+      }
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,20 @@
+{
+  "run_date": "2026-08-16",
+  "base_universe": "growth_40_v1",
+  "cohort_size": 55,
+  "lenses": [
+    "conservative_plus_v1",
+    "magic_formula_momentum_v1",
+    "growth_garp_v2",
+    "magic_formula_raw_v1",
+    "financials_v1"
+  ],
+  "sources": {
+    "ft": {
+      "scouted": 18,
+      "skipped": 0,
+      "json": "reports/scout/ft/2026-08-16_verdicts.json",
+      "md": "reports/scout/ft/2026-08-16_verdicts.md"
+    }
+  }
+}
