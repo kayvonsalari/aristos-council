@@ -1,0 +1,281 @@
+{
+  "run_date": "2026-08-16",
+  "source": "economist",
+  "base_universe": "growth_40_v1",
+  "cohort_size": 63,
+  "lenses": [
+    "conservative_plus_v1",
+    "magic_formula_momentum_v1",
+    "growth_garp_v2",
+    "magic_formula_raw_v1",
+    "financials_v1"
+  ],
+  "scouted": [
+    {
+      "symbol": "AMZN",
+      "source": "economist",
+      "company": "Amazon.com Inc \u2014 Cloud computing / custom AI silicon",
+      "date_added": "2026-08-13",
+      "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
+      "display": "Amazon.com, Inc. (AMZN)",
+      "rank_sum": 41,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.1037 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.1037 vs threshold 0.12)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.1037 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.1037 vs threshold 0.12)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 41,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#41 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Cyclical' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Cyclical' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "INTC",
+      "source": "economist",
+      "company": "Intel Corp \u2014 Semiconductors",
+      "date_added": "2026-08-13",
+      "story": "\"Business\" (The world this week), The Economist, Aug 15th 2026 issue (published Aug 13 2026)",
+      "display": "Intel Corporation (INTC)",
+      "rank_sum": 74,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +361% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +361% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 30,
+          "cohort_size": 36,
+          "reason": "",
+          "rendered": "#30 of 36 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed -0.05356 vs threshold 0.1) [\u26a0 price diverging: +361% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.05356 vs threshold 0.1) [\u26a0 price diverging: +361% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 44,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#44 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "NVDA",
+      "source": "economist",
+      "company": "NVIDIA Corp \u2014 Semiconductors / AI infrastructure",
+      "date_added": "2026-08-13",
+      "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
+      "display": "NVIDIA Corporation (NVDA)",
+      "rank_sum": 37,
+      "graded": 3,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.004441 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.004441 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 14,
+          "cohort_size": 36,
+          "reason": "",
+          "rendered": "#14 of 36 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 2,
+          "cohort_size": 10,
+          "reason": "",
+          "rendered": "#2 of 10 \u00b7 BUY"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 21,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#21 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "PANW",
+      "source": "economist",
+      "company": "Palo Alto Networks \u2014 Cybersecurity software",
+      "date_added": "2026-08-14",
+      "story": "\"AI agents lie, cheat and steal. That is putting off users\", The Economist, Aug 15th 2026 issue (published Aug 12 2026)",
+      "display": "Palo Alto Networks, Inc. (PANW)",
+      "rank_sum": 77,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +117% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +117% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 31,
+          "cohort_size": 36,
+          "reason": "",
+          "rendered": "#31 of 36 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +117% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +117% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 46,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#46 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "CRWD",
+      "source": "economist",
+      "company": "CrowdStrike Holdings \u2014 Cybersecurity software",
+      "date_added": "2026-08-14",
+      "story": "\"AI agents lie, cheat and steal. That is putting off users\", The Economist, Aug 15th 2026 issue (published Aug 12 2026)",
+      "display": "CrowdStrike Holdings, Inc. (CRWD)",
+      "rank_sum": 79,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +101% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +101% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 32,
+          "cohort_size": 36,
+          "reason": "",
+          "rendered": "#32 of 36 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +101% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +101% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 47,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#47 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      }
+    }
+  ],
+  "skipped": []
+}

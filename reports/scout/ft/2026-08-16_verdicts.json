@@ -2,7 +2,7 @@
   "run_date": "2026-08-16",
   "source": "ft",
   "base_universe": "growth_40_v1",
-  "cohort_size": 55,
+  "cohort_size": 63,
   "lenses": [
     "conservative_plus_v1",
     "magic_formula_momentum_v1",
@@ -18,7 +18,7 @@
       "date_added": "2026-08-08",
       "story": "\"Alibaba's latest AI model puts it back in the great game\", FT (Lex), Aug 7 2026",
       "display": "Alibaba Group Holding Limited (BABA)",
-      "rank_sum": 32,
+      "rank_sum": 36,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -49,10 +49,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 32,
-          "cohort_size": 47,
+          "position": 36,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#32 of 47 \u00b7 HOLD"
+          "rendered": "#36 of 54 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -71,7 +71,7 @@
       "date_added": "2026-08-08",
       "story": "\"Exxon nears peak impunity on climate obligations\", FT (Lex), Aug 7 2026",
       "display": "XOM",
-      "rank_sum": 4,
+      "rank_sum": 6,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -102,10 +102,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "buy",
-          "position": 4,
-          "cohort_size": 47,
+          "position": 6,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#4 of 47 \u00b7 BUY"
+          "rendered": "#6 of 54 \u00b7 BUY"
         },
         "financials_v1": {
           "status": "excluded",
@@ -124,7 +124,7 @@
       "date_added": "2026-08-08",
       "story": "\"Sainsbury's strikes deal to sell Argos for \u00a3120mn to Swift Partners\", FT, Jul 31 2026",
       "display": "J Sainsbury plc (SBRY.L)",
-      "rank_sum": 44,
+      "rank_sum": 50,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -155,10 +155,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 44,
-          "cohort_size": 47,
+          "position": 50,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#44 of 47 \u00b7 SELL"
+          "rendered": "#50 of 54 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -177,7 +177,7 @@
       "date_added": "2026-08-08",
       "story": "\"Pfizer grapples with 'a world of hurt' after Covid triumph\", FT, Aug 8 2026",
       "display": "PFE",
-      "rank_sum": 28,
+      "rank_sum": 31,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -208,10 +208,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 27,
-          "cohort_size": 47,
+          "position": 30,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#27 of 47 \u00b7 HOLD"
+          "rendered": "#30 of 54 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -230,7 +230,7 @@
       "date_added": "2026-08-08",
       "story": "\"China's biggest travel site grapples with watchdog's reservations\", FT, Aug 8 2026",
       "display": "Trip.com Group Limited (TCOM)",
-      "rank_sum": 35,
+      "rank_sum": 37,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -261,10 +261,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 35,
-          "cohort_size": 47,
+          "position": 37,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#35 of 47 \u00b7 HOLD"
+          "rendered": "#37 of 54 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -277,55 +277,55 @@
       }
     },
     {
-      "symbol": "BRK.B",
+      "symbol": "BRK-B",
       "source": "ft",
       "company": "Berkshire Hathaway Inc \u2014 Diversified Holding Company/Insurance",
       "date_added": "2026-08-09",
       "story": "\"Greg Abel finally puts Buffett's cash pile to work\", FT, Aug 8 2026",
-      "display": "BRK.B",
-      "rank_sum": null,
-      "graded": 0,
+      "display": "Berkshire Hathaway Inc. (BRK-B)",
+      "rank_sum": 6,
+      "graded": 2,
       "comparable": false,
       "lenses": {
         "conservative_plus_v1": {
-          "status": "unrateable",
+          "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
         },
         "magic_formula_momentum_v1": {
-          "status": "unrateable",
+          "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
         },
         "growth_garp_v2": {
-          "status": "unrateable",
-          "verdict": "",
-          "position": null,
-          "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 4,
+          "cohort_size": 10,
+          "reason": "",
+          "rendered": "#4 of 10 \u00b7 HOLD"
         },
         "magic_formula_raw_v1": {
-          "status": "unrateable",
+          "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
         },
         "financials_v1": {
-          "status": "unrateable",
-          "verdict": "",
-          "position": null,
-          "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 2,
+          "cohort_size": 4,
+          "reason": "",
+          "rendered": "#2 of 4 \u00b7 HOLD"
         }
       }
     },
@@ -336,7 +336,7 @@
       "date_added": "2026-08-09",
       "story": "\"The bank behind China's AI listings bonanza\", FT, Aug 8 2026",
       "display": "China International Capital Corporation Limited (3908.HK)",
-      "rank_sum": 2,
+      "rank_sum": 4,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -375,10 +375,10 @@
         "financials_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 2,
-          "cohort_size": 2,
+          "position": 4,
+          "cohort_size": 4,
           "reason": "",
-          "rendered": "#2 of 2 \u00b7 HOLD"
+          "rendered": "#4 of 4 \u00b7 HOLD"
         }
       }
     },
@@ -389,7 +389,7 @@
       "date_added": "2026-08-09",
       "story": "\"Asian carmakers cash in as high petrol prices lift US demand for hybrids\", FT, Aug 9 2026",
       "display": "Hyundai Motor Company (005380.KS)",
-      "rank_sum": 16,
+      "rank_sum": 17,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -420,10 +420,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 16,
-          "cohort_size": 47,
+          "position": 17,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#16 of 47 \u00b7 HOLD"
+          "rendered": "#17 of 54 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -442,7 +442,7 @@
       "date_added": "2026-08-09",
       "story": "\"Meta told to pay nearly $1bn penalty over social media harm to children\", FT, Aug 7 2026",
       "display": "Meta Platforms, Inc. (META)",
-      "rank_sum": 55,
+      "rank_sum": 60,
       "graded": 3,
       "comparable": false,
       "lenses": {
@@ -457,26 +457,26 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 24,
-          "cohort_size": 31,
+          "position": 25,
+          "cohort_size": 36,
           "reason": "",
-          "rendered": "#24 of 31 \u00b7 HOLD"
+          "rendered": "#25 of 36 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 5,
-          "cohort_size": 8,
+          "position": 6,
+          "cohort_size": 10,
           "reason": "",
-          "rendered": "#5 of 8 \u00b7 HOLD"
+          "rendered": "#6 of 10 \u00b7 HOLD"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 26,
-          "cohort_size": 47,
+          "position": 29,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#26 of 47 \u00b7 HOLD"
+          "rendered": "#29 of 54 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -495,7 +495,7 @@
       "date_added": "2026-08-09",
       "story": "\"'Don't underestimate us': German shipbuilder boss steers TKMS to large order wins\", FT, Aug 9 2026",
       "display": "TKMS AG & Co KGaA (TKMS.DE)",
-      "rank_sum": 86,
+      "rank_sum": 98,
       "graded": 3,
       "comparable": false,
       "lenses": {
@@ -510,26 +510,26 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 31,
-          "cohort_size": 31,
+          "position": 35,
+          "cohort_size": 36,
           "reason": "",
-          "rendered": "#31 of 31 \u00b7 SELL"
+          "rendered": "#35 of 36 \u00b7 SELL"
         },
         "growth_garp_v2": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 8,
-          "cohort_size": 8,
+          "position": 10,
+          "cohort_size": 10,
           "reason": "",
-          "rendered": "#8 of 8 \u00b7 SELL"
+          "rendered": "#10 of 10 \u00b7 SELL"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 47,
-          "cohort_size": 47,
+          "position": 53,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#47 of 47 \u00b7 SELL"
+          "rendered": "#53 of 54 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -548,7 +548,7 @@
       "date_added": "2026-08-09",
       "story": "\"Gucci is breaking luxury's penny-pinching taboo\", FT (Lex), Aug 9 2026",
       "display": "KER.PA",
-      "rank_sum": 36,
+      "rank_sum": 39,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -579,10 +579,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 36,
-          "cohort_size": 47,
+          "position": 39,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#36 of 47 \u00b7 HOLD"
+          "rendered": "#39 of 54 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -747,9 +747,9 @@
           "status": "ranked",
           "verdict": "buy",
           "position": 1,
-          "cohort_size": 2,
+          "cohort_size": 4,
           "reason": "",
-          "rendered": "#1 of 2 \u00b7 BUY"
+          "rendered": "#1 of 4 \u00b7 BUY"
         }
       }
     },
@@ -760,7 +760,7 @@
       "date_added": "2026-08-13",
       "story": "\"Maersk chief calls for investment push to ease trade strains\", FT, Aug 13 2026",
       "display": "Hapag-Lloyd Aktiengesellschaft (HLAG.DE)",
-      "rank_sum": 21,
+      "rank_sum": 22,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -774,11 +774,11 @@
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
-          "verdict": "buy",
-          "position": 7,
-          "cohort_size": 31,
+          "verdict": "hold",
+          "position": 8,
+          "cohort_size": 36,
           "reason": "",
-          "rendered": "#7 of 31 \u00b7 BUY"
+          "rendered": "#8 of 36 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -792,9 +792,9 @@
           "status": "ranked",
           "verdict": "hold",
           "position": 14,
-          "cohort_size": 47,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#14 of 47 \u00b7 HOLD"
+          "rendered": "#14 of 54 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -807,55 +807,55 @@
       }
     },
     {
-      "symbol": "MAERSK",
+      "symbol": "MAERSK-B.CO",
       "source": "ft",
       "company": "A.P. Moller-Maersk A/S \u2014 Container shipping & logistics",
       "date_added": "2026-08-13",
       "story": "\"Maersk chief calls for investment push to ease trade strains\", FT, Aug 13 2026",
-      "display": "MAERSK",
-      "rank_sum": null,
-      "graded": 0,
+      "display": "A.P. M\u00f8ller - M\u00e6rsk A/S (MAERSK-B.CO)",
+      "rank_sum": 2,
+      "graded": 2,
       "comparable": false,
       "lenses": {
         "conservative_plus_v1": {
-          "status": "unrateable",
+          "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "reason": "screen: min_dividend_streak (observed 1 vs threshold 10.0) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 1 vs threshold 10.0) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
-          "status": "unrateable",
-          "verdict": "",
-          "position": null,
-          "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 1,
+          "cohort_size": 36,
+          "reason": "",
+          "rendered": "#1 of 36 \u00b7 BUY"
         },
         "growth_garp_v2": {
-          "status": "unrateable",
+          "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "reason": "screen: min_revenue_cagr (observed -0.109 vs threshold 0.1) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.109 vs threshold 0.1) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
-          "status": "unrateable",
-          "verdict": "",
-          "position": null,
-          "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 1,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#1 of 54 \u00b7 BUY"
         },
         "financials_v1": {
-          "status": "unrateable",
+          "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
-          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+          "reason": "sector 'Industrials' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Industrials' outside this strategy's scope"
         }
       }
     },
@@ -866,7 +866,7 @@
       "date_added": "2026-08-13",
       "story": "\"Rio Tinto gets $1.8bn bailout for Australia's biggest aluminium smelter\", FT, Aug 12 2026",
       "display": "Rio Tinto Group (RIO.L)",
-      "rank_sum": 2,
+      "rank_sum": 4,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -881,10 +881,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "buy",
-          "position": 1,
-          "cohort_size": 31,
+          "position": 2,
+          "cohort_size": 36,
           "reason": "",
-          "rendered": "#1 of 31 \u00b7 BUY"
+          "rendered": "#2 of 36 \u00b7 BUY"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -897,10 +897,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "buy",
-          "position": 1,
-          "cohort_size": 47,
+          "position": 2,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#1 of 47 \u00b7 BUY"
+          "rendered": "#2 of 54 \u00b7 BUY"
         },
         "financials_v1": {
           "status": "excluded",
@@ -919,7 +919,7 @@
       "date_added": "2026-08-13",
       "story": "\"Vestas shares soar as wind turbine orders bounce back\", FT, Aug 12 2026",
       "display": "Vestas Wind Systems A/S (VWS.CO)",
-      "rank_sum": 51,
+      "rank_sum": 61,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -934,10 +934,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 21,
-          "cohort_size": 31,
+          "position": 27,
+          "cohort_size": 36,
           "reason": "",
-          "rendered": "#21 of 31 \u00b7 HOLD"
+          "rendered": "#27 of 36 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -950,10 +950,328 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 30,
-          "cohort_size": 47,
+          "position": 34,
+          "cohort_size": 54,
           "reason": "",
-          "rendered": "#30 of 47 \u00b7 HOLD"
+          "rendered": "#34 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Industrials' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Industrials' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "GOLD",
+      "source": "ft",
+      "company": "Barrick Gold Corp \u2014 Gold Mining",
+      "date_added": "2026-08-11",
+      "story": "\"Barrick and Newmont gold mining truce clears way for IPO\", FT, Aug 10 2026",
+      "display": "Gold.com, Inc. (GOLD)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_payout_ratio_fcf (observed 1.376 vs threshold 0.8) [FCF (4y mean)] [\u26a0 price diverging: +89% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_payout_ratio_fcf (observed 1.376 vs threshold 0.8) [FCF (4y mean)] [\u26a0 price diverging: +89% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      }
+    },
+    {
+      "symbol": "DB",
+      "source": "ft",
+      "company": "Deutsche Bank AG \u2014 European Banking",
+      "date_added": "2026-08-11",
+      "story": "\"Deutsche becomes first European clearing bank for renminbi\", FT, Aug 11 2026",
+      "display": "Deutsche Bank Aktiengesellschaft (DB)",
+      "rank_sum": 3,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_streak (observed 4 vs threshold 10.0)",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 4 vs threshold 10.0)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.06154 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.06154 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "financials_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 3,
+          "cohort_size": 4,
+          "reason": "",
+          "rendered": "#3 of 4 \u00b7 HOLD"
+        }
+      }
+    },
+    {
+      "symbol": "DKNG",
+      "source": "ft",
+      "company": "DraftKings Inc \u2014 Online Gambling/Betting",
+      "date_added": "2026-08-11",
+      "story": "\"FanDuel and DraftKings hedge their bets with a predictions pivot\", FT (Lex), Aug 10 2026",
+      "display": "DraftKings Inc. (DKNG)",
+      "rank_sum": 90,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 36,
+          "cohort_size": 36,
+          "reason": "",
+          "rendered": "#36 of 36 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0)",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 54,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#54 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Cyclical' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Cyclical' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "012450.KS",
+      "source": "ft",
+      "company": "Hanwha Aerospace \u2014 Aerospace & Defence",
+      "date_added": "2026-08-11",
+      "story": "\"South Korean group makes US defence push with shipbuilding bid\", FT, Aug 11 2026",
+      "display": "Hanwha Aerospace Co., Ltd. (012450.KS)",
+      "rank_sum": 45,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.006034 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.006034 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.06111 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.06111 vs threshold 0.12)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.06111 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.06111 vs threshold 0.12)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 45,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#45 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Industrials' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Industrials' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "JBS",
+      "source": "ft",
+      "company": "JBS SA \u2014 Food/Meatpacking",
+      "date_added": "2026-08-11",
+      "story": "\"JBS heir to become CEO of world's largest meatpacker\", FT, Aug 11 2026",
+      "display": "JBS N.V. (JBS)",
+      "rank_sum": 23,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_payout_ratio_fcf (observed 1.303 vs threshold 0.8) [FCF (4y mean)]",
+          "rendered": "excluded \u2014 screen: max_payout_ratio_fcf (observed 1.303 vs threshold 0.8) [FCF (4y mean)]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.1052 vs threshold 0.12)",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.1052 vs threshold 0.12)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.05874 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.05874 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 23,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#23 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Defensive' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Defensive' outside this strategy's scope"
+        }
+      }
+    },
+    {
+      "symbol": "RYAAY",
+      "source": "ft",
+      "company": "Ryanair Holdings \u2014 Airlines",
+      "date_added": "2026-08-11",
+      "story": "\"Carbon tax will hit EU's budget airlines where it hurts\", FT (Lex), Aug 11 2026",
+      "display": "Ryanair Holdings plc (RYAAY)",
+      "rank_sum": 40,
+      "graded": 3,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_streak (observed 1 vs threshold 10.0)",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 1 vs threshold 10.0)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 14,
+          "cohort_size": 36,
+          "reason": "",
+          "rendered": "#14 of 36 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 8,
+          "cohort_size": 10,
+          "reason": "",
+          "rendered": "#8 of 10 \u00b7 SELL"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 18,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#18 of 54 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",

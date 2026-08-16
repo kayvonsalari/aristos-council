@@ -1,7 +1,7 @@
 {
   "run_date": "2026-08-16",
   "base_universe": "growth_40_v1",
-  "cohort_size": 55,
+  "cohort_size": 63,
   "lenses": [
     "conservative_plus_v1",
     "magic_formula_momentum_v1",
@@ -11,10 +11,16 @@
   ],
   "sources": {
     "ft": {
-      "scouted": 18,
+      "scouted": 24,
       "skipped": 0,
       "json": "reports/scout/ft/2026-08-16_verdicts.json",
       "md": "reports/scout/ft/2026-08-16_verdicts.md"
+    },
+    "economist": {
+      "scouted": 5,
+      "skipped": 0,
+      "json": "reports/scout/economist/2026-08-16_verdicts.json",
+      "md": "reports/scout/economist/2026-08-16_verdicts.md"
     }
   }
 }
