@@ -1,0 +1,65 @@
+# Scout → Aristos verdicts: weekly deterministic re-grade of newly scouted tickers.
+#
+# Reads the FT (and, once configured, Economist) scout sheets, merges the week's
+# tickers into growth_40_v1, runs the multi-lens ranker (no LLM, no API keys, no
+# spend), and commits per-source results to reports/scout/{ft,economist}/ plus the
+# frozen run records in runs/. The Cowork "aristos-publish" scheduled task reads
+# reports/scout/latest.json afterwards and publishes to the Google Sheet.
+#
+# Free on this public repo. Manual run: Actions tab → this workflow → Run workflow.
+
+name: scout-verdicts
+
+on:
+  schedule:
+    - cron: "45 6 * * 6"        # Saturday 06:45 UTC (~07:45/08:45 UK) — before the
+                                # 09:30-UK Cowork publish task
+  workflow_dispatch:
+    inputs:
+      window_days:
+        description: "Lookback window in days"
+        default: "8"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scout-verdicts
+  cancel-in-progress: false
+
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install (yfinance extra — deterministic ranker only, no LLM)
+        run: pip install -e ".[yfinance]"
+
+      - name: Run scout verdicts
+        env:
+          SCOUT_WINDOW_DAYS: ${{ github.event.inputs.window_days || '8' }}
+          # Optional: set the Economist sheet CSV export URL as a repo variable
+          # (Settings → Secrets and variables → Actions → Variables) once the
+          # sheet exists. Leave unset until then — the script skips it cleanly.
+          SCOUT_SHEET_ECONOMIST: ${{ vars.SCOUT_SHEET_ECONOMIST }}
+        run: python scripts/scout_verdicts.py
+
+      - name: Commit results
+        run: |
+          git config user.name "aristos-scout[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          git add reports/scout runs verdicts || true
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "scout verdicts $(date -u +%F) [skip ci]"
+            git push
+          fi
