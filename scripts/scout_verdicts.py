@@ -327,4 +327,3 @@ def _write_outputs(today: date, per_source: dict, result, cohort: list[str]) -> 
 
 if __name__ == "__main__":
     main()
-Displaying scout_verdicts_v3_py.txt.
