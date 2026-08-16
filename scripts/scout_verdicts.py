@@ -78,7 +78,8 @@ VENUE_SUFFIX = {
     "COPENHAGEN": ".CO", "HELSINKI": ".HE",
 }
 US_VENUES = ("NYSE", "NASDAQ", "ADR")
-SYMBOL_RE = re.compile(r"\b([A-Z0-9]{1,7}(?:\.[A-Z]{1,2})?)\b")
+# allows class/exchange suffixes: BRK.B, FRAS.L, MAERSK-B.CO, 012450
+SYMBOL_RE = re.compile(r"\b([A-Z0-9]{1,7}(?:[.-][A-Z0-9]{1,2}){0,2})\b")
 VENUE_WORD_RE = re.compile(r"|".join(re.escape(v) for v in
                                      sorted(VENUE_SUFFIX, key=len, reverse=True)),
                            re.IGNORECASE)
@@ -101,7 +102,9 @@ def parse_ticker(cell: str) -> str | None:
         venue_m = VENUE_WORD_RE.search(part)
         venue = venue_m.group(0).upper() if venue_m else ""
         sym_text = part[: venue_m.start()] if venue_m else part
-        sym_text = re.sub(r"[()\[\]—–-]", " ", sym_text)
+        # strip brackets and em/en dashes (separators) but KEEP ascii hyphens —
+        # they are part of symbols like MAERSK-B.CO
+        sym_text = re.sub(r"[()\[\]—–]", " ", sym_text)
         sym_m = SYMBOL_RE.search(sym_text)
         # a part like "Nasdaq" carries only a venue for the previous symbol
         if sym_m is None and venue and pending_symbol:
@@ -120,13 +123,16 @@ def parse_ticker(cell: str) -> str | None:
             candidates.append((symbol, venue))
         else:
             pending_symbol = symbol
-    if pending_symbol:
-        candidates.append((pending_symbol, "NYSE"))   # bare symbol → assume US
+    if pending_symbol and not candidates:
+        # bare cell with no venue text at all (newer sheet convention, e.g.
+        # "FRAS.L", "MAERSK-B.CO", "GS") — already yfinance-style, trust it
+        return pending_symbol
     if not candidates:
         return None
     for symbol, venue in candidates:                  # US listing wins
         if any(us in venue for us in US_VENUES):
-            return symbol
+            # yfinance writes US share classes with a dash: BRK.B -> BRK-B
+            return symbol.replace(".", "-")
     symbol, venue = candidates[0]
     for key, suffix in VENUE_SUFFIX.items():
         if key in venue:
@@ -321,3 +327,4 @@ def _write_outputs(today: date, per_source: dict, result, cohort: list[str]) -> 
 
 if __name__ == "__main__":
     main()
+Displaying scout_verdicts_v3_py.txt.
