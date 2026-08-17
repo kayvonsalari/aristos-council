@@ -16,7 +16,7 @@
     {
       "source": "growth-scanner",
       "cell": "-",
-      "reason": "fetch/parse failed: HTTP Error 401: Unauthorized"
+      "reason": "fetch/parse failed: no growth_scan_*.csv found in Drive folder \u2014 is the folder shared 'anyone with link: viewer'?"
     }
   ],
   "scan_file": "",

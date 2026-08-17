@@ -125,7 +125,7 @@
       "date_added": "2026-08-09",
       "story": "\"Asian carmakers cash in as high petrol prices lift US demand for hybrids\", FT, Aug 9 2026",
       "display": "Hyundai Motor Company (005380.KS)",
-      "rank_sum": 13,
+      "rank_sum": 16,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -156,10 +156,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 13,
+          "position": 16,
           "cohort_size": 51,
           "reason": "",
-          "rendered": "#13 of 51 \u00b7 HOLD"
+          "rendered": "#16 of 51 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -178,7 +178,7 @@
       "date_added": "2026-08-09",
       "story": "\"Meta told to pay nearly $1bn penalty over social media harm to children\", FT, Aug 7 2026",
       "display": "Meta Platforms, Inc. (META)",
-      "rank_sum": 59,
+      "rank_sum": 61,
       "graded": 3,
       "comparable": false,
       "lenses": {
@@ -193,10 +193,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 25,
+          "position": 26,
           "cohort_size": 36,
           "reason": "",
-          "rendered": "#25 of 36 \u00b7 HOLD"
+          "rendered": "#26 of 36 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "ranked",
@@ -209,10 +209,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 28,
+          "position": 29,
           "cohort_size": 51,
           "reason": "",
-          "rendered": "#28 of 51 \u00b7 HOLD"
+          "rendered": "#29 of 51 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -283,8 +283,8 @@
       "company": "Kering SA \u2014 Personal & Household Goods (Luxury)",
       "date_added": "2026-08-09",
       "story": "\"Gucci is breaking luxury's penny-pinching taboo\", FT (Lex), Aug 9 2026",
-      "display": "KER.PA",
-      "rank_sum": 42,
+      "display": "Kering SA (KER.PA)",
+      "rank_sum": 38,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -314,11 +314,11 @@
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
-          "verdict": "sell",
-          "position": 42,
+          "verdict": "hold",
+          "position": 38,
           "cohort_size": 51,
           "reason": "",
-          "rendered": "#42 of 51 \u00b7 SELL"
+          "rendered": "#38 of 51 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -442,7 +442,7 @@
       "company": "Goldman Sachs Group \u2014 Investment bank / asset management",
       "date_added": "2026-08-13",
       "story": "\"Goldman Sachs to acquire ETF provider Neos for up to $2.3bn\", FT, Aug 12 2026",
-      "display": "GS",
+      "display": "The Goldman Sachs Group, Inc. (GS)",
       "rank_sum": 1,
       "graded": 1,
       "comparable": false,
@@ -496,7 +496,7 @@
       "date_added": "2026-08-13",
       "story": "\"Maersk chief calls for investment push to ease trade strains\", FT, Aug 13 2026",
       "display": "Hapag-Lloyd Aktiengesellschaft (HLAG.DE)",
-      "rank_sum": 24,
+      "rank_sum": 23,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -527,10 +527,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 16,
+          "position": 15,
           "cohort_size": 51,
           "reason": "",
-          "rendered": "#16 of 51 \u00b7 HOLD"
+          "rendered": "#15 of 51 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -549,7 +549,7 @@
       "date_added": "2026-08-13",
       "story": "\"Maersk chief calls for investment push to ease trade strains\", FT, Aug 13 2026",
       "display": "A.P. M\u00f8ller - M\u00e6rsk A/S (MAERSK-B.CO)",
-      "rank_sum": 3,
+      "rank_sum": 2,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -558,8 +558,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_streak (observed 1 vs threshold 10.0) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 1 vs threshold 10.0) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_streak (observed 1 vs threshold 10.0) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 1 vs threshold 10.0) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
@@ -574,16 +574,16 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_revenue_cagr (observed -0.109 vs threshold 0.1) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.109 vs threshold 0.1) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_revenue_cagr (observed -0.109 vs threshold 0.1) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.109 vs threshold 0.1) [\u26a0 price diverging: +54% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "buy",
-          "position": 2,
+          "position": 1,
           "cohort_size": 51,
           "reason": "",
-          "rendered": "#2 of 51 \u00b7 BUY"
+          "rendered": "#1 of 51 \u00b7 BUY"
         },
         "financials_v1": {
           "status": "excluded",
@@ -655,7 +655,7 @@
       "date_added": "2026-08-13",
       "story": "\"Vestas shares soar as wind turbine orders bounce back\", FT, Aug 12 2026",
       "display": "Vestas Wind Systems A/S (VWS.CO)",
-      "rank_sum": 61,
+      "rank_sum": 60,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -670,10 +670,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 27,
+          "position": 26,
           "cohort_size": 36,
           "reason": "",
-          "rendered": "#27 of 36 \u00b7 HOLD"
+          "rendered": "#26 of 36 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -717,8 +717,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: max_payout_ratio_fcf (observed 1.376 vs threshold 0.8) [FCF (4y mean)] [\u26a0 price diverging: +89% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: max_payout_ratio_fcf (observed 1.376 vs threshold 0.8) [FCF (4y mean)] [\u26a0 price diverging: +89% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: max_payout_ratio_fcf (observed 1.376 vs threshold 0.8) [FCF (4y mean)] [\u26a0 price diverging: +95% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_payout_ratio_fcf (observed 1.376 vs threshold 0.8) [FCF (4y mean)] [\u26a0 price diverging: +95% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -920,7 +920,7 @@
       "date_added": "2026-08-11",
       "story": "\"JBS heir to become CEO of world's largest meatpacker\", FT, Aug 11 2026",
       "display": "JBS N.V. (JBS)",
-      "rank_sum": 23,
+      "rank_sum": 28,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -951,10 +951,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 23,
+          "position": 28,
           "cohort_size": 51,
           "reason": "",
-          "rendered": "#23 of 51 \u00b7 HOLD"
+          "rendered": "#28 of 51 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -988,10 +988,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 14,
+          "position": 15,
           "cohort_size": 36,
           "reason": "",
-          "rendered": "#14 of 36 \u00b7 HOLD"
+          "rendered": "#15 of 36 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "ranked",
@@ -1004,10 +1004,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 19,
+          "position": 18,
           "cohort_size": 51,
           "reason": "",
-          "rendered": "#19 of 51 \u00b7 HOLD"
+          "rendered": "#18 of 51 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",

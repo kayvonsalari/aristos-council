@@ -19,7 +19,7 @@
       "date_added": "2026-08-13",
       "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
       "display": "Amazon.com, Inc. (AMZN)",
-      "rank_sum": 38,
+      "rank_sum": 39,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -50,10 +50,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 38,
+          "position": 39,
           "cohort_size": 51,
           "reason": "",
-          "rendered": "#38 of 51 \u00b7 HOLD"
+          "rendered": "#39 of 51 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -125,7 +125,7 @@
       "date_added": "2026-08-13",
       "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
       "display": "NVIDIA Corporation (NVDA)",
-      "rank_sum": 38,
+      "rank_sum": 39,
       "graded": 3,
       "comparable": false,
       "lenses": {
@@ -140,10 +140,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 14,
+          "position": 15,
           "cohort_size": 36,
           "reason": "",
-          "rendered": "#14 of 36 \u00b7 HOLD"
+          "rendered": "#15 of 36 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "ranked",
@@ -231,7 +231,7 @@
       "date_added": "2026-08-14",
       "story": "\"AI agents lie, cheat and steal. That is putting off users\", The Economist, Aug 15th 2026 issue (published Aug 12 2026)",
       "display": "CrowdStrike Holdings, Inc. (CRWD)",
-      "rank_sum": 77,
+      "rank_sum": 78,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -262,10 +262,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 45,
+          "position": 46,
           "cohort_size": 51,
           "reason": "",
-          "rendered": "#45 of 51 \u00b7 SELL"
+          "rendered": "#46 of 51 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
