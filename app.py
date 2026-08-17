@@ -2063,8 +2063,8 @@ def _render_company_check(result) -> None:
                    f"{result.reference_cohort_n} ranked) — replayed offline, no fresh "
                    "fetch.")
     else:
-        st.caption("No reference run available — showing raw values. Run the universe "
-                   "once (Universe Run tab) to get cohort context.")
+        st.caption("No reference run available — showing raw values. Run that list "
+                   "once (the Run tab) to get cohort context.")
     from aristos_council.company_check import format_factor_value
 
     for fc in result.factors:

@@ -1,9 +1,14 @@
-"""Universe manifests — a declared, versioned INPUT to a rank run.
+"""Universe manifests — a declared INPUT to a rank run.
 
 A verdict is only reproducible if its inputs are declared. A universe is one of those
 inputs (rank verdicts are universe-relative — the same name ranks differently in a
-different universe), so the standing lists live in ``universes/*.yaml`` as versioned
-manifests, not as ad-hoc pasted tickers that vanish after the run.
+different universe), so the standing lists live in ``universes/*.yaml`` as manifests,
+not as ad-hoc pasted tickers that vanish after the run.
+
+Since FUND-UI-2 a universe is a plain, EDITABLE ticker list YOU save (``universes/local/``,
+gitignored); the app ships only the ETF lists, which carry fund tickers nobody types from
+memory. Because a saved list is editable, its id alone no longer pins a membership — so every
+run also records ``universe_members`` and ``member_hash`` (below) in its meta.
 
 Manifest shape:
     id:          '<name>_v<n>'   (must encode a version, like a strategy)
@@ -12,9 +17,9 @@ Manifest shape:
     created:     'YYYY-MM-DD'
     rationale:   one line — why this list
 
-An AD-HOC ticker list (the Universe Run tab's custom textarea, a CLI ticker argument)
-is recorded as ``adhoc:<hex8>`` — a stable hash of the sorted normalized tickers — so
-two identical ad-hoc runs are linkable without pretending they were a named manifest.
+An AD-HOC ticker list (a new or edited list in the Run tab's ticker box, a CLI ticker
+argument) is recorded as ``adhoc:<hex8>`` — a stable hash of the sorted normalized tickers —
+so two identical ad-hoc runs are linkable without pretending they were a named manifest.
 """
 
 from __future__ import annotations

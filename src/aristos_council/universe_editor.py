@@ -1,20 +1,27 @@
-"""Universe editor — build, clone, and save custom ticker lists (UNIED-1).
+"""Ticker lists — parse, name, and save them (UNIED-1, reshaped by FUND-UI-2).
 
-Pure, Streamlit-free core behind Council Station's Universe Editor. Two write paths:
+Pure, Streamlit-free core behind the Run tab's ONE ticker box. (Until FUND-UI-2 this backed a
+separate "Universe Editor" expander; that second flow is gone — the ticker box you run from IS
+the editor now.) Two write paths:
 
-- **Run once** (no file): the parsed tickers go through the existing AD-HOC pipeline
-  path (``universe_id=None`` -> ``adhoc:<hex8>``), so an editor run is fingerprinted and
-  linkable exactly like a Custom paste — the ad-hoc path is REUSED, never forked.
-- **Save**: writes ``universes/local/<id>.yaml`` (created date + rationale). The ``local/``
-  directory carries its own ``.gitignore`` (``*`` + ``!.gitignore``) so personal lists —
-  portfolio-class data — can never ride a commit by default (the 2026-07-09 incident
-  class, closed STRUCTURALLY, not by a reviewer remembering).
+- **Run without saving**: the parsed tickers go through the existing AD-HOC pipeline path
+  (``universe_id=None`` -> ``adhoc:<hex8>``), so a new or EDITED list is fingerprinted and
+  linkable — the ad-hoc path is REUSED, never forked. Nothing is lost by not saving: the run
+  record carries the exact membership (``universe.member_hash``).
+- **Save**: writes ``universes/local/<id>.yaml`` (created date + rationale), either under a
+  fresh id derived from the name (``list_id_from_name``) or, with ``overwrite=True``, over one
+  of your OWN lists in place — a list is a plain editable ticker list, so adding a holding must
+  not force a new id. The ``local/`` directory carries its own ``.gitignore`` (``*`` +
+  ``!.gitignore``) so personal lists — portfolio-class data — can never ride a commit by
+  default (the 2026-07-09 incident class, closed STRUCTURALLY, not by a reviewer remembering).
 
 Guardrails:
-- A universe whose id appears in the graded/scoreboard set (the snapshot CSV) is
-  CLONE-ONLY: editing it in place would silently rewrite what a past verdict was graded
-  against, so a save under a graded id is refused with "graded — clone to modify".
-- A saved id must not collide with ANY existing universe id (top-level or local).
+- A universe whose id appears in the graded/scoreboard set (the snapshot CSV) is never
+  rewritten in place: editing it would silently change what a past verdict was graded against,
+  so a save under a graded id is refused with "graded — clone to modify" even with
+  ``overwrite=True``.
+- An in-place save is refused for a top-level (shipped) manifest — that is not yours to rewrite.
+- Without ``overwrite``, a saved id must not collide with ANY existing universe id.
 - Ticker validation is LAZY (house convention): unresolvable tickers surface as
   UNRATEABLE in the run, never blocking a save.
 """
@@ -100,7 +107,8 @@ def list_id_from_name(name: str, existing_ids=()) -> str:
 def graded_universe_ids(snapshots_csv: str | Path) -> set[str]:
     """The graded/scoreboard set — universe ids that appear in the prospective-scoreboard
     snapshot CSV. A graded universe is a frozen, pre-registered input to a forward-return
-    test, so it is CLONE-ONLY in the editor. Missing/empty CSV -> empty set."""
+    test, so it is never rewritten in place — save under a new name instead. Missing/empty
+    CSV -> empty set."""
     from .scoreboard import read_rows
 
     p = Path(snapshots_csv)
