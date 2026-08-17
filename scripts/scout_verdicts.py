@@ -1,14 +1,21 @@
 """Scout → Aristos bridge: grade newly scouted tickers under every stock lens.
 
-THREE SOURCES, kept separate and identifiable end to end:
+THREE DISCOVERY SOURCES, ONE COHORT (decided 2026-08-17):
   - "ft" and "economist": news scouts, read from the scout sheets (public CSV
-    export). Graded together in the NEWS cohort (growth_40_v1 + news names).
+    export).
   - "growth-scanner": the weekly multi-market growth scanner's latest frozen
-    CSV, read from the public Drive folder. Graded in its OWN cohort
-    (growth_40_v1 + scanner names) so scanner names NEVER affect news
-    verdicts and vice versa (a rank verdict is universe-relative).
+    CSV, read from the public Drive folder (never re-run here — read only).
 
-Outputs (per source, never mixed):
+All three are graded in a SINGLE combined cohort:
+    growth_40_v1 + FT names + Economist names + scanner names
+A rank verdict is universe-relative, so one big pool makes the quintile cuts
+more meaningful AND lets a name's verdict move as new comparables arrive —
+which is the point of running three discovery channels into one ranker. The
+sources stay separately IDENTIFIABLE (own output folders, own spreadsheet
+tabs, a "source" field and an "also_found_by" field per entry); they are NOT
+separately ranked.
+
+Outputs (per source, presentation kept apart):
     reports/scout/ft/<date>_verdicts.json + .md,          .../ft/latest.json
     reports/scout/economist/<date>_verdicts.json + .md,   .../economist/latest.json
     reports/scout/growth-scanner/<date>_verdicts.json + .md, .../growth-scanner/latest.json
@@ -380,18 +387,30 @@ def main() -> None:
             seen.setdefault(s["symbol"], s)
         return seen
 
+    # ONE COMBINED COHORT (decided 2026-08-17). Every source's names are graded
+    # in the SAME universe: base + FT + Economist + growth-scanner. A rank
+    # verdict is universe-relative, so a bigger pool makes the quintile cuts
+    # more meaningful and lets a name's verdict move when new comparables
+    # arrive — which is the point of feeding three discovery channels into one
+    # ranker. Sources stay separately IDENTIFIABLE (own folders/tabs/columns);
+    # they are not separately RANKED.
     news_meta = dedup([s for sc, _sk in news.values() for s in sc])
     scan_meta = dedup(scanner[0])
-    news_cohort = base + [s for s in news_meta if s not in base]
-    scan_cohort = base + [s for s in scan_meta if s not in base]
+    all_meta = {**news_meta}
+    for sym, m in scan_meta.items():          # news metadata wins on collision
+        all_meta.setdefault(sym, m)
+    cohort = base + [s for s in all_meta if s not in base]
 
     for source, (sc, sk) in news.items():
         print(f"{source}: scouted {[s['symbol'] for s in sc] or 'none'}, "
               f"skipped {len(sk)}")
     print(f"{SCANNER_SOURCE}: {scan_label or 'n/a'} — "
           f"{len(scan_meta)} names, skipped {len(scanner[1])}")
-    print(f"news cohort {len(news_cohort)} | scanner cohort {len(scan_cohort)} "
-          f"(base {BASE_UNIVERSE} = {len(base)})")
+    overlap = sorted(set(news_meta) & set(scan_meta))
+    print(f"combined cohort {len(cohort)} = {BASE_UNIVERSE} {len(base)} + "
+          f"news {len([s for s in news_meta if s not in base])} + scanner "
+          f"{len([s for s in scan_meta if s not in base and s not in news_meta])}"
+          + (f" (found by both: {', '.join(overlap)})" if overlap else ""))
     if args.dry_run:
         for _src, (_sc, sk) in {**news, SCANNER_SOURCE: scanner}.items():
             for row in sk:
@@ -400,29 +419,31 @@ def main() -> None:
 
     from aristos_council.pipeline import run_multi_strategy_pipeline
 
-    def grade(cohort: list[str], have_new: bool):
-        if not have_new:
-            return None
-        return run_multi_strategy_pipeline(
-            cohort, STOCK_LENSES, strategies_dir=ROOT / "strategies",
-            today=today, freeze_dir=ROOT / "runs",
-            progress=lambda m: print(f"  {m}"))
+    # ONE grading pass over the combined cohort — every source reads its rows
+    # out of the same grid, so ranks ARE comparable across tabs.
+    result = run_multi_strategy_pipeline(
+        cohort, STOCK_LENSES, strategies_dir=ROOT / "strategies",
+        today=today, freeze_dir=ROOT / "runs",
+        progress=lambda m: print(f"  {m}")) if all_meta else None
 
-    news_result = grade(news_cohort, bool(news_meta))
-    scan_result = grade(scan_cohort, bool(scan_meta))
-
-    per_source = {src: {"scouted": sc, "skipped": sk, "result": news_result,
-                        "cohort_size": len(news_cohort), "cohort": "news"}
+    also_found_by = {}                        # symbol -> other sources
+    for sym in set(news_meta) & set(scan_meta):
+        also_found_by[sym] = [SCANNER_SOURCE]
+    per_source = {src: {"scouted": sc, "skipped": sk, "result": result,
+                        "cohort_size": len(cohort), "cohort": "combined",
+                        "also_found_by": also_found_by}
                   for src, (sc, sk) in news.items()}
     per_source[SCANNER_SOURCE] = {
-        "scouted": scanner[0], "skipped": scanner[1], "result": scan_result,
-        "cohort_size": len(scan_cohort), "cohort": "scanner",
+        "scouted": scanner[0], "skipped": scanner[1], "result": result,
+        "cohort_size": len(cohort), "cohort": "combined",
+        "also_found_by": {s: ["news"] for s in set(news_meta) & set(scan_meta)},
         "scan_file": scan_label, "scan_header": scan_header}
     _write_outputs(today, per_source)
 
 
-def _entry_for(row, meta: dict) -> dict:
+def _entry_for(row, meta: dict, also: dict | None = None) -> dict:
     entry = {"symbol": meta["symbol"], "source": meta["source"],
+             "also_found_by": (also or {}).get(meta["symbol"], []),
              "company": meta.get("company", ""),
              "date_added": meta.get("date_added", ""),
              "story": meta.get("story", ""),
@@ -453,7 +474,8 @@ def _write_outputs(today: date, per_source: dict) -> None:
         by_ticker = {r.ticker: r for r in result.rows} if result else {}
         out_dir = ROOT / "reports" / "scout" / source
         out_dir.mkdir(parents=True, exist_ok=True)
-        entries = [_entry_for(by_ticker.get(m["symbol"]), m)
+        entries = [_entry_for(by_ticker.get(m["symbol"]), m,
+                               blob.get("also_found_by"))
                    for m in blob["scouted"]]
         payload = {"run_date": stamp, "source": source,
                    "cohort": blob["cohort"], "cohort_size": blob["cohort_size"],
