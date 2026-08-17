@@ -20,8 +20,11 @@ from aristos_council.universe_editor import (
     ensure_local_dir,
     existing_universe_ids,
     graded_universe_ids,
+    list_id_from_name,
+    local_universe_ids,
     parse_ticker_lines,
     save_local_universe,
+    slugify_list_name,
     suggest_clone_id,
 )
 
@@ -187,6 +190,57 @@ def test_saved_local_universe_is_discovered_and_flagged(tmp_path):
     assert found["mylist_v1"].local is True
     # existing_universe_ids sees both (so a second save can't collide with either)
     assert {"graded_top_v1", "mylist_v1"} <= existing_universe_ids(tmp_path)
+
+
+# --------------------------------------------------------------------------- #
+# FUND-UI-2 — a list is a plain, editable ticker list: name it, save it, edit it
+# --------------------------------------------------------------------------- #
+def test_id_is_derived_from_the_name_so_no_version_ceremony_reaches_the_ui():
+    assert list_id_from_name("My Portfolio") == "my_portfolio_v1"
+    assert list_id_from_name("  Core & Satellite!  ") == "core_satellite_v1"
+    assert list_id_from_name("") == "my_list_v1"                  # unusable name -> fallback
+    assert slugify_list_name("Growth 40") == "growth_40"
+
+
+def test_a_repeated_name_gets_the_next_free_version_never_a_silent_clobber():
+    existing = {"my_portfolio_v1", "my_portfolio_v2"}
+    assert list_id_from_name("My Portfolio", existing) == "my_portfolio_v3"
+
+
+def test_overwrite_rewrites_your_own_list_in_place(tmp_path):
+    # Adding a new holding must not force a new id — the list IS the thing you edit.
+    save_local_universe(tmp_path, id="mylist_v1", tickers=["AAPL"], created="2026-08-10",
+                        display_name="My List")
+    save_local_universe(tmp_path, id="mylist_v1", tickers=["AAPL", "NVDA"],
+                        created="2026-08-10", display_name="My List", overwrite=True)
+    u = load_universe_by_id("mylist_v1", tmp_path)
+    assert u.tickers == ["AAPL", "NVDA"]
+    assert len([p for p in (tmp_path / "local").glob("*.yaml")]) == 1   # rewritten, not forked
+
+
+def test_overwrite_is_still_refused_for_a_graded_list(tmp_path):
+    save_local_universe(tmp_path, id="mylist_v1", tickers=["AAPL"], created="2026-08-10")
+    with pytest.raises(ValueError, match="graded — clone to modify"):
+        save_local_universe(tmp_path, id="mylist_v1", tickers=["AAPL", "NVDA"],
+                            created="2026-08-10", graded_ids={"mylist_v1"},
+                            overwrite=True)
+    assert load_universe_by_id("mylist_v1", tmp_path).tickers == ["AAPL"]
+
+
+def test_overwrite_is_refused_for_a_top_level_manifest(tmp_path):
+    _write_manifest(tmp_path, ["AAPL"], uid="shipped_v1")
+    with pytest.raises(ValueError, match="not one of your saved lists"):
+        save_local_universe(tmp_path, id="shipped_v1", tickers=["MSFT"],
+                            created="2026-08-10", overwrite=True)
+    assert not (tmp_path / "local" / "shipped_v1.yaml").exists()
+    assert load_universe_by_id("shipped_v1", tmp_path).tickers == ["AAPL"]
+
+
+def test_local_universe_ids_are_only_your_own_lists(tmp_path):
+    _write_manifest(tmp_path, ["AAPL"], uid="shipped_v1")
+    save_local_universe(tmp_path, id="mine_v1", tickers=["MSFT"], created="2026-08-10")
+    assert local_universe_ids(tmp_path) == {"mine_v1"}
+    assert existing_universe_ids(tmp_path) == {"shipped_v1", "mine_v1"}
 
 
 def test_local_universe_label_is_tagged():
