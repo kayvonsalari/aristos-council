@@ -195,32 +195,58 @@ def read_scouted(text: str, source: str, window_days: int, today: date
 
 # --- growth-scanner reading ------------------------------------------------
 
-def find_latest_scan(folder_id: str) -> tuple[str, str] | None:
-    """(file_id, filename) of the newest growth_scan CSV in a public Drive
-    folder, or None. Same-day re-runs (_2, _3...) sort after the base file,
-    matching the scanner's append-only convention."""
-    html = _fetch(f"https://drive.google.com/embeddedfolderview?id={folder_id}#list")
-    best: tuple[tuple[str, int], str, str] | None = None
-    # entries appear as data-id="<id>" ... with the filename nearby
-    for m in re.finditer(r'data-id="([\w-]+)"(.{0,600}?)</div>', html, re.S):
-        file_id, blob = m.group(1), m.group(2)
-        name_m = SCAN_NAME_RE.search(blob)
-        if not name_m:
-            continue
-        key = (name_m.group(1), int(name_m.group(2) or 0))
-        if best is None or key > best[0]:
-            best = (key, file_id, name_m.group(0))
-    if best is None:
-        # fallback: ids and names may not share one div — pair them positionally
-        ids = re.findall(r'data-id="([\w-]+)"', html)
-        names = SCAN_NAME_RE.findall(html)
-        if ids and names and len(ids) >= len(names):
-            keyed = sorted(zip(names, ids[:len(names)]),
-                           key=lambda p: (p[0][0], int(p[0][1] or 0)))
-            (d, n), fid = keyed[-1]
-            return fid, f"growth_scan_{d}{'_' + n if n else ''}.csv"
+def _scan_key(name: str) -> tuple[str, int] | None:
+    """Sort key for a scan filename: (date, rerun-number). Same-day re-runs
+    (_2, _3...) sort after the base file, matching the append-only convention."""
+    m = SCAN_NAME_RE.fullmatch(name.strip())
+    return (m.group(1), int(m.group(2) or 0)) if m else None
+
+
+def find_repo_scan() -> tuple[Path, str] | None:
+    """(path, filename) of the newest growth_scan CSV committed under
+    data/growth_scans/ in this repo, or None. Preferred over Drive when
+    present: no network, no sharing, and the freeze lives in git history."""
+    d = ROOT / "data" / "growth_scans"
+    if not d.is_dir():
         return None
-    return best[1], best[2]
+    best: tuple[tuple[str, int], Path] | None = None
+    for p in sorted(d.glob("growth_scan_*.csv")):
+        key = _scan_key(p.name)
+        if key and (best is None or key > best[0]):
+            best = (key, p)
+    return (best[1], best[1].name) if best else None
+
+
+# an id token, then (later in the document) the filename it belongs to
+_DRIVE_TOKEN_RE = re.compile(
+    r'id="entry-([\w-]{20,})"'          # embeddedfolderview markup
+    r'|data-id="([\w-]{20,})"'          # alternative/older markup
+    r'|(growth_scan_\d{4}-\d{2}-\d{2}(?:_\d+)?\.csv)')
+
+
+def find_latest_scan(folder_id: str) -> tuple[str, str] | None:
+    """(file_id, filename) of the newest growth_scan CSV in a PUBLIC Drive
+    folder, or None.
+
+    Walks the folder-view HTML in document order pairing each filename with the
+    most recent preceding file-id token, so it survives markup changes as long
+    as ids still precede their titles."""
+    html = _fetch(f"https://drive.google.com/embeddedfolderview?id={folder_id}#list")
+    found: list[tuple[tuple[str, int], str, str]] = []
+    current_id: str | None = None
+    for m in _DRIVE_TOKEN_RE.finditer(html):
+        file_id = m.group(1) or m.group(2)
+        if file_id:
+            current_id = file_id
+            continue
+        name = m.group(3)
+        key = _scan_key(name)
+        if key and current_id:
+            found.append((key, current_id, name))
+    if not found:
+        return None
+    found.sort(key=lambda t: t[0])
+    return found[-1][1], found[-1][2]
 
 
 def read_scanner(text: str, scan_label: str) -> tuple[list[dict], list[dict]]:
@@ -313,9 +339,15 @@ def main() -> None:
     scan_label = ""
     if not args.no_scanner:
         try:
+            in_repo = find_repo_scan()
             if args.scanner_csv:
                 text = Path(args.scanner_csv).read_text(encoding="utf-8")
                 scan_label = Path(args.scanner_csv).name
+            elif in_repo is not None:
+                # committed scans win: no network, no sharing, in git history
+                path, scan_label = in_repo
+                text = path.read_text(encoding="utf-8", errors="replace")
+                print(f"  scanner source: repo data/growth_scans/{scan_label}")
             elif SCANNER_CSV_URL:
                 text = _fetch(SCANNER_CSV_URL)
                 scan_label = SCANNER_CSV_URL.rsplit("/", 1)[-1]
@@ -323,11 +355,14 @@ def main() -> None:
                 found = find_latest_scan(SCANNER_FOLDER_ID)
                 if found is None:
                     raise RuntimeError(
-                        "no growth_scan_*.csv found in Drive folder — is the "
-                        "folder shared 'anyone with link: viewer'?")
+                        "no growth_scan_*.csv found via Drive folder listing "
+                        f"(id {SCANNER_FOLDER_ID}). Either commit the scan to "
+                        "data/growth_scans/ in this repo, or set the repo "
+                        "variable SCOUT_SCANNER_CSV to a direct file URL.")
                 file_id, scan_label = found
                 text = _fetch("https://drive.google.com/uc?export=download"
                               f"&id={file_id}")
+                print(f"  scanner source: Drive {scan_label}")
             scan_header = "\n".join(ln for ln in text.splitlines()
                                     if ln.lstrip().startswith("#"))
             scanner = read_scanner(text, scan_label)
