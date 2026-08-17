@@ -201,26 +201,64 @@ def _legacy_app(timeout: int = 60):
 
 
 # --------------------------------------------------------------------------- #
-# Universe Run tab — schema-split dropdowns + pure render helpers (Sprint)
+# Run tab — schema-split pickers + pure render helpers (Sprint)
 # --------------------------------------------------------------------------- #
 def test_rank_strategy_options_lists_only_rank_strategies():
     ids = [s.id for _, _, s in app.list_rank_strategy_options(app.STRATEGIES_DIR)]
     assert {"conservative_plus_v1", "magic_formula_v1",
             "magic_formula_momentum_v1"} <= set(ids)
-    # council + lens strategies never appear in the rank dropdown
+    # council + lens strategies never appear in the rank picker
     assert "growth_v1" not in ids and "magic_value_screen_v1" not in ids
 
 
 def test_single_ticker_dropdown_excludes_rank_and_lens():
     ids = [s.id for _, _, s in app.list_strategy_options(app.STRATEGIES_DIR)]
-    assert "magic_formula_v1" not in ids               # rank -> Universe Run tab only
+    assert "magic_formula_v1" not in ids               # rank -> Run tab only
     assert "conservative_screen_v1" not in ids         # lens -> hidden
 
 
-def test_parse_universe_normalizes_dedupes_and_orders():
-    got = app._parse_universe("aapl, msft\nGOOGL aapl , ,brk.b")
-    assert got == ["AAPL", "MSFT", "GOOGL", "BRK.B"]    # upper, de-duped, order kept
-    assert app._parse_universe("") == []
+# --------------------------------------------------------------------------- #
+# FUND-UI-2 — ONE run flow: the guards are pure, and a list label names one list
+# --------------------------------------------------------------------------- #
+def test_run_problems_is_empty_for_a_runnable_single_strategy_narrator_run():
+    assert app.run_problems(["AAPL"], n_strategies=1, deterministic=False,
+                            has_key=True) == []
+
+
+def test_run_problems_names_every_blocker():
+    problems = app.run_problems([], n_strategies=0, deterministic=False, has_key=False)
+    blob = " ".join(problems)
+    assert "at least one strategy" in blob
+    assert "at least one ticker" in blob
+    assert "ANTHROPIC_API_KEY" in blob
+
+
+def test_run_problems_enforces_one_shared_cap():
+    over = ["T%d" % i for i in range(app.UNIVERSE_CAP + 1)]
+    assert any("too large" in p for p in
+               app.run_problems(over, n_strategies=1, deterministic=True, has_key=True))
+    at_cap = ["T%d" % i for i in range(app.UNIVERSE_CAP)]
+    assert app.run_problems(at_cap, n_strategies=1, deterministic=True,
+                            has_key=True) == []
+
+
+def test_a_deterministic_run_never_asks_for_a_key():
+    # Ranker-only, and several strategies (ranker-only by construction), cannot spend.
+    assert app.run_problems(["AAPL"], n_strategies=1, deterministic=True,
+                            has_key=False) == []
+    assert app.run_problems(["AAPL"], n_strategies=3, deterministic=True,
+                            has_key=False) == []
+
+
+def test_saved_list_labels_disambiguate_a_shared_label():
+    from aristos_council.universe import Universe
+    a = Universe(id="mine_v1", display_name="My List", tickers=["AAPL"], local=True)
+    b = Universe(id="mine_v2", display_name="My List", tickers=["MSFT"], local=True)
+    solo = Universe(id="other_v1", display_name="Other", tickers=["NVDA"], local=True)
+    labels = app.saved_list_labels([a, b, solo])
+    assert len(set(labels)) == 3                       # a label names exactly one list
+    assert "mine_v1" in labels[0] and "mine_v2" in labels[1]
+    assert labels[2] == "Other (local) · 1 names"      # unique label left alone
 
 
 def test_estimate_shortlist_size_tracks_the_cut():
@@ -276,19 +314,24 @@ def test_universe_markdown_has_sections_from_the_result():
     assert "## Narrative" in md and "ranked #1 on ROIC." in md
 
 
-def test_rank_dropdown_order_baseline_label_and_no_v2_heading():
+def _strategy_picker(at):
+    """The ONE strategy picker on the Run tab (FUND-UI-2) — a multiselect, so several
+    lenses grade one list in a single run."""
+    return next(m for m in at.multiselect if m.label == "Strategies")
+
+
+def test_rank_picker_order_baseline_label_and_no_v2_heading():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    rank_dd = next(s for s in at.selectbox if s.label == "Rank strategy")
-    opts = list(rank_dd.options)
+    opts = list(_strategy_picker(at).options)
     assert "momentum" in opts[0].lower()                        # flagship first
     # the baseline (magic_formula_v1) is HIDDEN by default now (ITEM 2) — it carries its
     # 'baseline — for comparison' label only under the validation toggle (asserted in
     # test_validation_assets_revealed_when_toggle_on).
     assert not any("baseline" in o.lower() for o in opts)
     heads = " ".join(str(getattr(e, "value", "")) for e in at.subheader)
-    assert "Universe Run — screen, rank, verdict" in heads and "v2" not in heads
+    assert "Run — pick strategies, pick tickers, run" in heads and "v2" not in heads
 
 
 def test_confirmation_line_states_strategy_universe_and_mode():
@@ -316,19 +359,24 @@ def test_confirmation_line_is_in_the_persisted_markdown():
     assert "Running magic_formula_momentum_v1 on growth_40_v1 in ranker-only." in md
 
 
-def test_universe_run_tab_renders_with_rank_dropdown():
-    # The app renders (all tabs) with the new Universe Run tab present and a rank-
-    # strategy dropdown — no run triggered, so nothing hits the network.
+def test_run_tab_renders_with_the_one_flow():
+    # The app renders (all tabs) with the Run tab present: ONE strategy picker, ONE list
+    # selector, ONE ticker box, ONE run button — no run triggered, nothing hits the network.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    # The "Rank strategy" selectbox only exists inside render_universe_tab, so its
-    # presence proves the tab rendered.
-    rank_dd = next(s for s in at.selectbox if s.label == "Rank strategy")
-    # Options are the FRIENDLY display names now (ITEM 1) — the technical id is demoted
-    # to a caption, so it never appears in the label (no ids/underscores/_v1).
-    assert any("Value + Momentum" in o for o in rank_dd.options)
-    assert not any("_" in o for o in rank_dd.options)
+    # The "Strategies" multiselect only exists inside render_universe_tab, so its presence
+    # proves the tab rendered.
+    picker = _strategy_picker(at)
+    # Options are the FRIENDLY display names (ITEM 1) — the technical id is demoted to a
+    # caption, so it never appears in the label (no ids/underscores/_v1).
+    assert any("Value + Momentum" in o for o in picker.options)
+    assert not any("_" in o for o in picker.options)
+    assert picker.value                                  # the flagship is pre-selected
+    # ...and the flow is exactly: strategies, a list, its tickers, run.
+    assert any(s.label == "List" for s in at.selectbox)
+    assert any("Tickers" in str(t.label) for t in at.text_area)
+    assert sum(1 for b in at.button if str(b.label).startswith("▶")) == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -357,8 +405,8 @@ def test_legacy_hidden_by_default_and_toggle_defaults_off():
     assert "Run a council" not in _header_blob(at)
     assert "Edits council-strategy YAMLs" not in _info_blob(at)
     assert not any("Legacy" in str(t.label) for t in at.tabs)
-    # the v2 product IS the landing (the Universe Run rank dropdown renders)
-    assert any(s.label == "Rank strategy" for s in at.selectbox)
+    # the v2 product IS the landing (the Run tab's strategy picker renders)
+    assert any(m.label == "Strategies" for m in at.multiselect)
 
 
 def test_legacy_surfaces_appear_when_toggle_on():
@@ -374,34 +422,30 @@ def _dropdown(at, label):
 
 
 def test_validation_assets_hidden_by_default(monkeypatch):
-    # ITEM 2 + UNI-1: toggle OFF (default) -> universe dropdown = the two graded scoreboard
-    # universes + the exploratory financials cohort (front-stage, role not 'never graded')
-    # + Custom; strategy dropdown = the live strategies. The never-graded trap bench +
-    # ui:hidden baseline stay hidden.
+    # ITEM 2 + UNI-1: toggle OFF (default) -> the List selector offers "New list" plus the
+    # front-stage saved lists; the strategy picker offers the live strategies. The
+    # never-graded trap bench + the ui:hidden baseline stay hidden.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
 
-    uni = _dropdown(at, "Universe").options
-    # substring (not startswith): the default strategy's suggested universe carries a ⭐
-    # prefix (UNI-1 ITEM 2), so match the name irrespective of the group marker.
+    uni = _dropdown(at, "List").options
+    assert uni[0] == "New list"                                      # FUND-UI-2: start blank
     assert any("Growth 40 · " in o for o in uni)
     assert any("Defensive Income 16 · " in o for o in uni)
     assert any("Financials 16 · " in o for o in uni)                 # UNI-1: front-stage
-    assert "Custom (paste tickers)" in uni
     assert not any("Validation Bench" in o for o in uni)             # trap bench hidden
     assert not any("Energy Watch" in o for o in uni)                 # observation hidden
     assert any("Dividend ETFs (US)" in o for o in uni)               # ETF-1 exploratory cohort
     assert any("Growth ETFs (US)" in o for o in uni)                 # ETF-1 exploratory cohort
     assert any("ETF Index Tracker — UCITS" in o for o in uni)        # ETFCORE-1 cohort
     assert not any("Core Market ETFs" in o for o in uni)             # UI-RENAME-1: old label gone
-    # 2 scoreboard + financials + 2 US ETF cohorts + 3 UCITS ETF cohorts (dividend +
-    # growth [UCITS-1] + core [ETFCORE-1], all front-stage) + Custom = 9. (These app
-    # tests skip in CI — streamlit is not in the dev extra — so the count had lagged the
-    # UCITS-1 additions; corrected to the live front-stage set here.)
+    # New list + 2 scoreboard + financials + 2 US ETF cohorts + 3 UCITS ETF cohorts
+    # (dividend + growth [UCITS-1] + core [ETFCORE-1], all front-stage) = 9. (These app
+    # tests skip in CI — streamlit is not in the dev extra.)
     assert len(uni) == 9
 
-    rank = _dropdown(at, "Rank strategy").options
+    rank = _strategy_picker(at).options
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
     assert any("GARP" in o for o in rank)                           # growth is live (4C)
     assert any("RAW" in o for o in rank)                            # canonical raw (RAW-1)
@@ -414,15 +458,15 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert len(rank) == 8
 
 
-def test_both_strategy_dropdowns_list_the_live_strategies():
-    # 4C ITEM 2: the universe-run selector AND the Company Check selector both populate
-    # from discovery with friendly display names; growth appears as GARP. RAW-1 makes it
-    # four (the canonical no-screen variant is visible).
+def test_both_strategy_pickers_list_the_live_strategies():
+    # 4C ITEM 2 + FUND-UI-2: the Run tab's picker AND Company Check's both come from the
+    # ONE picker module, so they offer the SAME set with the same friendly display names.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    rank = _dropdown(at, "Rank strategy").options
+    rank = _strategy_picker(at).options
     cc = _dropdown(at, "Strategy (lens screen + factors)").options
+    assert list(rank) == list(cc)                                    # one picker, one set
     for opts in (rank, cc):
         assert any("GARP" in o for o in opts)                        # growth as GARP
         assert any("RAW" in o for o in opts)                         # canonical raw
@@ -434,12 +478,12 @@ def test_both_strategy_dropdowns_list_the_live_strategies():
 
 def test_financials_16_is_front_stage_in_both_universe_selectors():
     # UNI-1 ITEM 1: financials_16 has no observational role, so it is FRONT-stage (toggle
-    # off) in BOTH the Universe Run selector and the Company Check reference selector —
+    # off) in BOTH the Run tab's List selector and the Company Check reference selector —
     # both discover from universes/ via the same role-derived visible_universes.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    uni = _dropdown(at, "Universe").options                          # Universe Run tab
+    uni = _dropdown(at, "List").options                              # Run tab
     ref = _dropdown(at, "Reference universe (for factor context)").options  # Company Check
     assert any("Financials 16 · " in o for o in uni)                 # (⭐-prefix-robust)
     assert any("Financials 16 · " in o for o in ref)
@@ -448,29 +492,41 @@ def test_financials_16_is_front_stage_in_both_universe_selectors():
     assert not any("Validation Bench" in o for o in ref)
 
 
-def test_suggested_universe_renders_first_for_selected_strategy():
-    # UNI-1 ITEM 2: select the financials lens -> its suggested universe (Financials 16)
-    # heads the Universe dropdown with the ⭐ marker; every other universe stays
-    # selectable below (a hierarchy, never a lock).
+def test_suggested_universe_renders_first_in_the_reference_selector():
+    # UNI-1 ITEM 2 survives FUND-UI-2 where it still means something: Company Check's
+    # REFERENCE cohort is a manifest picked for factor context, so the selected strategy's
+    # suggested cohort still heads it with the ⭐ marker, every other cohort selectable
+    # below (a hierarchy, never a lock). The Run tab's List selector is no longer a
+    # manifest picker — it is your saved lists — so it carries no suggestion ordering.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    rank_dd = _dropdown(at, "Rank strategy")
-    fin_label = next(o for o in rank_dd.options if "Financials" in o)
-    rank_dd.set_value(fin_label).run()
+    cc_dd = _dropdown(at, "Strategy (lens screen + factors)")
+    fin_label = next(o for o in cc_dd.options if "Financials" in o)
+    cc_dd.set_value(fin_label).run()
     assert not at.exception
-    uni = _dropdown(at, "Universe").options
-    assert uni[0] == "⭐ Financials 16 · 16 names"                   # suggested group first
-    assert not any(o.startswith("⭐") for o in uni[1:])             # only the suggested one
-    assert any(o.startswith("Growth 40 ·") for o in uni)           # cross-lens still selectable
+    ref = _dropdown(at, "Reference universe (for factor context)").options
+    assert ref[0] == "⭐ Financials 16 · 16 names"                   # suggested group first
+    assert not any(o.startswith("⭐") for o in ref[1:])             # only the suggested one
+    assert any(o.startswith("Growth 40 ·") for o in ref)           # cross-lens still selectable
+
+
+def test_the_run_tab_list_selector_offers_no_suggestion_ordering():
+    # FUND-UI-2: no per-section "relevant" filtering or steering in the ONE run flow — the
+    # List selector is a flat list of what you saved, and every strategy is offered for it.
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    uni = _dropdown(at, "List").options
+    assert not any(str(o).startswith("⭐") for o in uni)
 
 
 def test_validation_assets_revealed_when_toggle_on():
     at = _legacy_app(60)
     assert not at.exception
-    uni = _dropdown(at, "Universe").options
+    uni = _dropdown(at, "List").options
     assert any("Validation Bench" in o for o in uni)                 # bench revealed
-    rank = _dropdown(at, "Rank strategy").options
+    rank = _strategy_picker(at).options
     assert any("Classic Value" in o for o in rank)                  # baseline revealed
 
 
@@ -722,33 +778,54 @@ def test_screen_table_rows_empty_when_no_screen():
 
 
 # --------------------------------------------------------------------------- #
-# Universe Editor (UNIED-1) — build/clone/run/save from the UI
+# The ONE run flow (FUND-UI-2) — the editor IS the ticker box; no second section
 # --------------------------------------------------------------------------- #
-def test_universe_editor_section_renders():
-    # The editor lives inside the Universe Run tab as its own expander; its "Start from"
-    # clone selector + the two actions (Run once / Save) prove it rendered.
+def test_the_separate_universe_edit_section_is_gone():
+    # FUND-UI-2: there was a bottom "Universe Editor" expander with its own clone
+    # selector, its own ticker box, its own Run-once button and its own save — a second
+    # run flow wearing one tab. It is deleted; the ONE ticker box is the editor.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    assert any(s.label == "Start from" for s in at.selectbox)
-    assert any("Universe Editor" in str(e.label) for e in at.expander)
-    assert any("Run once" in b.label for b in at.button)
-    assert any("Save to universes/local/" in b.label for b in at.button)
+    assert not any(s.label == "Start from" for s in at.selectbox)
+    assert not any("Universe Editor" in str(e.label) for e in at.expander)
+    assert not any("Run once" in b.label for b in at.button)
+    assert not any("Save to universes/local/" in b.label for b in at.button)
+    assert not hasattr(app, "render_universe_editor")
+    assert not hasattr(app, "_parse_universe")           # parse_ticker_lines serves the box
 
 
-def test_custom_paste_adhoc_option_unchanged():
-    # The existing ad-hoc Custom paste path is intact alongside the new editor — the
-    # editor's Run once reuses the SAME path (universe_id=None), it does not replace it.
+def test_the_one_ticker_box_saves_in_place_or_as_a_new_list():
+    # "Type a name, press save" — and editing your own list updates it rather than forking.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    assert "Custom (paste tickers)" in _dropdown(at, "Universe").options
+    assert any("Save this list" in str(e.label) for e in at.expander)
+    assert any(b.label == "Save changes" for b in at.button)
+    assert any(b.label == "Save as new list" for b in at.button)
+    assert any(t.label == "List name" for t in at.text_input)
+
+
+def test_selecting_a_saved_list_loads_its_tickers_into_the_one_box():
+    # Load-on-select (no "Load into editor" button any more): picking a list seeds the box,
+    # where it is edited before running.
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    list_dd = _dropdown(at, "List")
+    assert list_dd.options[0] == "New list"
+    first_saved = list_dd.options[1]                     # whatever ships / is saved
+    list_dd.set_value(first_saved).run()
+    assert not at.exception
+    loaded = at.session_state["uni_tickers"].splitlines()
+    # the box now holds that list, one ticker per line — the count is in its own label
+    assert len(loaded) == int(first_saved.split("·")[-1].strip().split()[0])
 
 
 def test_saved_local_universe_appears_in_both_selectors():
-    # UNIED-1 Item 3: a saved local universe is discovered front-stage (default toggle
-    # off) in BOTH the Universe Run selector and the Company Check reference selector,
-    # tagged "(local)". Written into the real (gitignored) universes/local/ then removed.
+    # UNIED-1 Item 3: a saved local list is discovered front-stage (default toggle off) in
+    # BOTH the Run tab's List selector and the Company Check reference selector, tagged
+    # "(local)". Written into the real (gitignored) universes/local/ then removed.
     from streamlit.testing.v1 import AppTest
     local_dir = app.UNIVERSES_DIR / "local"
     local_dir.mkdir(parents=True, exist_ok=True)
@@ -760,7 +837,7 @@ def test_saved_local_universe_appears_in_both_selectors():
     try:
         at = AppTest.from_file(str(_APP), default_timeout=60).run()
         assert not at.exception
-        uni = _dropdown(at, "Universe").options
+        uni = _dropdown(at, "List").options
         ref = _dropdown(at, "Reference universe (for factor context)").options
         assert any("Apptest Local (local)" in o for o in uni)
         assert any("Apptest Local (local)" in o for o in ref)
@@ -861,8 +938,8 @@ def test_scoreboard_is_its_own_top_level_tab():
     assert any("Persisted snapshots" in str(e.label) for e in at.expander)
 
 
-def test_scoreboard_panel_is_no_longer_wired_into_universe_run():
-    # Source-level regression guard: the panel moved OFF the Universe Run flow (ITEM 4).
+def test_scoreboard_panel_is_no_longer_wired_into_the_run_flow():
+    # Source-level regression guard: the panel moved OFF the Run flow (ITEM 4).
     # AppTest can't distinguish "which tab" an element came from (all tab bodies execute
     # in one script run), so this pins the actual wiring instead.
     import inspect
@@ -878,84 +955,82 @@ def test_scoreboard_panel_is_no_longer_wired_into_universe_run():
 
 
 # --------------------------------------------------------------------------- #
-# STRAT-PICKER-1 — the Universe Run picker names the cohort's asset class, and an
-# AD-HOC cohort (which declares none) filters NOTHING. The primary dropdown itself is
-# never trimmed: a runnable strategy is always offered (the live 2026-08-10 bug was an
-# ad-hoc stock cohort offered a single lens).
+# STRAT-PICKER-1, as FUND-UI-2 leaves it — the picker NAMES the cohort's asset class and
+# warns on a confirmed mismatch, but never trims itself: every compatible strategy is
+# offered for ANY ticker list (the live 2026-08-10 bug was an ad-hoc stock cohort offered
+# a single lens while five stock lenses sat unreachable).
 # --------------------------------------------------------------------------- #
 def _caption_blob(at) -> str:
     return "\n".join(c.value for c in at.caption if isinstance(c.value, str))
 
 
-def test_named_equity_cohort_states_its_derived_asset_class():
+def _pick_list(at, needle):
+    dd = _dropdown(at, "List")
+    dd.set_value(next(o for o in dd.options if needle in o)).run()
+    return at
+
+
+def test_named_etf_cohort_states_its_derived_asset_class():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    # default: the flagship + its suggested Growth 40 — an equity cohort by derivation
-    assert "Cohort asset class: **equity**" in _caption_blob(at)
+    _pick_list(at, "ETF Index Tracker — UCITS")
+    assert not at.exception
+    # derived by inversion from the lenses that declare this cohort (applicability.py)
+    assert "Cohort asset class: **etf**" in _caption_blob(at)
 
 
 def test_adhoc_cohort_filters_nothing_and_says_so():
+    # "New list" is the default and declares nothing -> UNKNOWN, so nothing is hidden.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
-    assert not at.exception
-    uni_dd = _dropdown(at, "Universe")
-    uni_dd.set_value("Custom (paste tickers)").run()
     assert not at.exception
     blob = _caption_blob(at)
     assert "Ad-hoc cohort" in blob and "nothing is filtered out" in blob
-    # and the strategy dropdown still offers every live lens (5 stock + 3 ETF)
-    assert len(_dropdown(at, "Rank strategy").options) == 8
+    assert len(_strategy_picker(at).options) == 8      # every live lens (5 stock + 3 ETF)
+
+
+def test_every_strategy_stays_offered_even_for_a_cohort_of_the_other_kind():
+    # FUND-UI-2: no per-section "relevant" filtering. An ETF cohort still OFFERS the stock
+    # lenses (they are runnable — the asset-kind gate excludes the names honestly); the
+    # mismatch is surfaced as a warning, not as a hidden option.
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    before = list(_strategy_picker(at).options)
+    _pick_list(at, "ETF Index Tracker — UCITS")
+    assert not at.exception
+    assert list(_strategy_picker(at).options) == before      # nothing trimmed
+    warnings = " ".join(str(getattr(w, "value", "")) for w in at.warning)
+    assert "asset-kind gate" in warnings                     # the flagship is equity-only
 
 
 # --------------------------------------------------------------------------- #
-# FUND-RUN-1 — one cohort, N strategies, ONE combined grid. The "also grade with"
-# multiselect is scoped to the cohort's APPLICABLE set (STRAT-PICKER-1) minus the
-# primary, and a multi-lens run is deterministic (no key, no cost).
+# FUND-RUN-1 through the ONE picker — several strategies over one list is deterministic
+# and reports ONE combined grid.
 # --------------------------------------------------------------------------- #
-def _multiselect(at, label):
-    return next(m for m in at.multiselect if m.label.startswith(label))
-
-
-def test_multi_strategy_selector_offers_the_other_applicable_lenses():
+def test_selecting_a_second_strategy_makes_the_run_deterministic():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    ms = _multiselect(at, "Also grade with")
-    # default cohort is equity (Growth 40): the four OTHER stock lenses, no ETF lens and
-    # not the primary (the flagship) itself.
-    assert len(ms.options) == 4
-    assert not any("ETF" in o for o in ms.options)
-    assert not any("Value + Momentum" in o for o in ms.options)   # the primary
-    assert any("RAW" in o for o in ms.options)
-    assert any("GARP" in o for o in ms.options)
-
-
-def test_etf_cohort_offers_only_etf_lenses_in_the_multi_selector():
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
-    assert not at.exception
-    rank_dd = _dropdown(at, "Rank strategy")
-    rank_dd.set_value(next(o for o in rank_dd.options if "ETF Index Tracker" in o)).run()
-    assert not at.exception
-    uni_dd = _dropdown(at, "Universe")
-    uni_dd.set_value(next(o for o in uni_dd.options if "ETF Index Tracker — UCITS" in o))
-    at.run()
-    assert not at.exception
-    assert "Cohort asset class: **etf**" in _caption_blob(at)
-    ms = _multiselect(at, "Also grade with")
-    assert ms.options and all("ETF" in o for o in ms.options)     # ETF lenses only
-
-
-def test_selecting_a_second_lens_makes_the_run_deterministic():
-    from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
-    assert not at.exception
-    ms = _multiselect(at, "Also grade with")
-    ms.set_value([next(o for o in ms.options if "RAW" in o)]).run()
+    picker = _strategy_picker(at)
+    raw = next(o for o in picker.options if "RAW" in o)
+    picker.set_value(list(picker.value) + [raw]).run()
     assert not at.exception
     blob = _caption_blob(at)
     assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
+    assert "ONE combined grid" in blob
     # the run button says how many lenses will run, and is not gated on an API key
     assert any("Run 2 strategies (free)" in b.label for b in at.button)
     assert not any("ANTHROPIC_API_KEY" in str(getattr(i, "value", "")) for i in at.info)
+
+
+def test_deselecting_every_strategy_blocks_the_run():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    _strategy_picker(at).set_value([]).run()
+    assert not at.exception
+    infos = " ".join(str(getattr(i, "value", "")) for i in at.info)
+    assert "at least one strategy" in infos
+    assert next(b for b in at.button if str(b.label).startswith("▶")).disabled
