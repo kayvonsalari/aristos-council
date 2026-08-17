@@ -100,15 +100,21 @@ Three rank over ETFs — same engine, fund attributes instead of company fundame
 A strategy file declares its factors, screen, and verdict cut; the arithmetic behind every factor
 is unit-tested and documented in [The Calculations](docs/CALCULATIONS.md).
 
-The UI **discovers strategies dynamically** from `strategies/` — there is no hardcoded list. The
-visible set is currently eight — five stock lenses (**Defensive Income** `conservative_plus_v1`,
-**Value + Momentum** `magic_formula_momentum_v1`, **Growth at a Reasonable Price** `growth_garp_v2`,
-**Greenblatt RAW** `magic_formula_raw_v1`, **Financials** `financials_v1`) and three ETF lenses
-(**Dividend ETFs** `etf_dividend_v1`, **Growth ETFs** `etf_growth_v1`, **ETF Index Tracker**
-`etf_core_v1`); superseded/legacy configs (`growth_garp_v1`, `magic_formula_v1`,
-`dividend_aristocrats_v1`) are marked `ui: hidden` and stay fully loadable via the loader/CLI but
-unlisted. A new strategy appears simply by adding a YAML to `strategies/` — never
-by editing a published one (configs are versioned and superseded, not mutated).
+The UI **discovers strategies dynamically** from `strategies/` — there is no hardcoded list, and
+ONE picker (`strategy/picker.py`) serves every surface that offers strategies, so a fix can't land
+on one and miss the other. Labels are **plain names** — what a strategy is, not its rank in the
+line-up or the method behind it; qualifiers like *flagship* or *baseline — kept for comparison*
+live in the strategy's `role`, which renders as its own caption. The visible set is currently
+eight — five stock lenses (**Defensive Income** `conservative_plus_v1`, **Value + Momentum**
+`magic_formula_momentum_v1`, **Growth** `growth_garp_v2`, **Magic Formula RAW**
+`magic_formula_raw_v1`, **Financials** `financials_v1`) and three ETF lenses (**Dividend ETFs**
+`etf_dividend_v1`, **Growth ETFs** `etf_growth_v1`, **ETF Index Tracker** `etf_core_v1`);
+superseded/legacy configs (`growth_garp_v1`, `magic_formula_v1`, `dividend_aristocrats_v1`) are
+marked `ui: hidden` and stay fully loadable via the loader/CLI but unlisted. Where two configs
+would share a label (both GARP versions read "Growth"), the picker appends the id — a label always
+names exactly one strategy. The `id` is the stable record key and is never renamed. A new strategy
+appears simply by adding a YAML to `strategies/` — never by editing a published one (configs are
+versioned and superseded, not mutated).
 
 New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — the plain-language
 walkthrough. Want the formulas? **[The Calculations](docs/CALCULATIONS.md)** — every
@@ -262,8 +268,10 @@ unit conventions are in **[The Calculations §2.1](docs/CALCULATIONS.md#21-etf-f
 
 ### The ETF universes
 
-Five declared, versioned manifests under `universes/`. There is no US core cohort — the index
-tracker ships with the UCITS one only.
+The five manifests under `universes/` — and, since FUND-UI-2, the **only** lists the app ships
+(see [Universes](#universes)). They stay because they are the sole carrier of the UCITS/US fund
+tickers these lenses rank, and nobody retypes `SXR8.DE` from memory. There is no US core cohort —
+the index tracker ships with the UCITS one only.
 
 | Universe | Funds | For | Role |
 |---|---|---|---|
@@ -293,10 +301,9 @@ manifest (`VWCE.DE` also trades as `VGWL.DE`; `SXR8.DE` as `CSPX.L`; `EUNL.DE` a
 
 **Graded vs exploration.** A universe is **graded** when it appears in the
 prospective-scoreboard snapshot CSV (`snapshots/verdict_consensus.csv`) — a frozen,
-pre-registered input to a forward-return test. A graded universe is therefore **clone-only** in
-the universe editor:
-loading it to modify makes an editable copy under a new id, and the graded original is never
-changed. Everything else is **exploration**: run it, read it, learn from it — but its verdicts
+pre-registered input to a forward-return test. A graded list is therefore never rewritten in
+place: "Save changes" is refused for it, so save your edits under a new name and the graded
+original is untouched. Everything else is **exploration**: run it, read it, learn from it — but its verdicts
 are not scored, and the lenses over it say so in their own YAML (*"EXPLORATORY: never on the
 prospective scoreboard until deliberately frozen"*). **Every ETF lens and every ETF universe
 is exploration today**; the three cohorts marked *observation only* exist to watch how a
@@ -309,15 +316,19 @@ tools" toggle. The ETF universes are front-stage.)
 
 - **Decision core:** `rank_engine.py` (rank-sum + verdict cuts) + `factors.py` (factor
   registry) + `tools/` (all arithmetic; pure, unit-tested) + screens in versioned YAML.
-- **Universes:** declared, versioned manifests (`universes/*.yaml`) — a rank verdict is
-  universe-relative, so every run records the `universe_id` it ranked within (an ad-hoc
-  list is fingerprinted `adhoc:<hash>`). Universes are **discovered dynamically** like
-  strategies: a manifest is front-stage in both selectors unless its `role:` marks it
-  observational (a never-graded watch/control set — `energy_watch`, the validation bench),
-  which keeps it behind the "show validation" toggle. A strategy may declare
-  `suggested_universes:` to surface its natural pairing first in the selectors — a
-  hierarchy, never a lock: any universe stays one-click selectable (cross-lens runs are a
-  deliberate capability).
+- **Universes:** a universe is a **plain ticker list you save** (`universes/local/<id>.yaml`,
+  gitignored — portfolio-class data never rides a commit). The app ships no demo cohorts; the
+  only lists under `universes/` are the five ETF ones, because they carry fund tickers nobody
+  types from memory. A rank verdict is universe-relative, so every run records the
+  `universe_id` it ranked within (a new or edited list is fingerprinted `adhoc:<hash>`) **and
+  the exact membership it graded** — `universe_members` + an order-insensitive
+  `universe_member_hash`, so a past run stays interpretable after the list moves on. Lists are
+  **discovered dynamically** like strategies, and one is front-stage in both selectors unless
+  its `role:` marks it observational (a never-graded watch/control set), which keeps it behind
+  the "show validation" toggle. A strategy may declare `suggested_universes:` to surface its
+  natural pairing first in Company Check's reference-cohort selector — a hierarchy, never a
+  lock; an id no manifest resolves is skipped, so a dangling entry is inert. The Run tab's own
+  List selector does no such steering: it is a flat list of what you saved.
 - **Orchestration:** LangGraph; `ResearchState` threaded through every node; LLMs behind
   a `Runner` seam (tiered models via `init_chat_model`), so the graph tests end-to-end
   with fakes — no API keys in CI.
@@ -334,8 +345,11 @@ tools" toggle. The ETF universes are front-stage.)
 - **Persistence & audit:** append-only verdict history, full per-run reports, deep
   provenance audit resolving every cited figure against the tool-call ledger. Every
   run stores the inputs it saw (`runs/<run_id>/`); any run can be replayed offline.
-- **Council Station:** local Streamlit UI — run, read the deliberation, browse history,
-  edit strategies (edit-as-new-version; published files are never mutated).
+- **Council Station:** local Streamlit UI. The **Run** tab is the whole run flow — pick one
+  or more strategies, edit the ticker list, run (one strategy narrates; several grade the
+  same list under several lenses and report one combined grid, deterministically and for
+  free). Plus Company Check, the Scoreboard, and strategy editing (edit-as-new-version;
+  published files are never mutated).
 
 ## Project structure
 
@@ -370,13 +384,14 @@ aristos-council/
 │   │   └── reports.py            # full per-run deliberation for the UI (Sprint 3)
 │   ├── strategy/                 # strategy config
 │   │   ├── loader.py             # validated strategy YAML loader
+│   │   ├── picker.py             # THE strategy picker — one implementation, every surface
 │   │   └── versioning.py         # edit-as-new-version; never mutates published files (Sprint 3)
 │   └── tools/                    # deterministic tools — ALL arithmetic lives here
 │       ├── screening.py          # screen-criterion math (registry primitives, three-state)
 │       ├── technical.py          # price / technical snapshot
 │       └── sentiment_tools.py    # sentiment aggregation
 ├── strategies/                   # versioned strategy YAMLs — 8 visible lenses + legacy/lens screens
-├── universes/                    # declared, versioned universe manifests (incl. the 5 ETF cohorts)
+├── universes/                    # the 5 shipped ETF lists + local/ (your own lists, gitignored)
 ├── data/etf_static.csv           # committed, dated ETF static layer (fee / size / distribution)
 ├── scripts/                      # generate_etf_static_rows.py (static rows for review), diagnostics
 ├── snapshots/                    # prospective-scoreboard freezes (verdict_consensus.csv)
@@ -386,6 +401,7 @@ aristos-council/
 ├── .streamlit/                   # Council Station theme (config.toml)
 ├── examples/run_council.py       # CLI entrypoint (single council run)
 ├── tests/                        # pytest suite
+│   └── fixtures/universes/       # the five former demo cohorts, kept for tests & scripts
 └── CLAUDE.md                     # working agreement + sprint log for contributors
 ```
 
@@ -464,6 +480,11 @@ streamlit run app.py
 ```
 
 Browsing saved runs needs only `.[ui]`; launching a council from the UI bills API credits and additionally needs the runtime extras above plus `ANTHROPIC_API_KEY` (and optionally `FINNHUB_API_KEY`) in the environment or a local `.env`.
+
+The **Run** tab is the whole flow: pick strategies, paste or edit a ticker list, run. Save the
+list under a name to reuse it (it lands in `universes/local/`, gitignored); "Save changes"
+updates one of your own lists in place. Ranker-only, and any multi-strategy run, are
+deterministic — no key needed and nothing billed.
 
 Or run a single council from the CLI:
 

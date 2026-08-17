@@ -50,10 +50,17 @@ first scoring: January 2027.
 ## 5. Graded vs exploration — what is *not* on the scoreboard
 
 A universe is **graded** when it appears in `snapshots/verdict_consensus.csv`. That makes it a
-frozen, pre-registered input to a forward-return test, so the universe editor treats it as
-**clone-only**: loading it to modify produces an editable copy under a new id and the graded
-original is never changed. Everything else is **exploration** — run it, read it, learn from it,
+frozen, pre-registered input to a forward-return test, so a graded list is **never rewritten in
+place**: "Save changes" is refused for it, and saving your edits under a new name leaves the
+graded original untouched. Everything else is **exploration** — run it, read it, learn from it,
 but its verdicts are not scored and must not be quoted as scoreboard evidence.
+
+**A graded row's `universe_id` may name a list that no longer exists.** FUND-UI-2 deleted the
+shipped demo cohorts from the product surface (they live on verbatim under
+`tests/fixtures/universes/`), and a saved list is editable, so an id alone no longer pins a
+membership. Every run recorded from FUND-UI-2 onward therefore stamps its own
+`universe_members` and `universe_member_hash` — **that hash is the authoritative cohort** for
+interpreting a past run, not the id.
 
 Exploration is the honest default, not a lesser tier. A lens declares it in its own YAML — the
 ETF lenses word it *"EXPLORATORY: never on the prospective scoreboard until deliberately
