@@ -26,10 +26,10 @@
       "md": "reports/scout/economist/2026-08-17_verdicts.md"
     },
     "growth-scanner": {
-      "scouted": 0,
-      "skipped": 1,
+      "scouted": 50,
+      "skipped": 0,
       "cohort": "scanner",
-      "cohort_size": 40,
+      "cohort_size": 89,
       "json": "reports/scout/growth-scanner/2026-08-17_verdicts.json",
       "md": "reports/scout/growth-scanner/2026-08-17_verdicts.md"
     }

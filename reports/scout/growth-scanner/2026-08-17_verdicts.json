@@ -2,7 +2,7 @@
   "run_date": "2026-08-17",
   "source": "growth-scanner",
   "cohort": "scanner",
-  "cohort_size": 40,
+  "cohort_size": 89,
   "base_universe": "growth_40_v1",
   "lenses": [
     "conservative_plus_v1",
@@ -11,14 +11,2795 @@
     "magic_formula_raw_v1",
     "financials_v1"
   ],
-  "scouted": [],
-  "skipped": [
+  "scouted": [
     {
+      "symbol": "AAOI",
       "source": "growth-scanner",
-      "cell": "-",
-      "reason": "fetch/parse failed: no growth_scan_*.csv found in Drive folder \u2014 is the folder shared 'anyone with link: viewer'?"
+      "company": "Applied Opt",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.9258; market US; mktcap $11211.4M; rev YoY 0.8642",
+      "display": "Applied Optoelectronics, Inc. Common Stock (AAOI)",
+      "rank_sum": 65,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +553% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +553% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 26,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#26 of 40 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +553% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +553% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 39,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#39 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.9258",
+      "market": "US"
+    },
+    {
+      "symbol": "BFLY",
+      "source": "growth-scanner",
+      "company": "Butterfly Network Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.9145; market US; mktcap $2252.5M; rev YoY 0.2412",
+      "display": "Butterfly Network, Inc. (BFLY)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +523% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +523% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.9145",
+      "market": "US"
+    },
+    {
+      "symbol": "ATEX",
+      "source": "growth-scanner",
+      "company": "Anterix Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.8689; market US; mktcap $1740.4M; rev YoY 0.3808",
+      "display": "Anterix Inc. (ATEX)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "ret_6m": "1.8689",
+      "market": "US"
+    },
+    {
+      "symbol": "NAVN",
+      "source": "growth-scanner",
+      "company": "Navan, Inc. Class A Common Stock",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.8458; market US; mktcap $7502.8M; rev YoY 0.3986",
+      "display": "Navan, Inc. (NAVN)",
+      "rank_sum": 104,
+      "graded": 3,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 40,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#40 of 40 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 10,
+          "cohort_size": 10,
+          "reason": "",
+          "rendered": "#10 of 10 \u00b7 SELL"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 54,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#54 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.8458",
+      "market": "US"
+    },
+    {
+      "symbol": "MRVL",
+      "source": "growth-scanner",
+      "company": "Marvell Technology Group Ltd",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.8285; market US; mktcap $199254.9M; rev YoY 0.2757",
+      "display": "Marvell Technology, Inc. (MRVL)",
+      "rank_sum": 29,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.001081 vs threshold 0.015) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.001081 vs threshold 0.015) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 29,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#29 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "ret_6m": "1.8285",
+      "market": "US"
+    },
+    {
+      "symbol": "ARTV",
+      "source": "growth-scanner",
+      "company": "Artiva Biotherapeutics, Inc. Common Stock",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.825; market US; mktcap $534.4M",
+      "display": "Artiva Biotherapeutics, Inc. (ARTV)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_totalRevenue_le_0;prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.825",
+      "market": "US"
+    },
+    {
+      "symbol": "FCEL",
+      "source": "growth-scanner",
+      "company": "FuelCell Energy Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.8172; market US; mktcap $1651.9M; rev YoY -0.0486",
+      "display": "FuelCell Energy, Inc. (FCEL)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +425% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +425% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.8172",
+      "market": "US"
+    },
+    {
+      "symbol": "TTRX",
+      "source": "growth-scanner",
+      "company": "Turn Therapeutics Inc. Common Stock",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.8091; market US; mktcap $293.7M",
+      "display": "Turn Therapeutics Inc. (TTRX)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "fundamentals_gt_300d_old;prior_totalRevenue_le_0;no_prior_yr_netIncome;prior_epsActual_le_0",
+      "ret_6m": "1.8091",
+      "market": "US"
+    },
+    {
+      "symbol": "DFTX",
+      "source": "growth-scanner",
+      "company": "Definium Therapeutics, Inc.",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.7873; market US; mktcap $5760.3M",
+      "display": "Definium Therapeutics, Inc. (DFTX)",
+      "rank_sum": 82,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 34,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#34 of 40 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 48,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#48 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Healthcare' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Healthcare' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_totalRevenue_le_0;prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.7873",
+      "market": "US"
+    },
+    {
+      "symbol": "SYRE",
+      "source": "growth-scanner",
+      "company": "Spyre Therapeutics Inc.",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.7805; market US; mktcap $8872.9M",
+      "display": "Spyre Therapeutics, Inc. (SYRE)",
+      "rank_sum": 78,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +496% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +496% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 32,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#32 of 40 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +496% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +496% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 46,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#46 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Healthcare' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Healthcare' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_totalRevenue_le_0;prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.7805",
+      "market": "US"
+    },
+    {
+      "symbol": "CORT",
+      "source": "growth-scanner",
+      "company": "Corcept Therapeutics Incorporated",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.7648; market US; mktcap $12001.1M; rev YoY 0.3174",
+      "display": "Corcept Therapeutics Incorporated (CORT)",
+      "rank_sum": 53,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +57% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +57% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 24,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#24 of 40 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +57% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +57% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 29,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#29 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Healthcare' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Healthcare' outside this strategy's scope"
+        }
+      },
+      "ret_6m": "1.7648",
+      "market": "US"
+    },
+    {
+      "symbol": "ZIP",
+      "source": "growth-scanner",
+      "company": "Ziprecruiter Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.7283; market US; mktcap $388.1M; rev YoY 0.0519",
+      "display": "ZipRecruiter, Inc. (ZIP)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0",
+      "ret_6m": "1.7283",
+      "market": "US"
+    },
+    {
+      "symbol": "HPE",
+      "source": "growth-scanner",
+      "company": "Hewlett Packard Enterprise Co",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.6612; market US; mktcap $78644.4M; rev YoY 0.4072",
+      "display": "Hewlett Packard Enterprise Company (HPE)",
+      "rank_sum": 27,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.009709 vs threshold 0.015) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.009709 vs threshold 0.015) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.04481 vs threshold 0.12) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.04481 vs threshold 0.12) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.0607 vs threshold 0.1) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.0607 vs threshold 0.1) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 27,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#27 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0",
+      "ret_6m": "1.6612",
+      "market": "US"
+    },
+    {
+      "symbol": "PUBM",
+      "source": "growth-scanner",
+      "company": "Pubmatic\ufffdInc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.6422; market US; mktcap $793.5M; rev YoY 0.1055",
+      "display": "PubMatic, Inc. (PUBM)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0",
+      "ret_6m": "1.6422",
+      "market": "US"
+    },
+    {
+      "symbol": "NBIS",
+      "source": "growth-scanner",
+      "company": "Nebius Group N.V.",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.6022; market US; mktcap $71920.7M; rev YoY 6.2152",
+      "display": "NBIS",
+      "rank_sum": 75,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +293% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +293% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 31,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#31 of 40 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +293% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +293% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 44,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#44 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Communication Services' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Communication Services' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.6022",
+      "market": "US"
+    },
+    {
+      "symbol": "BB",
+      "source": "growth-scanner",
+      "company": "BlackBerry Ltd",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.5983; market US; mktcap $5257.1M; rev YoY 0.2564",
+      "display": "BlackBerry Limited (BB)",
+      "rank_sum": 68,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +136% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +136% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 26,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#26 of 40 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed -0.02204 vs threshold 0.1) [\u26a0 price diverging: +136% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.02204 vs threshold 0.1) [\u26a0 price diverging: +136% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 42,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#42 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "ret_6m": "1.5983",
+      "market": "US"
+    },
+    {
+      "symbol": "CLYM",
+      "source": "growth-scanner",
+      "company": "Climb Bio Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.5979; market US; mktcap $844.3M",
+      "display": "Climb Bio Inc (CLYM)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_totalRevenue_le_0;prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.5979",
+      "market": "US"
+    },
+    {
+      "symbol": "MAAS",
+      "source": "growth-scanner",
+      "company": "Maase Inc.",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.57; market US; mktcap $7021.7M",
+      "display": "Maase Inc. (MAAS)",
+      "rank_sum": 1,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +371% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +371% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +371% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +371% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "financials_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 1,
+          "cohort_size": 1,
+          "reason": "",
+          "rendered": "#1 of 1 \u00b7 BUY"
+        }
+      },
+      "scanner_notes": "no_prior_yr_totalRevenue;no_prior_yr_netIncome;no_prior_yr_epsActual",
+      "ret_6m": "1.57",
+      "market": "US"
+    },
+    {
+      "symbol": "MANE",
+      "source": "growth-scanner",
+      "company": "Veradermics, Incorporated",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.5541; market US; mktcap $4589.0M",
+      "display": "MANE",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_totalRevenue_le_0;prior_netIncome_le_0;no_prior_yr_epsActual",
+      "ret_6m": "1.5541",
+      "market": "US"
+    },
+    {
+      "symbol": "TWST",
+      "source": "growth-scanner",
+      "company": "Twist Bioscience Corp",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.5512; market US; mktcap $7650.3M; rev YoY 0.2324",
+      "display": "Twist Bioscience Corporation (TWST)",
+      "rank_sum": 78,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +332% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +332% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 32,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#32 of 40 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +332% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +332% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 46,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#46 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Healthcare' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Healthcare' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_epsActual_le_0",
+      "ret_6m": "1.5512",
+      "market": "US"
+    },
+    {
+      "symbol": "PMTS",
+      "source": "growth-scanner",
+      "company": "CPI Card Group Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.5483; market US; mktcap $335.2M; rev YoY 0.1497",
+      "display": "CPI Card Group Inc. (PMTS)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "ret_6m": "1.5483",
+      "market": "US"
+    },
+    {
+      "symbol": "IOVA",
+      "source": "growth-scanner",
+      "company": "Iovance Biotherapeutics Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.537; market US; mktcap $2933.0M; rev YoY 0.6565",
+      "display": "Iovance Biotherapeutics, Inc. (IOVA)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +185% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +185% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.537",
+      "market": "US"
+    },
+    {
+      "symbol": "ALAB",
+      "source": "growth-scanner",
+      "company": "Astera Labs, Inc.",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.496; market US; mktcap $56297.7M; rev YoY 1.0445",
+      "display": "Astera Labs, Inc. (ALAB)",
+      "rank_sum": 38,
+      "graded": 1,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 38,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#38 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "ret_6m": "1.496",
+      "market": "US"
+    },
+    {
+      "symbol": "STLN",
+      "source": "growth-scanner",
+      "company": "The Oncology Institute, Inc.",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.494; market US; mktcap $638.5M; rev YoY 0.3462",
+      "display": "Starling Oncology, Inc. (STLN)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.494",
+      "market": "US"
+    },
+    {
+      "symbol": "U",
+      "source": "growth-scanner",
+      "company": "Unity Software Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.4513; market US; mktcap $20200.1M; rev YoY 0.2393",
+      "display": "Unity Software Inc. (U)",
+      "rank_sum": 89,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 38,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#38 of 40 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.06901 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.06901 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 51,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#51 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.4513",
+      "market": "US"
+    },
+    {
+      "symbol": "SNDK",
+      "source": "growth-scanner",
+      "company": "Sandisk Corp",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.4389; market US; mktcap $235787.8M; rev YoY 3.7159",
+      "display": "Sandisk Corporation (SNDK)",
+      "rank_sum": 73,
+      "graded": 3,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +3391% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +3391% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 26,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#26 of 40 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 8,
+          "cohort_size": 10,
+          "reason": "",
+          "rendered": "#8 of 10 \u00b7 HOLD"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 39,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#39 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0",
+      "ret_6m": "1.4389",
+      "market": "US"
+    },
+    {
+      "symbol": "TMCI",
+      "source": "growth-scanner",
+      "company": "Treace Medical Concepts Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.4247; market US; mktcap $294.6M; rev YoY -0.0424",
+      "display": "Treace Medical Concepts, Inc. (TMCI)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.4247",
+      "market": "US"
+    },
+    {
+      "symbol": "CDNA",
+      "source": "growth-scanner",
+      "company": "CareDx Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.4137; market US; mktcap $2380.3M; rev YoY 0.5223",
+      "display": "CareDx, Inc. (CDNA)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +264% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +264% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0",
+      "ret_6m": "1.4137",
+      "market": "US"
+    },
+    {
+      "symbol": "OUST",
+      "source": "growth-scanner",
+      "company": "Ouster, Inc. Common Stock",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.4044; market US; mktcap $3337.4M; rev YoY 0.5586",
+      "display": "Ouster, Inc. (OUST)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +47% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +47% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.4044",
+      "market": "US"
+    },
+    {
+      "symbol": "PRLD",
+      "source": "growth-scanner",
+      "company": "Prelude Therapeutics\ufffdInc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.4036; market US; mktcap $417.3M",
+      "display": "Prelude Therapeutics Incorporated (PRLD)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_totalRevenue_le_0;prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.4036",
+      "market": "US"
+    },
+    {
+      "symbol": "AGEN",
+      "source": "growth-scanner",
+      "company": "Agenus Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3973; market US; mktcap $309.7M; rev YoY 0.3436",
+      "display": "Agenus Inc. (AGEN)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.3973",
+      "market": "US"
+    },
+    {
+      "symbol": "URGN",
+      "source": "growth-scanner",
+      "company": "UroGen Pharma Ltd",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.394; market US; mktcap $2314.0M; rev YoY 1.9922",
+      "display": "UroGen Pharma Ltd. (URGN)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +151% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +151% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.394",
+      "market": "US"
+    },
+    {
+      "symbol": "FBRX",
+      "source": "growth-scanner",
+      "company": "Forte Biosciences Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3936; market US; mktcap $1631.2M",
+      "display": "Forte Biosciences, Inc. (FBRX)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +614% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +614% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_totalRevenue_le_0;prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.3936",
+      "market": "US"
+    },
+    {
+      "symbol": "ETON",
+      "source": "growth-scanner",
+      "company": "Eton Pharmaceuticals Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3902; market US; mktcap $1617.5M; rev YoY 0.4041",
+      "display": "Eton Pharmaceuticals, Inc. (ETON)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +240% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +240% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.3902",
+      "market": "US"
+    },
+    {
+      "symbol": "RPI.L",
+      "source": "growth-scanner",
+      "company": "Raspberry Pi Holdings PLC",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3727; market UK; mktcap $1767.5M; rev YoY 0.5665",
+      "display": "Raspberry Pi Holdings plc (RPI.L)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +67% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +67% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "no_prior_yr_epsActual",
+      "ret_6m": "1.3727",
+      "market": "UK"
+    },
+    {
+      "symbol": "PANW",
+      "source": "growth-scanner",
+      "company": "Palo Alto Networks Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.372; market US; mktcap $321476.8M; rev YoY 0.3115",
+      "display": "Palo Alto Networks, Inc. (PANW)",
+      "rank_sum": 74,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +117% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +117% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 30,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#30 of 40 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +117% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +117% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 44,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#44 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "ret_6m": "1.372",
+      "market": "US"
+    },
+    {
+      "symbol": "HNST",
+      "source": "growth-scanner",
+      "company": "Honest Company Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3615; market US; mktcap $537.5M; rev YoY -0.1087",
+      "display": "The Honest Company, Inc. (HNST)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "ret_6m": "1.3615",
+      "market": "US"
+    },
+    {
+      "symbol": "FA",
+      "source": "growth-scanner",
+      "company": "First Advantage Corp",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3393; market US; mktcap $3802.6M; rev YoY 0.1488",
+      "display": "First Advantage Corporation (FA)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "ret_6m": "1.3393",
+      "market": "US"
+    },
+    {
+      "symbol": "IFRX",
+      "source": "growth-scanner",
+      "company": "InflaRx N.V.",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3372; market US; mktcap $295.3M; rev YoY -1.0",
+      "display": "InflaRx N.V. (IFRX)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.3372",
+      "market": "US"
+    },
+    {
+      "symbol": "SFOR.L",
+      "source": "growth-scanner",
+      "company": "S4 Capital PLC",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3367; market UK; mktcap $496.5M; rev YoY -0.0455",
+      "display": "S4 Capital plc (SFOR.L)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "1.3367",
+      "market": "UK"
+    },
+    {
+      "symbol": "ANDG",
+      "source": "growth-scanner",
+      "company": "Andersen Group Inc.",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3322; market US; mktcap $5516.3M; rev YoY 0.2368",
+      "display": "ANDG",
+      "rank_sum": 93,
+      "graded": 3,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 35,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#35 of 40 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 9,
+          "cohort_size": 10,
+          "reason": "",
+          "rendered": "#9 of 10 \u00b7 SELL"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 49,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#49 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Cyclical' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Cyclical' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;no_prior_yr_epsActual",
+      "ret_6m": "1.3322",
+      "market": "US"
+    },
+    {
+      "symbol": "AMD",
+      "source": "growth-scanner",
+      "company": "Advanced Micro Devices Inc",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.3298; market US; mktcap $797251.8M; rev YoY 0.5011",
+      "display": "Advanced Micro Devices, Inc. (AMD)",
+      "rank_sum": 65,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +179% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +179% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 26,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#26 of 40 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed 3.289 vs threshold 2.0) [\u26a0 price diverging: +179% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed 3.289 vs threshold 2.0) [\u26a0 price diverging: +179% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 39,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#39 of 54 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "ret_6m": "1.3298",
+      "market": "US"
+    },
+    {
+      "symbol": "CMCX.L",
+      "source": "growth-scanner",
+      "company": "CMC Markets PLC",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.1667; market UK; mktcap $2563.3M; rev YoY 0.2901",
+      "display": "CMC Markets Plc (CMCX.L)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.0001994 vs threshold 0.015) [\u26a0 price diverging: +211% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.0001994 vs threshold 0.015) [\u26a0 price diverging: +211% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "ret_6m": "1.1667",
+      "market": "UK"
+    },
+    {
+      "symbol": "TRST.L",
+      "source": "growth-scanner",
+      "company": "Trustpilot Group PLC",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 1.0732; market UK; mktcap $1478.7M; rev YoY 0.2516",
+      "display": "Trustpilot Group plc (TRST.L)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;no_prior_yr_epsActual",
+      "ret_6m": "1.0732",
+      "market": "UK"
+    },
+    {
+      "symbol": "LPK.DE",
+      "source": "growth-scanner",
+      "company": "LPKF Laser & Electronics AG",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 0.9879; market DE; mktcap $418.0M; rev YoY -0.4278",
+      "display": "LPKF Laser & Electronics SE (LPK.DE)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "ret_6m": "0.9879",
+      "market": "DE"
+    },
+    {
+      "symbol": "A1OS.DE",
+      "source": "growth-scanner",
+      "company": "All For One Steeb AG",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 0.8868; market DE; mktcap $365.2M; rev YoY 0.0525",
+      "display": "All for One Group SE (A1OS.DE)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "ret_6m": "0.8868",
+      "market": "DE"
+    },
+    {
+      "symbol": "ITM.L",
+      "source": "growth-scanner",
+      "company": "ITM Power",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 0.8603; market UK; mktcap $1028.8M; rev YoY 0.1604",
+      "display": "ITM Power Plc (ITM.L)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;no_prior_yr_epsActual",
+      "ret_6m": "0.8603",
+      "market": "UK"
+    },
+    {
+      "symbol": "AIXA.DE",
+      "source": "growth-scanner",
+      "company": "AIXTRON SE",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 0.8534; market DE; mktcap $5480.1M; rev YoY -0.1624",
+      "display": "AIXTRON SE (AIXA.DE)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.003635 vs threshold 0.015) [\u26a0 price diverging: +205% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.003635 vs threshold 0.015) [\u26a0 price diverging: +205% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "ret_6m": "0.8534",
+      "market": "DE"
+    },
+    {
+      "symbol": "DHER.DE",
+      "source": "growth-scanner",
+      "company": "Delivery Hero SE",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 0.8317; market DE; mktcap $13040.4M; rev YoY 0.1008",
+      "display": "Delivery Hero SE (DHER.DE)",
+      "rank_sum": 86,
+      "graded": 2,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +59% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +59% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 36,
+          "cohort_size": 40,
+          "reason": "",
+          "rendered": "#36 of 40 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +59% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +59% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 50,
+          "cohort_size": 54,
+          "reason": "",
+          "rendered": "#50 of 54 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Cyclical' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Cyclical' outside this strategy's scope"
+        }
+      },
+      "scanner_notes": "prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "0.8317",
+      "market": "DE"
+    },
+    {
+      "symbol": "BBZA.DE",
+      "source": "growth-scanner",
+      "company": "BB Biotech AG",
+      "date_added": "growth_scan_2026-08-14_3.csv",
+      "story": "6m return 0.8234; market DE; mktcap $3604.7M",
+      "display": "BB Biotech AG (BBZA.DE)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_streak (observed 0 vs threshold 10.0)",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 0 vs threshold 10.0)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "scanner_notes": "prior_totalRevenue_le_0;prior_netIncome_le_0;prior_epsActual_le_0",
+      "ret_6m": "0.8234",
+      "market": "DE"
     }
   ],
-  "scan_file": "",
-  "scan_header": ""
+  "skipped": [],
+  "scan_file": "growth_scan_2026-08-14_3.csv",
+  "scan_header": "# Aristos Council growth scan v1.5-local \ufffd FROZEN CANDIDATE LIST, not a buy list, not investment advice\n# scan_date: 2026-08-14  (frozen, append-only \ufffd never edit or overwrite)\n# rules: 6m total return (yfinance adj close, ~182d) in band +20%..+200%; min price 1.0 local (20.0p for GBX); min obs 100; cap floor $250M USD\n# stage2: top 50 by 6m return, slots proportional to per-market survivors (min 5); growth = latest reported period vs same period prior year (300-430d match, handles semiannual)\n# universe filters: common stocks only; cross-market dedupe by ISIN + normalized name (priority US>DE>UK; share classes collapse to one line); LSE non-GBP/GBX lines dropped (international order book); preferred-share pattern dropped\n# roic_ttm_approx: TTM NOPAT / (equity + debt - cash), rough; passes_roic_12 vs flagship min_roic 12%\n# universe: US=6117, DE=547, UK=1516; stage1 survivors: US=1390, DE=107, UK=180\n# fx used: EURUSD=1.1583 GBPUSD=1.3552\n# stage1_coverage: US=91%, DE=96%, UK=92%\n# data_quality: ok"
 }
