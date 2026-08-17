@@ -452,7 +452,7 @@ def test_validation_assets_hidden_by_default(monkeypatch):
 
     rank = _strategy_picker(at).options
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
-    assert any("GARP" in o for o in rank)                           # growth is live (4C)
+    assert "Growth" in rank                                         # growth is live (4C)
     assert any("RAW" in o for o in rank)                            # canonical raw (RAW-1)
     assert any("Financials" in o for o in rank)                     # financials lens (FIN-1)
     assert any("Dividend ETFs" in o for o in rank)                  # ETF-1 dividend lens
@@ -473,7 +473,7 @@ def test_both_strategy_pickers_list_the_live_strategies():
     cc = _dropdown(at, "Strategy (lens screen + factors)").options
     assert list(rank) == list(cc)                                    # one picker, one set
     for opts in (rank, cc):
-        assert any("GARP" in o for o in opts)                        # growth as GARP
+        assert "Growth" in opts                                      # plain names now
         assert any("RAW" in o for o in opts)                         # canonical raw
         assert any("Financials" in o for o in opts)                  # financials lens (FIN-1)
         assert not any("_" in o for o in opts)                       # display names, no ids

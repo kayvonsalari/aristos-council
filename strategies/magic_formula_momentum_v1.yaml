@@ -13,7 +13,13 @@
 
 id: magic_formula_momentum_v1
 name: Magic Formula + Momentum
-display_name: Value + Momentum (flagship)
+# DISPLAY LABEL ONLY (FUND-UI-2, same pattern as UI-RENAME-1): plain names in the
+# picker — what the strategy IS, not what rank it holds in the line-up. The
+# "(flagship)" qualifier moved to `role`, which renders as its own caption. The `id`
+# above is the stable record key and is NEVER renamed, so run history, snapshot rows
+# and manifests are untouched.
+display_name: Value + Momentum
+role: flagship
 version: 1
 
 description: >-
