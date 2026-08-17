@@ -1,8 +1,8 @@
 {
   "run_date": "2026-08-17",
   "source": "economist",
-  "cohort": "news",
-  "cohort_size": 60,
+  "cohort": "combined",
+  "cohort_size": 108,
   "base_universe": "growth_40_v1",
   "lenses": [
     "conservative_plus_v1",
@@ -15,11 +15,12 @@
     {
       "symbol": "AMZN",
       "source": "economist",
+      "also_found_by": [],
       "company": "Amazon.com Inc \u2014 Cloud computing / custom AI silicon",
       "date_added": "2026-08-13",
       "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
       "display": "Amazon.com, Inc. (AMZN)",
-      "rank_sum": 39,
+      "rank_sum": 41,
       "graded": 1,
       "comparable": false,
       "lenses": {
@@ -50,10 +51,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 39,
-          "cohort_size": 51,
+          "position": 41,
+          "cohort_size": 66,
           "reason": "",
-          "rendered": "#39 of 51 \u00b7 HOLD"
+          "rendered": "#41 of 66 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -68,11 +69,12 @@
     {
       "symbol": "INTC",
       "source": "economist",
+      "also_found_by": [],
       "company": "Intel Corp \u2014 Semiconductors",
       "date_added": "2026-08-13",
       "story": "\"Business\" (The world this week), The Economist, Aug 15th 2026 issue (published Aug 13 2026)",
       "display": "Intel Corporation (INTC)",
-      "rank_sum": 71,
+      "rank_sum": 76,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -86,11 +88,11 @@
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
-          "verdict": "sell",
+          "verdict": "hold",
           "position": 30,
-          "cohort_size": 36,
+          "cohort_size": 48,
           "reason": "",
-          "rendered": "#30 of 36 \u00b7 SELL"
+          "rendered": "#30 of 48 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -103,10 +105,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 41,
-          "cohort_size": 51,
+          "position": 46,
+          "cohort_size": 66,
           "reason": "",
-          "rendered": "#41 of 51 \u00b7 HOLD"
+          "rendered": "#46 of 66 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -121,11 +123,12 @@
     {
       "symbol": "NVDA",
       "source": "economist",
+      "also_found_by": [],
       "company": "NVIDIA Corp \u2014 Semiconductors / AI infrastructure",
       "date_added": "2026-08-13",
       "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
       "display": "NVIDIA Corporation (NVDA)",
-      "rank_sum": 39,
+      "rank_sum": 36,
       "graded": 3,
       "comparable": false,
       "lenses": {
@@ -140,26 +143,26 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 15,
-          "cohort_size": 36,
+          "position": 14,
+          "cohort_size": 48,
           "reason": "",
-          "rendered": "#15 of 36 \u00b7 HOLD"
+          "rendered": "#14 of 48 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "ranked",
           "verdict": "buy",
-          "position": 2,
-          "cohort_size": 10,
+          "position": 1,
+          "cohort_size": 13,
           "reason": "",
-          "rendered": "#2 of 10 \u00b7 BUY"
+          "rendered": "#1 of 13 \u00b7 BUY"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 22,
-          "cohort_size": 51,
+          "position": 21,
+          "cohort_size": 66,
           "reason": "",
-          "rendered": "#22 of 51 \u00b7 HOLD"
+          "rendered": "#21 of 66 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -174,11 +177,14 @@
     {
       "symbol": "PANW",
       "source": "economist",
+      "also_found_by": [
+        "growth-scanner"
+      ],
       "company": "Palo Alto Networks \u2014 Cybersecurity software",
       "date_added": "2026-08-14",
       "story": "\"AI agents lie, cheat and steal. That is putting off users\", The Economist, Aug 15th 2026 issue (published Aug 12 2026)",
       "display": "Palo Alto Networks, Inc. (PANW)",
-      "rank_sum": 74,
+      "rank_sum": 88,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -192,11 +198,11 @@
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
-          "verdict": "sell",
-          "position": 31,
-          "cohort_size": 36,
+          "verdict": "hold",
+          "position": 34,
+          "cohort_size": 48,
           "reason": "",
-          "rendered": "#31 of 36 \u00b7 SELL"
+          "rendered": "#34 of 48 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -209,10 +215,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 43,
-          "cohort_size": 51,
+          "position": 54,
+          "cohort_size": 66,
           "reason": "",
-          "rendered": "#43 of 51 \u00b7 SELL"
+          "rendered": "#54 of 66 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -227,11 +233,12 @@
     {
       "symbol": "CRWD",
       "source": "economist",
+      "also_found_by": [],
       "company": "CrowdStrike Holdings \u2014 Cybersecurity software",
       "date_added": "2026-08-14",
       "story": "\"AI agents lie, cheat and steal. That is putting off users\", The Economist, Aug 15th 2026 issue (published Aug 12 2026)",
       "display": "CrowdStrike Holdings, Inc. (CRWD)",
-      "rank_sum": 78,
+      "rank_sum": 96,
       "graded": 2,
       "comparable": false,
       "lenses": {
@@ -245,11 +252,11 @@
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
-          "verdict": "sell",
-          "position": 32,
-          "cohort_size": 36,
+          "verdict": "hold",
+          "position": 39,
+          "cohort_size": 48,
           "reason": "",
-          "rendered": "#32 of 36 \u00b7 SELL"
+          "rendered": "#39 of 48 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -262,10 +269,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 46,
-          "cohort_size": 51,
+          "position": 57,
+          "cohort_size": 66,
           "reason": "",
-          "rendered": "#46 of 51 \u00b7 SELL"
+          "rendered": "#57 of 66 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",

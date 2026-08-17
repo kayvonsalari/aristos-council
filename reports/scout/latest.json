@@ -12,24 +12,24 @@
     "ft": {
       "scouted": 19,
       "skipped": 0,
-      "cohort": "news",
-      "cohort_size": 60,
+      "cohort": "combined",
+      "cohort_size": 108,
       "json": "reports/scout/ft/2026-08-17_verdicts.json",
       "md": "reports/scout/ft/2026-08-17_verdicts.md"
     },
     "economist": {
       "scouted": 5,
       "skipped": 0,
-      "cohort": "news",
-      "cohort_size": 60,
+      "cohort": "combined",
+      "cohort_size": 108,
       "json": "reports/scout/economist/2026-08-17_verdicts.json",
       "md": "reports/scout/economist/2026-08-17_verdicts.md"
     },
     "growth-scanner": {
       "scouted": 50,
       "skipped": 0,
-      "cohort": "scanner",
-      "cohort_size": 89,
+      "cohort": "combined",
+      "cohort_size": 108,
       "json": "reports/scout/growth-scanner/2026-08-17_verdicts.json",
       "md": "reports/scout/growth-scanner/2026-08-17_verdicts.md"
     }
