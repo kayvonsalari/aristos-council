@@ -42,6 +42,7 @@ from ..screening import (
     min_market_cap_criterion,
     min_yield_criterion,
     peg_with_earnings_growth,
+    piotroski_f_score,
     revenue_cagr,
     through_cycle_roic,
 )
@@ -239,6 +240,29 @@ def _min_dividend_streak(ev: Evidence, threshold: float) -> CriterionResult:
         note=f"{s}y consecutive dividend increases vs floor {int(threshold)}y")
 
 
+def _min_f_score(ev: Evidence, threshold: float) -> CriterionResult:
+    """Piotroski F-Score (0-9) at or above a floor — an accounting-quality screen.
+
+    All nine checks come from ``screening.piotroski_f_score``, the SAME function the
+    rankable ``piotroski_f_score`` factor calls (two registries, one arithmetic), so
+    the screened and ranked values can never diverge. ABSTAINS (passed=None) when
+    fewer than 5 of the 9 checks are computable — a partial tally presented as a score
+    would read as a terrible company when it is actually a missing statement. The note
+    carries the N/9 plus the unavailability accounting either way.
+
+    NOT gating-eligible: the score aggregates nine checks whose availability depends on
+    provider statement coverage, so a hard deterministic veto on it would fail names
+    for data gaps. No ``is_gating`` flag is set or proposed.
+    """
+    result = piotroski_f_score(ev.fundamentals)
+    if result.score is None:
+        return CriterionResult(name="min_f_score", passed=None, observed=None,
+                               threshold=threshold, note=result.note)
+    return CriterionResult(name="min_f_score", passed=result.score >= threshold,
+                           observed=float(result.score), threshold=threshold,
+                           note=result.note)
+
+
 def _max_debt_to_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
     """Balance-sheet leverage as total_debt / market_cap (a yield-trap separator:
     VZ ~1.2x fails). Chosen over debt-to-equity BECAUSE it is ROBUST TO NEGATIVE
@@ -405,6 +429,19 @@ _CRITERIA: tuple[Criterion, ...] = (
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("total_debt",),
+    ),
+    # --- Accounting quality (PIOTROSKI-1) — OPTIONAL, no lens selects it yet ---
+    Criterion(
+        "min_f_score", _min_f_score,
+        label="Minimum Piotroski F-Score",
+        params=(ParamSpec("threshold", "int", min=0, max=9, step=1, default=5),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+        fundamentals_fields=("total_assets_annual", "long_term_debt_annual",
+                             "current_assets_annual", "current_liabilities_annual",
+                             "shares_outstanding_annual", "gross_profit_annual",
+                             "net_income", "operating_cash_flow_annual",
+                             "total_revenue"),
     ),
 )
 

@@ -31,7 +31,7 @@ from .fund_currency import (
     needs_conversion,
     normalize_currency_code,
 )
-from .tools.screening import revenue_cagr, through_cycle_roic
+from .tools.screening import piotroski_f_score, revenue_cagr, through_cycle_roic
 from .tools.technical import (
     _TD_6M,
     _TD_12M,
@@ -372,6 +372,25 @@ def _return_on_equity(fi: FactorInputs) -> Optional[float]:
     return None                                        # equity ≤ 0 / no income -> abstain
 
 
+def _piotroski_f_score(fi: FactorInputs) -> Optional[float]:
+    """Piotroski F-Score (0-9) — nine binary accounting-quality checks, HIGHER better.
+
+    Delegates ALL nine checks to ``tools.screening.piotroski_f_score``, the single
+    implementation the ``min_f_score`` screen criterion also calls, so the ranked
+    value and the screened value can never diverge. ABSTAINS (None, never excludes)
+    when fewer than 5 of the 9 checks are computable — a partial tally is not a score.
+
+    RANKING PROPERTY (PIOTROSKI-1, documented in CALCULATIONS.md): the F-Score is a
+    COARSE 0-9 integer, so on a 20-40 name universe it produces large TIED BLOCKS
+    that the rank engine resolves by averaging. That is a real argument for using it
+    as a SCREEN rather than a rank leg — it is NOT to be "fixed" with a tiebreaker.
+    Deliberately absent from PRICE_DERIVED_FACTORS (not computable point-in-time from
+    closes) and from every strategy YAML's ``factors:`` list.
+    """
+    result = piotroski_f_score(fi.fundamentals)
+    return None if result.score is None else float(result.score)
+
+
 @dataclass(frozen=True)
 class FactorDef:
     name: str
@@ -436,6 +455,13 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         "rate (DATA-HYGIENE-1), abstains when the rate is unavailable, flagged when the "
         "fund's base currency is unknown",
         source_fn=_fund_size_source),
+    # Piotroski F-Score (PIOTROSKI-1) — a rankable QUALITY leg, registered but NOT
+    # selected by any strategy in this PR. Shares its nine checks with the
+    # min_f_score screen criterion (tools/screening.piotroski_f_score).
+    "piotroski_f_score": FactorDef(
+        "piotroski_f_score", _piotroski_f_score, "high", "Piotroski F-Score (0-9)",
+        "nine annual-statement checks; abstains below 5 computable checks; coarse "
+        "integer -> large tied blocks on a small universe (screen beats rank leg)"),
 }
 
 

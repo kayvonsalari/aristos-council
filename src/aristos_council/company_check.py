@@ -537,14 +537,27 @@ def _fmt_num(v: Optional[float]) -> str:
 # divergence flag — never the raw ratio 7.11 (ITEM 3).
 _PERCENT_FACTORS = frozenset({"momentum_12m", "momentum_6m"})
 
+# Factors whose value is a SCORE OUT OF A FIXED CEILING — rendered "7/9", because a
+# bare "7" hides the scale a reader needs to judge it (PIOTROSKI-1).
+_SCORE_FACTOR_CEILINGS: dict[str, int] = {"piotroski_f_score": 9}
+
 
 def format_factor_value(factor: str, value: Optional[float]) -> str:
     """A factor's value for display: momentum as a signed percent (+711%, consistent
-    with the divergence flag), everything else via the general number formatter."""
+    with the divergence flag), a bounded score as "7/9", everything else via the
+    general number formatter.
+
+    NOTE (PIOTROSKI-1): this function receives ONLY the value, so the F-Score's
+    unavailability count cannot reach it — the "2 unavailable" accounting lives in the
+    min_f_score CRITERION's note, and no extra state is threaded through here to force
+    a longer string."""
     if value is None:
         return "—"
     if factor in _PERCENT_FACTORS:
         return f"{value:+.0%}"
+    ceiling = _SCORE_FACTOR_CEILINGS.get(factor)
+    if ceiling is not None:
+        return f"{value:.0f}/{ceiling}"
     return _fmt_num(value)
 
 

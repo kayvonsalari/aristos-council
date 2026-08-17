@@ -200,6 +200,28 @@ class YFinanceAdapter(MarketDataAdapter):
                 balance, "Stockholders Equity", "Total Stockholder Equity"),
             net_income=_cashflow_series(
                 income, "Net Income", "Net Income Common Stockholders"),
+            # Piotroski F-Score series (PIOTROSKI-1), newest-first. Mapped through the
+            # ALIAS-TOLERANT helper (not the single-label _annual_series) because
+            # yfinance drifts between these labels across versions — a single label
+            # would silently yield an empty series and make 7 of the 9 checks abstain.
+            # Best-effort exactly like the series above: a missing statement yields an
+            # empty list, never an exception and never a fabricated value.
+            #
+            # CACHE: these new fields need NO ADAPTER_SCHEMA_VERSION bump —
+            # cache._schema_marker already folds the sorted Fundamentals field-name set
+            # into the marker, so entries written before them are detected as stale and
+            # refetched automatically. Do NOT bump the version "just in case".
+            total_assets_annual=_cashflow_series(balance, "Total Assets"),
+            long_term_debt_annual=_cashflow_series(
+                balance, "Long Term Debt",
+                "Long Term Debt And Capital Lease Obligation"),
+            current_assets_annual=_cashflow_series(
+                balance, "Current Assets", "Total Current Assets"),
+            current_liabilities_annual=_cashflow_series(
+                balance, "Current Liabilities", "Total Current Liabilities"),
+            shares_outstanding_annual=_cashflow_series(
+                balance, "Ordinary Shares Number", "Share Issued"),
+            gross_profit_annual=_cashflow_series(income, "Gross Profit"),
         )
 
     # ------------------------------------------------------------------ #
