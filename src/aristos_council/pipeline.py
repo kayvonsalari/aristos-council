@@ -67,6 +67,7 @@ from .rank_engine import (
 )
 from .reproducibility import estimate_cost
 from .state import Recommendation, ResearchState
+from .universe import member_hash
 
 # The repo strategies/ and universes/ dirs, used to resolve an id when the caller does
 # not pass one (the UI/CLI pass their own). src/aristos_council/pipeline.py -> repo root.
@@ -655,6 +656,15 @@ def run_rank_pipeline(
         # Screen-less strategies render "none" — never the leaked default lens (NARR-FRAME-1).
         "screen_strategy_id": screen_strategy.id if screen_strategy is not None else "none",
         "universe_id": resolved_universe_id,
+        # FUND-UI-2: the EXACT membership this run graded, plus its order-insensitive
+        # fingerprint. A saved list is an editable ticker list now, so an id alone dates
+        # badly — `my_portfolio_v1` in June and in August are different cohorts, and a
+        # rank verdict is universe-relative (a name's position is a statement about the
+        # names it was ranked against). The members are what INPUT, not what survived:
+        # excluded and unrateable names belong to the graded cohort too. Recorded with no
+        # UI ceremony — it needs none to do its job.
+        "universe_members": list(universe),
+        "universe_member_hash": member_hash(list(universe)),
         "run_id": run_id,
         "council_mode": executed_mode,
         "council_runs_on": runs_on,
@@ -1151,6 +1161,10 @@ def run_multi_strategy_pipeline(
     meta = {
         "strategy_ids": list(ids),
         "universe_id": first.meta.get("universe_id"),
+        # ONE cohort under N lenses, so the membership record is the same for every column
+        # (FUND-UI-2) — carried up from the first run rather than recomputed.
+        "universe_members": list(first.meta.get("universe_members") or []),
+        "universe_member_hash": first.meta.get("universe_member_hash", ""),
         "universe_size": first.meta.get("universe_size", 0),
         "council_mode": "ranker-only",
         "ranker_only": True,

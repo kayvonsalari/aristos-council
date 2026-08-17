@@ -1229,7 +1229,24 @@ def _universe_markdown(result) -> str:
         lines += ["", "## Narrative", ""]
         for t, text in result.narratives.items():
             lines += [f"### {display_name(t, result.names.get(t))}", "", text, ""]
+    lines += _cohort_membership_lines(result.meta)
     return "\n".join(lines)
+
+
+def _cohort_membership_lines(meta: dict) -> list[str]:
+    """The exact membership this run graded, recorded in the canonical markdown record
+    (FUND-UI-2). A saved list is editable, so its id alone dates badly — and a rank
+    position is a statement about the names it was ranked AGAINST. Kept at the foot of
+    the report and out of the run flow entirely: the record needs it, the UI does not
+    need a versioning ceremony to produce it. Older results carry no members, and then
+    NO section is emitted — an empty block would imply nothing was graded."""
+    members = meta.get("universe_members") or []
+    if not members:
+        return []
+    return ["", "## Cohort graded (exact membership)", "",
+            f"- list: `{meta.get('universe_id') or 'adhoc'}` · {len(members)} names · "
+            f"members `{meta.get('universe_member_hash', '')}`",
+            "", ", ".join(members), ""]
 
 
 def _persist_universe_run(result, run_start: datetime,
@@ -1327,6 +1344,8 @@ def _multi_strategy_markdown(multi_result) -> str:
             lines += [f"- **{display_name(t, res.names.get(t))}** — {why}"
                       for t, why in res.unrateable]
         lines.append("")
+    # ONE cohort under N lenses — so ONE membership record covers the whole grid.
+    lines += _cohort_membership_lines(m)
     return "\n".join(lines)
 
 
