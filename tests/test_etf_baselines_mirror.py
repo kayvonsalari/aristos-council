@@ -21,7 +21,9 @@ from aristos_council.pipeline import run_rank_pipeline
 from aristos_council.universe import load_universe_by_id
 
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
-UNIV_DIR = Path(__file__).resolve().parents[1] / "universes"
+# The stock cohort this mirror check ranks an ETF lens over (growth_40_v1) is a fixture
+# now — FUND-UI-2 removed the shipped demo cohorts from the product surface.
+UNIV_DIR = Path(__file__).resolve().parent / "fixtures" / "universes"
 
 _DIV = {
     "VIG": (0.04, 129462992896, 0.0151), "VYM": (0.04, 96168181760, 0.023),

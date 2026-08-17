@@ -431,19 +431,24 @@ def test_validation_assets_hidden_by_default(monkeypatch):
 
     uni = _dropdown(at, "List").options
     assert uni[0] == "New list"                                      # FUND-UI-2: start blank
-    assert any("Growth 40 · " in o for o in uni)
-    assert any("Defensive Income 16 · " in o for o in uni)
-    assert any("Financials 16 · " in o for o in uni)                 # UNI-1: front-stage
-    assert not any("Validation Bench" in o for o in uni)             # trap bench hidden
-    assert not any("Energy Watch" in o for o in uni)                 # observation hidden
+    # FUND-UI-2 deleted the shipped stock cohorts — a list is one YOU save now.
+    assert not any("Growth 40" in o for o in uni)
+    assert not any("Defensive Income 16" in o for o in uni)
+    assert not any("Financials 16" in o for o in uni)
+    assert not any("Validation Bench" in o for o in uni)             # trap bench (fixture now)
+    assert not any("Energy Watch" in o for o in uni)                 # observation (fixture now)
+    # The ETF lists stay: they carry fund tickers nobody types from memory.
     assert any("Dividend ETFs (US)" in o for o in uni)               # ETF-1 exploratory cohort
     assert any("Growth ETFs (US)" in o for o in uni)                 # ETF-1 exploratory cohort
     assert any("ETF Index Tracker — UCITS" in o for o in uni)        # ETFCORE-1 cohort
     assert not any("Core Market ETFs" in o for o in uni)             # UI-RENAME-1: old label gone
-    # New list + 2 scoreboard + financials + 2 US ETF cohorts + 3 UCITS ETF cohorts
-    # (dividend + growth [UCITS-1] + core [ETFCORE-1], all front-stage) = 9. (These app
-    # tests skip in CI — streamlit is not in the dev extra.)
-    assert len(uni) == 9
+    # New list + 2 US ETF lists + 3 UCITS ETF lists (dividend + growth [UCITS-1] + core
+    # [ETFCORE-1]) = 6. Plus any of your OWN saved lists, so this is a lower bound in a
+    # working tree that has some. (These app tests skip in CI — streamlit is not in dev.)
+    assert len(uni) >= 6
+    # Everything shipped is an ETF list; anything else can only be one of YOUR OWN saved
+    # lists, which carry the "(local)" tag.
+    assert all(o == "New list" or "ETF" in o or "(local)" in o for o in uni)
 
     rank = _strategy_picker(at).options
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
@@ -476,18 +481,22 @@ def test_both_strategy_pickers_list_the_live_strategies():
         assert len(opts) == 8
 
 
-def test_financials_16_is_front_stage_in_both_universe_selectors():
-    # UNI-1 ITEM 1: financials_16 has no observational role, so it is FRONT-stage (toggle
-    # off) in BOTH the Run tab's List selector and the Company Check reference selector —
-    # both discover from universes/ via the same role-derived visible_universes.
+def test_the_same_lists_are_offered_in_both_selectors():
+    # UNI-1 ITEM 1's contract survives the cohort deletion: BOTH the Run tab's List
+    # selector and the Company Check reference selector discover from universes/ through
+    # the same role-derived visible_universes, so they offer the same lists (each with its
+    # own extra entry — "New list" / "(none …)").
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
     uni = _dropdown(at, "List").options                              # Run tab
     ref = _dropdown(at, "Reference universe (for factor context)").options  # Company Check
-    assert any("Financials 16 · " in o for o in uni)                 # (⭐-prefix-robust)
-    assert any("Financials 16 · " in o for o in ref)
-    # the never-graded trap bench stays backstage in both (default toggle off)
+    def _names(opts):
+        return {o.lstrip("⭐ ").split(" · ")[0] for o in opts
+                if o != "New list" and not o.startswith("(none")}
+    assert _names(uni) == _names(ref)
+    # the never-graded trap bench stays backstage in both (default toggle off) — and it is
+    # a fixture now, so it is not in universes/ at all
     assert not any("Validation Bench" in o for o in uni)
     assert not any("Validation Bench" in o for o in ref)
 
@@ -502,13 +511,13 @@ def test_suggested_universe_renders_first_in_the_reference_selector():
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
     cc_dd = _dropdown(at, "Strategy (lens screen + factors)")
-    fin_label = next(o for o in cc_dd.options if "Financials" in o)
-    cc_dd.set_value(fin_label).run()
+    etf = next(o for o in cc_dd.options if "ETF Index Tracker" in o)
+    cc_dd.set_value(etf).run()
     assert not at.exception
     ref = _dropdown(at, "Reference universe (for factor context)").options
-    assert ref[0] == "⭐ Financials 16 · 16 names"                   # suggested group first
+    assert ref[0] == "⭐ ETF Index Tracker — UCITS · 5 names"        # suggested group first
     assert not any(o.startswith("⭐") for o in ref[1:])             # only the suggested one
-    assert any(o.startswith("Growth 40 ·") for o in ref)           # cross-lens still selectable
+    assert any(o.startswith("Dividend ETFs (US) ·") for o in ref)   # cross-lens selectable
 
 
 def test_the_run_tab_list_selector_offers_no_suggestion_ordering():
@@ -522,12 +531,16 @@ def test_the_run_tab_list_selector_offers_no_suggestion_ordering():
 
 
 def test_validation_assets_revealed_when_toggle_on():
+    # The universe half of this is gone with the demo cohorts (the trap bench is a fixture
+    # now, not a shipped list); the STRATEGY half is what the toggle still reveals.
+    from streamlit.testing.v1 import AppTest
+    default = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not default.exception
     at = _legacy_app(60)
     assert not at.exception
-    uni = _dropdown(at, "List").options
-    assert any("Validation Bench" in o for o in uni)                 # bench revealed
     rank = _strategy_picker(at).options
     assert any("Classic Value" in o for o in rank)                  # baseline revealed
+    assert len(rank) > len(_strategy_picker(default).options)       # strictly more offered
 
 
 _MSFT_PRE_4E = _REPORTS / "MSFT" / "2026-06-14T13-29-49Z.json"
