@@ -376,7 +376,8 @@ def test_run_tab_renders_with_the_one_flow():
     # ...and the flow is exactly: strategies, a list, its tickers, run.
     assert any(s.label == "List" for s in at.selectbox)
     assert any("Tickers" in str(t.label) for t in at.text_area)
-    assert sum(1 for b in at.button if str(b.label).startswith("▶")) == 1
+    # ONE run button on this tab (Company Check has its own; the flow used to have two).
+    assert [b.label for b in at.button if b.label == "▶ Run"] == ["▶ Run"]
 
 
 # --------------------------------------------------------------------------- #
@@ -903,9 +904,9 @@ def test_persist_universe_run_writes_files_matching_the_download_bytes(monkeypat
 
 
 def test_persist_universe_run_ad_hoc_run_persists_too(monkeypatch, tmp_path):
-    # An ad-hoc run (Custom paste, or an Editor "Run once" with no Display name typed)
-    # carries universe_display_name="" — SCOPE item 1 explicitly requires it persists
-    # exactly like a named-manifest run, just without the slug segment.
+    # An ad-hoc run (a new or EDITED list — FUND-UI-2) carries universe_display_name=""
+    # — SCOPE item 1 explicitly requires it persists exactly like a saved-list run, just
+    # without the slug segment.
     from datetime import datetime, timezone
 
     monkeypatch.setattr(app, "UNIVERSE_RUNS_DIR", tmp_path / "universe_runs")
@@ -1046,4 +1047,4 @@ def test_deselecting_every_strategy_blocks_the_run():
     assert not at.exception
     infos = " ".join(str(getattr(i, "value", "")) for i in at.info)
     assert "at least one strategy" in infos
-    assert next(b for b in at.button if str(b.label).startswith("▶")).disabled
+    assert next(b for b in at.button if b.label == "▶ Run").disabled
