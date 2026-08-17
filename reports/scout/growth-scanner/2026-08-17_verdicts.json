@@ -1,0 +1,24 @@
+{
+  "run_date": "2026-08-17",
+  "source": "growth-scanner",
+  "cohort": "scanner",
+  "cohort_size": 40,
+  "base_universe": "growth_40_v1",
+  "lenses": [
+    "conservative_plus_v1",
+    "magic_formula_momentum_v1",
+    "growth_garp_v2",
+    "magic_formula_raw_v1",
+    "financials_v1"
+  ],
+  "scouted": [],
+  "skipped": [
+    {
+      "source": "growth-scanner",
+      "cell": "-",
+      "reason": "fetch/parse failed: HTTP Error 401: Unauthorized"
+    }
+  ],
+  "scan_file": "",
+  "scan_header": ""
+}
