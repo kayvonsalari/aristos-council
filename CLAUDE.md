@@ -411,3 +411,14 @@ tests green.
   open question).
 - v2 strategy YAML knob: is a price-appreciation-driven yield miss waivable
   or governing? The council has argued both sides; make it explicit policy.
+- EPV-1 (parked): Earnings Power Value + Margin of Safety as an ABSOLUTE valuation
+  anchor — the one question the system cannot currently ask ("is this cheap, full
+  stop?" vs "is this the best of the 40?"). EPV = through-cycle normalized EBIT ×
+  (1 − tax rate) / capitalization rate, compared to enterprise value; MoS = the
+  discount. Data is already on Fundamentals (operating_income, tax_provision,
+  pretax_income series — same lines ROIC reads). CONSTRAINTS DECIDED UP FRONT:
+  (a) the capitalization rate is ONE fixed, documented assumption for the whole
+  universe (not per-name CAPM — one honest assumption beats forty fake-precise
+  ones); (b) contestable denominator → NEVER gating, same statute as PEG/ROIC:
+  rank factor or display flag only; (c) evidence before any lens adopts it, like
+  the 12% ROIC bar. Sequenced behind PIOTROSKI-1 completion and PORTFOLIO-AWARE-1.
