@@ -901,6 +901,174 @@ def peg_with_earnings_growth(
 
 
 # --------------------------------------------------------------------------- #
+# Piotroski F-Score (PIOTROSKI-1) — ONE implementation, TWO consumers
+# --------------------------------------------------------------------------- #
+# The nine checks live HERE, in the deterministic-math module, because the score is
+# consumed by BOTH the rankable factor (factors._piotroski_f_score) and the screen
+# criterion (criteria.registry._min_f_score). Two registries, one arithmetic — the
+# same discipline that keeps _REVENUE_CAGR_YEARS readable by both revenue CAGR and
+# PEG, so the factor value and the criterion's observed value can never diverge.
+#
+# Standard Piotroski (2000): nine binary checks over the TWO most recent annual
+# periods, index [0] = current year, [1] = prior year. One point each, 0-9.
+#
+# DOCUMENTED CONVENTIONS (decided; see CALCULATIONS.md — do not re-litigate):
+#  * ZERO LONG-TERM DEBT is STRICT: a firm with LTD 0 in both years has a ratio that
+#    did NOT decrease, so check 5 scores NO point. Comparability with published
+#    F-Scores beats economic charity.
+#  * ROA and asset turnover use SAME-YEAR (ending) total assets, not Piotroski's
+#    beginning-of-year / average-assets denominator. One convention applied
+#    identically to both years, so the YoY comparison stays apples-to-apples. A
+#    deliberate simplification.
+#  * A check whose inputs are MISSING, or whose denominator is zero or negative,
+#    scores NO point AND is counted UNAVAILABLE. It is NEVER counted as a failed
+#    check — the null≠false discipline (project rule 3) applied to the checks.
+_F_SCORE_CHECKS = 9
+# Below this many computable checks the score is not a score. A partial tally
+# (3/9 because six lines are missing) reads as a terrible company when it is
+# actually an absent statement, so the whole thing ABSTAINS instead.
+_F_SCORE_MIN_COMPUTABLE = 5
+
+# Check names in scoring order — profitability, leverage & liquidity, efficiency.
+_F_SCORE_CHECK_NAMES: tuple[str, ...] = (
+    "roa_positive",
+    "ocf_positive",
+    "roa_improved",
+    "ocf_exceeds_net_income",
+    "ltd_ratio_decreased",
+    "current_ratio_improved",
+    "no_new_share_issuance",
+    "gross_margin_improved",
+    "asset_turnover_improved",
+)
+
+
+@dataclass(frozen=True)
+class FScoreResult:
+    """The outcome of the nine checks for one name.
+
+    ``score`` is None when fewer than ``_F_SCORE_MIN_COMPUTABLE`` checks were
+    computable — an ABSTENTION, not a zero. ``points`` is always the raw tally of
+    earned points (kept for the note even when abstaining); ``computed`` is C, the
+    number of checks that could be evaluated, and ``unavailable`` is M = 9 − C.
+    ``checks`` maps each check name to True (point) / False (no point) / None
+    (unavailable), in scoring order.
+    """
+
+    score: int | None
+    points: int
+    computed: int
+    unavailable: int
+    note: str
+    checks: tuple[tuple[str, bool | None], ...] = ()
+
+
+def _newest_first_at(series, index: int) -> float | None:
+    """Value at NEWEST-FIRST ``index`` of an annual series, or None when the series
+    is absent/too short or the cell is not a number. Annual series are newest-first
+    BY CONTRACT (the adapter guarantees it); this helper does not sort, so a
+    reversed series is honestly read as reversed rather than silently repaired."""
+    if not series or index >= len(series):
+        return None
+    v = series[index]
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return float(v)
+
+
+def _f_score_ratio(numerator: float | None, denominator: float | None) -> float | None:
+    """``numerator / denominator``, or None when either input is missing or the
+    denominator is zero or NEGATIVE. A non-positive denominator makes the ratio
+    meaningless (a negative-asset ROA flips sign), so the check that needs it is
+    UNAVAILABLE — never a failed check."""
+    if numerator is None or denominator is None or denominator <= 0:
+        return None
+    return numerator / denominator
+
+
+def piotroski_f_score(fundamentals: Fundamentals | None) -> FScoreResult:
+    """The Piotroski F-Score (0-9) from the annual statement series, or an abstention.
+
+    Pure and deterministic: same ``Fundamentals`` in -> same score, unavailability
+    count and note out. Reads only newest-first annual series ([0] current year,
+    [1] prior year) — no scalars, no TTM, no network. See the conventions block above.
+    """
+    f = fundamentals
+    empty: list[float] = []
+    net_income = f.net_income if f else empty
+    total_assets = f.total_assets_annual if f else empty
+    ocf = f.operating_cash_flow_annual if f else empty
+    ltd = f.long_term_debt_annual if f else empty
+    current_assets = f.current_assets_annual if f else empty
+    current_liabilities = f.current_liabilities_annual if f else empty
+    shares = f.shares_outstanding_annual if f else empty
+    gross_profit = f.gross_profit_annual if f else empty
+    revenue = f.total_revenue if f else empty
+
+    ni_0, ni_1 = _newest_first_at(net_income, 0), _newest_first_at(net_income, 1)
+    ta_0, ta_1 = _newest_first_at(total_assets, 0), _newest_first_at(total_assets, 1)
+    ocf_0 = _newest_first_at(ocf, 0)
+    rev_0, rev_1 = _newest_first_at(revenue, 0), _newest_first_at(revenue, 1)
+
+    # 1-4 profitability / cash quality.
+    roa_0 = _f_score_ratio(ni_0, ta_0)
+    roa_1 = _f_score_ratio(ni_1, ta_1)
+    roa_positive = None if roa_0 is None else roa_0 > 0
+    ocf_positive = None if ocf_0 is None else ocf_0 > 0
+    roa_improved = None if (roa_0 is None or roa_1 is None) else roa_0 > roa_1
+    # The ACCRUAL / cash-quality check: earnings not backed by cash.
+    ocf_exceeds_ni = None if (ocf_0 is None or ni_0 is None) else ocf_0 > ni_0
+
+    # 5-7 leverage & liquidity.
+    ltd_ratio_0 = _f_score_ratio(_newest_first_at(ltd, 0), ta_0)
+    ltd_ratio_1 = _f_score_ratio(_newest_first_at(ltd, 1), ta_1)
+    # STRICT zero-LTD: 0/assets is a COMPUTED 0.0 both years -> 0.0 < 0.0 is False ->
+    # no point, and the check counts as COMPUTED (not unavailable).
+    ltd_decreased = (None if (ltd_ratio_0 is None or ltd_ratio_1 is None)
+                     else ltd_ratio_0 < ltd_ratio_1)
+    cr_0 = _f_score_ratio(_newest_first_at(current_assets, 0),
+                          _newest_first_at(current_liabilities, 0))
+    cr_1 = _f_score_ratio(_newest_first_at(current_assets, 1),
+                          _newest_first_at(current_liabilities, 1))
+    cr_improved = None if (cr_0 is None or cr_1 is None) else cr_0 > cr_1
+    sh_0, sh_1 = _newest_first_at(shares, 0), _newest_first_at(shares, 1)
+    no_new_shares = None if (sh_0 is None or sh_1 is None) else sh_0 <= sh_1
+
+    # 8-9 efficiency.
+    gm_0 = _f_score_ratio(_newest_first_at(gross_profit, 0), rev_0)
+    gm_1 = _f_score_ratio(_newest_first_at(gross_profit, 1), rev_1)
+    gm_improved = None if (gm_0 is None or gm_1 is None) else gm_0 > gm_1
+    at_0 = _f_score_ratio(rev_0, ta_0)
+    at_1 = _f_score_ratio(rev_1, ta_1)
+    at_improved = None if (at_0 is None or at_1 is None) else at_0 > at_1
+
+    outcomes: tuple[bool | None, ...] = (
+        roa_positive, ocf_positive, roa_improved, ocf_exceeds_ni,
+        ltd_decreased, cr_improved, no_new_shares, gm_improved, at_improved,
+    )
+    checks = tuple(zip(_F_SCORE_CHECK_NAMES, outcomes))
+    points = sum(1 for o in outcomes if o is True)
+    computed = sum(1 for o in outcomes if o is not None)
+    unavailable = _F_SCORE_CHECKS - computed
+    missing = ", ".join(n for n, o in checks if o is None)
+
+    if computed < _F_SCORE_MIN_COMPUTABLE:
+        note = (f"F-Score not computable: only {computed} of {_F_SCORE_CHECKS} checks "
+                f"available (minimum {_F_SCORE_MIN_COMPUTABLE}) — abstained")
+        if missing:
+            note += f" (unavailable: {missing})"
+        return FScoreResult(score=None, points=points, computed=computed,
+                            unavailable=unavailable, note=note, checks=checks)
+
+    note = (f"F-Score {points}/{_F_SCORE_CHECKS} — computed from {computed} checks, "
+            f"{unavailable} unavailable")
+    if missing:
+        note += f" (unavailable: {missing})"
+    return FScoreResult(score=points, points=points, computed=computed,
+                        unavailable=unavailable, note=note, checks=checks)
+
+
+# --------------------------------------------------------------------------- #
 # Aggregate screen
 # --------------------------------------------------------------------------- #
 def run_strategy_screen(

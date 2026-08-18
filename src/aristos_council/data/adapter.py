@@ -276,6 +276,22 @@ class Fundamentals:
     # statement -> the factor uses the vendor scalar or abstains, never crashes.
     shareholders_equity: list[float] = field(default_factory=list)
     net_income: list[float] = field(default_factory=list)
+    # --- Piotroski F-Score series (PIOTROSKI-1), NEWEST-FIRST --------------- #
+    # The balance-sheet / income lines the nine F-Score checks need beyond the
+    # series already above (net_income, total_revenue, operating_cash_flow_annual).
+    # NAMING IS DELIBERATE: ``total_assets_annual`` is NOT ``total_assets`` — that
+    # field already exists and means an ETF's NET ASSETS (yfinance ``totalAssets``,
+    # a fund-size scalar). Overloading it would silently mix a fund-size number
+    # into a balance-sheet series, so the annual line carries the ``_annual`` suffix.
+    # Empty when the provider omits the statement -> the checks that read it count
+    # UNAVAILABLE (never a FAILED check), and the whole score abstains below the
+    # 5-computable-check minimum. See tools/screening.piotroski_f_score.
+    total_assets_annual: list[float] = field(default_factory=list)
+    long_term_debt_annual: list[float] = field(default_factory=list)
+    current_assets_annual: list[float] = field(default_factory=list)
+    current_liabilities_annual: list[float] = field(default_factory=list)
+    shares_outstanding_annual: list[float] = field(default_factory=list)
+    gross_profit_annual: list[float] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
