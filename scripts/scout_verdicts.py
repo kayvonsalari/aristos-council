@@ -5,12 +5,16 @@ FOUR DISCOVERY SOURCES, ONE COHORT (decided 2026-08-17, extended 2026-08-18):
     export).
   - "growth-scanner": the weekly multi-market growth scanner's latest frozen
     CSV, read from the public Drive folder (never re-run here — read only).
-  - "holdings" (SCOUT-2): the owner's watch/holdings rows on the SAME sheets,
-    flagged HOLDING in the Flags column. Ticker NAMES only — no amounts, no
-    cost basis (that is PORTFOLIO-AWARE-1, still parked) — so they are not
-    sensitive and are graded like any other candidate. The news lookback window
-    does NOT apply to them: a holding is watched CONTINUOUSLY, not scouted this
-    week, so every HOLDING row of every sheet joins the cohort on every run.
+  - "holdings": the owner's watch/holdings names. TWO inputs, one source:
+    PRIMARY the dedicated "Holdings" TAB of the scout spreadsheet
+    (Name | Ticker | Type — SCOUT-3), SUPPLEMENT any row still flagged HOLDING
+    in the Flags column of a news tab (SCOUT-2, unchanged). SCOUT-2 shipped only
+    the flag path and harvested ZERO rows on its first live run: the owner's list
+    was never on the news tabs, it lives on its own tab. Ticker NAMES only — no
+    amounts, no cost basis (that is PORTFOLIO-AWARE-1, still parked) — so they
+    are not sensitive and are graded like any other candidate. The news lookback
+    window does NOT apply to either input: a holding is watched CONTINUOUSLY, not
+    scouted this week, so EVERY holdings row joins the cohort on every run.
 
 All four are graded in a SINGLE combined cohort:
     growth_40_v1 + FT names + Economist names + scanner names + holdings
@@ -36,23 +40,28 @@ Outputs (per source, presentation kept apart):
     reports/scout/latest.json    (combined index the publisher reads)
 
 Nothing is silently dropped: unparseable rows are listed under "skipped" per
-source with the verbatim cell text — a HOLDING row whose ticker cell cannot be
-parsed lands in the HOLDINGS source's "skipped", never in a news source's. A
-HOLDING row that is not an equity (the watch table includes ETFs) is graded and
-EXCLUDED by the stock lenses' asset-kind gate with a named reason — correct
-behavior, not a failure: the ETF lenses are deliberately NOT wired into this job
-(examples/grade_holdings.py covers ETFs on demand). The scanner itself is NEVER
-modified or re-run here — this only reads its frozen output.
+source with the verbatim cell text — a holdings row whose ticker cell is blank
+lands in the HOLDINGS source's "skipped", never in a news source's, and a
+holdings Type the stock lenses cannot grade ("Trust", "Cash", …) is skipped with
+that verbatim type rather than guessed at. A holdings row that is not an equity
+(the watch table includes ETFs) is graded and EXCLUDED by the stock lenses'
+asset-kind gate with a named reason — correct behavior, not a failure: the ETF
+lenses are deliberately NOT wired into this job (examples/grade_holdings.py
+covers ETFs on demand). The scanner itself is NEVER modified or re-run here —
+this only reads its frozen output.
 
 Usage (from repo root):
     python scripts/scout_verdicts.py                     # live: fetch all, run
     python scripts/scout_verdicts.py --dry-run           # parse + print only
     python scripts/scout_verdicts.py --tickers-csv f.csv --source ft  # local test
     python scripts/scout_verdicts.py --scanner-csv scan.csv --dry-run # local test
+    python scripts/scout_verdicts.py --holdings-csv h.csv --dry-run   # local test
 
 Env:
     SCOUT_SHEET_FT           CSV export URL for the FT sheet (default built in)
     SCOUT_SHEET_ECONOMIST    CSV export URL for the Economist sheet/tab
+    SCOUT_SHEET_HOLDINGS     CSV export URL for the Holdings TAB (default built
+                             in; empty = no tab, the flag path still runs)
     SCOUT_SCANNER_FOLDER     Drive folder ID holding growth_scan_*.csv
                              (default built in; folder must be link-viewable)
     SCOUT_SCANNER_CSV        optional direct CSV URL — overrides folder lookup
@@ -95,11 +104,28 @@ SCANNER_CSV_URL = os.environ.get("SCOUT_SCANNER_CSV", "")
 SCANNER_SOURCE = "growth-scanner"
 SCAN_NAME_RE = re.compile(r"growth_scan_(\d{4}-\d{2}-\d{2})(?:_(\d+))?\.csv")
 
-# --- holdings-watch source (SCOUT-2) ---------------------------------------
-# Rows on the news sheets whose Flags cell starts with HOLDING. They are watched
-# CONTINUOUSLY, so the news lookback window is deliberately not applied to them.
+# --- holdings-watch source (SCOUT-2 flags + SCOUT-3 tab) -------------------
+# TWO inputs, ONE source. PRIMARY: the spreadsheet's dedicated "Holdings" tab,
+# where the owner's actual list lives (Name | Ticker | Type). SUPPLEMENT: rows on
+# the NEWS sheets whose Flags cell starts with HOLDING (SCOUT-2) — kept because a
+# name can be flagged on a news tab before it reaches the Holdings tab. Both are
+# watched CONTINUOUSLY, so the news lookback window applies to neither.
 HOLDINGS_SOURCE = "holdings"
 HOLDING_FLAG = "HOLDING"
+SHEET_HOLDINGS_URL = os.environ.get(
+    "SCOUT_SHEET_HOLDINGS",
+    "https://docs.google.com/spreadsheets/d/"
+    "1wDYdPDI_XDBTvx_ttmFskNbVpVDPonSJy_-auPY_Hb4/export?format=csv&gid=7542599")
+HOLDINGS_TAB_SHEET = "holdings-tab"      # the "sheet" label on a tab-sourced row
+HOLDINGS_TAB_COLUMNS = ("name", "ticker", "type")
+# Types the STOCK lenses can be pointed at. "ETF" is included DELIBERATELY: the
+# lenses then exclude it by their asset-kind gate with a named reason (SCOUT-2),
+# which is the honest answer rather than a silent drop. Any other Type ("Trust",
+# "Cash", a blank) is skipped naming the verbatim type — never guessed.
+GRADEABLE_HOLDING_TYPES = ("STOCK", "ETF")
+# A bare Asian listing code (1211, 0700) is a NUMBER to Sheets, so its CSV export
+# can arrive as "1211.0" or "1,211" — read the digits back as text, nothing else.
+_NUMERIC_CELL_RE = re.compile(r"\d+(?:,\d{3})*(?:\.0+)?")
 
 STOCK_LENSES = [
     "conservative_plus_v1",       # Defensive Income
@@ -250,6 +276,104 @@ def read_scouted(text: str, source: str, window_days: int, today: date) -> Sheet
         else:
             scouted.append({**entry, "symbol": symbol})
     return SheetRead(scouted, skipped, holdings, holdings_skipped)
+
+
+# --- holdings-tab reading (SCOUT-3) ----------------------------------------
+
+class HoldingsTabRead(NamedTuple):
+    """The dedicated Holdings tab's rows, and what it refused to guess at."""
+
+    holdings: list[dict]
+    skipped: list[dict]
+
+
+def holdings_ticker(cell: str) -> str | None:
+    """The yfinance symbol from a Holdings-tab Ticker cell: VERBATIM after trim.
+
+    No name→ticker mapping, no venue inference, no normalization — the cell IS the
+    contract ("a downstream automated pipeline parses this cell"), so data quality
+    lives in the sheet and a wrong symbol is fixed THERE, never guessed here. The
+    one transformation is de-numbering: Sheets stores a bare listing code like 1211
+    as a NUMBER and can export it as "1211.0" or "1,211", which is not a symbol —
+    those digits are read back as plain text. A blank cell returns None.
+    """
+    text = (cell or "").strip()
+    if not text:
+        return None
+    if _NUMERIC_CELL_RE.fullmatch(text):
+        return text.replace(",", "").split(".")[0]
+    return text
+
+
+def _tab_cell(row: list[str], cols: dict[str, int], key: str) -> str:
+    i = cols.get(key)
+    return row[i].strip() if i is not None and len(row) > i else ""
+
+
+def read_holdings_tab(text: str, *, label: str = "Holdings tab") -> HoldingsTabRead:
+    """Parse the Holdings tab (Name | Ticker | Type) into holdings rows.
+
+    EVERY row joins: the tab has no date column and no news requirement, because a
+    holding is watched CONTINUOUSLY — the same rationale that made the flag path
+    window-free in SCOUT-2. Even a date column, if one is ever added, is ignored
+    rather than filtered on.
+
+    Two honest refusals, both recorded in ``skipped`` with the verbatim cell:
+      - a Type the stock lenses cannot grade ("Trust", "Cash", a blank) — checked
+        FIRST, since it settles the row whatever the ticker says;
+      - a blank/unparseable Ticker cell.
+    """
+    rows = list(csv.reader(io.StringIO(text)))
+    header_i: int | None = None
+    cols: dict[str, int] = {}
+    for i, row in enumerate(rows):
+        lowered = [c.strip().lower() for c in row]
+        if "ticker" in lowered:
+            header_i = i
+            cols = {name: lowered.index(name) for name in HOLDINGS_TAB_COLUMNS
+                    if name in lowered}
+            break
+    if header_i is None:
+        return HoldingsTabRead([], [{"source": HOLDINGS_SOURCE, "cell": label,
+                                     "reason": "no 'Ticker' header found"}])
+    holdings, skipped = [], []
+    for row in rows[header_i + 1:]:
+        name = _tab_cell(row, cols, "name")
+        raw_ticker = _tab_cell(row, cols, "ticker")
+        raw_type = _tab_cell(row, cols, "type")
+        if not (name or raw_ticker or raw_type):
+            continue                                  # blank spacer row
+        entry = {"source": HOLDINGS_SOURCE, "date_added": "",
+                 "ticker_cell": raw_ticker, "company": name, "story": "",
+                 "holding_type": raw_type, "sheet": HOLDINGS_TAB_SHEET}
+        cell = " | ".join([name, raw_ticker, raw_type])
+        if raw_type.upper() not in GRADEABLE_HOLDING_TYPES:
+            skipped.append({**entry, "cell": cell,
+                            "reason": f"type '{raw_type}' not gradeable by the "
+                                      "stock lenses"})
+            continue
+        symbol = holdings_ticker(raw_ticker)
+        if symbol is None:
+            skipped.append({**entry, "cell": cell,
+                            "reason": "blank or unparseable ticker cell"})
+            continue
+        holdings.append({**entry, "symbol": symbol})
+    return HoldingsTabRead(holdings, skipped)
+
+
+def load_holdings_tab(url: str, *, fetch=None) -> HoldingsTabRead:
+    """Fetch + parse the Holdings tab, degrading EXACTLY like a news sheet: a fetch
+    failure becomes ONE ``skipped`` entry naming the reason and the run continues on
+    the other sources — an unreachable tab must never take the whole scout down."""
+    if not url:
+        return HoldingsTabRead([], [{"source": HOLDINGS_SOURCE, "cell": "-",
+                                     "reason": "no Holdings tab configured "
+                                               "(SCOUT_SHEET_HOLDINGS empty)"}])
+    try:
+        return read_holdings_tab((fetch or _fetch)(url), label=url)
+    except Exception as e:                        # noqa: BLE001 — never fatal
+        return HoldingsTabRead([], [{"source": HOLDINGS_SOURCE, "cell": url,
+                                     "reason": f"fetch failed: {e}"}])
 
 
 # --- growth-scanner reading ------------------------------------------------
@@ -460,6 +584,10 @@ def main() -> None:
     p.add_argument("--scanner-csv", help="local scanner CSV instead of Drive")
     p.add_argument("--no-scanner", action="store_true",
                    help="skip the growth-scanner source entirely")
+    p.add_argument("--holdings-csv",
+                   help="local Holdings-tab CSV instead of fetching the tab")
+    p.add_argument("--no-holdings-tab", action="store_true",
+                   help="skip the Holdings tab (the HOLDING-flag rows still run)")
     p.add_argument("--window-days", type=int,
                    default=int(os.environ.get("SCOUT_WINDOW_DAYS", "8")))
     args = p.parse_args()
@@ -485,12 +613,29 @@ def main() -> None:
                 continue
             news[source] = read_scouted(text, source, args.window_days, today)
 
-    # The holdings source is assembled ACROSS sheets (any sheet, any date — the
-    # news window does not apply to a continuously watched name).
-    # de-duped by symbol: a name held and watched on BOTH sheets is ONE holding.
-    holdings_rows = list(
-        dedup([h for read in news.values() for h in read.holdings]).values())
-    holdings_skipped = [h for read in news.values() for h in read.holdings_skipped]
+    # ---- holdings: the dedicated Holdings TAB (primary) + the HOLDING flags ----
+    if args.holdings_csv:
+        tab = read_holdings_tab(Path(args.holdings_csv).read_text(encoding="utf-8"),
+                                label=Path(args.holdings_csv).name)
+    elif args.no_holdings_tab:
+        print("NOTE: Holdings tab skipped (--no-holdings-tab).", file=sys.stderr)
+        tab = HoldingsTabRead([], [])
+    else:
+        tab = load_holdings_tab(SHEET_HOLDINGS_URL)
+        for row in tab.skipped:                   # surface only the tab-level ones
+            if row["reason"].startswith(("fetch failed", "no Holdings tab",
+                                         "no 'Ticker' header")):
+                print(f"WARN: Holdings tab: {row['reason']}", file=sys.stderr)
+
+    # ONE holdings source out of both inputs, assembled ACROSS the tab and every
+    # news sheet (any date — the news window does not apply to a continuously
+    # watched name), de-duped by symbol: a name on the tab AND flagged on a sheet
+    # is ONE holding. The TAB row is listed first, so it WINS the metadata
+    # collision — it is the owner's authoritative list.
+    flagged = [h for read in news.values() for h in read.holdings]
+    holdings_rows = list(dedup(tab.holdings + flagged).values())
+    holdings_skipped = tab.skipped + [h for read in news.values()
+                                      for h in read.holdings_skipped]
 
     # ---- growth-scanner source (own cohort, never mixed with news) ----
     scanner: tuple[list[dict], list[dict]] = ([], [])
@@ -558,7 +703,9 @@ def main() -> None:
     print(f"{SCANNER_SOURCE}: {scan_label or 'n/a'} — "
           f"{len(scan_meta)} names, skipped {len(scanner[1])}")
     print(f"{HOLDINGS_SOURCE}: {sorted(hold_meta) or 'none'} "
-          f"(watched continuously — no date window), skipped {len(holdings_skipped)}")
+          f"({len(tab.holdings)} from the Holdings tab, {len(flagged)} "
+          f"HOLDING-flagged on the news tabs; watched continuously — no date "
+          f"window), skipped {len(holdings_skipped)}")
     overlap = sorted(set(news_meta) & set(scan_meta))
     new_news = [s for s in news_meta if s not in base]
     new_scan = [s for s in scan_meta if s not in base and s not in news_meta]
@@ -620,7 +767,8 @@ def _entry_for(row, meta: dict, also: dict | None = None,
              # EVIDENCE, not judgment: no threshold reads this (SCOUT-2 part B).
              "f_score": (f_scores or {}).get(meta["symbol"]) or f_score_block(None),
              "lenses": {}}
-    for extra in ("scanner_notes", "ret_6m", "market", "flags", "sheet"):
+    for extra in ("scanner_notes", "ret_6m", "market", "flags", "sheet",
+                  "holding_type"):
         if meta.get(extra):
             entry[extra] = meta[extra]
     if row:
@@ -669,15 +817,25 @@ def _write_outputs(today: date, per_source: dict, f_scores: dict | None = None,
             lines.append(f"Scan file: {blob['scan_file']}")
             lines.append("")
         if source == HOLDINGS_SOURCE:
-            lines.append("Watch/holdings rows (Flags: HOLDING) — watched "
-                         "continuously, so the news date window does not apply. "
-                         "Ticker names only; no amounts or cost basis. A non-equity "
-                         "row (e.g. an ETF) is EXCLUDED by the stock lenses' "
-                         "asset-kind gate with a named reason — correct, not a "
-                         "failure: the ETF lenses are not wired into this job.")
+            lines.append("Holdings rows — the owner's Holdings tab "
+                         "(Name | Ticker | Type) plus any row still flagged on a "
+                         "news tab (Flags: HOLDING) — watched continuously, so the "
+                         "news date window does not apply. Ticker names only; no "
+                         "amounts or cost basis. The Ticker cell is used verbatim "
+                         "as the symbol: data quality lives in the sheet. A "
+                         "non-equity row (e.g. an ETF) is EXCLUDED by the stock "
+                         "lenses' asset-kind gate with a named reason — correct, "
+                         "not a failure: the ETF lenses are not wired into this "
+                         "job. A Type the stock lenses cannot grade (Trust, Cash, "
+                         "…) is listed under Skipped, never guessed.")
             lines.append("")
         for e in entries:
-            lines.append(f"## {e['display']} ({e['symbol']}) — {e['date_added']}")
+            head = f"## {e['display']} ({e['symbol']})"
+            # a Holdings-tab row carries no date at all — no dangling dash for it
+            lines.append(f"{head} — {e['date_added']}" if e.get("date_added")
+                         else head)
+            if e.get("holding_type"):
+                lines.append(f"Type: {e['holding_type']}")
             if e.get("story"):
                 lines.append(f"Context: {e['story']}")
             if e.get("scanner_notes"):

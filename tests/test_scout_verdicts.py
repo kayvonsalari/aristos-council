@@ -1,6 +1,6 @@
-"""SCOUT-2 — the holdings source and the F-Score column in the scout job.
+"""SCOUT-2/SCOUT-3 — the holdings source and the F-Score column in the scout job.
 
-Two changes, both making existing things VISIBLE rather than adding decision logic:
+Three changes, all making existing things VISIBLE rather than adding decision logic:
 
   PART A  HOLDING-flagged sheet rows stop being discarded: they become a fourth
           graded source ("holdings"), window-free (a holding is watched
@@ -11,6 +11,13 @@ Two changes, both making existing things VISIBLE rather than adding decision log
   PART B  every graded entry carries the Piotroski F-Score as EVIDENCE: an
           ``f_score`` block in the JSON and an F-Score line in the markdown.
           STRICTLY DISPLAY-ONLY — a null score renders ABSTAIN, never 0.
+  SCOUT-3 the owner's list lives on its own "Holdings" TAB (Name | Ticker | Type),
+          not on the news tabs — part A's flag path harvested ZERO rows live. The
+          tab is now the PRIMARY holdings input and the flag path a supplement:
+          every row joins (no date window, no news requirement), the Ticker cell
+          is the symbol VERBATIM after trim (numbers de-numbered, nothing mapped),
+          a non-gradeable Type is skipped naming it, and the two inputs merge into
+          one source de-duped by symbol with the TAB row winning a collision.
 
 Deterministic: a fake adapter, no network, no LLM (the grading is ranker-only).
 Nothing is written under the repo — the output test drives ``_write_outputs``
@@ -21,6 +28,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -68,6 +76,20 @@ SHEET = "\n".join([
     _row("2019-01-01", "B (NYSE)", "Bravo Inc", "held since 2019", "HOLDING"),
     _row("2020-02-02", "BNKE (NYSE)", "Bank ETF", "watch", "HOLDING - core"),
     _row("2021-03-03", "still nothing", "Mystery", "watch", "holding"),   # lowercase
+])
+
+# The dedicated Holdings TAB (SCOUT-3): Name | Ticker | Type, no date column at
+# all. A title row above the header, a spacer row below the data — both survivable.
+HOLDINGS_TAB = "\n".join([
+    "My holdings,,",
+    "Name,Ticker,Type",
+    "Alpha Inc,A,Stock",                     # also scouted as NEWS on the FT tab
+    "Bravo Inc, B ,Stock",                   # also HOLDING-flagged on the FT tab
+    "Bank ETF,BNKE,ETF",                     # graded, then asset-kind excluded
+    "Some Property Trust,TRST,Trust",        # the stock lenses cannot grade it
+    "No Ticker Co,,Stock",                   # blank ticker cell
+    "Hong Kong Co,1211.0,Stock",             # Sheets stored the code as a NUMBER
+    ",,",
 ])
 
 
@@ -218,6 +240,113 @@ def test_also_found_by_records_the_overlap_in_both_directions():
 
 
 # --------------------------------------------------------------------------- #
+# SCOUT-3 — the dedicated Holdings TAB is the primary holdings input
+# --------------------------------------------------------------------------- #
+def test_the_holdings_tab_is_configured_by_default():
+    """The tab is the PRIMARY input, so it must be wired with NO env setup: SCOUT-2
+    shipped a path that needed none and still found nothing, because the list was
+    never on the news tabs."""
+    if os.environ.get("SCOUT_SHEET_HOLDINGS"):
+        return                                  # an override is the owner's call
+    assert sv.SHEET_HOLDINGS_URL.startswith("https://docs.google.com/spreadsheets/")
+    assert "format=csv" in sv.SHEET_HOLDINGS_URL
+    assert "gid=7542599" in sv.SHEET_HOLDINGS_URL
+
+
+def test_every_gradeable_tab_row_joins_with_no_date_window():
+    read = sv.read_holdings_tab(HOLDINGS_TAB)
+    assert [h["symbol"] for h in read.holdings] == ["A", "B", "BNKE", "1211"]
+    assert all(h["source"] == sv.HOLDINGS_SOURCE for h in read.holdings)
+    assert all(h["sheet"] == sv.HOLDINGS_TAB_SHEET for h in read.holdings)
+    assert [h["holding_type"] for h in read.holdings] == ["Stock", "Stock", "ETF",
+                                                          "Stock"]
+    assert [h["company"] for h in read.holdings] == ["Alpha Inc", "Bravo Inc",
+                                                     "Bank ETF", "Hong Kong Co"]
+    # no date column exists on the tab, and no row is filtered for the lack of one
+    assert all(h["date_added"] == "" for h in read.holdings)
+    assert all(h["story"] == "" for h in read.holdings)
+
+
+def test_an_old_date_or_no_date_still_joins_even_if_the_tab_grows_a_date_column():
+    read = sv.read_holdings_tab("\n".join([
+        "Name,Ticker,Type,Date added",
+        "Ancient Co,ANC,Stock,2009-01-01",      # years outside any news window
+        "Dateless Co,DTL,Stock,",               # no date at all
+    ]))
+    assert [h["symbol"] for h in read.holdings] == ["ANC", "DTL"]
+    assert read.skipped == []
+
+
+def test_the_ticker_cell_is_verbatim_apart_from_trim_and_de_numbering():
+    assert sv.holdings_ticker("  EL.PA  ") == "EL.PA"      # trimmed, never mapped
+    assert sv.holdings_ticker("BRK-B") == "BRK-B"
+    assert sv.holdings_ticker("1211.HK") == "1211.HK"      # text: left alone
+    assert sv.holdings_ticker("1211.0") == "1211"          # Sheets number → text
+    assert sv.holdings_ticker("1,211") == "1211"
+    assert sv.holdings_ticker("0700") == "0700"            # leading zero preserved
+    assert sv.holdings_ticker("") is None
+    assert sv.holdings_ticker("   ") is None
+    # NO name→ticker mapping lives here — a wrong cell is fixed in the SHEET, so a
+    # company name is passed through as typed rather than guessed into a symbol
+    assert sv.holdings_ticker("Estee Lauder") == "Estee Lauder"
+
+
+def test_a_non_gradeable_type_and_a_blank_ticker_are_skipped_never_guessed():
+    read = sv.read_holdings_tab(HOLDINGS_TAB)
+    by_reason = {r["reason"]: r for r in read.skipped}
+    assert set(by_reason) == {"type 'Trust' not gradeable by the stock lenses",
+                             "blank or unparseable ticker cell"}
+    trust = by_reason["type 'Trust' not gradeable by the stock lenses"]
+    assert trust["source"] == sv.HOLDINGS_SOURCE
+    assert trust["cell"] == "Some Property Trust | TRST | Trust"   # verbatim row
+    blank = by_reason["blank or unparseable ticker cell"]
+    assert blank["cell"] == "No Ticker Co |  | Stock"
+    assert blank["ticker_cell"] == ""
+    # nothing skipped leaks into the graded rows
+    assert "TRST" not in [h["symbol"] for h in read.holdings]
+
+
+def test_the_tab_and_a_flag_row_for_one_symbol_merge_with_the_tab_row_winning():
+    news = {"ft": sv.read_scouted(SHEET, "ft", 8, TODAY)}   # flags B and BNKE
+    tab = sv.read_holdings_tab(HOLDINGS_TAB)                # lists A, B, BNKE, 1211
+    flagged = [h for r in news.values() for h in r.holdings]
+    rows = list(sv.dedup(tab.holdings + flagged).values())
+    assert [h["symbol"] for h in rows] == ["A", "B", "BNKE", "1211"]  # B/BNKE once
+    # the TAB row wins the metadata collision — it is the authoritative list
+    b = next(h for h in rows if h["symbol"] == "B")
+    assert b["sheet"] == sv.HOLDINGS_TAB_SHEET and b["holding_type"] == "Stock"
+    assert "flags" not in b
+    # the overlap with a NEWS source is still recorded in both directions
+    also = sv.also_found_by({
+        "ft": sv.dedup([s for r in news.values() for s in r.scouted]),
+        sv.HOLDINGS_SOURCE: sv.dedup(rows)})
+    assert also[sv.HOLDINGS_SOURCE] == {"A": ["ft"]}
+    assert also["ft"] == {"A": ["holdings"]}
+
+
+def test_a_tab_fetch_failure_degrades_to_one_skip_and_the_run_continues():
+    def boom(url):
+        raise RuntimeError("403 no access")
+
+    read = sv.load_holdings_tab("https://sheet/csv", fetch=boom)
+    assert read.holdings == []
+    assert read.skipped == [{"source": sv.HOLDINGS_SOURCE,
+                             "cell": "https://sheet/csv",
+                             "reason": "fetch failed: 403 no access"}]
+
+
+def test_an_unconfigured_or_headerless_tab_is_a_skip_not_a_crash():
+    assert sv.load_holdings_tab("").skipped[0]["reason"].startswith(
+        "no Holdings tab configured")
+    headerless = sv.load_holdings_tab("u", fetch=lambda url: "nothing,useful\n")
+    assert headerless.holdings == []
+    assert headerless.skipped == [{"source": sv.HOLDINGS_SOURCE, "cell": "u",
+                                  "reason": "no 'Ticker' header found"}]
+    empty = sv.load_holdings_tab("u", fetch=lambda url: "Name,Ticker,Type\n")
+    assert empty.holdings == [] and empty.skipped == []
+
+
+# --------------------------------------------------------------------------- #
 # PART B — the F-Score block (evidence, never judgment)
 # --------------------------------------------------------------------------- #
 def test_f_score_block_renders_score_out_of_nine():
@@ -289,14 +418,20 @@ _PUBLISHER_INDEX_SOURCE_KEYS = {"scouted", "skipped", "cohort", "cohort_size",
 def _written(tmp_path: Path):
     """A full write pass: grade a 4-name cohort (3 equities + 1 ETF holding) under
     the real stock lenses with the fake adapter, then write every output under
-    ``tmp_path`` — never the repo."""
+    ``tmp_path`` — never the repo.
+
+    The holdings source carries BOTH of its inputs: a Holdings-TAB row (C, dateless,
+    with its Type) and two HOLDING-flagged news rows (B, BNKE)."""
     adapter = _Adapter()
     cohort = ["A", "B", "C", "BNKE"]
     result = sv.grade_cohort(cohort, today=TODAY, adapter=adapter, freeze_dir=None)
     f_scores = sv.f_scores_for(cohort, adapter)
     ft_rows = [{"source": "ft", "symbol": "A", "company": "Alpha Inc",
                 "date_added": "2026-08-16", "story": "Alpha story"}]
-    hold_rows = [{"source": sv.HOLDINGS_SOURCE, "symbol": "B", "company": "Bravo Inc",
+    hold_rows = [{"source": sv.HOLDINGS_SOURCE, "symbol": "C",
+                  "company": "Charlie Inc", "date_added": "", "story": "",
+                  "holding_type": "Stock", "sheet": sv.HOLDINGS_TAB_SHEET},
+                 {"source": sv.HOLDINGS_SOURCE, "symbol": "B", "company": "Bravo Inc",
                   "date_added": "2019-01-01", "story": "held since 2019",
                   "flags": "HOLDING", "sheet": "ft"},
                  {"source": sv.HOLDINGS_SOURCE, "symbol": "BNKE",
@@ -311,7 +446,13 @@ def _written(tmp_path: Path):
                             "also_found_by": {}, "scan_file": "growth_scan_x.csv",
                             "scan_header": "# rules"},
         sv.HOLDINGS_SOURCE: {"scouted": hold_rows,
+                             # one skip from each input: the tab's Trust row and the
+                             # news tab's unparseable HOLDING cell
                              "skipped": [{"source": sv.HOLDINGS_SOURCE,
+                                          "cell": "Some Property Trust | TRST | Trust",
+                                          "reason": "type 'Trust' not gradeable by "
+                                                    "the stock lenses"},
+                                         {"source": sv.HOLDINGS_SOURCE,
                                           "cell": "2021 | still nothing | Mystery",
                                           "reason": "no parseable listed ticker"}],
                              "result": result, "cohort_size": len(cohort),
@@ -332,7 +473,7 @@ def test_holdings_source_gets_its_own_folder_and_an_index_entry(tmp_path):
     holdings = index["sources"][sv.HOLDINGS_SOURCE]
     # the pinned publisher-read keys are all still there, unchanged in meaning
     assert _PUBLISHER_INDEX_SOURCE_KEYS <= set(holdings)
-    assert holdings == {"scouted": 2, "skipped": 1, "cohort": "combined",
+    assert holdings == {"scouted": 3, "skipped": 2, "cohort": "combined",
                         "cohort_size": 4,
                         "json": f"reports/scout/holdings/{stamp}_verdicts.json",
                         "md": f"reports/scout/holdings/{stamp}_verdicts.md"}
@@ -345,13 +486,17 @@ def test_holdings_payload_keeps_the_publisher_shape_and_lists_its_skips(tmp_path
     assert _PUBLISHER_PAYLOAD_KEYS <= set(payload)
     assert payload["source"] == "holdings" and payload["cohort"] == "combined"
     assert payload["lenses"] == sv.STOCK_LENSES
-    assert [e["symbol"] for e in payload["scouted"]] == ["B", "BNKE"]
-    assert payload["skipped"][0]["reason"] == "no parseable listed ticker"
+    # the tab row first (authoritative list), then the flagged news rows
+    assert [e["symbol"] for e in payload["scouted"]] == ["C", "B", "BNKE"]
+    assert [s["reason"] for s in payload["skipped"]] == [
+        "type 'Trust' not gradeable by the stock lenses",
+        "no parseable listed ticker"]
     for entry in payload["scouted"]:
         assert _PUBLISHER_ENTRY_KEYS <= set(entry)
     # the overlap with FT is recorded, and the holdings row keeps its verbatim flag
-    assert payload["scouted"][0]["also_found_by"] == ["ft"]
-    assert payload["scouted"][0]["flags"] == "HOLDING"
+    flagged = next(e for e in payload["scouted"] if e["symbol"] == "B")
+    assert flagged["also_found_by"] == ["ft"]
+    assert flagged["flags"] == "HOLDING"
 
 
 def test_a_non_equity_holding_is_excluded_by_the_asset_kind_gate_with_a_reason(tmp_path):
@@ -363,6 +508,37 @@ def test_a_non_equity_holding_is_excluded_by_the_asset_kind_gate_with_a_reason(t
         cell = etf["lenses"][sid]
         assert cell["status"] == "excluded"
         assert "asset kind" in cell["reason"] and "ETF" in cell["reason"]
+
+
+def test_a_tab_sourced_holding_is_a_first_class_entry_labelled_as_tab_sourced(
+        tmp_path):
+    """SCOUT-3 output shape: a Holdings-TAB row is a normal graded entry — same keys,
+    every lens present — identifiable as tab-sourced and carrying its Type."""
+    out = _written(tmp_path)
+    payload = json.loads((out / "holdings" / "latest.json").read_text())
+    tab_row = next(e for e in payload["scouted"] if e["symbol"] == "C")
+    flag_row = next(e for e in payload["scouted"] if e["symbol"] == "B")
+    assert _PUBLISHER_ENTRY_KEYS <= set(tab_row)
+    assert tab_row["sheet"] == sv.HOLDINGS_TAB_SHEET
+    assert tab_row["holding_type"] == "Stock"
+    # the tab row carries no date and no flag; the flagged row carries both
+    assert tab_row["date_added"] == "" and "flags" not in tab_row
+    assert flag_row["date_added"] == "2019-01-01" and flag_row["flags"] == "HOLDING"
+    # every lens weighed in, and none excluded it for its asset KIND (the ETF row's
+    # exclusion is about being an ETF, never about coming off the tab)
+    assert set(tab_row["lenses"]) == set(sv.STOCK_LENSES)
+    for sid in sv.STOCK_LENSES:
+        assert "asset kind" not in (tab_row["lenses"][sid]["reason"] or "")
+
+    text = (out / "holdings" / f"{TODAY.isoformat()}_verdicts.md").read_text()
+    lines = text.splitlines()
+    head_i = next(i for i, ln in enumerate(lines)
+                  if ln.startswith("## ") and "(C)" in ln)
+    assert "—" not in lines[head_i]              # dateless: no dangling em dash
+    assert lines[head_i + 1] == "Type: Stock"
+    # the tab is named in the preamble, and a non-gradeable Type is listed, not lost
+    assert "Holdings tab" in text or "Name | Ticker | Type" in text
+    assert "type 'Trust' not gradeable by the stock lenses" in text
 
 
 def test_every_entry_carries_the_f_score_block(tmp_path):
