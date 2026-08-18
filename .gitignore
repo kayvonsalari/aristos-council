@@ -26,3 +26,9 @@ acceptance_out/
 # recovery copy of what the download buttons serve, not the committed report record
 # (reports/<TICKER>/*.json stays committed; only this subdirectory is ignored).
 reports/universe_runs/
+# HOLDINGS-RUN-1 backstop: the owner's private holdings export and its graded output
+# belong OUTSIDE this (public) repo, and examples/grade_holdings.py REFUSES an in-repo
+# path. These entries are the second line of defence for the conventional filenames —
+# a stray copy must not ride along in a 'git add -A'.
+holdings*.csv
+holdings*.txt
