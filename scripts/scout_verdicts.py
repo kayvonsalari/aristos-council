@@ -1,29 +1,47 @@
 """Scout → Aristos bridge: grade newly scouted tickers under every stock lens.
 
-THREE DISCOVERY SOURCES, ONE COHORT (decided 2026-08-17):
+FOUR DISCOVERY SOURCES, ONE COHORT (decided 2026-08-17, extended 2026-08-18):
   - "ft" and "economist": news scouts, read from the scout sheets (public CSV
     export).
   - "growth-scanner": the weekly multi-market growth scanner's latest frozen
     CSV, read from the public Drive folder (never re-run here — read only).
+  - "holdings" (SCOUT-2): the owner's watch/holdings rows on the SAME sheets,
+    flagged HOLDING in the Flags column. Ticker NAMES only — no amounts, no
+    cost basis (that is PORTFOLIO-AWARE-1, still parked) — so they are not
+    sensitive and are graded like any other candidate. The news lookback window
+    does NOT apply to them: a holding is watched CONTINUOUSLY, not scouted this
+    week, so every HOLDING row of every sheet joins the cohort on every run.
 
-All three are graded in a SINGLE combined cohort:
-    growth_40_v1 + FT names + Economist names + scanner names
+All four are graded in a SINGLE combined cohort:
+    growth_40_v1 + FT names + Economist names + scanner names + holdings
 A rank verdict is universe-relative, so one big pool makes the quintile cuts
 more meaningful AND lets a name's verdict move as new comparables arrive —
-which is the point of running three discovery channels into one ranker. The
+which is the point of running four discovery channels into one ranker. The
 sources stay separately IDENTIFIABLE (own output folders, own spreadsheet
 tabs, a "source" field and an "also_found_by" field per entry); they are NOT
 separately ranked.
+
+Every graded entry also carries the Piotroski F-Score as EVIDENCE, not
+judgment (SCOUT-2 part B): ``f_score`` on the entry, an "F-Score" column in the
+markdown. It is computed from the SAME adapter-fetched Fundamentals the ranker
+read (one adapter, built here and threaded through — never a second fetch), and
+it is STRICTLY DISPLAY-ONLY: ``min_f_score`` is adopted by no strategy, so the
+number moves no verdict, rank or exclusion until a lens adopts it on evidence.
 
 Outputs (per source, presentation kept apart):
     reports/scout/ft/<date>_verdicts.json + .md,          .../ft/latest.json
     reports/scout/economist/<date>_verdicts.json + .md,   .../economist/latest.json
     reports/scout/growth-scanner/<date>_verdicts.json + .md, .../growth-scanner/latest.json
+    reports/scout/holdings/<date>_verdicts.json + .md,    .../holdings/latest.json
     reports/scout/latest.json    (combined index the publisher reads)
 
 Nothing is silently dropped: unparseable rows are listed under "skipped" per
-source with the verbatim cell text. Holdings-watch rows (Flags starting with
-"HOLDING") are not candidates and are ignored. The scanner itself is NEVER
+source with the verbatim cell text — a HOLDING row whose ticker cell cannot be
+parsed lands in the HOLDINGS source's "skipped", never in a news source's. A
+HOLDING row that is not an equity (the watch table includes ETFs) is graded and
+EXCLUDED by the stock lenses' asset-kind gate with a named reason — correct
+behavior, not a failure: the ETF lenses are deliberately NOT wired into this job
+(examples/grade_holdings.py covers ETFs on demand). The scanner itself is NEVER
 modified or re-run here — this only reads its frozen output.
 
 Usage (from repo root):
@@ -53,6 +71,7 @@ import sys
 import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -75,6 +94,12 @@ SCANNER_FOLDER_ID = os.environ.get("SCOUT_SCANNER_FOLDER",
 SCANNER_CSV_URL = os.environ.get("SCOUT_SCANNER_CSV", "")
 SCANNER_SOURCE = "growth-scanner"
 SCAN_NAME_RE = re.compile(r"growth_scan_(\d{4}-\d{2}-\d{2})(?:_(\d+))?\.csv")
+
+# --- holdings-watch source (SCOUT-2) ---------------------------------------
+# Rows on the news sheets whose Flags cell starts with HOLDING. They are watched
+# CONTINUOUSLY, so the news lookback window is deliberately not applied to them.
+HOLDINGS_SOURCE = "holdings"
+HOLDING_FLAG = "HOLDING"
 
 STOCK_LENSES = [
     "conservative_plus_v1",       # Defensive Income
@@ -162,17 +187,35 @@ def _fetch(url: str) -> str:
 
 # --- news-sheet reading ----------------------------------------------------
 
-def read_scouted(text: str, source: str, window_days: int, today: date
-                 ) -> tuple[list[dict], list[dict]]:
-    """(scouted rows, skipped rows) for ONE news source's CSV, window-filtered."""
+class SheetRead(NamedTuple):
+    """One sheet's rows split by SOURCE, not by sheet: the news candidates (window
+    filtered) and the HOLDING-flagged watch rows (window ignored), each with its
+    own skipped list so a bad holdings cell is never reported as a news skip."""
+
+    scouted: list[dict]
+    skipped: list[dict]
+    holdings: list[dict]
+    holdings_skipped: list[dict]
+
+
+def read_scouted(text: str, source: str, window_days: int, today: date) -> SheetRead:
+    """Split ONE news sheet's CSV into its news candidates and its holdings rows.
+
+    News rows are window-filtered exactly as before (behavior byte-unchanged).
+    HOLDING-flagged rows are NOT candidates of this news source: they are routed
+    to the ``holdings`` source with the window deliberately NOT applied — a
+    holding is watched continuously rather than scouted this week — and an
+    unparseable one lands in ``holdings_skipped`` with the verbatim cell text.
+    """
     cutoff = today - timedelta(days=window_days)
     scouted, skipped = [], []
+    holdings, holdings_skipped = [], []
     rows = list(csv.reader(io.StringIO(text)))
     header_i = next((i for i, r in enumerate(rows)
                      if r and r[0].strip().lower() == "date added"), None)
     if header_i is None:
-        return [], [{"source": source, "cell": "(whole sheet)",
-                     "reason": "no 'Date added' header found"}]
+        return SheetRead([], [{"source": source, "cell": "(whole sheet)",
+                               "reason": "no 'Date added' header found"}], [], [])
     for r in rows[header_i + 1:]:
         if not r or not r[0].strip():
             continue
@@ -180,7 +223,16 @@ def read_scouted(text: str, source: str, window_days: int, today: date
         company = r[2].strip() if len(r) > 2 else ""
         story = r[3].strip() if len(r) > 3 else ""
         flags = r[6].strip() if len(r) > 6 else ""
-        if flags.upper().startswith("HOLDING"):
+        if flags.upper().startswith(HOLDING_FLAG):
+            entry = {"source": HOLDINGS_SOURCE, "date_added": raw_date[:10],
+                     "ticker_cell": raw_ticker, "company": company, "story": story,
+                     "flags": flags, "sheet": source}
+            symbol = parse_ticker(raw_ticker)
+            if symbol is None:
+                holdings_skipped.append({**entry, "cell": " | ".join(r[:3]),
+                                         "reason": "no parseable listed ticker"})
+            else:
+                holdings.append({**entry, "symbol": symbol})
             continue
         try:
             added = datetime.strptime(raw_date[:10], "%Y-%m-%d").date()
@@ -197,7 +249,7 @@ def read_scouted(text: str, source: str, window_days: int, today: date
             skipped.append({**entry, "reason": "no parseable listed ticker"})
         else:
             scouted.append({**entry, "symbol": symbol})
-    return scouted, skipped
+    return SheetRead(scouted, skipped, holdings, holdings_skipped)
 
 
 # --- growth-scanner reading ------------------------------------------------
@@ -304,6 +356,99 @@ def load_base_universe() -> list[str]:
     return list(data["tickers"])
 
 
+# --- cohort composition ----------------------------------------------------
+
+def dedup(rows: list[dict]) -> dict[str, dict]:
+    """symbol -> its FIRST row. Order of the sources decides who wins a collision;
+    the loser is never dropped, it is recorded in ``also_found_by``."""
+    seen: dict[str, dict] = {}
+    for s in rows:
+        seen.setdefault(s["symbol"], s)
+    return seen
+
+
+def also_found_by(by_source: dict[str, dict[str, dict]]) -> dict[str, dict[str, list[str]]]:
+    """Per source: {symbol: [the OTHER sources that also found it]}.
+
+    One derivation for every source (news, scanner, holdings), so a name found by
+    two channels shows both wherever it is presented — e.g. a holding that FT also
+    scouted appears on the FT tab with also_found_by ["holdings"] and on the
+    holdings tab with ["ft"]."""
+    out: dict[str, dict[str, list[str]]] = {}
+    for source, meta in by_source.items():
+        others: dict[str, list[str]] = {}
+        for sym in meta:
+            found = sorted(o for o, m in by_source.items()
+                           if o != source and sym in m)
+            if found:
+                others[sym] = found
+        out[source] = others
+    return out
+
+
+# --- grading ---------------------------------------------------------------
+
+def build_adapter(today: date):
+    """The ONE market adapter for a scout run.
+
+    Built here (rather than left to the pipeline) so the F-Score can read the SAME
+    fetched ``Fundamentals`` the ranker already used — the cache is consulted, so
+    no name is fetched twice. It is the pipeline's own builder, so the adapter
+    stack (retry + cache) is byte-identical to what the pipeline would have made."""
+    from aristos_council.pipeline import _build_adapter
+    return _build_adapter(today=today, use_cache=True)
+
+
+def grade_cohort(cohort: list[str], *, today: date, adapter=None,
+                 freeze_dir: Path | None = None, progress=None):
+    """ONE grading pass over the combined cohort under every stock lens — every
+    source reads its rows out of the same grid, so ranks ARE comparable across
+    tabs. Deterministic ranker only (no LLM, nothing spent)."""
+    from aristos_council.pipeline import run_multi_strategy_pipeline
+    return run_multi_strategy_pipeline(
+        cohort, STOCK_LENSES, strategies_dir=ROOT / "strategies", adapter=adapter,
+        today=today, freeze_dir=freeze_dir, progress=progress)
+
+
+# --- F-Score (SCOUT-2 part B: evidence, never judgment) ---------------------
+
+def f_scores_for(symbols: list[str], adapter, progress=None) -> dict[str, dict]:
+    """The ``f_score`` block per symbol, from the adapter the ranker already used.
+
+    A fetch failure is an ABSTENTION too, never a zero: score null, display
+    ABSTAIN, with the failure named in the note. DISPLAY ONLY — no caller of this
+    is allowed to gate on it (``min_f_score`` is adopted by no strategy)."""
+    from aristos_council.tools.screening import piotroski_f_score
+
+    out: dict[str, dict] = {}
+    for i, symbol in enumerate(symbols, 1):
+        if progress is not None and i % 25 == 0:
+            progress(f"F-Score: {i} of {len(symbols)}…")
+        try:
+            out[symbol] = f_score_block(piotroski_f_score(adapter.get_fundamentals(symbol)))
+        except Exception as e:                     # noqa: BLE001 — absent data, never fatal
+            out[symbol] = f_score_block(None, note=f"fundamentals unavailable: {e}")
+    return out
+
+
+def f_score_block(result, *, note: str = "") -> dict:
+    """One entry's F-Score evidence. ``score`` is None for the under-5-computable
+    abstention AND for a missing fetch; ``display`` renders "ABSTAIN" in both cases
+    — a 0/9 is a REAL score (nine checks computed, none earned) and must never
+    stand in for a gap (project rule 3, the null≠false discipline)."""
+    from aristos_council.tools.screening import _F_SCORE_CHECKS
+
+    if result is None:
+        return {"score": None, "computed": 0, "unavailable": _F_SCORE_CHECKS,
+                "display": "ABSTAIN",
+                "note": note or "F-Score not computed: no fundamentals"}
+    return {"score": result.score, "computed": result.computed,
+            "unavailable": result.unavailable,
+            "display": ("ABSTAIN" if result.score is None
+                        else f"{result.score}/{_F_SCORE_CHECKS}"),
+            "note": result.note}
+
+
 # --- main ------------------------------------------------------------------
 
 def main() -> None:
@@ -320,8 +465,8 @@ def main() -> None:
     args = p.parse_args()
     today = date.today()
 
-    # ---- news sources ----
-    news: dict[str, tuple[list[dict], list[dict]]] = {}
+    # ---- news sources (+ the HOLDING rows riding on the same sheets) ----
+    news: dict[str, SheetRead] = {}
     if args.tickers_csv:
         text = Path(args.tickers_csv).read_text(encoding="utf-8")
         news[args.source] = read_scouted(text, args.source, args.window_days, today)
@@ -335,10 +480,17 @@ def main() -> None:
                 text = _fetch(url)
             except Exception as e:                    # noqa: BLE001
                 print(f"WARN: could not fetch {source} sheet: {e}", file=sys.stderr)
-                news[source] = ([], [{"source": source, "cell": url,
-                                      "reason": f"fetch failed: {e}"}])
+                news[source] = SheetRead([], [{"source": source, "cell": url,
+                                               "reason": f"fetch failed: {e}"}], [], [])
                 continue
             news[source] = read_scouted(text, source, args.window_days, today)
+
+    # The holdings source is assembled ACROSS sheets (any sheet, any date — the
+    # news window does not apply to a continuously watched name).
+    # de-duped by symbol: a name held and watched on BOTH sheets is ONE holding.
+    holdings_rows = list(
+        dedup([h for read in news.values() for h in read.holdings]).values())
+    holdings_skipped = [h for read in news.values() for h in read.holdings_skipped]
 
     # ---- growth-scanner source (own cohort, never mixed with news) ----
     scanner: tuple[list[dict], list[dict]] = ([], [])
@@ -378,70 +530,84 @@ def main() -> None:
             scanner = ([], [{"source": SCANNER_SOURCE, "cell": scan_label or "-",
                              "reason": f"fetch/parse failed: {e}"}])
 
-    # ---- cohorts (separate by design) ----
+    # ---- cohort ----
     base = load_base_universe()
 
-    def dedup(rows: list[dict]) -> dict[str, dict]:
-        seen: dict[str, dict] = {}
-        for s in rows:
-            seen.setdefault(s["symbol"], s)
-        return seen
-
-    # ONE COMBINED COHORT (decided 2026-08-17). Every source's names are graded
-    # in the SAME universe: base + FT + Economist + growth-scanner. A rank
-    # verdict is universe-relative, so a bigger pool makes the quintile cuts
-    # more meaningful and lets a name's verdict move when new comparables
-    # arrive — which is the point of feeding three discovery channels into one
-    # ranker. Sources stay separately IDENTIFIABLE (own folders/tabs/columns);
-    # they are not separately RANKED.
-    news_meta = dedup([s for sc, _sk in news.values() for s in sc])
-    scan_meta = dedup(scanner[0])
+    # ONE COMBINED COHORT (decided 2026-08-17; holdings joined it 2026-08-18).
+    # Every source's names are graded in the SAME universe: base + FT +
+    # Economist + growth-scanner + holdings. A rank verdict is universe-relative,
+    # so a bigger pool makes the quintile cuts more meaningful and lets a name's
+    # verdict move when new comparables arrive — which is the point of feeding
+    # four discovery channels into one ranker. Sources stay separately
+    # IDENTIFIABLE (own folders/tabs/columns); they are not separately RANKED.
+    per_source_meta = {src: dedup(read.scouted) for src, read in news.items()}
+    per_source_meta[SCANNER_SOURCE] = dedup(scanner[0])
+    per_source_meta[HOLDINGS_SOURCE] = dedup(holdings_rows)
+    news_meta = dedup([s for read in news.values() for s in read.scouted])
+    scan_meta = per_source_meta[SCANNER_SOURCE]
+    hold_meta = per_source_meta[HOLDINGS_SOURCE]
     all_meta = {**news_meta}
-    for sym, m in scan_meta.items():          # news metadata wins on collision
-        all_meta.setdefault(sym, m)
+    for extra in (scan_meta, hold_meta):      # news metadata wins on collision
+        for sym, m in extra.items():
+            all_meta.setdefault(sym, m)
     cohort = base + [s for s in all_meta if s not in base]
 
-    for source, (sc, sk) in news.items():
-        print(f"{source}: scouted {[s['symbol'] for s in sc] or 'none'}, "
-              f"skipped {len(sk)}")
+    for source, read in news.items():
+        print(f"{source}: scouted {[s['symbol'] for s in read.scouted] or 'none'}, "
+              f"skipped {len(read.skipped)}")
     print(f"{SCANNER_SOURCE}: {scan_label or 'n/a'} — "
           f"{len(scan_meta)} names, skipped {len(scanner[1])}")
+    print(f"{HOLDINGS_SOURCE}: {sorted(hold_meta) or 'none'} "
+          f"(watched continuously — no date window), skipped {len(holdings_skipped)}")
     overlap = sorted(set(news_meta) & set(scan_meta))
+    new_news = [s for s in news_meta if s not in base]
+    new_scan = [s for s in scan_meta if s not in base and s not in news_meta]
+    new_hold = [s for s in hold_meta
+                if s not in base and s not in news_meta and s not in scan_meta]
     print(f"combined cohort {len(cohort)} = {BASE_UNIVERSE} {len(base)} + "
-          f"news {len([s for s in news_meta if s not in base])} + scanner "
-          f"{len([s for s in scan_meta if s not in base and s not in news_meta])}"
-          + (f" (found by both: {', '.join(overlap)})" if overlap else ""))
+          f"news {len(new_news)} + scanner {len(new_scan)} + "
+          f"holdings {len(new_hold)}"
+          + (f" (found by both news and scanner: {', '.join(overlap)})"
+             if overlap else ""))
     if args.dry_run:
-        for _src, (_sc, sk) in {**news, SCANNER_SOURCE: scanner}.items():
-            for row in sk:
+        for read in news.values():
+            for row in read.skipped:
                 print(f"  skipped: {row}")
+        for row in list(scanner[1]) + holdings_skipped:
+            print(f"  skipped: {row}")
         return
 
-    from aristos_council.pipeline import run_multi_strategy_pipeline
+    # The adapter is built ONCE here and threaded through BOTH the ranker and the
+    # F-Score, so the F-Score reads the fundamentals the ranker already fetched.
+    adapter = build_adapter(today) if all_meta else None
+    result = grade_cohort(cohort, today=today, adapter=adapter,
+                          freeze_dir=ROOT / "runs",
+                          progress=lambda m: print(f"  {m}")) if all_meta else None
 
-    # ONE grading pass over the combined cohort — every source reads its rows
-    # out of the same grid, so ranks ARE comparable across tabs.
-    result = run_multi_strategy_pipeline(
-        cohort, STOCK_LENSES, strategies_dir=ROOT / "strategies",
-        today=today, freeze_dir=ROOT / "runs",
-        progress=lambda m: print(f"  {m}")) if all_meta else None
+    # F-Score for every symbol we EMIT (display only — it judges nothing).
+    f_scores = (f_scores_for(sorted(all_meta), adapter,
+                             progress=lambda m: print(f"  {m}"))
+                if result is not None else {})
 
-    also_found_by = {}                        # symbol -> other sources
-    for sym in set(news_meta) & set(scan_meta):
-        also_found_by[sym] = [SCANNER_SOURCE]
-    per_source = {src: {"scouted": sc, "skipped": sk, "result": result,
-                        "cohort_size": len(cohort), "cohort": "combined",
-                        "also_found_by": also_found_by}
-                  for src, (sc, sk) in news.items()}
+    also = also_found_by(per_source_meta)
+    per_source = {src: {"scouted": read.scouted, "skipped": read.skipped,
+                        "result": result, "cohort_size": len(cohort),
+                        "cohort": "combined", "also_found_by": also.get(src, {})}
+                  for src, read in news.items()}
     per_source[SCANNER_SOURCE] = {
         "scouted": scanner[0], "skipped": scanner[1], "result": result,
         "cohort_size": len(cohort), "cohort": "combined",
-        "also_found_by": {s: ["news"] for s in set(news_meta) & set(scan_meta)},
+        "also_found_by": also.get(SCANNER_SOURCE, {}),
         "scan_file": scan_label, "scan_header": scan_header}
-    _write_outputs(today, per_source)
+    per_source[HOLDINGS_SOURCE] = {
+        "scouted": holdings_rows, "skipped": holdings_skipped, "result": result,
+        "cohort_size": len(cohort), "cohort": "combined",
+        "also_found_by": also.get(HOLDINGS_SOURCE, {})}
+    _write_outputs(today, per_source, f_scores)
 
 
-def _entry_for(row, meta: dict, also: dict | None = None) -> dict:
+def _entry_for(row, meta: dict, also: dict | None = None,
+               f_scores: dict | None = None) -> dict:
     entry = {"symbol": meta["symbol"], "source": meta["source"],
              "also_found_by": (also or {}).get(meta["symbol"], []),
              "company": meta.get("company", ""),
@@ -451,8 +617,10 @@ def _entry_for(row, meta: dict, also: dict | None = None) -> dict:
              "rank_sum": row.rank_sum if row else None,
              "graded": row.graded if row else 0,
              "comparable": row.comparable if row else False,
+             # EVIDENCE, not judgment: no threshold reads this (SCOUT-2 part B).
+             "f_score": (f_scores or {}).get(meta["symbol"]) or f_score_block(None),
              "lenses": {}}
-    for extra in ("scanner_notes", "ret_6m", "market"):
+    for extra in ("scanner_notes", "ret_6m", "market", "flags", "sheet"):
         if meta.get(extra):
             entry[extra] = meta[extra]
     if row:
@@ -464,7 +632,9 @@ def _entry_for(row, meta: dict, also: dict | None = None) -> dict:
     return entry
 
 
-def _write_outputs(today: date, per_source: dict) -> None:
+def _write_outputs(today: date, per_source: dict, f_scores: dict | None = None,
+                   root: Path | None = None) -> None:
+    root = root or ROOT
     stamp = today.isoformat()
     index = {"run_date": stamp, "base_universe": BASE_UNIVERSE,
              "lenses": STOCK_LENSES, "sources": {}}
@@ -472,10 +642,10 @@ def _write_outputs(today: date, per_source: dict) -> None:
     for source, blob in per_source.items():
         result = blob["result"]
         by_ticker = {r.ticker: r for r in result.rows} if result else {}
-        out_dir = ROOT / "reports" / "scout" / source
+        out_dir = root / "reports" / "scout" / source
         out_dir.mkdir(parents=True, exist_ok=True)
         entries = [_entry_for(by_ticker.get(m["symbol"]), m,
-                               blob.get("also_found_by"))
+                               blob.get("also_found_by"), f_scores)
                    for m in blob["scouted"]]
         payload = {"run_date": stamp, "source": source,
                    "cohort": blob["cohort"], "cohort_size": blob["cohort_size"],
@@ -491,9 +661,20 @@ def _write_outputs(today: date, per_source: dict) -> None:
         lines = [f"# {source.upper()} scout verdicts — {stamp}",
                  f"Cohort: {blob['cohort_size']} names ({BASE_UNIVERSE} + "
                  f"{blob['cohort']} names, graded separately). Deterministic "
-                 f"ranker only — the math judges.", ""]
+                 f"ranker only — the math judges.",
+                 "F-Score: Piotroski 0-9, EVIDENCE ONLY — no lens consumes it, so "
+                 "it moves no verdict, rank or exclusion. ABSTAIN = fewer than 5 of "
+                 "the 9 checks computable (never a 0).", ""]
         if source == SCANNER_SOURCE and blob.get("scan_file"):
             lines.append(f"Scan file: {blob['scan_file']}")
+            lines.append("")
+        if source == HOLDINGS_SOURCE:
+            lines.append("Watch/holdings rows (Flags: HOLDING) — watched "
+                         "continuously, so the news date window does not apply. "
+                         "Ticker names only; no amounts or cost basis. A non-equity "
+                         "row (e.g. an ETF) is EXCLUDED by the stock lenses' "
+                         "asset-kind gate with a named reason — correct, not a "
+                         "failure: the ETF lenses are not wired into this job.")
             lines.append("")
         for e in entries:
             lines.append(f"## {e['display']} ({e['symbol']}) — {e['date_added']}")
@@ -504,6 +685,9 @@ def _write_outputs(today: date, per_source: dict) -> None:
             for sid in STOCK_LENSES:
                 cell = e["lenses"].get(sid, {})
                 lines.append(f"- **{sid}**: {cell.get('rendered', '—')}")
+            fs = e.get("f_score") or {}
+            lines.append(f"- **F-Score**: {fs.get('display', 'ABSTAIN')} "
+                         f"({fs.get('note', '')})")
             lines.append("")
         if blob["skipped"]:
             lines.append("## Skipped (nothing dropped silently)")
@@ -518,8 +702,8 @@ def _write_outputs(today: date, per_source: dict) -> None:
             "md": f"reports/scout/{source}/{stamp}_verdicts.md"}
         print(f"wrote reports/scout/{source}/{stamp}_verdicts.json + .md")
 
-    (ROOT / "reports" / "scout").mkdir(parents=True, exist_ok=True)
-    (ROOT / "reports" / "scout" / "latest.json").write_text(
+    (root / "reports" / "scout").mkdir(parents=True, exist_ok=True)
+    (root / "reports" / "scout" / "latest.json").write_text(
         json.dumps(index, indent=2), encoding="utf-8")
     print("wrote reports/scout/latest.json (combined index)")
 
