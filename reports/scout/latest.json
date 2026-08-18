@@ -13,7 +13,7 @@
       "scouted": 12,
       "skipped": 0,
       "cohort": "combined",
-      "cohort_size": 102,
+      "cohort_size": 129,
       "json": "reports/scout/ft/2026-08-18_verdicts.json",
       "md": "reports/scout/ft/2026-08-18_verdicts.md"
     },
@@ -21,7 +21,7 @@
       "scouted": 5,
       "skipped": 0,
       "cohort": "combined",
-      "cohort_size": 102,
+      "cohort_size": 129,
       "json": "reports/scout/economist/2026-08-18_verdicts.json",
       "md": "reports/scout/economist/2026-08-18_verdicts.md"
     },
@@ -29,15 +29,15 @@
       "scouted": 50,
       "skipped": 0,
       "cohort": "combined",
-      "cohort_size": 102,
+      "cohort_size": 129,
       "json": "reports/scout/growth-scanner/2026-08-18_verdicts.json",
       "md": "reports/scout/growth-scanner/2026-08-18_verdicts.md"
     },
     "holdings": {
-      "scouted": 0,
-      "skipped": 0,
+      "scouted": 29,
+      "skipped": 1,
       "cohort": "combined",
-      "cohort_size": 102,
+      "cohort_size": 129,
       "json": "reports/scout/holdings/2026-08-18_verdicts.json",
       "md": "reports/scout/holdings/2026-08-18_verdicts.md"
     }

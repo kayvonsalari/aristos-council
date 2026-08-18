@@ -2,7 +2,7 @@
   "run_date": "2026-08-18",
   "source": "growth-scanner",
   "cohort": "combined",
-  "cohort_size": 102,
+  "cohort_size": 129,
   "base_universe": "growth_40_v1",
   "lenses": [
     "conservative_plus_v1",
@@ -20,7 +20,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.9258; market US; mktcap $11211.4M; rev YoY 0.8642",
       "display": "Applied Optoelectronics, Inc. (AAOI)",
-      "rank_sum": 78,
+      "rank_sum": 90,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -36,32 +36,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +553% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +553% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +637% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +637% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 32,
-          "cohort_size": 46,
+          "position": 38,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#32 of 46 \u00b7 HOLD"
+          "rendered": "#38 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +553% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +553% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +637% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +637% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 46,
-          "cohort_size": 62,
+          "position": 52,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#46 of 62 \u00b7 HOLD"
+          "rendered": "#52 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -100,8 +100,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +523% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +523% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +540% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +540% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -164,8 +164,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +322% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +322% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -211,7 +211,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.8458; market US; mktcap $7502.8M; rev YoY 0.3986",
       "display": "Navan, Inc. (NAVN)",
-      "rank_sum": 119,
+      "rank_sum": 138,
       "graded": 3,
       "comparable": false,
       "f_score": {
@@ -233,26 +233,26 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 46,
-          "cohort_size": 46,
+          "position": 53,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#46 of 46 \u00b7 SELL"
+          "rendered": "#53 of 53 \u00b7 SELL"
         },
         "growth_garp_v2": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 11,
-          "cohort_size": 11,
+          "position": 14,
+          "cohort_size": 14,
           "reason": "",
-          "rendered": "#11 of 11 \u00b7 SELL"
+          "rendered": "#14 of 14 \u00b7 SELL"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 62,
-          "cohort_size": 62,
+          "position": 71,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#62 of 62 \u00b7 SELL"
+          "rendered": "#71 of 71 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -275,7 +275,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.8285; market US; mktcap $199254.9M; rev YoY 0.2757",
       "display": "Marvell Technology, Inc. (MRVL)",
-      "rank_sum": 34,
+      "rank_sum": 39,
       "graded": 1,
       "comparable": false,
       "f_score": {
@@ -291,32 +291,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0.001081 vs threshold 0.015) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.001081 vs threshold 0.015) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0.001024 vs threshold 0.015) [\u26a0 price diverging: +197% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.001024 vs threshold 0.015) [\u26a0 price diverging: +197% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +197% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +197% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +181% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +197% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.005547 vs threshold 0.12) [\u26a0 price diverging: +197% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 34,
-          "cohort_size": 62,
+          "position": 39,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#34 of 62 \u00b7 HOLD"
+          "rendered": "#39 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -418,8 +418,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +425% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +425% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +429% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +429% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -530,7 +530,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.7873; market US; mktcap $5760.3M",
       "display": "Definium Therapeutics, Inc. (DFTX)",
-      "rank_sum": 94,
+      "rank_sum": 105,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -546,32 +546,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +354% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +354% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 39,
-          "cohort_size": 46,
+          "position": 44,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#39 of 46 \u00b7 SELL"
+          "rendered": "#44 of 53 \u00b7 SELL"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +328% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +354% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +354% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 55,
-          "cohort_size": 62,
+          "position": 61,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#55 of 62 \u00b7 SELL"
+          "rendered": "#61 of 71 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -594,7 +594,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.7805; market US; mktcap $8872.9M",
       "display": "Spyre Therapeutics, Inc. (SYRE)",
-      "rank_sum": 88,
+      "rank_sum": 101,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -610,32 +610,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +496% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +496% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +520% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +520% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 36,
-          "cohort_size": 46,
+          "position": 42,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#36 of 46 \u00b7 HOLD"
+          "rendered": "#42 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +496% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +496% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +520% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +520% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 52,
-          "cohort_size": 62,
+          "position": 59,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#52 of 62 \u00b7 SELL"
+          "rendered": "#59 of 71 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -658,7 +658,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.7648; market US; mktcap $12001.1M; rev YoY 0.3174",
       "display": "Corcept Therapeutics Incorporated (CORT)",
-      "rank_sum": 59,
+      "rank_sum": 66,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -674,32 +674,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +57% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +57% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +63% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +63% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 27,
-          "cohort_size": 46,
+          "position": 31,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#27 of 46 \u00b7 HOLD"
+          "rendered": "#31 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +57% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +57% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +63% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +63% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 32,
-          "cohort_size": 62,
+          "position": 35,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#32 of 62 \u00b7 HOLD"
+          "rendered": "#35 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -785,7 +785,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.6612; market US; mktcap $78644.4M; rev YoY 0.4072",
       "display": "Hewlett Packard Enterprise Company (HPE)",
-      "rank_sum": 33,
+      "rank_sum": 37,
       "graded": 1,
       "comparable": false,
       "f_score": {
@@ -801,32 +801,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0.009709 vs threshold 0.015) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.009709 vs threshold 0.015) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0.009894 vs threshold 0.015) [\u26a0 price diverging: +176% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.009894 vs threshold 0.015) [\u26a0 price diverging: +176% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_roic (observed 0.04481 vs threshold 0.12) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_roic (observed 0.04481 vs threshold 0.12) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_roic (observed 0.04481 vs threshold 0.12) [\u26a0 price diverging: +176% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.04481 vs threshold 0.12) [\u26a0 price diverging: +176% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_revenue_cagr (observed 0.0607 vs threshold 0.1) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.0607 vs threshold 0.1) [\u26a0 price diverging: +178% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_revenue_cagr (observed 0.0607 vs threshold 0.1) [\u26a0 price diverging: +176% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.0607 vs threshold 0.1) [\u26a0 price diverging: +176% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 33,
-          "cohort_size": 62,
+          "position": 37,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#33 of 62 \u00b7 HOLD"
+          "rendered": "#37 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -913,7 +913,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.6022; market US; mktcap $71920.7M; rev YoY 6.2152",
       "display": "NBIS",
-      "rank_sum": 85,
+      "rank_sum": 96,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -935,10 +935,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 35,
-          "cohort_size": 46,
+          "position": 40,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#35 of 46 \u00b7 HOLD"
+          "rendered": "#40 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -951,10 +951,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 50,
-          "cohort_size": 62,
+          "position": 56,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#50 of 62 \u00b7 HOLD"
+          "rendered": "#56 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -977,8 +977,8 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.5983; market US; mktcap $5257.1M; rev YoY 0.2564",
       "display": "BlackBerry Limited (BB)",
-      "rank_sum": null,
-      "graded": 0,
+      "rank_sum": 89,
+      "graded": 2,
       "comparable": false,
       "f_score": {
         "score": 7,
@@ -993,40 +993,40 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +136% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +136% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +137% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +137% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
-          "status": "excluded",
-          "verdict": "",
-          "position": null,
-          "cohort_size": 0,
-          "reason": "below min market cap",
-          "rendered": "excluded \u2014 below min market cap"
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 37,
+          "cohort_size": 53,
+          "reason": "",
+          "rendered": "#37 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "below min market cap",
-          "rendered": "excluded \u2014 below min market cap"
+          "reason": "screen: min_revenue_cagr (observed -0.02204 vs threshold 0.1) [\u26a0 price diverging: +137% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.02204 vs threshold 0.1) [\u26a0 price diverging: +137% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
-          "status": "excluded",
-          "verdict": "",
-          "position": null,
-          "cohort_size": 0,
-          "reason": "below min market cap",
-          "rendered": "excluded \u2014 below min market cap"
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 52,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#52 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "below min market cap",
-          "rendered": "excluded \u2014 below min market cap"
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
         }
       },
       "ret_6m": "1.5983",
@@ -1039,7 +1039,7 @@
       "company": "Climb Bio Inc",
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.5979; market US; mktcap $844.3M",
-      "display": "Climb Bio Inc (CLYM)",
+      "display": "Climb Bio, Inc. (CLYM)",
       "rank_sum": null,
       "graded": 0,
       "comparable": false,
@@ -1120,8 +1120,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +371% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +371% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +396% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +396% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -1136,8 +1136,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +371% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +371% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +396% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +396% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "excluded",
@@ -1151,9 +1151,9 @@
           "status": "ranked",
           "verdict": "hold",
           "position": 3,
-          "cohort_size": 3,
+          "cohort_size": 4,
           "reason": "",
-          "rendered": "#3 of 3 \u00b7 HOLD"
+          "rendered": "#3 of 4 \u00b7 HOLD"
         }
       },
       "scanner_notes": "no_prior_yr_totalRevenue;no_prior_yr_netIncome;no_prior_yr_epsActual",
@@ -1232,7 +1232,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.5512; market US; mktcap $7650.3M; rev YoY 0.2324",
       "display": "Twist Bioscience Corporation (TWST)",
-      "rank_sum": 88,
+      "rank_sum": 103,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -1248,32 +1248,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +332% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +332% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +331% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +331% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
-          "verdict": "sell",
-          "position": 36,
-          "cohort_size": 46,
+          "verdict": "hold",
+          "position": 43,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#36 of 46 \u00b7 SELL"
+          "rendered": "#43 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +332% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +332% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +331% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +331% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 52,
-          "cohort_size": 62,
+          "position": 60,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#52 of 62 \u00b7 SELL"
+          "rendered": "#60 of 71 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -1375,8 +1375,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +185% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +185% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +190% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +190% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -1423,7 +1423,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.496; market US; mktcap $56297.7M; rev YoY 1.0445",
       "display": "Astera Labs, Inc. (ALAB)",
-      "rank_sum": 43,
+      "rank_sum": 49,
       "graded": 1,
       "comparable": false,
       "f_score": {
@@ -1439,32 +1439,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +68% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +68% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +68% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +68% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +66% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +68% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_roic (observed -0.005425 vs threshold 0.12) [\u26a0 price diverging: +68% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 43,
-          "cohort_size": 62,
+          "position": 49,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#43 of 62 \u00b7 HOLD"
+          "rendered": "#49 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -1485,7 +1485,7 @@
       "company": "The Oncology Institute, Inc.",
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.494; market US; mktcap $638.5M; rev YoY 0.3462",
-      "display": "Starling Oncology, Inc. (STLN)",
+      "display": "The Oncology Institute, Inc. (STLN)",
       "rank_sum": null,
       "graded": 0,
       "comparable": false,
@@ -1550,7 +1550,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.4513; market US; mktcap $20200.1M; rev YoY 0.2393",
       "display": "Unity Software Inc. (U)",
-      "rank_sum": 101,
+      "rank_sum": 116,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -1572,10 +1572,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 43,
-          "cohort_size": 46,
+          "position": 49,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#43 of 46 \u00b7 SELL"
+          "rendered": "#49 of 53 \u00b7 SELL"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -1588,10 +1588,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 58,
-          "cohort_size": 62,
+          "position": 67,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#58 of 62 \u00b7 SELL"
+          "rendered": "#67 of 71 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -1614,7 +1614,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.4389; market US; mktcap $235787.8M; rev YoY 3.7159",
       "display": "Sandisk Corporation (SNDK)",
-      "rank_sum": 87,
+      "rank_sum": 102,
       "graded": 3,
       "comparable": false,
       "f_score": {
@@ -1630,32 +1630,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +3391% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +3391% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +3728% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +3728% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 32,
-          "cohort_size": 46,
+          "position": 38,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#32 of 46 \u00b7 HOLD"
+          "rendered": "#38 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 9,
-          "cohort_size": 11,
+          "position": 12,
+          "cohort_size": 14,
           "reason": "",
-          "rendered": "#9 of 11 \u00b7 HOLD"
+          "rendered": "#12 of 14 \u00b7 HOLD"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 46,
-          "cohort_size": 62,
+          "position": 52,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#46 of 62 \u00b7 HOLD"
+          "rendered": "#52 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -1758,8 +1758,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +264% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +264% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +272% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +272% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -1822,8 +1822,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +47% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +47% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +37% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +37% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -2014,8 +2014,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +151% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +151% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +145% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +145% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -2078,8 +2078,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +614% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +614% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +632% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +632% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -2142,8 +2142,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +240% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +240% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +262% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +262% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -2256,7 +2256,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.372; market US; mktcap $321476.8M; rev YoY 0.3115",
       "display": "Palo Alto Networks, Inc. (PANW)",
-      "rank_sum": 81,
+      "rank_sum": 97,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -2278,10 +2278,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 32,
-          "cohort_size": 46,
+          "position": 40,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#32 of 46 \u00b7 HOLD"
+          "rendered": "#40 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -2294,10 +2294,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 49,
-          "cohort_size": 62,
+          "position": 57,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#49 of 62 \u00b7 HOLD"
+          "rendered": "#57 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -2573,7 +2573,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.3322; market US; mktcap $5516.3M; rev YoY 0.2368",
       "display": "ANDG",
-      "rank_sum": 106,
+      "rank_sum": 122,
       "graded": 3,
       "comparable": false,
       "f_score": {
@@ -2595,26 +2595,26 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 40,
-          "cohort_size": 46,
+          "position": 46,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#40 of 46 \u00b7 SELL"
+          "rendered": "#46 of 53 \u00b7 SELL"
         },
         "growth_garp_v2": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 10,
-          "cohort_size": 11,
+          "position": 13,
+          "cohort_size": 14,
           "reason": "",
-          "rendered": "#10 of 11 \u00b7 SELL"
+          "rendered": "#13 of 14 \u00b7 SELL"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 56,
-          "cohort_size": 62,
+          "position": 63,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#56 of 62 \u00b7 SELL"
+          "rendered": "#63 of 71 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -2637,7 +2637,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 1.3298; market US; mktcap $797251.8M; rev YoY 0.5011",
       "display": "Advanced Micro Devices, Inc. (AMD)",
-      "rank_sum": 76,
+      "rank_sum": 87,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -2653,32 +2653,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +179% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +179% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +180% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +180% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 31,
-          "cohort_size": 46,
+          "position": 36,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#31 of 46 \u00b7 HOLD"
+          "rendered": "#36 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: max_peg_ratio (observed 3.064 vs threshold 2.0) [\u26a0 price diverging: +179% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: max_peg_ratio (observed 3.064 vs threshold 2.0) [\u26a0 price diverging: +179% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: max_peg_ratio (observed 3.073 vs threshold 2.0) [\u26a0 price diverging: +180% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed 3.073 vs threshold 2.0) [\u26a0 price diverging: +180% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 45,
-          "cohort_size": 62,
+          "position": 51,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#45 of 62 \u00b7 HOLD"
+          "rendered": "#51 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -2958,10 +2958,10 @@
       "comparable": false,
       "f_score": {
         "score": 4,
-        "computed": 9,
-        "unavailable": 0,
+        "computed": 8,
+        "unavailable": 1,
         "display": "4/9",
-        "note": "F-Score 4/9 \u2014 computed from 9 checks, 0 unavailable"
+        "note": "F-Score 4/9 \u2014 computed from 8 checks, 1 unavailable (unavailable: current_ratio_improved)"
       },
       "lenses": {
         "conservative_plus_v1": {
@@ -3033,8 +3033,8 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0.003556 vs threshold 0.015) [\u26a0 price diverging: +219% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.003556 vs threshold 0.015) [\u26a0 price diverging: +219% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0.003556 vs threshold 0.015) [\u26a0 price diverging: +212% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.003556 vs threshold 0.015) [\u26a0 price diverging: +212% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "excluded",
@@ -3080,7 +3080,7 @@
       "date_added": "growth_scan_2026-08-14_3.csv",
       "story": "6m return 0.8317; market DE; mktcap $13040.4M; rev YoY 0.1008",
       "display": "Delivery Hero SE (DHER.DE)",
-      "rank_sum": 98,
+      "rank_sum": 111,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -3096,32 +3096,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +60% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +60% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +59% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +59% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 41,
-          "cohort_size": 46,
+          "position": 47,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#41 of 46 \u00b7 SELL"
+          "rendered": "#47 of 53 \u00b7 SELL"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +60% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +60% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +59% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0) [\u26a0 price diverging: +59% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 57,
-          "cohort_size": 62,
+          "position": 64,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#57 of 62 \u00b7 SELL"
+          "rendered": "#64 of 71 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",

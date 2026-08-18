@@ -2,7 +2,7 @@
   "run_date": "2026-08-18",
   "source": "economist",
   "cohort": "combined",
-  "cohort_size": 102,
+  "cohort_size": 129,
   "base_universe": "growth_40_v1",
   "lenses": [
     "conservative_plus_v1",
@@ -20,7 +20,7 @@
       "date_added": "2026-08-13",
       "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
       "display": "Amazon.com, Inc. (AMZN)",
-      "rank_sum": 40,
+      "rank_sum": 47,
       "graded": 1,
       "comparable": false,
       "f_score": {
@@ -58,10 +58,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 40,
-          "cohort_size": 62,
+          "position": 47,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#40 of 62 \u00b7 HOLD"
+          "rendered": "#47 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -81,7 +81,7 @@
       "date_added": "2026-08-13",
       "story": "\"Business\" (The world this week), The Economist, Aug 15th 2026 issue (published Aug 13 2026)",
       "display": "Intel Corporation (INTC)",
-      "rank_sum": 73,
+      "rank_sum": 84,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -97,32 +97,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +361% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +361% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +334% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015) [\u26a0 price diverging: +334% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 30,
-          "cohort_size": 46,
+          "position": 35,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#30 of 46 \u00b7 HOLD"
+          "rendered": "#35 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_revenue_cagr (observed -0.05356 vs threshold 0.1) [\u26a0 price diverging: +361% 12m \u2014 cyclical inflection or mania; human review]",
-          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.05356 vs threshold 0.1) [\u26a0 price diverging: +361% 12m \u2014 cyclical inflection or mania; human review]"
+          "reason": "screen: min_revenue_cagr (observed -0.05356 vs threshold 0.1) [\u26a0 price diverging: +334% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.05356 vs threshold 0.1) [\u26a0 price diverging: +334% 12m \u2014 cyclical inflection or mania; human review]"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 43,
-          "cohort_size": 62,
+          "position": 49,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#43 of 62 \u00b7 HOLD"
+          "rendered": "#49 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -142,7 +142,7 @@
       "date_added": "2026-08-13",
       "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
       "display": "NVIDIA Corporation (NVDA)",
-      "rank_sum": 33,
+      "rank_sum": 39,
       "graded": 3,
       "comparable": false,
       "f_score": {
@@ -158,32 +158,32 @@
           "verdict": "",
           "position": null,
           "cohort_size": 0,
-          "reason": "screen: min_dividend_yield (observed 0.004441 vs threshold 0.015)",
-          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.004441 vs threshold 0.015)"
+          "reason": "screen: min_dividend_yield (observed 0.004444 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.004444 vs threshold 0.015)"
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 12,
-          "cohort_size": 46,
+          "position": 15,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#12 of 46 \u00b7 HOLD"
+          "rendered": "#15 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "ranked",
           "verdict": "buy",
-          "position": 1,
-          "cohort_size": 11,
+          "position": 2,
+          "cohort_size": 14,
           "reason": "",
-          "rendered": "#1 of 11 \u00b7 BUY"
+          "rendered": "#2 of 14 \u00b7 BUY"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 20,
-          "cohort_size": 62,
+          "position": 22,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#20 of 62 \u00b7 HOLD"
+          "rendered": "#22 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -205,7 +205,7 @@
       "date_added": "2026-08-14",
       "story": "\"AI agents lie, cheat and steal. That is putting off users\", The Economist, Aug 15th 2026 issue (published Aug 12 2026)",
       "display": "Palo Alto Networks, Inc. (PANW)",
-      "rank_sum": 81,
+      "rank_sum": 97,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -227,10 +227,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 32,
-          "cohort_size": 46,
+          "position": 40,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#32 of 46 \u00b7 HOLD"
+          "rendered": "#40 of 53 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -243,10 +243,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 49,
-          "cohort_size": 62,
+          "position": 57,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#49 of 62 \u00b7 HOLD"
+          "rendered": "#57 of 71 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -266,7 +266,7 @@
       "date_added": "2026-08-14",
       "story": "\"AI agents lie, cheat and steal. That is putting off users\", The Economist, Aug 15th 2026 issue (published Aug 12 2026)",
       "display": "CrowdStrike Holdings, Inc. (CRWD)",
-      "rank_sum": 90,
+      "rank_sum": 106,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -287,11 +287,11 @@
         },
         "magic_formula_momentum_v1": {
           "status": "ranked",
-          "verdict": "hold",
-          "position": 36,
-          "cohort_size": 46,
+          "verdict": "sell",
+          "position": 44,
+          "cohort_size": 53,
           "reason": "",
-          "rendered": "#36 of 46 \u00b7 HOLD"
+          "rendered": "#44 of 53 \u00b7 SELL"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -304,10 +304,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 54,
-          "cohort_size": 62,
+          "position": 62,
+          "cohort_size": 71,
           "reason": "",
-          "rendered": "#54 of 62 \u00b7 SELL"
+          "rendered": "#62 of 71 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",

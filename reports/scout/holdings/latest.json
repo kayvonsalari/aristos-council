@@ -2,7 +2,7 @@
   "run_date": "2026-08-18",
   "source": "holdings",
   "cohort": "combined",
-  "cohort_size": 102,
+  "cohort_size": 129,
   "base_universe": "growth_40_v1",
   "lenses": [
     "conservative_plus_v1",
@@ -11,6 +11,1846 @@
     "magic_formula_raw_v1",
     "financials_v1"
   ],
-  "scouted": [],
-  "skipped": []
+  "scouted": [
+    {
+      "symbol": "000660",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "SK Hynix",
+      "date_added": "",
+      "story": "",
+      "display": "000660",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "GOOGL",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Alphabet (Google)",
+      "date_added": "",
+      "story": "",
+      "display": "Alphabet Inc. (GOOGL)",
+      "rank_sum": 22,
+      "graded": 3,
+      "comparable": false,
+      "f_score": {
+        "score": 6,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "6/9",
+        "note": "F-Score 6/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.002558 vs threshold 0.015) [\u26a0 price diverging: +70% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.002558 vs threshold 0.015) [\u26a0 price diverging: +70% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 9,
+          "cohort_size": 53,
+          "reason": "",
+          "rendered": "#9 of 53 \u00b7 BUY"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 7,
+          "cohort_size": 14,
+          "reason": "",
+          "rendered": "#7 of 14 \u00b7 HOLD"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 6,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#6 of 71 \u00b7 BUY"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Communication Services' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Communication Services' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "ASML",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "ASML Holding",
+      "date_added": "",
+      "story": "",
+      "display": "ASML Holding N.V. (ASML)",
+      "rank_sum": 4,
+      "graded": 2,
+      "comparable": false,
+      "f_score": {
+        "score": 6,
+        "computed": 7,
+        "unavailable": 2,
+        "display": "6/9",
+        "note": "F-Score 6/9 \u2014 computed from 7 checks, 2 unavailable (unavailable: ocf_positive, ocf_exceeds_net_income)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.004822 vs threshold 0.015) [\u26a0 price diverging: +151% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.004822 vs threshold 0.015) [\u26a0 price diverging: +151% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 1,
+          "cohort_size": 53,
+          "reason": "",
+          "rendered": "#1 of 53 \u00b7 BUY"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed 3.389 vs threshold 2.0) [\u26a0 price diverging: +151% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed 3.389 vs threshold 2.0) [\u26a0 price diverging: +151% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 3,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#3 of 71 \u00b7 BUY"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "MSFT",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Microsoft",
+      "date_added": "",
+      "story": "",
+      "display": "Microsoft Corporation (MSFT)",
+      "rank_sum": 60,
+      "graded": 3,
+      "comparable": false,
+      "f_score": {
+        "score": 6,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "6/9",
+        "note": "F-Score 6/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.007578 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.007578 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 25,
+          "cohort_size": 53,
+          "reason": "",
+          "rendered": "#25 of 53 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 5,
+          "cohort_size": 14,
+          "reason": "",
+          "rendered": "#5 of 14 \u00b7 HOLD"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 30,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#30 of 71 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "BC94",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Samsung Electronics GDR",
+      "date_added": "",
+      "story": "",
+      "display": "BC94",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "TSM",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Taiwan Semiconductor (TSMC)",
+      "date_added": "",
+      "story": "",
+      "display": "Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+      "rank_sum": 27,
+      "graded": 3,
+      "comparable": false,
+      "f_score": {
+        "score": 9,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "9/9",
+        "note": "F-Score 9/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.01007 vs threshold 0.015) [\u26a0 price diverging: +81% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.01007 vs threshold 0.015) [\u26a0 price diverging: +81% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 12,
+          "cohort_size": 53,
+          "reason": "",
+          "rendered": "#12 of 53 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 4,
+          "cohort_size": 14,
+          "reason": "",
+          "rendered": "#4 of 14 \u00b7 HOLD"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 11,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#11 of 71 \u00b7 BUY"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "VWCE",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Vanguard FTSE All-World Acc",
+      "date_added": "",
+      "story": "",
+      "display": "VWCE",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "ETF"
+    },
+    {
+      "symbol": "CSPX",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "iShares Core S&P 500 Acc",
+      "date_added": "",
+      "story": "",
+      "display": "iShares Core S&amp;P 500 ETF USD Acc (CSPX)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "ETF"
+    },
+    {
+      "symbol": "AMS",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Amadeus IT Group",
+      "date_added": "",
+      "story": "",
+      "display": "American Shared Hospital Services (AMS)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": 3,
+        "computed": 8,
+        "unavailable": 1,
+        "display": "3/9",
+        "note": "F-Score 3/9 \u2014 computed from 8 checks, 1 unavailable (unavailable: ltd_ratio_decreased)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "VKTX",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Viking Therapeutics",
+      "date_added": "",
+      "story": "",
+      "display": "Viking Therapeutics, Inc. (VKTX)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": 2,
+        "computed": 8,
+        "unavailable": 1,
+        "display": "2/9",
+        "note": "F-Score 2/9 \u2014 computed from 8 checks, 1 unavailable (unavailable: gross_margin_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "EL",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "EssilorLuxottica",
+      "date_added": "",
+      "story": "",
+      "display": "The Est\u00e9e Lauder Companies Inc. (EL)",
+      "rank_sum": 65,
+      "graded": 1,
+      "comparable": false,
+      "f_score": {
+        "score": 4,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "4/9",
+        "note": "F-Score 4/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_payout_ratio_fcf (observed 0.9683 vs threshold 0.8) [FCF (4y mean)]",
+          "rendered": "excluded \u2014 screen: max_payout_ratio_fcf (observed 0.9683 vs threshold 0.8) [FCF (4y mean)]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.116 vs threshold 0.12) [borderline]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.116 vs threshold 0.12) [borderline]"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed -0.06386 vs threshold 0.1)",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.06386 vs threshold 0.1)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 65,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#65 of 71 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Consumer Defensive' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Consumer Defensive' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "ETN",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Eaton Corporation",
+      "date_added": "",
+      "story": "",
+      "display": "Eaton Corporation plc (ETN)",
+      "rank_sum": 41,
+      "graded": 1,
+      "comparable": false,
+      "f_score": {
+        "score": 7,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "7/9",
+        "note": "F-Score 7/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.009662 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.009662 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_roic (observed 0.1192 vs threshold 0.12) [borderline]",
+          "rendered": "excluded \u2014 screen: min_roic (observed 0.1192 vs threshold 0.12) [borderline]"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed 0.09515 vs threshold 0.1) [borderline]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed 0.09515 vs threshold 0.1) [borderline]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 41,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#41 of 71 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Industrials' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Industrials' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "QQQ",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Invesco QQQ Trust",
+      "date_added": "",
+      "story": "",
+      "display": "Invesco QQQ Trust (QQQ)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "asset kind 'ETF' outside this strategy's scope",
+          "rendered": "excluded \u2014 asset kind 'ETF' outside this strategy's scope"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "asset kind 'ETF' outside this strategy's scope",
+          "rendered": "excluded \u2014 asset kind 'ETF' outside this strategy's scope"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "asset kind 'ETF' outside this strategy's scope",
+          "rendered": "excluded \u2014 asset kind 'ETF' outside this strategy's scope"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "asset kind 'ETF' outside this strategy's scope",
+          "rendered": "excluded \u2014 asset kind 'ETF' outside this strategy's scope"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "asset kind 'ETF' outside this strategy's scope",
+          "rendered": "excluded \u2014 asset kind 'ETF' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "ETF"
+    },
+    {
+      "symbol": "TDGB",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "VanEck Developed Markets Dividend Leaders",
+      "date_added": "",
+      "story": "",
+      "display": "TDGB",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "ETF"
+    },
+    {
+      "symbol": "1211",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "BYD (H shares)",
+      "date_added": "",
+      "story": "",
+      "display": "1211",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "DFEU",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "iShares Europe Defence Acc",
+      "date_added": "",
+      "story": "",
+      "display": "DFEU",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "ETF"
+    },
+    {
+      "symbol": "VALE",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Vale",
+      "date_added": "",
+      "story": "",
+      "display": "Vale S.A. (VALE)",
+      "rank_sum": 52,
+      "graded": 2,
+      "comparable": false,
+      "f_score": {
+        "score": 4,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "4/9",
+        "note": "F-Score 4/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_streak (observed 1 vs threshold 10.0) [\u26a0 price diverging: +48% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_dividend_streak (observed 1 vs threshold 10.0) [\u26a0 price diverging: +48% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 25,
+          "cohort_size": 53,
+          "reason": "",
+          "rendered": "#25 of 53 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_revenue_cagr (observed -0.04788 vs threshold 0.1) [\u26a0 price diverging: +48% 12m \u2014 cyclical inflection or mania; human review]",
+          "rendered": "excluded \u2014 screen: min_revenue_cagr (observed -0.04788 vs threshold 0.1) [\u26a0 price diverging: +48% 12m \u2014 cyclical inflection or mania; human review]"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 27,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#27 of 71 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Basic Materials' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Basic Materials' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "NFLX",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Netflix",
+      "date_added": "",
+      "story": "",
+      "display": "Netflix, Inc. (NFLX)",
+      "rank_sum": 88,
+      "graded": 3,
+      "comparable": false,
+      "f_score": {
+        "score": 7,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "7/9",
+        "note": "F-Score 7/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 34,
+          "cohort_size": 53,
+          "reason": "",
+          "rendered": "#34 of 53 \u00b7 HOLD"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 10,
+          "cohort_size": 14,
+          "reason": "",
+          "rendered": "#10 of 14 \u00b7 HOLD"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 44,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#44 of 71 \u00b7 HOLD"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Communication Services' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Communication Services' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "VFEM",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Vanguard FTSE Emerging Markets Dis",
+      "date_added": "",
+      "story": "",
+      "display": "Vanguard FTSE Emerging Markets ETF (VFEM)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "ETF"
+    },
+    {
+      "symbol": "ENR",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Siemens Energy",
+      "date_added": "",
+      "story": "",
+      "display": "Energizer Holdings, Inc. (ENR)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": 6,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "6/9",
+        "note": "F-Score 6/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_market_cap (observed 1.535e+09 vs threshold 5000000000.0)",
+          "rendered": "excluded \u2014 screen: min_market_cap (observed 1.535e+09 vs threshold 5000000000.0)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "IONQ",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "IonQ",
+      "date_added": "",
+      "story": "",
+      "display": "IonQ, Inc. (IONQ)",
+      "rank_sum": 120,
+      "graded": 2,
+      "comparable": false,
+      "f_score": {
+        "score": 4,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "4/9",
+        "note": "F-Score 4/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 51,
+          "cohort_size": 53,
+          "reason": "",
+          "rendered": "#51 of 53 \u00b7 SELL"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed n/a vs threshold 2.0)",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed n/a vs threshold 2.0)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "sell",
+          "position": 69,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#69 of 71 \u00b7 SELL"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Technology' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Technology' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "V",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Visa",
+      "date_added": "",
+      "story": "",
+      "display": "Visa Inc. (V)",
+      "rank_sum": 4,
+      "graded": 1,
+      "comparable": false,
+      "f_score": {
+        "score": 6,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "6/9",
+        "note": "F-Score 6/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: min_dividend_yield (observed 0.007469 vs threshold 0.015)",
+          "rendered": "excluded \u2014 screen: min_dividend_yield (observed 0.007469 vs threshold 0.015)"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_peg_ratio (observed 2.985 vs threshold 2.0)",
+          "rendered": "excluded \u2014 screen: max_peg_ratio (observed 2.985 vs threshold 2.0)"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector excluded (Financial Services)",
+          "rendered": "excluded \u2014 sector excluded (Financial Services)"
+        },
+        "financials_v1": {
+          "status": "ranked",
+          "verdict": "hold",
+          "position": 4,
+          "cohort_size": 4,
+          "reason": "",
+          "rendered": "#4 of 4 \u00b7 HOLD"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "BNKE",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Amundi Euro Stoxx Banks Acc",
+      "date_added": "",
+      "story": "",
+      "display": "BNKE",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "ETF"
+    },
+    {
+      "symbol": "PAH3",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Porsche Automobil Holding",
+      "date_added": "",
+      "story": "",
+      "display": "PAH3",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "1810",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Xiaomi",
+      "date_added": "",
+      "story": "",
+      "display": "1810",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "HSTC",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "HSBC Hang Seng Tech",
+      "date_added": "",
+      "story": "",
+      "display": "HST Global, Inc. (HSTC)",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": 4,
+        "computed": 7,
+        "unavailable": 2,
+        "display": "4/9",
+        "note": "F-Score 4/9 \u2014 computed from 7 checks, 2 unavailable (unavailable: ltd_ratio_decreased, gross_margin_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "growth_garp_v2": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "magic_formula_raw_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "below min market cap",
+          "rendered": "excluded \u2014 below min market cap"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "ETF"
+    },
+    {
+      "symbol": "NVO",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Novo Nordisk",
+      "date_added": "",
+      "story": "",
+      "display": "Novo Nordisk A/S (NVO)",
+      "rank_sum": 10,
+      "graded": 3,
+      "comparable": false,
+      "f_score": {
+        "score": 4,
+        "computed": 9,
+        "unavailable": 0,
+        "display": "4/9",
+        "note": "F-Score 4/9 \u2014 computed from 9 checks, 0 unavailable"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "screen: max_payout_ratio_fcf (observed 0.8894 vs threshold 0.8) [FCF (4y mean)]",
+          "rendered": "excluded \u2014 screen: max_payout_ratio_fcf (observed 0.8894 vs threshold 0.8) [FCF (4y mean)]"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 3,
+          "cohort_size": 53,
+          "reason": "",
+          "rendered": "#3 of 53 \u00b7 BUY"
+        },
+        "growth_garp_v2": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 1,
+          "cohort_size": 14,
+          "reason": "",
+          "rendered": "#1 of 14 \u00b7 BUY"
+        },
+        "magic_formula_raw_v1": {
+          "status": "ranked",
+          "verdict": "buy",
+          "position": 6,
+          "cohort_size": 71,
+          "reason": "",
+          "rendered": "#6 of 71 \u00b7 BUY"
+        },
+        "financials_v1": {
+          "status": "excluded",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "sector 'Healthcare' outside this strategy's scope",
+          "rendered": "excluded \u2014 sector 'Healthcare' outside this strategy's scope"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "LHA",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Deutsche Lufthansa",
+      "date_added": "",
+      "story": "",
+      "display": "LHA",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    },
+    {
+      "symbol": "EXENS",
+      "source": "holdings",
+      "also_found_by": [],
+      "company": "Exosens",
+      "date_added": "",
+      "story": "",
+      "display": "EXENS",
+      "rank_sum": null,
+      "graded": 0,
+      "comparable": false,
+      "f_score": {
+        "score": null,
+        "computed": 0,
+        "unavailable": 9,
+        "display": "ABSTAIN",
+        "note": "F-Score not computable: only 0 of 9 checks available (minimum 5) \u2014 abstained (unavailable: roa_positive, ocf_positive, roa_improved, ocf_exceeds_net_income, ltd_ratio_decreased, current_ratio_improved, no_new_share_issuance, gross_margin_improved, asset_turnover_improved)"
+      },
+      "lenses": {
+        "conservative_plus_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_momentum_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "growth_garp_v2": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "magic_formula_raw_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        },
+        "financials_v1": {
+          "status": "unrateable",
+          "verdict": "",
+          "position": null,
+          "cohort_size": 0,
+          "reason": "UNRATEABLE: no data \u2014 possibly delisted",
+          "rendered": "UNRATEABLE \u2014 UNRATEABLE: no data \u2014 possibly delisted"
+        }
+      },
+      "sheet": "holdings-tab",
+      "holding_type": "Stock"
+    }
+  ],
+  "skipped": [
+    {
+      "source": "holdings",
+      "date_added": "",
+      "ticker_cell": "SMT",
+      "company": "Scottish Mortgage Investment Trust",
+      "story": "",
+      "holding_type": "Trust",
+      "sheet": "holdings-tab",
+      "cell": "Scottish Mortgage Investment Trust | SMT | Trust",
+      "reason": "type 'Trust' not gradeable by the stock lenses"
+    }
+  ]
 }
