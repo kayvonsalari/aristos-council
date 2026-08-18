@@ -18,6 +18,7 @@ fixture is the ``test_etf_lenses`` shape (expense ratio / fund size / momentum).
 from __future__ import annotations
 
 import importlib.util
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -39,6 +40,7 @@ def _module():
     spec = importlib.util.spec_from_file_location(
         "_grade_holdings_cli", ROOT / "examples" / "grade_holdings.py")
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     return mod
 
