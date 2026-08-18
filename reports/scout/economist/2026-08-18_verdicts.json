@@ -20,7 +20,7 @@
       "date_added": "2026-08-13",
       "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
       "display": "Amazon.com, Inc. (AMZN)",
-      "rank_sum": 47,
+      "rank_sum": 52,
       "graded": 1,
       "comparable": false,
       "f_score": {
@@ -58,10 +58,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 47,
-          "cohort_size": 71,
+          "position": 52,
+          "cohort_size": 78,
           "reason": "",
-          "rendered": "#47 of 71 \u00b7 HOLD"
+          "rendered": "#52 of 78 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -81,7 +81,7 @@
       "date_added": "2026-08-13",
       "story": "\"Business\" (The world this week), The Economist, Aug 15th 2026 issue (published Aug 13 2026)",
       "display": "Intel Corporation (INTC)",
-      "rank_sum": 84,
+      "rank_sum": 93,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -103,10 +103,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 35,
-          "cohort_size": 53,
+          "position": 36,
+          "cohort_size": 56,
           "reason": "",
-          "rendered": "#35 of 53 \u00b7 HOLD"
+          "rendered": "#36 of 56 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -119,10 +119,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 49,
-          "cohort_size": 71,
+          "position": 57,
+          "cohort_size": 78,
           "reason": "",
-          "rendered": "#49 of 71 \u00b7 HOLD"
+          "rendered": "#57 of 78 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -142,7 +142,7 @@
       "date_added": "2026-08-13",
       "story": "\"Nvidia's great silicon showdown\", The Economist, Aug 15th 2026 issue (published Aug 11 2026)",
       "display": "NVIDIA Corporation (NVDA)",
-      "rank_sum": 39,
+      "rank_sum": 41,
       "graded": 3,
       "comparable": false,
       "f_score": {
@@ -165,25 +165,25 @@
           "status": "ranked",
           "verdict": "hold",
           "position": 15,
-          "cohort_size": 53,
+          "cohort_size": 56,
           "reason": "",
-          "rendered": "#15 of 53 \u00b7 HOLD"
+          "rendered": "#15 of 56 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "ranked",
           "verdict": "buy",
           "position": 2,
-          "cohort_size": 14,
+          "cohort_size": 15,
           "reason": "",
-          "rendered": "#2 of 14 \u00b7 BUY"
+          "rendered": "#2 of 15 \u00b7 BUY"
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 22,
-          "cohort_size": 71,
+          "position": 24,
+          "cohort_size": 78,
           "reason": "",
-          "rendered": "#22 of 71 \u00b7 HOLD"
+          "rendered": "#24 of 78 \u00b7 HOLD"
         },
         "financials_v1": {
           "status": "excluded",
@@ -205,7 +205,7 @@
       "date_added": "2026-08-14",
       "story": "\"AI agents lie, cheat and steal. That is putting off users\", The Economist, Aug 15th 2026 issue (published Aug 12 2026)",
       "display": "Palo Alto Networks, Inc. (PANW)",
-      "rank_sum": 97,
+      "rank_sum": 104,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -227,10 +227,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "hold",
-          "position": 40,
-          "cohort_size": 53,
+          "position": 41,
+          "cohort_size": 56,
           "reason": "",
-          "rendered": "#40 of 53 \u00b7 HOLD"
+          "rendered": "#41 of 56 \u00b7 HOLD"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -242,11 +242,11 @@
         },
         "magic_formula_raw_v1": {
           "status": "ranked",
-          "verdict": "hold",
-          "position": 57,
-          "cohort_size": 71,
+          "verdict": "sell",
+          "position": 63,
+          "cohort_size": 78,
           "reason": "",
-          "rendered": "#57 of 71 \u00b7 HOLD"
+          "rendered": "#63 of 78 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
@@ -266,7 +266,7 @@
       "date_added": "2026-08-14",
       "story": "\"AI agents lie, cheat and steal. That is putting off users\", The Economist, Aug 15th 2026 issue (published Aug 12 2026)",
       "display": "CrowdStrike Holdings, Inc. (CRWD)",
-      "rank_sum": 106,
+      "rank_sum": 115,
       "graded": 2,
       "comparable": false,
       "f_score": {
@@ -288,10 +288,10 @@
         "magic_formula_momentum_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 44,
-          "cohort_size": 53,
+          "position": 46,
+          "cohort_size": 56,
           "reason": "",
-          "rendered": "#44 of 53 \u00b7 SELL"
+          "rendered": "#46 of 56 \u00b7 SELL"
         },
         "growth_garp_v2": {
           "status": "excluded",
@@ -304,10 +304,10 @@
         "magic_formula_raw_v1": {
           "status": "ranked",
           "verdict": "sell",
-          "position": 62,
-          "cohort_size": 71,
+          "position": 69,
+          "cohort_size": 78,
           "reason": "",
-          "rendered": "#62 of 71 \u00b7 SELL"
+          "rendered": "#69 of 78 \u00b7 SELL"
         },
         "financials_v1": {
           "status": "excluded",
