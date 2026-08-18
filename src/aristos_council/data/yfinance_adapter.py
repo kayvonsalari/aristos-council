@@ -135,6 +135,36 @@ class YFinanceAdapter(MarketDataAdapter):
         # Dividend-growth streak + last cut, DERIVED from the payment history (a
         # yield-trap separator that's free but yfinance never surfaces as a scalar).
         streak_years, last_cut = _dividend_streak_from_ticker(tk)
+        # Period-labelled series for the F-Score (PIOTROSKI-2): same statement
+        # lines as the positional series above, but WITH period-end dates and
+        # None holes kept in place, so cross-statement checks can period-match
+        # instead of trusting list position. The positional fields are built
+        # exactly as before — byte-identical for every other consumer.
+        aligned_annual: dict[str, list[float | None]] = {}
+        aligned_period_ends: dict[str, list[str]] = {}
+
+        def _record_aligned(name: str, frame: object, *labels: str) -> None:
+            dates, values = _aligned_series(frame, *labels)
+            if dates:
+                aligned_period_ends[name] = dates
+                aligned_annual[name] = values
+
+        _record_aligned("net_income", income,
+                        "Net Income", "Net Income Common Stockholders")
+        _record_aligned("total_revenue", income, "Total Revenue")
+        _record_aligned("gross_profit", income, "Gross Profit")
+        _record_aligned("operating_cash_flow", cashflow,
+                        "Operating Cash Flow", "Total Cash From Operating Activities")
+        _record_aligned("total_assets", balance, "Total Assets")
+        _record_aligned("long_term_debt", balance,
+                        "Long Term Debt", "Long Term Debt And Capital Lease Obligation")
+        _record_aligned("current_assets", balance,
+                        "Current Assets", "Total Current Assets")
+        _record_aligned("current_liabilities", balance,
+                        "Current Liabilities", "Total Current Liabilities")
+        _record_aligned("shares_outstanding", balance,
+                        "Ordinary Shares Number", "Share Issued")
+
         return Fundamentals(
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
@@ -200,6 +230,9 @@ class YFinanceAdapter(MarketDataAdapter):
                 balance, "Stockholders Equity", "Total Stockholder Equity"),
             net_income=_cashflow_series(
                 income, "Net Income", "Net Income Common Stockholders"),
+            # PIOTROSKI-2 period-labelled series (F-Score only; see adapter.py).
+            aligned_annual=aligned_annual,
+            aligned_period_ends=aligned_period_ends,
             # Piotroski F-Score series (PIOTROSKI-1), newest-first. Mapped through the
             # ALIAS-TOLERANT helper (not the single-label _annual_series) because
             # yfinance drifts between these labels across versions — a single label
@@ -441,6 +474,42 @@ def _cashflow_series(df: object, *labels: str) -> list[float]:
         if series:
             return series
     return []
+
+
+def _aligned_series(df: object, *labels: str) -> tuple[list[str], list[float | None]]:
+    """A NEWEST-FIRST (period-end ISO dates, values) pair for one statement row,
+    with NaN kept IN PLACE as None (PIOTROSKI-2).
+
+    Unlike ``_annual_series`` (which DROPS NaN cells and therefore loses the
+    position <-> fiscal-year correspondence), this keeps every column so the
+    F-Score can period-match values ACROSS statements. Alias-tolerant like
+    ``_cashflow_series``: the first label whose row carries at least one real
+    value wins. Missing frame/label, or an all-NaN row under every alias ->
+    ``([], [])`` — the F-Score then falls back to the positional path.
+    """
+    for label in labels:
+        try:
+            if df is None or df.empty or label not in df.index:
+                continue
+            row = df.loc[label]
+            try:
+                row = row.sort_index(ascending=False)   # newest-first, like _annual_series
+            except Exception:
+                pass
+            dates: list[str] = []
+            values: list[float | None] = []
+            for key, v in zip(list(row.index), row.tolist()):
+                try:
+                    d = key.date().isoformat()          # pandas Timestamp column
+                except Exception:
+                    d = str(key)[:10]                   # already a date/str column
+                dates.append(d)
+                values.append(_as_float(v))             # NaN -> None, kept IN PLACE
+            if any(v is not None for v in values):
+                return dates, values
+        except Exception:
+            continue
+    return [], []
 
 
 def _annual_series(df: object, label: str) -> list[float]:

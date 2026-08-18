@@ -986,29 +986,92 @@ def _f_score_ratio(numerator: float | None, denominator: float | None) -> float 
     return numerator / denominator
 
 
+# The nine input series the checks read: (pair key, positional Fundamentals attr).
+# The pair key is ALSO the key in the PIOTROSKI-2 ``aligned_annual`` /
+# ``aligned_period_ends`` dicts on Fundamentals.
+_F_SCORE_SERIES: tuple[tuple[str, str], ...] = (
+    ("net_income", "net_income"),
+    ("total_assets", "total_assets_annual"),
+    ("operating_cash_flow", "operating_cash_flow_annual"),
+    ("long_term_debt", "long_term_debt_annual"),
+    ("current_assets", "current_assets_annual"),
+    ("current_liabilities", "current_liabilities_annual"),
+    ("shares_outstanding", "shares_outstanding_annual"),
+    ("gross_profit", "gross_profit_annual"),
+    ("total_revenue", "total_revenue"),
+)
+
+
+def _f_score_pairs(f) -> dict[str, tuple[float | None, float | None]]:
+    """(current-year, prior-year) value per input series — PERIOD-MATCHED when the
+    adapter supplied period-labelled series (PIOTROSKI-2), positional otherwise.
+
+    Period-matched path: each series becomes a {period-end date: value} map (None
+    holes skipped — a hole is an absence, never a value); the reference years are
+    the two most recent period-end dates across ALL supplied series. A series with
+    no value at a reference date contributes None for that year, so the dependent
+    check counts UNAVAILABLE — never a silent wrong-year comparison. Statements
+    whose period axes genuinely differ therefore evaluate only on the overlap.
+
+    Positional fallback (aligned dicts absent/empty — EODHD, fakes, pre-existing
+    fixtures): index [0]/[1] of the NaN-dropped lists, the exact PIOTROSKI-1
+    behavior, preserved byte-identical as the regression pin.
+    """
+    aligned = getattr(f, "aligned_annual", None) or {}
+    periods = getattr(f, "aligned_period_ends", None) or {}
+    usable = {k for k in aligned
+              if aligned.get(k) and periods.get(k)
+              and len(aligned[k]) == len(periods[k])}
+    if usable:
+        by_date: dict[str, dict[str, float]] = {}
+        for key in usable:
+            vals: dict[str, float] = {}
+            for d, v in zip(periods[key], aligned[key]):
+                if v is None or isinstance(v, bool) or not isinstance(v, (int, float)):
+                    continue                      # a hole stays a hole
+                vals[str(d)] = float(v)
+            by_date[key] = vals
+        dates = sorted({d for m in by_date.values() for d in m}, reverse=True)
+        y0 = dates[0] if dates else None
+        y1 = dates[1] if len(dates) > 1 else None
+        return {
+            key: (
+                by_date.get(key, {}).get(y0) if y0 is not None else None,
+                by_date.get(key, {}).get(y1) if y1 is not None else None,
+            )
+            for key, _attr in _F_SCORE_SERIES
+        }
+    out: dict[str, tuple[float | None, float | None]] = {}
+    for key, attr in _F_SCORE_SERIES:
+        series = getattr(f, attr, None) or []
+        out[key] = (_newest_first_at(series, 0), _newest_first_at(series, 1))
+    return out
+
+
 def piotroski_f_score(fundamentals: Fundamentals | None) -> FScoreResult:
     """The Piotroski F-Score (0-9) from the annual statement series, or an abstention.
 
     Pure and deterministic: same ``Fundamentals`` in -> same score, unavailability
-    count and note out. Reads only newest-first annual series ([0] current year,
-    [1] prior year) — no scalars, no TTM, no network. See the conventions block above.
+    count and note out. Inputs are (current-year, prior-year) pairs per statement
+    line, PERIOD-MATCHED across statements when the adapter supplied the
+    PIOTROSKI-2 period-labelled series, positional ([0]/[1]) otherwise — see
+    ``_f_score_pairs``. No scalars, no TTM, no network; conventions block above.
     """
     f = fundamentals
-    empty: list[float] = []
-    net_income = f.net_income if f else empty
-    total_assets = f.total_assets_annual if f else empty
-    ocf = f.operating_cash_flow_annual if f else empty
-    ltd = f.long_term_debt_annual if f else empty
-    current_assets = f.current_assets_annual if f else empty
-    current_liabilities = f.current_liabilities_annual if f else empty
-    shares = f.shares_outstanding_annual if f else empty
-    gross_profit = f.gross_profit_annual if f else empty
-    revenue = f.total_revenue if f else empty
-
-    ni_0, ni_1 = _newest_first_at(net_income, 0), _newest_first_at(net_income, 1)
-    ta_0, ta_1 = _newest_first_at(total_assets, 0), _newest_first_at(total_assets, 1)
-    ocf_0 = _newest_first_at(ocf, 0)
-    rev_0, rev_1 = _newest_first_at(revenue, 0), _newest_first_at(revenue, 1)
+    if f is None:
+        pairs: dict[str, tuple[float | None, float | None]] = {
+            key: (None, None) for key, _attr in _F_SCORE_SERIES}
+    else:
+        pairs = _f_score_pairs(f)          # period-matched when possible (PIOTROSKI-2)
+    ni_0, ni_1 = pairs["net_income"]
+    ta_0, ta_1 = pairs["total_assets"]
+    ocf_0, _ocf_1 = pairs["operating_cash_flow"]
+    ltd_0, ltd_1 = pairs["long_term_debt"]
+    ca_0, ca_1 = pairs["current_assets"]
+    cl_0, cl_1 = pairs["current_liabilities"]
+    sh_0, sh_1 = pairs["shares_outstanding"]
+    gp_0, gp_1 = pairs["gross_profit"]
+    rev_0, rev_1 = pairs["total_revenue"]
 
     # 1-4 profitability / cash quality.
     roa_0 = _f_score_ratio(ni_0, ta_0)
@@ -1020,23 +1083,20 @@ def piotroski_f_score(fundamentals: Fundamentals | None) -> FScoreResult:
     ocf_exceeds_ni = None if (ocf_0 is None or ni_0 is None) else ocf_0 > ni_0
 
     # 5-7 leverage & liquidity.
-    ltd_ratio_0 = _f_score_ratio(_newest_first_at(ltd, 0), ta_0)
-    ltd_ratio_1 = _f_score_ratio(_newest_first_at(ltd, 1), ta_1)
+    ltd_ratio_0 = _f_score_ratio(ltd_0, ta_0)
+    ltd_ratio_1 = _f_score_ratio(ltd_1, ta_1)
     # STRICT zero-LTD: 0/assets is a COMPUTED 0.0 both years -> 0.0 < 0.0 is False ->
     # no point, and the check counts as COMPUTED (not unavailable).
     ltd_decreased = (None if (ltd_ratio_0 is None or ltd_ratio_1 is None)
                      else ltd_ratio_0 < ltd_ratio_1)
-    cr_0 = _f_score_ratio(_newest_first_at(current_assets, 0),
-                          _newest_first_at(current_liabilities, 0))
-    cr_1 = _f_score_ratio(_newest_first_at(current_assets, 1),
-                          _newest_first_at(current_liabilities, 1))
+    cr_0 = _f_score_ratio(ca_0, cl_0)
+    cr_1 = _f_score_ratio(ca_1, cl_1)
     cr_improved = None if (cr_0 is None or cr_1 is None) else cr_0 > cr_1
-    sh_0, sh_1 = _newest_first_at(shares, 0), _newest_first_at(shares, 1)
     no_new_shares = None if (sh_0 is None or sh_1 is None) else sh_0 <= sh_1
 
     # 8-9 efficiency.
-    gm_0 = _f_score_ratio(_newest_first_at(gross_profit, 0), rev_0)
-    gm_1 = _f_score_ratio(_newest_first_at(gross_profit, 1), rev_1)
+    gm_0 = _f_score_ratio(gp_0, rev_0)
+    gm_1 = _f_score_ratio(gp_1, rev_1)
     gm_improved = None if (gm_0 is None or gm_1 is None) else gm_0 > gm_1
     at_0 = _f_score_ratio(rev_0, ta_0)
     at_1 = _f_score_ratio(rev_1, ta_1)

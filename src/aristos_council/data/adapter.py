@@ -292,6 +292,25 @@ class Fundamentals:
     current_liabilities_annual: list[float] = field(default_factory=list)
     shares_outstanding_annual: list[float] = field(default_factory=list)
     gross_profit_annual: list[float] = field(default_factory=list)
+    # --- Period-labelled statement series (PIOTROSKI-2) --------------------- #
+    # The F-Score's cross-statement checks must compare values from the SAME
+    # fiscal period. The positional lists above CANNOT guarantee that: NaN cells
+    # are dropped PER SERIES, so index [0] of one statement's line and index [0]
+    # of another's can silently refer to different fiscal years (the AAPL/GIS/F
+    # implausible-cell class). These two dicts carry the same statement lines
+    # WITH their period-end dates and with None holes kept IN PLACE, keyed by
+    # series name ("net_income", "total_assets", "operating_cash_flow",
+    # "long_term_debt", "current_assets", "current_liabilities",
+    # "shares_outstanding", "gross_profit", "total_revenue"). Newest-first;
+    # values and dates are index-parallel per series. ONLY the F-Score reads
+    # them (tools/screening._f_score_pairs) — every other criterion keeps
+    # consuming the NaN-dropped positional lists above, byte-identical.
+    # Empty dicts when the provider/adapter doesn't supply them (EODHD, fakes)
+    # -> the F-Score falls back to the positional path (PIOTROSKI-1 behavior).
+    # NO ADAPTER_SCHEMA_VERSION bump needed: cache._schema_marker folds the
+    # field-name set into the marker, so pre-existing entries refetch.
+    aligned_annual: dict[str, list[float | None]] = field(default_factory=dict)
+    aligned_period_ends: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -418,3 +418,177 @@ def test_adapter_absent_statements_yield_empty_lists_not_an_exception(monkeypatc
         assert getattr(f, name) == [], name
     # ...and the score honestly abstains rather than reading as a 0/9 company.
     assert piotroski_f_score(f).score is None
+
+
+# --------------------------------------------------------------------------- #
+# PIOTROSKI-2 — fiscal-period alignment (the missing misalignment fixture class)
+#
+# Root cause being pinned: the positional lists drop NaN PER SERIES, so index [0]
+# of one statement's line and index [0] of another's can refer to DIFFERENT
+# fiscal years. The aligned path period-matches instead; a value absent at a
+# reference period makes the dependent check UNAVAILABLE, never a silent
+# wrong-year comparison.
+# --------------------------------------------------------------------------- #
+def _aligned_fund(series: dict[str, list[tuple[str, float | None]]],
+                  ticker: str = "ALIGNED") -> Fundamentals:
+    """Build a Fundamentals carrying ONLY the period-labelled series."""
+    return Fundamentals(
+        ticker=ticker,
+        aligned_annual={k: [v for _, v in dv] for k, dv in series.items()},
+        aligned_period_ends={k: [d for d, _ in dv] for k, dv in series.items()},
+    )
+
+
+def _aligned_from_positional(f: Fundamentals,
+                             dates: tuple[str, ...] = ("2025-12-31", "2024-12-31"),
+                             ) -> Fundamentals:
+    """The SAME numbers as a positional fixture, re-expressed as period-labelled
+    series on perfectly aligned statements."""
+    mapping = {
+        "net_income": f.net_income,
+        "total_assets": f.total_assets_annual,
+        "operating_cash_flow": f.operating_cash_flow_annual,
+        "long_term_debt": f.long_term_debt_annual,
+        "current_assets": f.current_assets_annual,
+        "current_liabilities": f.current_liabilities_annual,
+        "shares_outstanding": f.shares_outstanding_annual,
+        "gross_profit": f.gross_profit_annual,
+        "total_revenue": f.total_revenue,
+    }
+    present = {k: list(v) for k, v in mapping.items() if v}
+    return replace(
+        f,
+        aligned_annual=present,
+        aligned_period_ends={k: list(dates[:len(v)]) for k, v in present.items()},
+    )
+
+
+def test_aligned_equals_positional_on_perfectly_aligned_statements():
+    """Regression pin: aligned statements with identical period axes reproduce the
+    PIOTROSKI-1 result exactly — score, points, computed, and every per-check
+    outcome. The alignment machinery must change NOTHING when nothing is wrong."""
+    for fixture in (_strong(), ):
+        positional = piotroski_f_score(fixture)
+        aligned = piotroski_f_score(_aligned_from_positional(fixture))
+        assert aligned == positional
+
+
+def test_aligned_income_missing_latest_year_makes_income_checks_unavailable():
+    """The defect class itself. The cash-flow and balance statements carry fiscal
+    2025; the income statement's latest year is 2024. Positional alignment would
+    silently pair 2024 income with 2025 cash flow; the aligned path must mark every
+    income-dependent check UNAVAILABLE at the 2025 reference year instead."""
+    f = _aligned_fund({
+        # income statement: one year BEHIND the others
+        "net_income":          [("2024-12-31", 100.0), ("2023-12-31", 80.0)],
+        "total_revenue":       [("2024-12-31", 600.0), ("2023-12-31", 500.0)],
+        "gross_profit":        [("2024-12-31", 300.0), ("2023-12-31", 250.0)],
+        # cash-flow + balance: current
+        "operating_cash_flow": [("2025-12-31", 150.0), ("2024-12-31", 120.0)],
+        "total_assets":        [("2025-12-31", 1000.0), ("2024-12-31", 900.0)],
+        "long_term_debt":      [("2025-12-31", 100.0), ("2024-12-31", 120.0)],
+        "current_assets":      [("2025-12-31", 400.0), ("2024-12-31", 350.0)],
+        "current_liabilities": [("2025-12-31", 200.0), ("2024-12-31", 200.0)],
+        "shares_outstanding":  [("2025-12-31", 50.0), ("2024-12-31", 52.0)],
+    })
+    r = piotroski_f_score(f)
+    c = dict(r.checks)
+    for name in ("roa_positive", "roa_improved", "ocf_exceeds_net_income",
+                 "gross_margin_improved", "asset_turnover_improved"):
+        assert c[name] is None, f"{name} must be UNAVAILABLE, not wrong-year computed"
+    assert c["ocf_positive"] is True
+    assert c["ltd_ratio_decreased"] is True        # 0.100 < 0.133, both period-matched
+    assert c["current_ratio_improved"] is True     # 2.00 > 1.75
+    assert c["no_new_share_issuance"] is True      # 50 <= 52
+    # Only 4 checks computable -> honest abstention beats wrong-year arithmetic.
+    assert r.computed == 4 and r.score is None
+
+    # CONTRAST — the same numbers as positional lists (what the adapter produced
+    # before PIOTROSKI-2): the misalignment is INVISIBLE and check 4 "computes"
+    # 2025 cash flow against 2024 income. This is the bug, kept as documentation.
+    legacy = _fund(
+        net_income=[100.0, 80.0], total_revenue=[600.0, 500.0],
+        gross_profit_annual=[300.0, 250.0],
+        operating_cash_flow_annual=[150.0, 120.0],
+        total_assets_annual=[1000.0, 900.0], long_term_debt_annual=[100.0, 120.0],
+        current_assets_annual=[400.0, 350.0], current_liabilities_annual=[200.0, 200.0],
+        shares_outstanding_annual=[50.0, 52.0],
+    )
+    assert dict(piotroski_f_score(legacy).checks)["ocf_exceeds_net_income"] is True
+
+
+def test_aligned_nan_hole_marks_that_year_unavailable_not_shifted():
+    """A None hole mid-series must stay a hole: 2023 must NOT slide into the
+    prior-year slot (which is exactly what the positional NaN-drop does)."""
+    f = _aligned_fund({
+        "net_income":          [("2025-12-31", 100.0), ("2024-12-31", 80.0)],
+        "total_revenue":       [("2025-12-31", 600.0), ("2024-12-31", 500.0)],
+        "gross_profit":        [("2025-12-31", 300.0), ("2024-12-31", 240.0)],
+        "operating_cash_flow": [("2025-12-31", 150.0), ("2024-12-31", 120.0)],
+        # the hole: fiscal 2024 total assets missing; 2023 present but NOT prior-year
+        "total_assets":        [("2025-12-31", 1000.0), ("2024-12-31", None),
+                                ("2023-12-31", 800.0)],
+        "long_term_debt":      [("2025-12-31", 100.0), ("2024-12-31", 120.0)],
+        "current_assets":      [("2025-12-31", 400.0), ("2024-12-31", 350.0)],
+        "current_liabilities": [("2025-12-31", 200.0), ("2024-12-31", 200.0)],
+        "shares_outstanding":  [("2025-12-31", 50.0), ("2024-12-31", 52.0)],
+    })
+    r = piotroski_f_score(f)
+    c = dict(r.checks)
+    assert c["roa_positive"] is True               # current year intact: 100/1000
+    for name in ("roa_improved", "ltd_ratio_decreased", "asset_turnover_improved"):
+        assert c[name] is None, f"{name} needs prior-year assets — hole, so UNAVAILABLE"
+    assert c["ocf_positive"] is True and c["ocf_exceeds_net_income"] is True
+    assert c["gross_margin_improved"] is True and c["current_ratio_improved"] is True
+    assert r.computed == 6 and r.score == r.points
+
+
+def test_aligned_different_statement_depths_use_the_overlap():
+    """A 4-year balance sheet beside 2-year income/cash-flow statements: the two
+    most recent common periods drive every check; deeper history is inert."""
+    balance_years = [("2025-12-31", 1000.0), ("2024-12-31", 900.0),
+                     ("2023-12-31", 850.0), ("2022-12-31", 800.0)]
+    f = _aligned_fund({
+        "net_income":          [("2025-12-31", 100.0), ("2024-12-31", 50.0)],
+        "total_revenue":       [("2025-12-31", 1000.0), ("2024-12-31", 800.0)],
+        "gross_profit":        [("2025-12-31", 500.0), ("2024-12-31", 300.0)],
+        "operating_cash_flow": [("2025-12-31", 150.0), ("2024-12-31", 120.0)],
+        "total_assets":        balance_years,
+        "long_term_debt":      [("2025-12-31", 100.0), ("2024-12-31", 200.0),
+                                ("2023-12-31", 250.0), ("2022-12-31", 300.0)],
+        "current_assets":      [("2025-12-31", 400.0), ("2024-12-31", 300.0)],
+        "current_liabilities": [("2025-12-31", 200.0), ("2024-12-31", 250.0)],
+        "shares_outstanding":  [("2025-12-31", 90.0), ("2024-12-31", 100.0)],
+    })
+    r = piotroski_f_score(f)
+    assert r.computed == 9 and r.unavailable == 0
+    assert r.score == 9      # the _strong() numbers — every check earns its point
+
+
+@requires_pandas
+def test_adapter_builds_aligned_series_with_none_holes(monkeypatch):
+    """The adapter must keep a NaN IN PLACE in the aligned view (None) while the
+    positional field keeps its PIOTROSKI-1 NaN-dropping — both from one frame."""
+    income = _frame({"Total Revenue": [1000.0, 800.0],
+                     "Gross Profit": [500.0, float("nan")]})
+    balance = _frame({"Total Assets": [1000.0, 900.0],
+                      "Long Term Debt": [100.0, 200.0],
+                      "Current Assets": [400.0, 300.0],
+                      "Current Liabilities": [200.0, 250.0],
+                      "Ordinary Shares Number": [90.0, 100.0]})
+    f = _adapter(monkeypatch, income, balance).get_fundamentals("TEST")
+    assert f.aligned_period_ends["total_revenue"] == ["2025-12-31", "2024-12-31"]
+    assert f.aligned_annual["total_revenue"] == [1000.0, 800.0]
+    assert f.aligned_annual["gross_profit"] == [500.0, None]   # the hole, IN PLACE
+    assert f.gross_profit_annual == [500.0]                    # old field: NaN dropped
+    assert f.aligned_annual["total_assets"] == [1000.0, 900.0]
+    # no cash-flow frame in this fake -> no operating_cash_flow aligned entry
+    assert "operating_cash_flow" not in f.aligned_annual
+
+
+@requires_pandas
+def test_adapter_absent_statements_yield_empty_aligned_dicts(monkeypatch):
+    f = _adapter(monkeypatch, None, None).get_fundamentals("TEST")
+    assert f.aligned_annual == {} and f.aligned_period_ends == {}
+    # ...which routes the F-Score onto the positional fallback -> abstention here.
+    assert piotroski_f_score(f).score is None
