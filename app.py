@@ -70,6 +70,8 @@ from aristos_council.strategy.picker import (
     choice_labels,
     default_index,
     resolve,
+    resolve_all,
+    selected_labels,
     strategy_choices,
 )
 from aristos_council.strategy.overrides import applied_overrides, effective_strategy
@@ -1144,6 +1146,13 @@ def saved_list_labels(saved) -> list[str]:
     return [b if times[b] == 1 else f"{b} ({u.id})" for u, b in zip(saved, base)]
 
 
+def lens_checkbox_key(strategy_id: str) -> str:
+    """Session-state key for one extra-lens checkbox. Keyed by the strategy ID (the stable
+    record key), never by the label — so a display-name change cannot silently re-point a
+    ticked box at a different config."""
+    return f"uni_lens_{strategy_id}"
+
+
 def run_problems(universe: list[str], *, n_strategies: int, deterministic: bool,
                  has_key: bool, cap: int = UNIVERSE_CAP) -> list[str]:
     """Why the Run button is disabled, in plain sentences (empty list = runnable).
@@ -1605,13 +1614,42 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # caption (ids are the stable record keys — never renamed, never in the label). A label
     # two configs would SHARE carries its id, so a pick can't resolve to the wrong one.
     labels = choice_labels(choices)
-    picked_labels = st.multiselect(
-        "Strategies", labels, default=[labels[default_index(choices)]],
-        key="uni_strategies",
-        help="One strategy runs the full flow (narration included). Several grade the SAME "
-             "list under several lenses in one run and report ONE combined grid — "
-             "deterministic, no LLM, no cost.")
-    strategies = resolve_all(choices, picked_labels)
+    # The PRIMARY strategy stays a dropdown, and exactly one is always selected: narration is
+    # single-strategy, and the primary is the verdict the narrator explains. Folding it into
+    # the extra-lens control left the narrated strategy implicit (offer order decided it,
+    # which the user can neither see nor choose) — FUND-UI-2 item 5.
+    primary_label = st.selectbox(
+        "Primary strategy — the verdict the narrator explains", labels,
+        index=default_index(choices), key="uni_strategy",
+        help="Runs the full flow: screen → rank → gates issue the verdict, and the LLM "
+             "narrates it. Exactly one, because narration is single-strategy.")
+    primary = resolve(choices, primary_label) or choices[0].strategy
+
+    # Extra lenses are CHECKBOXES, one per lens, so every lens you could add is visible at
+    # once instead of hidden behind a dropdown (FUND-UI-2 item 5). Presentation only: the
+    # offered set is the same ONE picker's, and ticking any box runs FUND-RUN-1's combined
+    # grid exactly as the old "Also grade with" multiselect did — deterministic by
+    # construction (no LLM, no cost), so narration settings grey out below.
+    st.caption("**Also grade with** — optional extra lenses. These re-grade the SAME "
+               "ticker list deterministically and report a single combined grid; they are "
+               "never narrated. Leave them all unticked for a normal narrated run of the "
+               "primary strategy.")
+    extras: list[tuple[str, bool]] = []
+    extra_choices = [c for c in choices if c.label != primary_label]
+    if extra_choices:
+        n_cols = min(3, len(extra_choices))
+        per_col = -(-len(extra_choices) // n_cols)       # ceil: contiguous, offer-ordered
+        for i, col in enumerate(st.columns(n_cols)):
+            with col:
+                for c in extra_choices[i * per_col:(i + 1) * per_col]:
+                    extras.append((c.label,
+                                   st.checkbox(c.label, key=lens_checkbox_key(c.id))))
+    picked_labels = selected_labels(primary_label, extras)
+    # OFFER order, not click order (picker.resolve_all), so the combined grid's columns are
+    # reproducible. ``or [primary]`` only covers a stale widget value: with a required
+    # dropdown a zero-strategy run is structurally unreachable here, though run_problems
+    # still refuses one (that guard is the contract, not the only line of defence).
+    strategies = resolve_all(choices, picked_labels) or [primary]
     multi = len(strategies) > 1
     for s in strategies:
         bits = f"`{s.id}`"                               # the stable record key
@@ -1620,9 +1658,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
         st.caption(bits)
     if len(strategies) == 1 and getattr(strategies[0], "description", ""):
         st.caption(strategies[0].description.strip())
-    # The cost estimate + the narration settings describe the FIRST selected strategy; a
-    # multi-strategy run is deterministic, so neither is in play then.
-    rank_strategy = strategies[0] if strategies else choices[0].strategy
+    # The cost estimate + the narration settings describe the PRIMARY strategy (the only one
+    # that can narrate); a multi-lens run is deterministic, so neither is in play then.
+    rank_strategy = primary
 
     # 2 — TICKERS. A list is a plain, editable ticker list: pick one of yours (or start a
     # new one), edit it right here, run it. Selecting a list LOADS it into this box — there
@@ -1658,13 +1696,21 @@ def render_universe_tab(show_validation: bool = False) -> None:
     unchanged = picked_list is not None and universe == list(picked_list.tickers)
     universe_id = picked_list.id if unchanged else None
     universe_display_name = picked_list.display_name if unchanged else ""
-    if picked_list is not None and not unchanged:
-        st.caption("Edited — runs as an ad-hoc list (fingerprinted). Save it below to keep "
-                   f"the changes in **{universe_label(picked_list)}**.")
 
+    # An edit is ALWAYS a fork, never an in-place mutation of the manifest on disk: the run
+    # grades an ad-hoc copy and the source file is untouched until you explicitly save. Say
+    # which list the edit came from and that the original is intact — and, when that list
+    # cannot be rewritten at all (a shipped or scoreboard-graded one), say that too rather
+    # than pointing at a Save button that is disabled.
     graded = graded_universe_ids(SNAPSHOTS_CSV)
     is_mine = (picked_list is not None and getattr(picked_list, "local", False)
                and picked_list.id not in graded)
+    if picked_list is not None and not unchanged:
+        keep = ("Use **Save changes** to write the edit back into it, or **Save as new "
+                "list** to fork it." if is_mine else
+                "It cannot be edited in place — use **Save as new list** to keep the edit.")
+        st.caption(f"Edited — this run grades an ad-hoc copy (fingerprinted); "
+                   f"**{universe_label(picked_list)}** on disk is untouched. {keep}")
     with st.expander("💾 Save this list"):
         st.caption("Lists live in `universes/local/` and are gitignored by default — "
                    "portfolio-class data never rides a commit.")

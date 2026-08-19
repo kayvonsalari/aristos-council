@@ -88,6 +88,23 @@ def resolve_all(choices: Sequence[StrategyChoice], labels: Iterable[str]) -> lis
     return [c.strategy for c in choices if c.label in chosen]
 
 
+def selected_labels(primary: Optional[str],
+                    extras: Sequence[tuple[str, bool]] = ()) -> list[str]:
+    """The labels a run grades: the PRIMARY (narrated) one first, then every ticked extra.
+
+    FUND-UI-2 item 5 splits the Run tab's one multiselect into a required primary dropdown
+    (narration is single-strategy, so the narrated strategy must be explicit rather than
+    "whichever selection came first in offer order") plus one checkbox per extra lens. This
+    is the pure join of those two widgets, and it returns exactly what the multiselect's
+    value used to be for the same chosen set — ``resolve_all`` still puts the strategies in
+    offer order, so the combined grid is unchanged. The primary is never double-counted,
+    even if its own (now hidden) box is stale-ticked.
+    """
+    picked = [primary] if primary else []
+    picked += [label for label, on in extras if on and label != primary]
+    return picked
+
+
 def default_index(choices: Sequence[StrategyChoice],
                   preferred_id: Optional[str] = DEFAULT_ID) -> int:
     """Index of the strategy a surface should pre-select: ``preferred_id`` when it is
