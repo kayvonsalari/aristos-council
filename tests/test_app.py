@@ -315,9 +315,26 @@ def test_universe_markdown_has_sections_from_the_result():
 
 
 def _strategy_picker(at):
-    """The ONE strategy picker on the Run tab (FUND-UI-2) — a multiselect, so several
-    lenses grade one list in a single run."""
-    return next(m for m in at.multiselect if m.label == "Strategies")
+    """The Run tab's PRIMARY strategy picker (FUND-UI-2 item 5) — a dropdown, because
+    narration is single-strategy and the primary is the verdict the narrator explains.
+    Extra lenses are the checkbox group below it (`_lens_checkbox`), not more dropdown."""
+    return next(s for s in at.selectbox
+                if str(s.label).startswith("Primary strategy"))
+
+
+def _lens_checkbox(at, needle):
+    """One "Also grade with" lens checkbox, by its exact label or a fragment of it (exact
+    wins, so "Growth" never resolves to "Growth ETFs (US)"). The whole set is visible at
+    once — that is the point of the checkbox group replacing the multiselect."""
+    return (next((c for c in at.checkbox if str(c.label) == needle), None)
+            or next(c for c in at.checkbox if needle in str(c.label)))
+
+
+def _lens_checkbox_labels(at):
+    """Every extra-lens checkbox label on the Run tab, as rendered — a lens checkbox is
+    labelled with a strategy the picker offers, so the run-mode boxes never leak in."""
+    offered = set(_strategy_picker(at).options)
+    return [str(c.label) for c in at.checkbox if str(c.label) in offered]
 
 
 def test_rank_picker_order_baseline_label_and_no_v2_heading():
@@ -365,14 +382,20 @@ def test_run_tab_renders_with_the_one_flow():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    # The "Strategies" multiselect only exists inside render_universe_tab, so its presence
-    # proves the tab rendered.
+    # The "Primary strategy" dropdown only exists inside render_universe_tab, so its
+    # presence proves the tab rendered.
     picker = _strategy_picker(at)
     # Options are the FRIENDLY display names (ITEM 1) — the technical id is demoted to a
     # caption, so it never appears in the label (no ids/underscores/_v1).
     assert any("Value + Momentum" in o for o in picker.options)
     assert not any("_" in o for o in picker.options)
     assert picker.value                                  # the flagship is pre-selected
+    # Every OTHER lens is a checkbox, visible without opening anything (item 5) — exactly
+    # one box each, and none of them ticked, so the default run is the narrated primary.
+    boxes = _lens_checkbox_labels(at)
+    assert sorted(boxes) == sorted(o for o in picker.options if o != picker.value)
+    assert len(boxes) == len(set(boxes))
+    assert not any(_lens_checkbox(at, o).value for o in boxes)
     # ...and the flow is exactly: strategies, a list, its tickers, run.
     assert any(s.label == "List" for s in at.selectbox)
     assert any("Tickers" in str(t.label) for t in at.text_area)
@@ -407,7 +430,7 @@ def test_legacy_hidden_by_default_and_toggle_defaults_off():
     assert "Edits council-strategy YAMLs" not in _info_blob(at)
     assert not any("Legacy" in str(t.label) for t in at.tabs)
     # the v2 product IS the landing (the Run tab's strategy picker renders)
-    assert any(m.label == "Strategies" for m in at.multiselect)
+    assert any(str(s.label).startswith("Primary strategy") for s in at.selectbox)
 
 
 def test_legacy_surfaces_appear_when_toggle_on():
@@ -836,6 +859,31 @@ def test_selecting_a_saved_list_loads_its_tickers_into_the_one_box():
     assert len(loaded) == int(first_saved.split("·")[-1].strip().split()[0])
 
 
+def test_editing_a_shipped_list_forks_and_never_writes_back_to_the_manifest():
+    # FUND-UI-2 item 2: editing is ALWAYS a fork. The box is editable for every list, but
+    # an edit to one you do not own (shipped / scoreboard-graded) may not reach
+    # universes/*.yaml — it runs as an ad-hoc cohort, the file stays byte-identical, and the
+    # UI says so naming the list it came from.
+    from streamlit.testing.v1 import AppTest
+    src = app.UNIVERSES_DIR / "etf_core_ucits_v1.yaml"
+    before = src.read_bytes()
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    assert not at.exception
+    _pick_list(at, "ETF Index Tracker — UCITS")
+    assert not at.exception
+    box = next(t for t in at.text_area if "Tickers" in str(t.label))
+    box.set_value(box.value + "\nAAPL").run()               # an edit nobody saved
+    assert not at.exception
+    blob = _caption_blob(at)
+    assert "ad-hoc copy" in blob                            # this run grades the fork
+    assert "ETF Index Tracker — UCITS" in blob              # named: where the edit came from
+    assert "on disk is untouched" in blob                   # and the original is intact
+    assert "Save as new list" in blob                       # the only way to keep it
+    # in-place rewrite is not even offered for a list that is not yours
+    assert next(b for b in at.button if b.label == "Save changes").disabled
+    assert src.read_bytes() == before                       # byte-unchanged, no write-back
+
+
 def test_saved_local_universe_appears_in_both_selectors():
     # UNIED-1 Item 3: a saved local list is discovered front-stage (default toggle off) in
     # BOTH the Run tab's List selector and the Company Check reference selector, tagged
@@ -1023,13 +1071,14 @@ def test_every_strategy_stays_offered_even_for_a_cohort_of_the_other_kind():
 # FUND-RUN-1 through the ONE picker — several strategies over one list is deterministic
 # and reports ONE combined grid.
 # --------------------------------------------------------------------------- #
-def test_selecting_a_second_strategy_makes_the_run_deterministic():
+def test_ticking_a_second_lens_makes_the_run_deterministic():
+    # FUND-UI-2 item 5: the second lens is now a CHECKBOX, not a second multiselect pick.
+    # Same run underneath — deterministic, one combined grid, no key asked for.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    picker = _strategy_picker(at)
-    raw = next(o for o in picker.options if "RAW" in o)
-    picker.set_value(list(picker.value) + [raw]).run()
+    raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
+    _lens_checkbox(at, raw).set_value(True).run()
     assert not at.exception
     blob = _caption_blob(at)
     assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
@@ -1039,12 +1088,17 @@ def test_selecting_a_second_strategy_makes_the_run_deterministic():
     assert not any("ANTHROPIC_API_KEY" in str(getattr(i, "value", "")) for i in at.info)
 
 
-def test_deselecting_every_strategy_blocks_the_run():
+def test_a_zero_strategy_run_is_structurally_unreachable_and_still_refused():
+    # Was test_deselecting_every_strategy_blocks_the_run: with the multiselect you could
+    # deselect everything and had to be blocked by a guard. The primary is a REQUIRED
+    # dropdown now (item 5), so the empty state cannot be reached at all — a strictly
+    # stronger guarantee. Both halves are asserted: unreachable in the UI, and still
+    # refused by the pure guard if any future surface manages it.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    _strategy_picker(at).set_value([]).run()
-    assert not at.exception
-    infos = " ".join(str(getattr(i, "value", "")) for i in at.info)
-    assert "at least one strategy" in infos
-    assert next(b for b in at.button if b.label == "▶ Run").disabled
+    picker = _strategy_picker(at)
+    assert picker.value in picker.options            # always exactly one primary
+    assert "" not in picker.options                  # no "none of them" option to pick
+    assert "at least one strategy" in " ".join(
+        app.run_problems(["AAPL"], n_strategies=0, deterministic=True, has_key=False))

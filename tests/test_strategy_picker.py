@@ -18,6 +18,7 @@ from aristos_council.strategy.picker import (
     default_index,
     resolve,
     resolve_all,
+    selected_labels,
     strategy_choices,
 )
 from aristos_council.strategy.rank_loader import load_rank_strategy
@@ -98,6 +99,47 @@ def test_resolve_all_returns_offer_order_not_click_order():
 def test_resolve_all_drops_unknown_labels():
     choices = strategy_choices([FakeStrategy("a_v1", "Alpha")])
     assert [s.id for s in resolve_all(choices, ["Alpha", "Ghost"])] == ["a_v1"]
+
+
+# --------------------------------------------------------------------------- #
+# Primary dropdown + extra-lens checkboxes (FUND-UI-2 item 5) — the join is PURE, and it
+# is label-for-label what the one multiselect produced, so the run underneath is unchanged.
+# --------------------------------------------------------------------------- #
+def test_selected_labels_puts_the_narrated_primary_first_then_ticked_lenses():
+    extras = [("Beta", True), ("Gamma", False), ("Delta", True)]
+    assert selected_labels("Alpha", extras) == ["Alpha", "Beta", "Delta"]
+
+
+def test_selected_labels_with_nothing_ticked_is_a_single_strategy_run():
+    assert selected_labels("Alpha", [("Beta", False)]) == ["Alpha"]
+    assert selected_labels("Alpha") == ["Alpha"]
+
+
+def test_selected_labels_never_double_counts_a_stale_ticked_primary():
+    # A box ticked BEFORE that strategy was made primary must not grade it twice (which
+    # would show one lens as two columns).
+    assert selected_labels("Alpha", [("Alpha", True), ("Beta", True)]) == ["Alpha", "Beta"]
+
+
+def test_selected_labels_without_a_primary_falls_back_to_the_ticked_lenses():
+    # The Run tab always has a primary (a required dropdown), so this is the defensive
+    # path: no primary and nothing ticked selects NOTHING, which run_problems refuses —
+    # it never silently picks a strategy for you.
+    assert selected_labels(None, [("Beta", True)]) == ["Beta"]
+    assert selected_labels(None) == []
+    assert selected_labels("") == []
+
+
+def test_checkbox_join_resolves_to_the_same_strategies_the_multiselect_did():
+    # PARITY: for the same chosen SET, primary+checkboxes and the old multiselect value
+    # resolve to the identical strategy list — same ids, same OFFER order, so
+    # run_multi_strategy_pipeline gets identical input and the grid is unchanged.
+    choices = strategy_choices([FakeStrategy("a_v1", "Alpha"), FakeStrategy("b_v1", "Beta"),
+                                FakeStrategy("c_v1", "Gamma")])
+    multiselect_value = ["Gamma", "Alpha"]                       # click order, as recorded
+    checkboxes = selected_labels("Gamma", [("Alpha", True), ("Beta", False)])
+    assert [s.id for s in resolve_all(choices, checkboxes)] == \
+        [s.id for s in resolve_all(choices, multiselect_value)] == ["a_v1", "c_v1"]
 
 
 # --------------------------------------------------------------------------- #

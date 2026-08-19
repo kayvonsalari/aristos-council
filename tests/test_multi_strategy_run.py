@@ -158,6 +158,40 @@ def test_duplicate_ids_collapse_and_an_empty_selection_is_an_error():
 
 
 # --------------------------------------------------------------------------- #
+# FUND-UI-2 item 5 — the Run tab's lens picker became a primary dropdown + one checkbox
+# per extra lens. Presentation only: the SAME set of lenses must produce the SAME grid it
+# produced when both came out of one multiselect.
+# --------------------------------------------------------------------------- #
+def test_checkbox_lens_selection_yields_the_same_combined_grid_as_the_multiselect():
+    from dataclasses import dataclass
+
+    from aristos_council.strategy.picker import (
+        resolve_all,
+        selected_labels,
+        strategy_choices,
+    )
+
+    @dataclass
+    class _Stub:                        # only id + display_name reach the picker
+        id: str
+        display_name: str
+
+    choices = strategy_choices([_Stub(SCREENED, "Screened"), _Stub(RAW, "Raw")])
+    # OLD: one multiselect, both lenses in it (click order, as the widget recorded it).
+    from_multiselect = resolve_all(choices, ["Raw", "Screened"])
+    # NEW: "Screened" is the narrated primary, "Raw" is a ticked extra-lens checkbox.
+    from_checkboxes = resolve_all(choices, selected_labels("Screened", [("Raw", True)]))
+    assert [s.id for s in from_checkboxes] == [s.id for s in from_multiselect]
+
+    old = _multi([s.id for s in from_multiselect])
+    new = _multi([s.id for s in from_checkboxes])
+    assert new.strategy_ids == old.strategy_ids               # same columns, same order
+    assert format_multi_strategy_grid(new) == format_multi_strategy_grid(old)
+    assert {t: format_cli_report(r) for t, r in new.results.items()} == \
+        {t: format_cli_report(r) for t, r in old.results.items()}
+
+
+# --------------------------------------------------------------------------- #
 # The rendered grid
 # --------------------------------------------------------------------------- #
 def test_grid_text_carries_every_column_the_sums_and_the_incomparable_mark():
