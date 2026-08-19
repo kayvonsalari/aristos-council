@@ -74,6 +74,7 @@ All factors are pure functions of adapter data; each returns a float or `None`
 | `distribution_yield` | The fund's trailing distribution/dividend yield (`dividend_yield`, a DECIMAL) | high | ETF lenses only — the income leg of the dividend-ETF lens. See §2.1. |
 | `expense_ratio` | The fund's ongoing charge (`net_expense_ratio`), vendor value as-is | **low** | ETF lenses only — the sole LOW-direction ETF leg: cost compounds against the holder forever, so cheaper ranks better. See §2.1 for the percent-not-fraction unit trap. |
 | `fund_size` | The fund's net assets (`total_assets`) | high | ETF lenses only — a liquidity and closure-risk proxy. See §2.1. |
+| `piotroski_f_score` | The Piotroski F-Score: nine binary accounting checks over the two most recent annual periods, 0–9 | high | Registered but selected by **no strategy**; shares its arithmetic with the `min_f_score` screen criterion. **Abstains** below 5 computable checks. A coarse integer, so it ties heavily on a small cohort — better as a screen than a rank leg. Full definition in **§4.1**. |
 
 ### 2.1 ETF factors
 
@@ -187,6 +188,7 @@ strategy YAML, not code. Current registry (thresholds shown from the live strate
 | `min_dividend_streak` | 10 years | Cut history: T (cut 2022 → streak 0) and MMM (cut 2024) fail; PG/KO/JNJ/MCD pass. |
 | `max_debt_to_market_cap` | 1.0 | Balance-sheet risk: total debt ≤ market cap. VZ (~1.13×, $201B) fails. Uses debt/market-cap, **not** debt/equity — robust to negative-equity buyback names (MCD). |
 | `min_roic` | 0.12 (magic_value_screen) | The quality floor for value strategies. |
+| `min_f_score` | *none — enabled by no lens* | Accounting quality: nine binary checks on the annual statements (see **§4.1**). Registered and optional; no threshold is documented because no strategy adopts one yet. |
 | `revenue_cagr`, `peg_ratio` | growth_v1 | GARP criteria; **PEG** (the P/E ratio divided by the earnings-growth rate — a valuation-against-growth measure, where roughly ≤1 reads as "reasonably priced for the growth") uses in-house earnings-growth with a cyclical-base guard. |
 
 **Growth-metric cyclicality guards** (the GARP screen, `growth_v1`). The three growth
@@ -232,6 +234,124 @@ financials **sector gate**, with `min_roic` merely *abstaining* (ROIC isn't comp
 bank), i.e. NO confirmed fundamental fail: the flag is **correctly silent**. The pair shows
 the two guards working — a real fail + momentum trips it; an abstention or a non-fundamental
 (sector) exclusion does not.
+
+### 4.1 Accounting quality — the Piotroski F-Score (PIOTROSKI-1/2)
+
+Nine binary accounting checks over the **two most recent annual periods**, one point each,
+score 0–9 (Piotroski, 2000). There is **ONE implementation**
+(`tools/screening.piotroski_f_score`) with **TWO consumers**, so a screened and a ranked
+F-Score can never diverge:
+
+- the optional screen criterion **`min_f_score`** (`tools/criteria/registry.py`), and
+- the rankable quality factor **`piotroski_f_score`** (`factors.py`, direction **high**).
+
+Write `X₀` for the current annual period and `X₁` for the prior one. All nine inputs are
+annual statement series on `Fundamentals`, newest-first by adapter contract; nothing here
+reads a TTM scalar, and no value is derived from price.
+
+| # | Group | Check (registry name) | The comparison the code makes | `Fundamentals` fields |
+|---|---|---|---|---|
+| 1 | Profitability | `roa_positive` | `ROA₀ > 0`, where `ROA = net_income / total_assets` (**same-year** assets) | `net_income`, `total_assets_annual` |
+| 2 | Profitability | `ocf_positive` | `OCF₀ > 0` | `operating_cash_flow_annual` |
+| 3 | Profitability | `roa_improved` | `ROA₀ > ROA₁` | `net_income`, `total_assets_annual` |
+| 4 | Profitability | `ocf_exceeds_net_income` | `OCF₀ > net_income₀` — the **accrual** (cash-quality) check: earnings not backed by cash. Compared as raw amounts; dividing both by the same total assets is equivalent, so this check needs **no** balance sheet | `operating_cash_flow_annual`, `net_income` |
+| 5 | Leverage & liquidity | `ltd_ratio_decreased` | `long_term_debt₀ / total_assets₀ < long_term_debt₁ / total_assets₁` | `long_term_debt_annual`, `total_assets_annual` |
+| 6 | Leverage & liquidity | `current_ratio_improved` | `current_assets₀ / current_liabilities₀ > current_assets₁ / current_liabilities₁` | `current_assets_annual`, `current_liabilities_annual` |
+| 7 | Leverage & liquidity | `no_new_share_issuance` | `shares₀ ≤ shares₁` — **non-strict**, so a flat share count scores the point | `shares_outstanding_annual` |
+| 8 | Efficiency | `gross_margin_improved` | `gross_profit₀ / revenue₀ > gross_profit₁ / revenue₁` | `gross_profit_annual`, `total_revenue` |
+| 9 | Efficiency | `asset_turnover_improved` | `revenue₀ / total_assets₀ > revenue₁ / total_assets₁` | `total_revenue`, `total_assets_annual` |
+
+**Two annual periods are the requirement.** Six checks (3, 5, 6, 7, 8, 9) compare the two
+years and need both; three (1, 2, 4) read the current year alone. A name with a single
+annual period therefore scores at most 3 of 9 computable checks and **abstains** (below the
+five-check minimum), which is the intended outcome — not a low score.
+
+**Field-name trap.** The balance-sheet line is `total_assets_annual`, **not**
+`total_assets` — that field already exists and means an ETF's *net assets* (a fund-size
+scalar). Overloading it would mix a fund-size number into a balance-sheet series.
+
+**Period matching (PIOTROSKI-2).** The cross-statement checks must compare the same fiscal
+period, and the positional lists cannot guarantee that (NaN cells are dropped *per series*,
+so index `[0]` of two statements can refer to different fiscal years — the AAPL/GIS/F
+implausible-cell class). When the adapter supplies the period-labelled series
+(`aligned_annual` + `aligned_period_ends`), the two reference years are the two most recent
+period-end dates across all supplied series, and a series with no value at a reference date
+contributes nothing for that year — **the dependent check counts unavailable rather than
+comparing the wrong years**. When those dicts are absent (EODHD, fakes, older fixtures) the
+score falls back to positional `[0]`/`[1]`, the original PIOTROSKI-1 behaviour.
+
+**Computability — a missing check is never a failed check.** This is project rule 3
+(`null ≠ false`) applied at check granularity. A check whose inputs are missing, **or whose
+denominator is zero or negative**, scores no point *and* is counted **unavailable**; it is
+never counted as a check the company failed. (A non-positive denominator makes the ratio
+meaningless — a negative-asset ROA flips sign — so the check that needs it is unavailable.)
+With `C` = computable checks and `M = 9 − C` unavailable:
+
+- **`C < 5` → the whole score ABSTAINS** (`score = None`). A partial tally reads as a
+  terrible company when it is actually an absent statement, so nothing is reported rather
+  than something misleadingly low. The raw point tally is still carried on the result for
+  the note, but it is not a score.
+- **`C ≥ 5` → the score is the point tally out of 9**, published *with* the unavailability
+  accounting, so a 6/9 built from seven checks is never mistaken for a 6/9 built from nine.
+- An abstaining `min_f_score` **never excludes** a name, and the factor returns `None`
+  (imputed or ranked-worst per the strategy's `missing` policy), never a zero.
+
+**Conventions that differ from a published F-Score** — decided deliberately, so a
+third-party number may differ by a point:
+
+- **Zero long-term debt is STRICT.** A firm carrying no LTD in either year has a ratio of
+  `0.0` both years, which did *not* decrease, so check 5 scores **no point** — and counts as
+  *computed*, not unavailable. Comparability with published F-Scores beats economic charity.
+- **ROA and asset turnover use same-year (ending) total assets**, not Piotroski's
+  beginning-of-year / average-assets denominator. One convention applied identically to both
+  years, so the year-over-year comparison stays apples-to-apples. A stated simplification.
+
+**Display convention.** The factor value renders as a score over its ceiling — **`7/9`**, not
+a bare `7`, because the bare number hides the scale (`company_check.format_factor_value`).
+The unavailability accounting travels in the **criterion note**, which is the only place that
+has the counts:
+
+```
+F-Score 6/9 — computed from 9 checks, 0 unavailable
+F-Score 3/9 — computed from 7 checks, 2 unavailable (unavailable: current_ratio_improved, gross_margin_improved)
+F-Score not computable: only 0 of 9 checks available (minimum 5) — abstained (unavailable: …)
+```
+
+**Why `min_f_score` ships disabled, with no documented threshold.** It is registered with a
+0–9 integer threshold whose registry *default* is 5, and **no lens selects it** — no strategy
+YAML names the criterion or the factor. That default is a widget default, not an adopted
+bar, so this document deliberately states **no threshold** for it: a threshold gets adopted
+only after live evidence on the actual universes, the way the 12% ROIC floor was. It is also
+**not gating-eligible** — the score aggregates nine checks whose availability depends on
+provider statement coverage, so a hard deterministic veto on it would fail names for data
+gaps; no `is_gating` flag is set or proposed.
+
+**Better as a screen than as a rank leg.** The F-Score is a **coarse 0–9 integer**, so on a
+20–40 name cohort it produces large **tied blocks** that the rank engine can only resolve by
+averaging their positions. Measured on the committed probe output (`probe_stocks.csv`, from
+`examples/piotroski_probe.py`, over the demo cohorts now kept under
+`tests/fixtures/universes/`): the 39 names of `growth_40_v1` that scored occupy just **six
+distinct values** (2, 4, 5, 6, 7, 8), with the two largest blocks **11 names each** at 5/9
+and 6/9 — more than half the cohort in two ties. That is an argument for using it as a
+*floor* on who qualifies, not as a leg that orders survivors; it is **not** to be "fixed"
+with a tiebreaker. The factor is also deliberately absent from `PRICE_DERIVED_FACTORS`, so
+the backtest cannot validate it point-in-time (historical point-in-time fundamentals are not
+available on free data).
+
+**Coverage, measured.** From the same probe output: across `defensive_16_v1`,
+`defensive_income_16_v1`, `growth_40_v1` and `energy_watch_v1`, every name that had annual
+statements at all computed **all nine** checks (`0 unavailable`) — so the score is not
+systematically depressed by data gaps there. The one exception is the delisted **WBA**, which
+reaches `0` computable checks and **abstains** — the intended path, and distinct from a score
+of 0. **Banks and insurers lose exactly two checks**: they report no current
+assets/liabilities and no gross-profit line, so `current_ratio_improved` and
+`gross_margin_improved` are unavailable and the thirteen bank/insurer names in
+`financials_16_v1` score out of **7** computable — still above the five-check minimum, so
+they score rather than abstain, but on a structurally shorter ruler than a staple's. The
+three non-lender financials in that cohort (BLK, V, MA) compute all nine. A per-check
+availability report over any cohort is what `examples/piotroski_probe.py` exists to produce;
+it is the gate question ("is it computable here at all?") that precedes any question about
+whether the score is *useful* here.
 
 ## 5. Guards
 
