@@ -18,7 +18,10 @@ from aristos_council.strategy.rank_loader import load_rank_strategy
 from aristos_council.universe import list_universes, load_universe_by_id
 
 ROOT = Path(__file__).resolve().parents[1]
-UNIV_DIR = ROOT / "universes"
+# The manifests whose labels/roles this module pins are fixtures now: FUND-UI-2 deleted
+# the shipped demo cohorts from the product surface, and the role-derived classification
+# under test is a property of a manifest, not of the directory it sits in.
+UNIV_DIR = Path(__file__).resolve().parent / "fixtures" / "universes"
 STRAT_DIR = ROOT / "strategies"
 
 
@@ -53,14 +56,20 @@ def test_universe_display_names_and_roles():
 # Strategies — friendly names, ids untouched
 # --------------------------------------------------------------------------- #
 def test_strategy_display_names():
-    assert strategy_label(_strategy("magic_formula_momentum_v1")) == \
-        "Value + Momentum (flagship)"
-    assert strategy_label(_strategy("conservative_plus_v1")) == \
-        "Defensive Income (Conservative Formula+)"
-    assert strategy_label(_strategy("magic_formula_v1")) == \
-        "Classic Value (baseline — for comparison)"
-    # ids are the stable record keys — unchanged.
+    # FUND-UI-2: PLAIN names — what the strategy is, not its rank in the line-up or the
+    # method behind it. The qualifiers moved to `role` (its own caption) or were already
+    # in `name`/`description`.
+    assert strategy_label(_strategy("magic_formula_momentum_v1")) == "Value + Momentum"
+    assert strategy_role(_strategy("magic_formula_momentum_v1")) == "flagship"
+    assert strategy_label(_strategy("conservative_plus_v1")) == "Defensive Income"
+    assert strategy_label(_strategy("magic_formula_v1")) == "Classic Value"
+    assert "baseline" in strategy_role(_strategy("magic_formula_v1"))
+    assert strategy_label(_strategy("financials_v1")) == "Financials"
+    assert strategy_label(_strategy("magic_formula_raw_v1")) == "Magic Formula RAW"
+    assert strategy_label(_strategy("growth_garp_v2")) == "Growth"
+    # ids are the stable record keys — unchanged by every rename above.
     assert _strategy("magic_formula_v1").id == "magic_formula_v1"
+    assert _strategy("growth_garp_v2").id == "growth_garp_v2"
 
 
 def test_no_underscores_or_version_in_user_facing_labels():
@@ -98,13 +107,11 @@ _RANKS = ("magic_formula_momentum_v1", "conservative_plus_v1", "magic_formula_v1
 def test_visible_universes_hides_the_bench_by_default():
     manifests = list_universes(UNIV_DIR)
     off = {u.id for u in visible_universes(manifests, show_validation=False)}
-    # UNI-1: front-stage is now ROLE-DERIVED — graded scoreboard universes AND the
-    # exploratory cohorts (financials_16 + the ETF-1 exploratory ETF cohorts; never-graded
-    # observation/control assets stay back).
-    assert off == {"growth_40_v1", "defensive_income_16_v1", "financials_16_v1",
-                   "etf_dividend_us_v1", "etf_growth_us_v1",
-                   "etf_dividend_ucits_v1", "etf_growth_ucits_v1",
-                   "etf_core_ucits_v1"}
+    # UNI-1: front-stage is ROLE-DERIVED — graded/exploratory cohorts are offered, the
+    # never-graded observation and control assets stay back. (The set is the FIXTURE dir's
+    # now: FUND-UI-2 removed these from the product surface, so what is pinned here is the
+    # classification, not a shipping list.)
+    assert off == {"growth_40_v1", "defensive_income_16_v1", "financials_16_v1"}
     on = {u.id for u in visible_universes(manifests, show_validation=True)}
     assert "defensive_16_v1" in on                                      # bench revealed
     # the never-graded observation/control assets stay backstage (role-derived, UNI-1):

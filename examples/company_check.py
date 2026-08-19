@@ -8,7 +8,7 @@ the latest FROZEN run of the reference universe (offline replay), never a fresh 
 
 CLI:
     python examples/company_check.py MU --strategy magic_formula_momentum_v1 \
-        --reference growth_40_v1
+        --reference my_portfolio_v1        # any list under universes/ (yours included)
 
 Requires the market-data extra; NO keys (yfinance ``info`` + price history).
 """

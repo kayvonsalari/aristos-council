@@ -54,5 +54,34 @@ keep the prose honest, and each is enforced in code, not merely requested in a p
   ranker's; the header states the division of labor plainly (*Verdict: deterministic ranker.
   Narrative: LLM (non-judging).*), and no narrator output can change screen, rank, or gate.
 
+## Cohort graded (exact membership)
+
+Every run record — the markdown a run tab writes and the one it auto-persists — ends with a
+section naming the cohort it actually graded:
+
+```
+## Cohort graded (exact membership)
+
+- list: `my_portfolio_v1` · 23 names · members `3f9c1ad2`
+
+AAPL, MSFT, NVDA, …
+```
+
+**What fired it.** A saved list is a plain, EDITABLE ticker list (FUND-UI-2), so an id alone
+dates badly: `my_portfolio_v1` in June and in August can be different cohorts. A rank verdict is
+also universe-relative — a name's position is a statement about the names it was ranked *against*.
+So the pipeline stamps `universe_members` (the exact list as run) and `universe_member_hash` (an
+order-insensitive `hex8` over the normalized, de-duped set — `universe.member_hash`) onto every
+run's `meta`, and this section renders them. A multi-lens grid grades one cohort under N lenses,
+so it carries **one** such section.
+
+**What it does not mean.** The member list is what went **IN**, not what survived: names that were
+excluded by the screen or came back UNRATEABLE are members too, because the cohort a name was
+ranked against includes them. The hash is not a version number and there is no versioning ceremony
+in the UI — nothing prompts you, nothing is bumped; it is recorded silently and is simply what
+makes a past run interpretable after the list moved on. A record written **before** FUND-UI-2
+carries no members, and then **no section is emitted at all** — an empty block would imply nothing
+was graded.
+
 See **[The Calculations](CALCULATIONS.md)** for the arithmetic behind the values these marks
 annotate, and **[How It Works](COUNCIL_EXPLAINER.md)** for the five-stage flow.

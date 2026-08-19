@@ -12,7 +12,9 @@
 
 id: growth_garp_v1
 name: Growth at a Reasonable Price
-display_name: Growth at a Reasonable Price (GARP)
+# DISPLAY LABEL ONLY (FUND-UI-2): see growth_garp_v2 — plain name, id disambiguates.
+display_name: Growth
+role: superseded by Growth v2
 # superseded by growth_garp_v2 (non-gating momentum; lens -> growth_screen_v2). Hidden
 # from the dropdowns; still loadable via the CLI/loader.
 ui: hidden
