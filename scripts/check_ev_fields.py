@@ -24,7 +24,10 @@ from pathlib import Path
 from aristos_council.universe import load_universe_by_id
 
 ROOT = Path(__file__).resolve().parents[1]
-UNIVERSES_DIR = ROOT / "universes"
+# growth_40_v1 stopped being shipped product data in FUND-UI-2 (the app ships no demo
+# cohorts); the manifest is kept verbatim as a fixture, so this probe still samples the
+# SAME 40 names it always did.
+UNIVERSES_DIR = ROOT / "tests" / "fixtures" / "universes"
 BAR = 0.90
 
 

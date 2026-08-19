@@ -25,6 +25,9 @@ from aristos_council.strategy.rank_loader import load_rank_strategy
 
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 UNIV_DIR = Path(__file__).resolve().parents[1] / "universes"
+# The financials cohort moved to the fixtures dir with the other shipped cohorts
+# (FUND-UI-2); only the suggested-universe label test needs to resolve it.
+FIXTURE_UNIV_DIR = Path(__file__).resolve().parent / "fixtures" / "universes"
 RUNS_DIR = Path(__file__).resolve().parents[1] / "runs"
 
 
@@ -122,9 +125,19 @@ def test_strategy_tab_renders_financials_lens():
 
 # --- UNI-1 ITEM 3: Strategy tab shows the suggested-universe pairing --------- #
 def test_strategy_tab_shows_suggested_universes_as_display_names():
-    detail = strategy_detail("financials_v1", STRAT_DIR)
+    # financials_16_v1 is a fixture since FUND-UI-2 (the app ships no demo cohorts), so
+    # the resolution is exercised against the directory that still holds it.
+    detail = strategy_detail("financials_v1", STRAT_DIR, universes_dir=FIXTURE_UNIV_DIR)
     # resolved to the universe DISPLAY NAME, not the raw id
     assert detail.suggested_universes == ["Financials 16"]
+
+
+def test_a_suggested_universe_that_no_longer_exists_falls_back_to_its_id():
+    # FUND-UI-2 deleted the shipped cohorts a few strategies still name. That is inert by
+    # design — an unresolvable id is shown as itself and skipped in the selectors, never a
+    # crash — and it comes back to life if a list is saved under that id.
+    detail = strategy_detail("financials_v1", STRAT_DIR)
+    assert detail.suggested_universes == ["financials_16_v1"]
 
 
 def test_strategy_tab_omits_suggested_universes_when_field_absent():

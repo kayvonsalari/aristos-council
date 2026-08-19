@@ -54,24 +54,37 @@ LangGraph orchestration, Anthropic models, pydantic state.
 - `src/aristos_council/pipeline.py` — the v2 rank pipeline + the ONE shared entry
   `run_rank_pipeline(universe, strategy_id, *, council_mode, ranker_only, csv_path,
   …) -> RankPipelineResult` that BOTH the CLI (`examples/run_pipeline.py`) and
-  Council Station's Universe Run tab call (no subprocess, no duplicated
+  Council Station's Run tab call (no subprocess, no duplicated
   orchestration). `RankPipelineResult` splits UNRATEABLE (no-data/delisted) from
   Excluded (screen/cap/sector) and carries `narratives`, `header`, `meta`; the
   per-name council loop lives once in `_council_stage` (shared with the older
   `run_pipeline`). `format_cli_report(result)` is what the CLI prints, so UI and
   CLI show the SAME thing.
+- `src/aristos_council/strategy/picker.py` — THE strategy picker (FUND-UI-2). One
+  implementation for every surface that offers strategies: `strategy_choices` filters by
+  visibility (`ui: hidden` unless the validation toggle is on) and orders flagship-first,
+  `choice_labels`/`resolve`/`resolve_all` move between labels and strategies, `default_index`
+  pre-selects the flagship. Two surfaces had grown their own copies (the run tab's and Company
+  Check's), so STRAT-PICKER-1's fix landed on one and missed the other — and both carried the
+  same bug: `labels.index(choice)` resolved a SHARED `display_name` (both GARP versions read
+  "Growth") to the FIRST match, so picking v2 ran v1. A colliding label now carries its id.
+  It deliberately does NOT filter by "relevance": every visible strategy is offered for ANY
+  ticker list; asset-class scope stays an honest caption + a confirmed-mismatch warning
+  (`applicability.py`), never a hidden option.
 - `src/aristos_council/strategy/discovery.py` — classify strategy YAMLs by SHAPE:
   RANK (`factors:`), COUNCIL (`criteria:`, single-ticker), LENS (a `criteria:`
   screen referenced by a rank strategy's `council_screen_strategy` — hidden). The
   lens set is DERIVED (union of rank strategies' `council_screen_strategy`), never
-  hardcoded. Drives both dropdowns: single-ticker page → COUNCIL only, Universe Run
+  hardcoded. Drives both dropdowns: single-ticker page → COUNCIL only, Run
   tab → RANK only.
 - `examples/run_council.py` — the single-ticker demo entrypoint (run in Colab, not
   here). `examples/run_pipeline.py` — the v2 universe CLI, now a THIN wrapper over
   `run_rank_pipeline` (`--ranker-only` for a free, no-LLM deterministic ranking).
 - `app.py` — Council Station, the local Streamlit UI (`streamlit run app.py`).
-  Tabs: Report (single-ticker), **Universe Run** (the v2 rank pipeline — see
-  below), History, Strategy. Loads `.env` at app start so keys reach the process.
+  Tabs: **Run** (the ONE run flow over the v2 rank pipeline — see below), Company Check,
+  Scoreboard, then the legacy single-ticker Report / History / Strategy behind the
+  "Show validation & legacy tools" toggle. Loads `.env` at app start so keys reach the
+  process.
 
 ## Hard project rules (learned the expensive way — do not relax)
 
@@ -397,6 +410,57 @@ produces. Presentation only — NO new decision logic.
 OUT OF SCOPE (kept so): redesigning the single-ticker page; strategy editing for
 rank YAMLs; charts/history for rank runs; any Finnhub fix beyond env loading. 581
 tests green.
+
+**Superseded by FUND-UI-2 (below) in the places it names.** The tab is called **Run**; the
+manifest dropdown + "Custom (paste tickers)" and the separate Universe Editor expander are
+gone; the rank-strategy selectbox and FUND-RUN-1's "Also grade with" multiselect are one
+`Strategies` multiselect. Everything else above — the shared entrypoint, the schema split, the
+output order, the per-phase progress, the `.env` load — is unchanged.
+
+## FUND-UI-2 — the ONE run flow (shipped 2026-08-17)
+
+The run UX is: pick strategies, pick/edit a ticker list, run. Nothing else. It was two flows
+wearing one tab — a fixed-universe half on top, a "Universe Editor" expander with its own clone
+selector / ticker box / Run-once / save at the bottom — with two guard sets that had already
+drifted (each re-declared `CAP = 60` and its own key check).
+
+- **One picker** — `strategy/picker.py` (see Architecture). Both surfaces use it; a shared
+  `display_name` no longer resolves to the wrong config.
+- **The `Strategies` multiselect** replaces the primary selectbox AND FUND-RUN-1's "Also grade
+  with" box. One strategy → the full flow with narration; several → `run_multi_strategy_pipeline`
+  and FUND-RUN-1's combined grid (kept, not replaced), deterministic by construction, so
+  ranker-only / mode / coverage grey out, no key is asked for and no cost estimate is shown.
+  **No "relevance" filtering** — every visible strategy is offered for any list. This is a
+  deliberate change from FUND-RUN-1, which scoped the extra-lens pool to the cohort's asset
+  kind: `applicability.py`'s derived-class caption and confirmed-mismatch warning stay, and the
+  run-time asset-kind gate still excludes individual names, so nothing dishonest slips through.
+- **The ticker box IS the editor.** `render_universe_editor` and `app._parse_universe` are
+  deleted; the editor's comment-tolerant `parse_ticker_lines` serves the one box. Selecting a
+  saved list loads it (pre-instantiation session write, only on a CHANGED selection so an edit
+  in progress is never clobbered); "Save changes" rewrites one of your own lists in place
+  (`save_local_universe(..., overwrite=True)`), "Save as new list" derives the id from the name
+  (`list_id_from_name`) — no version ceremony in the UI, though the file id still encodes one.
+  An EDITED list runs ad-hoc (`adhoc:<hex8>`) rather than filing changed members under a name
+  whose past verdicts were graded on different ones.
+- **Every run records its membership** — `meta.universe_members` + `universe_member_hash`
+  (`universe.member_hash`, extracted from `adhoc_universe_id`, which now composes it, so
+  existing `adhoc:<hex8>` ids are byte-identical). A "Cohort graded (exact membership)" section
+  ends both canonical markdowns, skipped for older records. Silent by design.
+- **Pure guards** — `app.run_problems(universe, n_strategies=, deterministic=, has_key=)` and
+  ONE `app.UNIVERSE_CAP`. Unit-tested rather than eyeballed in a browser.
+- **Demo cohorts deleted.** Growth 40 / Defensive 16 / Defensive Income 16 / Financials 16 /
+  Energy Watch are gone from `universes/`; they live on VERBATIM under
+  `tests/fixtures/universes/` (with a README naming every reader) because several checks and
+  scripts are only meaningful against those exact members — `acceptance_check.py`,
+  `scripts/check_ev_fields.py`, `scripts/scout_verdicts.py` (its base cohort must stay the same
+  40 names for the dated verdicts to be comparable), `examples/etf_baselines.py`, and five test
+  modules are repointed there. Nothing in `app.py` reads that directory. The **ETF lists stay**
+  in `universes/`: they are the only carrier of the fund tickers the ETF lenses rank. Strategy
+  YAMLs keep their now-dangling `suggested_universes` entries — `suggested_first` skips
+  unresolvable ids by design (pinned by a test), and they revive if a list is saved under one.
+- **Plain strategy names** (display-only; ids, versions, factors, gates and thresholds
+  untouched): Value + Momentum, Classic Value, Magic Formula RAW, Defensive Income, Financials,
+  Growth (both GARP versions). Qualifiers moved to `role`, which renders as its own caption.
 
 ## Sprint 4F (next build)
 

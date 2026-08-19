@@ -34,7 +34,12 @@ from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
 from aristos_council.data.provider import select_market_adapter
 from aristos_council.pipeline import run_rank_pipeline
 
-STRATS, UNIS, RUNS = ROOT / "strategies", ROOT / "universes", ROOT / "runs"
+STRATS, RUNS = ROOT / "strategies", ROOT / "runs"
+# The cohorts these acceptance runs are graded over (Growth 40, Defensive Income 16,
+# Energy Watch) stopped being shipped product data in FUND-UI-2 — the app ships no demo
+# lists. They are kept verbatim as fixtures so this script still reproduces the SAME
+# cohorts; a live user's own lists live in universes/local/.
+UNIS = ROOT / "tests" / "fixtures" / "universes"
 RESULTS: list[tuple[str, str, str]] = []
 
 

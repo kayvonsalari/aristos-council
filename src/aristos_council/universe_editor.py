@@ -1,20 +1,27 @@
-"""Universe editor — build, clone, and save custom ticker lists (UNIED-1).
+"""Ticker lists — parse, name, and save them (UNIED-1, reshaped by FUND-UI-2).
 
-Pure, Streamlit-free core behind Council Station's Universe Editor. Two write paths:
+Pure, Streamlit-free core behind the Run tab's ONE ticker box. (Until FUND-UI-2 this backed a
+separate "Universe Editor" expander; that second flow is gone — the ticker box you run from IS
+the editor now.) Two write paths:
 
-- **Run once** (no file): the parsed tickers go through the existing AD-HOC pipeline
-  path (``universe_id=None`` -> ``adhoc:<hex8>``), so an editor run is fingerprinted and
-  linkable exactly like a Custom paste — the ad-hoc path is REUSED, never forked.
-- **Save**: writes ``universes/local/<id>.yaml`` (created date + rationale). The ``local/``
-  directory carries its own ``.gitignore`` (``*`` + ``!.gitignore``) so personal lists —
-  portfolio-class data — can never ride a commit by default (the 2026-07-09 incident
-  class, closed STRUCTURALLY, not by a reviewer remembering).
+- **Run without saving**: the parsed tickers go through the existing AD-HOC pipeline path
+  (``universe_id=None`` -> ``adhoc:<hex8>``), so a new or EDITED list is fingerprinted and
+  linkable — the ad-hoc path is REUSED, never forked. Nothing is lost by not saving: the run
+  record carries the exact membership (``universe.member_hash``).
+- **Save**: writes ``universes/local/<id>.yaml`` (created date + rationale), either under a
+  fresh id derived from the name (``list_id_from_name``) or, with ``overwrite=True``, over one
+  of your OWN lists in place — a list is a plain editable ticker list, so adding a holding must
+  not force a new id. The ``local/`` directory carries its own ``.gitignore`` (``*`` +
+  ``!.gitignore``) so personal lists — portfolio-class data — can never ride a commit by
+  default (the 2026-07-09 incident class, closed STRUCTURALLY, not by a reviewer remembering).
 
 Guardrails:
-- A universe whose id appears in the graded/scoreboard set (the snapshot CSV) is
-  CLONE-ONLY: editing it in place would silently rewrite what a past verdict was graded
-  against, so a save under a graded id is refused with "graded — clone to modify".
-- A saved id must not collide with ANY existing universe id (top-level or local).
+- A universe whose id appears in the graded/scoreboard set (the snapshot CSV) is never
+  rewritten in place: editing it would silently change what a past verdict was graded against,
+  so a save under a graded id is refused with "graded — clone to modify" even with
+  ``overwrite=True``.
+- An in-place save is refused for a top-level (shipped) manifest — that is not yours to rewrite.
+- Without ``overwrite``, a saved id must not collide with ANY existing universe id.
 - Ticker validation is LAZY (house convention): unresolvable tickers surface as
   UNRATEABLE in the run, never blocking a save.
 """
@@ -72,10 +79,36 @@ def suggest_clone_id(base_id: str, existing_ids) -> str:
     return f"{stem}_v{n}"
 
 
+_SLUG_STRIP = re.compile(r"[^a-z0-9]+")
+
+
+def slugify_list_name(name: str) -> str:
+    """A display name -> the stem of its file id ("My Portfolio" -> ``my_portfolio``).
+    Empty when the name carries no usable characters, so the caller can fall back."""
+    return _SLUG_STRIP.sub("_", (name or "").strip().lower()).strip("_")
+
+
+def list_id_from_name(name: str, existing_ids=()) -> str:
+    """The id for a list the user simply NAMED (FUND-UI-2).
+
+    Saving a list is "type a name, press save": the id is derived here rather than typed,
+    so no version ceremony reaches the UI. The file id still encodes a version (the
+    ``Universe`` validator demands it, and every record key in this repo carries one) —
+    it is just not the user's problem. A name whose ``_v1`` is taken gets the next free
+    version, so naming a second list the same thing never overwrites the first by
+    accident; overwriting is an explicit, separate act (``save_local_universe(...,
+    overwrite=True)``).
+    """
+    stem = slugify_list_name(name) or "my_list"
+    first = f"{stem}_v1"
+    return first if first not in set(existing_ids) else suggest_clone_id(first, existing_ids)
+
+
 def graded_universe_ids(snapshots_csv: str | Path) -> set[str]:
     """The graded/scoreboard set — universe ids that appear in the prospective-scoreboard
     snapshot CSV. A graded universe is a frozen, pre-registered input to a forward-return
-    test, so it is CLONE-ONLY in the editor. Missing/empty CSV -> empty set."""
+    test, so it is never rewritten in place — save under a new name instead. Missing/empty
+    CSV -> empty set."""
     from .scoreboard import read_rows
 
     p = Path(snapshots_csv)
@@ -88,6 +121,12 @@ def existing_universe_ids(universes_dir: str | Path) -> set[str]:
     """Every universe id currently discoverable (top-level manifests + local lists) — the
     collision set a new save must avoid."""
     return {u.id for u in list_universes(universes_dir)}
+
+
+def local_universe_ids(universes_dir: str | Path) -> set[str]:
+    """The ids of PERSONAL lists (``universes/local/``) — the only ones an in-place save
+    may rewrite. A top-level manifest is not yours to overwrite from the editor."""
+    return {u.id for u in list_universes(universes_dir) if getattr(u, "local", False)}
 
 
 def local_dir(universes_dir: str | Path) -> Path:
@@ -125,12 +164,21 @@ def _dump_manifest_yaml(u: Universe, *, created: str) -> str:
 def save_local_universe(universes_dir: str | Path, *, id: str, tickers: list[str],
                         created: str, display_name: str = "", rationale: str = "",
                         description: str = "", role: str = "",
-                        graded_ids: set[str] | frozenset[str] | None = None) -> Path:
+                        graded_ids: set[str] | frozenset[str] | None = None,
+                        overwrite: bool = False) -> Path:
     """Validate and write a personal list to ``universes/local/<id>.yaml``.
+
+    ``overwrite=True`` rewrites one of YOUR OWN lists in place — a list is a plain,
+    editable ticker list (FUND-UI-2), so adding a new holding must not force a new id.
+    It is still refused for a GRADED id and for a top-level manifest (neither is yours to
+    rewrite), and past runs stay interpretable because each run records the exact
+    membership it graded (``universe.member_hash``), not just the list id.
 
     Raises ``ValueError`` (nothing written) when:
     - ``id`` is in ``graded_ids`` — graded, clone-only ("graded — clone to modify");
-    - ``id`` collides with an existing universe id (top-level or local);
+    - ``id`` collides with an existing universe id and ``overwrite`` is False;
+    - ``overwrite`` is True but the id names a top-level (shipped) manifest, not a
+      personal list;
     - the manifest is invalid (id must encode ``_v<n>``, at least one valid ticker) — the
       ``Universe`` model is the single validator, reused so the file stays loadable.
 
@@ -152,9 +200,14 @@ def save_local_universe(universes_dir: str | Path, *, id: str, tickers: list[str
                  created=created, rationale=rationale.strip())
 
     if u.id in existing_universe_ids(universes_dir):
-        raise ValueError(
-            f"universe id '{u.id}' already exists — pick a new id (saved ids must be "
-            "unique; clone into a fresh version like '..._v2').")
+        if not overwrite:
+            raise ValueError(
+                f"universe id '{u.id}' already exists — pick a new id (saved ids must be "
+                "unique; clone into a fresh version like '..._v2').")
+        if u.id not in local_universe_ids(universes_dir):
+            raise ValueError(
+                f"universe '{u.id}' is a top-level manifest, not one of your saved "
+                "lists — save your edits under a new name instead.")
 
     d = ensure_local_dir(universes_dir)
     path = d / f"{u.id}.yaml"

@@ -37,7 +37,7 @@ universe. That is a property of the method, not a bug — the universe is part o
 
 Two different numbers are easy to confuse — a name's **position** in the cohort and its
 **combined rank-sum** (the score). Every display therefore renders them through ONE shared
-formatter (`rank_engine.format_position_cell`), used by the CLI ranked table, the Universe Run
+formatter (`rank_engine.format_position_cell`), used by the CLI ranked table, the Run tab's
 table, the markdown download, and Company Check:
 
 ```

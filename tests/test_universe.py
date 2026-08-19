@@ -28,7 +28,11 @@ from aristos_council.universe import (
 )
 
 REPO = Path(__file__).resolve().parents[1]
-UNIVERSES_DIR = REPO / "universes"
+# The former SHIPPED cohorts (Growth 40 and friends) are no longer product data — the app
+# ships no demo lists any more (FUND-UI-2), so the manifests that these load/validate
+# tests exercise live here, as fixtures. The manifest FORMAT is what is under test; where
+# the files sit is not.
+UNIVERSES_DIR = Path(__file__).resolve().parent / "fixtures" / "universes"
 STRAT_DIR = REPO / "strategies"
 
 _FUND = {

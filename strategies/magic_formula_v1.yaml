@@ -4,7 +4,11 @@
 # migration from the old screen (ROIC + value already in the registry).
 id: magic_formula_v1
 name: Magic Formula
-display_name: Classic Value (baseline — for comparison)
+# DISPLAY LABEL ONLY (FUND-UI-2): a plain name in the picker; the "baseline — for
+# comparison" qualifier lives in `role`, which renders as its own caption. The `id` is
+# the stable record key and is NEVER renamed.
+display_name: Classic Value
+role: baseline — kept for comparison
 ui: hidden          # legacy/superseded — not listed in the dropdowns; still CLI-loadable
 version: 1
 description: >-

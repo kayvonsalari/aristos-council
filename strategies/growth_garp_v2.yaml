@@ -20,7 +20,12 @@
 
 id: growth_garp_v2
 name: Growth at a Reasonable Price
-display_name: Growth at a Reasonable Price (GARP)
+# DISPLAY LABEL ONLY (FUND-UI-2): plain name — "Growth". GARP is the METHOD (it is the
+# `name` above, and the description spells it out); the picker says what the strategy is
+# for. growth_garp_v1 carries the same label, and the picker disambiguates a shared
+# label with the id rather than silently resolving to the first match. The `id` is the
+# stable record key and is NEVER renamed.
+display_name: Growth
 version: 2
 created: "2026-07-09"
 

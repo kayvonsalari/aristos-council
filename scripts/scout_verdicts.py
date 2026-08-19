@@ -475,8 +475,12 @@ def read_scanner(text: str, scan_label: str) -> tuple[list[dict], list[dict]]:
 
 
 def load_base_universe() -> list[str]:
+    # growth_40_v1 is no longer shipped product data (FUND-UI-2 removed the demo cohorts
+    # from universes/), but the scout's base cohort must stay the SAME 40 names for its
+    # dated verdict files to be comparable — so it reads the kept fixture copy.
     import yaml
-    data = yaml.safe_load((ROOT / "universes" / f"{BASE_UNIVERSE}.yaml").read_text())
+    base = ROOT / "tests" / "fixtures" / "universes" / f"{BASE_UNIVERSE}.yaml"
+    data = yaml.safe_load(base.read_text())
     return list(data["tickers"])
 
 
