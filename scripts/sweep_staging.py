@@ -42,6 +42,26 @@ import json
 import os
 import re
 import sys
+import time
+
+
+def call(request, tries: int = 5):
+    """Execute a Google API request, retrying transient 5xx/429 errors.
+
+    Google's Sheets/Drive APIs return 500/503/429 sporadically under no fault of
+    ours (a 503 on a Growth-Scanner read killed the 2026-08-20 run after every row
+    had already merged). Back off and retry those; let real errors (403, 404, 400)
+    propagate immediately.
+    """
+    from googleapiclient.errors import HttpError
+    for i in range(tries):
+        try:
+            return request.execute()
+        except HttpError as e:
+            if e.resp.status in (429, 500, 502, 503, 504) and i < tries - 1:
+                time.sleep(2 ** i)          # 1, 2, 4, 8 seconds
+                continue
+            raise
 
 # Section marker -> (master tab, dedup key column indexes)
 # Keys are chosen to identify a logical row: date + the thing it is about.
@@ -127,14 +147,14 @@ def retire(drive, f) -> str:
     """
     from googleapiclient.errors import HttpError
     try:
-        drive.files().update(fileId=f["id"], body={"trashed": True}).execute()
+        call(drive.files().update(fileId=f["id"], body={"trashed": True}))
         return "trashed"
     except HttpError as e:
         if e.resp.status != 403:
             raise   # a real error (auth, network) — do not paper over it
     try:
-        drive.files().update(fileId=f["id"],
-                             body={"name": SWEPT_PREFIX + f["name"]}).execute()
+        call(drive.files().update(fileId=f["id"],
+                                  body={"name": SWEPT_PREFIX + f["name"]}))
         return "renamed " + SWEPT_PREFIX + f["name"]
     except HttpError as e:
         return f"could not retire ({e.resp.status}) — will be re-read next run, dedup will skip its rows"
@@ -153,10 +173,10 @@ def main() -> int:
     sheets = build("sheets", "v4", credentials=c).spreadsheets()
     drive = build("drive", "v3", credentials=c)
 
-    staged = drive.files().list(
+    staged = call(drive.files().list(
         q=(f"'{args.folder}' in parents and trashed = false and "
            f"mimeType = 'application/vnd.google-apps.spreadsheet'"),
-        fields="files(id,name)", orderBy="name").execute().get("files", [])
+        fields="files(id,name)", orderBy="name")).get("files", [])
     staged = [f for f in staged if not f["name"].startswith(SWEPT_PREFIX)]
     if not staged:
         print("no staging sheets — nothing to do")
@@ -166,18 +186,26 @@ def main() -> int:
     # What the master already holds, per tab, as dedup keys.
     existing: dict[str, set[tuple]] = {}
     live_tabs = {s["properties"]["title"] for s in
-                 sheets.get(spreadsheetId=args.spreadsheet_id).execute()["sheets"]}
+                 call(sheets.get(spreadsheetId=args.spreadsheet_id))["sheets"]}
     for _pat, tab, _k in SECTIONS:
         if tab not in live_tabs:
             continue
-        vals = sheets.values().get(spreadsheetId=args.spreadsheet_id,
-                                   range=f"'{tab}'").execute().get("values", [])
+        vals = call(sheets.values().get(spreadsheetId=args.spreadsheet_id,
+                                        range=f"'{tab}'")).get("values", [])
         existing[tab] = {key_for(tab, trim(r)) for r in vals[1:] if trim(r)}
 
     total_new = 0
+    failed = 0
     for f in staged:
-        vals = sheets.values().get(spreadsheetId=f["id"],
-                                   range="A:Z").execute().get("values", [])
+        try:
+            vals = call(sheets.values().get(spreadsheetId=f["id"],
+                                            range="A:Z")).get("values", [])
+        except Exception as e:
+            # One unreadable sheet must not abort the others or lose the merges and
+            # renames already done above. Log it, count it, move on.
+            print(f"  {f['name']}: could not read ({e}) — SKIPPED, will retry next run")
+            failed += 1
+            continue
         sections = parse_staging(vals)
         if not sections:
             print(f"  {f['name']}: no recognisable sections — LEFT IN PLACE")
@@ -193,10 +221,10 @@ def main() -> int:
             fresh = [r for r in rows if key_for(tab, r) not in seen]
             dupes = len(rows) - len(fresh)
             if fresh and not args.dry_run:
-                sheets.values().append(
+                call(sheets.values().append(
                     spreadsheetId=args.spreadsheet_id, range=f"'{tab}'!A1",
                     valueInputOption="RAW", insertDataOption="INSERT_ROWS",
-                    body={"values": fresh}).execute()
+                    body={"values": fresh}))
                 seen.update(key_for(tab, r) for r in fresh)
             total_new += len(fresh)
             print(f"  {f['name']} -> {tab}: {len(fresh)} new"
@@ -206,7 +234,10 @@ def main() -> int:
         if swept_all and not args.dry_run and not args.keep:
             print(f"  {f['name']}: {retire(drive, f)}")
 
-    print(f"done — {total_new} row(s) appended to the master")
+    print(f"done — {total_new} row(s) appended to the master"
+          + (f"; {failed} sheet(s) unreadable this run, will retry next run" if failed else ""))
+    # A sheet we could not read is deferred, not lost — it is re-read next run and
+    # dedup makes that safe. So a transient Google outage does not fail the job.
     return 0
 
 
