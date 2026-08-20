@@ -9,7 +9,9 @@ accumulate un-pasted (five of them by 2026-08-20, master last updated 08-13).
 
 This script is the deterministic half of the fix: the LLM keeps doing the research
 and writing staging sheets; this appends their rows into the right master tabs and
-trashes the staged file. No model, no browser, no manual paste.
+retires the staged file (trash it if we own it, else rename it "SWEPT …" since a
+writer-only service account cannot trash another user's file). No model, no browser,
+no manual paste.
 
 Staging layout it understands (as emitted by the scout tasks):
 
@@ -49,6 +51,13 @@ SECTIONS: list[tuple[re.Pattern, str, tuple[int, ...]]] = [
     (re.compile(r"^HOLDINGS MENTIONS\b", re.I), "Holdings Mentions", (0, 1)),
 ]
 STOP = re.compile(r"^RUN NOTES\b", re.I)
+
+# A service account that is only a *writer* on the staging folder cannot trash a
+# file Kayvon owns — Drive reserves trashing for the owner (403
+# insufficientFilePermissions, hit on the first real run 2026-08-20). A writer CAN
+# rename, so renaming with this prefix is the fallback way to mark a sheet done.
+# Files already carrying the prefix are skipped on the next run.
+SWEPT_PREFIX = "SWEPT "
 
 
 def creds():
@@ -111,6 +120,26 @@ def key_for(tab: str, row: list[str]) -> tuple:
     return tuple(str(row[i]).strip().lower() if i < len(row) else "" for i in idx)
 
 
+def retire(drive, f) -> str:
+    """Mark a swept sheet done. Trash it if we own it; otherwise rename it.
+
+    Returns a short word for the log: 'trashed', 'renamed' or 'left in place'.
+    """
+    from googleapiclient.errors import HttpError
+    try:
+        drive.files().update(fileId=f["id"], body={"trashed": True}).execute()
+        return "trashed"
+    except HttpError as e:
+        if e.resp.status != 403:
+            raise   # a real error (auth, network) — do not paper over it
+    try:
+        drive.files().update(fileId=f["id"],
+                             body={"name": SWEPT_PREFIX + f["name"]}).execute()
+        return "renamed " + SWEPT_PREFIX + f["name"]
+    except HttpError as e:
+        return f"could not retire ({e.resp.status}) — will be re-read next run, dedup will skip its rows"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--folder", required=True, help="Drive folder holding the staging sheets")
@@ -128,6 +157,7 @@ def main() -> int:
         q=(f"'{args.folder}' in parents and trashed = false and "
            f"mimeType = 'application/vnd.google-apps.spreadsheet'"),
         fields="files(id,name)", orderBy="name").execute().get("files", [])
+    staged = [f for f in staged if not f["name"].startswith(SWEPT_PREFIX)]
     if not staged:
         print("no staging sheets — nothing to do")
         return 0
@@ -174,8 +204,7 @@ def main() -> int:
                   + (" (dry run)" if args.dry_run else ""))
 
         if swept_all and not args.dry_run and not args.keep:
-            drive.files().update(fileId=f["id"], body={"trashed": True}).execute()
-            print(f"  {f['name']}: trashed")
+            print(f"  {f['name']}: {retire(drive, f)}")
 
     print(f"done — {total_new} row(s) appended to the master")
     return 0
