@@ -1,0 +1,58 @@
+# .github/workflows/sweep-staging.yml
+#
+# Merges the scout tasks' staging sheets into the master tracker.
+#
+# Why this exists: the FT/Economist scout tasks run as scheduled CLOUD sessions,
+# which never have access to Kayvon's machine. The browser path in those prompts
+# therefore cannot fire, every run falls back to a staging sheet, and the sheets
+# pile up un-pasted (five by 2026-08-20; the master's FT Scout tab had stopped on
+# 08-13). The LLM keeps doing the research; this does the writing.
+#
+# Setup (one-off, already done 2026-08-20):
+#   - Drive folder "Scout Staging" = 12h1wwTnAvMAnVzMIDGjPBy5BpRjc_Q-x
+#   - shared with aristos-writer@aristos-publisher.iam.gserviceaccount.com as writer
+#   - the scout task prompts must create their staging sheets INSIDE that folder
+#     (Drive create_file with parentId), or the sweeper cannot see them
+#   - enable the Drive API on the project (Sheets API alone is not enough here)
+
+name: sweep-staging
+
+on:
+  schedule:
+    - cron: "20 9 * * 1-5"      # weekdays 09:20 UTC — after ft-scout (08:00)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report only, change nothing"
+        type: boolean
+        default: false
+
+concurrency:
+  group: sweep-staging
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      MASTER_SHEET_ID: 1wDYdPDI_XDBTvx_ttmFskNbVpVDPonSJy_-auPY_Hb4
+      STAGING_FOLDER_ID: 12h1wwTnAvMAnVzMIDGjPBy5BpRjc_Q-x
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install --quiet google-auth google-api-python-client
+
+      - name: Sweep staging sheets into the master
+        if: ${{ env.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
+        run: |
+          python scripts/sweep_staging.py \
+            --folder "$STAGING_FOLDER_ID" \
+            --spreadsheet-id "$MASTER_SHEET_ID" \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
