@@ -3,8 +3,10 @@
 # Reads the FT (and, once configured, Economist) scout sheets, merges the week's
 # tickers into growth_40_v1, runs the multi-lens ranker (no LLM, no API keys, no
 # spend), and commits per-source results to reports/scout/{ft,economist}/ plus the
-# frozen run records in runs/. The Cowork "aristos-publish" scheduled task reads
-# reports/scout/latest.json afterwards and publishes to the Google Sheet.
+# frozen run records in runs/. It then formats the results deterministically into
+# dist/ (one workbook, three tabs + summary.json) and, when GOOGLE_SERVICE_ACCOUNT_JSON
+# is set, writes them straight into the master Google Sheet — no LLM in the publish
+# path. The Cowork "aristos-publish" task only reads dist/summary.json to notify.
 #
 # Free on this public repo. Manual run: Actions tab → this workflow → Run workflow.
 
@@ -32,6 +34,11 @@ jobs:
   grade:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # `secrets` is NOT available in a step-level `if:` — lift it into env and
+      # test env there instead, or the push step silently never runs.
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      MASTER_SHEET_ID: 1wDYdPDI_XDBTvx_ttmFskNbVpVDPonSJy_-auPY_Hb4
     steps:
       - uses: actions/checkout@v4
 
@@ -52,11 +59,35 @@ jobs:
           SCOUT_SHEET_ECONOMIST: ${{ vars.SCOUT_SHEET_ECONOMIST }}
         run: python scripts/scout_verdicts.py
 
+      - name: Install publisher deps
+        run: pip install --quiet openpyxl google-auth google-api-python-client
+
+      # Always produced, credentials or not: dist/aristos_verdicts_<run_date>.xlsx
+      # (three named tabs) and dist/summary.json (digest for the notification).
+      # --max-age-days 3 exits 3 if the grader did not actually refresh the reports.
+      - name: Build verdict workbook
+        run: |
+          python scripts/publish_verdicts.py \
+            --reports reports/scout \
+            --out dist \
+            --max-age-days 3
+
+      # Appends this week's rows to the master sheet and creates "Holdings
+      # Verdicts" on first run. Skipped cleanly until the secret exists.
+      - name: Push tabs into master spreadsheet
+        if: ${{ env.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
+        run: |
+          python scripts/publish_verdicts.py \
+            --reports reports/scout \
+            --out dist \
+            --spreadsheet-id "$MASTER_SHEET_ID" \
+            --append
+
       - name: Commit results
         run: |
           git config user.name "aristos-scout[bot]"
           git config user.email "actions@users.noreply.github.com"
-          git add reports/scout runs verdicts || true
+          git add reports/scout runs verdicts dist || true
           if git diff --cached --quiet; then
             echo "nothing to commit"
           else
