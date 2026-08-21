@@ -40,6 +40,7 @@ from .factors import (
     is_sector_out_of_scope,
     is_unrateable,
     price_divergence_flag,
+    valuation_band_display,
 )
 from .rank_engine import FactorSpec, cohort_positions, format_score
 
@@ -129,6 +130,13 @@ class CompanyCheckResult:
     # nothing, so the SCREEN section says so rather than diagnosing against a default lens
     # (CCFIX-2). Gates still apply.
     screen_less: bool = False
+    # ABSOLUTE valuation context (VALBAND-1) — the one line here that is NOT a cohort
+    # statement: today's EV/EBIT (or labelled P/E fallback) as a percentile of this
+    # name's OWN 5-year band, e.g. "78th percentile of own 5-year EV/EBIT band (band
+    # from 55/60 months)". Always rendered for a rateable name — an ABSTENTION ("not
+    # evaluated — insufficient history: 1.4y") is information, not something to hide.
+    # Strictly display: it feeds no screen, no gate and no verdict in this PR.
+    valuation_band: str = "—"
 
     @property
     def display(self) -> str:
@@ -391,7 +399,7 @@ def run_company_check(
         divergence_flag=divergence, reference_available=cohort is not None,
         reference_run_id=ref_run_id, reference_run_date=ref_run_date,
         reference_cohort_n=cohort_n, data_integrity=di, pointer=pointer,
-        verdict_of_record=verdict_of_record,
+        verdict_of_record=verdict_of_record, valuation_band=valuation_band_display(fi),
         market_cap_in_gates=market_cap_in_gates, screen_less=screen_less)
 
 
@@ -641,6 +649,12 @@ def format_company_check(result: CompanyCheckResult) -> str:
         lines.append(f"  {fc.label} ({fc.factor}): "
                      f"{format_factor_value(fc.factor, fc.value)}{gloss} "
                      f"[{fc.source}] — {fc.context}")
+
+    # ABSOLUTE VALUATION (VALBAND-1) — deliberately printed right after the cohort-
+    # relative factor block, because it answers the question that block CANNOT: the
+    # factors say where this name sits among its peers, this says where its price sits
+    # against its own past. Display only; it decides nothing.
+    lines.append(f"VALUATION BAND (absolute; vs own history): {result.valuation_band}")
 
     # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen run, right after the
     # factor block. Renders only when the checked name had a recorded outcome; otherwise

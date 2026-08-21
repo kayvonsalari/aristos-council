@@ -52,6 +52,7 @@ from .factors import (
     is_unrateable,
     price_divergence_flag,
     screen_evaluate,
+    valuation_band_display,
 )
 from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
@@ -142,6 +143,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     screen_bases: dict[str, dict[str, str]] = {}     # ticker -> {criterion: basis}
     abstentions_by_ticker: dict[str, dict[str, str]] = {}   # ticker -> {criterion: note}
     names_by_ticker: dict[str, str] = {}             # ticker -> company display name (ITEM 1)
+    bands_by_ticker: dict[str, str] = {}             # ticker -> valuation band (VALBAND-1)
     for t in universe:
         # A TRANSIENT fetch failure (429/timeout/5xx, unrecovered after retries) is NOT
         # absent data — abort THIS name with a fetch-error status (rerun), never mislabel
@@ -211,6 +213,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             fi, [fac.name for fac in rank_strategy.factors])
         rows.append((t, {n: v for n, (v, _) in outcomes.items()}))
         sources_by_ticker[t] = {n: s for n, (_, s) in outcomes.items()}
+        bands_by_ticker[t] = valuation_band_display(fi)   # VALBAND-1 (display only)
     specs = [FactorSpec(fac.name, fac.direction, fac.missing)
              for fac in rank_strategy.factors]
     ranked = rank_universe(rows, specs, cut=rank_strategy.cut, k=rank_strategy.k,
@@ -223,6 +226,8 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             r.factor_sources = sources_by_ticker[r.ticker]
         if r.ticker in abstentions_by_ticker:
             r.screen_abstentions = abstentions_by_ticker[r.ticker]
+        if r.ticker in bands_by_ticker:
+            r.valuation_band = bands_by_ticker[r.ticker]
     return ranked, excluded, screen_bases, names_by_ticker
 
 
@@ -879,6 +884,36 @@ def format_screen_basis(result: RankPipelineResult) -> list[str]:
     return lines
 
 
+def valuation_band_rows(result) -> list[tuple[str, str]]:
+    """``(display name, band)`` per RATEABLE name (VALBAND-1) — the ONE source the CLI
+    block, the Run tab table and the canonical markdown all render, so the three can't
+    drift.
+
+    Every other block in a run report is a cohort statement: the ranked table says which
+    of these names is least expensive, and in a uniformly hot cohort that is still a #1.
+    This one says where each price sits against its OWN five-year history.
+
+    Display only — nothing here ranks, screens, gates or votes. Abstentions are INCLUDED
+    ("not evaluated — insufficient history: 1.4y" is the honest answer for a recent IPO
+    and must be visible). Empty when no name computed one, so a run against a thin/fake
+    adapter renders exactly what it rendered before."""
+    rows = [(_disp(result, r.ticker), r.valuation_band) for r in result.ranked
+            if not r.excluded and getattr(r, "valuation_band", "")]
+    return [] if all(band == "—" for _, band in rows) else rows
+
+
+def format_valuation_bands(result) -> list[str]:
+    """The absolute valuation-band block as CLI lines (see ``valuation_band_rows``)."""
+    rows = valuation_band_rows(result)
+    if not rows:
+        return []
+    lines = ["  VALUATION BAND (absolute; vs each name's OWN history — not ranked, "
+             "not screened):"]
+    for name, band in rows:
+        lines.append(f"      {_name_col(name)} {band}")
+    return lines
+
+
 def format_cli_report(result: RankPipelineResult) -> str:
     """The console report the CLI prints — built from the structured result so the UI
     and CLI show the SAME thing. Mirrors the legacy run_pipeline.py layout."""
@@ -916,6 +951,10 @@ def format_cli_report(result: RankPipelineResult) -> str:
     if basis_block:
         lines.append("")
         lines.extend(basis_block)
+    band_block = format_valuation_bands(result)
+    if band_block:
+        lines.append("")
+        lines.extend(band_block)
     if result.excluded:
         lines.append("")
         lines.append("  Excluded (not ranked):")

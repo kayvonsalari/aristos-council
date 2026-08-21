@@ -72,6 +72,13 @@ class Evidence:
     # history is too short. Decimals: +0.15 == +15%; -0.40 == a 40% drawdown.
     return_6m: float | None = None
     return_12m: float | None = None
+    # ABSOLUTE valuation context (VALBAND-1): a ``tools.valuation_band.ValuationBand``
+    # — today's EV/EBIT (or labelled P/E fallback) as a percentile of this name's OWN
+    # 5-year monthly distribution. Deliberately typed loosely and defaulted to None:
+    # it is computed on the RANK path (which fetches 5 years of prices), so a path that
+    # doesn't compute it leaves it None and the criterion NOT-EVALs — the same honest
+    # abstention every other criterion makes on a missing input, never a phantom fail.
+    valuation_band: object | None = None
 
 
 @dataclass(frozen=True)
@@ -263,6 +270,42 @@ def _min_f_score(ev: Evidence, threshold: float) -> CriterionResult:
                            note=result.note)
 
 
+def _valuation_band_percentile(ev: Evidence, threshold: float) -> CriterionResult:
+    """Today's valuation as a percentile of this name's OWN 5-year band, vs a CEILING.
+
+    The absolute counterpart to every relative value measure in the system: a cohort
+    rank says "cheapest of these ten", this says "and it is still at the 92nd percentile
+    of its own five-year range". Lower is better; the threshold is the highest percentile
+    a strategy will accept.
+
+    ALL arithmetic lives in ``tools.valuation_band.valuation_band`` — the SAME function
+    the rankable ``valuation_band_percentile`` factor calls (two registries, one
+    computation), so a screened and a ranked band can never diverge.
+
+    ABSTAINS (passed=None, rule 3) whenever the band abstains and whenever the band was
+    never computed on this path — the note carries the reason verbatim ("insufficient
+    history: 1.4y", "no dated statement history …"). A recent IPO ABSTAINS; it is never
+    failed for being young.
+
+    NOT gating-eligible and selected by NO strategy in this PR: the denominator is a
+    reconstructed history whose coverage varies by provider depth, which is exactly the
+    contestable-denominator class (PEG/ROIC) that must never become a deterministic veto.
+    """
+    band = ev.valuation_band
+    if band is None:
+        return CriterionResult(
+            name="valuation_band_percentile", passed=None, observed=None,
+            threshold=threshold,
+            note="valuation band not computed on this path (needs 5y price history)")
+    pct = getattr(band, "percentile", None)
+    note = getattr(band, "display", "") or getattr(band, "note", "")
+    if pct is None:
+        return CriterionResult(name="valuation_band_percentile", passed=None,
+                               observed=None, threshold=threshold, note=note)
+    return CriterionResult(name="valuation_band_percentile", passed=pct <= threshold,
+                           observed=pct, threshold=threshold, note=note)
+
+
 def _max_debt_to_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
     """Balance-sheet leverage as total_debt / market_cap (a yield-trap separator:
     VZ ~1.2x fails). Chosen over debt-to-equity BECAUSE it is ROBUST TO NEGATIVE
@@ -442,6 +485,24 @@ _CRITERIA: tuple[Criterion, ...] = (
                              "shares_outstanding_annual", "gross_profit_annual",
                              "net_income", "operating_cash_flow_annual",
                              "total_revenue"),
+    ),
+    # --- Absolute valuation band (VALBAND-1) — OPTIONAL, no strategy selects it --- #
+    Criterion(
+        "valuation_band_percentile", _valuation_band_percentile,
+        label="Maximum valuation percentile vs own 5y band",
+        params=(ParamSpec("threshold", "float", min=0.0, max=100.0, step=5.0,
+                          default=80.0),
+                _UNVERIFIABLE_BLOCKS),
+        # requires=() DELIBERATELY: the band is not one of the gathered evidence KINDS
+        # (fundamentals / dividends / last_close) that validate_selections knows about.
+        # Declaring a kind that AVAILABLE_EVIDENCE doesn't list would make every strategy
+        # selecting this criterion fail to load; declaring one it DOES list would be a
+        # lie on the council path, which never computes a band. It rides on
+        # Evidence.valuation_band and NOT-EVALs when absent.
+        requires=(),
+        # The band is built from PRICE history + the DATED statement dicts, not from a
+        # scalar Fundamentals field, so there is nothing to add to the evidence packet.
+        fundamentals_fields=(),
     ),
 )
 
