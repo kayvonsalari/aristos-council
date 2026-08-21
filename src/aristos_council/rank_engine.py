@@ -78,6 +78,13 @@ class RankedTicker:
     # True when another ranked name shares this combined rank.
     cohort_position: Optional[int] = None
     cohort_tied: bool = False
+    # ABSOLUTE valuation context (VALBAND-1), display-only: today's EV/EBIT (or labelled
+    # P/E fallback) as a percentile of THIS name's own 5-year band. Attached by the rank
+    # stage after ranking (like factor_sources); empty for a bare rank_universe call. It
+    # is deliberately NOT part of factor_values or the combined rank — no strategy ranks
+    # on it yet — and deliberately NOT in explain(), so the narrator is not handed a
+    # number it was not briefed to reason about.
+    valuation_band: str = ""
 
     def score_bounds(self) -> tuple[int, int]:
         """(best, worst) possible combined rank-sum for this name's cohort: best = number

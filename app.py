@@ -1253,6 +1253,16 @@ def _universe_markdown(result) -> str:
         lines += ["", "## Screen basis", ""]
         lines += [f"- **{e['criterion']}** — {format_screen_basis_entry(e)}"
                   for e in basis_entries]
+    # VALBAND-1: the absolute counterpart to the ranked table, in the RECORD too — a
+    # rank position ages into "it was cheapest of those"; the band ages into "and it
+    # was at the 92nd percentile of its own five years", which is the sentence a reader
+    # of an old run actually needs.
+    from aristos_council.pipeline import valuation_band_rows
+
+    band_rows = valuation_band_rows(result)
+    if band_rows:
+        lines += ["", "## Valuation band (absolute — vs each name's own history)", ""]
+        lines += [f"- **{n}** — {b}" for n, b in band_rows]
     if result.excluded:
         lines += ["", "## Excluded (screen / cap / sector)", ""]
         lines += [f"- **{display_name(t, result.names.get(t))}** — {why}"
@@ -1496,6 +1506,21 @@ def _render_universe_result(result) -> None:
                    "fallback (stale cache / missing fields) now shows in plain text.")
         for e in entries:
             st.markdown(f"- **{e['factor']}** — {format_integrity_entry(e)}")
+
+    # 2b2 — VALUATION BAND (VALBAND-1): the one ABSOLUTE line in a report otherwise made
+    # entirely of cohort statements. The ranked table above says which of these names is
+    # least expensive; this says whether any of them is cheap against its OWN history.
+    # Display only — it ranks nothing, screens nothing, and decides nothing.
+    from aristos_council.pipeline import valuation_band_rows
+
+    band_rows = valuation_band_rows(result)
+    if band_rows:
+        st.subheader("Valuation band — absolute, vs each name's own history")
+        st.caption("Today's EV/EBIT (or the labelled P/E fallback) as a percentile of "
+                   "the name's OWN 5-year monthly range. 92nd = near its own peak, "
+                   "15th = historically cheap. Not ranked, not screened.")
+        st.dataframe([{"Name": n, "Valuation band": b} for n, b in band_rows],
+                     hide_index=True, width="stretch")
 
     # 2c — SCREEN BASIS: the measurement basis each screen criterion used (payout FCF
     # vs EPS fallback) across the screened names.

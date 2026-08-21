@@ -117,6 +117,8 @@ def test_registry_holds_dividend_and_growth_criteria():
         "min_dividend_streak", "max_debt_to_market_cap",
         # accounting quality (PIOTROSKI-1)
         "min_f_score",
+        # absolute valuation vs the name's OWN history (VALBAND-1)
+        "valuation_band_percentile",
     }
     assert all(isinstance(c, Criterion) for c in REGISTRY.values())
 

@@ -103,7 +103,12 @@ DEFAULT_CACHE_DIR = ".aristos_cache"
 # caught by the field-name marker — no bump needed for those.)
 #   v1: initial field-name marker only (pre-ETFCHK-4).
 #   v2: ETF dividend_yield derivation fix (ETFCHK-4) — same field set, new value.
-ADAPTER_SCHEMA_VERSION = 2
+#   v3: VALBAND-1 added ebit / operating_income / total_debt / cash to the DATED
+#       aligned_annual + aligned_period_ends dicts. The Fundamentals FIELD SET is
+#       unchanged (the new series are dict KEYS), so the field-name marker alone
+#       would keep serving pre-bump entries with the keys missing and the valuation
+#       band would abstain forever on a warm cache.
+ADAPTER_SCHEMA_VERSION = 3
 
 
 def _schema_marker(cls) -> str:

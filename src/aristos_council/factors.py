@@ -39,6 +39,7 @@ from .tools.technical import (
     technical_snapshot,
     total_return,
 )
+from .tools.valuation_band import BAND_YEARS, ValuationBand, valuation_band
 
 _ROIC_WINDOW = 4   # through-cycle window (matches the screen's ROIC window intent)
 
@@ -98,6 +99,13 @@ class FactorInputs:
     fund_size_fx: Optional[FundSizeConversion] = None
     fund_size_fx_failed: bool = False
     fund_size_currency_unverified: bool = False
+    # ABSOLUTE valuation context (VALBAND-1): where today's EV/EBIT (or the labelled
+    # P/E fallback) sits in this name's OWN 5-year monthly distribution. Every other
+    # field here is a RELATIVE measure — ranked within a cohort — so this is the one
+    # input that can say "expensive against its own past" when the whole cohort is hot.
+    # None when the 5-year price fetch failed or was not requested; an ABSTAINED band
+    # is a ValuationBand with percentile None carrying its reason, never None here.
+    valuation_band: Optional[ValuationBand] = None
 
 
 # --- factor functions (pure; None == NOT-EVAL) ---------------------------- #
@@ -391,6 +399,34 @@ def _piotroski_f_score(fi: FactorInputs) -> Optional[float]:
     return None if result.score is None else float(result.score)
 
 
+def _valuation_band_percentile(fi: FactorInputs) -> Optional[float]:
+    """Where today's valuation sits in this name's OWN 5-year band, 0-100. LOWER better
+    (0 = its own historical floor, 100 = its own peak) — see ``FactorDef.direction``.
+
+    The ONLY absolute-valuation leg in the registry: every other value factor
+    (earnings_yield, price_to_book) is a cohort-relative statement, so in a uniformly
+    expensive cohort they all still rank someone #1. This one can say "and all ten are
+    near their own highs".
+
+    Delegates ALL arithmetic to ``tools.valuation_band.valuation_band``, the single
+    implementation the ``valuation_band_percentile`` SCREEN criterion also reads, so the
+    ranked and screened values can never diverge. ABSTAINS (None) whenever the band
+    abstains — short history (a recent IPO), no dated statements, a currency mismatch.
+
+    Registered but selected by NO strategy in this PR (like piotroski_f_score): a
+    threshold or a rank leg on it needs documented rationale first.
+    """
+    band = fi.valuation_band
+    return None if band is None else band.percentile
+
+
+def valuation_band_display(fi: FactorInputs) -> str:
+    """The band's one-line display for this name — the report/Company Check column
+    (VALBAND-1 role (a)). "—" when the band was never computed (no 5-year fetch)."""
+    band = fi.valuation_band
+    return "—" if band is None else band.display
+
+
 @dataclass(frozen=True)
 class FactorDef:
     name: str
@@ -462,6 +498,14 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         "piotroski_f_score", _piotroski_f_score, "high", "Piotroski F-Score (0-9)",
         "nine annual-statement checks; abstains below 5 computable checks; coarse "
         "integer -> large tied blocks on a small universe (screen beats rank leg)"),
+    # Absolute valuation band (VALBAND-1) — a rankable leg registered but selected by
+    # NO strategy in this PR. direction "low": the 15th percentile of its own history is
+    # cheap, the 92nd is near its own peak.
+    "valuation_band_percentile": FactorDef(
+        "valuation_band_percentile", _valuation_band_percentile, "low",
+        "Valuation vs own 5y band (percentile, low best)",
+        "monthly EV/EBIT over 5y (P/E fallback, labelled); abstains below 3y of "
+        "computable history or without dated statements"),
 }
 
 
@@ -651,6 +695,34 @@ def _fetch_fx_rate(adapter, from_ccy: str, to_ccy: str, *, today: date
     return closes[-1] if closes else None
 
 
+def _gather_valuation_band(adapter, ticker: str, fundamentals, *, today: date
+                           ) -> Optional[ValuationBand]:
+    """The absolute valuation band for one name (VALBAND-1), from its OWN 5-year price
+    history + dated statements.
+
+    Fetched SEPARATELY from the 400-day window the momentum/volatility factors read —
+    deliberately, not lazily. ``annualized_volatility`` consumes the WHOLE close list,
+    so widening the shared fetch to 5 years would silently change the low_volatility
+    factor and therefore every existing strategy's ranking. Two windows, one cached
+    provider call each, zero drift in the legs that already exist.
+
+    Best-effort: any fetch failure -> None (the band column reads "—"), never an
+    exception. A TRANSIENT error is NOT re-raised here either — an absolute-context
+    column must not abort a name the ranking legs could still rate."""
+    if fundamentals is None:
+        return None
+    try:
+        prices = adapter.get_price_history(
+            ticker, start=today - timedelta(days=round(365.25 * BAND_YEARS) + 10),
+            end=today)
+    except Exception:
+        return None
+    bars = getattr(prices, "bars", None) or []
+    if not bars:
+        return None
+    return valuation_band(bars, fundamentals, asof=today)
+
+
 def gather_factor_inputs(adapter, ticker: str, *, today: date,
                          static_rows=None) -> FactorInputs:
     """Fetch the deterministic inputs one ticker needs for factor ranking — the same
@@ -744,6 +816,10 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
             else:
                 fx_failed = True
 
+    # Absolute valuation band (VALBAND-1) — display column + registered factor. Computed
+    # AFTER the static/FX layers so it reads the same fundamentals every other leg does.
+    band = _gather_valuation_band(adapter, ticker, fundamentals, today=today)
+
     return FactorInputs(
         ticker=ticker, fundamentals=fundamentals,
         return_6m=total_return(closes, _TD_6M) if closes else None,
@@ -752,7 +828,8 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
         last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed,
         static=static_fill, fund_size_fx=fund_size_fx,
         fund_size_fx_failed=fund_size_fx_failed,
-        fund_size_currency_unverified=fund_size_currency_unverified)
+        fund_size_currency_unverified=fund_size_currency_unverified,
+        valuation_band=band)
 
 
 BORDERLINE_TOL = 0.05    # within 5% (relative) of the threshold
@@ -828,7 +905,8 @@ def price_divergence_flag(fi: FactorInputs, screen_criteria) -> Optional[str]:
     from .tools.criteria.registry import (
         Evidence, PRICE_MOMENTUM_CRITERION, run_screen)
     ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
-                  return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
+                  return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[],
+                  valuation_band=fi.valuation_band)
     res = run_screen(screen_criteria, ev, ticker=fi.ticker)
     if not any(c.passed is False and c.name != PRICE_MOMENTUM_CRITERION
                for c in res.criteria):
@@ -851,7 +929,8 @@ def screen_evaluate(screen_criteria, fi: FactorInputs):
     if fi.fundamentals is None:
         return None, {}, {}
     ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
-                  return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
+                  return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[],
+                  valuation_band=fi.valuation_band)
     reason = None
     bases: dict[str, str] = {}
     abstentions: dict[str, str] = {}

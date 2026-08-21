@@ -164,6 +164,16 @@ class YFinanceAdapter(MarketDataAdapter):
                         "Current Liabilities", "Total Current Liabilities")
         _record_aligned("shares_outstanding", balance,
                         "Ordinary Shares Number", "Share Issued")
+        # VALBAND-1: the absolute valuation band needs statements it can place IN TIME
+        # (the positional series drop NaN cells and lose the value <-> fiscal-year
+        # correspondence). EBIT/operating income is the band's preferred denominator;
+        # total debt & cash make the numerator a real EV rather than a market cap.
+        # Same best-effort contract as every series above — absent -> the band abstains.
+        _record_aligned("ebit", income, "EBIT")
+        _record_aligned("operating_income", income, "Operating Income")
+        _record_aligned("total_debt", balance, "Total Debt")
+        _record_aligned("cash", balance, "Cash And Cash Equivalents",
+                        "Cash Cash Equivalents And Short Term Investments")
 
         return Fundamentals(
             ticker=ticker,
