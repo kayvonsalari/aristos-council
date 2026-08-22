@@ -132,11 +132,14 @@ def test_strategy_tab_shows_suggested_universes_as_display_names():
     assert detail.suggested_universes == ["Financials 16"]
 
 
-def test_a_suggested_universe_that_no_longer_exists_falls_back_to_its_id():
+def test_a_suggested_universe_that_no_longer_exists_falls_back_to_its_id(tmp_path):
     # FUND-UI-2 deleted the shipped cohorts a few strategies still name. That is inert by
     # design — an unresolvable id is shown as itself and skipped in the selectors, never a
-    # crash — and it comes back to life if a list is saved under that id.
-    detail = strategy_detail("financials_v1", STRAT_DIR)
+    # crash — and it comes back to life if a list is saved under that id. Resolve against an
+    # ISOLATED empty dir so the fallback is exercised deterministically: this machine's
+    # universes/local/ may hold a personal financials_16_v1 (which correctly resolves to a
+    # display name), but that is a different claim than this test's ("unresolvable -> id").
+    detail = strategy_detail("financials_v1", STRAT_DIR, universes_dir=tmp_path)
     assert detail.suggested_universes == ["financials_16_v1"]
 
 
