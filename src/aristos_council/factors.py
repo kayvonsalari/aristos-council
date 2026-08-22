@@ -696,7 +696,7 @@ def _fetch_fx_rate(adapter, from_ccy: str, to_ccy: str, *, today: date
 
 
 def _gather_valuation_band(adapter, ticker: str, fundamentals, *, today: date
-                           ) -> Optional[ValuationBand]:
+                           ) -> ValuationBand:
     """The absolute valuation band for one name (VALBAND-1), from its OWN 5-year price
     history + dated statements.
 
@@ -706,20 +706,28 @@ def _gather_valuation_band(adapter, ticker: str, fundamentals, *, today: date
     factor and therefore every existing strategy's ranking. Two windows, one cached
     provider call each, zero drift in the legs that already exist.
 
-    Best-effort: any fetch failure -> None (the band column reads "—"), never an
-    exception. A TRANSIENT error is NOT re-raised here either — an absolute-context
-    column must not abort a name the ranking legs could still rate."""
+    Best-effort: it NEVER raises and NEVER aborts a name the ranking legs could rate (a
+    TRANSIENT error is swallowed here too — an absolute-context column must not abort a
+    name). But a failure no longer collapses to ``None``: ``None`` rendered as "—", which
+    ``valuation_band_rows`` drops when EVERY band is "—", so a REQUESTED band whose fetch
+    failed produced a report byte-identical to one where the band was never requested — a
+    silent-failure hole that cost two live debugging rounds (2026-08-22). Instead it
+    returns an ABSTAINING band carrying the reason, so the section renders an honest
+    "not evaluated — price history unavailable: <reason>", matching the insufficient-history
+    abstention. The not-requested case never reaches here — the caller passes
+    ``with_valuation_band=False`` and leaves the band ``None`` (no section), unchanged."""
     if fundamentals is None:
-        return None
+        return ValuationBand(note="fundamentals unavailable for this name")
     try:
         prices = adapter.get_price_history(
             ticker, start=today - timedelta(days=round(365.25 * BAND_YEARS) + 10),
             end=today)
-    except Exception:
-        return None
+    except Exception as exc:
+        return ValuationBand(
+            note=f"price history unavailable: {type(exc).__name__}: {exc}")
     bars = getattr(prices, "bars", None) or []
     if not bars:
-        return None
+        return ValuationBand(note="price history unavailable: no price bars returned")
     return valuation_band(bars, fundamentals, asof=today)
 
 

@@ -366,6 +366,23 @@ def test_universe_html_keeps_an_abstaining_bands_reason_intact():
     assert _squash("VWCE.DE — not evaluated — insufficient history: 1.4y") in visible
 
 
+def test_universe_html_renders_the_section_when_every_band_is_a_failure_abstention():
+    # VALBAND silent-failure fix: when the band was REQUESTED but every name's fetch
+    # FAILED, each string is "not evaluated — price history unavailable: …" (never "—"),
+    # so valuation_band_rows does NOT drop the section (it drops only when every band is
+    # "—", i.e. never requested). The report shows the reason, not silence.
+    result = _universe_result()
+    for r in result.ranked:
+        r.valuation_band = ("not evaluated — price history unavailable: "
+                            "RuntimeError: no timezone found")
+    rows = valuation_band_rows(result)
+    assert len(rows) == 3                                     # section NOT dropped
+    visible = _visible(universe_report_html(result, run_start=_RUN))
+    assert _squash(_BAND_HEADING) in visible
+    for name, band in rows:
+        assert _squash(f"{name} — {band}") in visible
+
+
 def test_universe_html_places_the_band_after_the_ranked_table_before_exclusions():
     doc = universe_report_html(_universe_result_with_bands(), run_start=_RUN)
     i_ranked = doc.index("Ranked — verdict of record")

@@ -486,3 +486,112 @@ def test_toggle_on_with_extra_lenses_keeps_the_column_and_every_lens_verdict():
     # every lens's verdict column is unchanged whether the band is on or off.
     for sid in ids:
         assert _verdict_snapshot(on.results[sid]) == _verdict_snapshot(off.results[sid])
+
+
+# --------------------------------------------------------------------------- #
+# 10. Silent-failure hole (VALBAND, 2026-08-22): a REQUESTED band whose fetch fails must
+# render an honest, visible abstention with its reason — never collapse to "—" and get the
+# whole section dropped (byte-identical to a run where the band was never requested).
+# --------------------------------------------------------------------------- #
+from aristos_council.factors import _gather_valuation_band   # noqa: E402
+
+
+class _RaisingPriceAdapter(_BandAdapter):
+    """Valid dated fundamentals (names still rank on roic + earnings_yield), but EVERY
+    price fetch raises — so the band's 5-year fetch fails. The 400-day leg's failure is a
+    plain (non-transient) error, swallowed by gather_factor_inputs, so the name stays
+    rateable; only the band cannot compute."""
+
+    def get_price_history(self, ticker, *, start, end):
+        self.price_calls += 1
+        raise RuntimeError("no timezone found, symbol may be delisted")
+
+
+class _ZeroBarPriceAdapter(_BandAdapter):
+    """Every price fetch returns zero bars — the band gets no history."""
+
+    def get_price_history(self, ticker, *, start, end):
+        self.price_calls += 1
+        return PriceHistory(ticker=ticker, bars=[])
+
+
+# --- the core: _gather_valuation_band records WHY, never collapses to None ---------- #
+def _dated_f():
+    return _fundamentals(ebit=100.0, debt=200.0, cash=50.0)
+
+
+def test_gather_band_fetch_raise_returns_a_reasoned_abstention_not_none():
+    class _Boom:
+        def get_price_history(self, ticker, *, start, end):
+            raise RuntimeError("boom-net")
+    band = _gather_valuation_band(_Boom(), "X", _dated_f(), today=TODAY)
+    assert band is not None and not band.available            # NOT None, and abstained
+    assert "price history unavailable" in band.note and "RuntimeError" in band.note
+    assert band.display.startswith("not evaluated — price history unavailable")
+
+
+def test_gather_band_zero_bars_returns_its_own_reason():
+    class _Empty:
+        def get_price_history(self, ticker, *, start, end):
+            return PriceHistory(ticker=ticker, bars=[])
+    band = _gather_valuation_band(_Empty(), "X", _dated_f(), today=TODAY)
+    assert not band.available and "no price bars returned" in band.note
+
+
+def test_gather_band_no_fundamentals_returns_its_own_reason():
+    class _Empty:
+        def get_price_history(self, ticker, *, start, end):
+            return PriceHistory(ticker=ticker, bars=[])
+    band = _gather_valuation_band(_Empty(), "X", None, today=TODAY)
+    assert not band.available and "fundamentals unavailable" in band.note
+
+
+def test_gather_band_never_raises_even_on_a_transient_error():
+    from aristos_council.data.adapter import TransientFetchError
+    class _Transient:
+        def get_price_history(self, ticker, *, start, end):
+            raise TransientFetchError("429 rate limited")
+    band = _gather_valuation_band(_Transient(), "X", _dated_f(), today=TODAY)  # must NOT raise
+    assert not band.available and "price history unavailable" in band.note
+
+
+# --- the report: the section renders when requested-but-failed ---------------------- #
+def test_band_requested_but_fetch_raises_renders_the_section_with_the_reason():
+    result = run_rank_pipeline(
+        ["P", "Q"], "magic_formula_v1", ranker_only=True, with_valuation_band=True,
+        strategies_dir=STRAT_DIR, adapter=_RaisingPriceAdapter(), today=TODAY)
+    rows = valuation_band_rows(result)
+    assert {n for n, _ in rows} == {"P", "Q"}                 # section present, one row/name
+    assert all("price history unavailable" in b for _, b in rows)
+    assert all(b.startswith("not evaluated — ") for _, b in rows)
+    # display-only: the names still ranked (fundamentals-only lens) — verdicts unaffected.
+    assert all(r.verdict for r in result.ranked if not r.excluded)
+
+
+def test_band_requested_but_zero_bars_renders_the_section_with_the_reason():
+    result = run_rank_pipeline(
+        ["P", "Q"], "magic_formula_v1", ranker_only=True, with_valuation_band=True,
+        strategies_dir=STRAT_DIR, adapter=_ZeroBarPriceAdapter(), today=TODAY)
+    rows = valuation_band_rows(result)
+    assert {n for n, _ in rows} == {"P", "Q"}
+    assert all("no price bars returned" in b for _, b in rows)
+
+
+def test_band_not_requested_stays_silent_even_when_the_fetch_would_fail(tmp_path):
+    # REGRESSION: band OFF must produce NO section, even with an adapter whose band fetch
+    # would fail — the failure path is never entered, output byte-identical to a no-band run.
+    result = run_rank_pipeline(
+        ["P", "Q"], "magic_formula_v1", ranker_only=True,
+        strategies_dir=STRAT_DIR, adapter=_RaisingPriceAdapter(), today=TODAY)
+    assert result.meta["with_valuation_band"] is False
+    assert valuation_band_rows(result) == []                  # no section at all
+
+
+def test_band_requested_and_all_compute_is_unchanged_no_failure_text():
+    result = run_rank_pipeline(
+        ["P", "Q"], "magic_formula_v1", ranker_only=True, with_valuation_band=True,
+        strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
+    rows = valuation_band_rows(result)
+    assert {n for n, _ in rows} == {"P", "Q"}
+    assert all("percentile of own 5-year" in b for _, b in rows)
+    assert not any("not evaluated" in b for _, b in rows)     # real bands, no abstention text
