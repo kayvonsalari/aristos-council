@@ -445,10 +445,26 @@ def _dropdown(at, label):
     return next(s for s in at.selectbox if s.label == label)
 
 
-def test_validation_assets_hidden_by_default(monkeypatch):
+def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
     # ITEM 2 + UNI-1: toggle OFF (default) -> the List selector offers "New list" plus the
     # front-stage saved lists; the strategy picker offers the live strategies. The
     # never-graded trap bench + the ui:hidden baseline stay hidden.
+    #
+    # Isolate the universes the app-under-test sees: copy the SHIPPED manifests (top-level
+    # only — NOT universes/local/) into a tmp dir and point list_universes there, so the
+    # List selector shows a KNOWN set. Without this, the assertions below depend on whatever
+    # personal lists sit in this machine's gitignored universes/local/ — and a personal list
+    # may legitimately reuse a deleted cohort's id (e.g. growth_40_v1), which would wrongly
+    # trip the "Growth 40 absent" checks. app.py imports list_universes locally per call, so
+    # patching the module attribute reaches the running app (verified).
+    import shutil
+    import aristos_council.universe as _univ
+    _real_list_universes = _univ.list_universes
+    for _p in (_APP.parent / "universes").glob("*.yaml"):
+        shutil.copy(_p, tmp_path / _p.name)
+    monkeypatch.setattr(_univ, "list_universes",
+                        lambda _dir: _real_list_universes(tmp_path))
+
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
@@ -467,12 +483,12 @@ def test_validation_assets_hidden_by_default(monkeypatch):
     assert any("ETF Index Tracker — UCITS" in o for o in uni)        # ETFCORE-1 cohort
     assert not any("Core Market ETFs" in o for o in uni)             # UI-RENAME-1: old label gone
     # New list + 2 US ETF lists + 3 UCITS ETF lists (dividend + growth [UCITS-1] + core
-    # [ETFCORE-1]) = 6. Plus any of your OWN saved lists, so this is a lower bound in a
-    # working tree that has some. (These app tests skip in CI — streamlit is not in dev.)
-    assert len(uni) >= 6
-    # Everything shipped is an ETF list; anything else can only be one of YOUR OWN saved
-    # lists, which carry the "(local)" tag.
-    assert all(o == "New list" or "ETF" in o or "(local)" in o for o in uni)
+    # [ETFCORE-1]) = 6. The universes are isolated to the SHIPPED set above, so this is now
+    # exact. (These app tests skip in CI — streamlit is not in dev.)
+    assert len(uni) == 6
+    # Everything shipped is an ETF list (local/ was excluded by the isolation), so every
+    # option is "New list" or an ETF list.
+    assert all(o == "New list" or "ETF" in o for o in uni)
 
     rank = _strategy_picker(at).options
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
