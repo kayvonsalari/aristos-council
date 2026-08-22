@@ -399,6 +399,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         format_screen_basis_entry,
         ranked_abstention_footnotes,
         screen_basis_integrity,
+        valuation_band_rows,
     )
     from ..data.adapter import display_name
 
@@ -471,6 +472,21 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
                      + _bullets(f'<strong>{_esc(e["criterion"])}</strong> — '
                                 + _inline(format_screen_basis_entry(e))
                                 for e in basis_entries)
+                     + "</section>")
+
+    # ----- 2b: absolute valuation band (VALBAND-2). The one NON-cohort context column,
+    # placed exactly where the canonical markdown puts it — after the ranked table + the
+    # integrity blocks, before the exclusion axes — with the SAME heading, from the SAME
+    # source (pipeline.valuation_band_rows), so HTML, markdown, CLI and the Run tab cannot
+    # drift. Abstentions are INCLUDED (valuation_band_rows already keeps them). Empty (band
+    # toggle off, or no name computed one) -> render NOTHING, so a band-off run's HTML is
+    # byte-identical to before VALBAND-2.
+    band_rows = valuation_band_rows(result)
+    if band_rows:
+        parts.append('<section class="section">'
+                     "<h2>Valuation band (absolute — vs each name's own history)</h2>"
+                     + _bullets(f'<strong>{_esc(name)}</strong> — {_inline(band)}'
+                                for name, band in band_rows)
                      + "</section>")
 
     # ----- 3/4/5: the three NON-verdict axes, each kept distinct.
