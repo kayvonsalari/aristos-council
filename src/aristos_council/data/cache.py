@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, fields
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 _log = logging.getLogger(__name__)
@@ -82,6 +82,26 @@ def _deser_dividends(d: list) -> list:
 DEFAULT_CACHE_DIR = ".aristos_cache"
 
 
+def _day(x) -> str:
+    """A value's DATE, ISO-formatted — the granularity the cache key uses for a fetch
+    window. A ``datetime`` is reduced to its date (windows are day-granular, never
+    sub-day); a ``date`` is used as-is; anything else falls back to ``str`` unchanged
+    (never invents a shape it wasn't given)."""
+    if isinstance(x, datetime):
+        return x.date().isoformat()
+    if isinstance(x, date):
+        return x.isoformat()
+    return str(x)
+
+
+def _window_key(start, end) -> str:
+    """The normalized ``start_end`` window token that makes two different date ranges for
+    the same ticker on the same day two DISTINCT cache entries (the VALBAND-1 5-year band
+    request must not be served the momentum leg's cached 400-day series). Date-granular, so
+    a repeat of the SAME window is still a cache HIT."""
+    return f"{_day(start)}_{_day(end)}"
+
+
 # --------------------------------------------------------------------------- #
 # ADAPTER SCHEMA VERSION — bump this integer whenever an adapter changes the
 # SHAPE or SEMANTICS of a cached payload WITHOUT changing the DTO field-name set.
@@ -108,7 +128,12 @@ DEFAULT_CACHE_DIR = ".aristos_cache"
 #       unchanged (the new series are dict KEYS), so the field-name marker alone
 #       would keep serving pre-bump entries with the keys missing and the valuation
 #       band would abstain forever on a warm cache.
-ADAPTER_SCHEMA_VERSION = 3
+#   v4: price/dividend cache key now includes the REQUESTED WINDOW (start,end). Pre-v4
+#       entries were keyed window-less, so a 5-year band request collided with a cached
+#       400-day series (every name abstained "insufficient history: 1.1y"). New windowed
+#       keys write to new filenames, so pre-v4 window-less files are simply never read
+#       again; this bump additionally rejects any that are, rather than misreading one.
+ADAPTER_SCHEMA_VERSION = 4
 
 
 def _schema_marker(cls) -> str:
@@ -150,16 +175,21 @@ class CachingAdapter(MarketDataAdapter):
         return self._inner.provider_for(data_kind)
 
     # --- cache plumbing --- #
-    def cache_key(self, ticker: str, kind: str) -> str:
-        return f"{self._inner.provider_for(kind)}:{ticker}:{self._today.isoformat()}:{kind}"
+    def cache_key(self, ticker: str, kind: str, window: str = "") -> str:
+        # A ``window`` (the fetch's start_end range) is part of the identity for the
+        # windowed kinds (prices, dividends) so two ranges for one ticker on one day are
+        # two entries; window-less kinds (fundamentals, consensus) pass "" and are keyed
+        # exactly as before — byte-identical filenames for those.
+        base = f"{self._inner.provider_for(kind)}:{ticker}:{self._today.isoformat()}:{kind}"
+        return f"{base}:{window}" if window else base
 
-    def _path(self, ticker: str, kind: str) -> Path:
+    def _path(self, ticker: str, kind: str, window: str = "") -> Path:
         safe = "".join(ch if ch.isalnum() else "_"
-                       for ch in self.cache_key(ticker, kind))
+                       for ch in self.cache_key(ticker, kind, window))
         return self._dir / f"{safe}.json"
 
-    def _cached(self, ticker, kind, fetch, ser, deser):
-        path = self._path(ticker, kind)
+    def _cached(self, ticker, kind, fetch, ser, deser, *, window: str = ""):
+        path = self._path(ticker, kind, window)
         schema = _SCHEMAS.get(kind, "")
         if not self._refresh and path.exists():
             try:
@@ -185,16 +215,22 @@ class CachingAdapter(MarketDataAdapter):
                             _ser_fundamentals, _deser_fundamentals)
 
     def get_price_history(self, ticker, *, start, end):
+        # The WINDOW is part of the key (v4): gather_factor_inputs fetches a 400-day
+        # window (momentum/volatility) AND a 5-year window (valuation band) for the same
+        # ticker on the same day — window-less, the second was served the first's series.
         return self._cached(ticker, "prices",
                             lambda: self._inner.get_price_history(
                                 ticker, start=start, end=end),
-                            _ser_prices, _deser_prices)
+                            _ser_prices, _deser_prices,
+                            window=_window_key(start, end))
 
     def get_dividend_history(self, ticker, *, start, end):
+        # Same window-in-key treatment as prices — the identical latent collision.
         return self._cached(ticker, "dividends",
                             lambda: self._inner.get_dividend_history(
                                 ticker, start=start, end=end),
-                            _ser_dividends, _deser_dividends)
+                            _ser_dividends, _deser_dividends,
+                            window=_window_key(start, end))
 
     def get_street_consensus(self, ticker):
         # Delegate to the inner adapter (the base default would return an all-null
