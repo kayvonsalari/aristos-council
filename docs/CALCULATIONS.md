@@ -75,6 +75,7 @@ All factors are pure functions of adapter data; each returns a float or `None`
 | `expense_ratio` | The fund's ongoing charge (`net_expense_ratio`), vendor value as-is | **low** | ETF lenses only — the sole LOW-direction ETF leg: cost compounds against the holder forever, so cheaper ranks better. See §2.1 for the percent-not-fraction unit trap. |
 | `fund_size` | The fund's net assets (`total_assets`) | high | ETF lenses only — a liquidity and closure-risk proxy. See §2.1. |
 | `piotroski_f_score` | The Piotroski F-Score: nine binary accounting checks over the two most recent annual periods, 0–9 | high | Registered but selected by **no strategy**; shares its arithmetic with the `min_f_score` screen criterion. **Abstains** below 5 computable checks. A coarse integer, so it ties heavily on a small cohort — better as a screen than a rank leg. Full definition in **§4.1**. |
+| `valuation_band_percentile` | Where today's valuation sits in the name's **OWN** 5-year monthly distribution, 0–100 (15th = historically cheap, 92nd = near its own peak) | **low** | ABSOLUTE, not cohort-relative — the one factor that asks "expensive vs its own past?". Registered but selected by **no strategy**; shares its arithmetic with the `valuation_band_percentile` screen criterion. **Abstains** below 3 years of computable history. Opt-in (an extra 5-year fetch). Full definition in **§2.3**. |
 
 ### 2.1 ETF factors
 
@@ -157,6 +158,78 @@ decimal, and ACC/DIST is inferred from the yield (a true zero → `acc`) with a 
 left blank — omit, never invent.
 
 The columns `share_class` and `domicile` are **descriptive only**: no factor reads them.
+
+### 2.3 Absolute valuation band (VALBAND-1, `tools/valuation_band.py`)
+
+Every other value measure here is **relative** — earnings yield ranked *within a cohort* —
+so in a hot cohort the least-expensive of ten overpriced names still ranks #1. The
+valuation band answers the ABSOLUTE question instead: *where does today's valuation sit in
+this stock's OWN 5-year history?* Deterministic, no forecasting.
+
+**Formula.** Build a monthly valuation series over the last 5 years and report today's value
+as a percentile of that series:
+
+```
+percentile = 100 × (count of historical months with valuation ≤ today) / months_covered
+```
+
+A **flat** history puts today at the 50th percentile exactly (no interpolation, no drift); a
+name at its own historical peak reads near the 100th, at its own floor near the 0th. Lower is
+better (cheaper vs its own past), so as a rank factor its direction is **low**.
+
+**Basis choice — EV/EBIT preferred, P/E fallback, always labelled.** Each month's valuation is
+**EV/EBIT** = (market cap + total debt − cash) / EBIT, the same enterprise-value construction
+`earnings_yield` uses (§2). Where the EV/EBIT components are unavailable it falls back to
+trailing **P/E**, and every value states which basis it used — `"78th percentile of own
+5-year EV/EBIT band"` vs `"… P/E band (fallback)"` — a fallback is never silent.
+
+**Three construction rules, because each is how a "historical" series quietly rots:**
+
+- **Market cap is scaled by PRICE RELATIVES** (`mcap_now × close_t / close_now`), *not* by a
+  historical share count: provider closes are split-adjusted while reported share counts are
+  as-reported, so multiplying them is off by the entire split factor (4× for a 2:1). The cost
+  is that buyback drift is not modelled — disclosed, not traded for a 10× error. Uses `close`
+  (split-adjusted), never `adj_close` (a total-return series is not a price).
+- **Statements are applied point-in-time** with a 90-day reporting lag, and today's value is
+  built by the SAME rule as the history — no look-ahead on the current point.
+- **Missing / loss months drop out and are COUNTED.** A P/E month with non-positive earnings is
+  undefined, so it is excluded and the coverage reported — `"band from 41 of 60 months"` —
+  rather than faked to a full 60. Coverage is disclosed, never padded.
+
+**The ≥3-year rule (honest abstention).** The band **abstains** below **3 years** of computable
+history (or below half the months in its span), stating the reason with the measured span:
+`"insufficient history: 1.4y"`. A recent IPO will and should abstain — it is never assigned a
+fabricated middle. A confirmed accounts-vs-price **currency mismatch** abstains too (house
+rule 8), never mixing currencies into one series.
+
+**Roles.** (a) a **display/context column** per rateable name (CLI report, Run tab, the run
+markdown, Company Check — one shared row builder, `pipeline.valuation_band_rows`, so the
+surfaces cannot drift); (b) a **rankable factor** `valuation_band_percentile` (direction low)
+and the matching **screen criterion**, both delegating to the ONE computation so a ranked and
+a screened band can never diverge. **No shipped strategy selects either, and there is no
+screen/gate** — any future threshold arrives separately with documented rationale here, per
+house rules. So VALBAND-1 moves no existing verdict.
+
+**Opt-in — why the band is a toggle, not always-on.** The band needs its OWN 5-year price
+fetch, kept deliberately separate from the 400-day window the momentum/volatility factors read
+(widening that shared fetch would silently change `low_volatility`, and therefore every
+existing strategy's ranking). Because that second fetch has a cost, the band is **off by
+default** end-to-end: `factors.gather_factor_inputs(..., with_valuation_band=False)` threads up
+through `_rank_stage` → `run_rank_pipeline` / `run_multi_strategy_pipeline`. Off, no band is
+computed, no extra fetch is made, and output is byte-identical to a pre-VALBAND run. The
+Council Station Run tab exposes this as a **"Valuation band (context column — no verdict)"**
+checkbox rendered with the "Also grade with" extra-lens group, **default OFF** — but with
+semantics distinct from those lenses: extra lenses *grade* (add a verdict column), the band
+*contextualizes* (adds the absolute percentile column), re-grading nothing. It combines freely
+with the primary strategy and any extra lenses; in a multi-lens run the band is computed once
+(per name) and shown once beside the combined grid. Company Check shows the band as it has
+since VALBAND-1 shipped.
+
+**Narrator.** The band is a **display/context column only** — it is deliberately NOT fed into
+the council/narrator evidence block in this build. A new evidence line invites a citation
+whose `field_path` the provenance grammar cannot yet resolve (house rule 4), which would
+generate `DATA_QUALITY` violations; that wiring needs its own alias-table work and is deferred.
+No prompt changes.
 
 ## 3. Dividend streak — flat is not a cut (`tools/screening.py`)
 

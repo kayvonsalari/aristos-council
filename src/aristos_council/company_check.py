@@ -270,7 +270,11 @@ def run_company_check(
     screen_criteria = list(screen_strategy.criteria) if screen_strategy else []
     screen_strategy_id_str = screen_strategy.id if screen_strategy else ""
 
-    fi = gather_factor_inputs(adapter, ticker, today=today)
+    # VALBAND-1: gather_factor_inputs now gates the absolute band (an extra 5-year fetch)
+    # behind with_valuation_band, default OFF. Company Check has shown the band since it
+    # shipped, so pass True to keep its output byte-unchanged in this PR; the opt-in
+    # checkbox that will gate it here lands with the multi-lens Company Check work (Part B).
+    fi = gather_factor_inputs(adapter, ticker, today=today, with_valuation_band=True)
     f = fi.fundamentals
     company_name = getattr(f, "company_name", None) if f is not None else None
 

@@ -365,3 +365,124 @@ def test_a_run_where_nothing_computed_a_band_renders_no_block_at_all():
     assert valuation_band_rows(_Result([_row("A", "—"), _row("B", "—")])) == []
     assert format_valuation_bands(_Result([_row("A", "—")])) == []
     assert format_valuation_bands(_Result([])) == []
+
+
+# --------------------------------------------------------------------------- #
+# 9. UI toggle (VALBAND-1 A4) — the band is OPT-IN at the pipeline level.
+#
+# The band costs a second (5-year) price fetch per name, so run_rank_pipeline /
+# run_multi_strategy_pipeline compute it ONLY when with_valuation_band=True. Off (the
+# default) there is no band section and no extra fetch — byte-identical to a pre-VALBAND
+# run; on, the context column appears and every ranker verdict/rank is unchanged (the band
+# never re-grades). These pin exactly the A4 acceptance criteria.
+# --------------------------------------------------------------------------- #
+from pathlib import Path  # noqa: E402
+
+from aristos_council.data.adapter import MarketDataAdapter, PriceHistory  # noqa: E402
+from aristos_council.pipeline import (  # noqa: E402
+    run_multi_strategy_pipeline, run_rank_pipeline)
+
+STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
+
+# magic_formula_v1 ranks on ROIC + earnings_yield and prefilters at ROIC >= 12% with a
+# $5B cap floor; both names clear it. Dated ebit/debt/cash feed the band (the SAME
+# fundamentals the ranking reads), so a real percentile computes for each.
+_BAND_FUND = {
+    "P": dict(market_cap=2e10, sector="Technology", ebit=[3000.0], pe_ratio=10.0,
+              operating_income=[3000.0, 2800, 2600, 2400], tax_provision=[600.0] * 4,
+              pretax_income=[2900.0, 2700, 2500, 2300], invested_capital=[5000.0] * 4,
+              total_revenue=[200.0, 170, 150, 120]),
+    "Q": dict(market_cap=2e10, sector="Technology", ebit=[1500.0], pe_ratio=20.0,
+              operating_income=[1500.0, 1450, 1400, 1350], tax_provision=[300.0] * 4,
+              pretax_income=[1450.0, 1400, 1350, 1300], invested_capital=[5000.0] * 4,
+              total_revenue=[150.0, 140, 130, 120]),
+}
+_BAND_TRENDS = {"P": [50.0 + i for i in range(60)],       # rising -> near its own peak
+                "Q": [110.0 - i for i in range(60)]}      # falling -> near its own floor
+
+
+class _BandAdapter(MarketDataAdapter):
+    """Two rateable stocks with DATED statements (so the band computes) and a 5-year
+    monthly price series. Counts get_price_history calls so a test can prove the band's
+    extra fetch runs ONLY when requested."""
+
+    name = "fake-band"
+
+    def __init__(self):
+        self.price_calls = 0
+
+    def get_fundamentals(self, ticker):
+        ends = _fiscal_years(6)
+        aligned = {"ebit": [_BAND_FUND[ticker]["ebit"][0]] * 6,
+                   "total_debt": [200.0] * 6, "cash": [50.0] * 6}
+        period_ends = {k: ends[:6] for k in aligned}
+        return Fundamentals(ticker=ticker, name=ticker,
+                            aligned_annual=aligned, aligned_period_ends=period_ends,
+                            **_BAND_FUND[ticker])
+
+    def get_price_history(self, ticker, *, start, end):
+        self.price_calls += 1
+        return PriceHistory(ticker=ticker, bars=_bars(_BAND_TRENDS[ticker], end=TODAY))
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return []
+
+
+def _verdict_snapshot(result):
+    return [(r.ticker, r.verdict, round(r.combined_rank, 6))
+            for r in result.ranked if not r.excluded]
+
+
+def test_toggle_off_produces_no_band_and_is_the_default():
+    result = run_rank_pipeline(
+        ["P", "Q"], "magic_formula_v1", ranker_only=True,
+        strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
+    assert result.meta["with_valuation_band"] is False        # default OFF
+    assert valuation_band_rows(result) == []                  # no band section
+    assert all(getattr(r, "valuation_band", "—") in ("", "—") for r in result.ranked)
+
+
+def test_toggle_on_adds_the_column_and_leaves_verdicts_unchanged():
+    off = run_rank_pipeline(
+        ["P", "Q"], "magic_formula_v1", ranker_only=True,
+        strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
+    on = run_rank_pipeline(
+        ["P", "Q"], "magic_formula_v1", ranker_only=True, with_valuation_band=True,
+        strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
+
+    assert on.meta["with_valuation_band"] is True
+    band_rows = valuation_band_rows(on)
+    assert {n for n, _ in band_rows} == {"P", "Q"}            # column present for each
+    assert all("percentile of own 5-year" in b for _, b in band_rows)
+    # the band NEVER re-grades: verdicts + ranks are byte-identical with it on or off.
+    assert _verdict_snapshot(on) == _verdict_snapshot(off)
+
+
+def test_toggle_off_makes_no_extra_price_fetch():
+    off_adapter = _BandAdapter()
+    run_rank_pipeline(["P", "Q"], "magic_formula_v1", ranker_only=True,
+                      strategies_dir=STRAT_DIR, adapter=off_adapter, today=TODAY)
+    on_adapter = _BandAdapter()
+    run_rank_pipeline(["P", "Q"], "magic_formula_v1", ranker_only=True,
+                      with_valuation_band=True, strategies_dir=STRAT_DIR,
+                      adapter=on_adapter, today=TODAY)
+    # ON fetches an extra 5-year window per name (its own separate fetch); OFF does not.
+    assert on_adapter.price_calls > off_adapter.price_calls
+    assert on_adapter.price_calls == off_adapter.price_calls + 2   # one per name
+
+
+def test_toggle_on_with_extra_lenses_keeps_the_column_and_every_lens_verdict():
+    ids = ["magic_formula_v1", "magic_formula_raw_v1"]
+    off = run_multi_strategy_pipeline(
+        ["P", "Q"], ids, strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
+    on = run_multi_strategy_pipeline(
+        ["P", "Q"], ids, strategies_dir=STRAT_DIR, adapter=_BandAdapter(),
+        today=TODAY, with_valuation_band=True)
+
+    # the band rides on the FIRST lens's result (computed once, per name).
+    first_on = on.results[ids[0]]
+    assert {n for n, _ in valuation_band_rows(first_on)} == {"P", "Q"}
+    assert valuation_band_rows(off.results[ids[0]]) == []
+    # every lens's verdict column is unchanged whether the band is on or off.
+    for sid in ids:
+        assert _verdict_snapshot(on.results[sid]) == _verdict_snapshot(off.results[sid])

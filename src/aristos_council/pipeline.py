@@ -134,7 +134,8 @@ def _screenless_frame(rank_strategy):
         lens_factor_labels=list(lens.factor_labels))
 
 
-def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None):
+def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None,
+                with_valuation_band=False):
     from .data.adapter import TransientFetchError
 
     rows: list[tuple[str, dict]] = []
@@ -149,7 +150,8 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         # absent data — abort THIS name with a fetch-error status (rerun), never mislabel
         # a throttled live ticker as UNRATEABLE or silently worst-rank it (ITEM 5).
         try:
-            fi = gather_factor_inputs(adapter, t, today=today)
+            fi = gather_factor_inputs(adapter, t, today=today,
+                                      with_valuation_band=with_valuation_band)
         except TransientFetchError as exc:
             excluded.append((t, f"{FETCH_ERROR_PREFIX}: {exc}"))
             continue
@@ -213,7 +215,8 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             fi, [fac.name for fac in rank_strategy.factors])
         rows.append((t, {n: v for n, (v, _) in outcomes.items()}))
         sources_by_ticker[t] = {n: s for n, (_, s) in outcomes.items()}
-        bands_by_ticker[t] = valuation_band_display(fi)   # VALBAND-1 (display only)
+        if with_valuation_band:                           # VALBAND-1 (display only, opt-in)
+            bands_by_ticker[t] = valuation_band_display(fi)
     specs = [FactorSpec(fac.name, fac.direction, fac.missing)
              for fac in rank_strategy.factors]
     ranked = rank_universe(rows, specs, cut=rank_strategy.cut, k=rank_strategy.k,
@@ -535,6 +538,7 @@ def run_rank_pipeline(
     adapter=None, runners=None, today: Optional[date] = None,
     use_cache: bool = True, progress: Optional[Callable[[str], None]] = None,
     freeze_dir: str | Path | None = None, replay_run_id: Optional[str] = None,
+    with_valuation_band: bool = False,
 ) -> RankPipelineResult:
     """Rank a universe under a RANK strategy, then (unless ``ranker_only``) narrate
     the shortlist with the LLM council. The single entrypoint the CLI and Council
@@ -554,7 +558,13 @@ def run_rank_pipeline(
     ``narrate_coverage`` (NARR-2) controls WHICH ranked names get an LLM narrative:
     ``"buys_only"`` (default, cheapest — the strategy's usual BUY-tier shortlist) or
     ``"all"`` (every ranked live name, for core/ETF cohorts where the HOLDs are live
-    candidates). Coverage only — the deterministic ranker verdicts are byte-unchanged."""
+    candidates). Coverage only — the deterministic ranker verdicts are byte-unchanged.
+
+    ``with_valuation_band`` (VALBAND-1, default False) adds the ABSOLUTE valuation-band
+    context column for every rateable name — where today's valuation sits in that name's
+    OWN 5-year distribution. Opt-in because it costs a second (5-year) price fetch per
+    name; it NEVER re-grades, changes a rank, or feeds a verdict. Off -> no band
+    computation, no extra fetch, and the output is byte-identical to a pre-VALBAND run."""
     strategies_dir = Path(strategies_dir) if strategies_dir else _STRATEGIES_DIR
     universe, resolved_universe_id = _resolve_universe(
         universe, universe_id,
@@ -607,7 +617,8 @@ def run_rank_pipeline(
                  if (screen_strategy is not None
                      and getattr(rank_strategy, "prefilter_screen", False)) else None)
     ranked, prerank_excluded, screen_bases, names = _rank_stage(
-        universe, rank_strategy, adapter, today=today, prefilter_criteria=prefilter)
+        universe, rank_strategy, adapter, today=today, prefilter_criteria=prefilter,
+        with_valuation_band=with_valuation_band)
     live = [r for r in ranked if not r.excluded]
     excluded, unrateable, fetch_errors = _split_exclusions(ranked, prerank_excluded)
 
@@ -675,6 +686,9 @@ def run_rank_pipeline(
         "council_runs_on": runs_on,
         "narrate_coverage": narrate_coverage,
         "ranker_only": ranker_only,
+        # VALBAND-1: whether the opt-in absolute valuation band was computed this run
+        # (a context column, never a verdict input). False -> no band section anywhere.
+        "with_valuation_band": with_valuation_band,
         "universe_size": len(universe),
         "ranked_count": len(live),
         "shortlist": [r.ticker for r in shortlist],
@@ -1159,6 +1173,7 @@ def run_multi_strategy_pipeline(
     today: Optional[date] = None, use_cache: bool = True,
     progress: Optional[Callable[[str], None]] = None,
     freeze_dir: str | Path | None = None,
+    with_valuation_band: bool = False,
 ) -> MultiStrategyResult:
     """Grade ONE cohort under N rank strategies and return the combined grid (FUND-RUN-1).
 
@@ -1191,7 +1206,12 @@ def run_multi_strategy_pipeline(
             list(universe) if universe else None, sid, universe_id=universe_id,
             universes_dir=universes_dir, strategies_dir=strategies_dir,
             ranker_only=True, adapter=adapter, today=today, use_cache=use_cache,
-            freeze_dir=freeze_dir)
+            freeze_dir=freeze_dir,
+            # VALBAND-1: the band is per-NAME, not per-strategy, so compute it once (on the
+            # first lens) — the shared cache means later lenses would only re-read the same
+            # 5-year fetch. Every column's ranked tickers still describe the same cohort;
+            # the band column is read off this first result (app renders it beside the grid).
+            with_valuation_band=(with_valuation_band and i == 1))
         results[sid] = res
         names[sid] = res.meta.get("rank_strategy_name", "") or sid
 

@@ -724,7 +724,8 @@ def _gather_valuation_band(adapter, ticker: str, fundamentals, *, today: date
 
 
 def gather_factor_inputs(adapter, ticker: str, *, today: date,
-                         static_rows=None) -> FactorInputs:
+                         static_rows=None,
+                         with_valuation_band: bool = False) -> FactorInputs:
     """Fetch the deterministic inputs one ticker needs for factor ranking — the same
     adapter the council uses. Per-source DataUnavailable is swallowed (partial inputs
     -> NOT-EVAL factors), so one flaky name never aborts a universe ranking.
@@ -736,7 +737,13 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
 
     A served ``fund_size`` is then normalised to EUR (DATA-HYGIENE-1) — converted at a
     dated rate, withheld when the rate is unavailable, or flagged when its base currency
-    is unknown. See the ``FactorInputs.fund_size_fx*`` fields."""
+    is unknown. See the ``FactorInputs.fund_size_fx*`` fields.
+
+    ``with_valuation_band`` (VALBAND-1, default False) gates the ABSOLUTE valuation band:
+    it is the ONLY opt-in leg here because it is the only one that costs a SECOND price
+    fetch (its own 5-year window, separate from the 400-day factor window). Off by default
+    so a normal ranking makes no extra call and its output is byte-identical to a
+    pre-VALBAND run; the UI's "Valuation band" checkbox and Company Check pass True."""
     from .data.adapter import TransientFetchError
 
     fundamentals = None
@@ -818,7 +825,10 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
 
     # Absolute valuation band (VALBAND-1) — display column + registered factor. Computed
     # AFTER the static/FX layers so it reads the same fundamentals every other leg does.
-    band = _gather_valuation_band(adapter, ticker, fundamentals, today=today)
+    # OPT-IN: skipped (and its extra 5-year fetch never made) unless the caller asks — off
+    # by default so a normal ranking is byte-identical to a pre-VALBAND run.
+    band = (_gather_valuation_band(adapter, ticker, fundamentals, today=today)
+            if with_valuation_band else None)
 
     return FactorInputs(
         ticker=ticker, fundamentals=fundamentals,
