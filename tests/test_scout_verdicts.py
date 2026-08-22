@@ -530,7 +530,7 @@ def test_a_tab_sourced_holding_is_a_first_class_entry_labelled_as_tab_sourced(
     for sid in sv.STOCK_LENSES:
         assert "asset kind" not in (tab_row["lenses"][sid]["reason"] or "")
 
-    text = (out / "holdings" / f"{TODAY.isoformat()}_verdicts.md").read_text()
+    text = (out / "holdings" / f"{TODAY.isoformat()}_verdicts.md").read_text(encoding="utf-8")
     lines = text.splitlines()
     head_i = next(i for i, ln in enumerate(lines)
                   if ln.startswith("## ") and "(C)" in ln)
@@ -561,7 +561,7 @@ def test_every_entry_carries_the_f_score_block(tmp_path):
 
 def test_markdown_carries_an_f_score_line_next_to_the_lens_lines(tmp_path):
     out = _written(tmp_path)
-    text = (out / "holdings" / f"{TODAY.isoformat()}_verdicts.md").read_text()
+    text = (out / "holdings" / f"{TODAY.isoformat()}_verdicts.md").read_text(encoding="utf-8")
     assert "# HOLDINGS scout verdicts" in text
     assert "EVIDENCE ONLY" in text and "no lens consumes it" in text
     assert "Flags: HOLDING" in text and "asset-kind gate" in text
@@ -576,7 +576,7 @@ def test_markdown_carries_an_f_score_line_next_to_the_lens_lines(tmp_path):
         assert block.index(f_lines[0]) > block.index(lens_lines[0])
         assert expected in f_lines[0]
     assert "- **F-Score**: 9/9" in (out / "ft" / f"{TODAY.isoformat()}_verdicts.md"
-                                    ).read_text()
+                                    ).read_text(encoding="utf-8")
 
 
 def test_the_f_score_moves_no_verdict(tmp_path):

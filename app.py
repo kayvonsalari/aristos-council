@@ -1376,6 +1376,15 @@ def _multi_strategy_markdown(multi_result) -> str:
     lines += ["", "Rank-sum adds the per-strategy cohort POSITIONS and is comparable only "
                   "across names ranked by ALL strategies (‡ = ranked by fewer; nothing "
                   "imputed for an exclusion).", ""]
+    # VALBAND-1: the absolute band, computed once (on the first lens) — a per-NAME context
+    # column, not a per-strategy verdict, so it sits ONCE under the combined grid. Empty
+    # (section omitted) unless the "Valuation band" checkbox was ticked.
+    from aristos_council.pipeline import valuation_band_rows
+    band_rows = valuation_band_rows(multi_result.results[ids[0]]) if ids else []
+    if band_rows:
+        lines += ["## Valuation band (absolute — vs each name's own history)", ""]
+        lines += [f"- **{n}** — {b}" for n, b in band_rows]
+        lines.append("")
     for sid in ids:
         res = multi_result.results[sid]
         lines += [f"## {multi_result.strategy_names.get(sid) or sid} (`{sid}`)", ""]
@@ -1420,6 +1429,17 @@ def _render_multi_strategy_result(multi_result) -> None:
     st.caption(f"Rank-sum adds the per-strategy cohort POSITIONS; comparable only across "
                f"the {m.get('graded_by_all', 0)} name(s) ranked by ALL {len(ids)} "
                f"strategies (‡ = ranked by fewer — nothing is imputed for an exclusion).")
+
+    # VALBAND-1: the absolute band (computed once, on the first lens) — a per-NAME context
+    # column beside the combined grid, never a verdict. Shown only when the checkbox was on.
+    from aristos_council.pipeline import valuation_band_rows
+    band_rows = valuation_band_rows(multi_result.results[ids[0]]) if ids else []
+    if band_rows:
+        st.subheader("Valuation band — absolute, vs each name's own history")
+        st.caption("Where today's valuation sits in each name's OWN 5-year distribution "
+                   "(context only — it does not re-grade or reorder any lens).")
+        st.dataframe([{"Name": n, "Valuation band": b} for n, b in band_rows],
+                     width="stretch", hide_index=True)
 
     for sid in ids:
         res = multi_result.results[sid]
@@ -1669,6 +1689,18 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 for c in extra_choices[i * per_col:(i + 1) * per_col]:
                     extras.append((c.label,
                                    st.checkbox(c.label, key=lens_checkbox_key(c.id))))
+    # VALBAND-1: the valuation-band toggle rides WITH the extra-lens group but is NOT a
+    # lens — extra lenses GRADE (add a verdict column), the band CONTEXTUALIZES (adds an
+    # absolute percentile column, re-grades nothing). Default OFF: unticked -> no band
+    # computation, no extra fetch, output byte-identical to a pre-VALBAND run.
+    with_valuation_band = st.checkbox(
+        "Valuation band (context column — no verdict)", value=False,
+        key="uni_valuation_band",
+        help="Adds an absolute column: where today's valuation sits in each name's OWN "
+             "5-year EV/EBIT (or P/E) distribution — 15th percentile = historically "
+             "cheap, 92nd = near its own peak. Unlike the extra lenses above it never "
+             "grades, reorders, or narrates; it only contextualizes. Off by default — "
+             "ticking it fetches each name's 5-year price history.")
     picked_labels = selected_labels(primary_label, extras)
     # OFFER order, not click order (picker.resolve_all), so the combined grid's columns are
     # reproducible. ``or [primary]`` only covers a stale widget value: with a required
@@ -1862,7 +1894,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
             multi_result = run_multi_strategy_pipeline(
                 universe, strategy_ids, universe_id=universe_id,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                freeze_dir=ROOT / "runs",
+                freeze_dir=ROOT / "runs", with_valuation_band=with_valuation_band,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")
@@ -1890,6 +1922,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 universe, rank_strategy.id, universe_id=universe_id,
                 council_mode=mode, ranker_only=ranker_only,
                 narrate_coverage=narrate_coverage,
+                with_valuation_band=with_valuation_band,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 # Freeze this run's raw inputs so Company Check's reference-cohort reader
                 # (_latest_reference_run) can replay it offline — without this the UI
