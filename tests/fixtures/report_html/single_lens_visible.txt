@@ -1,0 +1,143 @@
+Aristos Council · universe run
+ETF Index Tracker — etf_core_5_v1
+Universe
+etf_core_5_v1 — 5 names
+Strategy
+ETF Index Tracker (etf_core_v1)
+Screen
+none
+Run
+24.08.2026 13:49 CEST — narrator commentary
+Ranked
+3 of 5 names
+Shortlist
+1 names · estimated cost $0.19 · narrating buys_only
+Verdict: deterministic ranker.  Narrative: LLM (non-judging).
+1 BUY · 1 HOLD · 1 SELL — 3 of 5 names ranked, 1 excluded by the screen, 1 with no usable data, 1 whose data fetch failed — re-run to recover
+Rules applied
+Screen: none
+This strategy screens nothing: no rule filtered the cohort, and quality enters only through the ranking below.
+Rule
+Limit
+What it did
+Measured on
+Dividends vs free cash flow
+max_payout_ratio_fcf
+limit not recorded
+not applied to any name
+4-year average free cash flow for 1 name (EUNL.DE)
+Ranked — the verdict of record
+Score is the sum of a name's factor ranks — lower is better. With 2 factors over 3 ranked names the best possible score is 2 and the worst is 6.
+Position (score)
+Name
+Verdict
+Expense ratio (low best) (rank, 1 = best)
+Fund size (total assets, EUR) (rank, 1 = best)
+#1 of 3
+· score 2
+iShares Core S&P 500 (SXR8.DE)
+BUY
+1 · 0.07
+1 · €80.0bn
+#2 of 3 (tied)
+· score 5
+iShares Core MSCI World (EUNL.DE)
+HOLD
+⚑ boundary (tied 5 with VWCE.DE — SELL; tie broken alphabetically)
+2 · 0.20
+3 · €50.0bn
+#2 of 3 (tied)
+· score 5
+VWCE.DE†
+SELL
+⚑ boundary (tied 5 with EUNL.DE — HOLD; tie broken alphabetically)
+3 · 0.22
+2*
+Factor ids, in column order:
+expense_ratio
+,
+fund_size
+.
+*
+— A rank marked * was IMPUTED: that factor had no value for this name, so it was given the average of the name's other factor ranks rather than the worst rank — the name is judged on what it has, not punished for the gap.
+†
+— A name marked † PASSED the screen while one of the screen's rules could not be tested at all for it; the rule and the reason are named under the verdict.
+⚑
+— A verdict marked ⚑ sits on a boundary: this name tied on score with another that received a DIFFERENT verdict, and the alphabetical tie-break, not a score difference, decided which side of the line each fell on.
+Rules that could not be tested
+These names PASSED the screen — a rule that cannot be evaluated never excludes anyone (an abstention is not a failure) — but one of its rules returned no answer for them at all, so their pass is thinner than it looks.
+VWCE.DE
+— SELL — 1 rule could not be tested: Dividends vs free cash flow (mean FCF non-positive) [max_payout_ratio_fcf]
+Where the numbers came from
+How each ranked name's value for each factor was actually produced — a silent fallback (a proxy, a stale cache, a missing field) reads in plain text here instead of looking identical to a real measurement.
+Expense ratio (low best) — static: 2026-07-21, EODHD for all 3 names.
+Fund size (total assets, EUR) — real data for all 3 names.
+Valuation band (absolute — vs each name's own history)
+What each name costs today, where that sits in its own 12-month range, where today's multiple sits in its OWN multi-year range, and what the price would be at that name's own MEDIAN past multiple. Rows follow the ranked table's order — they are deliberately not re-sorted by gap.
+Name
+Price
+12-month low
+12-month high
+EV/EBIT
+Own 5y median
+Percentile
+Reversion value
+Gap
+iShares Core S&P 500 (SXR8.DE)
+€105.50
+€90.00
+€140.00
+21.9x
+18.4x
+78th (dear)
+€88.50
+-16%
+iShares Core MSCI World (EUNL.DE)
+€99.50
+€90.00
+€140.00
+14.2x (P/E)
+17.1x
+23rd (cheap)
+€120.40
++21%
+VWCE.DE
+€132.00
+€90.00
+€140.00
+—
+—
+not evaluated — insufficient history: 1.4y
+—
+—
+Prices are the last close on 2026-07-09, each in the name's own quoted currency, never converted. A stale cache shows up here.
+Every rated name here is placed on the same 55 of 60 monthly observations in the window; the other 5 months lack usable statements, so they drop out rather than being filled in.
+Arithmetic on each company's own history — not a forecast, not a target price and not a recommendation. A business that has permanently derated should trade below its own past median, and arithmetic cannot tell decline from mispricing. Not ranked, not screened, and never shown to any model.
+Excluded — did not pass a rule, so was never ranked · 1
+IWDA.AS
+— asset kind 'ETF' outside this strategy's scope
+Unrateable — no data, no verdict · 1
+A SELL implies an assessment was made; these names had no usable data at all, so they receive NO verdict and reached no model.
+DEAD.DE
+— UNRATEABLE: no data — possibly delisted
+Fetch failed — rerun · 1
+A TRANSIENT fetch failure (rate limit / timeout / server error) that did not recover after retries — a live ticker, NOT delisted and NOT unrateable. Re-run to recover these.
+SPY5.DE
+— fetch error: 429 after 3 retries
+Narration — non-judging
+iShares Core S&P 500 (SXR8.DE) · BUY
+SXR8.DE
+takes the best combined rank-sum in this cohort.
+Cost: expense_ratio 0.07
+[static: 2026-07-21, EODHD]
+— the cheapest leg.
+Size: fund_size is rank 1 of 3.
+Momentum is the weakest leg at rank 3 of 3.
+narration check
+[⚠ narration check: "Momentum is the weakest leg at rank 3 of 3" contradicts rank table — table is authoritative]
+iShares Core MSCI World (EUNL.DE) · HOLD
+EUNL.DE is tied on the combined rank-sum and the verdict split alphabetically.
+narration check
+[⚠ narration check: "a claim nowhere in the prose" contradicts rank table — table is authoritative]
+Verdicts are deterministic — math judges, the LLM only writes; a fact-checker annotates the prose.
+Research tool, not financial advice. Nothing here is a recommendation to buy or sell any security. Figures come from third-party vendor data and may be incomplete, stale or wrong; abstentions and warnings in this document are part of the record, not noise.

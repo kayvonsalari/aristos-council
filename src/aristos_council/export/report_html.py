@@ -80,10 +80,114 @@ _MD_MARKS = re.compile(r"[*`]+")
 _PROVENANCE = re.compile(r"\[(static:\s?[^\]\n]{1,200})\]")
 _BULLET_MARK = re.compile(r"^\s*[-•]\s*")
 
+# Five LENS ACCENTS (REPORT-HTML-STYLE). A multi-lens report is read by following ONE
+# lens down the page — its rules block, its column in the verdict grid, its detail
+# section — so each lens gets a colour and keeps it in all three places. Chosen from the
+# blue/orange/teal/purple/magenta family rather than any red-green pair, so they stay
+# distinguishable under the common colour-vision deficiencies, and every one is a
+# LABEL's companion, never a label's replacement.
+LENS_ACCENTS = 5
+
+
+def lens_class(index: int) -> str:
+    """The accent class for the nth lens in the run — wraps past five, so a six-lens run
+    repeats a colour rather than silently rendering one lens unaccented."""
+    return f"lens-{index % LENS_ACCENTS}"
+
+
+# The valuation percentile's five buckets (REPORT-1's fixed gloss) mapped to a diverging
+# BACKGROUND tint: cool at the cheap end, warm at the dear end. Deliberately a different
+# channel and a different hue family from the verdict palette — the band ranks nothing
+# and decides nothing, so it must not borrow buy/sell colours.
+_PERCENTILE_BUCKETS = ("cheapest", "cheap", "mid", "dear", "dearest")
+
+
+def percentile_class(cell: str) -> str:
+    """The tint class for a valuation-percentile cell, taken from the ONE-WORD gloss
+    REPORT-1 already renders inside it ("1st (cheapest)"). Read, never re-derived — the
+    scale cannot disagree with the word beside it, and a cell that abstained
+    ("not evaluated — …") gets no tint at all."""
+    for bucket in _PERCENTILE_BUCKETS:
+        if f"({bucket})" in cell:
+            return f"pct-{bucket}"
+    return ""
+
 _CSS = """
-:root { color-scheme: light; }
+/* --------------------------------------------------------------------------
+   Tokens. Every colour is defined here on :root for the light scheme and
+   redefined once under prefers-color-scheme: dark, so a reader in either mode
+   gets the same document with legible contrast — and no rule below hardcodes
+   a colour that only works on white.
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #16181d;
+  --fg-quiet: #5b6472;
+  --rule: #c7cdd8;
+  --rule-strong: #16181d;
+  --panel: #f6f8fb;
+  --panel-alt: #fafbfd;
+  --head: #eef1f6;
+
+  --buy: #2E7D32;
+  --hold: #96690a;
+  --sell: #B23B3B;
+
+  --lens-0: #1f6fb2;   /* blue    */
+  --lens-1: #b25f00;   /* orange  */
+  --lens-2: #0f7b6c;   /* teal    */
+  --lens-3: #7a4bb5;   /* purple  */
+  --lens-4: #a8306f;   /* magenta */
+
+  /* Diverging tint for the valuation percentile: cool = its own cheap end,
+     warm = its own dear end. Background only; the word is always present too. */
+  --pct-cheapest: rgba(31, 111, 178, .20);
+  --pct-cheap:    rgba(31, 111, 178, .10);
+  --pct-mid:      transparent;
+  --pct-dear:     rgba(178, 95, 0, .12);
+  --pct-dearest:  rgba(178, 95, 0, .24);
+
+  --callout-bg: #fff8e5;
+  --callout-edge: #9a6700;
+  --alert-bg: #fdf2f2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --fg: #e6e9ee;
+    --fg-quiet: #9aa3b2;
+    --rule: #333a45;
+    --rule-strong: #e6e9ee;
+    --panel: #1c1f26;
+    --panel-alt: #191c22;
+    --head: #232833;
+
+    --buy: #6cc46f;
+    --hold: #e0b243;
+    --sell: #ef8080;
+
+    --lens-0: #6fb8ee;
+    --lens-1: #f0a35e;
+    --lens-2: #4fc3ae;
+    --lens-3: #bfa0ee;
+    --lens-4: #f08fc0;
+
+    --pct-cheapest: rgba(111, 184, 238, .26);
+    --pct-cheap:    rgba(111, 184, 238, .13);
+    --pct-mid:      transparent;
+    --pct-dear:     rgba(240, 163, 94, .15);
+    --pct-dearest:  rgba(240, 163, 94, .30);
+
+    --callout-bg: #2a2415;
+    --callout-edge: #d0a02a;
+    --alert-bg: #2b1c1c;
+  }
+}
+
 * { box-sizing: border-box; }
-body { margin: 0; padding: 26px 30px 44px; background: #ffffff; color: #16181d;
+body { margin: 0; padding: 26px 30px 44px; background: var(--bg); color: var(--fg);
        font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
              "Helvetica Neue", Arial, sans-serif; }
 .wrap { max-width: 1180px; margin: 0 auto; }
@@ -91,86 +195,146 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
               "Liberation Mono", monospace; font-size: 0.92em; }
 a { color: inherit; }
 
-header.doc { border-bottom: 3px solid #16181d; padding-bottom: 12px; margin-bottom: 18px; }
+header.doc { border-bottom: 3px solid var(--rule-strong); padding-bottom: 12px;
+             margin-bottom: 18px; }
 header.doc .kicker { text-transform: uppercase; letter-spacing: .09em; font-size: 11px;
-                     font-weight: 700; color: #5b6472; margin: 0 0 4px; }
+                     font-weight: 700; color: var(--fg-quiet); margin: 0 0 4px; }
 header.doc h1 { font-size: 26px; line-height: 1.2; margin: 0 0 8px; }
-.house { margin: 10px 0 0; padding: 8px 12px; border: 1px solid #c7cdd8;
-         border-left: 5px solid #16181d; background: #f6f8fb; font-weight: 600; }
+.house { margin: 10px 0 0; padding: 8px 12px; border: 1px solid var(--rule);
+         border-left: 5px solid var(--rule-strong); background: var(--panel);
+         font-weight: 600; }
 /* REPORT-1: the one-line verdict summary, directly under the header. There was no
    summary anywhere before — a reader had to count the ranked table by hand. */
 .summary { margin: 8px 0 0; font-size: 16px; font-weight: 700; }
 /* A machine id kept beside its human label: present for auditability, visually second. */
-.muted { color: #5b6472; font-size: 0.86em; font-weight: 400; }
+.muted { color: var(--fg-quiet); font-size: 0.86em; font-weight: 400; }
 
 .kv { display: table; width: 100%; margin: 10px 0 0; border-collapse: collapse; }
 .kv .row { display: table-row; }
 .kv .k, .kv .v { display: table-cell; padding: 3px 10px 3px 0; vertical-align: top;
                  font-size: 13px; }
-.kv .k { color: #5b6472; white-space: nowrap; width: 1%; text-transform: uppercase;
+.kv .k { color: var(--fg-quiet); white-space: nowrap; width: 1%; text-transform: uppercase;
          letter-spacing: .05em; font-size: 11px; font-weight: 700; padding-top: 5px; }
 
-h2 { font-size: 17px; margin: 26px 0 8px; padding-bottom: 4px;
-     border-bottom: 1px solid #c7cdd8; }
+h2 { font-size: 17px; margin: 0 0 8px; padding-bottom: 4px;
+     border-bottom: 1px solid var(--rule); }
 h3 { font-size: 14px; margin: 16px 0 6px; }
 h4 { font-size: 13px; margin: 12px 0 4px; }
 p { margin: 8px 0; }
 ul { margin: 8px 0; padding-left: 22px; }
 li { margin: 3px 0; }
-.note { color: #5b6472; font-size: 12.5px; margin: 4px 0; }
-.section { margin-bottom: 4px; }
+.note { color: var(--fg-quiet); font-size: 12.5px; margin: 4px 0; }
+
+/* --------------------------------------------------------------------------
+   Section hierarchy. A major section is a CARD — its own panel, its own top
+   rule — so the eye finds its edges instead of reading one long column of
+   text. (The valuation band was being missed entirely for want of this.)
+   -------------------------------------------------------------------------- */
+.section { margin: 0 0 18px; padding: 14px 16px 10px; background: var(--panel);
+           border: 1px solid var(--rule); border-radius: 6px;
+           border-top: 3px solid var(--rule-strong); }
+.section > h2 { margin-top: 0; }
+.section table { background: var(--bg); }
 
 .scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
-th, td { border: 1px solid #c7cdd8; padding: 5px 8px; text-align: left;
+th, td { border: 1px solid var(--rule); padding: 5px 8px; text-align: left;
          vertical-align: top; }
-th { background: #eef1f6; font-size: 11.5px; text-transform: uppercase;
+th { background: var(--head); font-size: 11.5px; text-transform: uppercase;
      letter-spacing: .04em; overflow-wrap: anywhere; }
-tbody tr:nth-child(even) td { background: #fafbfd; }
+/* Sticky headers, but only where they can DO anything: a table long enough to be
+   given its own scroll box (see .scroll.tall). Short tables are left alone. */
+.scroll.tall { max-height: 78vh; overflow: auto; }
+.scroll.tall thead th { position: sticky; top: 0; z-index: 2;
+                        box-shadow: inset 0 -1px 0 var(--rule); }
+tbody tr:nth-child(even) td { background: var(--panel-alt); }
+tbody tr:hover td { background: var(--head); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pos { font-weight: 700; white-space: nowrap; }
-.pos .detail { font-weight: 400; color: #5b6472; font-size: 12px; white-space: normal; }
+.pos .detail { font-weight: 400; color: var(--fg-quiet); font-size: 12px;
+               white-space: normal; }
+
+/* Verdicts carry COLOUR AND TEXT — never colour alone, so the meaning survives
+   printing, grayscale and colour-vision deficiency. */
 .verdict { font-weight: 700; white-space: nowrap; }
-.verdict-buy { color: #2E7D32; }
-.verdict-hold { color: #B8860B; }
-.verdict-sell { color: #B23B3B; }
+.verdict-buy { color: var(--buy); }
+.verdict-hold { color: var(--hold); }
+.verdict-sell { color: var(--sell); }
+td.cell-buy { box-shadow: inset 3px 0 0 var(--buy); }
+td.cell-hold { box-shadow: inset 3px 0 0 var(--hold); }
+td.cell-sell { box-shadow: inset 3px 0 0 var(--sell); }
+
+/* Valuation percentile: a diverging tint behind a cell that ALREADY says the word. */
+td.pct-cheapest { background: var(--pct-cheapest) !important; }
+td.pct-cheap    { background: var(--pct-cheap) !important; }
+td.pct-mid      { background: var(--pct-mid); }
+td.pct-dear     { background: var(--pct-dear) !important; }
+td.pct-dearest  { background: var(--pct-dearest) !important; }
+
+/* --------------------------------------------------------------------------
+   Lens accents. One colour per lens, used in all three places that lens
+   appears, so a reader can follow it down the page.
+   -------------------------------------------------------------------------- */
+.lens-0 { --accent: var(--lens-0); }
+.lens-1 { --accent: var(--lens-1); }
+.lens-2 { --accent: var(--lens-2); }
+.lens-3 { --accent: var(--lens-3); }
+.lens-4 { --accent: var(--lens-4); }
+
+h3.lens-head { color: var(--accent); border-left: 4px solid var(--accent);
+               padding-left: 8px; margin-top: 20px; font-size: 15px; }
+section.lens-card { border-top-color: var(--accent); }
+section.lens-card > h2 { color: var(--accent); border-bottom-color: var(--accent); }
+th.lens-col { color: var(--accent); border-bottom: 3px solid var(--accent); }
+td.lens-col { box-shadow: inset 3px 0 0 var(--accent); }
+/* A verdict cell inside a lens column keeps the lens stripe; the verdict itself is
+   carried by the coloured WORD, which is always present. */
+td.lens-col.cell-buy, td.lens-col.cell-hold, td.lens-col.cell-sell {
+  box-shadow: inset 3px 0 0 var(--accent); }
+
 .flag { display: block; margin-top: 2px; font-weight: 700; font-size: 11.5px;
-        color: #16181d; border: 1px solid #16181d; border-radius: 3px;
-        padding: 1px 5px; background: #f1f3f7; white-space: normal; }
+        color: var(--fg); border: 1px solid var(--fg); border-radius: 3px;
+        padding: 1px 5px; background: var(--head); white-space: normal; }
 .status { font-weight: 700; white-space: nowrap; }
 
-.badge { display: inline-block; border: 1px solid #9aa3b2; border-radius: 999px;
-         background: #f1f3f7; color: #333a45; padding: 0 7px;
+.badge { display: inline-block; border: 1px solid var(--fg-quiet); border-radius: 999px;
+         background: var(--head); color: var(--fg); padding: 0 7px;
          font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
          font-size: 11px; font-weight: 600; white-space: nowrap; }
 
-.callout { margin: 10px 0; padding: 9px 12px; border: 2px solid #9a6700;
-           border-left-width: 7px; border-radius: 4px; background: #fff8e5; }
+.callout { margin: 10px 0; padding: 9px 12px; border: 2px solid var(--callout-edge);
+           border-left-width: 7px; border-radius: 4px; background: var(--callout-bg); }
 .callout .body { font-weight: 600; }
-.callout.stamp { border-color: #9a6700; }
-.callout.alert { border-color: #B23B3B; background: #fdf2f2; }
+.callout.stamp { border-color: var(--callout-edge); }
+.callout.alert { border-color: var(--sell); background: var(--alert-bg); }
 .callout .label { display: block; text-transform: uppercase; letter-spacing: .08em;
-                  font-size: 10.5px; font-weight: 700; color: #5b6472;
+                  font-size: 10.5px; font-weight: 700; color: var(--fg-quiet);
                   margin-bottom: 3px; }
 
-.name-section { border: 1px solid #c7cdd8; border-radius: 5px; margin: 12px 0;
-                padding: 2px 14px 10px; background: #ffffff; }
+.name-section { border: 1px solid var(--rule); border-radius: 5px; margin: 12px 0;
+                padding: 2px 14px 10px; background: var(--bg); }
 .name-section > summary { cursor: pointer; font-weight: 700; font-size: 15px;
                           margin: 10px -4px; padding-left: 4px; }
-.name-section > summary::marker { color: #5b6472; }
+.name-section > summary::marker { color: var(--fg-quiet); }
 
-footer.doc { margin-top: 34px; padding-top: 12px; border-top: 3px solid #16181d; }
+footer.doc { margin-top: 34px; padding-top: 12px; border-top: 3px solid var(--rule-strong); }
 footer.doc .doctrine { font-weight: 700; margin: 0 0 6px; }
-footer.doc .disclaimer { color: #4b5462; font-size: 12px; margin: 0; }
+footer.doc .disclaimer { color: var(--fg-quiet); font-size: 12px; margin: 0; }
 
 @media print {
   @page { size: A4 portrait; margin: 12mm 10mm 14mm 10mm; }
-  body { padding: 0; font-size: 10.5pt; }
+  body { padding: 0; font-size: 10.5pt; background: #ffffff !important;
+         color: #000000 !important; }
   .wrap { max-width: none; }
-  .scroll { overflow: visible; }
+  .scroll, .scroll.tall { overflow: visible; max-height: none; }
+  .scroll.tall thead th { position: static; box-shadow: none; }
   h2 { break-after: avoid; page-break-after: avoid; }
   thead { display: table-header-group; }
   tr, .callout, .kv { break-inside: avoid; page-break-inside: avoid; }
+  /* Cards flatten in print: the page break is the separator there. */
+  .section { background: #ffffff !important; border: none; border-top: 2px solid #000000;
+             border-radius: 0; padding: 8px 0 0; margin-bottom: 14px;
+             break-inside: auto; }
   /* Wide rank tables must SHRINK, never clip: auto layout + smaller type + hard wrap. */
   table { font-size: 8pt; table-layout: auto; width: 100%; }
   th, td { padding: 3px 4px; overflow-wrap: anywhere; word-break: break-word; }
@@ -180,12 +344,18 @@ footer.doc .disclaimer { color: #4b5462; font-size: 12px; margin: 0; }
                   padding: 0; }
   .name-section:first-of-type { break-before: auto; page-break-before: auto; }
   details, details > summary ~ * { display: block; }
-  /* Grayscale legibility: structure carries the meaning, not the hue. */
+  /* Grayscale legibility: structure carries the meaning, not the hue. Every coloured
+     signal above also has a WORD, so nothing is lost when the colour goes. */
   .callout, .badge, .flag { background: #ffffff !important; border-color: #000000 !important;
                             color: #000000 !important; }
   .callout { border-left-width: 7px !important; }
   .verdict-buy, .verdict-hold, .verdict-sell, .status { color: #000000 !important; }
   .house { background: #ffffff !important; }
+  h3.lens-head, section.lens-card > h2, th.lens-col { color: #000000 !important;
+                                                      border-color: #000000 !important; }
+  td.lens-col, td.cell-buy, td.cell-hold, td.cell-sell { box-shadow: none !important; }
+  td[class*="pct-"] { background: #ffffff !important; }
+  tbody tr:nth-child(even) td { background: #ffffff !important; }
 }
 """
 
@@ -283,21 +453,52 @@ def _position_cell(cell: str) -> str:
             f'<span class="detail"> · {_esc(tail)}</span></span>')
 
 
+def _cell_cls(column_cls: str, cell_classes, row: int, col: int) -> str:
+    """Merge a COLUMN's class with an optional PER-CELL one (the verdict tint, the
+    valuation-percentile tint). Styling only — no cell's text is touched."""
+    extra = ""
+    if cell_classes:
+        extra = (cell_classes.get((row, col), "") if isinstance(cell_classes, dict)
+                 else "")
+    if not column_cls and not extra:
+        return ""
+    inner = column_cls[8:-1] if column_cls else ""      # strip ' class="' ... '"'
+    return f' class="{(inner + " " + extra).strip()}"'
+
+
 def _table(head: list[str], rows: list[list[str]], *, cls: str = "",
-           titles: list[str] | None = None) -> str:
+           titles: list[str] | None = None,
+           col_classes: list[str] | None = None,
+           cell_classes: dict | None = None) -> str:
     """A bordered table from pre-rendered HTML cells (``head`` entries are escaped).
 
     ``titles`` supplies an optional per-column ``title`` attribute — REPORT-1 uses it to
     keep a factor's RAW ID available on hover while the header itself reads in plain
-    English. An id is never dropped; it just stops being the only thing shown."""
+    English. An id is never dropped; it just stops being the only thing shown.
+
+    ``col_classes`` styles a whole COLUMN (REPORT-HTML-STYLE uses it for a lens's accent,
+    so a reader can follow one lens down the page) and ``cell_classes`` maps
+    ``(row, col) -> class`` for a single cell (the verdict tint, the valuation-percentile
+    scale). Both are presentation only: neither can alter a cell's text."""
     titles = titles or []
+    col_classes = col_classes or []
+
+    def _cls(i: int) -> str:
+        c = col_classes[i] if i < len(col_classes) else ""
+        return f' class="{c}"' if c else ""
+
     ths = "".join(
-        f'<th title="{_esc(titles[i])}">{_esc(h)}</th>' if i < len(titles) and titles[i]
-        else f"<th>{_esc(h)}</th>"
+        f'<th{_cls(i)} title="{_esc(titles[i])}">{_esc(h)}</th>'
+        if i < len(titles) and titles[i] else f"<th{_cls(i)}>{_esc(h)}</th>"
         for i, h in enumerate(head))
-    trs = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in row) + "</tr>"
-                  for row in rows)
-    return (f'<div class="scroll"><table class="{cls}"><thead><tr>{ths}</tr></thead>'
+    trs = "".join(
+        "<tr>" + "".join(f"<td{_cell_cls(_cls(i), cell_classes, r, i)}>{c}</td>"
+                         for i, c in enumerate(row)) + "</tr>"
+        for r, row in enumerate(rows))
+    # A table long enough to run off the screen gets its own scroll box, which is what
+    # makes a sticky header do anything at all; short tables are left alone.
+    scroll = "scroll tall" if len(rows) > 12 else "scroll"
+    return (f'<div class="{scroll}"><table class="{cls}"><thead><tr>{ths}</tr></thead>'
             f"<tbody>{trs}</tbody></table></div>")
 
 
@@ -457,9 +658,12 @@ def multi_strategy_report_html(multi_result, *,
                  '<p class="note">Each lens screens on its own rules; a name excluded by '
                  "one may be ranked by another. The rules below are read from the "
                  "strategies that actually ran.</p>")
-    for sid, label in zip(ids, lens_labels):
+    for i, (sid, label) in enumerate(zip(ids, lens_labels)):
         rules = rules_applied(multi_result.results[sid])
-        parts.append(f"<h3>{_esc(label)}</h3>")
+        # Each lens keeps ONE accent in all three places it appears — here, its column in
+        # the verdict grid, and its detail section — so a reader can follow it down the
+        # page by colour. The label is always present; the colour only helps find it.
+        parts.append(f'<h3 class="lens-head {lens_class(i)}">{_esc(label)}</h3>')
         if rules is None:
             parts.append('<p class="note">This lens declares no screen.</p>')
             continue
@@ -484,7 +688,19 @@ def multi_strategy_report_html(multi_result, *,
         body = [[f'<strong>{_esc(row[head[0]])}</strong>']
                 + [_verdict_grid_cell(row[c]) for c in head[1:]]
                 for row in rows]
-        parts.append(_table(head, body, cls="ranked"))
+        # Column 0 is the Name; columns 1..len(ids) are the lenses, each carrying its own
+        # accent; the trailing Rank-sum / Graded by columns are cohort-wide, not a lens's.
+        col_classes = [""] + [f"lens-col {lens_class(i)}" for i in range(len(ids))]
+        # ...and a RANKED cell also carries its verdict's tint. The verdict WORD is
+        # rendered regardless, so nothing depends on the colour.
+        cell_classes = {}
+        for r, row in enumerate(rows):
+            for c, column in enumerate(head):
+                verdict = verdict_of_cell(row[column])
+                if verdict:
+                    cell_classes[(r, c)] = f"cell-{verdict.lower()}"
+        parts.append(_table(head, body, cls="ranked", col_classes=col_classes,
+                            cell_classes=cell_classes))
     else:
         parts.append('<p class="note">(no names reported)</p>')
     parts.append("</section>")
@@ -493,20 +709,14 @@ def multi_strategy_report_html(multi_result, *,
     first = multi_result.results[ids[0]] if ids else None
     band_table = valuation_band_table(first) if first is not None else None
     if band_table is not None:
-        body = [[_esc(row[c]) if i else f"<strong>{_esc(row[c])}</strong>"
-                 for i, c in enumerate(band_table.columns)]
-                for row in band_table.rows]
-        parts.append('<section class="section">'
-                     f"<h2>{_esc(band_table.title)}</h2>"
-                     f'<p class="note">{_esc(band_table.intro)}</p>'
-                     + _table(band_table.columns, body, cls="ranked")
-                     + _bullets(_esc(n) for n in band_table.footnotes)
-                     + "</section>")
+        parts.append(_band_section(band_table))
 
-    # ----- 6: what DOES vary per lens, clearly headed by lens.
-    for sid, label in zip(ids, lens_labels):
+    # ----- 6: what DOES vary per lens, clearly headed by lens — and carrying that lens's
+    # accent on its own card, so the section is findable by the same colour as its column.
+    for i, (sid, label) in enumerate(zip(ids, lens_labels)):
         res = multi_result.results[sid]
-        parts.append(f'<section class="section"><h2>{_esc(label)} — detail</h2>'
+        parts.append(f'<section class="section lens-card {lens_class(i)}">'
+                     f"<h2>{_esc(label)} — detail</h2>"
                      f'<p class="note">Ranked {res.meta["ranked_count"]} of '
                      f'{res.meta["universe_size"]} names.</p>')
         if res.excluded:
@@ -542,16 +752,56 @@ def multi_strategy_report_html(multi_result, *,
     return _document(title=f"{cohort} — {len(ids)} lenses", body="\n".join(parts))
 
 
+def _band_section(band_table) -> str:
+    """The price-and-valuation section — the ONE builder both the single-lens and the
+    merged report render, so they cannot drift apart visually any more than they can
+    numerically.
+
+    The percentile column carries a diverging BACKGROUND tint keyed off the one-word
+    gloss already inside the cell, so the cheap and dear ends of a cohort are findable at
+    a glance. The word is always there; the tint only speeds the eye. This section was
+    the one being missed entirely for want of a visual edge, so it gets the card
+    treatment like every other major section."""
+    columns = band_table.columns
+    body = [[_esc(row[c]) if i else f"<strong>{_esc(row[c])}</strong>"
+             for i, c in enumerate(columns)]
+            for row in band_table.rows]
+    pct_col = columns.index("Percentile") if "Percentile" in columns else None
+    cell_classes = {}
+    if pct_col is not None:
+        for r, row in enumerate(band_table.rows):
+            tint = percentile_class(row[columns[pct_col]])
+            if tint:
+                cell_classes[(r, pct_col)] = tint
+    return ('<section class="section">'
+            f"<h2>{_esc(band_table.title)}</h2>"
+            f'<p class="note">{_esc(band_table.intro)}</p>'
+            + _table(columns, body, cls="ranked", cell_classes=cell_classes)
+            + _bullets(_esc(n) for n in band_table.footnotes)
+            + "</section>")
+
+
+def verdict_of_cell(text: str) -> str:
+    """The VERDICT a verdict-grid cell carries ("BUY"/"HOLD"/"SELL"), or "" for a cell on
+    another axis (excluded / no data / fetch failed) — those are not verdicts and must
+    never be coloured as though they were."""
+    for verdict in _VERDICT_HEX:
+        if text.endswith(f"· {verdict}"):
+            return verdict
+    return ""
+
+
 def _verdict_grid_cell(text: str) -> str:
     """One verdict-table cell. A ranked cell's VERDICT keeps the shared palette so the
     grid scans by colour exactly as the single-lens ranked table does; every other axis
-    (excluded / no data / fetch failed) stays plain, because it is not a verdict."""
-    for verdict, hexcode in _VERDICT_HEX.items():
-        if text.endswith(f"· {verdict}"):
-            head = text[: -len(verdict)]
-            return (f'<span class="mono">{_esc(head)}</span>'
-                    f'<span class="verdict verdict-{verdict.lower()}">{_esc(verdict)}'
-                    "</span>")
+    (excluded / no data / fetch failed) stays plain, because it is not a verdict. The
+    verdict WORD is always rendered — colour is never the only carrier of meaning."""
+    verdict = verdict_of_cell(text)
+    if verdict:
+        head = text[: -len(verdict)]
+        return (f'<span class="mono">{_esc(head)}</span>'
+                f'<span class="verdict verdict-{verdict.lower()}">{_esc(verdict)}'
+                "</span>")
     return f'<span class="mono">{_esc(text)}</span>'
 
 
@@ -718,15 +968,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
     # Same cells as every other surface (pipeline.valuation_band_table).
     band_table = valuation_band_table(result)
     if band_table is not None:
-        body = [[_esc(row[c]) if i else f"<strong>{_esc(row[c])}</strong>"
-                 for i, c in enumerate(band_table.columns)]
-                for row in band_table.rows]
-        parts.append('<section class="section">'
-                     f"<h2>{_esc(band_table.title)}</h2>"
-                     f'<p class="note">{_esc(band_table.intro)}</p>'
-                     + _table(band_table.columns, body, cls="ranked")
-                     + _bullets(_esc(n) for n in band_table.footnotes)
-                     + "</section>")
+        parts.append(_band_section(band_table))
 
     # ----- 3/4/5: the three NON-verdict axes, each kept distinct.
     def _reason_list(pairs) -> str:
