@@ -1162,6 +1162,80 @@ def lens_checkbox_key(strategy_id: str) -> str:
     return f"uni_lens_{strategy_id}"
 
 
+# --------------------------------------------------------------------------- #
+# RUN MODE (RUNMODE-1) — ONE control for what used to be two
+# --------------------------------------------------------------------------- #
+# "Ranker only" (a checkbox) and "Council mode" (a selectbox) expressed ONE decision, and
+# on a multi-lens run they lied about it: the code forced ranker_only=True internally
+# while the checkbox rendered DISABLED AND UNCHECKED and the mode selector still read
+# "narrator". The screen said narration would run; the run was deterministic. The values
+# were right and the display was not — and a disabled widget that shows a value other
+# than the one in force is worse than no widget at all.
+#
+# One selector now carries the decision, and the UI never shows a value it is not using.
+RUN_MODE_RANKER = "ranker_only"
+RUN_MODE_NARRATOR = "narrator"
+RUN_MODE_SECOND_OPINION = "second_opinion"
+RUN_MODES: tuple[str, ...] = (RUN_MODE_RANKER, RUN_MODE_NARRATOR,
+                              RUN_MODE_SECOND_OPINION)
+
+RUN_MODE_LABELS = {
+    RUN_MODE_RANKER: "Ranker only — deterministic, no LLM, no cost",
+    RUN_MODE_NARRATOR: "Narrator — the LLM explains the ranker's verdict",
+    RUN_MODE_SECOND_OPINION: "Second opinion — experimental; null result, see README",
+}
+
+MULTI_LENS_LOCK_REASON = ("Several lenses is a deterministic comparison — it cannot "
+                          "narrate.")
+
+
+def effective_run_mode(selected: str, *, n_strategies: int) -> str:
+    """The run mode ACTUALLY in force. Several lenses over one list is a deterministic
+    comparison (FUND-RUN-1), so it is forced to ranker-only — and, unlike before, the
+    control is then made to SHOW ranker-only rather than leaving a stale value on screen."""
+    if n_strategies > 1:
+        return RUN_MODE_RANKER
+    return selected if selected in RUN_MODES else RUN_MODE_NARRATOR
+
+
+def run_mode_locked(n_strategies: int) -> bool:
+    """Is the run mode forced (and therefore not the user's to choose)?"""
+    return n_strategies > 1
+
+
+def run_mode_arguments(run_mode: str) -> tuple[bool, str]:
+    """``(ranker_only, council_mode)`` — the EXISTING pipeline arguments this mode maps
+    onto. The pipeline's signature and behaviour are untouched; this is a UI-layer
+    translation only.
+
+    Ranker-only passes ``council_mode="narrator"`` because the pipeline ignores the mode
+    when ranker_only is set (it stamps the executed mode "ranker-only" itself) — the same
+    inert value today's disabled selectbox already handed it, so the call is unchanged."""
+    if run_mode == RUN_MODE_RANKER:
+        return True, RUN_MODE_NARRATOR
+    if run_mode == RUN_MODE_SECOND_OPINION:
+        return False, RUN_MODE_SECOND_OPINION
+    return False, RUN_MODE_NARRATOR
+
+
+def run_mode_narrates(run_mode: str) -> bool:
+    """Does this mode spend on an LLM? Narration coverage is shown only when it does —
+    HIDDEN rather than greyed, because a greyed control still invites a reading."""
+    return not run_mode_arguments(run_mode)[0]
+
+
+def run_button_label(run_mode: str, *, n_strategies: int,
+                     est_cost: float | None = None) -> str:
+    """The button says what will happen and what it costs, on its own line:
+    ``"▶ Run 5 lenses — deterministic, free"`` / ``"▶ Run — narrated, est. $0.42"``."""
+    what = f"Run {n_strategies} lenses" if n_strategies > 1 else "Run"
+    if not run_mode_narrates(run_mode):
+        return f"▶ {what} — deterministic, free"
+    cost = f", est. ${est_cost:.2f}" if est_cost is not None else ""
+    tail = "narrated" if run_mode == RUN_MODE_NARRATOR else "second opinion"
+    return f"▶ {what} — {tail}{cost}"
+
+
 def run_problems(universe: list[str], *, n_strategies: int, deterministic: bool,
                  has_key: bool, cap: int = UNIVERSE_CAP) -> list[str]:
     """Why the Run button is disabled, in plain sentences (empty list = runnable).
@@ -2097,56 +2171,78 @@ def render_universe_tab(show_validation: bool = False) -> None:
 
     strategy_ids = [s.id for s in strategies]
 
+    # RUNMODE-1 — ONE control. The forced multi-lens case renders its OWN widget under a
+    # separate key, so the user's single-lens choice is remembered rather than clobbered
+    # by the forced value: deselecting the extra lens restores it.
+    n_strategies = len(strategies)
+    locked = run_mode_locked(n_strategies)
+    # The user's CHOICE is mirrored into a plain (non-widget) session key. Streamlit drops
+    # a widget's own state when that widget is not rendered, so the forced multi-lens
+    # branch would otherwise erase the single-lens choice: untick the extra lens and you
+    # would be stranded back on the default instead of where you were.
+    st.session_state.setdefault("uni_run_mode_choice", RUN_MODE_NARRATOR)
+    remembered = effective_run_mode(st.session_state["uni_run_mode_choice"],
+                                    n_strategies=1)
     col_a, col_b = st.columns(2)
     with col_a:
-        ranker_only = st.checkbox("Ranker only — no LLM, no cost", value=False,
-                                  key="uni_ranker_only", disabled=multi)
+        if locked:
+            # SHOW the mode that is actually in force, selected, with the whole control
+            # disabled and a one-line reason. No hidden override, and no unchecked box
+            # standing for a true value.
+            st.radio("Run mode", RUN_MODES,
+                     index=RUN_MODES.index(RUN_MODE_RANKER),
+                     format_func=lambda m: RUN_MODE_LABELS[m],
+                     disabled=True, key="uni_run_mode_locked")
+            st.caption(MULTI_LENS_LOCK_REASON)
+            run_mode = RUN_MODE_RANKER
+        else:
+            run_mode = st.radio(
+                "Run mode", RUN_MODES, index=RUN_MODES.index(remembered),
+                format_func=lambda m: RUN_MODE_LABELS[m], key="uni_run_mode",
+                help="Ranker only: the deterministic ranking, free. "
+                     "Narrator: the LLM explains the ranker's verdict (default). "
+                     "Second opinion: an independent comparison verdict — a "
+                     "pre-registered experiment that returned a null result; kept "
+                     "behind this option.")
+            st.session_state["uni_run_mode_choice"] = run_mode
     with col_b:
-        # Value stays "second_opinion" (behavior unchanged); only its LABEL flags it as
-        # the experimental null-result mode.
-        _mode_label = {
-            "narrator": "narrator",
-            "second_opinion": "second_opinion (experimental — null result; see README)",
-        }
-        # Several lenses over one list is a DETERMINISTIC comparison — it cannot spend, so
-        # the LLM settings are greyed out rather than quietly multiplied by N.
-        mode = st.selectbox(
-            "Council mode", ["narrator", "second_opinion"],
-            key="uni_mode", disabled=ranker_only or multi,
-            format_func=lambda m: _mode_label[m],
-            help="narrator: the LLM explains the ranker verdict (default). "
-                 "second_opinion: an independent comparison verdict — a pre-registered "
-                 "experiment that returned a null result; kept behind this flag.")
         # NARR-2 ITEM 2: which ranked names get narrated. buys_only (default, cheapest)
         # for stock screens; all for core/ETF cohorts where the HOLDs are live
-        # candidates being compared, not rejects.
-        _cov_label = {"buys_only": "Narrate: BUYs only (cheapest)",
-                      "all": "Narrate: all ranked names"}
-        narrate_coverage = st.selectbox(
-            "Narration coverage", ["buys_only", "all"],
-            key="uni_coverage", disabled=ranker_only or multi,
-            format_func=lambda c: _cov_label[c],
-            help="BUYs only: narrate the shortlist (cheapest — good for stock screens). "
-                 "all: narrate every ranked name — for core/ETF cohorts where the HOLDs "
-                 "are live options you're comparing, not rejects.")
+        # candidates being compared, not rejects. HIDDEN — not greyed — when nothing
+        # narrates: a greyed control still invites a reading it cannot support.
+        if run_mode_narrates(run_mode):
+            _cov_label = {"buys_only": "Narrate: BUYs only (cheapest)",
+                          "all": "Narrate: all ranked names"}
+            narrate_coverage = st.selectbox(
+                "Narration coverage", ["buys_only", "all"],
+                key="uni_coverage",
+                format_func=lambda c: _cov_label[c],
+                help="BUYs only: narrate the shortlist (cheapest — good for stock "
+                     "screens). all: narrate every ranked name — for core/ETF cohorts "
+                     "where the HOLDs are live options you're comparing, not rejects.")
+        else:
+            # The inert default the pipeline already receives on a ranker-only run.
+            narrate_coverage = st.session_state.get("uni_coverage", "buys_only")
+
+    # The two pipeline arguments, derived from the ONE control (UI layer only).
+    ranker_only, mode = run_mode_arguments(run_mode)
 
     st.caption(f"**{len(universe)}** ticker(s).")
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     # A multi-strategy run is deterministic by construction (FUND-RUN-1), so it needs no
-    # key and shows no cost estimate — same footing as the Ranker-only checkbox.
+    # key and shows no cost estimate.
     deterministic = ranker_only or multi
     # ONE guard set, pure and unit-tested (FUND-UI-2). The old flow re-declared CAP and the
     # key check per section, which is precisely how the two halves drifted apart.
     problems = run_problems(universe, n_strategies=len(strategies),
                             deterministic=deterministic, has_key=has_key)
 
+    est = None
     if not deterministic and universe and len(universe) <= UNIVERSE_CAP:
         est = estimate_cost(
             _estimate_shortlist_size(len(universe), rank_strategy,
                                      narrate_coverage=narrate_coverage))
-        st.caption(f"Estimated council cost ≈ **${est:.2f}** — upper bound (pre-screen); "
-                   "the exact shortlist (after the screen prefilter) is shown after ranking.")
     if multi:
         st.caption(f"Multi-lens re-grade: **{len(strategies)}** strategies × "
                    f"**{len(universe)}** name(s) — deterministic ranker only "
@@ -2155,11 +2251,12 @@ def render_universe_tab(show_validation: bool = False) -> None:
     for msg in problems:
         st.info(msg)
 
-    if multi:
-        label = f"▶ Run {len(strategies)} strategies (free)"
-    else:
-        label = "▶ Run ranker (free)" if ranker_only else "▶ Run"
-    run = st.button(label, type="primary", disabled=bool(problems), key="uni_run")
+    # RUNMODE-1: the button says WHAT will happen and WHAT IT COSTS, on its own line.
+    run = st.button(run_button_label(run_mode, n_strategies=n_strategies, est_cost=est),
+                    type="primary", disabled=bool(problems), key="uni_run")
+    if est is not None:
+        st.caption("The estimate is an upper bound (pre-screen); the exact shortlist "
+                   "(after the screen prefilter) is shown after ranking.")
 
     if run and multi:
         run_start = datetime.now(timezone.utc)
