@@ -96,6 +96,19 @@ class ValuationBand:
     # Net-debt provenance for the EV route: "asof" (dated statements, per month),
     # "latest" (current scalars held constant — disclosed), "" when not applicable.
     net_debt_basis: str = ""
+    # --- Reversion inputs (PRICE-1), recorded not recomputed -------------------- #
+    # The SAME monthly multiple series this band took its percentile over, reduced to
+    # its MEDIAN, plus the three point-in-time inputs the CURRENT point was built from
+    # (the newest usable month). tools/reversion.py reads ONLY these, so the reversion
+    # value and the percentile are two readings of one series by construction and can
+    # never be built from different months, statements or share counts. Recording them
+    # changes NO band arithmetic, threshold or abstention: an abstaining band returns
+    # before they are set and leaves them None, exactly as before.
+    median_multiple: Optional[float] = None
+    current_point: Optional[date] = None     # the month-end the current multiple used
+    current_earnings: Optional[float] = None  # EBIT (ev_ebit) / net income (pe), as-of
+    current_net_debt: Optional[float] = None  # net debt at current_point, band's basis
+    current_shares: Optional[float] = None    # shares outstanding as-of, same lag rule
 
     @property
     def available(self) -> bool:
@@ -109,18 +122,38 @@ class ValuationBand:
     def display(self) -> str:
         """The one display string every surface renders (report, Company Check).
 
-        Computed: "78th percentile of own 5-year EV/EBIT band (band from 55/60 months)".
+        Computed (PRICE-1 item 4 — the VALUE plus a plain-English gloss; same numbers,
+        nothing recomputed):
+        "EV/EBIT 21.9 — 70th percentile of its own 5-year range (dearer than 70% of the
+        last five years; based on 42 of 61 months, the rest lack usable statements)".
         Abstained: "not evaluated — insufficient history: 1.4y".
         """
         if not self.available:
             return f"not evaluated — {self.note}" if self.note else "not evaluated"
-        phrase = _BASIS_PHRASE.get(self.basis or "", "valuation band")
-        tail = ""
-        if self.net_debt_basis == "latest":
-            tail = "; net debt held at latest reported"
-        return (f"{ordinal(round(self.percentile))} percentile of own "
-                f"{self.window_years}-year {phrase} "
-                f"(band from {self.months_covered}/{self.months_total} months{tail})")
+        pct = round(self.percentile)
+        tail = "; net debt held at latest reported" \
+            if self.net_debt_basis == "latest" else ""
+        lead = f"{self.basis_label} {self.current:.1f} — " \
+            if self.current is not None else ""
+        # "42 of 61 months" was the unexplained half of the old line: say WHY the other
+        # 19 are absent. When every month IS computable there is no "rest" to explain.
+        gap = ", the rest lack usable statements" \
+            if self.months_covered < self.months_total else ""
+        return (f"{lead}{ordinal(pct)} percentile of its own "
+                f"{self.window_years}-year range "
+                f"(dearer than {pct}% of the last {_words(self.window_years)} years; "
+                f"based on {self.months_covered} of {self.months_total} months"
+                f"{gap}{tail})")
+
+
+_NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+
+
+def _words(n: int) -> str:
+    """'the last five years' reads as prose; 'the last 5 years' reads as a field. Falls
+    back to the digits above ten."""
+    return _NUMBER_WORDS.get(n, str(n))
 
 
 def ordinal(n: int) -> str:
@@ -286,10 +319,21 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
 
     values = [v for _, v in series]
     current = values[-1]
+    # PRICE-1: record (never recompute) the reversion inputs — the median of THIS series
+    # and the three point-in-time quantities the CURRENT point above was built from, all
+    # taken at the same month `current_day`. Pure bookkeeping: no value below feeds the
+    # percentile, the coverage counts or any abstention.
+    current_day = series[-1][0]
     return ValuationBand(
         percentile=_percentile(values, current), basis=basis, current=current,
         months_covered=covered, months_total=total, years_covered=span,
         window_years=years, net_debt_basis=(net_debt_basis if basis == _EV_EBIT else ""),
+        median_multiple=_median(values),
+        current_point=current_day,
+        current_earnings=_asof(earnings, current_day),
+        current_net_debt=(_net_debt(f, debt, cash, net_debt_basis, current_day)
+                          if basis == _EV_EBIT else None),
+        current_shares=_asof(_dated_series(f, "shares_outstanding"), current_day),
         note=f"{_BASIS_PHRASE[basis]} over {span:.1f}y; "
              f"{covered} of {total} months computable")
 
@@ -335,6 +379,23 @@ def _net_debt(f, debt, cash, mode: str, when: date) -> Optional[float]:
         c = getattr(f, "total_cash", None)
         return None if d is None or c is None else d - c
     return None
+
+
+def _median(values: list[float]) -> Optional[float]:
+    """The MEDIAN of the band's own monthly multiples (PRICE-1).
+
+    The plain statistical median — the middle value, or the mean of the two middle
+    values on an even count. Chosen because the 50th percentile is the SAME distribution
+    the band already reports today's multiple against, so "70th percentile" and
+    "reversion to the median" are two readings of one series rather than two opinions.
+    None on an empty series (unreachable from ``valuation_band``, which abstains below
+    two computable months)."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    n = len(ordered)
+    mid = n // 2
+    return ordered[mid] if n % 2 else (ordered[mid - 1] + ordered[mid]) / 2.0
 
 
 def _percentile(values: list[float], current: float) -> float:

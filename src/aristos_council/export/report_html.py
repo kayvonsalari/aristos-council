@@ -394,9 +394,13 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
     strategy id; ``run_start`` is omitted from the header when absent (never invented).
     """
     from ..pipeline import (
+        PRICE_SECTION_NOTE,
+        PRICE_SECTION_TITLE,
+        VALUATION_BAND_SECTION_NOTE,
         factor_integrity,
         format_integrity_entry,
         format_screen_basis_entry,
+        price_rows,
         ranked_abstention_footnotes,
         screen_basis_integrity,
         valuation_band_rows,
@@ -481,10 +485,24 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
     # drift. Abstentions are INCLUDED (valuation_band_rows already keeps them). Empty (band
     # toggle off, or no name computed one) -> render NOTHING, so a band-off run's HTML is
     # byte-identical to before VALBAND-2.
+    # ----- 2b0: share price + 52-week position (PRICE-1). ALWAYS ON — it reads bars the
+    # run already fetched — and placed immediately before the band so the three "what does
+    # this cost" facts (price, where it sits lately, what it would cost at its own median
+    # valuation) read as one group. Same shared source as every other surface (price_rows).
+    p_rows = price_rows(result)
+    if p_rows:
+        parts.append('<section class="section">'
+                     f"<h2>{_esc(PRICE_SECTION_TITLE)}</h2>"
+                     f'<p class="note">{_esc(PRICE_SECTION_NOTE)}</p>'
+                     + _bullets(f'<strong>{_esc(name)}</strong> — {_inline(line)}'
+                                for name, line in p_rows)
+                     + "</section>")
+
     band_rows = valuation_band_rows(result)
     if band_rows:
         parts.append('<section class="section">'
                      "<h2>Valuation band (absolute — vs each name's own history)</h2>"
+                     f'<p class="note">{_esc(VALUATION_BAND_SECTION_NOTE)}</p>'
                      + _bullets(f'<strong>{_esc(name)}</strong> — {_inline(band)}'
                                 for name, band in band_rows)
                      + "</section>")

@@ -1257,11 +1257,21 @@ def _universe_markdown(result) -> str:
     # rank position ages into "it was cheapest of those"; the band ages into "and it
     # was at the 92nd percentile of its own five years", which is the sentence a reader
     # of an old run actually needs.
-    from aristos_council.pipeline import valuation_band_rows
+    from aristos_council.pipeline import (
+        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, VALUATION_BAND_SECTION_NOTE,
+        price_rows, valuation_band_rows,
+    )
 
+    # PRICE-1: the share price + 52-week position, ALWAYS in the record (never gated by
+    # the band toggle) — an old run whose price is not written down cannot be re-read.
+    p_rows = price_rows(result)
+    if p_rows:
+        lines += ["", f"## {PRICE_SECTION_TITLE}", "", f"_{PRICE_SECTION_NOTE}_", ""]
+        lines += [f"- **{n}** — {line}" for n, line in p_rows]
     band_rows = valuation_band_rows(result)
     if band_rows:
-        lines += ["", "## Valuation band (absolute — vs each name's own history)", ""]
+        lines += ["", "## Valuation band (absolute — vs each name's own history)", "",
+                  f"_{VALUATION_BAND_SECTION_NOTE}_", ""]
         lines += [f"- **{n}** — {b}" for n, b in band_rows]
     if result.excluded:
         lines += ["", "## Excluded (screen / cap / sector)", ""]
@@ -1379,10 +1389,22 @@ def _multi_strategy_markdown(multi_result) -> str:
     # VALBAND-1: the absolute band, computed once (on the first lens) — a per-NAME context
     # column, not a per-strategy verdict, so it sits ONCE under the combined grid. Empty
     # (section omitted) unless the "Valuation band" checkbox was ticked.
-    from aristos_council.pipeline import valuation_band_rows
-    band_rows = valuation_band_rows(multi_result.results[ids[0]]) if ids else []
+    from aristos_council.pipeline import (
+        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, VALUATION_BAND_SECTION_NOTE,
+        price_rows, valuation_band_rows,
+    )
+    first = multi_result.results[ids[0]] if ids else None
+    # PRICE-1: the price is a per-NAME fact, identical under every lens, so it sits ONCE
+    # under the combined grid — and unlike the band it is never gated by a toggle.
+    p_rows = price_rows(first) if first is not None else []
+    if p_rows:
+        lines += [f"## {PRICE_SECTION_TITLE}", "", f"_{PRICE_SECTION_NOTE}_", ""]
+        lines += [f"- **{n}** — {line}" for n, line in p_rows]
+        lines.append("")
+    band_rows = valuation_band_rows(first) if first is not None else []
     if band_rows:
-        lines += ["## Valuation band (absolute — vs each name's own history)", ""]
+        lines += ["## Valuation band (absolute — vs each name's own history)", "",
+                  f"_{VALUATION_BAND_SECTION_NOTE}_", ""]
         lines += [f"- **{n}** — {b}" for n, b in band_rows]
         lines.append("")
     for sid in ids:
@@ -1430,16 +1452,28 @@ def _render_multi_strategy_result(multi_result) -> None:
                f"the {m.get('graded_by_all', 0)} name(s) ranked by ALL {len(ids)} "
                f"strategies (‡ = ranked by fewer — nothing is imputed for an exclusion).")
 
-    # VALBAND-1: the absolute band (computed once, on the first lens) — a per-NAME context
-    # column beside the combined grid, never a verdict. Shown only when the checkbox was on.
-    from aristos_council.pipeline import valuation_band_rows
-    band_rows = valuation_band_rows(multi_result.results[ids[0]]) if ids else []
+    # PRICE-1 / VALBAND-1: per-NAME context beside the combined grid, never a verdict.
+    # The price is identical under every lens so it is read off the first one — and it is
+    # ALWAYS shown; the band (and the reversion value riding with it) only when the
+    # checkbox was on.
+    from aristos_council.pipeline import (
+        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, VALUATION_BAND_SECTION_NOTE,
+        price_rows, valuation_band_rows,
+    )
+    first = multi_result.results[ids[0]] if ids else None
+    p_rows = price_rows(first) if first is not None else []
+    if p_rows:
+        st.subheader(PRICE_SECTION_TITLE)
+        st.caption(PRICE_SECTION_NOTE)
+        st.dataframe([{"Name": n, "Price · 52-week position": line}
+                      for n, line in p_rows], width="stretch", hide_index=True)
+
+    band_rows = valuation_band_rows(first) if first is not None else []
     if band_rows:
         st.subheader("Valuation band — absolute, vs each name's own history")
-        st.caption("Where today's valuation sits in each name's OWN 5-year distribution "
-                   "(context only — it does not re-grade or reorder any lens).")
-        st.dataframe([{"Name": n, "Valuation band": b} for n, b in band_rows],
-                     width="stretch", hide_index=True)
+        st.caption(VALUATION_BAND_SECTION_NOTE)
+        st.dataframe([{"Name": n, "Valuation band · reversion value": b}
+                      for n, b in band_rows], width="stretch", hide_index=True)
 
     for sid in ids:
         res = multi_result.results[sid]
@@ -1527,20 +1561,34 @@ def _render_universe_result(result) -> None:
         for e in entries:
             st.markdown(f"- **{e['factor']}** — {format_integrity_entry(e)}")
 
-    # 2b2 — VALUATION BAND (VALBAND-1): the one ABSOLUTE line in a report otherwise made
-    # entirely of cohort statements. The ranked table above says which of these names is
-    # least expensive; this says whether any of them is cheap against its OWN history.
-    # Display only — it ranks nothing, screens nothing, and decides nothing.
-    from aristos_council.pipeline import valuation_band_rows
+    # 2b1 — SHARE PRICE & 52-WEEK POSITION (PRICE-1): the plainest two facts in the
+    # report — what one share costs today (in its OWN currency, with the close's date, so
+    # a stale cache is visible) and where that sits in the trailing year. ALWAYS shown:
+    # it reads the 400-day bars the ranking legs already fetched, so it is free and is not
+    # gated by the valuation-band toggle. Display only.
+    from aristos_council.pipeline import (
+        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, VALUATION_BAND_SECTION_NOTE,
+        price_rows, valuation_band_rows,
+    )
 
+    p_rows = price_rows(result)
+    if p_rows:
+        st.subheader(PRICE_SECTION_TITLE)
+        st.caption(PRICE_SECTION_NOTE)
+        st.dataframe([{"Name": n, "Price · 52-week position": line}
+                      for n, line in p_rows], hide_index=True, width="stretch")
+
+    # 2b2 — VALUATION BAND (VALBAND-1) + REVERSION VALUE (PRICE-1): the one ABSOLUTE line
+    # in a report otherwise made entirely of cohort statements. The ranked table above says
+    # which of these names is least expensive; this says whether any of them is cheap
+    # against its OWN history, and what it would cost at its own median multiple.
+    # Display only — it ranks nothing, screens nothing, and decides nothing.
     band_rows = valuation_band_rows(result)
     if band_rows:
         st.subheader("Valuation band — absolute, vs each name's own history")
-        st.caption("Today's EV/EBIT (or the labelled P/E fallback) as a percentile of "
-                   "the name's OWN 5-year monthly range. 92nd = near its own peak, "
-                   "15th = historically cheap. Not ranked, not screened.")
-        st.dataframe([{"Name": n, "Valuation band": b} for n, b in band_rows],
-                     hide_index=True, width="stretch")
+        st.caption(VALUATION_BAND_SECTION_NOTE)
+        st.dataframe([{"Name": n, "Valuation band · reversion value": b}
+                      for n, b in band_rows], hide_index=True, width="stretch")
 
     # 2c — SCREEN BASIS: the measurement basis each screen criterion used (payout FCF
     # vs EPS fallback) across the screened names.

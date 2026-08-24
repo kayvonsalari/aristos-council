@@ -50,7 +50,9 @@ from .factors import (
     is_sector_excluded,
     is_sector_out_of_scope,
     is_unrateable,
+    price_display,
     price_divergence_flag,
+    reversion_value_display,
     screen_evaluate,
     valuation_band_display,
 )
@@ -145,6 +147,8 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     abstentions_by_ticker: dict[str, dict[str, str]] = {}   # ticker -> {criterion: note}
     names_by_ticker: dict[str, str] = {}             # ticker -> company display name (ITEM 1)
     bands_by_ticker: dict[str, str] = {}             # ticker -> valuation band (VALBAND-1)
+    prices_by_ticker: dict[str, str] = {}            # ticker -> price line (PRICE-1)
+    reversion_by_ticker: dict[str, str] = {}         # ticker -> reversion value (PRICE-1)
     for t in universe:
         # A TRANSIENT fetch failure (429/timeout/5xx, unrecovered after retries) is NOT
         # absent data — abort THIS name with a fetch-error status (rerun), never mislabel
@@ -215,8 +219,13 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             fi, [fac.name for fac in rank_strategy.factors])
         rows.append((t, {n: v for n, (v, _) in outcomes.items()}))
         sources_by_ticker[t] = {n: s for n, (_, s) in outcomes.items()}
+        # PRICE-1 (display only): the share price + 52-week position for EVERY rateable
+        # name, ALWAYS — it reads bars this run already fetched, so there is nothing to
+        # gate. The reversion value rides with the band flag (it reuses the band's inputs).
+        prices_by_ticker[t] = price_display(fi)
         if with_valuation_band:                           # VALBAND-1 (display only, opt-in)
             bands_by_ticker[t] = valuation_band_display(fi)
+            reversion_by_ticker[t] = reversion_value_display(fi)
     specs = [FactorSpec(fac.name, fac.direction, fac.missing)
              for fac in rank_strategy.factors]
     ranked = rank_universe(rows, specs, cut=rank_strategy.cut, k=rank_strategy.k,
@@ -231,6 +240,10 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             r.screen_abstentions = abstentions_by_ticker[r.ticker]
         if r.ticker in bands_by_ticker:
             r.valuation_band = bands_by_ticker[r.ticker]
+        if r.ticker in prices_by_ticker:
+            r.price_line = prices_by_ticker[r.ticker]
+        if r.ticker in reversion_by_ticker:
+            r.reversion_value = reversion_by_ticker[r.ticker]
     return ranked, excluded, screen_bases, names_by_ticker
 
 
@@ -898,6 +911,43 @@ def format_screen_basis(result: RankPipelineResult) -> list[str]:
     return lines
 
 
+# --------------------------------------------------------------------------- #
+# PRICE-1 — the share price + 52-week position, ALWAYS ON
+# --------------------------------------------------------------------------- #
+PRICE_SECTION_TITLE = "Share price & 52-week position"
+PRICE_SECTION_NOTE = (
+    "The last close in the name's OWN quoted currency (never converted) with the date "
+    "of that close, and where it sits between the trailing 52-week low and high. "
+    "Display only — not ranked, not screened.")
+
+
+def price_rows(result) -> list[tuple[str, str]]:
+    """``(display name, price line)`` per RATEABLE name (PRICE-1) — the ONE source the
+    CLI block, the Run tab table, the canonical markdown and the HTML export all render,
+    so the four cannot drift (the same discipline ``valuation_band_rows`` uses).
+
+    NOT gated by the valuation-band flag: the price comes off the 400-day bars every run
+    already fetches, so it costs nothing and is always shown. Abstentions are INCLUDED
+    ("price not available — …", "52-week range not evaluated — only 31 weeks of closes"):
+    an honest reason is the point, and silence is indistinguishable from a feature that
+    was never switched on. Empty only when NO name carries a line at all (a hand-built
+    or pre-PRICE-1 result), so such a run renders exactly what it rendered before."""
+    return [(_disp(result, r.ticker), r.price_line) for r in result.ranked
+            if not r.excluded and getattr(r, "price_line", "")]
+
+
+def format_price_lines(result) -> list[str]:
+    """The share-price block as CLI lines (see ``price_rows``)."""
+    rows = price_rows(result)
+    if not rows:
+        return []
+    lines = [f"  {PRICE_SECTION_TITLE.upper()} (quoted currency, never converted — "
+             "not ranked, not screened):"]
+    for name, line in rows:
+        lines.append(f"      {_name_col(name)} {line}")
+    return lines
+
+
 def valuation_band_rows(result) -> list[tuple[str, str]]:
     """``(display name, band)`` per RATEABLE name (VALBAND-1) — the ONE source the CLI
     block, the Run tab table and the canonical markdown all render, so the three can't
@@ -907,13 +957,42 @@ def valuation_band_rows(result) -> list[tuple[str, str]]:
     of these names is least expensive, and in a uniformly hot cohort that is still a #1.
     This one says where each price sits against its OWN five-year history.
 
+    Each row carries the band line AND (PRICE-1) the REVERSION VALUE — what the price
+    would be at this name's own median multiple — because the reversion value reuses the
+    band's inputs entirely and therefore rides on the same flag and lives in the same
+    section. It is arithmetic on one company's own history: NOT a forecast, NOT a target
+    price, NOT a recommendation (``VALUATION_BAND_SECTION_NOTE`` says so on every
+    surface).
+
     Display only — nothing here ranks, screens, gates or votes. Abstentions are INCLUDED
     ("not evaluated — insufficient history: 1.4y" is the honest answer for a recent IPO
     and must be visible). Empty when no name computed one, so a run against a thin/fake
     adapter renders exactly what it rendered before."""
-    rows = [(_disp(result, r.ticker), r.valuation_band) for r in result.ranked
+    rows = [(_disp(result, r.ticker),
+             _band_cell(r.valuation_band, getattr(r, "reversion_value", "")))
+            for r in result.ranked
             if not r.excluded and getattr(r, "valuation_band", "")]
     return [] if all(band == "—" for _, band in rows) else rows
+
+
+def _band_cell(band: str, reversion: str) -> str:
+    """One valuation-band cell: the band line, then the reversion value as a second
+    clause. An uncomputed band ("—") stays a bare "—" — appending a reversion abstention
+    to a column that was never computed would resurrect the silent-failure ambiguity
+    ``valuation_band_rows`` exists to avoid."""
+    if not reversion or band == "—":
+        return band
+    return f"{band} · {reversion}"
+
+
+VALUATION_BAND_SECTION_NOTE = (
+    "Where today's EV/EBIT (or the labelled P/E fallback) sits in the name's OWN "
+    "multi-year monthly range — 92nd = near its own peak, 15th = historically cheap. "
+    "The reversion value re-prices today's earnings and net debt at that name's own "
+    "MEDIAN past multiple: it is arithmetic on the company's own history, not a "
+    "forecast, not a target price and not a recommendation — a business that has "
+    "permanently derated should trade below its own past median, and arithmetic cannot "
+    "tell decline from mispricing. Not ranked, not screened, not shown to any model.")
 
 
 def format_valuation_bands(result) -> list[str]:
@@ -965,6 +1044,10 @@ def format_cli_report(result: RankPipelineResult) -> str:
     if basis_block:
         lines.append("")
         lines.extend(basis_block)
+    price_block = format_price_lines(result)          # PRICE-1 (always on)
+    if price_block:
+        lines.append("")
+        lines.extend(price_block)
     band_block = format_valuation_bands(result)
     if band_block:
         lines.append("")

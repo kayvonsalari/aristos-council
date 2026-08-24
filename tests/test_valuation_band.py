@@ -121,7 +121,11 @@ def test_a_name_at_its_own_peak_reads_near_the_100th_percentile():
 
     assert band.available
     assert band.percentile > 95
-    assert "percentile of own 5-year EV/EBIT band" in band.display
+    # PRICE-1 item 4: the line now LEADS with the multiple and glosses the percentile in
+    # plain English. Same numbers, same abstentions — wording only.
+    assert band.display.startswith("EV/EBIT ")
+    assert "percentile of its own 5-year range" in band.display
+    assert f"dearer than {round(band.percentile)}% of the last five years" in band.display
 
 
 def test_a_name_at_its_own_floor_reads_near_the_1st_percentile():
@@ -182,7 +186,7 @@ def test_pe_fallback_is_used_and_labelled_when_ev_components_are_absent():
 
     assert band.available
     assert band.basis == "pe"
-    assert "P/E band (fallback)" in band.display
+    assert band.display.startswith("P/E (fallback) ")     # the fallback stays LABELLED
     assert band.current == 1_000.0 / 80.0
 
 
@@ -209,7 +213,10 @@ def test_loss_years_drop_out_of_a_pe_band_and_the_coverage_is_reported():
 
     assert band.available
     assert band.months_covered < band.months_total     # loss months are NOT in the band
-    assert f"band from {band.months_covered}/{band.months_total} months" in band.display
+    # PRICE-1 item 4: the coverage is stated AND explained — "42 of 61 months" alone was
+    # the unexplained half of the old line.
+    assert (f"based on {band.months_covered} of {band.months_total} months, "
+            "the rest lack usable statements") in band.display
 
 
 def test_coverage_below_half_the_span_abstains_with_the_count():
@@ -322,8 +329,11 @@ def test_the_display_string_states_the_percentile_the_basis_and_the_coverage():
                       valuation_band=valuation_band(bars, f, asof=TODAY))
     text = valuation_band_display(fi)
 
-    assert text.startswith("50th percentile of own 5-year EV/EBIT band")
-    assert "band from " in text and " months" in text
+    # PRICE-1 item 4: value first, then the percentile with a plain-English gloss, then
+    # the coverage WITH its explanation. Same numbers as before, nothing recomputed.
+    assert text.startswith("EV/EBIT 11.5 — 50th percentile of its own 5-year range")
+    assert "dearer than 50% of the last five years" in text
+    assert "based on 61 of 61 months" in text
 
 
 def test_an_uncomputed_band_renders_as_an_em_dash_not_a_number():
@@ -413,10 +423,13 @@ class _BandAdapter(MarketDataAdapter):
 
     def get_fundamentals(self, ticker):
         ends = _fiscal_years(6)
+        # shares_outstanding is dated too, so the PRICE-1 reversion value computes on the
+        # SAME point-in-time discipline as net debt (it abstains without it).
         aligned = {"ebit": [_BAND_FUND[ticker]["ebit"][0]] * 6,
-                   "total_debt": [200.0] * 6, "cash": [50.0] * 6}
+                   "total_debt": [200.0] * 6, "cash": [50.0] * 6,
+                   "shares_outstanding": [1e9] * 6}
         period_ends = {k: ends[:6] for k in aligned}
-        return Fundamentals(ticker=ticker, name=ticker,
+        return Fundamentals(ticker=ticker, name=ticker, currency="USD",
                             aligned_annual=aligned, aligned_period_ends=period_ends,
                             **_BAND_FUND[ticker])
 
@@ -453,7 +466,7 @@ def test_toggle_on_adds_the_column_and_leaves_verdicts_unchanged():
     assert on.meta["with_valuation_band"] is True
     band_rows = valuation_band_rows(on)
     assert {n for n, _ in band_rows} == {"P", "Q"}            # column present for each
-    assert all("percentile of own 5-year" in b for _, b in band_rows)
+    assert all("percentile of its own 5-year range" in b for _, b in band_rows)
     # the band NEVER re-grades: verdicts + ranks are byte-identical with it on or off.
     assert _verdict_snapshot(on) == _verdict_snapshot(off)
 
@@ -593,5 +606,7 @@ def test_band_requested_and_all_compute_is_unchanged_no_failure_text():
         strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
     rows = valuation_band_rows(result)
     assert {n for n, _ in rows} == {"P", "Q"}
-    assert all("percentile of own 5-year" in b for _, b in rows)
-    assert not any("not evaluated" in b for _, b in rows)     # real bands, no abstention text
+    assert all("percentile of its own 5-year range" in b for _, b in rows)
+    # real bands AND real reversion values — no abstention text anywhere in the section.
+    assert not any("not evaluated" in b for _, b in rows)
+    assert all("reversion value $" in b for _, b in rows)

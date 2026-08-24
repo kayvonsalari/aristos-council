@@ -39,6 +39,8 @@ from .tools.technical import (
     technical_snapshot,
     total_return,
 )
+from .tools.price_context import PriceContext, price_context
+from .tools.reversion import ReversionValue, reversion_value
 from .tools.valuation_band import BAND_YEARS, ValuationBand, valuation_band
 
 _ROIC_WINDOW = 4   # through-cycle window (matches the screen's ROIC window intent)
@@ -106,6 +108,14 @@ class FactorInputs:
     # None when the 5-year price fetch failed or was not requested; an ABSTAINED band
     # is a ValuationBand with percentile None carrying its reason, never None here.
     valuation_band: Optional[ValuationBand] = None
+    # SHARE PRICE + 52-WEEK POSITION (PRICE-1) — ALWAYS ON, never gated by the band flag.
+    # Read off the SAME 400-day bars the momentum/volatility legs already consume (no new
+    # fetch, no re-windowing), so it costs nothing and cannot move a ranking. Carries the
+    # currency and the close's as-of DATE, so a stale cache is visible rather than silent.
+    # Distinct from ``last_close`` above on purpose: that one is the ADJUSTED close the
+    # screen consumes; this is the traded ``close``, which is what "the share price"
+    # means (see tools/price_context.py).
+    price_context: Optional[PriceContext] = None
 
 
 # --- factor functions (pure; None == NOT-EVAL) ---------------------------- #
@@ -425,6 +435,39 @@ def valuation_band_display(fi: FactorInputs) -> str:
     (VALBAND-1 role (a)). "—" when the band was never computed (no 5-year fetch)."""
     band = fi.valuation_band
     return "—" if band is None else band.display
+
+
+def price_display(fi: FactorInputs) -> str:
+    """The share-price + 52-week-position line for this name (PRICE-1) — the ONE string
+    the CLI, the Run tab, the markdown record and the HTML export all render.
+
+    ALWAYS available (it reads bars the run already fetched), so unlike the band there is
+    no "never computed" case to render as "—": a name with no price bars gets an honest
+    "price not available — …". "—" only for a FactorInputs assembled without the field at
+    all (a hand-built test row)."""
+    ctx = fi.price_context
+    return "—" if ctx is None else ctx.display
+
+
+def reversion_value_for(fi: FactorInputs) -> ReversionValue:
+    """This name's reversion value (PRICE-1) — today's earnings and net debt re-priced at
+    its OWN median multiple from the band's series.
+
+    Rides WITH the valuation band: the band carries the median and the point-in-time
+    inputs, so a run with the band off returns an abstention here too. The last close is
+    the SAME number ``price_display`` shows, so the rendered gap always reconciles with
+    the price line above it. Display only — see tools/reversion.py."""
+    ctx = fi.price_context
+    f = fi.fundamentals
+    return reversion_value(fi.valuation_band, f,
+                           last_close=(ctx.last_close if ctx else None),
+                           currency=(getattr(f, "currency", None) if f else None))
+
+
+def reversion_value_display(fi: FactorInputs) -> str:
+    """``reversion_value_for`` rendered — "" when the band was never computed on this run
+    (band OFF: no band section, so no reversion clause either)."""
+    return "" if fi.valuation_band is None else reversion_value_for(fi).display
 
 
 @dataclass(frozen=True)
@@ -763,16 +806,25 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
     except Exception:
         pass                                          # DataUnavailable OR a raw error
     closes: list[float] = []
+    # PRICE-1: the SAME fetch, read twice. ``closes`` (adjusted) keeps feeding the
+    # momentum/volatility legs and the screen byte-for-byte; ``bars`` is kept so the
+    # share price and 52-week position can be read off the TRADED close without a second
+    # call. The window is NOT touched — 400 days is what low_volatility consumes.
+    bars: list = []
+    price_fail = ""
     try:
         prices = adapter.get_price_history(
             ticker, start=today - timedelta(days=400), end=today)
         closes = prices.closes if prices and prices.closes else []
+        bars = list(getattr(prices, "bars", None) or [])
     except TransientFetchError:
         raise                                         # transient -> fetch-error, not
                                                       # UNRATEABLE
-    except Exception:
-        pass    # a delisted name can raise a RAW yfinance error ("no timezone found")
-                # rather than DataUnavailable — degrade to no-data, never crash the run
+    except Exception as exc:
+        # a delisted name can raise a RAW yfinance error ("no timezone found")
+        # rather than DataUnavailable — degrade to no-data, never crash the run. The
+        # REASON is kept so the price line abstains visibly instead of silently.
+        price_fail = f"price history unavailable: {type(exc).__name__}: {exc}"
     snap = technical_snapshot(closes) if closes else None
 
     # ETF static layer (ETF-STATIC-1): fill slow ETF fields the vendor doesn't serve from
@@ -838,6 +890,14 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
     band = (_gather_valuation_band(adapter, ticker, fundamentals, today=today)
             if with_valuation_band else None)
 
+    # Share price + 52-week position (PRICE-1) — ALWAYS ON. Free: it reads the bars
+    # fetched above, in the price currency the provider reports, with no conversion and
+    # no assumption when that currency is absent.
+    ctx = price_context(
+        bars, currency=getattr(fundamentals, "currency", None) if fundamentals else None)
+    if not ctx.available and price_fail:
+        ctx = replace(ctx, note=price_fail)          # name the fetch failure, don't hide it
+
     return FactorInputs(
         ticker=ticker, fundamentals=fundamentals,
         return_6m=total_return(closes, _TD_6M) if closes else None,
@@ -847,7 +907,7 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
         static=static_fill, fund_size_fx=fund_size_fx,
         fund_size_fx_failed=fund_size_fx_failed,
         fund_size_currency_unverified=fund_size_currency_unverified,
-        valuation_band=band)
+        valuation_band=band, price_context=ctx)
 
 
 BORDERLINE_TOL = 0.05    # within 5% (relative) of the threshold

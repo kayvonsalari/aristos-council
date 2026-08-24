@@ -85,6 +85,18 @@ class RankedTicker:
     # on it yet — and deliberately NOT in explain(), so the narrator is not handed a
     # number it was not briefed to reason about.
     valuation_band: str = ""
+    # SHARE PRICE + 52-WEEK POSITION (PRICE-1), display-only: "$27.14 (as of 2026-08-22)
+    # — 34% of its 52-week range (low $22.80 · high $31.20)". Attached by the rank stage
+    # for EVERY rateable name — unlike valuation_band it is NOT gated by a flag, because
+    # it costs nothing (the 400-day bars are already fetched). Same discipline as the
+    # band: not in factor_values, not in the combined rank, not in explain().
+    price_line: str = ""
+    # REVERSION VALUE (PRICE-1), display-only: today's earnings and net debt re-priced at
+    # this name's OWN median multiple from the band's series. Rides WITH the band (same
+    # flag, same section) because it reuses the band's inputs entirely; empty when the
+    # band was not requested. Arithmetic, NOT a forecast/target/recommendation — see
+    # tools/reversion.py. Feeds nothing: no factor, screen, gate, rank, verdict or prompt.
+    reversion_value: str = ""
 
     def score_bounds(self) -> tuple[int, int]:
         """(best, worst) possible combined rank-sum for this name's cohort: best = number

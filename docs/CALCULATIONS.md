@@ -231,6 +231,162 @@ whose `field_path` the provenance grammar cannot yet resolve (house rule 4), whi
 generate `DATA_QUALITY` violations; that wiring needs its own alias-table work and is deferred.
 No prompt changes.
 
+**Band line wording (PRICE-1 item 4 — wording only, no maths change).** The line used to read
+`"70th percentile of own 5-year EV/EBIT band (band from 42/61 months)"`: the raw multiple was
+computed and never shown, and `42/61 months` was unexplained. It now leads with the VALUE and
+glosses the percentile in plain English —
+
+```
+EV/EBIT 21.9 — 70th percentile of its own 5-year range (dearer than 70% of the last five
+years; based on 42 of 61 months, the rest lack usable statements)
+```
+
+— from the identical numbers. `net_debt_basis == "latest"` still appends
+`"; net debt held at latest reported"`, an abstention still renders `"not evaluated — <reason>"`,
+and when every month is computable the `", the rest lack usable statements"` clause is
+dropped (there is no rest to explain).
+
+### 2.4 Share price & 52-week position (PRICE-1, `tools/price_context.py`)
+
+The plainest two facts in the report, and the ones it lacked longest: **what does one share
+cost, and is that high or low lately?** Every other line was a rank or a percentile.
+
+**Source — the existing series, never a new window.** Both numbers are read off the SAME
+400-day close series `gather_factor_inputs` already fetches for the momentum/volatility legs.
+No new fetch, no new provider call, and **no re-windowing**: `low_volatility` consumes the whole
+close list, so widening that window would silently change every existing strategy's ranking.
+Because it costs nothing, it is **always on** — not gated by the valuation-band toggle.
+
+**`close`, never `adj_close`.** The same choice the band makes (§2.3) for the same reason:
+`adj_close` is a TOTAL-RETURN level, not a share price. For a dividend payer the adjusted series
+sits below the traded price in the past, which would drag the 52-week low down and flatter the
+position. (`FactorInputs.last_close`, which the screen consumes, is the ADJUSTED close and is
+deliberately left untouched — the price line carries its own traded-close reading.)
+
+**Currency — stated, never converted, never assumed.** The price renders in the name's own
+quoted currency (`Fundamentals.currency`): `$27.14`, `€61.30`, `CHF 84.20`. An **unknown**
+currency renders the bare amount plus one per-line note that no currency was reported — house
+rule 8's honest abstention applied to display. Several ETF cohorts are EUR/GBP denominated, so a
+silently-USD number would be a real error.
+
+**As-of date.** Every price carries the DAY of that close (`(as of 2026-08-21)`), so a stale
+cache is visible rather than silent.
+
+**52-week position.**
+
+```
+window          = [last_close_day − 52 weeks, last_close_day]      (inclusive)
+high_52w        = max(close) inside the window
+low_52w         = min(close) inside the window
+position (%)    = 100 × (last_close − low_52w) / (high_52w − low_52w)
+```
+
+Only closes **inside the trailing 52 weeks** count — the 400-day fetch is ~13 months, and
+presenting all of it would quietly widen the range. The window is anchored on the last close's
+own day, not on the calendar today, so the price and the range are two statements about the same
+series. **At the high the position reads 100%, at the low 0%**; a price that never moved all year
+(a zero-width range) reads 100% under that same stated rule rather than dividing by zero.
+
+**Abstention.** Below **40 weeks** of span inside the window the RANGE abstains with the REAL
+span — `"52-week range not evaluated — only 31 weeks of closes"` — never a partial range dressed
+as a full one. The PRICE still renders: the two facts fail independently. With no price bars at
+all the line reads `"price not available — <reason>"`.
+
+**Rendered line** (one shared builder, `pipeline.price_rows`, read by the CLI block, the Run tab
+table, the canonical run markdown and the HTML export, so the four cannot drift):
+
+```
+PFE  $27.14 (as of 2026-08-22) — 34% of its 52-week range (low $22.80 · high $31.20)
+```
+
+**Display only.** Nothing here feeds a factor, screen, gate, rank, verdict or LLM prompt, and it
+is registered as neither a factor nor a criterion.
+
+### 2.5 Reversion value (PRICE-1, `tools/reversion.py`)
+
+The band says *how* dear a name is against its own past. This says *what it would cost* at a
+normal valuation for that company. It **rides with the valuation band** — same flag, same report
+section — because it reuses the band's inputs entirely.
+
+**What it is NOT.** Arithmetic, not analysis: it re-prices today's earnings and today's net debt
+at the MEDIAN of the multiples this same company actually traded on over the band's window. It is
+**not a forecast, not a target price, not a recommendation**, and it carries no view on whether
+that median multiple is deserved — a business that has permanently derated (broken moat, patent
+cliff, a regulated return cut) *should* trade below its own past median, and arithmetic cannot
+tell decline from mispricing. Every render site says so in plain English. **Display only**: it
+feeds no factor, no screen, no gate, no rank, no verdict and no LLM prompt, and is not registered
+as a criterion.
+
+**Formula.** `median_multiple` is the median of the SAME monthly multiple series the band already
+took its percentile over — recorded by `valuation_band()` (`ValuationBand.median_multiple`), never
+rebuilt, so the two numbers are two readings of ONE series.
+
+EV/EBIT basis:
+
+```
+implied_EV      = ebit × median_multiple
+implied_equity  = implied_EV − net_debt
+reversion_price = implied_equity / shares_outstanding
+```
+
+P/E basis (the band's labelled fallback):
+
+```
+reversion_price = eps_ttm × median_pe
+```
+
+and in both cases:
+
+```
+gap = reversion_price / last_close − 1          (+0.17 → the price would be 17% higher)
+```
+
+**Every input field, and where it comes from.**
+
+| input | field | provenance |
+|---|---|---|
+| `median_multiple` | `ValuationBand.median_multiple` | median of the band's own monthly series (§2.3) |
+| `ebit` | `ValuationBand.current_earnings` | `aligned_annual["ebit" \| "operating_income"]`, applied point-in-time at the band's newest usable month (90-day reporting lag) |
+| `net_debt` | `ValuationBand.current_net_debt` | `aligned_annual["total_debt"] − ["cash"]` at that SAME month on the band's own `net_debt_basis` (`asof`; `latest` when the provider gives no dated debt/cash, and the band's line already discloses that) |
+| `shares_outstanding` | `ValuationBand.current_shares` | `aligned_annual["shares_outstanding"]` (yfinance *Ordinary Shares Number* / *Share Issued*), same as-of month and same lag rule |
+| `eps_ttm` | `Fundamentals.eps` | vendor trailing EPS — the P/E route only |
+| `last_close` | `PriceContext.last_close` | the SAME traded close the price line above displays (§2.4), so the gap always reconciles with the number the reader can see |
+
+Taking every input at the band's own current month is what makes the number auditable: feed the
+band's CURRENT multiple in place of its median and the implied price comes back to the last close
+(pinned by a test). Anything else would mean the reversion value was built from different months,
+statements or share counts than the percentile printed beside it.
+
+**Abstains — with its own reason, never a guess — when:**
+
+- the band itself abstained for that name (`"the valuation band abstained for this name"`);
+- the band was never computed on this run (band toggle off);
+- `ebit ≤ 0` on the EV/EBIT basis, or `eps_ttm ≤ 0` on the P/E basis;
+- `shares_outstanding` is missing or `≤ 0`;
+- net debt is not computable on the band's basis;
+- `last_close` is missing;
+- `implied_equity ≤ 0` (net debt exceeds the implied enterprise value at the median multiple).
+
+An abstaining reversion value never hides the band line beside it — both render.
+
+**No clamping, no capping, no smoothing.** A name whose own median multiple is far from today's
+produces a large number; it is shown **as-is, beside the median multiple that produced it**, so a
+reader can audit it. Tidying it into plausibility would hide exactly the case worth looking at.
+
+**Why the MEDIAN.** The 50th percentile is the same distribution the band already reports today's
+multiple against, so "70th percentile of its own range" and "reversion to its own median" are
+consistent by construction rather than two independent opinions. It is the plain statistical
+median (middle value; mean of the two middle values on an even count), computed over the identical
+`values` list the percentile uses.
+
+**Rendered line** (appended to the band's row by `pipeline.valuation_band_rows`, so the CLI, the
+Run tab, the markdown record and the HTML export all carry it):
+
+```
+reversion value $31.80 (+17%) if EV/EBIT returned to its own 5-year median of 18.4x;
+42 of 61 months usable
+```
+
 ## 3. Dividend streak — flat is not a cut (`tools/screening.py`)
 
 Annual dividend totals are built per calendar year (partial current year excluded), then
