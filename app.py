@@ -1211,6 +1211,44 @@ def _confirmation_line(m: dict) -> str:
             f"{m.get('universe_id') or 'adhoc'} in {m['council_mode']}.")
 
 
+def _render_valuation_band_table(table) -> None:
+    """The valuation-band section in the Run tab (PRICE-2): the intro, the TABLE, then the
+    footnotes underneath. Renders the cells ``pipeline.valuation_band_table`` produced —
+    the same ones the markdown record, the HTML export and the CLI show — so nothing here
+    formats a number of its own. Renders NOTHING when no name carried a band."""
+    from aristos_council.pipeline import VALUATION_BAND_SECTION_TITLE
+
+    if table is None:
+        return
+    st.subheader(VALUATION_BAND_SECTION_TITLE)
+    st.caption(table.intro)
+    st.dataframe([{c: row[c] for c in table.columns} for row in table.rows],
+                 hide_index=True, width="stretch")
+    for note in table.footnotes:
+        st.caption(note)
+
+
+def _valuation_band_markdown(table) -> list[str]:
+    """The valuation-band section as markdown (PRICE-2): at most two sentences, then the
+    TABLE, then the footnotes. Reads ``pipeline.valuation_band_table`` — the ONE source
+    the Run tab, the HTML export and the CLI also read — so the four cannot drift.
+    ``[]`` when no name carried a band (band toggle off), exactly as before."""
+    from aristos_council.pipeline import VALUATION_BAND_SECTION_TITLE
+
+    if table is None:
+        return []
+    lines = ["", f"## {VALUATION_BAND_SECTION_TITLE}", "", table.intro, "",
+             "| " + " | ".join(table.columns) + " |",
+             "|" + "---|" * len(table.columns)]
+    for row in table.rows:
+        cells = [row[c].replace("|", "\\|") for c in table.columns]
+        cells[0] = f"**{cells[0]}**"
+        lines.append("| " + " | ".join(cells) + " |")
+    lines.append("")
+    lines += [f"- {note}" for note in table.footnotes]
+    return lines
+
+
 def _universe_markdown(result) -> str:
     """The run as a self-contained markdown doc (the download; NO new storage format
     this sprint — the pipeline does not persist reports)."""
@@ -1258,8 +1296,7 @@ def _universe_markdown(result) -> str:
     # was at the 92nd percentile of its own five years", which is the sentence a reader
     # of an old run actually needs.
     from aristos_council.pipeline import (
-        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, VALUATION_BAND_SECTION_NOTE,
-        price_rows, valuation_band_rows,
+        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, price_rows, valuation_band_table,
     )
 
     # PRICE-1: the share price + 52-week position, ALWAYS in the record (never gated by
@@ -1268,11 +1305,7 @@ def _universe_markdown(result) -> str:
     if p_rows:
         lines += ["", f"## {PRICE_SECTION_TITLE}", "", f"_{PRICE_SECTION_NOTE}_", ""]
         lines += [f"- **{n}** — {line}" for n, line in p_rows]
-    band_rows = valuation_band_rows(result)
-    if band_rows:
-        lines += ["", "## Valuation band (absolute — vs each name's own history)", "",
-                  f"_{VALUATION_BAND_SECTION_NOTE}_", ""]
-        lines += [f"- **{n}** — {b}" for n, b in band_rows]
+    lines += _valuation_band_markdown(valuation_band_table(result))
     if result.excluded:
         lines += ["", "## Excluded (screen / cap / sector)", ""]
         lines += [f"- **{display_name(t, result.names.get(t))}** — {why}"
@@ -1390,8 +1423,7 @@ def _multi_strategy_markdown(multi_result) -> str:
     # column, not a per-strategy verdict, so it sits ONCE under the combined grid. Empty
     # (section omitted) unless the "Valuation band" checkbox was ticked.
     from aristos_council.pipeline import (
-        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, VALUATION_BAND_SECTION_NOTE,
-        price_rows, valuation_band_rows,
+        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, price_rows, valuation_band_table,
     )
     first = multi_result.results[ids[0]] if ids else None
     # PRICE-1: the price is a per-NAME fact, identical under every lens, so it sits ONCE
@@ -1401,12 +1433,9 @@ def _multi_strategy_markdown(multi_result) -> str:
         lines += [f"## {PRICE_SECTION_TITLE}", "", f"_{PRICE_SECTION_NOTE}_", ""]
         lines += [f"- **{n}** — {line}" for n, line in p_rows]
         lines.append("")
-    band_rows = valuation_band_rows(first) if first is not None else []
-    if band_rows:
-        lines += ["## Valuation band (absolute — vs each name's own history)", "",
-                  f"_{VALUATION_BAND_SECTION_NOTE}_", ""]
-        lines += [f"- **{n}** — {b}" for n, b in band_rows]
-        lines.append("")
+    if first is not None:
+        band_md = _valuation_band_markdown(valuation_band_table(first))
+        lines += (band_md + [""]) if band_md else []
     for sid in ids:
         res = multi_result.results[sid]
         lines += [f"## {multi_result.strategy_names.get(sid) or sid} (`{sid}`)", ""]
@@ -1457,8 +1486,7 @@ def _render_multi_strategy_result(multi_result) -> None:
     # ALWAYS shown; the band (and the reversion value riding with it) only when the
     # checkbox was on.
     from aristos_council.pipeline import (
-        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, VALUATION_BAND_SECTION_NOTE,
-        price_rows, valuation_band_rows,
+        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, price_rows, valuation_band_table,
     )
     first = multi_result.results[ids[0]] if ids else None
     p_rows = price_rows(first) if first is not None else []
@@ -1468,12 +1496,8 @@ def _render_multi_strategy_result(multi_result) -> None:
         st.dataframe([{"Name": n, "Price · 52-week position": line}
                       for n, line in p_rows], width="stretch", hide_index=True)
 
-    band_rows = valuation_band_rows(first) if first is not None else []
-    if band_rows:
-        st.subheader("Valuation band — absolute, vs each name's own history")
-        st.caption(VALUATION_BAND_SECTION_NOTE)
-        st.dataframe([{"Name": n, "Valuation band · reversion value": b}
-                      for n, b in band_rows], width="stretch", hide_index=True)
+    _render_valuation_band_table(
+        valuation_band_table(first) if first is not None else None)
 
     for sid in ids:
         res = multi_result.results[sid]
@@ -1567,8 +1591,7 @@ def _render_universe_result(result) -> None:
     # it reads the 400-day bars the ranking legs already fetched, so it is free and is not
     # gated by the valuation-band toggle. Display only.
     from aristos_council.pipeline import (
-        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, VALUATION_BAND_SECTION_NOTE,
-        price_rows, valuation_band_rows,
+        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, price_rows, valuation_band_table,
     )
 
     p_rows = price_rows(result)
@@ -1578,17 +1601,12 @@ def _render_universe_result(result) -> None:
         st.dataframe([{"Name": n, "Price · 52-week position": line}
                       for n, line in p_rows], hide_index=True, width="stretch")
 
-    # 2b2 — VALUATION BAND (VALBAND-1) + REVERSION VALUE (PRICE-1): the one ABSOLUTE line
-    # in a report otherwise made entirely of cohort statements. The ranked table above says
-    # which of these names is least expensive; this says whether any of them is cheap
-    # against its OWN history, and what it would cost at its own median multiple.
-    # Display only — it ranks nothing, screens nothing, and decides nothing.
-    band_rows = valuation_band_rows(result)
-    if band_rows:
-        st.subheader("Valuation band — absolute, vs each name's own history")
-        st.caption(VALUATION_BAND_SECTION_NOTE)
-        st.dataframe([{"Name": n, "Valuation band · reversion value": b}
-                      for n, b in band_rows], hide_index=True, width="stretch")
+    # 2b2 — VALUATION BAND (VALBAND-1) + REVERSION VALUE (PRICE-1), as a TABLE (PRICE-2):
+    # the one ABSOLUTE block in a report otherwise made entirely of cohort statements. The
+    # ranked table above says which of these names is least expensive; this says whether
+    # any of them is cheap against its OWN history, and what it would cost at its own
+    # median multiple. Display only — it ranks nothing, screens nothing, decides nothing.
+    _render_valuation_band_table(valuation_band_table(result))
 
     # 2c — SCREEN BASIS: the measurement basis each screen criterion used (payout FCF
     # vs EPS fallback) across the screened names.

@@ -449,14 +449,17 @@ def price_display(fi: FactorInputs) -> str:
     return "—" if ctx is None else ctx.display
 
 
-def reversion_value_for(fi: FactorInputs) -> ReversionValue:
+def reversion_value_for(fi: FactorInputs) -> Optional[ReversionValue]:
     """This name's reversion value (PRICE-1) — today's earnings and net debt re-priced at
     its OWN median multiple from the band's series.
 
-    Rides WITH the valuation band: the band carries the median and the point-in-time
-    inputs, so a run with the band off returns an abstention here too. The last close is
-    the SAME number ``price_display`` shows, so the rendered gap always reconciles with
-    the price line above it. Display only — see tools/reversion.py."""
+    Rides WITH the valuation band: ``None`` when the band was never computed on this run
+    (band OFF -> no band section, so no reversion cell either); an ABSTAINING
+    ``ReversionValue`` carrying its reason whenever the band ran but the arithmetic could
+    not. The last close is the SAME number the price line shows, so the rendered gap
+    always reconciles with the price beside it. Display only — see tools/reversion.py."""
+    if fi.valuation_band is None:
+        return None
     ctx = fi.price_context
     f = fi.fundamentals
     return reversion_value(fi.valuation_band, f,
@@ -465,9 +468,11 @@ def reversion_value_for(fi: FactorInputs) -> ReversionValue:
 
 
 def reversion_value_display(fi: FactorInputs) -> str:
-    """``reversion_value_for`` rendered — "" when the band was never computed on this run
-    (band OFF: no band section, so no reversion clause either)."""
-    return "" if fi.valuation_band is None else reversion_value_for(fi).display
+    """``reversion_value_for`` rendered as one line — "" when the band was never computed
+    on this run. Kept for single-name surfaces; the universe report renders the same
+    numbers as table cells (``pipeline.valuation_band_table``)."""
+    rev = reversion_value_for(fi)
+    return "" if rev is None else rev.display
 
 
 @dataclass(frozen=True)
@@ -752,7 +757,7 @@ def _gather_valuation_band(adapter, ticker: str, fundamentals, *, today: date
     Best-effort: it NEVER raises and NEVER aborts a name the ranking legs could rate (a
     TRANSIENT error is swallowed here too — an absolute-context column must not abort a
     name). But a failure no longer collapses to ``None``: ``None`` rendered as "—", which
-    ``valuation_band_rows`` drops when EVERY band is "—", so a REQUESTED band whose fetch
+    the report dropped when EVERY band was absent, so a REQUESTED band whose fetch
     failed produced a report byte-identical to one where the band was never requested — a
     silent-failure hole that cost two live debugging rounds (2026-08-22). Instead it
     returns an ABSTAINING band carrying the reason, so the section renders an honest

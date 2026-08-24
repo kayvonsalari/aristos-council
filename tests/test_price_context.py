@@ -1,4 +1,5 @@
-"""PRICE-1 — the share price, its 52-week position, and the reversion value.
+"""PRICE-1/2 — the share price, its 52-week position, the reversion value, and the
+valuation-band TABLE they are rendered in.
 
 The reports could say a name sat at the 70th percentile of its own five-year valuation
 band and still never say what one share COST. These tests pin the three plain facts that
@@ -15,6 +16,10 @@ close that gap, and — more importantly — the honesty properties around them:
 - price and 52-week position are ALWAYS ON; the reversion value rides with the valuation
   band's flag;
 - and none of it moves a verdict, a rank or a factor value.
+
+PRICE-2 turned the band section from ten prose bullets into a table. That is a REFORMAT,
+so the guard that matters most (section 12) is that not one value moved: every cell is
+checked against the same objects the one-line rendering prints.
 
 The reversion arithmetic is checked against numbers worked by hand in the PR description,
 not against the implementation restating itself.
@@ -40,7 +45,7 @@ from aristos_council.pipeline import (
     format_price_lines,
     price_rows,
     run_rank_pipeline,
-    valuation_band_rows,
+    valuation_band_table,
 )
 from aristos_council.rank_engine import RankedTicker
 from aristos_council.tools.price_context import (
@@ -432,8 +437,8 @@ def test_the_band_line_leads_with_the_multiple_and_explains_the_month_count():
     # 31 months below today's 11.5 and 30 equal to it -> mid-rank 75.4 -> "75th".
     assert band.percentile == pytest.approx(75.4)
     assert band.display == (
-        "EV/EBIT 11.5 — 75th percentile of its own 5-year range "
-        "(dearer than 75% of the last five years; based on 61 of 61 months)")
+        "EV/EBIT 11.5 — 75th percentile (dear) of its own 5-year range "
+        "(based on 61 of 61 months)")
 
 
 def test_the_band_line_says_why_the_uncounted_months_are_missing():
@@ -557,28 +562,31 @@ def test_a_result_with_no_price_lines_renders_no_block_at_all():
 def test_band_off_keeps_the_price_and_the_52_week_position_and_drops_the_rest():
     off = _run(band=False)
     assert off.meta["with_valuation_band"] is False
-    assert valuation_band_rows(off) == []                      # no band section
-    assert all(not r.reversion_value for r in off.ranked)      # no reversion value
+    assert valuation_band_table(off) is None                   # no band section
+    assert all(r.reversion is None for r in off.ranked)        # no reversion value
     rows = price_rows(off)                                     # ...but the price stays
     assert {n for n, _ in rows} == {"P", "Q"}
     assert all("52-week range" in line for _, line in rows)
 
 
-def test_band_on_adds_the_band_and_the_reversion_value_to_the_same_section():
+def test_band_on_adds_the_band_and_the_reversion_value_to_the_same_table():
     on = _run(band=True)
-    rows = valuation_band_rows(on)
-    assert {n for n, _ in rows} == {"P", "Q"}
-    for _, cell in rows:
-        assert "percentile of its own 5-year range" in cell    # the band line
-        assert "reversion value $" in cell                     # ...and the reversion value
-        assert "if EV/EBIT returned to its own 5-year median of" in cell
+    table = valuation_band_table(on)
+    assert {r["Name"] for r in table.rows} == {"P", "Q"}
+    for row in table.rows:
+        assert row["EV/EBIT"].endswith("x")                    # today's multiple
+        assert row["Own 5y median"].endswith("x")              # its own median
+        assert row["Percentile"].endswith(")")                 # ordinal + one-word gloss
+        assert row["Reversion value"].startswith("$")
+        assert row["Gap"].startswith(("+", "-"))
+        assert row["Price"].startswith("$")                    # the gap's visible base
     # the price section is unchanged by the toggle — it was never gated by it.
     assert price_rows(on) == price_rows(_run(band=False))
 
 
-def test_an_abstaining_reversion_value_never_hides_the_band_line():
+def test_an_abstaining_reversion_value_never_hides_the_band_cells():
     """No dated share count: the band computes, the reversion value abstains — and BOTH
-    are visible, because a silent section is indistinguishable from a switched-off one."""
+    are visible, because a silent cell is indistinguishable from a switched-off one."""
     class _NoShares(_PriceAdapter):
         def get_fundamentals(self, ticker):
             f = super().get_fundamentals(ticker)
@@ -589,18 +597,20 @@ def test_an_abstaining_reversion_value_never_hides_the_band_line():
             return Fundamentals(**{**f.__dict__, "aligned_annual": aligned,
                                    "aligned_period_ends": ends})
 
-    rows = valuation_band_rows(_run(band=True, adapter=_NoShares()))
-    for _, cell in rows:
-        assert "percentile of its own 5-year range" in cell
-        assert "reversion value not evaluated — shares outstanding unavailable" in cell
+    for row in valuation_band_table(_run(band=True, adapter=_NoShares())).rows:
+        assert row["Percentile"].endswith(")")                 # the band still reads
+        assert row["Reversion value"] == ("not evaluated — shares outstanding "
+                                          "unavailable")
+        assert row["Gap"] == "—"
 
 
 def test_a_non_usd_cohort_renders_its_own_currency_end_to_end():
     on = _run(band=True, adapter=_PriceAdapter(currency="EUR"))
     for _, line in price_rows(on):
         assert "€" in line and "$" not in line
-    for _, cell in valuation_band_rows(on):
-        assert "reversion value €" in cell and "$" not in cell
+    for row in valuation_band_table(on).rows:
+        assert row["Price"].startswith("€") and row["Reversion value"].startswith("€")
+        assert "$" not in row["Price"] + row["Reversion value"]
 
 
 # --------------------------------------------------------------------------- #
@@ -636,7 +646,7 @@ def test_the_price_and_the_reversion_value_are_absent_from_the_narrator_evidence
     number may appear in it (the same fence VALBAND-1 put around the band)."""
     on = _run(band=True)
     for r in on.ranked:
-        assert r.price_line and r.reversion_value                # both computed...
+        assert r.price is not None and r.reversion is not None   # both computed...
         assert "52-week" not in r.explain()                      # ...and both fenced out
         assert "reversion" not in r.explain()
         assert "as of" not in r.explain()
@@ -668,3 +678,236 @@ def test_the_reversion_value_never_raises_on_absent_inputs():
     assert isinstance(reversion_value(ValuationBand(), None, last_close=1.0),
                       ReversionValue)
     assert isinstance(price_context(None), PriceContext)
+
+
+# --------------------------------------------------------------------------- #
+# 12. PRICE-2 — the valuation band as a TABLE
+#
+# The prose section was ten ~45-word bullets: the same coverage phrase twice in every
+# line, five lines of caveat ahead of the first number, no price beside the gap, and a
+# double negative at the cheap end ("1st percentile ... dearer than 1%"). PRICE-2 is a
+# REFORMAT — so the guard that matters is that not one value moved.
+# --------------------------------------------------------------------------- #
+import re  # noqa: E402
+
+from aristos_council.pipeline import (  # noqa: E402
+    VALUATION_BAND_DOCTRINE,
+    VALUATION_BAND_INTRO,
+    format_valuation_bands,
+)
+from aristos_council.tools.valuation_band import (  # noqa: E402
+    ordinal,
+    percentile_gloss,
+)
+
+_NUMBER = re.compile(r"-?\d[\d,]*\.?\d*")
+
+
+def _numbers(text: str) -> list[str]:
+    return _NUMBER.findall(text)
+
+
+def _band(*, percentile: float, basis: str = "ev_ebit", current: float = 19.7,
+          median: float = 21.2, covered: int = 42, total: int = 61,
+          net_debt_basis: str = "asof") -> ValuationBand:
+    return ValuationBand(percentile=percentile, basis=basis, current=current,
+                         median_multiple=median, months_covered=covered,
+                         months_total=total, years_covered=5.0, window_years=5,
+                         net_debt_basis=(net_debt_basis if basis == "ev_ebit" else ""))
+
+
+def _band_row(ticker: str, band, *, price=None, reversion=None,
+              excluded: bool = False) -> RankedTicker:
+    row = RankedTicker(ticker=ticker, factor_ranks={}, factor_values={},
+                       combined_rank=1.0, universe_size=2, excluded=excluded)
+    row.valuation_band = band
+    row.price = price
+    row.reversion = reversion
+    return row
+
+
+class _BandResult:
+    """The two attributes the band table reads off a RankPipelineResult."""
+
+    def __init__(self, ranked):
+        self.ranked = ranked
+        self.names: dict = {}
+
+
+def test_the_table_carries_exactly_the_values_the_prose_rendering_produced():
+    """THE core guard: a reformat must not alter data. Every cell is checked against the
+    SAME ``ValuationBand`` / ``ReversionValue`` objects the one-line rendering prints, and
+    then every number in the row is checked to appear in that prose — so a cell can never
+    quietly become a different number from the one the band itself reports."""
+    result = _run(band=True)
+    table = valuation_band_table(result)
+    live = [r for r in result.ranked if not r.excluded]
+    assert len(table.rows) == len(live)
+
+    for row, r in zip(table.rows, live):
+        band, rev, price = r.valuation_band, r.reversion, r.price
+        assert band.available and rev.available
+
+        assert row["EV/EBIT"] == f"{band.current:.1f}x"
+        assert row["Own 5y median"] == f"{band.median_multiple:.1f}x"
+        assert row["Percentile"] == (f"{ordinal(round(band.percentile))} "
+                                     f"({percentile_gloss(band.percentile)})")
+        assert row["Reversion value"] == format_money(rev.price, rev.currency)
+        assert row["Gap"] == f"{rev.gap:+.0%}"
+        assert row["Price"] == format_money(price.last_close, price.currency)
+
+        # ...and every number in the row appears in the one-line renderings of the SAME
+        # objects — the two surfaces cannot report different values.
+        prose = f"{band.display} {rev.display} {price.price_display}"
+        for cell in ("EV/EBIT", "Own 5y median", "Percentile", "Reversion value", "Gap",
+                     "Price"):
+            for number in _numbers(row[cell]):
+                assert number in prose, (cell, number, prose)
+
+
+def test_an_abstaining_name_keeps_its_row_and_its_real_reason():
+    """PG's live "insufficient history: 2.9y" must stay a visible ROW — never a dropped
+    name and never a blank cell."""
+    table = valuation_band_table(_BandResult([
+        _band_row("A", _band(percentile=1.2)),
+        _band_row("PG", ValuationBand(note="insufficient history: 2.9y")),
+    ]))
+    pg = table.rows[1]
+    assert pg["Name"] == "PG"
+    assert pg["Percentile"] == "not evaluated — insufficient history: 2.9y"
+    assert pg["EV/EBIT"] == pg["Own 5y median"] == pg["Reversion value"] == "—"
+    assert pg["Gap"] == "—"
+
+
+def test_an_abstaining_name_still_shows_the_price_it_does_have():
+    """The band abstaining says nothing about the price: it is fetched on a different
+    path and it is known. Blanking a fact we hold is not honest abstention."""
+    row = _band_row("PG", ValuationBand(note="insufficient history: 2.9y"),
+                    price=PriceContext(last_close=144.68, as_of=TODAY, currency="USD"))
+    table = valuation_band_table(_BandResult([row]))
+    assert table.rows[0]["Price"] == "$144.68"
+
+
+def test_the_row_order_matches_the_ranked_tables_order_exactly():
+    """A reader comparing sections must not have to re-find each name, so the table is
+    NOT re-sorted by gap — the biggest temptation here."""
+    result = _run(band=True)
+    ranked_order = [r.ticker for r in result.ranked if not r.excluded]
+    table = valuation_band_table(result)
+    assert [r["Name"] for r in table.rows] == ranked_order
+
+
+def test_the_table_is_not_re_sorted_by_gap():
+    """P ranks first and Q second, but Q carries the LARGER gap — so a gap-sorted table
+    would put Q on top. The fixture exists to make that visible."""
+    table = valuation_band_table(_BandResult([
+        _band_row("FIRST", _band(percentile=40.0),
+                  reversion=ReversionValue(price=10.0, gap=0.05, median_multiple=21.2,
+                                           basis="ev_ebit", window_years=5,
+                                           months_covered=42, months_total=61,
+                                           currency="USD")),
+        _band_row("SECOND", _band(percentile=40.0),
+                  reversion=ReversionValue(price=99.0, gap=0.90, median_multiple=21.2,
+                                           basis="ev_ebit", window_years=5,
+                                           months_covered=42, months_total=61,
+                                           currency="USD")),
+    ]))
+    assert [r["Name"] for r in table.rows] == ["FIRST", "SECOND"]
+    assert [r["Gap"] for r in table.rows] == ["+5%", "+90%"]     # ascending, not re-sorted
+
+
+def test_the_percentile_gloss_cutoffs_are_the_documented_ones():
+    assert percentile_gloss(10) == "cheapest"
+    assert percentile_gloss(11) == "cheap"
+    assert percentile_gloss(50) == "mid"
+    assert percentile_gloss(66) == "dear"
+    assert percentile_gloss(90) == "dearest"
+    # the boundaries, both sides
+    assert percentile_gloss(35) == "cheap" and percentile_gloss(36) == "mid"
+    assert percentile_gloss(65) == "mid" and percentile_gloss(89) == "dear"
+    # ...and it is taken from the ROUNDED percentile, the same number the ordinal uses,
+    # so the two halves of the cell can never disagree.
+    assert percentile_gloss(10.4) == "cheapest" and ordinal(round(10.4)) == "10th"
+    assert percentile_gloss(10.6) == "cheap" and ordinal(round(10.6)) == "11th"
+
+
+def test_the_gloss_replaces_the_double_negative_on_the_cheap_end():
+    """The old cell made the reader work out that "dearer than 1% of the last five years"
+    meant CHEAP. One word does it."""
+    cell = valuation_band_table(
+        _BandResult([_band_row("DUK", _band(percentile=1.2))])).rows[0]["Percentile"]
+    assert cell == "1st (cheapest)"
+    assert "dearer than" not in cell
+
+
+def test_uniform_coverage_is_stated_once_as_a_footnote_not_in_every_row():
+    """Ten identical "42 of 61 months" cells say one thing ten times."""
+    table = valuation_band_table(_BandResult([
+        _band_row("A", _band(percentile=20.0, covered=42, total=61)),
+        _band_row("B", _band(percentile=70.0, covered=42, total=61)),
+    ]))
+    assert "Months" not in table.columns
+    assert any("42 of 61 monthly observations" in n for n in table.footnotes)
+    assert all("42 of 61" not in cell for row in table.rows for cell in row.values())
+
+
+def test_varying_coverage_gets_its_own_compact_column_instead():
+    table = valuation_band_table(_BandResult([
+        _band_row("A", _band(percentile=20.0, covered=42, total=61)),
+        _band_row("B", _band(percentile=70.0, covered=51, total=61)),
+    ]))
+    assert "Months" in table.columns
+    assert [r["Months"] for r in table.rows] == ["42 of 61", "51 of 61"]
+    assert not any("monthly observations" in n for n in table.footnotes)
+
+
+def test_the_caveats_sit_below_the_table_and_the_intro_is_at_most_two_sentences():
+    table = valuation_band_table(_run(band=True))
+    assert table.intro == VALUATION_BAND_INTRO
+    assert VALUATION_BAND_INTRO.count(". ") <= 1                # i.e. two sentences
+    assert VALUATION_BAND_DOCTRINE in table.footnotes           # the caveat, in FULL
+    # everything the prose used to say AHEAD of the data still gets said, below it.
+    for phrase in ("not a forecast", "not a target price", "not a recommendation",
+                   "permanently derated", "arithmetic cannot tell decline from "
+                   "mispricing", "Not ranked, not screened", "never shown to any model"):
+        assert phrase in VALUATION_BAND_DOCTRINE
+
+
+def test_the_pe_fallback_stays_labelled_in_the_multiple_cell():
+    """The column header says EV/EBIT; a name on the labelled fallback basis must not
+    read as though it were an EV/EBIT number."""
+    table = valuation_band_table(_BandResult([
+        _band_row("A", _band(percentile=40.0, basis="pe", current=18.2)),
+    ]))
+    assert table.rows[0]["EV/EBIT"] == "18.2x (P/E)"
+
+
+def test_the_net_debt_held_at_latest_disclosure_moves_to_a_footnote():
+    """It used to ride inside the prose line. It is still a real assumption, so it is
+    still stated — once, naming the affected names."""
+    table = valuation_band_table(_BandResult([
+        _band_row("A", _band(percentile=40.0, net_debt_basis="latest")),
+        _band_row("B", _band(percentile=40.0)),
+    ]))
+    assert any("Net debt held at its latest reported value" in n and "A" in n
+               for n in table.footnotes)
+
+
+def test_the_cli_renders_the_same_columns_as_aligned_fixed_width_text():
+    result = _run(band=True)
+    table = valuation_band_table(result)
+    text = "\n".join(format_valuation_bands(result))
+
+    header = next(line for line in text.splitlines() if "Reversion value" in line)
+    assert header.split() == " ".join(table.columns).split()    # same columns, in order
+    for row in table.rows:                                      # every cell present
+        for column in table.columns:
+            assert row[column] in text
+    for note in table.footnotes:
+        assert note in text
+    # the columns line up: every data line ends at the same right edge (Gap is the last
+    # column and every gap here is the same width).
+    data = [ln for ln in text.splitlines()
+            if any(ln.strip().startswith(r["Name"]) for r in table.rows)]
+    assert len(data) == len(table.rows)
+    assert len({len(ln.rstrip()) for ln in data}) == 1

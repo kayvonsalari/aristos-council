@@ -122,11 +122,15 @@ class ValuationBand:
     def display(self) -> str:
         """The one display string every surface renders (report, Company Check).
 
-        Computed (PRICE-1 item 4 — the VALUE plus a plain-English gloss; same numbers,
-        nothing recomputed):
-        "EV/EBIT 21.9 — 70th percentile of its own 5-year range (dearer than 70% of the
-        last five years; based on 42 of 61 months, the rest lack usable statements)".
+        Computed (PRICE-1 item 4 / PRICE-2 — the VALUE plus a one-word plain-English
+        gloss; same numbers, nothing recomputed):
+        "EV/EBIT 21.9 — 70th percentile (dear) of its own 5-year range (based on 42 of 61
+        months, the rest lack usable statements)".
         Abstained: "not evaluated — insufficient history: 1.4y".
+
+        This is the SINGLE-LINE rendering, kept for surfaces that show ONE name (Company
+        Check). The universe report renders the same numbers as a table instead — see
+        ``pipeline.valuation_band_table``.
         """
         if not self.available:
             return f"not evaluated — {self.note}" if self.note else "not evaluated"
@@ -139,21 +143,30 @@ class ValuationBand:
         # 19 are absent. When every month IS computable there is no "rest" to explain.
         gap = ", the rest lack usable statements" \
             if self.months_covered < self.months_total else ""
-        return (f"{lead}{ordinal(pct)} percentile of its own "
-                f"{self.window_years}-year range "
-                f"(dearer than {pct}% of the last {_words(self.window_years)} years; "
-                f"based on {self.months_covered} of {self.months_total} months"
+        return (f"{lead}{ordinal(pct)} percentile ({percentile_gloss(self.percentile)}) "
+                f"of its own {self.window_years}-year range "
+                f"(based on {self.months_covered} of {self.months_total} months"
                 f"{gap}{tail})")
 
 
-_NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
-                 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+# Plain-English gloss for a percentile (PRICE-2). FIXED cutoffs, documented in
+# CALCULATIONS.md, no judgement in them — they replace the old "dearer than N% of the last
+# five years" phrasing, which forced the reader through a double negative at the cheap end
+# ("dearer than 1%" meaning "the cheapest it has been"). Applied to the ROUNDED percentile,
+# the same number the ordinal beside it is built from, so the two can never disagree.
+_GLOSS_CUTOFFS: tuple[tuple[int, str], ...] = (
+    (10, "cheapest"), (35, "cheap"), (65, "mid"), (89, "dear"))
+_GLOSS_TOP = "dearest"
 
 
-def _words(n: int) -> str:
-    """'the last five years' reads as prose; 'the last 5 years' reads as a field. Falls
-    back to the digits above ten."""
-    return _NUMBER_WORDS.get(n, str(n))
+def percentile_gloss(percentile: float) -> str:
+    """``1 -> 'cheapest'``, ``11 -> 'cheap'``, ``50 -> 'mid'``, ``66 -> 'dear'``,
+    ``90 -> 'dearest'``. Relative to the name's OWN history, never to a peer group."""
+    p = round(percentile)
+    for ceiling, word in _GLOSS_CUTOFFS:
+        if p <= ceiling:
+            return word
+    return _GLOSS_TOP
 
 
 def ordinal(n: int) -> str:

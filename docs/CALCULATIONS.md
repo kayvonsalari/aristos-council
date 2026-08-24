@@ -231,20 +231,38 @@ whose `field_path` the provenance grammar cannot yet resolve (house rule 4), whi
 generate `DATA_QUALITY` violations; that wiring needs its own alias-table work and is deferred.
 No prompt changes.
 
-**Band line wording (PRICE-1 item 4 — wording only, no maths change).** The line used to read
-`"70th percentile of own 5-year EV/EBIT band (band from 42/61 months)"`: the raw multiple was
-computed and never shown, and `42/61 months` was unexplained. It now leads with the VALUE and
-glosses the percentile in plain English —
+**Band line wording (PRICE-1 item 4 / PRICE-2 — wording only, no maths change).** The line used
+to read `"70th percentile of own 5-year EV/EBIT band (band from 42/61 months)"`: the raw multiple
+was computed and never shown, and `42/61 months` was unexplained. It now leads with the VALUE and
+glosses the percentile in ONE plain-English word —
 
 ```
-EV/EBIT 21.9 — 70th percentile of its own 5-year range (dearer than 70% of the last five
-years; based on 42 of 61 months, the rest lack usable statements)
+EV/EBIT 21.9 — 70th percentile (dear) of its own 5-year range (based on 42 of 61 months,
+the rest lack usable statements)
 ```
 
 — from the identical numbers. `net_debt_basis == "latest"` still appends
 `"; net debt held at latest reported"`, an abstention still renders `"not evaluated — <reason>"`,
 and when every month is computable the `", the rest lack usable statements"` clause is
-dropped (there is no rest to explain).
+dropped (there is no rest to explain). This is the **single-line** rendering, used where ONE
+name is shown (Company Check); the universe report renders the same numbers as a table (§2.6).
+
+**The percentile gloss (PRICE-2).** FIXED cutoffs on the ROUNDED percentile — the same number the
+ordinal beside it is built from, so the two halves of the cell can never disagree. No judgement
+enters here:
+
+| rounded percentile | gloss |
+|---|---|
+| ≤ 10 | `cheapest` |
+| 11 – 35 | `cheap` |
+| 36 – 65 | `mid` |
+| 66 – 89 | `dear` |
+| ≥ 90 | `dearest` |
+
+It replaces the earlier `"dearer than N% of the last five years"` phrasing, which forced a double
+negative at the cheap end: `"1st percentile (dearer than 1% of the last five years)"` had to be
+reasoned through to arrive at "this is the cheapest it has been". Relative to the name's OWN
+history, never to a peer group.
 
 ### 2.4 Share price & 52-week position (PRICE-1, `tools/price_context.py`)
 
@@ -379,13 +397,60 @@ consistent by construction rather than two independent opinions. It is the plain
 median (middle value; mean of the two middle values on an even count), computed over the identical
 `values` list the percentile uses.
 
-**Rendered line** (appended to the band's row by `pipeline.valuation_band_rows`, so the CLI, the
-Run tab, the markdown record and the HTML export all carry it):
+**Where it renders.** As the `Reversion value` and `Gap` columns of the valuation-band table
+(§2.6), beside the price so the gap has a visible base. The single-line rendering
+(`ReversionValue.display`) is kept for one-name surfaces:
 
 ```
 reversion value $31.80 (+17%) if EV/EBIT returned to its own 5-year median of 18.4x;
 42 of 61 months usable
 ```
+
+### 2.6 The valuation-band table (PRICE-2, `pipeline.valuation_band_table`)
+
+Presentation only — **no number, percentile, median, reversion value, gap or abstention rule
+differs from §2.3–2.5**. It exists because ten ~45-word prose bullets could not be scanned: the
+coverage phrase appeared twice in every line and identically in all ten, five lines of caveat
+preceded the first number, and the price was nowhere near the gap it was the base of.
+
+**One row per name, in the RANKED TABLE'S ORDER** — deliberately not re-sorted by gap, so a
+reader comparing sections never has to re-find a name.
+
+| column | contents |
+|---|---|
+| `Name` | the display name, as everywhere else |
+| `Price` | last close in its own currency (§2.4) — the base the gap is measured from |
+| `EV/EBIT` | today's multiple, `19.7x`; a labelled-fallback row reads `18.2x (P/E)` |
+| `Own Ny median` | the band's own median multiple, `21.2x` (N = the band window) |
+| `Percentile` | `1st (cheapest)` — the ordinal plus the fixed-cutoff gloss above |
+| `Months` | ONLY when coverage varies by name (see below) |
+| `Reversion value` | `$138.58` in the name's own currency, unconverted |
+| `Gap` | `+16%` |
+
+**Abstentions keep their row.** A name is never dropped and never blanked: the cells read
+`not evaluated` and the row carries the REAL reason (PG's `not evaluated — insufficient history:
+2.9y` sits in the `Percentile` cell). A reversion value that abstains while the band computed
+states its own reason in the `Reversion value` cell the same way. A name whose BAND abstained
+still shows its `Price`: the price is fetched on a different path and is known, and blanking a
+fact the run holds is not honest abstention.
+
+**Coverage is stated once.** `months_covered of months_total` drops out of the rows entirely.
+When it is identical for every rated name — which it usually is, because months drop out on
+statement availability, a cohort-wide property of the window — it becomes ONE footnote under the
+table. When it genuinely varies, a compact `Months` column appears instead. The code decides from
+the data (`pipeline.valuation_band_table`), and both paths are pinned by tests.
+
+**Two sentences of intro, all caveats below.** The doctrine of §2.5 — arithmetic on the company's
+own history, not a forecast/target/recommendation; a permanently derated business should trade
+below its own past median and arithmetic cannot tell decline from mispricing; not ranked, not
+screened, never shown to any model — is unchanged and stated IN FULL, as a footnote BELOW the
+table rather than ahead of the data. The `net debt held at latest reported` disclosure moves to a
+footnote too, naming the affected tickers once.
+
+**One source, four surfaces.** `pipeline.valuation_band_table` returns the columns, the rows
+(already-rendered cells) and the footnotes. The Run tab renders them with `st.dataframe`, the
+markdown record as a pipe table, the HTML export as a `<table>`, and the CLI as column-aligned
+fixed-width text — none of them formats a number of its own.
 
 ## 3. Dividend streak — flat is not a cut (`tools/screening.py`)
 

@@ -50,11 +50,9 @@ from .factors import (
     is_sector_excluded,
     is_sector_out_of_scope,
     is_unrateable,
-    price_display,
     price_divergence_flag,
-    reversion_value_display,
+    reversion_value_for,
     screen_evaluate,
-    valuation_band_display,
 )
 from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
@@ -146,9 +144,12 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     screen_bases: dict[str, dict[str, str]] = {}     # ticker -> {criterion: basis}
     abstentions_by_ticker: dict[str, dict[str, str]] = {}   # ticker -> {criterion: note}
     names_by_ticker: dict[str, str] = {}             # ticker -> company display name (ITEM 1)
-    bands_by_ticker: dict[str, str] = {}             # ticker -> valuation band (VALBAND-1)
-    prices_by_ticker: dict[str, str] = {}            # ticker -> price line (PRICE-1)
-    reversion_by_ticker: dict[str, str] = {}         # ticker -> reversion value (PRICE-1)
+    # Display-only context objects, attached to the ranked rows below. Objects, not
+    # pre-rendered strings (PRICE-2): the table and the single-line surfaces format the
+    # SAME numbers, so a reformat can never become a different value.
+    bands_by_ticker: dict = {}                       # ticker -> ValuationBand (VALBAND-1)
+    prices_by_ticker: dict = {}                      # ticker -> PriceContext (PRICE-1)
+    reversion_by_ticker: dict = {}                   # ticker -> ReversionValue (PRICE-1)
     for t in universe:
         # A TRANSIENT fetch failure (429/timeout/5xx, unrecovered after retries) is NOT
         # absent data — abort THIS name with a fetch-error status (rerun), never mislabel
@@ -222,10 +223,11 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         # PRICE-1 (display only): the share price + 52-week position for EVERY rateable
         # name, ALWAYS — it reads bars this run already fetched, so there is nothing to
         # gate. The reversion value rides with the band flag (it reuses the band's inputs).
-        prices_by_ticker[t] = price_display(fi)
+        if fi.price_context is not None:
+            prices_by_ticker[t] = fi.price_context
         if with_valuation_band:                           # VALBAND-1 (display only, opt-in)
-            bands_by_ticker[t] = valuation_band_display(fi)
-            reversion_by_ticker[t] = reversion_value_display(fi)
+            bands_by_ticker[t] = fi.valuation_band
+            reversion_by_ticker[t] = reversion_value_for(fi)
     specs = [FactorSpec(fac.name, fac.direction, fac.missing)
              for fac in rank_strategy.factors]
     ranked = rank_universe(rows, specs, cut=rank_strategy.cut, k=rank_strategy.k,
@@ -241,9 +243,9 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         if r.ticker in bands_by_ticker:
             r.valuation_band = bands_by_ticker[r.ticker]
         if r.ticker in prices_by_ticker:
-            r.price_line = prices_by_ticker[r.ticker]
+            r.price = prices_by_ticker[r.ticker]
         if r.ticker in reversion_by_ticker:
-            r.reversion_value = reversion_by_ticker[r.ticker]
+            r.reversion = reversion_by_ticker[r.ticker]
     return ranked, excluded, screen_bases, names_by_ticker
 
 
@@ -924,16 +926,16 @@ PRICE_SECTION_NOTE = (
 def price_rows(result) -> list[tuple[str, str]]:
     """``(display name, price line)`` per RATEABLE name (PRICE-1) — the ONE source the
     CLI block, the Run tab table, the canonical markdown and the HTML export all render,
-    so the four cannot drift (the same discipline ``valuation_band_rows`` uses).
+    so the four cannot drift.
 
     NOT gated by the valuation-band flag: the price comes off the 400-day bars every run
     already fetches, so it costs nothing and is always shown. Abstentions are INCLUDED
     ("price not available — …", "52-week range not evaluated — only 31 weeks of closes"):
     an honest reason is the point, and silence is indistinguishable from a feature that
-    was never switched on. Empty only when NO name carries a line at all (a hand-built
+    was never switched on. Empty only when NO name carries a price at all (a hand-built
     or pre-PRICE-1 result), so such a run renders exactly what it rendered before."""
-    return [(_disp(result, r.ticker), r.price_line) for r in result.ranked
-            if not r.excluded and getattr(r, "price_line", "")]
+    return [(_disp(result, r.ticker), r.price.display) for r in result.ranked
+            if not r.excluded and getattr(r, "price", None) is not None]
 
 
 def format_price_lines(result) -> list[str]:
@@ -948,63 +950,203 @@ def format_price_lines(result) -> list[str]:
     return lines
 
 
-def valuation_band_rows(result) -> list[tuple[str, str]]:
-    """``(display name, band)`` per RATEABLE name (VALBAND-1) — the ONE source the CLI
-    block, the Run tab table and the canonical markdown all render, so the three can't
-    drift.
+# --------------------------------------------------------------------------- #
+# VALBAND-1 / PRICE-1 / PRICE-2 — the valuation band as a TABLE
+# --------------------------------------------------------------------------- #
+VALUATION_BAND_SECTION_TITLE = "Valuation band (absolute — vs each name's own history)"
+# At most two sentences, ahead of the data. Everything else — the doctrine, the caveats —
+# lives in the footnotes BELOW the table (PRICE-2): five lines of caveat before the first
+# number is how a section stops being read.
+VALUATION_BAND_INTRO = (
+    "Where today's multiple sits in each name's OWN multi-year monthly range, and what "
+    "the price would be at that name's own MEDIAN past multiple. Rows follow the ranked "
+    "table's order — they are deliberately not re-sorted by gap.")
+VALUATION_BAND_DOCTRINE = (
+    "Arithmetic on each company's own history — not a forecast, not a target price and "
+    "not a recommendation. A business that has permanently derated should trade below "
+    "its own past median, and arithmetic cannot tell decline from mispricing. Not "
+    "ranked, not screened, and never shown to any model.")
+# Retained under its VALBAND-1 name for single-line surfaces and older callers.
+VALUATION_BAND_SECTION_NOTE = VALUATION_BAND_DOCTRINE
+
+_COL_NAME = "Name"
+_COL_PRICE = "Price"
+_COL_MULTIPLE = "EV/EBIT"
+_COL_PERCENTILE = "Percentile"
+_COL_MONTHS = "Months"
+_COL_REVERSION = "Reversion value"
+_COL_GAP = "Gap"
+# Columns whose content is a NUMBER and reads better flush right in fixed-width text.
+_BAND_RIGHT_ALIGNED = frozenset({_COL_PRICE, _COL_MULTIPLE, _COL_REVERSION, _COL_GAP})
+_NOT_EVALUATED = "not evaluated"
+_EMPTY = "—"
+
+
+@dataclass(frozen=True)
+class ValuationBandTable:
+    """The valuation-band section as a TABLE — the ONE source the CLI, the Run tab, the
+    canonical markdown and the HTML export all render (PRICE-2).
+
+    ``rows`` are dicts keyed by ``columns``, in the RANKED TABLE'S ORDER so a reader
+    comparing sections never has to re-find a name. Every cell is already a display
+    string built from the SAME ``ValuationBand`` / ``ReversionValue`` / ``PriceContext``
+    objects the single-line renderings use, so a reformat can never become a different
+    value."""
+
+    columns: list[str]
+    rows: list[dict[str, str]]
+    intro: str = VALUATION_BAND_INTRO
+    footnotes: list[str] = field(default_factory=list)
+
+    @property
+    def median_column(self) -> str:
+        """The median column's header, e.g. ``"Own 5y median"``."""
+        for c in self.columns:
+            if c.startswith("Own ") and c.endswith(" median"):
+                return c
+        return "Own median"
+
+
+def _multiple_cell(band) -> str:
+    """``19.7x`` — or ``18.2x (P/E)`` on the band's labelled fallback basis, so the
+    fallback stays disclosed even under an EV/EBIT column header."""
+    if band.current is None:
+        return _EMPTY
+    tag = " (P/E)" if band.basis == "pe" else ""
+    return f"{band.current:.1f}x{tag}"
+
+
+def valuation_band_table(result) -> Optional[ValuationBandTable]:
+    """The valuation-band table for a run, or None when no name carries a band.
 
     Every other block in a run report is a cohort statement: the ranked table says which
     of these names is least expensive, and in a uniformly hot cohort that is still a #1.
-    This one says where each price sits against its OWN five-year history.
+    This one says where each price sits against its OWN history — and, beside it, what
+    that name would cost at its own median multiple, with today's price in the row so the
+    gap has a visible base.
 
-    Each row carries the band line AND (PRICE-1) the REVERSION VALUE — what the price
-    would be at this name's own median multiple — because the reversion value reuses the
-    band's inputs entirely and therefore rides on the same flag and lives in the same
-    section. It is arithmetic on one company's own history: NOT a forecast, NOT a target
-    price, NOT a recommendation (``VALUATION_BAND_SECTION_NOTE`` says so on every
-    surface).
+    ABSTENTIONS KEEP THEIR ROW: a name is never dropped, its cells read "not evaluated"
+    and the row carries the REAL reason. Silence is indistinguishable from a feature that
+    was never switched on, which is exactly the ambiguity VALBAND-1 was built to end.
 
-    Display only — nothing here ranks, screens, gates or votes. Abstentions are INCLUDED
-    ("not evaluated — insufficient history: 1.4y" is the honest answer for a recent IPO
-    and must be visible). Empty when no name computed one, so a run against a thin/fake
-    adapter renders exactly what it rendered before."""
-    rows = [(_disp(result, r.ticker),
-             _band_cell(r.valuation_band, getattr(r, "reversion_value", "")))
-            for r in result.ranked
-            if not r.excluded and getattr(r, "valuation_band", "")]
-    return [] if all(band == "—" for _, band in rows) else rows
+    COVERAGE ("42 of 61 months") is stated ONCE as a footnote when it is identical for
+    every rated name (it usually is — the months drop out on statement availability, which
+    is a cohort-wide property of the window), and gets its own compact column only when it
+    actually varies. Repeating it in ten rows says nothing ten times.
+
+    Display only — nothing here ranks, screens, gates or votes."""
+    from .tools.valuation_band import BAND_YEARS, ordinal, percentile_gloss
+    from .tools.price_context import format_money
+
+    live = [r for r in result.ranked
+            if not r.excluded and getattr(r, "valuation_band", None) is not None]
+    if not live:
+        return None
+
+    bands = [r.valuation_band for r in live]
+    rated = [b for b in bands if b.available]
+    window = rated[0].window_years if rated else BAND_YEARS
+    median_col = f"Own {window}y median"
+    coverage = {(b.months_covered, b.months_total) for b in rated}
+    uniform = len(coverage) <= 1                      # one shared count -> a footnote
+
+    columns = [_COL_NAME, _COL_PRICE, _COL_MULTIPLE, median_col, _COL_PERCENTILE]
+    if not uniform:
+        columns.append(_COL_MONTHS)
+    columns += [_COL_REVERSION, _COL_GAP]
+
+    rows: list[dict[str, str]] = []
+    for r in live:
+        band, rev, price = r.valuation_band, getattr(r, "reversion", None), \
+            getattr(r, "price", None)
+        cells = dict.fromkeys(columns, _EMPTY)
+        cells[_COL_NAME] = _disp(result, r.ticker)
+        cells[_COL_PRICE] = (format_money(price.last_close, price.currency)
+                             if price is not None and price.available else _EMPTY)
+        if band.available:
+            cells[_COL_MULTIPLE] = _multiple_cell(band)
+            cells[median_col] = (f"{band.median_multiple:.1f}x"
+                                 if band.median_multiple is not None else _EMPTY)
+            cells[_COL_PERCENTILE] = (f"{ordinal(round(band.percentile))} "
+                                      f"({percentile_gloss(band.percentile)})")
+            if not uniform:
+                cells[_COL_MONTHS] = f"{band.months_covered} of {band.months_total}"
+            if rev is not None and rev.available:
+                cells[_COL_REVERSION] = format_money(rev.price, rev.currency)
+                cells[_COL_GAP] = f"{rev.gap:+.0%}"
+            elif rev is not None:
+                # The band computed but the arithmetic could not — its OWN reason, in the
+                # row, exactly as an abstaining band states its own.
+                cells[_COL_REVERSION] = f"{_NOT_EVALUATED} — {rev.note}" if rev.note \
+                    else _NOT_EVALUATED
+        else:
+            cells[_COL_PERCENTILE] = f"{_NOT_EVALUATED} — {band.note}" if band.note \
+                else _NOT_EVALUATED
+        rows.append(cells)
+
+    return ValuationBandTable(columns=columns, rows=rows,
+                              footnotes=_band_footnotes(live, uniform, coverage))
 
 
-def _band_cell(band: str, reversion: str) -> str:
-    """One valuation-band cell: the band line, then the reversion value as a second
-    clause. An uncomputed band ("—") stays a bare "—" — appending a reversion abstention
-    to a column that was never computed would resurrect the silent-failure ambiguity
-    ``valuation_band_rows`` exists to avoid."""
-    if not reversion or band == "—":
-        return band
-    return f"{band} · {reversion}"
-
-
-VALUATION_BAND_SECTION_NOTE = (
-    "Where today's EV/EBIT (or the labelled P/E fallback) sits in the name's OWN "
-    "multi-year monthly range — 92nd = near its own peak, 15th = historically cheap. "
-    "The reversion value re-prices today's earnings and net debt at that name's own "
-    "MEDIAN past multiple: it is arithmetic on the company's own history, not a "
-    "forecast, not a target price and not a recommendation — a business that has "
-    "permanently derated should trade below its own past median, and arithmetic cannot "
-    "tell decline from mispricing. Not ranked, not screened, not shown to any model.")
+def _band_footnotes(live, uniform: bool, coverage: set) -> list[str]:
+    """The notes that belong BELOW the table: the shared month coverage, the net-debt
+    disclosure, then the doctrine in full. Nothing here is a caveat the reader has to get
+    past to reach a number."""
+    notes: list[str] = []
+    if uniform and coverage:
+        covered, total = next(iter(coverage))
+        if covered < total:
+            notes.append(
+                f"Every rated name here is placed on the same {covered} of {total} "
+                f"monthly observations in the window; the other {total - covered} months "
+                "lack usable statements, so they drop out rather than being filled in.")
+        else:
+            notes.append(f"Every rated name here is placed on all {total} monthly "
+                         "observations in the window.")
+    held = sorted({r.ticker for r in live
+                   if r.valuation_band.available
+                   and r.valuation_band.net_debt_basis == "latest"})
+    if held:
+        notes.append("Net debt held at its latest reported value across the window "
+                     f"(the provider gave no dated debt/cash) for: {', '.join(held)}.")
+    notes.append(VALUATION_BAND_DOCTRINE)
+    return notes
 
 
 def format_valuation_bands(result) -> list[str]:
-    """The absolute valuation-band block as CLI lines (see ``valuation_band_rows``)."""
-    rows = valuation_band_rows(result)
-    if not rows:
+    """The valuation-band table as CLI lines — the SAME columns as every other surface,
+    laid out as aligned fixed-width text (see ``valuation_band_table``)."""
+    table = valuation_band_table(result)
+    if table is None:
         return []
-    lines = ["  VALUATION BAND (absolute; vs each name's OWN history — not ranked, "
-             "not screened):"]
-    for name, band in rows:
-        lines.append(f"      {_name_col(name)} {band}")
+    lines = [f"  {VALUATION_BAND_SECTION_TITLE.upper()}:", f"      {table.intro}", ""]
+    lines += [f"      {row}" for row in _fixed_width_table(table)]
+    lines.append("")
+    lines += [f"      - {note}" for note in table.footnotes]
     return lines
+
+
+def _fixed_width_table(table: ValuationBandTable) -> list[str]:
+    """A column-aligned rendering of ``table`` for the console: numeric columns flush
+    right, text columns flush left, every column as wide as its widest cell. Nothing is
+    truncated — an abstention reason widens its column rather than losing its tail."""
+    widths = {c: max(len(c), *(len(r[c]) for r in table.rows)) if table.rows else len(c)
+              for c in table.columns}
+
+    def _right(col: str) -> bool:
+        # the median column's header carries the window ("Own 5y median"), so it is
+        # matched by shape rather than listed as a literal.
+        return col in _BAND_RIGHT_ALIGNED or (col.startswith("Own ")
+                                              and col.endswith(" median"))
+
+    def _cell(col: str, text: str) -> str:
+        return text.rjust(widths[col]) if _right(col) else text.ljust(widths[col])
+
+    out = ["  ".join(_cell(c, c) for c in table.columns).rstrip()]
+    out.append("  ".join("-" * widths[c] for c in table.columns))
+    for row in table.rows:
+        out.append("  ".join(_cell(c, row[c]) for c in table.columns).rstrip())
+    return out
 
 
 def format_cli_report(result: RankPipelineResult) -> str:

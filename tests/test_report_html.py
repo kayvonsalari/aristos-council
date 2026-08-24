@@ -312,75 +312,113 @@ def test_html_export_leaves_the_canonical_company_check_text_byte_identical():
 # --------------------------------------------------------------------------- #
 # 3b — VALBAND-2: the valuation band in the HTML, from the SAME source as the md
 # --------------------------------------------------------------------------- #
-from aristos_council.pipeline import valuation_band_rows   # noqa: E402
+from aristos_council.pipeline import (   # noqa: E402
+    VALUATION_BAND_SECTION_TITLE, valuation_band_table)
+from aristos_council.tools.price_context import PriceContext   # noqa: E402
+from aristos_council.tools.reversion import ReversionValue     # noqa: E402
+from aristos_council.tools.valuation_band import ValuationBand  # noqa: E402
 
-_BAND_HEADING = "Valuation band (absolute — vs each name's own history)"
+_BAND_HEADING = VALUATION_BAND_SECTION_TITLE
 
 
 def _universe_result_with_bands() -> RankPipelineResult:
-    """The band-ON fixture: the same three-name run, with a valuation band set on each
-    ranked ticker — two computed, one ABSTAINING (a recent-IPO reason that must stay
-    visible, per VALBAND-1's honesty rule)."""
+    """The band-ON fixture: the same three-name run, with a valuation band, a price and a
+    reversion value set on each ranked ticker — two computed, one ABSTAINING (a recent-IPO
+    reason that must stay visible, per VALBAND-1's honesty rule)."""
     result = _universe_result()
     bands = {
-        "SXR8.DE": "78th percentile of own 5-year EV/EBIT band (band from 55/60 months)",
-        "EUNL.DE": "23rd percentile of own 5-year P/E band (fallback) (band from 41/60 "
-                   "months)",
-        "VWCE.DE": "not evaluated — insufficient history: 1.4y",
+        "SXR8.DE": ValuationBand(percentile=78.0, basis="ev_ebit", current=21.9,
+                                 median_multiple=18.4, months_covered=55,
+                                 months_total=60, net_debt_basis="asof"),
+        "EUNL.DE": ValuationBand(percentile=23.0, basis="pe", current=14.2,
+                                 median_multiple=17.1, months_covered=55,
+                                 months_total=60),
+        "VWCE.DE": ValuationBand(note="insufficient history: 1.4y"),
     }
+    revs = {
+        "SXR8.DE": ReversionValue(price=88.5, gap=-0.16, median_multiple=18.4,
+                                  basis="ev_ebit", window_years=5, months_covered=55,
+                                  months_total=60, currency="EUR"),
+        "EUNL.DE": ReversionValue(price=120.4, gap=0.21, median_multiple=17.1,
+                                  basis="pe", window_years=5, months_covered=55,
+                                  months_total=60, currency="EUR"),
+        "VWCE.DE": ReversionValue(note="the valuation band abstained for this name"),
+    }
+    prices = {"SXR8.DE": 105.5, "EUNL.DE": 99.5, "VWCE.DE": 132.0}
     for r in result.ranked:
         r.valuation_band = bands[r.ticker]
+        r.reversion = revs[r.ticker]
+        r.price = PriceContext(last_close=prices[r.ticker], as_of=_RUN.date(),
+                               currency="EUR", high_52w=140.0, low_52w=90.0,
+                               position_pct=31.0, weeks_covered=52.0)
     return result
 
 
-def test_universe_html_renders_the_band_matching_valuation_band_rows_exactly():
+def test_universe_html_renders_the_band_table_matching_the_shared_source_exactly():
     result = _universe_result_with_bands()
     doc = universe_report_html(result, run_start=_RUN)
     visible = _visible(doc)
 
     assert _squash(_BAND_HEADING) in visible                  # same heading as the md
-    rows = valuation_band_rows(result)
-    assert len(rows) == 3                                     # one row per rateable name
-    # every row present, VERBATIM (name — band, the shared "**name** — band" shape), in the
-    # SAME ORDER as the source.
-    keys = [_squash(f"{name} — {band}") for name, band in rows]
+    table = valuation_band_table(result)
+    assert len(table.rows) == 3                               # one row per rateable name
+    # every row present, VERBATIM (all its cells, in column order), in the SAME ORDER as
+    # the source — an abstaining name included, carrying its reason.
+    keys = [_squash("".join(row[c] for c in table.columns)) for row in table.rows]
     for k in keys:
         assert k in visible
     positions = [visible.index(k) for k in keys]
     assert positions == sorted(positions)
+    for note in table.footnotes:                              # the caveats, BELOW the table
+        assert _squash(note) in visible
 
 
 def test_universe_html_band_and_markdown_cannot_drift():
     result = _universe_result_with_bands()
     doc = _visible(universe_report_html(result, run_start=_RUN))
     md = _squash(_universe_md(result))                        # importorskip streamlit
-    # the SAME rows appear in both surfaces — the anti-drift guarantee of one shared source.
-    for name, band in valuation_band_rows(result):
-        key = _squash(f"{name} — {band}")
-        assert key in doc and key in md
+    # the SAME cells appear in both surfaces — the anti-drift guarantee of one shared
+    # source. Compared CELL BY CELL: the markdown carries pipe separators the HTML does
+    # not, so a concatenated row would compare the table SYNTAX, not the data.
+    table = valuation_band_table(result)
+    for row in table.rows:
+        for column in table.columns:
+            cell = _squash(row[column])
+            if not cell or cell == _squash("—"):
+                continue                       # an em-dash placeholder is not evidence
+            assert cell in doc and cell in md
+    for note in table.footnotes:
+        assert _squash(note) in doc and _squash(note) in md
+    # ...and in the same ROW ORDER in both (the ranked table's order).
+    for surface in (doc, md):
+        positions = [surface.index(_squash(r["Name"])) for r in table.rows]
+        assert positions == sorted(positions)
 
 
-def test_universe_html_keeps_an_abstaining_bands_reason_intact():
+def test_universe_html_keeps_an_abstaining_bands_row_and_reason_intact():
+    """PRICE-2: an abstaining name KEEPS its row — it is never dropped and never blanked."""
     result = _universe_result_with_bands()
     visible = _visible(universe_report_html(result, run_start=_RUN))
-    assert _squash("VWCE.DE — not evaluated — insufficient history: 1.4y") in visible
+    assert _squash("VWCE.DE") in visible
+    assert _squash("not evaluated — insufficient history: 1.4y") in visible
 
 
 def test_universe_html_renders_the_section_when_every_band_is_a_failure_abstention():
     # VALBAND silent-failure fix: when the band was REQUESTED but every name's fetch
-    # FAILED, each string is "not evaluated — price history unavailable: …" (never "—"),
-    # so valuation_band_rows does NOT drop the section (it drops only when every band is
-    # "—", i.e. never requested). The report shows the reason, not silence.
+    # FAILED, each row carries an ABSTAINING ValuationBand (never None), so the section is
+    # NOT dropped (it is dropped only when no name carries a band at all, i.e. never
+    # requested). The report shows the reason, not silence.
     result = _universe_result()
     for r in result.ranked:
-        r.valuation_band = ("not evaluated — price history unavailable: "
-                            "RuntimeError: no timezone found")
-    rows = valuation_band_rows(result)
-    assert len(rows) == 3                                     # section NOT dropped
+        r.valuation_band = ValuationBand(
+            note="price history unavailable: RuntimeError: no timezone found")
+    table = valuation_band_table(result)
+    assert len(table.rows) == 3                               # section NOT dropped
     visible = _visible(universe_report_html(result, run_start=_RUN))
     assert _squash(_BAND_HEADING) in visible
-    for name, band in rows:
-        assert _squash(f"{name} — {band}") in visible
+    for row in table.rows:
+        assert _squash(row["Name"]) in visible
+        assert _squash(row["Percentile"]) in visible
 
 
 def test_universe_html_places_the_band_after_the_ranked_table_before_exclusions():
@@ -392,12 +430,12 @@ def test_universe_html_places_the_band_after_the_ranked_table_before_exclusions(
 
 
 def test_universe_html_with_band_off_renders_no_band_section():
-    # the default fixture sets no valuation_band -> valuation_band_rows is empty -> the
+    # the default fixture sets no valuation_band -> valuation_band_table is None -> the
     # HTML must carry NO band heading (a band-off run's HTML is unchanged from before
     # VALBAND-2). The other universe-HTML tests all run on this same band-off fixture and
     # must keep passing, which is the byte-stability guard.
     result = _universe_result()
-    assert valuation_band_rows(result) == []
+    assert valuation_band_table(result) is None
     doc = universe_report_html(result, run_start=_RUN)
     assert _BAND_HEADING not in doc
     assert "Valuation band" not in doc

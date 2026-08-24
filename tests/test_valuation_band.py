@@ -28,7 +28,7 @@ from aristos_council.factors import (
     compute_factor_outcomes,
     valuation_band_display,
 )
-from aristos_council.pipeline import format_valuation_bands, valuation_band_rows
+from aristos_council.pipeline import format_valuation_bands, valuation_band_table
 from aristos_council.rank_engine import RankedTicker
 from aristos_council.tools.criteria.registry import REGISTRY, Evidence, run_screen
 from aristos_council.tools.valuation_band import ValuationBand, valuation_band
@@ -121,11 +121,10 @@ def test_a_name_at_its_own_peak_reads_near_the_100th_percentile():
 
     assert band.available
     assert band.percentile > 95
-    # PRICE-1 item 4: the line now LEADS with the multiple and glosses the percentile in
-    # plain English. Same numbers, same abstentions — wording only.
+    # PRICE-1 item 4 / PRICE-2: the line LEADS with the multiple and glosses the
+    # percentile in ONE plain-English word. Same numbers, same abstentions — wording only.
     assert band.display.startswith("EV/EBIT ")
-    assert "percentile of its own 5-year range" in band.display
-    assert f"dearer than {round(band.percentile)}% of the last five years" in band.display
+    assert "percentile (dearest) of its own 5-year range" in band.display
 
 
 def test_a_name_at_its_own_floor_reads_near_the_1st_percentile():
@@ -331,9 +330,8 @@ def test_the_display_string_states_the_percentile_the_basis_and_the_coverage():
 
     # PRICE-1 item 4: value first, then the percentile with a plain-English gloss, then
     # the coverage WITH its explanation. Same numbers as before, nothing recomputed.
-    assert text.startswith("EV/EBIT 11.5 — 50th percentile of its own 5-year range")
-    assert "dearer than 50% of the last five years" in text
-    assert "based on 61 of 61 months" in text
+    assert text == ("EV/EBIT 11.5 — 50th percentile (mid) of its own 5-year range "
+                    "(based on 61 of 61 months)")
 
 
 def test_an_uncomputed_band_renders_as_an_em_dash_not_a_number():
@@ -348,32 +346,41 @@ class _Result:
         self.names = {"A": "Alpha Corp"}
 
 
-def _row(ticker: str, band: str, excluded: bool = False) -> RankedTicker:
+def _computed(percentile: float, *, basis: str = "ev_ebit", current: float = 21.9,
+              median: float = 18.4, covered: int = 55, total: int = 60) -> ValuationBand:
+    return ValuationBand(percentile=percentile, basis=basis, current=current,
+                         median_multiple=median, months_covered=covered,
+                         months_total=total, years_covered=5.0,
+                         net_debt_basis="asof" if basis == "ev_ebit" else "")
+
+
+def _row(ticker: str, band, excluded: bool = False) -> RankedTicker:
     return RankedTicker(ticker=ticker, factor_ranks={}, factor_values={},
                         combined_rank=1.0, universe_size=2, excluded=excluded,
                         valuation_band=band)
 
 
-def test_the_report_block_names_every_rateable_name_and_skips_the_excluded():
-    rows = valuation_band_rows(_Result([
-        _row("A", "78th percentile of own 5-year EV/EBIT band (band from 55/60 months)"),
-        _row("B", "not evaluated — insufficient history: 1.4y"),
-        _row("C", "92nd percentile of own 5-year P/E band (fallback)", excluded=True),
+def test_the_report_table_names_every_rateable_name_and_skips_the_excluded():
+    table = valuation_band_table(_Result([
+        _row("A", _computed(78.0)),
+        _row("B", ValuationBand(note="insufficient history: 1.4y")),
+        _row("C", _computed(92.0, basis="pe"), excluded=True),
     ]))
 
-    assert [n for n, _ in rows] == ["Alpha Corp (A)", "B"]   # excluded name is not rated
-    assert "insufficient history" in rows[1][1]              # abstention stays VISIBLE
+    assert [r["Name"] for r in table.rows] == ["Alpha Corp (A)", "B"]   # excluded dropped
+    # the ABSTAINING name keeps its row, carrying its real reason (never a blank).
+    assert table.rows[1]["Percentile"] == "not evaluated — insufficient history: 1.4y"
 
-    text = "\n".join(format_valuation_bands(_Result([_row("A", "78th percentile")])))
-    assert "VALUATION BAND (absolute" in text
-    assert "not ranked, not screened" in text
+    text = "\n".join(format_valuation_bands(_Result([_row("A", _computed(78.0))])))
+    assert "VALUATION BAND (ABSOLUTE" in text.upper()
+    assert "Not ranked, not screened" in text            # the doctrine, in the footnotes
 
 
-def test_a_run_where_nothing_computed_a_band_renders_no_block_at_all():
-    """A thin/fake adapter (or a cohort of recent listings) must print exactly what it
-    printed before VALBAND-1 — an empty section header is noise, not information."""
-    assert valuation_band_rows(_Result([_row("A", "—"), _row("B", "—")])) == []
-    assert format_valuation_bands(_Result([_row("A", "—")])) == []
+def test_a_run_where_no_name_carries_a_band_renders_no_block_at_all():
+    """A thin/fake adapter (or a band-off run) must print exactly what it printed before
+    VALBAND-1 — an empty section header is noise, not information."""
+    assert valuation_band_table(_Result([_row("A", None), _row("B", None)])) is None
+    assert format_valuation_bands(_Result([_row("A", None)])) == []
     assert format_valuation_bands(_Result([])) == []
 
 
@@ -451,8 +458,8 @@ def test_toggle_off_produces_no_band_and_is_the_default():
         ["P", "Q"], "magic_formula_v1", ranker_only=True,
         strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
     assert result.meta["with_valuation_band"] is False        # default OFF
-    assert valuation_band_rows(result) == []                  # no band section
-    assert all(getattr(r, "valuation_band", "—") in ("", "—") for r in result.ranked)
+    assert valuation_band_table(result) is None                # no band section
+    assert all(r.valuation_band is None for r in result.ranked)
 
 
 def test_toggle_on_adds_the_column_and_leaves_verdicts_unchanged():
@@ -464,9 +471,9 @@ def test_toggle_on_adds_the_column_and_leaves_verdicts_unchanged():
         strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
 
     assert on.meta["with_valuation_band"] is True
-    band_rows = valuation_band_rows(on)
-    assert {n for n, _ in band_rows} == {"P", "Q"}            # column present for each
-    assert all("percentile of its own 5-year range" in b for _, b in band_rows)
+    table = valuation_band_table(on)
+    assert {r["Name"] for r in table.rows} == {"P", "Q"}      # one row per rateable name
+    assert all(r["Percentile"].endswith(")") for r in table.rows)
     # the band NEVER re-grades: verdicts + ranks are byte-identical with it on or off.
     assert _verdict_snapshot(on) == _verdict_snapshot(off)
 
@@ -494,8 +501,8 @@ def test_toggle_on_with_extra_lenses_keeps_the_column_and_every_lens_verdict():
 
     # the band rides on the FIRST lens's result (computed once, per name).
     first_on = on.results[ids[0]]
-    assert {n for n, _ in valuation_band_rows(first_on)} == {"P", "Q"}
-    assert valuation_band_rows(off.results[ids[0]]) == []
+    assert {r["Name"] for r in valuation_band_table(first_on).rows} == {"P", "Q"}
+    assert valuation_band_table(off.results[ids[0]]) is None
     # every lens's verdict column is unchanged whether the band is on or off.
     for sid in ids:
         assert _verdict_snapshot(on.results[sid]) == _verdict_snapshot(off.results[sid])
@@ -573,10 +580,10 @@ def test_band_requested_but_fetch_raises_renders_the_section_with_the_reason():
     result = run_rank_pipeline(
         ["P", "Q"], "magic_formula_v1", ranker_only=True, with_valuation_band=True,
         strategies_dir=STRAT_DIR, adapter=_RaisingPriceAdapter(), today=TODAY)
-    rows = valuation_band_rows(result)
-    assert {n for n, _ in rows} == {"P", "Q"}                 # section present, one row/name
-    assert all("price history unavailable" in b for _, b in rows)
-    assert all(b.startswith("not evaluated — ") for _, b in rows)
+    rows = valuation_band_table(result).rows
+    assert {r["Name"] for r in rows} == {"P", "Q"}            # section present, one row/name
+    assert all("price history unavailable" in r["Percentile"] for r in rows)
+    assert all(r["Percentile"].startswith("not evaluated — ") for r in rows)
     # display-only: the names still ranked (fundamentals-only lens) — verdicts unaffected.
     assert all(r.verdict for r in result.ranked if not r.excluded)
 
@@ -585,9 +592,9 @@ def test_band_requested_but_zero_bars_renders_the_section_with_the_reason():
     result = run_rank_pipeline(
         ["P", "Q"], "magic_formula_v1", ranker_only=True, with_valuation_band=True,
         strategies_dir=STRAT_DIR, adapter=_ZeroBarPriceAdapter(), today=TODAY)
-    rows = valuation_band_rows(result)
-    assert {n for n, _ in rows} == {"P", "Q"}
-    assert all("no price bars returned" in b for _, b in rows)
+    rows = valuation_band_table(result).rows
+    assert {r["Name"] for r in rows} == {"P", "Q"}
+    assert all("no price bars returned" in r["Percentile"] for r in rows)
 
 
 def test_band_not_requested_stays_silent_even_when_the_fetch_would_fail(tmp_path):
@@ -597,16 +604,17 @@ def test_band_not_requested_stays_silent_even_when_the_fetch_would_fail(tmp_path
         ["P", "Q"], "magic_formula_v1", ranker_only=True,
         strategies_dir=STRAT_DIR, adapter=_RaisingPriceAdapter(), today=TODAY)
     assert result.meta["with_valuation_band"] is False
-    assert valuation_band_rows(result) == []                  # no section at all
+    assert valuation_band_table(result) is None               # no section at all
 
 
 def test_band_requested_and_all_compute_is_unchanged_no_failure_text():
     result = run_rank_pipeline(
         ["P", "Q"], "magic_formula_v1", ranker_only=True, with_valuation_band=True,
         strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
-    rows = valuation_band_rows(result)
-    assert {n for n, _ in rows} == {"P", "Q"}
-    assert all("percentile of its own 5-year range" in b for _, b in rows)
+    table = valuation_band_table(result)
+    rows = table.rows
+    assert {r["Name"] for r in rows} == {"P", "Q"}
     # real bands AND real reversion values — no abstention text anywhere in the section.
-    assert not any("not evaluated" in b for _, b in rows)
-    assert all("reversion value $" in b for _, b in rows)
+    assert not any("not evaluated" in cell for r in rows for cell in r.values())
+    assert all(r["Reversion value"].startswith("$") for r in rows)
+    assert all(r["Gap"].startswith(("+", "-")) for r in rows)

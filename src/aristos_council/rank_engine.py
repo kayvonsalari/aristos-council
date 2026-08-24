@@ -78,25 +78,27 @@ class RankedTicker:
     # True when another ranked name shares this combined rank.
     cohort_position: Optional[int] = None
     cohort_tied: bool = False
-    # ABSOLUTE valuation context (VALBAND-1), display-only: today's EV/EBIT (or labelled
-    # P/E fallback) as a percentile of THIS name's own 5-year band. Attached by the rank
-    # stage after ranking (like factor_sources); empty for a bare rank_universe call. It
-    # is deliberately NOT part of factor_values or the combined rank — no strategy ranks
-    # on it yet — and deliberately NOT in explain(), so the narrator is not handed a
-    # number it was not briefed to reason about.
-    valuation_band: str = ""
-    # SHARE PRICE + 52-WEEK POSITION (PRICE-1), display-only: "$27.14 (as of 2026-08-22)
-    # — 34% of its 52-week range (low $22.80 · high $31.20)". Attached by the rank stage
-    # for EVERY rateable name — unlike valuation_band it is NOT gated by a flag, because
-    # it costs nothing (the 400-day bars are already fetched). Same discipline as the
-    # band: not in factor_values, not in the combined rank, not in explain().
-    price_line: str = ""
-    # REVERSION VALUE (PRICE-1), display-only: today's earnings and net debt re-priced at
-    # this name's OWN median multiple from the band's series. Rides WITH the band (same
-    # flag, same section) because it reuses the band's inputs entirely; empty when the
-    # band was not requested. Arithmetic, NOT a forecast/target/recommendation — see
-    # tools/reversion.py. Feeds nothing: no factor, screen, gate, rank, verdict or prompt.
-    reversion_value: str = ""
+    # --- DISPLAY-ONLY CONTEXT (VALBAND-1 / PRICE-1 / PRICE-2) ------------------------ #
+    # The three objects below are attached by the rank stage after ranking (like
+    # factor_sources) and are the ONE source every surface formats from — PRICE-2 renders
+    # them as a table, Company Check as a line, and neither re-derives a number. They are
+    # deliberately NOT part of factor_values or the combined rank (no strategy ranks on
+    # them) and deliberately NOT in explain(), so the narrator is never handed a number it
+    # was not briefed to reason about. None on a bare rank_universe call.
+    #
+    # ABSOLUTE valuation context: today's EV/EBIT (or the labelled P/E fallback) as a
+    # percentile of THIS name's own 5-year band. Gated by the run's valuation-band flag —
+    # None when the band was not requested; an ABSTAINED band is a ValuationBand carrying
+    # its reason, never None (silence is indistinguishable from a switched-off feature).
+    valuation_band: Optional[object] = None          # tools.valuation_band.ValuationBand
+    # SHARE PRICE + 52-WEEK POSITION: attached for EVERY rateable name, NEVER gated by a
+    # flag, because it costs nothing (the 400-day bars are already fetched).
+    price: Optional[object] = None                   # tools.price_context.PriceContext
+    # REVERSION VALUE: today's earnings and net debt re-priced at this name's OWN median
+    # multiple from the band's series. Rides WITH the band (same flag, same section)
+    # because it reuses the band's inputs entirely. Arithmetic, NOT a
+    # forecast/target/recommendation — see tools/reversion.py.
+    reversion: Optional[object] = None               # tools.reversion.ReversionValue
 
     def score_bounds(self) -> tuple[int, int]:
         """(best, worst) possible combined rank-sum for this name's cohort: best = number
