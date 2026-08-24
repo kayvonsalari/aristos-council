@@ -120,7 +120,9 @@ def test_format_cli_report_reflects_the_result():
         strategies_dir=STRAT_DIR, adapter=_Adapter(), today=date(2026, 6, 30))
     text = format_cli_report(result)
     assert result.header in text
-    assert "=== RANKED (magic_formula_v1)" in text
+    # REPORT-1: the section heading leads with the strategy's human name and keeps the
+    # id beside it as the record key.
+    assert "RANKED — the verdict of record" in text and "magic_formula_v1" in text
     for t in ("A", "B"):
         assert t in text
     assert "UNRATEABLE" in text and "DEAD" in text

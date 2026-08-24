@@ -1091,12 +1091,17 @@ def render_strategy_tab(selected_path: Path | None = None) -> None:
     if d.description:
         st.markdown(d.description)
 
-    # 3 — screen criteria (name, threshold, gating/non-gating)
+    # 3 — screen criteria (REPORT-1: the rule's human name first, its limit in plain
+    # English, and its id kept as the record key).
+    from aristos_council.company_check import _criterion_label, _criterion_threshold
+
     st.subheader(f"Screen criteria · {d.screen_source}")
     if d.criteria:
         st.dataframe(
-            [{"Criterion": c.name, "Threshold": _cc_num(c.threshold),
-              "Gating": "gating" if c.gating else "non-gating"} for c in d.criteria],
+            [{"Rule": _criterion_label(c.name),
+              "Limit": _criterion_threshold(c.name, c.threshold),
+              "Gating": "gating" if c.gating else "non-gating",
+              "Criterion id": c.name} for c in d.criteria],
             hide_index=True, width="stretch")
     else:
         st.caption("No screen criteria.")
@@ -1112,8 +1117,12 @@ def render_strategy_tab(selected_path: Path | None = None) -> None:
     # 5 — rank factors + verdict cut
     if d.factors:
         st.subheader("Rank factors + verdict cut")
-        st.dataframe([{"Factor": f.name, "Direction": f.direction} for f in d.factors],
-                     hide_index=True, width="stretch")
+        from aristos_council.factors import FACTOR_REGISTRY
+        st.dataframe(
+            [{"Factor": (getattr(FACTOR_REGISTRY.get(f.name), "label", "") or f.name),
+              "Better when": ("higher" if f.direction == "high" else "lower"),
+              "Factor id": f.name} for f in d.factors],
+            hide_index=True, width="stretch")
         st.caption(f"Verdict cut: {d.cut_rule}")
 
     # 6 — policy flags (plain meanings from the shared glossary)
@@ -1216,11 +1225,9 @@ def _render_valuation_band_table(table) -> None:
     footnotes underneath. Renders the cells ``pipeline.valuation_band_table`` produced —
     the same ones the markdown record, the HTML export and the CLI show — so nothing here
     formats a number of its own. Renders NOTHING when no name carried a band."""
-    from aristos_council.pipeline import VALUATION_BAND_SECTION_TITLE
-
     if table is None:
         return
-    st.subheader(VALUATION_BAND_SECTION_TITLE)
+    st.subheader(table.title)
     st.caption(table.intro)
     st.dataframe([{c: row[c] for c in table.columns} for row in table.rows],
                  hide_index=True, width="stretch")
@@ -1228,90 +1235,150 @@ def _render_valuation_band_table(table) -> None:
         st.caption(note)
 
 
-def _valuation_band_markdown(table) -> list[str]:
-    """The valuation-band section as markdown (PRICE-2): at most two sentences, then the
-    TABLE, then the footnotes. Reads ``pipeline.valuation_band_table`` — the ONE source
-    the Run tab, the HTML export and the CLI also read — so the four cannot drift.
-    ``[]`` when no name carried a band (band toggle off), exactly as before."""
-    from aristos_council.pipeline import VALUATION_BAND_SECTION_TITLE
+def _md_table(columns, rows, *, bold_first: bool = True) -> list[str]:
+    """A markdown pipe table from already-rendered cells. One helper, so every markdown
+    table in the report is built the same way and a cell containing a pipe cannot break
+    the layout."""
+    lines = ["| " + " | ".join(columns) + " |", "|" + "---|" * len(columns)]
+    for row in rows:
+        cells = [str(row[c]).replace("|", "\\|") for c in columns]
+        if bold_first and cells:
+            cells[0] = f"**{cells[0]}**"
+        lines.append("| " + " | ".join(cells) + " |")
+    return lines
 
+
+def _valuation_band_markdown(table) -> list[str]:
+    """The price-and-valuation section as markdown (PRICE-2, extended by REPORT-1): at
+    most two sentences, then the TABLE, then the footnotes. Reads
+    ``pipeline.valuation_band_table`` — the ONE source the Run tab, the HTML export and
+    the CLI also read — so the four cannot drift. ``[]`` when the run carries neither a
+    price nor a band for any name."""
     if table is None:
         return []
-    lines = ["", f"## {VALUATION_BAND_SECTION_TITLE}", "", table.intro, "",
-             "| " + " | ".join(table.columns) + " |",
-             "|" + "---|" * len(table.columns)]
-    for row in table.rows:
-        cells = [row[c].replace("|", "\\|") for c in table.columns]
-        cells[0] = f"**{cells[0]}**"
-        lines.append("| " + " | ".join(cells) + " |")
+    lines = ["", f"## {table.title}", "", table.intro, ""]
+    lines += _md_table(table.columns, table.rows)
     lines.append("")
     lines += [f"- {note}" for note in table.footnotes]
     return lines
 
 
+def _rules_applied_markdown(result) -> list[str]:
+    """The RULES APPLIED block as markdown (REPORT-1) — every rule the run applied, its
+    limit in plain English and what it did, BEFORE any result. Read from the strategies
+    that actually ran, so editing one changes this block with no code change."""
+    from aristos_council.pipeline import RULES_SECTION_TITLE, rules_applied
+
+    block = rules_applied(result)
+    if block is None:
+        return []
+    lines = ["", f"## {RULES_SECTION_TITLE}", "",
+             f"**{block.screen_heading}**", "", block.screen_note, ""]
+    if block.rules:
+        cols = ["Rule", "Limit", "What it did"]
+        if any(r.measured for r in block.rules):
+            cols.append("Measured on")
+        rows = [{"Rule": f"{r.label} `{r.criterion}`", "Limit": r.threshold_phrase,
+                 "What it did": r.tally, "Measured on": r.measured or "—"}
+                for r in block.rules]
+        lines += _md_table(cols, rows, bold_first=False)
+        lines.append("")
+    lines += [f"- {line}" for line in block.ranker_lines]
+    return lines
+
+
 def _universe_markdown(result) -> str:
     """The run as a self-contained markdown doc (the download; NO new storage format
-    this sprint — the pipeline does not persist reports)."""
+    this sprint — the pipeline does not persist reports).
+
+    REPORT-1: the header leads with the HUMAN names and keeps every id beside them as
+    the stable record key, a one-line verdict summary sits directly under it, and the
+    rules that were applied are stated before any result."""
+    from aristos_council.pipeline import header_lines, summary_line
+    from aristos_council.report_language import label_with_id
+
     m = result.meta
-    lines = [f"# Universe run — {m['rank_strategy_id']}", "",
-             f"**{_confirmation_line(m)}**", "",
-             f"_{result.header}_", "",
-             f"- screen: `{m['screen_strategy_id']}`",
-             f"- mode: {m['council_mode']}",
-             f"- ranked: {m['ranked_count']} / {m['universe_size']}"]
+    head = header_lines(result)
+    lines = [f"# Universe run — {head[0]}", ""]
+    lines += [f"**{line}**" for line in head[1:]]
+    lines += ["", f"### {summary_line(result)}", "",
+              f"_{_confirmation_line(m)}_", "",
+              f"_{result.header}_", "",
+              f"- Screen: {label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id'])}",
+              f"- Ranked: {m['ranked_count']} of {m['universe_size']} names"]
+    if m.get("run_id"):
+        lines.append(f"- Run id: `{m['run_id']}`")
     if not m["ranker_only"]:
-        lines.append(f"- shortlist: {len(m['shortlist'])} · est ${m['est_cost']:.2f}")
+        lines.append(f"- Shortlist: {len(m['shortlist'])} names · estimated cost "
+                     f"${m['est_cost']:.2f}")
         lines.append(f"- narration coverage: {m.get('narrate_coverage', 'buys_only')}")
-    lines += ["", "## Ranked (verdict of record)", ""]
+    # REPORT-1: every rule that was applied, with its limit and what it did, BEFORE any
+    # result — the header used to name only the screen's id.
+    lines += _rules_applied_markdown(result)
+
+    from aristos_council.pipeline import (
+        PROVENANCE_SECTION_NOTE, PROVENANCE_SECTION_TITLE, provenance_sentences,
+        untested_rule_notes, used_symbol_notes,
+    )
+    from aristos_council.rank_engine import factor_column_label
+    from aristos_council.report_language import format_score_gloss
+
+    lines += ["", "## Ranked — the verdict of record", ""]
     rows, factor_names = _ranked_rows(result.ranked, result.names)
     if rows:
-        head = ["Position (score)", "Name", "Verdict", *factor_names]
-        lines.append("| " + " | ".join(head) + " |")
-        lines.append("|" + "---|" * len(head))
-        for row in rows:
-            cells = [row["Position (score)"], row["Name"], row["Verdict"],
-                     *[str(row[f]) for f in factor_names]]
-            lines.append("| " + " | ".join(cells) + " |")
+        n_factors = next((len(r.factor_ranks) for r in result.ranked if r.factor_ranks),
+                         0)
+        lines += [format_score_gloss(n_factors, len(result.ranked)), ""]
+        labels = [factor_column_label(f) for f in factor_names]
+        lines += _md_table(["Position (score)", "Name", "Verdict", *labels], rows,
+                           bold_first=False)
+        lines += ["", "Factor ids, in column order: "
+                      + ", ".join(f"`{f}`" for f in factor_names) + "."]
     else:
         lines.append("_(no names survived the screen)_")
-    from aristos_council.pipeline import (
-        factor_integrity, format_integrity_entry,
-        format_screen_basis_entry, ranked_abstention_footnotes, screen_basis_integrity,
-    )
 
-    for foot in ranked_abstention_footnotes(result):
-        lines.append(foot)
+    symbols = used_symbol_notes(result)
+    if symbols:
+        lines.append("")
+        lines += [f"- `{sym}` — {note}" for sym, note in symbols]
 
-    entries = factor_integrity(result)
+    # REPORT-1: a rule that could not be TESTED, in words, beside the verdict it
+    # qualifies — it used to be a bare dagger in the name column.
+    untested = untested_rule_notes(result)
+    if untested:
+        lines += ["", "## Rules that could not be tested", "",
+                  "_These names PASSED the screen — a rule that cannot be evaluated "
+                  "never excludes anyone — but one of its rules returned no answer for "
+                  "them at all, so their pass is thinner than it looks._", ""]
+        for n in untested:
+            count = len(n["rules"])
+            lines.append(f"- **{n['name']}** — {n['verdict']} — {count} rule"
+                         f"{'s' if count != 1 else ''} could not be tested: "
+                         + "; ".join(n["rules"]))
+
+    entries = provenance_sentences(result)
     if entries:
-        lines += ["", "## Factor integrity", ""]
-        lines += [f"- **{e['factor']}** — {format_integrity_entry(e)}" for e in entries]
-    basis_entries = screen_basis_integrity(result)
-    if basis_entries:
-        lines += ["", "## Screen basis", ""]
-        lines += [f"- **{e['criterion']}** — {format_screen_basis_entry(e)}"
-                  for e in basis_entries]
-    # VALBAND-1: the absolute counterpart to the ranked table, in the RECORD too — a
-    # rank position ages into "it was cheapest of those"; the band ages into "and it
-    # was at the 92nd percentile of its own five years", which is the sentence a reader
-    # of an old run actually needs.
-    from aristos_council.pipeline import (
-        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, price_rows, valuation_band_table,
-    )
+        lines += ["", f"## {PROVENANCE_SECTION_TITLE}", "",
+                  f"_{PROVENANCE_SECTION_NOTE}_", ""]
+        lines += [f"- {e['sentence']}" for e in entries]
+    # VALBAND-1 / PRICE-2 / REPORT-1: the absolute counterpart to the ranked table, in
+    # the RECORD too — a rank position ages into "it was cheapest of those"; the price
+    # and the band age into "it cost $119.85 and sat at the 1st percentile of its own
+    # five years", which is the sentence a reader of an old run actually needs.
+    from aristos_council.pipeline import exclusion_rows, valuation_band_table
 
-    # PRICE-1: the share price + 52-week position, ALWAYS in the record (never gated by
-    # the band toggle) — an old run whose price is not written down cannot be re-read.
-    p_rows = price_rows(result)
-    if p_rows:
-        lines += ["", f"## {PRICE_SECTION_TITLE}", "", f"_{PRICE_SECTION_NOTE}_", ""]
-        lines += [f"- **{n}** — {line}" for n, line in p_rows]
+    # PRICE-1/PRICE-2/REPORT-1: price, 12-month range and valuation in ONE table — the
+    # same names are no longer listed twice in two sections.
     lines += _valuation_band_markdown(valuation_band_table(result))
     if result.excluded:
-        lines += ["", "## Excluded (screen / cap / sector)", ""]
-        lines += [f"- **{display_name(t, result.names.get(t))}** — {why}"
-                  for t, why in result.excluded]
+        lines += ["", "## Excluded — did not pass a rule, so was never ranked", ""]
+        for row in exclusion_rows(result):
+            muted = f" `{row['criterion']}`" if row["criterion"] else ""
+            lines.append(f"- **{row['name']}** — {row['sentence']}{muted}")
+            if row["flag"]:
+                lines.append(f"  - {row['flag']}")
     if result.unrateable:
-        lines += ["", "## Unrateable (no data — no verdict)", ""]
+        lines += ["", "## No usable data — no verdict was formed", ""]
         lines += [f"- **{display_name(t, result.names.get(t))}** — {why}"
                   for t, why in result.unrateable]
     if result.narratives:
@@ -1422,17 +1489,11 @@ def _multi_strategy_markdown(multi_result) -> str:
     # VALBAND-1: the absolute band, computed once (on the first lens) — a per-NAME context
     # column, not a per-strategy verdict, so it sits ONCE under the combined grid. Empty
     # (section omitted) unless the "Valuation band" checkbox was ticked.
-    from aristos_council.pipeline import (
-        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, price_rows, valuation_band_table,
-    )
+    from aristos_council.pipeline import valuation_band_table
     first = multi_result.results[ids[0]] if ids else None
-    # PRICE-1: the price is a per-NAME fact, identical under every lens, so it sits ONCE
-    # under the combined grid — and unlike the band it is never gated by a toggle.
-    p_rows = price_rows(first) if first is not None else []
-    if p_rows:
-        lines += [f"## {PRICE_SECTION_TITLE}", "", f"_{PRICE_SECTION_NOTE}_", ""]
-        lines += [f"- **{n}** — {line}" for n, line in p_rows]
-        lines.append("")
+    # PRICE-1/PRICE-2/REPORT-1: price, 12-month range and valuation are per-NAME facts,
+    # identical under every lens, so they sit ONCE under the combined grid — in ONE
+    # table, not two sections listing the same names twice.
     if first is not None:
         band_md = _valuation_band_markdown(valuation_band_table(first))
         lines += (band_md + [""]) if band_md else []
@@ -1485,17 +1546,8 @@ def _render_multi_strategy_result(multi_result) -> None:
     # The price is identical under every lens so it is read off the first one — and it is
     # ALWAYS shown; the band (and the reversion value riding with it) only when the
     # checkbox was on.
-    from aristos_council.pipeline import (
-        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, price_rows, valuation_band_table,
-    )
+    from aristos_council.pipeline import valuation_band_table
     first = multi_result.results[ids[0]] if ids else None
-    p_rows = price_rows(first) if first is not None else []
-    if p_rows:
-        st.subheader(PRICE_SECTION_TITLE)
-        st.caption(PRICE_SECTION_NOTE)
-        st.dataframe([{"Name": n, "Price · 52-week position": line}
-                      for n, line in p_rows], width="stretch", hide_index=True)
-
     _render_valuation_band_table(
         valuation_band_table(first) if first is not None else None)
 
@@ -1535,95 +1587,119 @@ def _render_universe_result(result) -> None:
         st.success(f"💾 Saved to: `{md_path.relative_to(ROOT)}` and "
                   f"`{html_path.relative_to(ROOT)}`")
 
+    from aristos_council.pipeline import (
+        PROVENANCE_SECTION_NOTE, PROVENANCE_SECTION_TITLE, RULES_SECTION_TITLE,
+        header_lines, provenance_sentences, rules_applied, summary_line,
+        untested_rule_notes, used_symbol_notes,
+    )
+    from aristos_council.rank_engine import factor_column_label
+    from aristos_council.report_language import format_score_gloss, label_with_id
+
     # ITEM 6: the confirmation line first — a wrong dropdown is visible immediately.
     st.caption(_confirmation_line(m))
-    # 1 — the division-of-labor header line, prominent.
-    st.markdown(f"#### {result.header}")
-    meta_bits = (f"rank: `{m['rank_strategy_id']}` · screen: "
-                 f"`{m['screen_strategy_id']}` · universe: "
-                 f"`{m.get('universe_id', '—')}` · mode: {m['council_mode']} · "
-                 f"ranked {m['ranked_count']}/{m['universe_size']}")
+    # 1 — REPORT-1: the human names lead; every id stays beside them as the record key.
+    head = header_lines(result)
+    st.markdown(f"#### {head[0]}")
+    for line in head[1:]:
+        st.caption(line)
+    st.markdown(f"### {summary_line(result)}")
+    st.caption(result.header)
+    meta_bits = (f"Screen: {label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id'])} · "
+                 f"ranked {m['ranked_count']} of {m['universe_size']} names")
     if not m["ranker_only"]:
         meta_bits += (f" · shortlist {len(m['shortlist'])} · "
-                      f"est ${m['est_cost']:.2f} · "
-                      f"narrate {m.get('narrate_coverage', 'buys_only')}")
+                      f"estimated cost ${m['est_cost']:.2f} · "
+                      f"narrating {m.get('narrate_coverage', 'buys_only')}")
+    if m.get("run_id"):
+        meta_bits += f" · run id `{m['run_id']}`"
     st.caption(meta_bits)
 
-    # 2 — RANKED table: sortable, verdict palette, per-factor ranks (imputed *).
-    st.subheader("Ranked — verdict of record")
+    # 1b — REPORT-1: RULES APPLIED, before any result. Every rule the run applied, its
+    # limit in plain English, and what it actually did — including rules nothing failed.
+    rules = rules_applied(result)
+    if rules is not None:
+        st.subheader(RULES_SECTION_TITLE)
+        st.caption(f"**{rules.screen_heading}** — {rules.screen_note}")
+        if rules.rules:
+            st.dataframe([{"Rule": r.label, "Limit": r.threshold_phrase,
+                           "What it did": r.tally,
+                           "Measured on": r.measured or "—",
+                           "Criterion id": r.criterion}
+                          for r in rules.rules], hide_index=True, width="stretch")
+        for line in rules.ranker_lines:
+            st.caption(line)
+
+    # 2 — RANKED table: sortable, verdict palette, per-factor rank AND value.
+    st.subheader("Ranked — the verdict of record")
     rows, factor_names = _ranked_rows(result.ranked, result.names)
     if rows:
         import pandas as pd
 
+        n_factors = next((len(r.factor_ranks) for r in result.ranked if r.factor_ranks),
+                         0)
+        st.caption(format_score_gloss(n_factors, len(result.ranked)))
         df = pd.DataFrame(rows)
         styler = df.style.map(
             lambda v: f"color: {_verdict_hex(v)}; font-weight: 700",
             subset=["Verdict"])
         st.dataframe(styler, hide_index=True, width="stretch")
-        if any("*" in str(row[f]) for row in rows for f in factor_names):
-            st.caption("\\* = factor value absent; rank imputed from the name's "
-                       "other factors (judged on what it has, not punished).")
-        from aristos_council.pipeline import ranked_abstention_footnotes
-
-        for foot in ranked_abstention_footnotes(result):
-            st.caption(foot)
+        st.caption("Factor ids, in column order: "
+                   + ", ".join(f"`{f}`" for f in factor_names) + ".")
+        for sym, note in used_symbol_notes(result):
+            st.caption(f"{sym} — {note}")
     else:
         st.info("No names survived the screen to be ranked.")
 
-    # 2b — FACTOR INTEGRITY: which computation path produced each factor per name
-    # (ITEM 1) — EV vs EBIT/mcap proxy vs abstained, no longer silent.
-    from aristos_council.pipeline import (
-        factor_integrity, format_integrity_entry,
-        format_screen_basis_entry, screen_basis_integrity,
-    )
+    # 2a — REPORT-1: a rule that could not be TESTED, in words, next to the verdict it
+    # qualifies. It used to be a bare dagger in the name column.
+    untested = untested_rule_notes(result)
+    if untested:
+        st.subheader("Rules that could not be tested")
+        st.caption("These names PASSED the screen — a rule that cannot be evaluated "
+                   "never excludes anyone — but one of its rules returned no answer "
+                   "for them at all, so their pass is thinner than it looks.")
+        for n in untested:
+            count = len(n["rules"])
+            st.markdown(f"- **{n['name']}** — {n['verdict']} — {count} rule"
+                        f"{'s' if count != 1 else ''} could not be tested: "
+                        + "; ".join(n["rules"]))
 
-    entries = factor_integrity(result)
+    # 2b — REPORT-1: "Where the numbers came from" (was "Factor integrity"): which
+    # computation path produced each factor per name, as a sentence. Same counts.
+    entries = provenance_sentences(result)
     if entries:
-        st.subheader("Factor integrity")
-        st.caption("Per factor, how each ranked name's value was produced — a silent "
-                   "fallback (stale cache / missing fields) now shows in plain text.")
+        st.subheader(PROVENANCE_SECTION_TITLE)
+        st.caption(PROVENANCE_SECTION_NOTE)
         for e in entries:
-            st.markdown(f"- **{e['factor']}** — {format_integrity_entry(e)}")
+            st.markdown(f"- {e['sentence']}")
 
     # 2b1 — SHARE PRICE & 52-WEEK POSITION (PRICE-1): the plainest two facts in the
     # report — what one share costs today (in its OWN currency, with the close's date, so
     # a stale cache is visible) and where that sits in the trailing year. ALWAYS shown:
     # it reads the 400-day bars the ranking legs already fetched, so it is free and is not
     # gated by the valuation-band toggle. Display only.
-    from aristos_council.pipeline import (
-        PRICE_SECTION_NOTE, PRICE_SECTION_TITLE, price_rows, valuation_band_table,
-    )
+    from aristos_council.pipeline import valuation_band_table
 
-    p_rows = price_rows(result)
-    if p_rows:
-        st.subheader(PRICE_SECTION_TITLE)
-        st.caption(PRICE_SECTION_NOTE)
-        st.dataframe([{"Name": n, "Price · 52-week position": line}
-                      for n, line in p_rows], hide_index=True, width="stretch")
-
-    # 2b2 — VALUATION BAND (VALBAND-1) + REVERSION VALUE (PRICE-1), as a TABLE (PRICE-2):
-    # the one ABSOLUTE block in a report otherwise made entirely of cohort statements. The
-    # ranked table above says which of these names is least expensive; this says whether
-    # any of them is cheap against its OWN history, and what it would cost at its own
-    # median multiple. Display only — it ranks nothing, screens nothing, decides nothing.
+    # 2b2 — PRICE + VALUATION as ONE table (PRICE-2, extended by REPORT-1): what each
+    # name costs, where that sits in its 12-month range, and — when the band is on —
+    # where its multiple sits in its OWN multi-year range and what it would cost at that
+    # name's median. Display only: it ranks nothing, screens nothing, decides nothing.
     _render_valuation_band_table(valuation_band_table(result))
 
-    # 2c — SCREEN BASIS: the measurement basis each screen criterion used (payout FCF
-    # vs EPS fallback) across the screened names.
-    basis_entries = screen_basis_integrity(result)
-    if basis_entries:
-        st.subheader("Screen basis")
-        st.caption("Which measurement basis each screen criterion used across the "
-                   "screened names — a marked fallback (e.g. EPS when FCF is absent) "
-                   "shows in plain text.")
-        for e in basis_entries:
-            st.markdown(f"- **{e['criterion']}** — {format_screen_basis_entry(e)}")
+    # 2c — the old "Screen basis" section is GONE (REPORT-1): the measurement basis each
+    # rule used is now a "measured on …" line inside the RULES APPLIED block above, beside
+    # the rule it qualifies, so the same information is not printed in two places.
 
-    # 3 — Excluded (screen / cap / sector / payout): a neutral table.
+    # 3 — REPORT-1: excluded names as SENTENCES naming the rule, the observed value and
+    # the limit in their proper units — the raw form was "screen: min_dividend_yield
+    # (observed 0.009547 vs threshold 0.015)". The criterion id stays for auditability.
     if result.excluded:
-        st.subheader(f"Excluded — screen / cap / sector · {len(result.excluded)}")
-        st.dataframe([{"Name": display_name(t, result.names.get(t)), "Reason": why}
-                      for t, why in result.excluded],
+        from aristos_council.pipeline import exclusion_rows
+        st.subheader(f"Excluded — did not pass a rule, so was never ranked · "
+                     f"{len(result.excluded)}")
+        st.dataframe([{"Name": r["name"], "Why": r["sentence"],
+                       "Warning": r["flag"], "Criterion id": r["criterion"]}
+                      for r in exclusion_rows(result)],
                      hide_index=True, width="stretch")
 
     # 4 — UNRATEABLE: its OWN axis (no data, no verdict) — deliberately distinct.

@@ -525,17 +525,22 @@ def test_the_four_surfaces_render_the_same_price_lines_and_cannot_drift():
     cli = format_cli_report(result)                            # surface 1: CLI
     md = _visible_md(result)                                   # surface 2: markdown
     html_doc = universe_report_html(result)                    # surface 3: HTML
-    # surface 4: the Run tab renders `price_rows` directly into its dataframe, so the
-    # source IS the assertion target — the same tuples, name and line, in the same order.
-    run_tab = [{"Name": n, "Price · 52-week position": line} for n, line in rows]
+    # surface 4: the Run tab renders the SAME table cells into its dataframe.
+    table = valuation_band_table(result)                       # the shared source
 
     import html as _html
-    for i, (name, line) in enumerate(rows):
-        assert f"{name} {line}" in cli                          # CLI: name then the line
-        assert f"- **{name}** — {line}" in md                   # markdown bullet
-        assert _html.escape(name, quote=False) in html_doc      # HTML: both, escaped
-        assert _html.escape(line, quote=False) in html_doc
-        assert run_tab[i] == {"Name": name, "Price · 52-week position": line}
+    for row in table.rows:
+        for column in table.columns:
+            cell = row[column]
+            if cell in ("—", ""):
+                continue
+            assert cell in cli, (column, cell)
+            assert cell in md, (column, cell)
+            assert _html.escape(cell, quote=False) in html_doc, (column, cell)
+    # ...and the one-line rendering carries the same numbers as the table's cells.
+    for (name, line), row in zip(rows, table.rows):
+        assert row["Name"] == name
+        assert row["Price"] in line
 
 
 def test_the_cli_block_names_the_section_and_states_it_is_display_only():
@@ -560,11 +565,20 @@ def test_a_result_with_no_price_lines_renders_no_block_at_all():
 # 9. The flag: price is ALWAYS on, the reversion value rides with the band
 # --------------------------------------------------------------------------- #
 def test_band_off_keeps_the_price_and_the_52_week_position_and_drops_the_rest():
+    """REPORT-1 folded the price section INTO this table, so a band-off run still
+    renders it — with the price and 12-month range columns and WITHOUT the band's."""
     off = _run(band=False)
     assert off.meta["with_valuation_band"] is False
-    assert valuation_band_table(off) is None                   # no band section
     assert all(r.reversion is None for r in off.ranked)        # no reversion value
-    rows = price_rows(off)                                     # ...but the price stays
+    table = valuation_band_table(off)
+    assert table is not None and table.has_band is False
+    assert table.columns == ["Name", "Price", "12-month low", "12-month high"]
+    assert {r["Name"] for r in table.rows} == {"P", "Q"}
+    assert all(r["Price"].startswith("$") for r in table.rows)
+    # the PRICE footnote (the close's as-of date) stays — it belongs to the price, not
+    # the band; only the band's coverage + doctrine notes are absent.
+    assert len(table.footnotes) == 1 and "last close on" in table.footnotes[0]
+    rows = price_rows(off)                                     # the one-line form too
     assert {n for n, _ in rows} == {"P", "Q"}
     assert all("52-week range" in line for _, line in rows)
 

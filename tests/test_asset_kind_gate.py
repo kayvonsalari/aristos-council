@@ -106,7 +106,7 @@ def _equity_only_strategy():
 def test_pipeline_gates_etf_out_of_an_equity_lens_with_exact_message():
     strat = _equity_only_strategy()
     adapter = _KindAdapter({"AAPL": "EQUITY", "QQQ": "ETF"})
-    ranked, excluded, _, _ = _rank_stage(
+    ranked, excluded, _, _, _ = _rank_stage(
         ["AAPL", "QQQ"], strat, adapter, today=date(2026, 6, 30))
     # QQQ (ETF) gated out with the verbatim message
     assert ("QQQ", "asset kind 'ETF' outside this strategy's scope") in excluded
@@ -121,7 +121,7 @@ def test_pipeline_gates_equity_out_of_an_etf_lens():
                          asset_kinds=["etf"],
                          factors=[RankFactorSpec(name="momentum_12m")])
     adapter = _KindAdapter({"AAPL": "EQUITY", "QQQ": "ETF"})
-    _, excluded, _, _ = _rank_stage(
+    _, excluded, _, _, _ = _rank_stage(
         ["AAPL", "QQQ"], strat, adapter, today=date(2026, 6, 30))
     assert ("AAPL", "asset kind 'Equity' outside this strategy's scope") in excluded
 
@@ -129,7 +129,7 @@ def test_pipeline_gates_equity_out_of_an_etf_lens():
 def test_pipeline_confirmed_only_missing_kind_never_gates():
     strat = _equity_only_strategy()
     adapter = _KindAdapter({"AAPL": None})       # no quoteType reported
-    ranked, excluded, _, _ = _rank_stage(
+    ranked, excluded, _, _, _ = _rank_stage(
         ["AAPL"], strat, adapter, today=date(2026, 6, 30))
     assert not any("asset kind" in why for _, why in excluded)
     assert "AAPL" in {r.ticker for r in ranked if not r.excluded}

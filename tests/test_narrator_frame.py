@@ -97,7 +97,9 @@ def test_pipeline_header_renders_screen_none_for_screenless():
         ["A", "B", "C"], "magic_formula_raw_v1", ranker_only=True,
         strategies_dir=STRAT_DIR, adapter=_Adapter(), today=date(2026, 6, 30))
     assert result.meta["screen_strategy_id"] == "none"
-    assert "screen: none" in format_cli_report(result)
+    # REPORT-1: the screen is named in the RULES APPLIED block, human name first and id
+    # second. A screen-less run says so in words rather than printing a bare "none".
+    assert "Screen: none" in format_cli_report(result)
 
 
 def test_pipeline_header_unchanged_for_screened_garp_v2():
@@ -106,7 +108,9 @@ def test_pipeline_header_unchanged_for_screened_garp_v2():
         ["A", "B", "C"], "growth_garp_v2", ranker_only=True,
         strategies_dir=STRAT_DIR, adapter=_Adapter(), today=date(2026, 6, 30))
     assert result.meta["screen_strategy_id"] == "growth_screen_v2"
-    assert "screen: growth_screen_v2" in format_cli_report(result)
+    # REPORT-1: the id is still there — it is just no longer the only thing shown.
+    text = format_cli_report(result)
+    assert "growth_screen_v2" in text and "Screen: " in text
 
 
 # --- the resolver default (for genuine council-mode) is untouched ------------ #

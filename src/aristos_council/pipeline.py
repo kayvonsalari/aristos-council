@@ -57,6 +57,7 @@ from .factors import (
 from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
 from .rank_engine import (
+    BOUNDARY_FLAG,
     FactorSpec,
     RankedTicker,
     boundary_tie_facts,
@@ -65,6 +66,20 @@ from .rank_engine import (
     format_position_cell,
     format_verdict_cell,
     rank_universe,
+    ranked_table_rows,
+)
+from .report_language import (
+    COMPARISON_MIN,
+    format_limit_clause,
+    format_score_gloss,
+    UNIT_CURRENCY,
+    UNIT_PERCENT,
+    UNIT_RATIO,
+    format_signed_change,
+    format_summary_line,
+    format_threshold,
+    format_value,
+    label_with_id,
 )
 from .reproducibility import estimate_cost
 from .state import Recommendation, ResearchState
@@ -142,6 +157,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
     excluded: list[tuple[str, str]] = []
     sources_by_ticker: dict[str, dict[str, str]] = {}
     screen_bases: dict[str, dict[str, str]] = {}     # ticker -> {criterion: basis}
+    screen_outcomes: dict[str, dict[str, dict]] = {}  # ticker -> {criterion: outcome}
     abstentions_by_ticker: dict[str, dict[str, str]] = {}   # ticker -> {criterion: note}
     names_by_ticker: dict[str, str] = {}             # ticker -> company display name (ITEM 1)
     # Display-only context objects, attached to the ranked rows below. Objects, not
@@ -202,11 +218,15 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         # definition (the council screen). One source of truth; floors enforced. Capture
         # each name's per-criterion measurement basis (payout FCF/EPS) for the report.
         if prefilter_criteria is not None:
-            reason, bases, abstentions = screen_evaluate(prefilter_criteria, fi)
+            reason, bases, abstentions, outcomes = screen_evaluate(prefilter_criteria, fi)
             if bases:
                 screen_bases[t] = bases
             if abstentions:
                 abstentions_by_ticker[t] = abstentions
+            if outcomes:
+                # REPORT-1: what EVERY rule did for this name, kept whether the name went
+                # on to rank or was excluded — the "rules applied" block tallies across it.
+                screen_outcomes[t] = outcomes
             if reason is not None:
                 # ITEM 2: decorate (never alter) the exclusion when a fundamental floor
                 # confirmed-fails while price has run up hard — visible wherever the
@@ -246,7 +266,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             r.price = prices_by_ticker[r.ticker]
         if r.ticker in reversion_by_ticker:
             r.reversion = reversion_by_ticker[r.ticker]
-    return ranked, excluded, screen_bases, names_by_ticker
+    return ranked, excluded, screen_bases, names_by_ticker, screen_outcomes
 
 
 def _shortlist(ranked: list[RankedTicker], runs_on: str, k: int) -> list[RankedTicker]:
@@ -424,7 +444,7 @@ def run_pipeline(
     # ranking — ranker and council share one defensive definition.
     prefilter = (screen_strategy.criteria
                  if getattr(rank_strategy, "prefilter_screen", False) else None)
-    ranked, excluded, _, _ = _rank_stage(universe, rank_strategy, adapter, today=today,
+    ranked, excluded, _, _, _ = _rank_stage(universe, rank_strategy, adapter, today=today,
                                           prefilter_criteria=prefilter)
     shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
 
@@ -477,6 +497,18 @@ class RankPipelineResult:
     # display_name(ticker, names.get(ticker)); a missing entry falls back to the bare
     # ticker (ITEM 1).
     names: dict[str, str] = field(default_factory=dict)
+    # REPORT-1 — what EVERY screen rule did for EVERY screened name:
+    # {ticker: {criterion: {"passed", "observed", "threshold", "note", "basis",
+    # "borderline"}}}. The old report could only ever name the FIRST rule a name failed,
+    # so a rule nothing failed was invisible and a reader could not tell what had been
+    # applied at all. The "Rules applied" block tallies across this. Display only.
+    screen_outcomes: dict[str, dict[str, dict]] = field(default_factory=dict)
+    # The LOADED strategy objects this run actually used, INCLUDING any per-run
+    # overrides — so the rules block is read from what RAN, never from a hardcoded list.
+    # A strategy edited tomorrow changes the block automatically. None on a screen-less
+    # run (no lens declared) or for a hand-built result.
+    rank_strategy: object = None
+    screen_strategy: object = None
 
 
 def tie_boundary_notes(ranked: list[RankedTicker]) -> dict[str, str]:
@@ -581,7 +613,7 @@ def run_rank_pipeline(
     name; it NEVER re-grades, changes a rank, or feeds a verdict. Off -> no band
     computation, no extra fetch, and the output is byte-identical to a pre-VALBAND run."""
     strategies_dir = Path(strategies_dir) if strategies_dir else _STRATEGIES_DIR
-    universe, resolved_universe_id = _resolve_universe(
+    universe, resolved_universe_id, universe_name = _resolve_universe(
         universe, universe_id,
         Path(universes_dir) if universes_dir else _UNIVERSES_DIR)
     rank_strategy = load_rank_strategy_from_id(strategy_id, strategies_dir)
@@ -631,7 +663,7 @@ def run_rank_pipeline(
     prefilter = (screen_strategy.criteria
                  if (screen_strategy is not None
                      and getattr(rank_strategy, "prefilter_screen", False)) else None)
-    ranked, prerank_excluded, screen_bases, names = _rank_stage(
+    ranked, prerank_excluded, screen_bases, names, screen_outcomes = _rank_stage(
         universe, rank_strategy, adapter, today=today, prefilter_criteria=prefilter,
         with_valuation_band=with_valuation_band)
     live = [r for r in ranked if not r.excluded]
@@ -686,6 +718,17 @@ def run_rank_pipeline(
                                or getattr(rank_strategy, "name", "") or ""),
         # Screen-less strategies render "none" — never the leaked default lens (NARR-FRAME-1).
         "screen_strategy_id": screen_strategy.id if screen_strategy is not None else "none",
+        # REPORT-1 — the human names beside the ids. A report leads with these and keeps
+        # the id parenthetically; empty when the source declares none, so a renderer
+        # falls back to the id rather than inventing a label.
+        "screen_strategy_name": (getattr(screen_strategy, "display_name", "")
+                                 or getattr(screen_strategy, "name", "") or ""
+                                 ) if screen_strategy is not None else "",
+        "universe_name": universe_name,
+        # Whether the screen ran as a PREFILTER (names failing a rule were never ranked)
+        # or not at all. Material: a reader must know whether a failing name was excluded
+        # before ranking or merely flagged.
+        "prefilter_screen": prefilter is not None,
         "universe_id": resolved_universe_id,
         # FUND-UI-2: the EXACT membership this run graded, plus its order-insensitive
         # fingerprint. A saved list is an editable ticker list now, so an id alone dates
@@ -714,23 +757,39 @@ def run_rank_pipeline(
         ranked=live, excluded=excluded, unrateable=unrateable, narratives=narratives,
         header=_pipeline_header(executed_mode), meta=meta, council_mode=executed_mode,
         council=council, shortlist=[r.ticker for r in shortlist],
-        fetch_errors=fetch_errors, screen_bases=screen_bases, names=names)
+        fetch_errors=fetch_errors, screen_bases=screen_bases, names=names,
+        # REPORT-1: the per-rule record and the strategies that produced it, so the
+        # "Rules applied" block reads from what ACTUALLY RAN (overrides included).
+        screen_outcomes=screen_outcomes, rank_strategy=rank_strategy,
+        screen_strategy=screen_strategy)
 
     if csv_path and not ranker_only and mode != "narrator":
         _append_agreement_csv(result, Path(csv_path))
     return result
 
 
-def _resolve_universe(universe, universe_id, universes_dir: Path) -> tuple[list[str], str]:
-    """Turn (universe list, universe_id) into (tickers, recorded_id). A ``universe_id``
-    with no explicit list loads the named manifest; an explicit list keeps its
-    ``universe_id`` if given, else gets an ``adhoc:<hex8>`` fingerprint."""
+def _resolve_universe(universe, universe_id, universes_dir: Path
+                      ) -> tuple[list[str], str, str]:
+    """Turn (universe list, universe_id) into (tickers, recorded_id, display_name). A
+    ``universe_id`` with no explicit list loads the named manifest; an explicit list
+    keeps its ``universe_id`` if given, else gets an ``adhoc:<hex8>`` fingerprint.
+
+    The manifest's ``display_name`` rides along (REPORT-1) so a report can lead with
+    "Defensive Income" and keep the id as the record key beside it. Empty for an ad-hoc
+    list — a renderer then shows the id alone rather than inventing a name."""
     from .universe import adhoc_universe_id, load_universe_by_id
     if universe_id and not universe:
         u = load_universe_by_id(universe_id, universes_dir)
-        return list(u.tickers), u.id
+        return list(u.tickers), u.id, (getattr(u, "display_name", "") or "")
     if universe:
-        return list(universe), (universe_id or adhoc_universe_id(list(universe)))
+        name = ""
+        if universe_id:
+            try:
+                name = getattr(load_universe_by_id(universe_id, universes_dir),
+                               "display_name", "") or ""
+            except Exception:
+                name = ""            # an ad-hoc / unresolvable id keeps no display name
+        return list(universe), (universe_id or adhoc_universe_id(list(universe))), name
     raise ValueError("run_rank_pipeline needs an explicit `universe` list or a "
                      "`universe_id` naming a manifest")
 
@@ -828,15 +887,66 @@ def format_integrity_entry(e: dict) -> str:
     return " · ".join(parts)
 
 
+# REPORT-1: "Factor integrity" was internal jargon and told a reader nothing about what
+# it was for. The section is now "Where the numbers came from", and each line is a
+# sentence rather than a slash-separated tally. The COUNTS are exactly the same.
+PROVENANCE_SECTION_TITLE = "Where the numbers came from"
+PROVENANCE_SECTION_NOTE = (
+    "How each ranked name's value for each factor was actually produced — a silent "
+    "fallback (a proxy, a stale cache, a missing field) reads in plain text here "
+    "instead of looking identical to a real measurement.")
+
+# How a source tag reads INSIDE a sentence ("real data for all 10 names"). Same tags as
+# _SOURCE_LABELS, phrased as prose rather than as a column heading.
+_SOURCE_PHRASE = {
+    "ev": "from enterprise value",
+    "computed": "real data",
+    "abstained": "no usable data",
+    "fallback:ebit_mcap": "from the EBIT / market-cap proxy",
+    "fallback:pe": "from 1 / price-earnings",
+    "fallback:dividend_yield": "taken from dividend yield",
+}
+
+
+def _source_phrase(src: str) -> str:
+    return _SOURCE_PHRASE.get(src, _source_label(src))
+
+
+def _names_clause(tickers: list[str], total: int) -> str:
+    """``"for all 10 names"`` / ``"for 2 names (HD, CAT)"`` — names them when few enough
+    to be actionable, counts them otherwise."""
+    n = len(tickers)
+    if n == total:
+        return f"for all {total} name{'s' if total != 1 else ''}"
+    named = f" ({', '.join(tickers)})" if n <= 5 else ""
+    return f"for {n} of {total} names{named}"
+
+
+def provenance_sentences(result: RankPipelineResult) -> list[dict]:
+    """``[{factor, sentence}]`` — one plain sentence per factor (REPORT-1), e.g.
+    "Price volatility — real data for all 10 names." Reads the SAME
+    ``factor_integrity`` counts; only the words change."""
+    from .factors import FACTOR_REGISTRY
+    out = []
+    for e in factor_integrity(result):
+        total, bs = e["total"], e["by_source"]
+        label = getattr(FACTOR_REGISTRY.get(e["factor"]), "label", "") or e["factor"]
+        parts = []
+        for src in sorted(bs, key=lambda s: (s == "abstained", s)):
+            parts.append(f"{_source_phrase(src)} {_names_clause(bs[src], total)}")
+        out.append({"factor": e["factor"], "label": label,
+                    "sentence": f"{label} — " + "; ".join(parts) + "."})
+    return out
+
+
 def format_factor_integrity(result: RankPipelineResult) -> list[str]:
-    """The 'Factor integrity' block as text lines, e.g.
-    'earnings_yield: EV 21/23 · EBIT/mcap proxy 2/23 (HD, CAT) · abstained 0'."""
-    entries = factor_integrity(result)
+    """The provenance block as CLI lines (see ``provenance_sentences``)."""
+    entries = provenance_sentences(result)
     if not entries:
         return []
-    lines = ["=== FACTOR INTEGRITY (per-factor source across the ranked names) ==="]
+    lines = [f"  {PROVENANCE_SECTION_TITLE.upper()}:"]
     for e in entries:
-        lines.append(f"  {e['factor']}: " + format_integrity_entry(e))
+        lines.append(f"      {e['sentence']}")
     return lines
 
 
@@ -844,6 +954,16 @@ def format_factor_integrity(result: RankPipelineResult) -> list[str]:
 # criterion, not a rank factor, so its basis reads across ALL screened names (ranked or
 # excluded), not just the ranked ones — its own line, same format as factor integrity.
 _BASIS_DISPLAY = {"fcf": "FCF (4y mean)", "eps": "EPS fallback"}
+# The same bases in prose, for a sentence rather than a column (REPORT-1).
+_BASIS_PROSE = {"fcf": "4-year average free cash flow",
+                "eps": "earnings per share (a marked fallback)",
+                "abstained": "nothing measurable"}
+
+
+def basis_phrase(basis: str) -> str:
+    """A measurement basis as it reads inside a sentence, e.g. "4-year average free cash
+    flow". Falls back to the column form for a basis with no prose entry."""
+    return _BASIS_PROSE.get(basis, _BASIS_DISPLAY.get(basis, basis))
 
 
 def screen_basis_integrity(result: RankPipelineResult) -> list[dict]:
@@ -914,6 +1034,453 @@ def format_screen_basis(result: RankPipelineResult) -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
+# REPORT-1 — the report's own header, summary and exclusion sentences
+# --------------------------------------------------------------------------- #
+def header_lines(result) -> list[str]:
+    """The header block, human names first and ids second (REPORT-1).
+
+    It used to be machine ids only — ``strategy conservative_plus_v1, universe
+    defensive_income_16_v1`` — which told a reader nothing they could act on while
+    hiding the names the UI already knew. The ids stay: they are the stable record
+    keys a verdict log and a frozen run join on. They are just no longer the only
+    thing shown. The run id sits LAST, muted, for the same reason."""
+    m = result.meta or {}
+    size = m.get("universe_size", len(getattr(result, "ranked", []) or []))
+    universe = label_with_id(m.get("universe_name", ""), m.get("universe_id", "") or "")
+    lines = [f"{universe} — {size} names" if universe else f"{size} names"]
+    strategy = label_with_id(m.get("rank_strategy_name", ""),
+                             m.get("rank_strategy_id", "") or "")
+    if strategy:
+        lines.append(f"Strategy: {strategy}")
+    mode = m.get("council_mode", "")
+    mode_phrase = ("ranker only, no AI commentary" if mode == "ranker-only"
+                   else f"{mode} commentary" if mode else "")
+    if mode_phrase:
+        lines.append(f"Run: {mode_phrase}")
+    return lines
+
+
+def summary_line(result) -> str:
+    """``"2 BUY · 6 HOLD · 2 SELL — 10 of 16 names ranked, 6 excluded by the screen"``.
+
+    Derived from the result every time. There was no summary anywhere before this: a
+    reader had to count the table by hand to learn what the run had concluded."""
+    m = result.meta or {}
+    return format_summary_line(
+        result.ranked, universe_size=m.get("universe_size", len(result.ranked)),
+        excluded=len(getattr(result, "excluded", []) or []),
+        unrateable=len(getattr(result, "unrateable", []) or []),
+        fetch_errors=len(getattr(result, "fetch_errors", []) or []))
+
+
+def exclusion_sentence(result, ticker: str, reason: str) -> str:
+    """One excluded name as a SENTENCE: the rule in words, the observed value and the
+    limit, both in their proper units.
+
+    The raw form was ``screen: min_dividend_yield (observed 0.009547 vs threshold
+    0.015)`` — three machine identifiers and two raw decimals. This reads
+
+        Walmart (WMT) — dividend yield 0.95%; the rule requires at least 1.5%.
+                        [min_dividend_yield]
+
+    The observed value, the threshold and the pass/fail decision are IDENTICAL — only
+    the words change. Falls back to the raw reason for an exclusion that is not a screen
+    rule (a market-cap floor, a sector or asset-kind gate, an unrateable name): those
+    already read as prose and have no criterion to look up."""
+    from .tools.criteria.registry import REGISTRY
+
+    outcome = _failing_outcome(result, ticker, reason)
+    if outcome is None:
+        return reason
+    name, o = outcome
+    crit = REGISTRY.get(name)
+    spec = crit.threshold_param if crit is not None else None
+    unit = getattr(spec, "unit", "") or UNIT_RATIO
+    currency = getattr(spec, "currency", None)
+    comparison = getattr(crit, "comparison", COMPARISON_MIN)
+    template = (getattr(crit, "observation", "")
+                or (getattr(crit, "label", "") or name) + " {observed}")
+    observed = template.format(
+        observed=format_value(o["observed"], unit, currency=currency),
+        signed=format_signed_change(o["observed"], unit))
+    limit = format_limit_clause(comparison, o["threshold"], unit, currency=currency)
+    tail = ""
+    basis = o.get("basis") or ""
+    if basis and basis != "abstained":
+        tail += f" Measured on {basis_phrase(basis)}."
+    if o.get("borderline"):
+        tail += " This is a borderline miss — it is still a miss."
+    return f"{observed}; {limit}.{tail}"
+
+
+def _failing_outcome(result, ticker: str, reason: str):
+    """``(criterion, outcome)`` for the rule that EXCLUDED this name, or None.
+
+    Read from ``screen_outcomes`` — the per-criterion record of the same single screen
+    evaluation the reason string came from — and matched by the criterion the reason
+    NAMES, so the sentence can never describe a different rule from the one that fired."""
+    if not reason.startswith(_SCREEN_REASON_PREFIX):
+        return None
+    named = reason[len(_SCREEN_REASON_PREFIX):].split(" (")[0].strip()
+    per_name = (getattr(result, "screen_outcomes", None) or {}).get(ticker) or {}
+    o = per_name.get(named)
+    if o is None or o.get("passed") is not False:
+        return None
+    return named, o
+
+
+_SCREEN_REASON_PREFIX = "screen: "
+
+
+def exclusion_rows(result) -> list[dict]:
+    """``[{ticker, name, sentence, criterion, flag}]`` per excluded name — the ONE
+    source every surface renders, in the order the pipeline recorded them.
+
+    ``flag`` is a standalone warning (e.g. the price-divergence disclosure), lifted OUT
+    of the middle of the sentence into its own clearly-marked line: it is a separate
+    statement about the name, not a clause of the rule it failed."""
+    rows = []
+    for ticker, reason in (getattr(result, "excluded", None) or []):
+        body, flag = _split_flag(reason)
+        outcome = _failing_outcome(result, ticker, body)
+        rows.append({
+            "ticker": ticker,
+            "name": _disp(result, ticker),
+            "sentence": exclusion_sentence(result, ticker, body),
+            "criterion": outcome[0] if outcome else "",
+            "flag": flag,
+        })
+    return rows
+
+
+def _split_flag(reason: str) -> tuple[str, str]:
+    """Split a trailing ``[⚠ …]`` disclosure off an exclusion reason. The reason string
+    itself is NEVER rewritten — this only decides where each half renders."""
+    i = reason.find("[⚠")
+    if i == -1:
+        return reason, ""
+    return reason[:i].rstrip(), reason[i:].strip()
+
+
+def format_exclusions(result) -> list[str]:
+    """The excluded block as CLI lines (see ``exclusion_rows``)."""
+    rows = exclusion_rows(result)
+    if not rows:
+        return []
+    lines = ["  EXCLUDED — did not pass a rule, so was never ranked:"]
+    for r in rows:
+        muted = f"  [{r['criterion']}]" if r["criterion"] else ""
+        lines.append(f"      {r['name']} — {r['sentence'].rstrip()}{muted}")
+        if r["flag"]:
+            lines.append(f"          {r['flag']}")
+    return lines
+
+
+def untested_rule_notes(result) -> list[dict]:
+    """``[{ticker, name, verdict, rules: [sentence]}]`` for every RANKED name that
+    passed the screen while a rule could not be tested at all.
+
+    Duke Energy is the top-ranked BUY and Southern a HOLD, yet for both one rule
+    (dividends vs free cash flow) was uncomputable — free cash flow was zero or
+    negative. Passing four of five rules with the fifth untestable is materially
+    different from passing all five, and it used to be a bare dagger. The reason text is
+    the criterion's own, unchanged; it just stops hiding behind a symbol."""
+    from .tools.criteria.registry import REGISTRY
+
+    out = []
+    for r in result.ranked:
+        if r.excluded or not r.screen_abstentions:
+            continue
+        rules = []
+        for crit, note in sorted(r.screen_abstentions.items()):
+            label = getattr(REGISTRY.get(crit), "label", "") or crit
+            rules.append(f"{label} ({_abstention_reason(note)}) [{crit}]")
+        out.append({"ticker": r.ticker, "name": _disp(result, r.ticker),
+                    "verdict": r.verdict.upper(), "rules": rules})
+    return out
+
+
+def format_untested_rules(result) -> list[str]:
+    """The untested-rule disclosures as CLI lines (see ``untested_rule_notes``)."""
+    notes = untested_rule_notes(result)
+    if not notes:
+        return []
+    lines = ["  RULES THAT COULD NOT BE TESTED (the name still passed the screen):"]
+    for n in notes:
+        count = len(n["rules"])
+        lines.append(f"      {n['name']} — {n['verdict']} — {count} rule"
+                     f"{'s' if count != 1 else ''} could not be tested:")
+        for rule in n["rules"]:
+            lines.append(f"          {rule}")
+    return lines
+
+
+# --------------------------------------------------------------------------- #
+# REPORT-1 — "Rules applied": what was filtered out, and on what basis
+# --------------------------------------------------------------------------- #
+RULES_SECTION_TITLE = "Rules applied"
+PREFILTER_NOTE = ("Used as a prefilter — names failing any rule below were never "
+                  "ranked.")
+NON_PREFILTER_NOTE = ("Applied as a lens for commentary only — a name failing a rule "
+                      "below was still ranked.")
+NO_SCREEN_NOTE = ("This strategy screens nothing: no rule filtered the cohort, and "
+                  "quality enters only through the ranking below.")
+
+
+@dataclass(frozen=True)
+class AppliedRule:
+    """One screen rule as the report states it: the human name, the threshold in words,
+    and what it actually did across the cohort."""
+
+    criterion: str                 # the registry id — the record key, kept muted
+    label: str                     # Criterion.label, e.g. "Dividend yield"
+    threshold_phrase: str          # "at least 1.5%" / "at most 80%" / "no worse than -10%"
+    passed: int = 0
+    failed: int = 0
+    not_tested: int = 0
+    # How this rule was actually MEASURED across the cohort, when it reports a basis
+    # (e.g. cash-flow vs the marked EPS fallback). This is the disclosure the separate
+    # "Screen basis" section used to carry; the block absorbs it rather than dropping it.
+    measured: str = ""
+
+    @property
+    def tally(self) -> str:
+        """``"passed 11 · failed 3 · not tested 2"`` — zero categories omitted, but a
+        rule that nothing failed still renders its "passed N". Silence about a rule is
+        the thing this block exists to end."""
+        parts = [f"passed {self.passed}"] if self.passed else []
+        if self.failed:
+            parts.append(f"failed {self.failed}")
+        if self.not_tested:
+            parts.append(f"not tested {self.not_tested}")
+        return " · ".join(parts) or "not applied to any name"
+
+
+@dataclass(frozen=True)
+class RulesApplied:
+    """The whole block: the screen and its rules, then the ranker's own filters."""
+
+    screen_label: str = ""         # "Conservative (defensive) screen"
+    screen_id: str = ""            # "conservative_screen_v1"
+    prefilter: bool = False
+    rules: list[AppliedRule] = field(default_factory=list)
+    ranker_lines: list[str] = field(default_factory=list)
+
+    @property
+    def screen_heading(self) -> str:
+        if not self.screen_id:
+            return "Screen: none"
+        return f"Screen: {label_with_id(self.screen_label, self.screen_id)}"
+
+    @property
+    def screen_note(self) -> str:
+        if not self.screen_id:
+            return NO_SCREEN_NOTE
+        return PREFILTER_NOTE if self.prefilter else NON_PREFILTER_NOTE
+
+
+def rules_applied(result) -> Optional[RulesApplied]:
+    """Every rule this run applied, read from the strategy objects that ACTUALLY RAN.
+
+    The header used to say only ``screen conservative_screen_v1``. That screen holds SIX
+    rules; the report only ever named the three that something failed, so a reader could
+    not tell what had been applied, what a rule's limit was, or that three further rules
+    had been checked and passed by everything. This block states all of it BEFORE any
+    result.
+
+    Nothing here is hardcoded: the rules come from ``result.screen_strategy.criteria``,
+    their names and units from the registry, and their tallies from
+    ``result.screen_outcomes`` — the per-criterion record the single screen evaluation
+    already produced. A strategy edited tomorrow (a rule added, a threshold moved, a
+    per-run override applied) changes this block with no code change.
+
+    Returns None only when the run carries neither a screen nor a rank strategy to
+    describe (a hand-built result), so such a report renders exactly as before."""
+    from .tools.criteria.registry import REGISTRY
+
+    screen = getattr(result, "screen_strategy", None)
+    rank = getattr(result, "rank_strategy", None)
+    outcomes = getattr(result, "screen_outcomes", None) or {}
+    bases = getattr(result, "screen_bases", None) or {}
+    selections = list(getattr(screen, "criteria", None) or [])
+    if not selections and (outcomes or bases):
+        # A result that carries per-rule EVIDENCE but no strategy object (a hand-built
+        # or replayed result). The rules are still named and their measurement basis
+        # still disclosed — losing a disclosure because an object is absent would be
+        # exactly the silent-failure hole this block exists to close. Thresholds come
+        # from the evidence when it has them, and are omitted when it does not.
+        selections = [_SelectionFromEvidence(n, _recorded_threshold(outcomes, n))
+                      for n in _criteria_seen(outcomes, bases)]
+    if screen is None and rank is None and not selections:
+        return None
+
+    rules: list[AppliedRule] = []
+    for sel in selections:
+        name = getattr(sel, "name", "")
+        threshold = getattr(sel, "threshold", None)
+        crit = REGISTRY.get(name)
+        label = getattr(crit, "label", "") or name
+        comparison = getattr(crit, "comparison", COMPARISON_MIN)
+        spec = crit.threshold_param if crit is not None else None
+        phrase = ("limit not recorded" if threshold is None else format_threshold(
+            comparison, threshold, getattr(spec, "unit", "") or UNIT_RATIO,
+            currency=getattr(spec, "currency", None)))
+        passed = failed = not_tested = 0
+        for per_name in outcomes.values():
+            o = per_name.get(name)
+            if o is None:
+                continue
+            if o["passed"] is True:
+                passed += 1
+            elif o["passed"] is False:
+                failed += 1
+            else:
+                not_tested += 1          # NOT-EVAL is not a fail (house rule 3)
+        rules.append(AppliedRule(
+            criterion=name, label=label, threshold_phrase=phrase, passed=passed,
+            failed=failed, not_tested=not_tested,
+            measured=_measured_phrase(result, name)))
+
+    return RulesApplied(
+        screen_label=(result.meta.get("screen_strategy_name", "") if result.meta else ""),
+        screen_id=(getattr(screen, "id", "") if screen is not None else ""),
+        prefilter=bool((result.meta or {}).get("prefilter_screen")),
+        rules=rules, ranker_lines=_ranker_filter_lines(rank))
+
+
+@dataclass(frozen=True)
+class _SelectionFromEvidence:
+    """A criterion selection reconstructed from a result's own per-rule evidence, for a
+    result that carries no strategy object."""
+
+    name: str
+    threshold: object = None
+
+
+def _criteria_seen(outcomes: dict, bases: dict) -> list[str]:
+    """Every criterion this result has evidence for, first-seen order preserved so the
+    block's row order is deterministic."""
+    seen: list[str] = []
+    for per_name in list(outcomes.values()) + list(bases.values()):
+        for crit in per_name:
+            if crit not in seen:
+                seen.append(crit)
+    return seen
+
+
+def _recorded_threshold(outcomes: dict, criterion: str):
+    """The threshold this run actually applied for a criterion, taken from the evidence.
+    None when nothing recorded one — then the block says so rather than inventing it."""
+    for per_name in outcomes.values():
+        o = per_name.get(criterion)
+        if o is not None and o.get("threshold") is not None:
+            return o["threshold"]
+    return None
+
+
+def _measured_phrase(result, criterion: str) -> str:
+    """How one rule was measured across the screened names, in words — e.g. "4-year
+    average free cash flow for 14 names; earnings per share (a marked fallback) for 2
+    (KMB, PEP)". Empty when the rule reports no basis (most do not)."""
+    by_basis: dict[str, list[str]] = {}
+    for ticker, crit_bases in (getattr(result, "screen_bases", None) or {}).items():
+        basis = crit_bases.get(criterion)
+        if basis:
+            by_basis.setdefault(basis, []).append(ticker)
+    if not by_basis or set(by_basis) <= {"abstained"}:
+        return ""
+    parts = []
+    for basis in sorted(by_basis, key=lambda b: (b == "abstained", b != "fcf", b)):
+        tks = sorted(by_basis[basis])
+        named = f" ({', '.join(tks)})" if len(tks) <= 5 else ""
+        parts.append(f"{basis_phrase(basis)} for {len(tks)} name"
+                     f"{'s' if len(tks) != 1 else ''}{named}")
+    return "; ".join(parts)
+
+
+_CUT_PHRASE = {
+    "quintile": "top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut)",
+    "top_k": "the best {k} names BUY, the rest HOLD (top-k cut)",
+    "top_percentile": "the best {p} BUY, the rest HOLD (top-percentile cut)",
+}
+_MISSING_PHRASE = {
+    "worst": "Missing factor values are ranked worst.",
+    "neutral": ("A name missing a factor value is judged on the factors it does have "
+                "(its rank for the missing one is imputed from its others), never "
+                "dumped to the bottom for the gap."),
+    "exclude": "A name missing any factor value is dropped before ranking.",
+}
+
+
+def _ranker_filter_lines(rank) -> list[str]:
+    """The RANKER's own filters, in the same plain register as the screen's rules — the
+    cut, the factors it ranks on, the market-cap floor, any sector scope, and how a
+    missing value is treated. These decide outcomes exactly as the screen's rules do, so
+    leaving them unstated would reproduce the problem one level down."""
+    from .factors import FACTOR_REGISTRY
+    if rank is None:
+        return []
+    lines: list[str] = []
+    cut = getattr(rank, "cut", "quintile") or "quintile"
+    phrase = _CUT_PHRASE.get(cut, cut).format(
+        k=getattr(rank, "k", ""),
+        p=f"{(getattr(rank, 'percentile', 0.0) or 0.0):.0%}")
+    lines.append(f"Ranking: {phrase}.")
+    labels = [(FACTOR_REGISTRY[f.name].label if f.name in FACTOR_REGISTRY else f.name)
+              for f in (getattr(rank, "factors", None) or [])]
+    if labels:
+        lines.append("Names ranked on: " + ", ".join(labels) + ".")
+    floor = getattr(rank, "min_market_cap", None)
+    if floor:
+        lines.append("Company size: at least "
+                     + format_value(floor, UNIT_CURRENCY, currency="USD")
+                     + " (applied by the ranker, before the screen).")
+    excluded_sectors = list(getattr(rank, "exclude_sectors", None) or [])
+    if excluded_sectors:
+        lines.append("Sectors excluded: " + ", ".join(excluded_sectors) + ".")
+    included_sectors = list(getattr(rank, "include_sectors", None) or [])
+    if included_sectors:
+        lines.append("Sectors admitted: " + ", ".join(included_sectors)
+                     + " (a name outside them is not ranked).")
+    kinds = list(getattr(rank, "asset_kinds", None) or [])
+    if kinds:
+        lines.append("Asset kinds admitted: " + ", ".join(kinds) + ".")
+    payout = getattr(rank, "max_payout_ratio", None)
+    if payout:
+        lines.append("Dividends vs earnings: at most "
+                     + format_value(payout, UNIT_PERCENT)
+                     + " (applied by the ranker).")
+    missing = getattr(rank, "missing", "worst") or "worst"
+    lines.append(_MISSING_PHRASE.get(missing,
+                                     f"Missing factor values are handled: {missing}."))
+    return lines
+
+
+def format_rules_applied(result) -> list[str]:
+    """The rules block as CLI lines — the same content every other surface renders."""
+    block = rules_applied(result)
+    if block is None:
+        return []
+    lines = [f"  {RULES_SECTION_TITLE.upper()}", f"      {block.screen_heading}",
+             f"      {block.screen_note}"]
+    if block.rules:
+        lines.append("")
+        width = max(len(r.label) for r in block.rules)
+        phrase_width = max(len(r.threshold_phrase) for r in block.rules)
+        for r in block.rules:
+            lines.append(f"      {r.label:<{width}}  "
+                         f"{r.threshold_phrase:<{phrase_width}}  {r.tally}"
+                         f"  [{r.criterion}]")
+            if r.measured:
+                lines.append(f"      {'':<{width}}  {'':<{phrase_width}}  "
+                             f"measured on {r.measured}")
+    if block.ranker_lines:
+        lines.append("")
+        lines += [f"      {line}" for line in block.ranker_lines]
+    return lines
+
+
+# --------------------------------------------------------------------------- #
 # PRICE-1 — the share price + 52-week position, ALWAYS ON
 # --------------------------------------------------------------------------- #
 PRICE_SECTION_TITLE = "Share price & 52-week position"
@@ -958,9 +1525,10 @@ VALUATION_BAND_SECTION_TITLE = "Valuation band (absolute — vs each name's own 
 # lives in the footnotes BELOW the table (PRICE-2): five lines of caveat before the first
 # number is how a section stops being read.
 VALUATION_BAND_INTRO = (
-    "Where today's multiple sits in each name's OWN multi-year monthly range, and what "
-    "the price would be at that name's own MEDIAN past multiple. Rows follow the ranked "
-    "table's order — they are deliberately not re-sorted by gap.")
+    "What each name costs today, where that sits in its own 12-month range, where "
+    "today's multiple sits in its OWN multi-year range, and what the price would be at "
+    "that name's own MEDIAN past multiple. Rows follow the ranked table's order — they "
+    "are deliberately not re-sorted by gap.")
 VALUATION_BAND_DOCTRINE = (
     "Arithmetic on each company's own history — not a forecast, not a target price and "
     "not a recommendation. A business that has permanently derated should trade below "
@@ -971,32 +1539,51 @@ VALUATION_BAND_SECTION_NOTE = VALUATION_BAND_DOCTRINE
 
 _COL_NAME = "Name"
 _COL_PRICE = "Price"
+# REPORT-1: the separate "Share price & 52-week position" section is FOLDED IN here as
+# two columns, so the same ten names are not listed twice in two sections — and the
+# percentage-of-range is replaced by the two PRICES it was derived from, which is what a
+# reader can actually act on ("$114.00 / $133.46" beats "34% of its range").
+_COL_LOW_52W = "12-month low"
+_COL_HIGH_52W = "12-month high"
 _COL_MULTIPLE = "EV/EBIT"
 _COL_PERCENTILE = "Percentile"
 _COL_MONTHS = "Months"
 _COL_REVERSION = "Reversion value"
 _COL_GAP = "Gap"
 # Columns whose content is a NUMBER and reads better flush right in fixed-width text.
-_BAND_RIGHT_ALIGNED = frozenset({_COL_PRICE, _COL_MULTIPLE, _COL_REVERSION, _COL_GAP})
+_BAND_RIGHT_ALIGNED = frozenset({_COL_PRICE, _COL_LOW_52W, _COL_HIGH_52W,
+                                 _COL_MULTIPLE, _COL_REVERSION, _COL_GAP})
 _NOT_EVALUATED = "not evaluated"
 _EMPTY = "—"
 
 
 @dataclass(frozen=True)
 class ValuationBandTable:
-    """The valuation-band section as a TABLE — the ONE source the CLI, the Run tab, the
-    canonical markdown and the HTML export all render (PRICE-2).
+    """The price-and-valuation section as a TABLE — the ONE source the CLI, the Run tab,
+    the canonical markdown and the HTML export all render (PRICE-2, extended by
+    REPORT-1).
 
     ``rows`` are dicts keyed by ``columns``, in the RANKED TABLE'S ORDER so a reader
     comparing sections never has to re-find a name. Every cell is already a display
     string built from the SAME ``ValuationBand`` / ``ReversionValue`` / ``PriceContext``
     objects the single-line renderings use, so a reformat can never become a different
-    value."""
+    value.
+
+    ``has_band`` is False on a band-OFF run: the price and 12-month range columns are
+    ALWAYS present (they cost nothing and are never gated), and the band/reversion
+    columns simply do not exist. That is why the section carries its own ``title`` —
+    the same table honestly describes itself as either."""
 
     columns: list[str]
     rows: list[dict[str, str]]
     intro: str = VALUATION_BAND_INTRO
     footnotes: list[str] = field(default_factory=list)
+    has_band: bool = True
+
+    @property
+    def title(self) -> str:
+        return (VALUATION_BAND_SECTION_TITLE if self.has_band
+                else PRICE_SECTION_TITLE)
 
     @property
     def median_column(self) -> str:
@@ -1038,22 +1625,29 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
     from .tools.valuation_band import BAND_YEARS, ordinal, percentile_gloss
     from .tools.price_context import format_money
 
+    # REPORT-1: a row for every rateable name that has EITHER a price or a band. The
+    # price is never gated by the valuation-band toggle, so a band-off run still renders
+    # this table — just without the band's own columns.
     live = [r for r in result.ranked
-            if not r.excluded and getattr(r, "valuation_band", None) is not None]
+            if not r.excluded and (getattr(r, "valuation_band", None) is not None
+                                   or getattr(r, "price", None) is not None)]
     if not live:
         return None
+    has_band = any(getattr(r, "valuation_band", None) is not None for r in live)
 
-    bands = [r.valuation_band for r in live]
+    bands = [r.valuation_band for r in live if getattr(r, "valuation_band", None)]
     rated = [b for b in bands if b.available]
     window = rated[0].window_years if rated else BAND_YEARS
     median_col = f"Own {window}y median"
     coverage = {(b.months_covered, b.months_total) for b in rated}
     uniform = len(coverage) <= 1                      # one shared count -> a footnote
 
-    columns = [_COL_NAME, _COL_PRICE, _COL_MULTIPLE, median_col, _COL_PERCENTILE]
-    if not uniform:
-        columns.append(_COL_MONTHS)
-    columns += [_COL_REVERSION, _COL_GAP]
+    columns = [_COL_NAME, _COL_PRICE, _COL_LOW_52W, _COL_HIGH_52W]
+    if has_band:
+        columns += [_COL_MULTIPLE, median_col, _COL_PERCENTILE]
+        if not uniform:
+            columns.append(_COL_MONTHS)
+        columns += [_COL_REVERSION, _COL_GAP]
 
     rows: list[dict[str, str]] = []
     for r in live:
@@ -1063,7 +1657,16 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
         cells[_COL_NAME] = _disp(result, r.ticker)
         cells[_COL_PRICE] = (format_money(price.last_close, price.currency)
                              if price is not None and price.available else _EMPTY)
-        if band.available:
+        if price is not None and price.range_available:
+            cells[_COL_LOW_52W] = format_money(price.low_52w, price.currency)
+            cells[_COL_HIGH_52W] = format_money(price.high_52w, price.currency)
+        elif price is not None and price.range_note:
+            # The 52-week range abstained — say so, with its real span, rather than
+            # leaving two blanks a reader would read as "no movement".
+            cells[_COL_LOW_52W] = f"{_NOT_EVALUATED} — {price.range_note}"
+        if band is None:
+            pass                                  # band off: those columns do not exist
+        elif band.available:
             cells[_COL_MULTIPLE] = _multiple_cell(band)
             cells[median_col] = (f"{band.median_multiple:.1f}x"
                                  if band.median_multiple is not None else _EMPTY)
@@ -1084,15 +1687,27 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
                 else _NOT_EVALUATED
         rows.append(cells)
 
-    return ValuationBandTable(columns=columns, rows=rows,
-                              footnotes=_band_footnotes(live, uniform, coverage))
+    return ValuationBandTable(
+        columns=columns, rows=rows, has_band=has_band,
+        intro=VALUATION_BAND_INTRO if has_band else PRICE_SECTION_NOTE,
+        footnotes=_band_footnotes(live, uniform, coverage, has_band=has_band))
 
 
-def _band_footnotes(live, uniform: bool, coverage: set) -> list[str]:
+def _band_footnotes(live, uniform: bool, coverage: set, *,
+                    has_band: bool = True) -> list[str]:
     """The notes that belong BELOW the table: the shared month coverage, the net-debt
     disclosure, then the doctrine in full. Nothing here is a caveat the reader has to get
     past to reach a number."""
     notes: list[str] = []
+    stamps = sorted({r.price.as_of.isoformat() for r in live
+                     if getattr(r, "price", None) is not None
+                     and r.price.as_of is not None})
+    if stamps:
+        when = stamps[0] if len(stamps) == 1 else f"{stamps[0]} to {stamps[-1]}"
+        notes.append(f"Prices are the last close on {when}, each in the name's own "
+                     "quoted currency, never converted. A stale cache shows up here.")
+    if not has_band:
+        return notes                    # band off: no coverage, no doctrine to state
     if uniform and coverage:
         covered, total = next(iter(coverage))
         if covered < total:
@@ -1104,7 +1719,8 @@ def _band_footnotes(live, uniform: bool, coverage: set) -> list[str]:
             notes.append(f"Every rated name here is placed on all {total} monthly "
                          "observations in the window.")
     held = sorted({r.ticker for r in live
-                   if r.valuation_band.available
+                   if getattr(r, "valuation_band", None) is not None
+                   and r.valuation_band.available
                    and r.valuation_band.net_debt_basis == "latest"})
     if held:
         notes.append("Net debt held at its latest reported value across the window "
@@ -1149,19 +1765,78 @@ def _fixed_width_table(table: ValuationBandTable) -> list[str]:
     return out
 
 
+def _n_factors(result) -> int:
+    """How many factors this run ranked on (for the score gloss)."""
+    for r in result.ranked:
+        if r.factor_ranks:
+            return len(r.factor_ranks)
+    return 0
+
+
+def used_symbol_notes(result) -> list[tuple[str, str]]:
+    """The table's symbol legend — one FULL SENTENCE per symbol, and ONLY for symbols
+    this run actually used (REPORT-1).
+
+    All three used to share a single dense run-on line, which is why none of them was
+    read. Explaining a symbol that never appears is noise of a different kind, so the
+    legend is filtered to what is on the page."""
+    from .report_language import SYMBOL_NOTES
+    used = set()
+    if any(r.imputed_factors for r in result.ranked):
+        used.add("*")
+    if any(r.screen_abstentions for r in result.ranked):
+        used.add("†")
+    if boundary_tie_notes(result.ranked):
+        used.add(BOUNDARY_FLAG)
+    return [(sym, note) for sym, note in SYMBOL_NOTES if sym in used]
+
+
+def format_ranked_factor_lines(result) -> list[str]:
+    """The per-factor rank AND value for each ranked name, as CLI lines.
+
+    The console table is a fixed-width three-column layout that predates the factor
+    columns; rather than widen it past readability, the same cells
+    ``ranked_table_rows`` builds are printed underneath it — the identical strings the
+    Run tab, the markdown and the HTML render in their factor columns."""
+    rows, factor_ids = ranked_table_rows(result.ranked, result.names)
+    if not factor_ids or not rows:
+        return []
+    from .rank_engine import factor_column_label
+    labels = [factor_column_label(f) for f in factor_ids]
+    lines = ["  HOW EACH NAME RANKED ON EACH FACTOR (rank · value; 1 = best):"]
+    for row in rows:
+        cells = " · ".join(f"{lab.split(' (')[0]} {row[lab]}"
+                           for lab in labels if lab in row)
+        lines.append(f"      {row['Name']} — {cells}")
+    lines.append("      Factor ids, in order: " + ", ".join(factor_ids) + ".")
+    return lines
+
+
 def format_cli_report(result: RankPipelineResult) -> str:
     """The console report the CLI prints — built from the structured result so the UI
     and CLI show the SAME thing. Mirrors the legacy run_pipeline.py layout."""
     m = result.meta
-    lines = [
-        f"(rank: {m['rank_strategy_id']}; screen: {m['screen_strategy_id']}; "
-        f"mode: {m['council_mode']}; shortlist {len(m['shortlist'])}/"
-        f"{m['universe_size']}; est ${m['est_cost']:.2f})",
-        "",
-        result.header,
-        "",
-        f"=== RANKED ({m['rank_strategy_id']}) — verdict-of-record ===",
-    ]
+    # REPORT-1: human names first, ids second and muted; the run id last, as the record
+    # key. The old first line was five machine ids and nothing a reader could act on.
+    lines = list(header_lines(result))
+    lines.append(result.header)
+    if not m["ranker_only"]:
+        lines.append(f"Shortlist: {len(m['shortlist'])} of {m['universe_size']} names · "
+                     f"estimated cost ${m['est_cost']:.2f}")
+    if m.get("run_id"):
+        lines.append(f"Run id: {m['run_id']}")
+    lines += ["", f"  {summary_line(result)}"]
+
+    rules_block = format_rules_applied(result)        # REPORT-1 Part 1
+    if rules_block:
+        lines.append("")
+        lines.extend(rules_block)
+
+    lines += ["", "  RANKED — the verdict of record · "
+                  + label_with_id(m.get("rank_strategy_name", ""),
+                                  m["rank_strategy_id"])]
+    lines.append(f"      {format_score_gloss(_n_factors(result), len(result.ranked))}")
+    lines.append("")
     tie_notes = boundary_tie_notes(result.ranked)     # VERDICT-TIE-1 boundary marks
     positions = cohort_positions(result.ranked)      # tie-shared #N of M (RANK-DISPLAY-1)
     cohort_m = len(result.ranked)                     # rateable cohort size (M); NOT `m`
@@ -1176,37 +1851,39 @@ def format_cli_report(result: RankPipelineResult) -> str:
         # tie that decided a verdict should break the eye's scan.
         verdict = format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""))
         lines.append(f"  {_name_col(disp):<34} {verdict:<5} {cell}")
-    for foot in ranked_abstention_footnotes(result):
-        lines.append(f"  {foot}")
+    factor_lines = format_ranked_factor_lines(result)
+    if factor_lines:
+        lines.append("")
+        lines.extend(factor_lines)
+    symbols = [f"      {sym}  {note}" for sym, note in used_symbol_notes(result)]
+    if symbols:
+        lines.append("")
+        lines.extend(symbols)
+    untested = format_untested_rules(result)          # REPORT-1: the dagger, in words
+    if untested:
+        lines.append("")
+        lines.extend(untested)
     integrity = format_factor_integrity(result)
     if integrity:
         lines.append("")
         lines.extend(integrity)
-    basis_block = format_screen_basis(result)
-    if basis_block:
-        lines.append("")
-        lines.extend(basis_block)
-    price_block = format_price_lines(result)          # PRICE-1 (always on)
-    if price_block:
-        lines.append("")
-        lines.extend(price_block)
     band_block = format_valuation_bands(result)
     if band_block:
         lines.append("")
         lines.extend(band_block)
-    if result.excluded:
+    exclusion_block = format_exclusions(result)       # REPORT-1: sentences, not fragments
+    if exclusion_block:
         lines.append("")
-        lines.append("  Excluded (not ranked):")
-        for t, reason in result.excluded:
-            lines.append(f"      {_disp(result, t)} — {reason}")
+        lines.extend(exclusion_block)
     if result.unrateable:
         lines.append("")
-        lines.append("  UNRATEABLE (no data — no verdict):")
+        lines.append("  NO USABLE DATA — no verdict was formed for these names:")
         for t, reason in result.unrateable:
             lines.append(f"      {_disp(result, t)} — {reason}")
     if result.fetch_errors:
         lines.append("")
-        lines.append("  FETCH FAILED — RERUN (transient; not ranked, not UNRATEABLE):")
+        lines.append("  DATA FETCH FAILED — re-run to recover (a temporary "
+                     "provider failure, not missing data):")
         for t, reason in result.fetch_errors:
             lines.append(f"      {_disp(result, t)} — {reason}")
     if not m["ranker_only"]:

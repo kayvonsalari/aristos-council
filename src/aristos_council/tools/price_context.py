@@ -62,7 +62,8 @@ CURRENCY_UNKNOWN_NOTE = " — currency not reported, so the amounts above carry 
                         "currency (never assumed to be USD)"
 
 
-def format_money(value: Optional[float], currency: Optional[str]) -> str:
+def format_money(value: Optional[float], currency: Optional[str], *,
+                 decimals: int = 2) -> str:
     """One money amount as every PRICE-1 surface renders it: ``$27.14``, ``€61.30``,
     ``CHF 84.20`` — or a BARE ``27.14`` when the provider reported no currency.
 
@@ -72,7 +73,7 @@ def format_money(value: Optional[float], currency: Optional[str]) -> str:
     every amount — never silently defaulted to dollars."""
     if value is None:
         return "—"
-    amount = f"{value:,.2f}"
+    amount = f"{value:,.{decimals}f}"
     if not currency:
         return amount
     sym = _SYMBOLS.get(currency)

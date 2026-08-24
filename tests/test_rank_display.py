@@ -12,6 +12,7 @@ the narration check reads `cohort_position` (the tie-shared ordinal below), not
 
 from __future__ import annotations
 
+from aristos_council.report_language import format_score_gloss
 from aristos_council.rank_engine import (
     FactorSpec,
     RankedTicker,
@@ -34,19 +35,23 @@ def _rt(ticker, combined, *, factors=2, n=9, excluded=False):
 # --------------------------------------------------------------------------- #
 def test_format_position_cell_matches_the_issue_example():
     # #1 of 9 · score 11 (best 3 · worst 27) — 3 factors, cohort of 9.
-    assert format_position_cell(1, 9, False, 11.0, 3) == \
-        "#1 of 9 · score 11 (best 3 · worst 27)"
+    # REPORT-1: the best/worst BOUNDS move OUT of every row and are stated ONCE above
+    # the table (report_language.format_score_gloss) — identical numbers, said once
+    # instead of once per name. The position and the score itself are unchanged.
+    assert format_position_cell(1, 9, False, 11.0, 3) == "#1 of 9 · score 11"
+    assert format_score_gloss(3, 9) == (
+        "Score is the sum of a name's factor ranks — lower is better. With 3 factors "
+        "over 9 ranked names the best possible score is 3 and the worst is 27.")
 
 
 def test_format_position_cell_marks_a_tie():
-    assert format_position_cell(1, 9, True, 11.0, 3) == \
-        "#1 of 9 (tied) · score 11 (best 3 · worst 27)"
+    assert format_position_cell(1, 9, True, 11.0, 3) == "#1 of 9 (tied) · score 11"
 
 
 def test_format_position_cell_fractional_score_keeps_one_decimal():
     # averaged-tie ranks are the only non-integers; whole numbers render bare.
     assert format_score(11.0) == "11" and format_score(11.5) == "11.5"
-    assert "score 11.5 " in format_position_cell(2, 5, False, 11.5, 2)
+    assert format_position_cell(2, 5, False, 11.5, 2).endswith("score 11.5")
 
 
 def test_format_position_cell_without_a_position_falls_back_to_bare_score():
@@ -55,8 +60,9 @@ def test_format_position_cell_without_a_position_falls_back_to_bare_score():
 
 def test_bounds_track_the_factor_count():
     # best = number of factors; worst = factors × cohort size.
-    assert format_position_cell(1, 9, False, 2.0, 2).endswith("(best 2 · worst 18)")
-    assert format_position_cell(1, 9, False, 3.0, 3).endswith("(best 3 · worst 27)")
+    # the bounds still track the factor count — they are just stated once, above.
+    assert "best possible score is 2 and the worst is 18" in format_score_gloss(2, 9)
+    assert "best possible score is 3 and the worst is 27" in format_score_gloss(3, 9)
 
 
 # --------------------------------------------------------------------------- #

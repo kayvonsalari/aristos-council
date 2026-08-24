@@ -481,6 +481,19 @@ class FactorDef:
     fn: Callable[[FactorInputs], Optional[float]]
     direction: str        # "high" = higher is better, "low" = lower is better
     label: str
+    # NOTE: ``label`` is NOT display-only. agents/prompts.lens_brief builds the LENS
+    # EMPHASIS block from these strings, so every specialist/critic/narrator prompt
+    # quotes them — rewording one is a NARRATOR change, not a report change. REPORT-1
+    # therefore reads them as they are and adds only the unit below.
+    #
+    # WHAT THE NUMBER MEANS (REPORT-1) — one of report_language.UNITS. Reports format
+    # the factor's VALUE from this declaration rather than guessing at the render site,
+    # so a ranked table can show "1 · 14.2%" instead of a bare rank. ``currency`` names
+    # the money a "currency" unit is denominated in (fund_size is normalised to EUR).
+    # Every registered factor must declare one — a test fails the registry otherwise,
+    # which is what keeps the next addition honest.
+    unit: str = "ratio"
+    currency: Optional[str] = None
     fallback_note: str = ""
     # Optional per-name SOURCE tag (ITEM 1). None -> the source is derived generically
     # as "computed"/"abstained" from the value; set it for factors WITH fallbacks so the
@@ -491,69 +504,90 @@ class FactorDef:
 FACTOR_REGISTRY: dict[str, FactorDef] = {
     "earnings_yield": FactorDef(
         "earnings_yield", _earnings_yield, "high", "Earnings yield (EBIT/EV)",
-        "EBIT / (market cap + total debt − cash); EBIT/market_cap fallback when EV "
-        "components missing, then 1/PE; net-cash (EV≤0) abstains",
+        unit="percent",
+        fallback_note="EBIT / (market cap + total debt − cash); EBIT/market_cap "
+                      "fallback when EV components missing, then 1/PE; net-cash "
+                      "(EV≤0) abstains",
         source_fn=_earnings_yield_source),
     "roic": FactorDef(
-        "roic", _return_on_capital, "high", "Return on invested capital"),
+        "roic", _return_on_capital, "high", "Return on invested capital",
+        unit="percent"),
     "momentum_12m": FactorDef(
-        "momentum_12m", _momentum_12m, "high", "12-month price momentum"),
+        "momentum_12m", _momentum_12m, "high", "12-month price momentum",
+        unit="percent"),
     "momentum_6m": FactorDef(
-        "momentum_6m", _momentum_6m, "high", "6-month price momentum"),
+        "momentum_6m", _momentum_6m, "high", "6-month price momentum", unit="percent"),
     "low_volatility": FactorDef(
-        "low_volatility", _low_volatility, "low", "Annualized volatility (low best)"),
+        "low_volatility", _low_volatility, "low", "Annualized volatility (low best)",
+        unit="percent"),
     "net_payout_yield": FactorDef(
         "net_payout_yield", _net_payout_yield, "high", "Net payout yield",
-        "dividend-yield fallback (buybacks unavailable on free fundamentals)",
+        unit="percent",
+        fallback_note="dividend-yield fallback (buybacks unavailable on free "
+                      "fundamentals)",
         source_fn=_net_payout_source),
     "revenue_growth": FactorDef(
-        "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3y)"),
+        "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3y)",
+        unit="percent"),
     "dividend_streak": FactorDef(
-        "dividend_streak", _dividend_streak, "high", "Dividend-growth streak (years)"),
+        "dividend_streak", _dividend_streak, "high",
+        "Dividend-growth streak (years)", unit="count"),
     # Financials lens (FIN-1): the measures banks & insurers are actually priced by,
     # since EBIT/EV and ROIC are not computable for them (the Greenblatt exclusion,
     # inverted). Vendor value primary, derived fallback, abstain on non-positive book.
     "price_to_book": FactorDef(
         "price_to_book", _price_to_book, "low", "Price / book (low best)",
-        "vendor priceToBook; fallback market_cap / closing equity; abstains on book ≤ 0"),
+        unit="multiple",
+        fallback_note="vendor priceToBook; fallback market_cap / closing equity; "
+                      "abstains on book ≤ 0"),
     "return_on_equity": FactorDef(
         "return_on_equity", _return_on_equity, "high", "Return on equity",
-        "vendor returnOnEquity (TTM); fallback net_income / mean(opening+closing equity); "
-        "abstains on equity ≤ 0"),
+        unit="percent",
+        fallback_note="vendor returnOnEquity (TTM); fallback net_income / "
+                      "mean(opening+closing equity); abstains on equity ≤ 0"),
     # ETF asset-class factors (ETF-1 ITEM 3). No fallbacks — abstain on a missing field
     # (the lens declares missing: neutral, so a gap judges on the factors present, never
     # excludes). expense_ratio is the only LOW-direction leg (cost compounds against the
     # holder). Field coverage confirmed 100% on both ITEM-4 universes (ITEM 1 probe).
     "distribution_yield": FactorDef(
         "distribution_yield", _distribution_yield, "high",
-        "Distribution yield", "ETF trailing distribution/dividend yield (decimal)",
+        "Distribution yield", unit="percent",
+        fallback_note="ETF trailing distribution/dividend yield (decimal)",
         source_fn=_distribution_yield_source),
+    # unit="ratio" DELIBERATELY, not "percent": the vendor's expense-ratio convention is
+    # not guaranteed (0.07 vs 0.0007 across sources), and the lens ranks it RELATIVELY so
+    # the convention never mattered. Declaring "percent" would put a unit on a number
+    # whose unit is unknown — house rule: abstain rather than invent.
     "expense_ratio": FactorDef(
         "expense_ratio", _expense_ratio, "low",
-        "Expense ratio (low best)", "ETF ongoing cost; ranked relatively, direction low",
+        "Expense ratio (low best)", unit="ratio",
+        fallback_note="ETF ongoing cost; ranked relatively, direction low; the vendor's "
+                      "unit convention is not asserted here",
         source_fn=_expense_ratio_source),
     "fund_size": FactorDef(
         "fund_size", _fund_size, "high",
-        "Fund size (total assets, EUR)",
-        "ETF net assets — liquidity + closure-risk proxy; normalised to EUR at a dated FX "
-        "rate (DATA-HYGIENE-1), abstains when the rate is unavailable, flagged when the "
-        "fund's base currency is unknown",
+        "Fund size (total assets, EUR)", unit="currency", currency="EUR",
+        fallback_note="ETF net assets — liquidity + closure-risk proxy; normalised to "
+                      "EUR at a dated FX rate (DATA-HYGIENE-1), abstains when the rate "
+                      "is unavailable, flagged when the fund's base currency is unknown",
         source_fn=_fund_size_source),
     # Piotroski F-Score (PIOTROSKI-1) — a rankable QUALITY leg, registered but NOT
     # selected by any strategy in this PR. Shares its nine checks with the
     # min_f_score screen criterion (tools/screening.piotroski_f_score).
     "piotroski_f_score": FactorDef(
-        "piotroski_f_score", _piotroski_f_score, "high", "Piotroski F-Score (0-9)",
-        "nine annual-statement checks; abstains below 5 computable checks; coarse "
-        "integer -> large tied blocks on a small universe (screen beats rank leg)"),
+        "piotroski_f_score", _piotroski_f_score, "high",
+        "Piotroski F-Score (0-9)", unit="score",
+        fallback_note="nine annual-statement checks; abstains below 5 computable "
+                      "checks; coarse integer -> large tied blocks on a small universe "
+                      "(screen beats rank leg)"),
     # Absolute valuation band (VALBAND-1) — a rankable leg registered but selected by
     # NO strategy in this PR. direction "low": the 15th percentile of its own history is
     # cheap, the 92nd is near its own peak.
     "valuation_band_percentile": FactorDef(
         "valuation_band_percentile", _valuation_band_percentile, "low",
-        "Valuation vs own 5y band (percentile, low best)",
-        "monthly EV/EBIT over 5y (P/E fallback, labelled); abstains below 3y of "
-        "computable history or without dated statements"),
+        "Valuation vs own 5y band (percentile, low best)", unit="score",
+        fallback_note="monthly EV/EBIT over 5y (P/E fallback, labelled); abstains below "
+                      "3y of computable history or without dated statements"),
 }
 
 
@@ -952,7 +986,7 @@ def screen_prefilter_fail(screen_criteria, fi: FactorInputs) -> Optional[str]:
     gap. (Requiring income IS the strategy's intent here, so a genuine non-payer
     failing min_dividend_yield is CORRECT — distinct from the growth-factor rule that
     never punishes a non-dividend name.)"""
-    return screen_evaluate(screen_criteria, fi)[0]
+    return screen_evaluate(screen_criteria, fi)[0]      # (reason, bases, abstentions, …)
 
 
 # Display labels for a criterion's measurement basis (payout-on-FCF, through-cycle).
@@ -1000,25 +1034,37 @@ def price_divergence_flag(fi: FactorInputs, screen_criteria) -> Optional[str]:
 
 def screen_evaluate(screen_criteria, fi: FactorInputs):
     """Run a screen ONCE and return ``(first_confirmed_fail_reason | None, bases,
-    abstentions)``:
+    abstentions, outcomes)``:
     - ``bases`` maps each criterion reporting a measurement basis to it (e.g.
       ``{"max_payout_ratio_fcf": "fcf"}``, incl. ``"abstained"``);
     - ``abstentions`` maps a criterion that ABSTAINED on a per-name data condition
       (basis == "abstained") to its note — a PASSED name whose dividend-safety check
       could not be evaluated is legitimate (abstention never excludes) but must be
       VISIBLE (ITEM 3). The fail reason NAMES the basis and carries the borderline tag.
-    All three read from the SAME single evaluation."""
+    - ``outcomes`` (REPORT-1) is the PER-CRITERION record for THIS name:
+      ``{criterion: {"passed": True|False|None, "observed": …, "threshold": …,
+      "note": …, "basis": …, "borderline": bool}}``. It is what lets a report say what
+      EVERY rule did — the old output could only ever name the first rule a name failed,
+      so a rule nothing failed was invisible and a reader could not tell what had been
+      applied. Display data only: the fail REASON string below is byte-unchanged,
+      because the scoreboard and the verdict publisher parse it.
+    All four read from the SAME single evaluation — no criterion runs twice."""
     from .tools.criteria.registry import Evidence, run_screen
     if fi.fundamentals is None:
-        return None, {}, {}
+        return None, {}, {}, {}
     ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
                   return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[],
                   valuation_band=fi.valuation_band)
     reason = None
     bases: dict[str, str] = {}
     abstentions: dict[str, str] = {}
+    outcomes: dict[str, dict] = {}
     for c in run_screen(screen_criteria, ev, ticker=fi.ticker).criteria:
         basis = getattr(c, "basis", "") or ""
+        borderline = is_borderline_fail(c.observed, c.threshold)
+        outcomes[c.name] = {"passed": c.passed, "observed": c.observed,
+                            "threshold": c.threshold, "note": c.note or "",
+                            "basis": basis, "borderline": borderline}
         if basis:
             bases[c.name] = basis
         if basis == "abstained" and c.passed is None:
@@ -1027,7 +1073,7 @@ def screen_evaluate(screen_criteria, fi: FactorInputs):
             obs = (f"{c.observed:.4g}" if isinstance(c.observed, (int, float))
                    else "n/a")
             basis_tag = f" [{_BASIS_LABEL.get(basis, basis)}]" if basis else ""
-            border = " [borderline]" if is_borderline_fail(c.observed, c.threshold) else ""
+            border = " [borderline]" if borderline else ""
             reason = (f"screen: {c.name} (observed {obs} vs threshold "
                       f"{c.threshold}){basis_tag}{border}")
-    return reason, bases, abstentions
+    return reason, bases, abstentions, outcomes

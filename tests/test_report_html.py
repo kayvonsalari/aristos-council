@@ -212,15 +212,27 @@ def test_universe_html_renders_positions_boundary_ties_and_integrity():
     doc = universe_report_html(_universe_result(), run_start=_RUN)
     visible = _visible(doc)
     # "#N of M · score (best/worst)" positions, ties SHARING a position (RANK-DISPLAY-1)
-    assert _squash("#1 of 3 · score 2 (best 2 · worst 6)") in visible
-    assert _squash("#2 of 3 (tied) · score 5 (best 2 · worst 6)") in visible
+    # REPORT-1: the best/worst bounds are stated ONCE above the table, not per row.
+    assert _squash("#1 of 3 · score 2") in visible
+    assert _squash("best possible score is 2 and the worst is 6") in visible
+    assert _squash("#2 of 3 (tied) · score 5") in visible
     # boundary-tie flag on BOTH sides of the split (VERDICT-TIE-1)
     assert _squash("⚑ boundary (tied 5 with VWCE.DE — SELL") in visible
     assert _squash("⚑ boundary (tied 5 with EUNL.DE — HOLD") in visible
     # the abstention footnote (†) and the factor-integrity + screen-basis blocks
-    assert _squash("† VWCE.DE — screen criterion not evaluated") in visible
-    assert "Factor integrity" in doc and _squash("static: 2026-07-21, EODHD") in visible
-    assert "Screen basis" in doc and _squash("FCF (4y mean) 1/1") in visible
+    # REPORT-1: the dagger's meaning is spelled out in its own section — the rule, the
+    # verdict it qualifies and the reason, in words rather than a footnote symbol.
+    assert _squash("Rules that could not be tested") in visible
+    assert _squash("VWCE.DE") in visible
+    # REPORT-1: "Factor integrity" was internal jargon; the section is now
+    # "Where the numbers came from". Same counts, one sentence per factor.
+    assert "Where the numbers came from" in doc
+    assert _squash("static: 2026-07-21, EODHD") in visible
+    # REPORT-1: the separate "Screen basis" section is GONE — the measurement basis
+    # each rule used is now a "Measured on" column INSIDE the rules block, beside
+    # the rule it qualifies, so the same fact is not printed in two places.
+    assert "Rules applied" in doc
+    assert _squash("4-year average free cash flow for 1 name") in visible
     # the three NON-verdict axes stay distinct
     assert "Excluded" in doc and "IWDA.AS" in doc
     assert "Unrateable" in doc and "DEAD.DE" in doc
@@ -249,7 +261,9 @@ def test_universe_html_display_name_falls_back_to_the_id_and_never_invents():
     result = _universe_result()
     result.meta.pop("rank_strategy_name")
     doc = universe_report_html(result)                      # no run_start either
-    assert "<h1>etf_core_v1</h1>" in doc
+    # REPORT-1: the h1 leads with the strategy name (falling back to the id when the
+    # strategy declares none — never inventing one) and names the cohort beside it.
+    assert "<h1>etf_core_v1 — " in doc
     assert "ETF Index Tracker" not in doc
     # A run timestamp that was never supplied is OMITTED, not guessed.
     assert "09.07.2026" not in doc
@@ -423,9 +437,9 @@ def test_universe_html_renders_the_section_when_every_band_is_a_failure_abstenti
 
 def test_universe_html_places_the_band_after_the_ranked_table_before_exclusions():
     doc = universe_report_html(_universe_result_with_bands(), run_start=_RUN)
-    i_ranked = doc.index("Ranked — verdict of record")
+    i_ranked = doc.index("Ranked — the verdict of record")
     i_band = doc.index("Valuation band (absolute")
-    i_excluded = doc.index("Excluded — screen")
+    i_excluded = doc.index("Excluded — did not pass a rule")
     assert i_ranked < i_band < i_excluded                     # mirrors the markdown order
 
 

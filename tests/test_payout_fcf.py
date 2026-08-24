@@ -116,7 +116,7 @@ def test_exclusion_line_names_the_eps_fallback_basis():
 
 
 def test_screen_evaluate_records_basis_for_a_passing_name():
-    _, bases, _ = screen_evaluate(
+    _, bases, _, _ = screen_evaluate(
         _SCREEN, _fi(dividends_paid=4e9, free_cash_flow_annual=[10e9] * 4))
     assert bases.get("max_payout_ratio_fcf") == "fcf"
 

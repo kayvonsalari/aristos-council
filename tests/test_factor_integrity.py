@@ -142,7 +142,10 @@ def test_pipeline_attaches_sources_and_report_shows_block():
     assert by["NETCASH"] == SRC_ABSTAINED
 
     block = "\n".join(format_factor_integrity(result))
-    assert "FACTOR INTEGRITY" in block
-    assert "EV 2/5" in block
-    assert "EBIT/mcap proxy 2/5 (NOCASH1, NOCASH2)" in block
-    assert "abstained 1 (NETCASH)" in block
+    # REPORT-1: the section is "Where the numbers came from" — "Factor integrity" was
+    # internal jargon. The COUNTS below are unchanged; only the wording is.
+    assert "WHERE THE NUMBERS CAME FROM" in block
+    # REPORT-1: the same counts, as a sentence rather than a slash tally.
+    assert "from enterprise value for 2 of 5 names" in block
+    assert "from the EBIT / market-cap proxy for 2 of 5 names (NOCASH1, NOCASH2)" in block
+    assert "no usable data for 1 of 5 names (NETCASH)" in block

@@ -97,6 +97,11 @@ header.doc .kicker { text-transform: uppercase; letter-spacing: .09em; font-size
 header.doc h1 { font-size: 26px; line-height: 1.2; margin: 0 0 8px; }
 .house { margin: 10px 0 0; padding: 8px 12px; border: 1px solid #c7cdd8;
          border-left: 5px solid #16181d; background: #f6f8fb; font-weight: 600; }
+/* REPORT-1: the one-line verdict summary, directly under the header. There was no
+   summary anywhere before — a reader had to count the ranked table by hand. */
+.summary { margin: 8px 0 0; font-size: 16px; font-weight: 700; }
+/* A machine id kept beside its human label: present for auditability, visually second. */
+.muted { color: #5b6472; font-size: 0.86em; font-weight: 400; }
 
 .kv { display: table; width: 100%; margin: 10px 0 0; border-collapse: collapse; }
 .kv .row { display: table-row; }
@@ -278,9 +283,18 @@ def _position_cell(cell: str) -> str:
             f'<span class="detail"> · {_esc(tail)}</span></span>')
 
 
-def _table(head: list[str], rows: list[list[str]], *, cls: str = "") -> str:
-    """A bordered table from pre-rendered HTML cells (``head`` entries are escaped)."""
-    ths = "".join(f"<th>{_esc(h)}</th>" for h in head)
+def _table(head: list[str], rows: list[list[str]], *, cls: str = "",
+           titles: list[str] | None = None) -> str:
+    """A bordered table from pre-rendered HTML cells (``head`` entries are escaped).
+
+    ``titles`` supplies an optional per-column ``title`` attribute — REPORT-1 uses it to
+    keep a factor's RAW ID available on hover while the header itself reads in plain
+    English. An id is never dropped; it just stops being the only thing shown."""
+    titles = titles or []
+    ths = "".join(
+        f'<th title="{_esc(titles[i])}">{_esc(h)}</th>' if i < len(titles) and titles[i]
+        else f"<th>{_esc(h)}</th>"
+        for i, h in enumerate(head))
     trs = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in row) + "</tr>"
                   for row in rows)
     return (f'<div class="scroll"><table class="{cls}"><thead><tr>{ths}</tr></thead>'
@@ -394,17 +408,20 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
     strategy id; ``run_start`` is omitted from the header when absent (never invented).
     """
     from ..pipeline import (
-        PRICE_SECTION_NOTE,
-        PRICE_SECTION_TITLE,
-        VALUATION_BAND_SECTION_TITLE,
-        factor_integrity,
-        format_integrity_entry,
-        format_screen_basis_entry,
-        price_rows,
-        ranked_abstention_footnotes,
-        screen_basis_integrity,
+        PROVENANCE_SECTION_NOTE,
+        PROVENANCE_SECTION_TITLE,
+        RULES_SECTION_TITLE,
+        exclusion_rows,
+        header_lines,
+        provenance_sentences,
+        rules_applied,
+        summary_line,
+        untested_rule_notes,
+        used_symbol_notes,
         valuation_band_table,
     )
+    from ..rank_engine import factor_column_label
+    from ..report_language import format_score_gloss, label_with_id
     from ..data.adapter import display_name
 
     m = result.meta
@@ -413,96 +430,135 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
     stamp = _local_stamp(run_start)
     parts: list[str] = []
 
-    # ----- header: who ran what, on which cohort, when, in which mode.
+    # ----- header (REPORT-1): the human names lead, the ids stay beside them as the
+    # stable record keys, and the run id sits last. It used to be machine ids only —
+    # "strategy conservative_plus_v1, universe defensive_income_16_v1" — which told a
+    # reader nothing while hiding names the UI already knew.
+    universe_label = label_with_id(m.get("universe_name", ""),
+                                   m.get("universe_id") or "adhoc")
+    mode = m.get("council_mode", "")
+    mode_phrase = ("ranker only, no AI commentary" if mode == "ranker-only"
+                   else f"{mode} commentary" if mode else "")
     parts.append(
         '<header class="doc">'
         '<p class="kicker">Aristos Council · universe run</p>'
-        f"<h1>{_esc(title_name)}</h1>"
+        f"<h1>{_esc(title_name)} — {_esc(universe_label)}</h1>"
         + _kv([
-            ("strategy", f'<code>{_esc(strategy_id)}</code>'),
-            ("universe", f'<code>{_esc(m.get("universe_id") or "adhoc")}</code>'),
-            ("run", _esc(stamp)),
-            ("mode", _esc(m.get("council_mode", ""))),
-            ("screen", f'<code>{_esc(m.get("screen_strategy_id", ""))}</code>'),
-            ("ranked", _esc(f'{m.get("ranked_count", "—")} of '
-                            f'{m.get("universe_size", "—")}')),
-            ("shortlist", "" if m.get("ranker_only") else
-             _esc(f'{len(m.get("shortlist") or [])} · est '
-                  f'${float(m.get("est_cost") or 0.0):.2f} · narrate '
+            ("Universe", _esc(f'{universe_label} — '
+                              f'{m.get("universe_size", "—")} names')),
+            ("Strategy", _esc(label_with_id(m.get("rank_strategy_name", ""),
+                                            strategy_id))),
+            ("Screen", _esc(label_with_id(m.get("screen_strategy_name", ""),
+                                          m.get("screen_strategy_id", "")))),
+            # A missing run timestamp is OMITTED, never guessed — so the mode must not
+            # be left dangling behind an em-dash with nothing before it.
+            ("Run", _esc(" — ".join(p for p in (stamp, mode_phrase) if p))),
+            ("Ranked", _esc(f'{m.get("ranked_count", "—")} of '
+                            f'{m.get("universe_size", "—")} names')),
+            ("Shortlist", "" if m.get("ranker_only") else
+             _esc(f'{len(m.get("shortlist") or [])} names · estimated cost '
+                  f'${float(m.get("est_cost") or 0.0):.2f} · narrating '
                   f'{m.get("narrate_coverage", "buys_only")}')),
-            ("run id", f'<code>{_esc(m["run_id"])}</code>' if m.get("run_id") else ""),
+            ("Run id", f'<code class="muted">{_esc(m["run_id"])}</code>'
+                       if m.get("run_id") else ""),
         ])
         + f'<p class="house">{_esc(result.header)}</p>'
+        f'<p class="summary">{_esc(summary_line(result))}</p>'
         "</header>")
 
-    # ----- 1: the ranked table — the verdict of record.
+    # ----- 0 (REPORT-1): RULES APPLIED — every rule this run applied, with its limit in
+    # plain English and what it actually did, BEFORE any result. The header used to name
+    # only the screen's id; the screen holds six rules and the report named at most the
+    # three something failed, so a reader could not tell what had been filtered or why.
+    rules = rules_applied(result)
+    if rules is not None:
+        show_basis = any(r.measured for r in rules.rules)
+        head = ["Rule", "Limit", "What it did"] + (["Measured on"] if show_basis else [])
+        body = [[f'<strong>{_esc(r.label)}</strong>'
+                 f'<br><code class="muted">{_esc(r.criterion)}</code>',
+                 _esc(r.threshold_phrase), _esc(r.tally)]
+                + ([_esc(r.measured or "—")] if show_basis else [])
+                for r in rules.rules]
+        parts.append(f'<section class="section"><h2>{_esc(RULES_SECTION_TITLE)}</h2>'
+                     f'<p class="note"><strong>{_esc(rules.screen_heading)}</strong><br>'
+                     f'{_esc(rules.screen_note)}</p>'
+                     + (_table(head, body, cls="ranked") if body else "")
+                     + _bullets(_esc(line) for line in rules.ranker_lines)
+                     + "</section>")
+
+    # ----- 1: the ranked table — the verdict of record. Factor columns are headed by
+    # the factor's HUMAN label (the raw id rides in the header's title attribute, on
+    # hover, and in a footnote), each cell carries the rank AND the value it was ranked
+    # on, and the score gloss is stated ONCE above the table rather than in every row.
     rows, factor_names = ranked_table_rows(result.ranked, result.names)
-    parts.append('<section class="section"><h2>Ranked — verdict of record</h2>')
+    parts.append('<section class="section"><h2>Ranked — the verdict of record</h2>')
     if rows:
-        head = ["Position (score)", "Name", "Verdict", *factor_names]
+        labels = [factor_column_label(f) for f in factor_names]
+        n_factors = next((len(r.factor_ranks) for r in result.ranked if r.factor_ranks),
+                         0)
+        parts.append('<p class="note">'
+                     + _esc(format_score_gloss(n_factors, len(result.ranked)))
+                     + "</p>")
+        head = ["Position (score)", "Name", "Verdict", *labels]
         body = [[_position_cell(r["Position (score)"]),
                  _esc(r["Name"]),
                  _verdict_cell(r["Verdict"]),
-                 *[f'<span class="mono">{_esc(r[f])}</span>' for f in factor_names]]
+                 *[f'<span class="mono">{_esc(r[lab])}</span>' for lab in labels]]
                 for r in rows]
-        parts.append(_table(head, body, cls="ranked"))
-        parts.append('<p class="note">Rank 1 = best on a factor; a lower combined '
-                     'rank-sum is better. <code>*</code> marks an IMPUTED factor rank '
-                     '(the value was absent), <code>†</code> a name that passed the '
-                     f'screen while a criterion abstained, <code>{_esc(BOUNDARY_FLAG)}</code> '
-                     'a verdict that split from a tied name on the alphabetical '
-                     'tie-break.</p>')
+        parts.append(_table(head, body, cls="ranked", titles=[
+            "", "", "", *factor_names]))
+        parts.append('<p class="note">Factor ids, in column order: '
+                     + ", ".join(f"<code>{_esc(f)}</code>" for f in factor_names)
+                     + ".</p>")
+        symbols = used_symbol_notes(result)
+        if symbols:
+            parts.append(_bullets(f'<code>{_esc(sym)}</code> — {_esc(note)}'
+                                  for sym, note in symbols))
     else:
         parts.append('<p class="note">(no names survived the screen)</p>')
-    footnotes = ranked_abstention_footnotes(result)
-    if footnotes:
-        parts.append(_bullets(_esc(f) for f in footnotes))
     parts.append("</section>")
 
-    # ----- 2: factor integrity — what each factor was actually measured from.
-    entries = factor_integrity(result)
-    if entries:
-        parts.append('<section class="section"><h2>Factor integrity</h2>'
-                     '<p class="note">Per-factor source across the ranked names.</p>'
-                     + _bullets(f'<strong>{_esc(e["factor"])}</strong> — '
-                                + _inline(format_integrity_entry(e))
-                                for e in entries)
-                     + "</section>")
-
-    basis_entries = screen_basis_integrity(result)
-    if basis_entries:
-        parts.append('<section class="section"><h2>Screen basis</h2>'
-                     '<p class="note">Measurement basis across the screened names.</p>'
-                     + _bullets(f'<strong>{_esc(e["criterion"])}</strong> — '
-                                + _inline(format_screen_basis_entry(e))
-                                for e in basis_entries)
-                     + "</section>")
-
-    # ----- 2b0: share price + 52-week position (PRICE-1). ALWAYS ON — it reads bars the
-    # run already fetched — and placed immediately before the band so the three "what does
-    # this cost" facts (price, where it sits lately, what it would cost at its own median
-    # valuation) read as one group. Same shared source as every other surface (price_rows).
-    p_rows = price_rows(result)
-    if p_rows:
+    # ----- 1b (REPORT-1): a rule that could NOT BE TESTED, in words, next to the
+    # verdict it qualifies. Passing four of five rules with the fifth untestable is
+    # materially different from passing all five, and it used to be a bare dagger.
+    untested = untested_rule_notes(result)
+    if untested:
         parts.append('<section class="section">'
-                     f"<h2>{_esc(PRICE_SECTION_TITLE)}</h2>"
-                     f'<p class="note">{_esc(PRICE_SECTION_NOTE)}</p>'
-                     + _bullets(f'<strong>{_esc(name)}</strong> — {_inline(line)}'
-                                for name, line in p_rows)
+                     "<h2>Rules that could not be tested</h2>"
+                     '<p class="note">These names PASSED the screen — a rule that '
+                     "cannot be evaluated never excludes anyone (an abstention is not a "
+                     "failure) — but one of its rules returned no answer for them at "
+                     "all, so their pass is thinner than it looks.</p>"
+                     + _bullets(
+                         f'<strong>{_esc(n["name"])}</strong> — {_esc(n["verdict"])} — '
+                         + _esc(f'{len(n["rules"])} rule'
+                                f'{"s" if len(n["rules"]) != 1 else ""} could not be '
+                                "tested: ")
+                         + _esc("; ".join(n["rules"]))
+                         for n in untested)
                      + "</section>")
 
-    # ----- 2b: the valuation band as a TABLE (PRICE-2). One row per name in the RANKED
-    # table's order, at most two sentences ahead of the data, and the doctrine + the shared
-    # month coverage as footnotes BELOW it. Same columns and same cells as every other
-    # surface (pipeline.valuation_band_table), so HTML, markdown, CLI and the Run tab
-    # cannot drift. Abstaining names KEEP their row, carrying their real reason.
+    # ----- 2 (REPORT-1): "Where the numbers came from" — was "Factor integrity", which
+    # was internal jargon. Same counts, one sentence per factor.
+    entries = provenance_sentences(result)
+    if entries:
+        parts.append(f'<section class="section"><h2>{_esc(PROVENANCE_SECTION_TITLE)}</h2>'
+                     f'<p class="note">{_esc(PROVENANCE_SECTION_NOTE)}</p>'
+                     + _bullets(_esc(e["sentence"]) for e in entries)
+                     + "</section>")
+
+    # ----- 2b: price and valuation as ONE table (PRICE-2, extended by REPORT-1). The
+    # separate "Share price & 52-week position" section is FOLDED IN as columns, so the
+    # same names are not listed twice; the price columns are never gated by the band
+    # toggle, so a band-off run still renders this table (without the band's columns).
+    # Same cells as every other surface (pipeline.valuation_band_table).
     band_table = valuation_band_table(result)
     if band_table is not None:
         body = [[_esc(row[c]) if i else f"<strong>{_esc(row[c])}</strong>"
                  for i, c in enumerate(band_table.columns)]
                 for row in band_table.rows]
         parts.append('<section class="section">'
-                     f"<h2>{_esc(VALUATION_BAND_SECTION_TITLE)}</h2>"
+                     f"<h2>{_esc(band_table.title)}</h2>"
                      f'<p class="note">{_esc(band_table.intro)}</p>'
                      + _table(band_table.columns, body, cls="ranked")
                      + _bullets(_esc(n) for n in band_table.footnotes)
@@ -515,9 +571,22 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
             + _inline(why) for t, why in pairs)
 
     if result.excluded:
+        # REPORT-1: a sentence naming the rule, the observed value and the limit, both
+        # in their proper units — the raw form was "screen: min_dividend_yield (observed
+        # 0.009547 vs threshold 0.015)". The criterion id stays, muted, for auditability,
+        # and a warning flag becomes its own marked line rather than brackets mid-sentence.
+        items = []
+        for row in exclusion_rows(result):
+            muted = (f' <code class="muted">{_esc(row["criterion"])}</code>'
+                     if row["criterion"] else "")
+            flag = (f'<br><span class="flag">{_esc(row["flag"])}</span>'
+                    if row["flag"] else "")
+            items.append(f'<strong>{_esc(row["name"])}</strong> — '
+                         f'{_esc(row["sentence"])}{muted}{flag}')
         parts.append('<section class="section">'
-                     f"<h2>Excluded — screen / cap / sector · {len(result.excluded)}</h2>"
-                     + _reason_list(result.excluded) + "</section>")
+                     f"<h2>Excluded — did not pass a rule, so was never ranked · "
+                     f"{len(result.excluded)}</h2>"
+                     + _bullets(items) + "</section>")
     if result.unrateable:
         parts.append('<section class="section">'
                      f"<h2>Unrateable — no data, no verdict · {len(result.unrateable)}</h2>"

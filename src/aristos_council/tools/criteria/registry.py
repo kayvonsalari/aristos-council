@@ -97,6 +97,15 @@ class ParamSpec:
     step: float | None = None      # UI step for numerics
     default: object = None          # default value (UI pre-fill; also the
                                     # source for params not set by a strategy)
+    # WHAT THE NUMBER MEANS (REPORT-1) — one of report_language.UNITS, or "" for a
+    # bool flag. Reports format from this declaration, never by guessing at the render
+    # site: 0.009547 with unit="percent" is "0.95%", and a criterion added tomorrow
+    # reads correctly because it declared its unit, not because a render site
+    # remembered it. ``currency`` names the money a "currency" unit is denominated in
+    # (the min_market_cap floor is USD by its own contract — house rule 8 abstains on
+    # a non-USD name rather than converting).
+    unit: str = ""
+    currency: str | None = None
 
 
 @dataclass(frozen=True)
@@ -106,8 +115,22 @@ class Criterion:
 
     name: str
     fn: Callable[[Evidence, float], CriterionResult]
-    label: str                     # human display label, e.g. "Minimum dividend yield"
+    # HUMAN RULE NAME (REPORT-1), e.g. "Dividend yield". Deliberately DIRECTION-FREE:
+    # the direction lives in ``comparison`` and is rendered into the threshold phrase
+    # ("at least 1.5%"), so a report never says "Minimum dividend yield at least 1.5%".
+    # One source — a report never formats a rule name at the render site.
+    label: str
     params: tuple[ParamSpec, ...]  # parameters a strategy sets (threshold, flags)
+    # Which side of the threshold PASSES: "min" (observed >= threshold) or "max"
+    # (observed <= threshold). Drives the plain-English threshold phrase and the
+    # exclusion sentence's limit clause. Not new behaviour — it restates in data what
+    # the criterion function has always done, so reports stop hardcoding it.
+    comparison: str = "min"
+    # The observation half of an exclusion sentence, e.g. "dividend yield {observed}".
+    # Placeholders: ``{observed}`` (formatted by the threshold param's unit) and
+    # ``{signed}`` (a direction + magnitude, "fell 14.0%"). Empty -> the report falls
+    # back to "<label> {observed}", which is correct if plain.
+    observation: str = ""
     # Evidence kinds (fundamentals / dividends / last_close) that must be
     # available for this criterion to evaluate.
     requires: tuple[str, ...] = ()
@@ -360,27 +383,33 @@ _CRITERIA: tuple[Criterion, ...] = (
     # --- Dividend criteria (Sprint 4A) ---
     Criterion(
         "min_dividend_yield", _min_dividend_yield,
-        label="Minimum dividend yield",
+        label="Dividend yield",
+        comparison="min",
+        observation="dividend yield {observed}",
         params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.005,
-                          default=0.025),
+                          default=0.025, unit="percent"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("dividend_per_share", "dividend_yield"),
     ),
     Criterion(
         "max_payout_ratio", _max_payout_ratio,
-        label="Maximum payout ratio",
+        label="Dividends vs earnings",
+        comparison="max",
+        observation="dividends took {observed} of earnings",
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.05,
-                          default=0.75),
+                          default=0.75, unit="percent"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("payout_ratio", "dividend_per_share"),
     ),
     Criterion(
         "max_payout_ratio_fcf", _max_payout_ratio_fcf,
-        label="Maximum payout ratio (cash / FCF basis)",
+        label="Dividends vs free cash flow",
+        comparison="max",
+        observation="dividends took {observed} of free cash flow",
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.05,
-                          default=0.80),
+                          default=0.80, unit="percent"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("dividends_paid", "free_cash_flow", "operating_cash_flow",
@@ -389,18 +418,22 @@ _CRITERIA: tuple[Criterion, ...] = (
     ),
     Criterion(
         "min_market_cap", _min_market_cap,
-        label="Minimum market cap (USD)",
+        label="Company size",
+        comparison="min",
+        observation="market value {observed}",
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=1e9,
-                          default=10_000_000_000),
+                          default=10_000_000_000, unit="currency", currency="USD"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("market_cap",),
     ),
     Criterion(
         "min_dividend_growth_streak", _min_dividend_growth_streak,
-        label="Minimum dividend-growth streak (years)",
+        label="Consecutive years of dividend increases (from payment history)",
+        comparison="min",
+        observation="{observed} consecutive years of dividend increases",
         params=(ParamSpec("threshold", "int", min=0.0, max=None, step=1.0,
-                          default=25),
+                          default=25, unit="count"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("dividends",),
         fundamentals_fields=("years_dividend_growth",),
@@ -408,20 +441,24 @@ _CRITERIA: tuple[Criterion, ...] = (
     # --- Growth / quality criteria (Sprint 4B) ---
     Criterion(
         "min_revenue_cagr", _min_revenue_cagr,
-        label="Minimum revenue CAGR",
+        label="Revenue growth (annual average)",
+        comparison="min",
+        observation="revenue grew {observed} a year",
         params=(ParamSpec("years", "int", min=1, max=None, step=1.0,
-                          default=_REVENUE_CAGR_YEARS),
+                          default=_REVENUE_CAGR_YEARS, unit="count"),
                 ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.01,
-                          default=0.10),
+                          default=0.10, unit="percent"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("total_revenue",),
     ),
     Criterion(
         "min_roic", _min_roic,
-        label="Minimum ROIC",
+        label="Return on invested capital",
+        comparison="min",
+        observation="return on invested capital {observed}",
         params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.01,
-                          default=0.12),
+                          default=0.12, unit="percent"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("operating_income", "ebit", "tax_provision",
@@ -429,14 +466,16 @@ _CRITERIA: tuple[Criterion, ...] = (
     ),
     Criterion(
         "max_peg_ratio", _max_peg_ratio,
-        label="Maximum PEG ratio",
+        label="Price/earnings against growth (PEG)",
+        comparison="max",
+        observation="PEG ratio {observed}",
         # NB: PEG divides P/E by the SAME in-house revenue-CAGR window the
         # revenue criterion uses (the _REVENUE_CAGR_YEARS module constant, read
         # by BOTH _min_revenue_cagr and _max_peg_ratio — one source of truth, can
         # never diverge). So the window is NOT a PEG parameter; it is surfaced
         # ONCE, under min_revenue_cagr, not redundantly here.
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.1,
-                          default=2.0),
+                          default=2.0, unit="ratio"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("total_revenue", "pe_ratio"),
@@ -444,13 +483,15 @@ _CRITERIA: tuple[Criterion, ...] = (
     # --- Price momentum (value+momentum) — fixes cheap-falling-knife false BUYs ---
     Criterion(
         PRICE_MOMENTUM_CRITERION, _min_price_momentum,
-        label="Minimum 12m price momentum",
+        label="12-month price change",
+        comparison="min",
+        observation="share price {signed} over 12 months",
         # Floor is a 12m RETURN and MAY be negative: the floor catches BREAKDOWNS, not
         # flatness. A defensive floor of -0.10 excludes a name down >10% (breaking
         # down) while letting a quiet defensive down 0-10% through; 0.0 = 'not in a
         # downtrend'. Reads ev.return_12m (from price closes already fetched).
         params=(ParamSpec("threshold", "float", min=-1.0, max=1.0, step=0.01,
-                          default=0.0),
+                          default=0.0, unit="percent"),
                 _UNVERIFIABLE_BLOCKS),
         requires=(),
         fundamentals_fields=(),
@@ -458,17 +499,22 @@ _CRITERIA: tuple[Criterion, ...] = (
     # --- Defensive-risk criteria (free-data yield-trap separators) ---
     Criterion(
         "min_dividend_streak", _min_dividend_streak,
-        label="Minimum dividend-growth streak (years)",
-        params=(ParamSpec("threshold", "int", min=0, max=None, step=1, default=10),
+        label="Consecutive years of dividend increases",
+        comparison="min",
+        observation="{observed} consecutive years of dividend increases",
+        params=(ParamSpec("threshold", "int", min=0, max=None, step=1, default=10,
+                          unit="count"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("dividend_streak_years",),
     ),
     Criterion(
         "max_debt_to_market_cap", _max_debt_to_market_cap,
-        label="Maximum total-debt / market-cap",
+        label="Total debt vs market value",
+        comparison="max",
+        observation="total debt {observed} of market value",
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.1,
-                          default=1.0),
+                          default=1.0, unit="multiple"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("total_debt",),
@@ -476,8 +522,11 @@ _CRITERIA: tuple[Criterion, ...] = (
     # --- Accounting quality (PIOTROSKI-1) — OPTIONAL, no lens selects it yet ---
     Criterion(
         "min_f_score", _min_f_score,
-        label="Minimum Piotroski F-Score",
-        params=(ParamSpec("threshold", "int", min=0, max=9, step=1, default=5),
+        label="Accounting quality (Piotroski F-Score, 0-9)",
+        comparison="min",
+        observation="F-Score {observed} of 9",
+        params=(ParamSpec("threshold", "int", min=0, max=9, step=1, default=5,
+                          unit="score"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("fundamentals",),
         fundamentals_fields=("total_assets_annual", "long_term_debt_annual",
@@ -489,9 +538,11 @@ _CRITERIA: tuple[Criterion, ...] = (
     # --- Absolute valuation band (VALBAND-1) — OPTIONAL, no strategy selects it --- #
     Criterion(
         "valuation_band_percentile", _valuation_band_percentile,
-        label="Maximum valuation percentile vs own 5y band",
+        label="Valuation against its own 5-year range",
+        comparison="max",
+        observation="valuation at the {observed}th percentile of its own 5-year range",
         params=(ParamSpec("threshold", "float", min=0.0, max=100.0, step=5.0,
-                          default=80.0),
+                          default=80.0, unit="score"),
                 _UNVERIFIABLE_BLOCKS),
         # requires=() DELIBERATELY: the band is not one of the gathered evidence KINDS
         # (fundamentals / dividends / last_close) that validate_selections knows about.

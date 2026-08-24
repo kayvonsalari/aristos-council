@@ -458,8 +458,13 @@ def test_toggle_off_produces_no_band_and_is_the_default():
         ["P", "Q"], "magic_formula_v1", ranker_only=True,
         strategies_dir=STRAT_DIR, adapter=_BandAdapter(), today=TODAY)
     assert result.meta["with_valuation_band"] is False        # default OFF
-    assert valuation_band_table(result) is None                # no band section
     assert all(r.valuation_band is None for r in result.ranked)
+    # REPORT-1: the table still renders (the PRICE is never gated by the band toggle) —
+    # but it carries no band, so none of the band's columns exist.
+    table = valuation_band_table(result)
+    assert table.has_band is False
+    assert not any(c in table.columns
+                   for c in ("EV/EBIT", "Percentile", "Reversion value", "Gap"))
 
 
 def test_toggle_on_adds_the_column_and_leaves_verdicts_unchanged():
@@ -502,7 +507,7 @@ def test_toggle_on_with_extra_lenses_keeps_the_column_and_every_lens_verdict():
     # the band rides on the FIRST lens's result (computed once, per name).
     first_on = on.results[ids[0]]
     assert {r["Name"] for r in valuation_band_table(first_on).rows} == {"P", "Q"}
-    assert valuation_band_table(off.results[ids[0]]) is None
+    assert valuation_band_table(off.results[ids[0]]).has_band is False
     # every lens's verdict column is unchanged whether the band is on or off.
     for sid in ids:
         assert _verdict_snapshot(on.results[sid]) == _verdict_snapshot(off.results[sid])
@@ -604,7 +609,7 @@ def test_band_not_requested_stays_silent_even_when_the_fetch_would_fail(tmp_path
         ["P", "Q"], "magic_formula_v1", ranker_only=True,
         strategies_dir=STRAT_DIR, adapter=_RaisingPriceAdapter(), today=TODAY)
     assert result.meta["with_valuation_band"] is False
-    assert valuation_band_table(result) is None               # no section at all
+    assert valuation_band_table(result).has_band is False     # no BAND columns at all
 
 
 def test_band_requested_and_all_compute_is_unchanged_no_failure_text():

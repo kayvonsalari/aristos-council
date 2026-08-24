@@ -295,7 +295,11 @@ def _run(f: Fundamentals | None, threshold: float):
 
 def test_criterion_self_describes_int_threshold_zero_to_nine():
     crit = REGISTRY["min_f_score"]
-    assert crit.label == "Minimum Piotroski F-Score"
+    # REPORT-1: criterion labels are the RULE NAME and are direction-free — the
+    # direction now lives in `comparison` and is rendered into the threshold phrase
+    # ("at least 5"), so a report never reads "Minimum ... at least 5".
+    assert crit.label == "Accounting quality (Piotroski F-Score, 0-9)"
+    assert crit.comparison == "min"
     tp = crit.threshold_param
     assert (tp.type, tp.min, tp.max, tp.step, tp.default) == ("int", 0, 9, 1, 5)
     assert crit.requires == ("fundamentals",)

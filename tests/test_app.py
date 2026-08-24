@@ -281,9 +281,16 @@ def test_ranked_rows_marks_imputed_factors_with_a_star():
     assert row["Verdict"] == "BUY"
     # RANK-DISPLAY-1: ordinal position first, rank-SUM as detail against its bounds
     # (2 factors, cohort of 1 -> best 2 · worst 2; score = combined 3).
-    assert row["Position (score)"] == "#1 of 1 · score 3 (best 2 · worst 2)"
-    assert row["earnings_yield"] == "1"                 # present, no star
-    assert row["net_payout_yield"] == "2*"              # imputed -> star
+    # REPORT-1: the best/worst bounds are stated ONCE above the table, not per row.
+    assert row["Position (score)"] == "#1 of 1 · score 3"
+    # REPORT-1: row keys are the factor's HUMAN column label, and each cell carries the
+    # rank AND the value it was ranked on. The raw id stays available via factor_names.
+    from aristos_council.rank_engine import factor_column_label
+    ey = factor_column_label("earnings_yield")
+    assert ey.startswith("Earnings yield (EBIT/EV)") and "rank, 1 = best" in ey
+    assert row[ey].startswith("1")                     # present, no star
+    # an IMPUTED rank keeps its star and shows NO value — there was none to show.
+    assert row[factor_column_label("net_payout_yield")] == "2*"
 
 
 def test_universe_markdown_has_sections_from_the_result():
@@ -304,13 +311,15 @@ def test_universe_markdown_has_sections_from_the_result():
               "est_cost": 0.19},
         council_mode="narrator")
     md = app._universe_markdown(result)
-    assert "# Universe run — magic_formula_v1" in md
-    assert "## Ranked (verdict of record)" in md
+    # REPORT-1: the header leads with the HUMAN names; the id stays beside them.
+    assert "# Universe run — " in md
+    assert "magic_formula_v1" in md
+    assert "## Ranked — the verdict of record" in md
     assert "Position (score)" in md                     # RANK-DISPLAY-1 header
     # the ranked row for A: ordinal position first (1 factor, cohort of 1), then verdict
-    assert "#1 of 1 · score 1 (best 1 · worst 1) | A | BUY |" in md
+    assert "#1 of 1 · score 1 | A | BUY |" in md
     assert "## Excluded" in md and "min_roic" in md
-    assert "## Unrateable" in md and "DEAD" in md
+    assert "## No usable data — no verdict was formed" in md and "DEAD" in md
     assert "## Narrative" in md and "ranked #1 on ROIC." in md
 
 

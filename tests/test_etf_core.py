@@ -178,7 +178,7 @@ class _KindAdapter(MarketDataAdapter):
 def test_core_lens_gates_a_stock_mock_out():
     strat = load_rank_strategy(STRAT_DIR / "etf_core_v1.yaml")
     adapter = _KindAdapter({"AAPL": "EQUITY", "VWCE.DE": "ETF"})
-    ranked, excluded, _, _ = _rank_stage(
+    ranked, excluded, _, _, _ = _rank_stage(
         ["AAPL", "VWCE.DE"], strat, adapter, today=date(2026, 6, 30))
     # the equity is gated out with the verbatim asset-kind message
     assert ("AAPL", "asset kind 'Equity' outside this strategy's scope") in excluded

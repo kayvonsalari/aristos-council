@@ -88,7 +88,7 @@ class _TwoSectorAdapter(MarketDataAdapter):
 
 def test_pipeline_gates_out_of_scope_and_ranks_in_scope():
     fin = load_rank_strategy(STRAT_DIR / "financials_v1.yaml")
-    ranked, excluded, _, _ = _rank_stage(
+    ranked, excluded, _, _, _ = _rank_stage(
         ["JPM", "MSFT"], fin, _TwoSectorAdapter(), today=date(2026, 6, 30))
     # MSFT (Technology) gated out of scope with the exact message
     assert ("MSFT", "sector 'Technology' outside this strategy's scope") in excluded

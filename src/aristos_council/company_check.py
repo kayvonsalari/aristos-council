@@ -537,6 +537,39 @@ def _pointer(screen: list[ScreenCell], gates: list[GateCell],
 # --------------------------------------------------------------------------- #
 # Text formatting (CLI + markdown-ish; the UI renders the structured result directly)
 # --------------------------------------------------------------------------- #
+def _criterion_label(name: str) -> str:
+    """A screen rule's HUMAN name for the diagnostic (REPORT-1), from the registry — the
+    same label every other surface uses. Falls back to the id, never inventing one."""
+    from .tools.criteria.registry import REGISTRY
+    return getattr(REGISTRY.get(name), "label", "") or name
+
+
+def _criterion_unit(name: str) -> tuple[str, Optional[str]]:
+    """``(unit, currency)`` as the criterion DECLARED them, so this surface formats from
+    the same declaration every other one reads."""
+    from .report_language import UNIT_RATIO
+    from .tools.criteria.registry import REGISTRY
+    spec = getattr(REGISTRY.get(name), "threshold_param", None)
+    return (getattr(spec, "unit", "") or UNIT_RATIO), getattr(spec, "currency", None)
+
+
+def _criterion_value(name: str, value: Optional[float]) -> str:
+    from .report_language import format_value
+    unit, currency = _criterion_unit(name)
+    return format_value(value, unit, currency=currency)
+
+
+def _criterion_threshold(name: str, value: Optional[float]) -> str:
+    """The rule's limit in words — "at most 80%", "at least 1.5%"."""
+    from .report_language import COMPARISON_MIN, format_threshold
+    from .tools.criteria.registry import REGISTRY
+    if value is None:
+        return "limit not recorded"
+    unit, currency = _criterion_unit(name)
+    comparison = getattr(REGISTRY.get(name), "comparison", COMPARISON_MIN)
+    return format_threshold(comparison, value, unit, currency=currency)
+
+
 def _fmt_num(v: Optional[float]) -> str:
     if v is None:
         return "—"
@@ -619,15 +652,21 @@ def format_company_check(result: CompanyCheckResult) -> str:
             if c.borderline:
                 tags.append("borderline")
             tag = f"  [{'; '.join(tags)}]"
+            # REPORT-1: the rule's HUMAN name leads and its id stays beside it, and both
+            # numbers are formatted from the criterion's DECLARED unit — "observed
+            # 0.009547 vs threshold 0.015" was three machine identifiers and two raw
+            # decimals. Same numbers, same statuses, same order.
+            label = _criterion_label(c.name)
             if c.status == "FAIL" and c.observed is None:
                 # A must-fail with no observed value (e.g. PEG growth <= 0 — undefined,
                 # fails closed by design): render its REASON, not a bare "— vs threshold".
                 reason = c.note or "fails closed by design"
-                lines.append(f"  {c.status:<14} {c.name:<26} {reason}{tag}")
+                lines.append(f"  {c.status:<14} {label:<40} {reason}{tag}")
             else:
-                lines.append(f"  {c.status:<14} {c.name:<26} observed "
-                             f"{_fmt_num(c.observed)} vs threshold "
-                             f"{_fmt_num(c.threshold)}{tag}")
+                lines.append(f"  {c.status:<14} {label:<40} "
+                             f"{_criterion_value(c.name, c.observed)} vs "
+                             f"{_criterion_threshold(c.name, c.threshold)}{tag}")
+                lines.append(f"  {'':<14} {'':<40} [{c.name}]")
         if result.market_cap_in_gates:
             lines.append("  (min_market_cap — same floor as the universe gate; shown "
                          "once, under GATES below)")

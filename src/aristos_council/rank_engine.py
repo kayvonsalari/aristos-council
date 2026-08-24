@@ -383,6 +383,36 @@ def format_score(v: float) -> str:
     return f"{v:.0f}" if float(v).is_integer() else f"{v:.1f}"
 
 
+def factor_column_label(factor: str) -> str:
+    """The ranked table's column header for a factor (REPORT-1): the registry's human
+    label, plus the plain statement that the cells are RANKS.
+
+    The header used to be the raw identifier — ``low_volatility``, ``momentum_12m`` —
+    and the cell was a bare number, so a reader saw "10" and reasonably assumed bigger
+    was better. The label comes from ``FACTOR_REGISTRY[...].label``; the raw id is kept
+    for the surfaces that can show it on hover or in a footnote, never dropped."""
+    from .factors import FACTOR_REGISTRY
+    from .report_language import RANK_COLUMN_NOTE
+    label = getattr(FACTOR_REGISTRY.get(factor), "label", "") or factor
+    return f"{label} ({RANK_COLUMN_NOTE})"
+
+
+def format_factor_cell(rank: float, value, factor: str, imputed: bool) -> str:
+    """One factor cell: the RANK, then the VALUE it was ranked on — ``"1 · 14.2%"``.
+
+    A rank alone hides whether first place beat second by a hair or a mile, which is
+    exactly the judgement a reader is trying to make. The value is formatted from the
+    factor's DECLARED unit (never guessed here), and ``*`` still marks an imputed rank —
+    a name whose value was absent shows no value, because there was none."""
+    from .factors import FACTOR_REGISTRY
+    from .report_language import format_value
+    fdef = FACTOR_REGISTRY.get(factor)
+    cell = f"{rank:.0f}" + ("*" if imputed else "")
+    if imputed or value is None or fdef is None:
+        return cell
+    return f"{cell} · {format_value(value, fdef.unit, currency=fdef.currency)}"
+
+
 def ranked_table_rows(ranked: list["RankedTicker"],
                       names: Optional[dict] = None) -> tuple[list[dict], list[str]]:
     """Rows + the ordered factor columns for THE ranked table — the ONE builder every
@@ -390,13 +420,21 @@ def ranked_table_rows(ranked: list["RankedTicker"],
     export), so the three can never drift.
 
     The leading ``Position (score)`` column shows the ordinal cohort position first with
-    the rank-SUM as detail — ``#1 of 9 · score 11 (best 3 · worst 27)`` — so the sum is
-    never misread as a position (RANK-DISPLAY-1; ties share a position). A per-factor rank
-    is marked with a trailing ``*`` when it was imputed (the value was absent). The Name
-    column leads with 'Company Name (TICKER)' (ITEM 1), falling back to the bare ticker
-    when the display name is unknown, and carries ``†`` when the name PASSED the screen
-    while a criterion abstained (ITEM 3). The Verdict column carries the boundary-tie mark
-    when a tie spans a verdict boundary (VERDICT-TIE-1). Presentation only."""
+    the rank-SUM as detail — ``#1 of 9 · score 11`` — so the sum is never misread as a
+    position (RANK-DISPLAY-1; ties share a position); what the score IS and which
+    direction is good is stated ONCE above the table (REPORT-1) rather than repeated in
+    every row. Each factor column is headed by the factor's HUMAN label and the note
+    that its cells are ranks, and each cell carries the rank AND the value it was ranked
+    on (``1 · 14.2%``). A per-factor rank is marked with a trailing ``*`` when it was
+    imputed (the value was absent). The Name column leads with 'Company Name (TICKER)'
+    (ITEM 1), falling back to the bare ticker when the display name is unknown, and
+    carries ``†`` when the name PASSED the screen while a criterion abstained (ITEM 3).
+    The Verdict column carries the boundary-tie mark when a tie spans a verdict boundary
+    (VERDICT-TIE-1). Presentation only — no rank, score or verdict is recomputed here.
+
+    The returned ``factor_names`` are the RAW ids, in order, so a caller can render the
+    label for a header and keep the id for a hover title or footnote; the row dicts are
+    keyed by the LABEL, which is what the header shows."""
     from .data.adapter import display_name
 
     names = names or {}
@@ -408,6 +446,7 @@ def ranked_table_rows(ranked: list["RankedTicker"],
         for f in r.factor_ranks:
             if f not in factor_names:
                 factor_names.append(f)
+    columns = {f: factor_column_label(f) for f in factor_names}
     rows: list[dict] = []
     for r in ranked:
         label = display_name(r.ticker, names.get(r.ticker)) + \
@@ -419,10 +458,11 @@ def ranked_table_rows(ranked: list["RankedTicker"],
                "Verdict": format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""))}
         for f in factor_names:
             if f in r.factor_ranks:
-                row[f] = f"{r.factor_ranks[f]:.0f}" + \
-                    ("*" if f in r.imputed_factors else "")
+                row[columns[f]] = format_factor_cell(
+                    r.factor_ranks[f], r.factor_values.get(f), f,
+                    f in r.imputed_factors)
             else:
-                row[f] = "—"
+                row[columns[f]] = "—"
         rows.append(row)
     return rows, factor_names
 
@@ -438,7 +478,8 @@ def format_position_cell(position: Optional[int], cohort_size: int, tied: bool,
     score = format_score(combined_rank)
     if position is None:
         return f"score {score}"
-    best, worst = n_factors, n_factors * cohort_size
     tie = " (tied)" if tied else ""
-    return (f"#{position} of {cohort_size}{tie} · score {score} "
-            f"(best {best} · worst {worst})")
+    # REPORT-1: the "(best 3 · worst 30)" bounds move OUT of every row and are stated
+    # ONCE above the table (report_language.format_score_gloss) — identical numbers,
+    # said once instead of ten times.
+    return f"#{position} of {cohort_size}{tie} · score {score}"

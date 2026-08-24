@@ -326,7 +326,7 @@ def _payout_rank_stage(payouts: dict, max_payout):
         def get_dividend_history(self, ticker, *, start, end):
             return []
 
-    ranked, excluded, _, _ = _rank_stage(list(payouts), _Strat(), _A(),
+    ranked, excluded, _, _, _ = _rank_stage(list(payouts), _Strat(), _A(),
                                          today=date(2026, 6, 30))
     return ranked, excluded
 
@@ -403,7 +403,7 @@ def test_rank_stage_prefilter_excludes_failing_names_pre_rank():
         def get_dividend_history(self, t, *, start, end):
             return []
 
-    ranked, excluded, _, _ = _rank_stage(["AAPL", "JNJ"], cons, _A(),
+    ranked, excluded, _, _, _ = _rank_stage(["AAPL", "JNJ"], cons, _A(),
                                          today=date(2026, 6, 30),
                                          prefilter_criteria=CONS_SCREEN.criteria)
     assert {r.ticker for r in ranked} == {"JNJ"}         # AAPL prefiltered out
@@ -496,7 +496,7 @@ def test_unrateable_excluded_on_both_prefiltered_and_unprefiltered_paths():
     lens = load_strategy(STRAT_DIR / "magic_value_screen_v1.yaml")
 
     for prefilter in (None, lens.criteria):              # un-prefiltered AND prefiltered
-        ranked, excluded, _, _ = _rank_stage(
+        ranked, excluded, _, _, _ = _rank_stage(
             ["GOOD", "PARA", "WBA"], MAGIC_NO_PREFILTER, _DelistedAdapter(),
             today=date(2026, 6, 30), prefilter_criteria=prefilter)
         assert {r.ticker for r in ranked} == {"GOOD"}    # ghosts NOT ranked
