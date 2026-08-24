@@ -1428,92 +1428,164 @@ def _persist_universe_run(result, run_start: datetime,
                              out_dir=UNIVERSE_RUNS_DIR)
 
 
+def _persist_multi_strategy_run(multi_result, run_start: datetime,
+                                universe_display_name: str) -> tuple[Path, Path]:
+    """Auto-persist a multi-lens run as ONE markdown + ONE HTML (REPORT-2).
+
+    A run used to write one standalone pair PER LENS — four files for four lenses, each
+    repeating the same cohort, prices and valuation band. It now writes exactly one pair
+    covering every lens, named for the cohort and the LENS COUNT rather than for any one
+    strategy (none of them owns the file).
+
+    RECORD LAYER UNTOUCHED: this only changes the human-facing REPORT files. Each
+    strategy's run is still frozen individually under ``runs/`` by
+    ``run_rank_pipeline(freeze_dir=…)``, still carries its own membership manifest and
+    member hash, and still grades individually on forward returns."""
+    from aristos_council.download_names import multi_universe_download_name
+    from aristos_council.export.report_html import multi_strategy_report_html
+    from aristos_council.persistence.universe_runs import save_universe_run
+
+    n = len(multi_result.strategy_ids)
+    mode = multi_result.meta.get("council_mode", "ranker-only")
+    md_name = multi_universe_download_name(
+        n, mode, run_start, universe_display_name=universe_display_name)
+    html_name = multi_universe_download_name(
+        n, mode, run_start, ext="html", universe_display_name=universe_display_name)
+    md_bytes = _multi_strategy_markdown(multi_result, run_start).encode("utf-8")
+    html_bytes = multi_strategy_report_html(
+        multi_result, run_start=run_start).encode("utf-8")
+    return save_universe_run(md_bytes, html_bytes, md_name=md_name,
+                             html_name=html_name, out_dir=UNIVERSE_RUNS_DIR)
+
+
 def _multi_columns(multi_result) -> dict[str, str]:
-    """strategy_id -> its column header: the friendly display name, with the id appended
-    ONLY when two selected strategies share a label (GARP v1/v2 do) — a column must never
-    silently swallow another's cells."""
-    ids = multi_result.strategy_ids
-    labels = {sid: (multi_result.strategy_names.get(sid) or sid) for sid in ids}
-    seen: dict[str, int] = {}
-    for lbl in labels.values():
-        seen[lbl] = seen.get(lbl, 0) + 1
-    return {sid: (lbl if seen[lbl] == 1 else f"{lbl} ({sid})")
-            for sid, lbl in labels.items()}
+    """strategy_id -> its column header — a thin delegate to the shared builder."""
+    from aristos_council.pipeline import multi_strategy_columns
+
+    return multi_strategy_columns(multi_result)
 
 
 def _multi_grid_rows(multi_result) -> list[dict]:
-    """The combined grid as table rows (FUND-RUN-1) — one row per name, one column per
-    strategy, plus the rank-sum. Pure, so the table and the markdown download read the
-    SAME cells. ``‡`` marks a rank-sum over FEWER lenses than the run used (nothing is
-    imputed for a strategy that excluded the name), so a smaller sum is never misread."""
-    columns = _multi_columns(multi_result)
-    rows = []
-    for row in multi_result.rows:
-        rs = "—" if row.rank_sum is None else str(row.rank_sum)
-        if row.rank_sum is not None and not row.comparable:
-            rs = f"{rs}‡"
-        cells = {"Name": row.display, "Rank-sum": rs,
-                 "Graded by": f"{row.graded} of {len(multi_result.strategy_ids)}"}
-        for sid, header in columns.items():
-            cells[header] = row.cells[sid].render()
-        rows.append(cells)
-    return rows
+    """The verdict table's rows — a thin delegate to the ONE shared builder
+    (``pipeline.multi_strategy_grid_rows``), so the Run tab, the merged markdown and the
+    merged HTML export render byte-identical cells (REPORT-2 moved the body there;
+    behaviour unchanged apart from the column order stated in the spec)."""
+    from aristos_council.pipeline import multi_strategy_grid_rows
+
+    return multi_strategy_grid_rows(multi_result)[0]
 
 
-def _multi_strategy_markdown(multi_result) -> str:
-    """The multi-lens re-grade as a self-contained markdown doc (the download). The
-    per-strategy runs are persisted individually by the existing single-run sink; this is
-    the COMBINED view, which has no on-disk format of its own."""
+def _multi_strategy_markdown(multi_result, run_start=None) -> str:
+    """ONE merged markdown report for the whole run, however many lenses ran (REPORT-2).
+
+    Before this, ticking three extra lenses wrote FOUR standalone documents, each
+    repeating the same cohort, the same prices and the same valuation band — so
+    comparing lenses meant opening four files side by side. This is the single document
+    the scout verdict reports are modelled on: one header, the rules each lens applied,
+    one verdict table with a column per lens, the per-NAME facts stated ONCE, and then
+    only the things that genuinely differ per lens.
+
+    RECORD LAYER UNTOUCHED: only the human-facing report merges. Each strategy's run is
+    still frozen individually under ``runs/`` (so it replays), still carries its own
+    membership manifest and member hash, and still grades individually on forward
+    returns. Merging the reports drops no per-strategy record."""
+    from aristos_council.pipeline import (
+        VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, exclusion_rows,
+        multi_strategy_grid_rows, multi_summary_line, provenance_sentences,
+        valuation_band_table,
+    )
+    from aristos_council.export.report_html import DISCLAIMER, DOCTRINE
+    from aristos_council.report_language import label_with_id
+
     m = multi_result.meta
     ids = multi_result.strategy_ids
-    lines = [f"# Multi-lens re-grade — {len(ids)} strategies", "",
-             f"**Running {', '.join(ids)} on {m.get('universe_id') or 'adhoc'} in "
-             f"{m['council_mode']}.**", "",
-             "_Verdict: deterministic ranker. No LLM ran — narration is a per-strategy "
-             "run._", "",
-             f"- names in cohort: {m.get('universe_size', 0)}",
-             f"- ranked by ALL {len(ids)} strategies: {m.get('graded_by_all', 0)}", "",
-             "## Combined grid", ""]
-    rows = _multi_grid_rows(multi_result)
+    names = multi_result.strategy_names
+    cohort = label_with_id(m.get("universe_name", ""), m.get("universe_id") or "adhoc")
+
+    # 1 — ONE header, not four.
+    lines = [f"# Universe run — {cohort} under {len(ids)} lenses", ""]
+    lines.append(f"**Cohort: {cohort} — {m.get('universe_size', 0)} names**")
+    lines.append(f"**Lenses: " + "; ".join(
+        label_with_id(names.get(sid) or sid, sid) for sid in ids) + "**")
+    if run_start is not None:
+        lines.append(f"**Run: {_local_stamp(run_start)} — "
+                     f"{_mode_phrase(m.get('council_mode', ''))}**")
+    else:
+        lines.append(f"**Run: {_mode_phrase(m.get('council_mode', ''))}**")
+    lines += ["", "_Verdict: deterministic ranker. No LLM ran — narration stays a "
+                  "per-strategy run._", ""]
+
+    # 3 — the summary line (2 is the rules block, which is long; the one-liner leads).
+    lines += [f"### {multi_summary_line(multi_result)}", ""]
+
+    # 2 — rules applied, ONE sub-block per lens (each has its own screen and thresholds).
+    lines += ["", "## Rules applied — by lens", "",
+              "_Each lens screens on its own rules; a name excluded by one may be ranked "
+              "by another. The rules below are read from the strategies that actually "
+              "ran._"]
+    for sid in ids:
+        lines += ["", f"### {label_with_id(names.get(sid) or sid, sid)}"]
+        lines += _rules_applied_markdown(multi_result.results[sid])[1:]
+
+    # 4 — THE VERDICT TABLE: one row per name, one column per lens.
+    lines += ["", f"## {VERDICT_TABLE_TITLE}", "", VERDICT_TABLE_NOTE, ""]
+    rows, head = multi_strategy_grid_rows(multi_result)
     if rows:
-        head = list(rows[0].keys())
-        lines.append("| " + " | ".join(head) + " |")
-        lines.append("|" + "---|" * len(head))
-        for row in rows:
-            lines.append("| " + " | ".join(str(row[h]) for h in head) + " |")
+        lines += _md_table(head, rows)
     else:
         lines.append("_(no names reported)_")
-    lines += ["", "Rank-sum adds the per-strategy cohort POSITIONS and is comparable only "
-                  "across names ranked by ALL strategies (‡ = ranked by fewer; nothing "
-                  "imputed for an exclusion).", ""]
-    # VALBAND-1: the absolute band, computed once (on the first lens) — a per-NAME context
-    # column, not a per-strategy verdict, so it sits ONCE under the combined grid. Empty
-    # (section omitted) unless the "Valuation band" checkbox was ticked.
-    from aristos_council.pipeline import valuation_band_table
+
+    # 5 — the per-NAME facts, ONCE: they do not vary by lens.
     first = multi_result.results[ids[0]] if ids else None
-    # PRICE-1/PRICE-2/REPORT-1: price, 12-month range and valuation are per-NAME facts,
-    # identical under every lens, so they sit ONCE under the combined grid — in ONE
-    # table, not two sections listing the same names twice.
     if first is not None:
         band_md = _valuation_band_markdown(valuation_band_table(first))
-        lines += (band_md + [""]) if band_md else []
+        lines += band_md
+
+    # 6 — what DOES vary per lens.
     for sid in ids:
         res = multi_result.results[sid]
-        lines += [f"## {multi_result.strategy_names.get(sid) or sid} (`{sid}`)", ""]
-        lines.append(f"- ranked: {res.meta['ranked_count']} / "
-                     f"{res.meta['universe_size']}")
+        lines += ["", f"## {label_with_id(names.get(sid) or sid, sid)} — detail", "",
+                  f"- Ranked: {res.meta['ranked_count']} of "
+                  f"{res.meta['universe_size']} names"]
         if res.excluded:
-            lines += ["", "Excluded (screen / cap / sector):", ""]
-            lines += [f"- **{display_name(t, res.names.get(t))}** — {why}"
-                      for t, why in res.excluded]
+            lines += ["", "**Excluded — did not pass a rule, so was never ranked**", ""]
+            for row in exclusion_rows(res):
+                muted = f" `{row['criterion']}`" if row["criterion"] else ""
+                lines.append(f"- **{row['name']}** — {row['sentence']}{muted}")
+                if row["flag"]:
+                    lines.append(f"  - {row['flag']}")
         if res.unrateable:
-            lines += ["", "Unrateable (no data — no verdict):", ""]
+            lines += ["", "**No usable data — no verdict was formed**", ""]
             lines += [f"- **{display_name(t, res.names.get(t))}** — {why}"
                       for t, why in res.unrateable]
-        lines.append("")
+        if res.fetch_errors:
+            lines += ["", "**Data fetch failed — re-run to recover**", ""]
+            lines += [f"- **{display_name(t, res.names.get(t))}** — {why}"
+                      for t, why in res.fetch_errors]
+        entries = provenance_sentences(res)
+        if entries:
+            lines += ["", "**Where the numbers came from**", ""]
+            lines += [f"- {e['sentence']}" for e in entries]
+
     # ONE cohort under N lenses — so ONE membership record covers the whole grid.
     lines += _cohort_membership_lines(m)
+    # 7 — ONE common footer.
+    lines += ["", "---", "", f"_{DOCTRINE}_", "", f"_{DISCLAIMER}_", ""]
     return "\n".join(lines)
+
+
+def _mode_phrase(council_mode: str) -> str:
+    """The executed mode in words — the same phrasing every REPORT-1 surface uses."""
+    if council_mode == "ranker-only":
+        return "ranker only, no AI commentary"
+    return f"{council_mode} commentary" if council_mode else ""
+
+
+def _local_stamp(run_start) -> str:
+    """Run start in Europe/Berlin, the display zone every user-facing surface uses."""
+    from aristos_council.export.report_html import _local_stamp as stamp
+
+    return stamp(run_start)
 
 
 def _render_multi_strategy_result(multi_result) -> None:
@@ -1524,23 +1596,54 @@ def _render_multi_strategy_result(multi_result) -> None:
 
     persisted = st.session_state.get("uni_multi_persisted")
     if persisted:
-        paths = ", ".join(f"`{md.relative_to(ROOT)}`" for md, _html in persisted)
-        st.success(f"💾 Saved the {len(persisted)} per-strategy run(s) to: {paths}")
+        md_path, html_path = persisted
+        st.success(f"💾 Saved this run to: `{md_path.relative_to(ROOT)}` and "
+                   f"`{html_path.relative_to(ROOT)}` — ONE merged report covering all "
+                   f"{len(ids)} lenses.")
 
-    st.markdown(f"### Combined grid — {len(ids)} strategies × "
-                f"{m.get('universe_size', 0)} names")
-    st.caption(f"Running {', '.join(ids)} on {m.get('universe_id') or 'adhoc'} in "
-               f"{m['council_mode']}.")
+    from aristos_council.pipeline import (
+        RULES_SECTION_TITLE, VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE,
+        multi_strategy_grid_rows, multi_summary_line, rules_applied,
+    )
+    from aristos_council.report_language import label_with_id
+
+    cohort = label_with_id(m.get("universe_name", ""), m.get("universe_id") or "adhoc")
+    lens_labels = {sid: label_with_id(multi_result.strategy_names.get(sid) or sid, sid)
+                   for sid in ids}
+    st.markdown(f"#### {cohort} — {len(ids)} lenses × {m.get('universe_size', 0)} names")
+    st.caption("Lenses: " + "; ".join(lens_labels.values()))
+    st.markdown(f"### {multi_summary_line(multi_result)}")
     st.caption("**Verdict: deterministic ranker.** No LLM ran — narration stays a "
                "per-strategy run.")
-    rows = _multi_grid_rows(multi_result)
+
+    # REPORT-2: the rules EACH lens applied, before the verdicts — a name excluded by one
+    # lens and ranked by another is only legible once both rule sets are stated.
+    with st.expander(f"{RULES_SECTION_TITLE} — by lens", expanded=False):
+        for sid in ids:
+            rules = rules_applied(multi_result.results[sid])
+            st.markdown(f"**{lens_labels[sid]}**")
+            if rules is None:
+                st.caption("This lens declares no screen.")
+                continue
+            st.caption(f"{rules.screen_heading} — {rules.screen_note}")
+            if rules.rules:
+                st.dataframe([{"Rule": r.label, "Limit": r.threshold_phrase,
+                               "What it did": r.tally,
+                               "Measured on": r.measured or "—",
+                               "Criterion id": r.criterion} for r in rules.rules],
+                             hide_index=True, width="stretch")
+            for line in rules.ranker_lines:
+                st.caption(line)
+
+    st.subheader(VERDICT_TABLE_TITLE)
+    rows, _head = multi_strategy_grid_rows(multi_result)
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.info("No names reported.")
-    st.caption(f"Rank-sum adds the per-strategy cohort POSITIONS; comparable only across "
-               f"the {m.get('graded_by_all', 0)} name(s) ranked by ALL {len(ids)} "
-               f"strategies (‡ = ranked by fewer — nothing is imputed for an exclusion).")
+    st.caption(VERDICT_TABLE_NOTE)
+    st.caption(f"{m.get('graded_by_all', 0)} name(s) were ranked by ALL {len(ids)} "
+               "lenses — only those rank-sums are comparable.")
 
     # PRICE-1 / VALBAND-1: per-NAME context beside the combined grid, never a verdict.
     # The price is identical under every lens so it is read off the first one — and it is
@@ -1551,29 +1654,60 @@ def _render_multi_strategy_result(multi_result) -> None:
     _render_valuation_band_table(
         valuation_band_table(first) if first is not None else None)
 
+    # What DOES vary per lens — exclusion reasons, no-data names, factor sourcing.
+    from aristos_council.pipeline import exclusion_rows, provenance_sentences
+
     for sid in ids:
         res = multi_result.results[sid]
-        label = multi_result.strategy_names.get(sid) or sid
-        with st.expander(f"{label} — exclusions & unrateable "
-                         f"({len(res.excluded)} excluded, "
-                         f"{len(res.unrateable)} unrateable)"):
+        with st.expander(f"{lens_labels[sid]} — detail "
+                         f"({res.meta['ranked_count']} ranked, "
+                         f"{len(res.excluded)} excluded, "
+                         f"{len(res.unrateable)} with no data)"):
             if res.excluded:
-                st.markdown("**Excluded (failed rule + observed value):**")
-                for t, why in res.excluded:
-                    st.markdown(f"- **{display_name(t, res.names.get(t))}** — {why}")
+                st.markdown("**Excluded — did not pass a rule, so was never ranked**")
+                for row in exclusion_rows(res):
+                    muted = f" `{row['criterion']}`" if row["criterion"] else ""
+                    st.markdown(f"- **{row['name']}** — {row['sentence']}{muted}")
+                    if row["flag"]:
+                        st.caption(row["flag"])
             if res.unrateable:
-                st.markdown("**Unrateable (no data — no verdict):**")
+                st.markdown("**No usable data — no verdict was formed**")
                 for t, why in res.unrateable:
                     st.markdown(f"- **{display_name(t, res.names.get(t))}** — {why}")
             if not res.excluded and not res.unrateable:
                 st.caption("Every name was rateable and ranked.")
+            entries = provenance_sentences(res)
+            if entries:
+                st.markdown("**Where the numbers came from**")
+                for e in entries:
+                    st.markdown(f"- {e['sentence']}")
 
+    # REPORT-2: ONE merged pair, whatever the lens count. The old "download combined grid
+    # (markdown)" button is GONE — it served a grid-only subset of this same document.
     run_start = st.session_state.get("uni_run_start") or datetime.now(timezone.utc)
-    st.download_button(
-        "⬇ Download combined grid (markdown)",
-        data=_multi_strategy_markdown(multi_result).encode("utf-8"),
-        file_name=f"multi_lens_regrade_{run_start.strftime('%Y%m%d_%H%M')}.md",
-        mime="text/markdown", key="uni_multi_download")
+    display_name_for_file = st.session_state.get("uni_universe_display_name", "")
+    from aristos_council.download_names import multi_universe_download_name
+    from aristos_council.export.report_html import multi_strategy_report_html
+
+    n = len(ids)
+    mode = m.get("council_mode", "ranker-only")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.download_button(
+            "⬇ Download this run (markdown)",
+            data=_multi_strategy_markdown(multi_result, run_start).encode("utf-8"),
+            file_name=multi_universe_download_name(
+                n, mode, run_start, universe_display_name=display_name_for_file),
+            mime="text/markdown", key="uni_multi_download")
+    with c2:
+        st.download_button(
+            "⬇ Download this run (HTML)",
+            data=multi_strategy_report_html(
+                multi_result, run_start=run_start).encode("utf-8"),
+            file_name=multi_universe_download_name(
+                n, mode, run_start, ext="html",
+                universe_display_name=display_name_for_file),
+            mime="text/html", key="uni_multi_download_html")
 
 
 def _render_universe_result(result) -> None:
@@ -2047,12 +2181,12 @@ def render_universe_tab(show_validation: bool = False) -> None:
             st.session_state["uni_multi_result"] = multi_result
             st.session_state["uni_run_start"] = run_start
             st.session_state["uni_universe_display_name"] = universe_display_name
-            # Each column is a complete run of that strategy — persist them with the SAME
-            # helper a single run uses, so no completed run lives only in the session.
+            # REPORT-2: ONE merged report for the whole run, however many lenses ran.
+            # (The per-strategy RECORDS are untouched — every column was frozen under
+            # runs/ by its own run_rank_pipeline call above, so each stays replayable.)
             st.session_state["uni_persisted_paths"] = None
-            st.session_state["uni_multi_persisted"] = [
-                _persist_universe_run(res, run_start, universe_display_name)
-                for res in multi_result.results.values()]
+            st.session_state["uni_multi_persisted"] = _persist_multi_strategy_run(
+                multi_result, run_start, universe_display_name)
             st.session_state.pop("uni_result", None)
     elif run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)

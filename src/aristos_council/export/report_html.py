@@ -392,6 +392,170 @@ def _narration_html(narrative: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Merged multi-lens report (REPORT-2)
+# --------------------------------------------------------------------------- #
+def multi_strategy_report_html(multi_result, *,
+                               run_start: Optional[datetime] = None) -> str:
+    """ONE self-contained HTML report for a whole multi-lens run (REPORT-2).
+
+    Ticking three extra lenses used to write FOUR standalone documents, each repeating
+    the same cohort, the same prices and the same valuation band. This is the single
+    document: one header, the rules each lens applied, ONE verdict table with a column
+    per lens, the per-NAME facts stated once, then only what genuinely differs per lens,
+    and one footer.
+
+    Reads the SAME builders every other surface does — ``multi_strategy_grid_rows`` for
+    the table, ``rules_applied`` / ``exclusion_rows`` / ``provenance_sentences`` per
+    lens, ``valuation_band_table`` for the shared price-and-valuation section — so this
+    export can never carry a value the Run tab or the markdown does not.
+
+    RECORD LAYER UNTOUCHED: only the human-facing report merges. Each strategy's run is
+    still frozen individually under ``runs/`` and still grades individually."""
+    from ..pipeline import (
+        PROVENANCE_SECTION_TITLE,
+        RULES_SECTION_TITLE,
+        VERDICT_TABLE_NOTE,
+        VERDICT_TABLE_TITLE,
+        exclusion_rows,
+        multi_strategy_grid_rows,
+        multi_summary_line,
+        provenance_sentences,
+        rules_applied,
+        valuation_band_table,
+    )
+    from ..data.adapter import display_name
+    from ..report_language import label_with_id
+
+    m = multi_result.meta
+    ids = multi_result.strategy_ids
+    names = multi_result.strategy_names
+    cohort = label_with_id(m.get("universe_name", ""), m.get("universe_id") or "adhoc")
+    stamp = _local_stamp(run_start)
+    mode = m.get("council_mode", "")
+    mode_phrase = ("ranker only, no AI commentary" if mode == "ranker-only"
+                   else f"{mode} commentary" if mode else "")
+    lens_labels = [label_with_id(names.get(sid) or sid, sid) for sid in ids]
+    parts: list[str] = []
+
+    # ----- 1: ONE header, not one per lens.
+    parts.append(
+        '<header class="doc">'
+        '<p class="kicker">Aristos Council · universe run · multi-lens</p>'
+        f"<h1>{_esc(cohort)} — {len(ids)} lenses</h1>"
+        + _kv([
+            ("Cohort", _esc(f'{cohort} — {m.get("universe_size", 0)} names')),
+            ("Lenses", "<br>".join(_esc(lbl) for lbl in lens_labels)),
+            ("Run", _esc(" — ".join(p for p in (stamp, mode_phrase) if p))),
+        ])
+        + '<p class="house">Verdict: deterministic ranker. No LLM ran — narration '
+          "stays a per-strategy run.</p>"
+        f'<p class="summary">{_esc(multi_summary_line(multi_result))}</p>'
+        "</header>")
+
+    # ----- 2: rules applied, ONE sub-block per lens — each screens on its own rules.
+    parts.append(f'<section class="section"><h2>{_esc(RULES_SECTION_TITLE)} — by lens</h2>'
+                 '<p class="note">Each lens screens on its own rules; a name excluded by '
+                 "one may be ranked by another. The rules below are read from the "
+                 "strategies that actually ran.</p>")
+    for sid, label in zip(ids, lens_labels):
+        rules = rules_applied(multi_result.results[sid])
+        parts.append(f"<h3>{_esc(label)}</h3>")
+        if rules is None:
+            parts.append('<p class="note">This lens declares no screen.</p>')
+            continue
+        show_basis = any(r.measured for r in rules.rules)
+        head = ["Rule", "Limit", "What it did"] + (["Measured on"] if show_basis else [])
+        body = [[f'<strong>{_esc(r.label)}</strong>'
+                 f'<br><code class="muted">{_esc(r.criterion)}</code>',
+                 _esc(r.threshold_phrase), _esc(r.tally)]
+                + ([_esc(r.measured or "—")] if show_basis else [])
+                for r in rules.rules]
+        parts.append(f'<p class="note"><strong>{_esc(rules.screen_heading)}</strong><br>'
+                     f'{_esc(rules.screen_note)}</p>'
+                     + (_table(head, body, cls="ranked") if body else "")
+                     + _bullets(_esc(line) for line in rules.ranker_lines))
+    parts.append("</section>")
+
+    # ----- 4: THE VERDICT TABLE — the heart of the merged report.
+    rows, head = multi_strategy_grid_rows(multi_result)
+    parts.append(f'<section class="section"><h2>{_esc(VERDICT_TABLE_TITLE)}</h2>'
+                 f'<p class="note">{_esc(VERDICT_TABLE_NOTE)}</p>')
+    if rows:
+        body = [[f'<strong>{_esc(row[head[0]])}</strong>']
+                + [_verdict_grid_cell(row[c]) for c in head[1:]]
+                for row in rows]
+        parts.append(_table(head, body, cls="ranked"))
+    else:
+        parts.append('<p class="note">(no names reported)</p>')
+    parts.append("</section>")
+
+    # ----- 5: the per-NAME facts, ONCE — they do not vary by lens.
+    first = multi_result.results[ids[0]] if ids else None
+    band_table = valuation_band_table(first) if first is not None else None
+    if band_table is not None:
+        body = [[_esc(row[c]) if i else f"<strong>{_esc(row[c])}</strong>"
+                 for i, c in enumerate(band_table.columns)]
+                for row in band_table.rows]
+        parts.append('<section class="section">'
+                     f"<h2>{_esc(band_table.title)}</h2>"
+                     f'<p class="note">{_esc(band_table.intro)}</p>'
+                     + _table(band_table.columns, body, cls="ranked")
+                     + _bullets(_esc(n) for n in band_table.footnotes)
+                     + "</section>")
+
+    # ----- 6: what DOES vary per lens, clearly headed by lens.
+    for sid, label in zip(ids, lens_labels):
+        res = multi_result.results[sid]
+        parts.append(f'<section class="section"><h2>{_esc(label)} — detail</h2>'
+                     f'<p class="note">Ranked {res.meta["ranked_count"]} of '
+                     f'{res.meta["universe_size"]} names.</p>')
+        if res.excluded:
+            items = []
+            for row in exclusion_rows(res):
+                muted = (f' <code class="muted">{_esc(row["criterion"])}</code>'
+                         if row["criterion"] else "")
+                flag = (f'<br><span class="flag">{_esc(row["flag"])}</span>'
+                        if row["flag"] else "")
+                items.append(f'<strong>{_esc(row["name"])}</strong> — '
+                             f'{_esc(row["sentence"])}{muted}{flag}')
+            parts.append(f"<h3>Excluded — did not pass a rule · {len(res.excluded)}</h3>"
+                         + _bullets(items))
+        if res.unrateable:
+            parts.append(f"<h3>No usable data — no verdict · {len(res.unrateable)}</h3>"
+                         + _bullets(
+                             f'<strong>{_esc(display_name(t, res.names.get(t)))}</strong>'
+                             f" — {_inline(why)}" for t, why in res.unrateable))
+        if getattr(res, "fetch_errors", None):
+            parts.append(f"<h3>Data fetch failed — re-run to recover · "
+                         f"{len(res.fetch_errors)}</h3>"
+                         + _bullets(
+                             f'<strong>{_esc(display_name(t, res.names.get(t)))}</strong>'
+                             f" — {_inline(why)}" for t, why in res.fetch_errors))
+        entries = provenance_sentences(res)
+        if entries:
+            parts.append(f"<h3>{_esc(PROVENANCE_SECTION_TITLE)}</h3>"
+                         + _bullets(_esc(e["sentence"]) for e in entries))
+        parts.append("</section>")
+
+    # ----- 7: ONE common footer.
+    parts.append(_footer())
+    return _document(title=f"{cohort} — {len(ids)} lenses", body="\n".join(parts))
+
+
+def _verdict_grid_cell(text: str) -> str:
+    """One verdict-table cell. A ranked cell's VERDICT keeps the shared palette so the
+    grid scans by colour exactly as the single-lens ranked table does; every other axis
+    (excluded / no data / fetch failed) stays plain, because it is not a verdict."""
+    for verdict, hexcode in _VERDICT_HEX.items():
+        if text.endswith(f"· {verdict}"):
+            head = text[: -len(verdict)]
+            return (f'<span class="mono">{_esc(head)}</span>'
+                    f'<span class="verdict verdict-{verdict.lower()}">{_esc(verdict)}'
+                    "</span>")
+    return f'<span class="mono">{_esc(text)}</span>'
+
+
+# --------------------------------------------------------------------------- #
 # Universe report
 # --------------------------------------------------------------------------- #
 def universe_report_html(result, *, run_start: Optional[datetime] = None,

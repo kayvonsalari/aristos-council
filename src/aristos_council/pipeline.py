@@ -1970,7 +1970,13 @@ class MultiStrategyCell:
     cohort_size: int = 0
     verdict: str = ""
     score: Optional[float] = None
+    # The RAW reason string, exactly as the run recorded it — the scoreboard and the
+    # verdict publisher parse this shape, so it is never rewritten.
     reason: str = ""
+    # The same exclusion in REPORT-1 plain English ("dividends took 120% of free cash
+    # flow; the rule allows at most 80%"). Computed by ``combine_rank_results``, which
+    # has the result the sentence needs; empty when there is no rule to name.
+    reason_plain: str = ""
 
     def render(self) -> str:
         """The cell as one honest line — each axis reads distinctly (an exclusion is not
@@ -1979,11 +1985,13 @@ class MultiStrategyCell:
             pos = f"#{self.position} of {self.cohort_size}" if self.position else "ranked"
             return f"{pos} · {self.verdict.upper()}"
         if self.status == _EXCLUDED:
-            return f"excluded — {self.reason}"
+            return f"excluded — {self.reason_plain or self.reason}"
         if self.status == _UNRATEABLE:
-            return f"UNRATEABLE — {self.reason}"
+            # REPORT-2: "no data" is the cell's own axis — short enough to scan in a
+            # grid, with the full reason kept in that lens's detail section below.
+            return "no data"
         if self.status == _FETCH_ERROR:
-            return f"fetch failed (rerun) — {self.reason}"
+            return "fetch failed (rerun)"
         return "—"
 
 
@@ -2047,8 +2055,14 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
                               (_UNRATEABLE, res.unrateable),
                               (_FETCH_ERROR, res.fetch_errors)):
             for ticker, reason in pairs:
-                _cell(ticker, MultiStrategyCell(strategy_id=sid, status=status,
-                                                reason=reason))
+                # The RAW reason is kept verbatim; the plain-English sentence rides
+                # beside it (REPORT-1 wording, REPORT-2 grid), never replacing it.
+                body, _flag = _split_flag(reason)
+                plain = (exclusion_sentence(res, ticker, body)
+                         if status == _EXCLUDED else "")
+                _cell(ticker, MultiStrategyCell(
+                    strategy_id=sid, status=status, reason=reason,
+                    reason_plain=plain if plain != body else ""))
 
     rows: list[MultiStrategyRow] = []
     for ticker in sorted(cells):
@@ -2122,6 +2136,9 @@ def run_multi_strategy_pipeline(
     meta = {
         "strategy_ids": list(ids),
         "universe_id": first.meta.get("universe_id"),
+        # REPORT-1/REPORT-2: the cohort's HUMAN name, carried up so the merged report's
+        # single header can lead with it and keep the id beside it.
+        "universe_name": first.meta.get("universe_name", ""),
         # ONE cohort under N lenses, so the membership record is the same for every column
         # (FUND-UI-2) — carried up from the first run rather than recomputed.
         "universe_members": list(first.meta.get("universe_members") or []),
@@ -2133,6 +2150,84 @@ def run_multi_strategy_pipeline(
     }
     return MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
                                results=results, rows=rows, meta=meta)
+
+
+# --------------------------------------------------------------------------- #
+# REPORT-2 — ONE merged report per run, however many lenses ran
+# --------------------------------------------------------------------------- #
+VERDICT_TABLE_TITLE = "Verdict by lens"
+VERDICT_TABLE_NOTE = (
+    "One row per name, one column per lens. A ranked cell gives the name's position in "
+    "THAT lens's cohort and its verdict; an excluded cell names the rule it failed; a "
+    "name with no usable data reads \u201cno data\u201d and keeps its reason in that "
+    "lens's own section below. Rank-sum adds the per-lens POSITIONS and is comparable "
+    "only across names ranked by EVERY lens \u2014 \u2021 marks a sum over fewer, and "
+    "nothing is imputed for an exclusion.")
+_COL_RANK_SUM = "Rank-sum"
+_COL_GRADED_BY = "Graded by"
+
+
+def multi_strategy_columns(result: MultiStrategyResult) -> dict[str, str]:
+    """``strategy_id -> column header``: the friendly display name, with the id appended
+    ONLY when two selected strategies share a label (the two GARP versions do) — a column
+    must never silently swallow another's cells."""
+    ids = result.strategy_ids
+    labels = {sid: (result.strategy_names.get(sid) or sid) for sid in ids}
+    seen: dict[str, int] = {}
+    for lbl in labels.values():
+        seen[lbl] = seen.get(lbl, 0) + 1
+    return {sid: (lbl if seen[lbl] == 1 else f"{lbl} ({sid})")
+            for sid, lbl in labels.items()}
+
+
+def multi_strategy_grid_rows(result: MultiStrategyResult) -> tuple[list[dict], list[str]]:
+    """``(rows, columns)`` for THE verdict table — the ONE builder the Run tab, the
+    merged markdown and the merged HTML all render, so the three cannot drift.
+
+    One row per name in the combined grid's own order (best rank-sum first, then the
+    partially-ranked, then the never-ranked — never re-sorted here). ``\u2021`` marks a
+    rank-sum over FEWER lenses than the run used, so a smaller sum is never misread as a
+    better one."""
+    columns = multi_strategy_columns(result)
+    head = ["Name", *columns.values(), _COL_RANK_SUM, _COL_GRADED_BY]
+    rows = []
+    for row in result.rows:
+        rs = "—" if row.rank_sum is None else str(row.rank_sum)
+        if row.rank_sum is not None and not row.comparable:
+            rs = f"{rs}\u2021"
+        cells = {"Name": row.display, _COL_RANK_SUM: rs,
+                 _COL_GRADED_BY: f"{row.graded} of {len(result.strategy_ids)}"}
+        for sid, header in columns.items():
+            cells[header] = row.cells[sid].render()
+        rows.append(cells)
+    return rows, head
+
+
+def multi_summary_line(result: MultiStrategyResult) -> str:
+    """``"4 lenses × 16 names — 3 names rated BUY by every lens, 5 excluded by every
+    lens, 10 of 16 ranked by at least one."``
+
+    Derived from the combined grid every time, never hardcoded. A clause whose count is
+    ZERO is omitted rather than printed — a zero is noise here, not information."""
+    ids = result.strategy_ids
+    n_lenses = len(ids)
+    size = result.meta.get("universe_size", len(result.rows))
+    buy_all = sum(1 for row in result.rows
+                  if row.comparable
+                  and all(c.status == _RANKED and c.verdict == "buy"
+                          for c in row.cells.values()))
+    excluded_all = sum(1 for row in result.rows
+                       if ids and all(row.cells[s].status == _EXCLUDED for s in ids))
+    ranked_any = sum(1 for row in result.rows if row.graded)
+    parts = []
+    if buy_all:
+        parts.append(f"{buy_all} name{'s' if buy_all != 1 else ''} rated BUY by every "
+                     "lens")
+    if excluded_all:
+        parts.append(f"{excluded_all} excluded by every lens")
+    parts.append(f"{ranked_any} of {size} ranked by at least one")
+    lens_word = "lens" if n_lenses == 1 else "lenses"
+    return f"{n_lenses} {lens_word} × {size} names — " + ", ".join(parts)
 
 
 def format_multi_strategy_grid(result: MultiStrategyResult) -> str:

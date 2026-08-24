@@ -64,6 +64,21 @@ def universe_download_name(strategy_id: str, council_mode: str,
     return f"{prefix}{strategy_id}_{mode_tag(council_mode)}_{_stamp(run_start)}.{ext}"
 
 
+def multi_universe_download_name(n_lenses: int, council_mode: str,
+                                 run_start: datetime, *, ext: str = "md",
+                                 universe_display_name: str = "") -> str:
+    """The MERGED multi-lens run's download name (REPORT-2), e.g.
+    ``universe_defensive-income-16_4lenses_ranker_2026-08-24_1349.html``.
+
+    A multi-lens run produces ONE report covering every lens, so its filename carries the
+    LENS COUNT where a single run carries the strategy id — there is no single strategy
+    that owns the file. Same cohort slug, same mode tag and same stamp as every other
+    run file, so a folder of them still sorts and reads together."""
+    slug = slugify(universe_display_name)
+    prefix = f"universe_{slug}_" if slug else "universe_"
+    return f"{prefix}{n_lenses}lenses_{mode_tag(council_mode)}_{_stamp(run_start)}.{ext}"
+
+
 def company_check_download_name(ticker: str, strategy_id: str,
                                 run_start: datetime, *, ext: str = "txt") -> str:
     """The Company Check download name. A SINGLE-NAME file, so the ticker is REQUIRED and

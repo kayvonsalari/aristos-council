@@ -125,7 +125,10 @@ def test_unrateable_keeps_its_own_axis_in_every_column():
     dead = {row.ticker: row for row in res.rows}["DEAD"]
     assert [cell.status for cell in dead.cells.values()] == ["unrateable", "unrateable"]
     assert dead.rank_sum is None and dead.graded == 0
-    assert "UNRATEABLE" in dead.cells[SCREENED].render()
+    # REPORT-2: the CELL reads "no data" — short enough to scan across a wide grid —
+    # while the RAW reason is kept on the cell and rendered in that lens's detail section.
+    assert dead.cells[SCREENED].render() == "no data"
+    assert "no data" in dead.cells[SCREENED].reason
     assert dead.ticker == res.rows[-1].ticker            # never-ranked names sort last
 
 
@@ -200,8 +203,14 @@ def test_grid_text_carries_every_column_the_sums_and_the_incomparable_mark():
     assert "COMBINED GRID" in text and "2 strategies" in text
     assert SCREENED in text and RAW in text
     assert "deterministic ranker" in text
-    assert "min_roic" in text                     # exclusion reason, verbatim
-    assert "UNRATEABLE" in text                   # its own axis, distinct wording
+    # REPORT-2: an exclusion cell states the rule in REPORT-1 plain English rather than
+    # repeating the machine reason — the criterion id stays in the per-lens detail
+    # section of the merged report, where a whole line can carry it.
+    assert "excluded — return on invested capital" in text
+    assert "the rule requires at least" in text
+    # "no data" is its own axis, worded distinctly from an exclusion (a name with no
+    # data was not judged and failed nothing); its reason is kept in the detail section.
+    assert "no data" in text
     assert "‡" in text                            # C: ranked by fewer lenses
 
 
