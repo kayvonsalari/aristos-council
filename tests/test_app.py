@@ -1111,6 +1111,8 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     _lens_checkbox(at, raw).set_value(True).run()
     assert not at.exception
     blob = _caption_blob(at)
+    # Ranker-only is still the DEFAULT for several lenses (NARR-UNION-1 made it a default
+    # rather than a lock), so the deterministic caption is what a fresh tick shows.
     assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
     assert "ONE combined grid" in blob
     # the run button says how many lenses will run and what it costs, and is not gated

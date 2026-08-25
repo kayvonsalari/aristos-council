@@ -1190,17 +1190,27 @@ MULTI_LENS_LOCK_REASON = ("Several lenses is a deterministic comparison — it c
 
 
 def effective_run_mode(selected: str, *, n_strategies: int) -> str:
-    """The run mode ACTUALLY in force. Several lenses over one list is a deterministic
-    comparison (FUND-RUN-1), so it is forced to ranker-only — and, unlike before, the
-    control is then made to SHOW ranker-only rather than leaving a stale value on screen."""
-    if n_strategies > 1:
-        return RUN_MODE_RANKER
+    """The run mode ACTUALLY in force.
+
+    NARR-UNION-1 relaxed the earlier multi-lens LOCK to a DEFAULT: a multi-lens run can
+    now narrate, because "what does a cross-lens narration even say?" has an answer — one
+    section per NAME over the union of every lens's BUYs, attributing each lens and
+    adjudicating none. Ranker-only remains the default there (it is free), but it is the
+    user's to change, so nothing is forced and nothing is displayed that is not in force."""
     return selected if selected in RUN_MODES else RUN_MODE_NARRATOR
 
 
 def run_mode_locked(n_strategies: int) -> bool:
-    """Is the run mode forced (and therefore not the user's to choose)?"""
-    return n_strategies > 1
+    """Is the run mode forced (and therefore not the user's to choose)? Nothing forces it
+    any more — kept as the ONE place that answers the question, so a future lock has a
+    home and the invariant test has something to read."""
+    return False
+
+
+def default_run_mode(n_strategies: int) -> str:
+    """The mode a run STARTS on: ranker-only for several lenses (a cross-lens comparison
+    is usually wanted for free), narrator for one."""
+    return RUN_MODE_RANKER if n_strategies > 1 else RUN_MODE_NARRATOR
 
 
 def run_mode_arguments(run_mode: str) -> tuple[bool, str]:
@@ -1225,15 +1235,55 @@ def run_mode_narrates(run_mode: str) -> bool:
 
 
 def run_button_label(run_mode: str, *, n_strategies: int,
-                     est_cost: float | None = None) -> str:
+                     est_cost: float | None = None,
+                     narrated_count: int | None = None) -> str:
     """The button says what will happen and what it costs, on its own line:
-    ``"▶ Run 5 lenses — deterministic, free"`` / ``"▶ Run — narrated, est. $0.42"``."""
+
+        ``▶ Run 5 lenses — deterministic, free``
+        ``▶ Run 5 lenses — up to 13 names narrated, est. ≤ $0.68``
+        ``▶ Run — narrated, est. $0.42``
+
+    ``narrated_count`` is the size of the UNION of every lens's BUYs (NARR-UNION-1) — the
+    thing the bill is actually proportional to. Five lenses produced 18 BUY verdicts over
+    only 13 distinct names on the 2026-08-24 run, and it is the 13 that gets charged, so
+    it is the 13 the button states."""
     what = f"Run {n_strategies} lenses" if n_strategies > 1 else "Run"
     if not run_mode_narrates(run_mode):
         return f"▶ {what} — deterministic, free"
     cost = f", est. ${est_cost:.2f}" if est_cost is not None else ""
+    if narrated_count is not None:
+        # UP TO: the true union is only knowable after the free ranking pass (lenses
+        # OVERLAP — five lenses produced 18 BUY verdicts over 13 distinct names on
+        # 2026-08-24), and there is no non-invented way to predict the overlap. So the
+        # pre-click number is stated as the CEILING it is, never as the figure it is not;
+        # the exact count is reported before narration starts and in the report header.
+        ceiling = cost.replace("est. $", "est. ≤ $")
+        return f"▶ {what} — up to {narrated_count} names narrated{ceiling}"
     tail = "narrated" if run_mode == RUN_MODE_NARRATOR else "second opinion"
     return f"▶ {what} — {tail}{cost}"
+
+
+MULTI_LENS_NARRATION_NOTE = (
+    "Several lenses narrate ONE section per NAME, over the union of every lens's BUYs — "
+    "a name three lenses bought is narrated once, not three times. Each lens's verdict is "
+    "attributed; the narrator never reconciles them.")
+
+
+def _estimate_union_size(n_names: int, strategies, *,
+                         narrate_coverage: str = "buys_only") -> int:
+    """An UPPER BOUND on the size of the narrated union, before the free ranking pass has
+    run (NARR-UNION-1).
+
+    The true union is only knowable after ranking, so this is deliberately an upper bound
+    — the same discipline the single-lens estimate already uses. Coverage ``all`` bounds
+    at the whole cohort; ``buys_only`` bounds at the union of each lens's BUY tier, capped
+    at the cohort (lenses OVERLAP heavily, so the sum of the tiers overstates it — the cap
+    is what stops the estimate growing without limit in the lens count)."""
+    if narrate_coverage == "all":
+        return n_names
+    total = sum(_estimate_shortlist_size(n_names, s, narrate_coverage="buys_only")
+                for s in strategies)
+    return min(total, n_names)
 
 
 def run_problems(universe: list[str], *, n_strategies: int, deterministic: bool,
@@ -1502,6 +1552,123 @@ def _persist_universe_run(result, run_start: datetime,
                              out_dir=UNIVERSE_RUNS_DIR)
 
 
+def _shown_path(path) -> str:
+    """A written file's path for display: relative to the repo when it lives there, the
+    full path otherwise. ``Path.relative_to`` RAISES on a path outside the root, which
+    turned a successful save into a crashed render the moment the sink was pointed
+    anywhere else."""
+    try:
+        return str(Path(path).relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _publish_multi(multi_result, run_start, universe_display_name) -> None:
+    """Report a finished multi-lens run: persist it and put it on screen. Shared by the
+    free path and the confirmed-narration path, so a kept ranking is reported exactly as
+    a narrated one is — the ranking work is never thrown away (CONFIRM-SPEND-1)."""
+    st.session_state["uni_multi_result"] = multi_result
+    st.session_state["uni_persisted_paths"] = None
+    # REPORT-2: ONE merged report for the whole run, however many lenses ran. (The
+    # per-strategy RECORDS are untouched — every column was frozen under runs/ by its own
+    # run_rank_pipeline call, so each stays replayable.)
+    st.session_state["uni_multi_persisted"] = _persist_multi_strategy_run(
+        multi_result, run_start, universe_display_name)
+
+
+def _publish_single(result, run_start, universe_display_name) -> None:
+    """Report a finished single-lens run — same contract as ``_publish_multi``."""
+    st.session_state["uni_result"] = result
+    # UI-FIX-1: persist BEFORE rendering — a completed (possibly paid) run must survive a
+    # restart even if nobody clicks a download button.
+    st.session_state["uni_persisted_paths"] = _persist_universe_run(
+        result, run_start, universe_display_name)
+
+
+def _render_narration_confirmation() -> None:
+    """CONFIRM-SPEND-1 — the confirmation step, between the free ranking and the spend.
+
+    The ranking has ALREADY happened, so this states the EXACT count and the EXACT
+    estimate — no upper bound, no coefficient, and the names themselves. Money is only
+    ever spent from the button that carries that figure. "Keep the free ranking" reports
+    the run exactly as a ranker-only run: the work is done and is never discarded."""
+    from aristos_council.pipeline import (
+        narrate_multi_strategy, narrate_rank_result, narration_plan)
+
+    pending = st.session_state.get("uni_pending_narration")
+    if not pending:
+        return
+    result = pending["result"]
+    plan = narration_plan(result, pending.get("coverage", "buys_only"))
+    run_start = st.session_state.get("uni_run_start") or datetime.now(timezone.utc)
+    display_name = st.session_state.get("uni_universe_display_name", "")
+
+    if not plan["count"]:
+        # Nothing to narrate — there is no spend to confirm, so do not ask.
+        st.session_state.pop("uni_pending_narration", None)
+        (_publish_multi if pending["kind"] == "multi" else _publish_single)(
+            result, run_start, display_name)
+        st.info("The ranking produced no name to narrate, so the run is complete and "
+                "nothing was charged.")
+        return
+
+    st.divider()
+    st.subheader("Ranking complete — confirm the narration spend")
+    st.markdown(f"### {plan['count']} names rated BUY by at least one lens — "
+                f"narrate all {plan['count']}? est. ${plan['est_cost']:.2f}"
+                if pending["kind"] == "multi" else
+                f"### {plan['count']} names to narrate — narrate all "
+                f"{plan['count']}? est. ${plan['est_cost']:.2f}")
+    st.caption(f"Exact figures from the ranking that has just run — {plan['basis']}. "
+               "Nothing has been charged yet.")
+    names = getattr(result, "rows", None)
+    if names is not None:
+        labels = {row.ticker: row.display for row in result.rows}
+    else:
+        labels = {t: display_name_of(result, t) for t in plan["names"]}
+    st.write(", ".join(labels.get(t, t) for t in plan["names"]))
+
+    c1, c2 = st.columns(2)
+    with c1:
+        confirmed = st.button(f"▶ Narrate — ${plan['est_cost']:.2f}", type="primary",
+                              key="uni_confirm_narrate")
+    with c2:
+        kept = st.button("Keep the free ranking", key="uni_keep_ranking")
+
+    if kept:
+        # The ranking is DONE. Report it as a normal ranker-only run rather than
+        # discarding it or making the user pay to see it.
+        st.session_state.pop("uni_pending_narration", None)
+        (_publish_multi if pending["kind"] == "multi" else _publish_single)(
+            result, run_start, display_name)
+        st.rerun()
+
+    if confirmed:
+        status = st.status("Narrating…", expanded=True)
+        try:
+            if pending["kind"] == "multi":
+                narrated = narrate_multi_strategy(
+                    result, coverage=pending.get("coverage", "buys_only"),
+                    progress=lambda msg: status.update(label=msg))
+            else:
+                narrated = narrate_rank_result(
+                    result, mode=pending.get("mode", "narrator"),
+                    progress=lambda msg: status.update(label=msg))
+        except Exception as exc:
+            status.update(label="Narration failed", state="error")
+            st.exception(exc)
+            return
+        status.update(label="Done.", state="complete")
+        st.session_state.pop("uni_pending_narration", None)
+        (_publish_multi if pending["kind"] == "multi" else _publish_single)(
+            narrated, run_start, display_name)
+        st.rerun()
+
+
+def display_name_of(result, ticker: str) -> str:
+    return display_name(ticker, (getattr(result, "names", None) or {}).get(ticker))
+
+
 def _persist_multi_strategy_run(multi_result, run_start: datetime,
                                 universe_display_name: str) -> tuple[Path, Path]:
     """Auto-persist a multi-lens run as ONE markdown + ONE HTML (REPORT-2).
@@ -1615,6 +1782,10 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         band_md = _valuation_band_markdown(valuation_band_table(first))
         lines += band_md
 
+    # 5b — NARR-UNION-1: ONE narration section per NAME, over the union of every lens's
+    # BUYs, placed after the verdict table and the valuation band.
+    lines += _multi_narration_markdown(multi_result)
+
     # 6 — what DOES vary per lens.
     for sid in ids:
         res = multi_result.results[sid]
@@ -1648,6 +1819,26 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     return "\n".join(lines)
 
 
+def _multi_narration_markdown(multi_result) -> list[str]:
+    """The narration sections of a multi-lens run (NARR-UNION-1) — ONE per NAME, headed by
+    the name, in the verdict table's own order. ``[]`` on a ranker-only run."""
+    if not multi_result.narratives:
+        return []
+    m = multi_result.meta
+    basis = m.get("narration_basis", "")
+    count = m.get("narrated_count", len(multi_result.narratives))
+    lines = ["", "## Narration", "",
+             f"_{count} name{'s' if count != 1 else ''} narrated — {basis}. ONE section "
+             "per NAME: a name several lenses bought is narrated once, with each lens's "
+             "verdict attributed. The narrator explains the ranker's verdicts; it never "
+             "weighs the lenses against each other._", ""]
+    for ticker, text in multi_result.narratives.items():
+        display = next((r.display for r in multi_result.rows if r.ticker == ticker),
+                       ticker)
+        lines += [f"### {display}", "", text, ""]
+    return lines
+
+
 def _mode_phrase(council_mode: str) -> str:
     """The executed mode in words — the same phrasing every REPORT-1 surface uses."""
     if council_mode == "ranker-only":
@@ -1671,8 +1862,8 @@ def _render_multi_strategy_result(multi_result) -> None:
     persisted = st.session_state.get("uni_multi_persisted")
     if persisted:
         md_path, html_path = persisted
-        st.success(f"💾 Saved this run to: `{md_path.relative_to(ROOT)}` and "
-                   f"`{html_path.relative_to(ROOT)}` — ONE merged report covering all "
+        st.success(f"💾 Saved this run to: `{_shown_path(md_path)}` and "
+                   f"`{_shown_path(html_path)}` — ONE merged report covering all "
                    f"{len(ids)} lenses.")
 
     from aristos_council.pipeline import (
@@ -1792,8 +1983,8 @@ def _render_universe_result(result) -> None:
     persisted = st.session_state.get("uni_persisted_paths")
     if persisted:
         md_path, html_path = persisted
-        st.success(f"💾 Saved to: `{md_path.relative_to(ROOT)}` and "
-                  f"`{html_path.relative_to(ROOT)}`")
+        st.success(f"💾 Saved to: `{_shown_path(md_path)}` and "
+                  f"`{_shown_path(html_path)}`")
 
     from aristos_council.pipeline import (
         PROVENANCE_SECTION_NOTE, PROVENANCE_SECTION_TITLE, RULES_SECTION_TITLE,
@@ -1980,6 +2171,7 @@ def _render_universe_result(result) -> None:
 def render_universe_tab(show_validation: bool = False) -> None:
     import os
 
+    from aristos_council.pipeline import NARRATION_BASIS
     from aristos_council.reproducibility import estimate_cost
 
     from aristos_council.universe import list_universes
@@ -2171,40 +2363,54 @@ def render_universe_tab(show_validation: bool = False) -> None:
 
     strategy_ids = [s.id for s in strategies]
 
-    # RUNMODE-1 — ONE control. The forced multi-lens case renders its OWN widget under a
-    # separate key, so the user's single-lens choice is remembered rather than clobbered
-    # by the forced value: deselecting the extra lens restores it.
+    # RUNMODE-1 — ONE control, and it always shows the value in force.
+    # NARR-UNION-1 relaxed the multi-lens LOCK to a DEFAULT: several lenses now CAN
+    # narrate (one section per NAME over the union of their BUYs), so the control is no
+    # longer disabled. Ranker-only stays the default there because it is free.
     n_strategies = len(strategies)
-    locked = run_mode_locked(n_strategies)
-    # The user's CHOICE is mirrored into a plain (non-widget) session key. Streamlit drops
-    # a widget's own state when that widget is not rendered, so the forced multi-lens
-    # branch would otherwise erase the single-lens choice: untick the extra lens and you
-    # would be stranded back on the default instead of where you were.
-    st.session_state.setdefault("uni_run_mode_choice", RUN_MODE_NARRATOR)
-    remembered = effective_run_mode(st.session_state["uni_run_mode_choice"],
-                                    n_strategies=1)
+    # The mode FOLLOWS the lens count until the user states a preference, and obeys the
+    # user for ever after. Two session keys, because they answer different questions:
+    #   uni_run_mode_choice  — what the user last picked (a plain key, so it outlives the
+    #                          widget: Streamlit drops widget state when the widget is not
+    #                          rendered, which is how the earlier lock erased the choice).
+    #   uni_run_mode_touched — whether the user has picked AT ALL. Untouched, ticking a
+    #                          second lens moves the default to ranker-only (free, and
+    #                          what a cross-lens comparison usually wants); touched, the
+    #                          choice stands through ticking and unticking alike.
+    st.session_state.setdefault("uni_run_mode_choice", default_run_mode(n_strategies))
+    st.session_state.setdefault("uni_run_mode_touched", False)
+    remembered = effective_run_mode(
+        st.session_state["uni_run_mode_choice"]
+        if st.session_state["uni_run_mode_touched"]
+        else default_run_mode(n_strategies),
+        n_strategies=n_strategies)
+
+    def _run_mode_chosen() -> None:
+        st.session_state["uni_run_mode_touched"] = True
+
+    # PRE-INSTANTIATION session write (the convention the list selector already uses):
+    # a widget with a key ignores `index` once its key exists, so an UNTOUCHED control
+    # must be moved explicitly when the lens count changes what the default should be.
+    # Guarded on "untouched" and on an actual change, so a user's pick is never clobbered.
+    st.session_state.setdefault("uni_run_mode", remembered)
+    if (not st.session_state["uni_run_mode_touched"]
+            and st.session_state["uni_run_mode"] != remembered):
+        st.session_state["uni_run_mode"] = remembered
+
     col_a, col_b = st.columns(2)
     with col_a:
-        if locked:
-            # SHOW the mode that is actually in force, selected, with the whole control
-            # disabled and a one-line reason. No hidden override, and no unchecked box
-            # standing for a true value.
-            st.radio("Run mode", RUN_MODES,
-                     index=RUN_MODES.index(RUN_MODE_RANKER),
-                     format_func=lambda m: RUN_MODE_LABELS[m],
-                     disabled=True, key="uni_run_mode_locked")
-            st.caption(MULTI_LENS_LOCK_REASON)
-            run_mode = RUN_MODE_RANKER
-        else:
-            run_mode = st.radio(
-                "Run mode", RUN_MODES, index=RUN_MODES.index(remembered),
-                format_func=lambda m: RUN_MODE_LABELS[m], key="uni_run_mode",
-                help="Ranker only: the deterministic ranking, free. "
-                     "Narrator: the LLM explains the ranker's verdict (default). "
-                     "Second opinion: an independent comparison verdict — a "
-                     "pre-registered experiment that returned a null result; kept "
-                     "behind this option.")
-            st.session_state["uni_run_mode_choice"] = run_mode
+        run_mode = st.radio(
+            "Run mode", RUN_MODES,
+            format_func=lambda m: RUN_MODE_LABELS[m], key="uni_run_mode",
+            on_change=_run_mode_chosen,
+            help="Ranker only: the deterministic ranking, free. "
+                 "Narrator: the LLM explains the ranker's verdict. "
+                 "Second opinion: an independent comparison verdict — a "
+                 "pre-registered experiment that returned a null result; kept "
+                 "behind this option.")
+        st.session_state["uni_run_mode_choice"] = run_mode
+        if n_strategies > 1 and run_mode_narrates(run_mode):
+            st.caption(MULTI_LENS_NARRATION_NOTE)
     with col_b:
         # NARR-2 ITEM 2: which ranked names get narrated. buys_only (default, cheapest)
         # for stock screens; all for core/ETF cohorts where the HOLDs are live
@@ -2230,20 +2436,32 @@ def render_universe_tab(show_validation: bool = False) -> None:
     st.caption(f"**{len(universe)}** ticker(s).")
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    # A multi-strategy run is deterministic by construction (FUND-RUN-1), so it needs no
-    # key and shows no cost estimate.
-    deterministic = ranker_only or multi
+    # NARR-UNION-1: a multi-lens run is no longer deterministic BY CONSTRUCTION — it can
+    # narrate now — so the one thing that decides whether a key is needed and a cost is
+    # shown is the run MODE, for one lens and for five alike.
+    deterministic = ranker_only
     # ONE guard set, pure and unit-tested (FUND-UI-2). The old flow re-declared CAP and the
     # key check per section, which is precisely how the two halves drifted apart.
     problems = run_problems(universe, n_strategies=len(strategies),
                             deterministic=deterministic, has_key=has_key)
 
+    # NARR-UNION-1: on a MULTI-LENS narrated run the bill is proportional to the size of
+    # the UNION of every lens's BUYs — NOT to the lens count, and not to the number of BUY
+    # verdicts (five lenses produced 18 verdicts over 13 distinct names on 2026-08-24).
+    # The union cannot be known before the free ranking pass, so the pre-run number is the
+    # same upper bound the single-lens flow already shows, stated per NAME.
     est = None
+    narrated_count = None
     if not deterministic and universe and len(universe) <= UNIVERSE_CAP:
-        est = estimate_cost(
-            _estimate_shortlist_size(len(universe), rank_strategy,
-                                     narrate_coverage=narrate_coverage))
-    if multi:
+        per_lens = _estimate_shortlist_size(len(universe), rank_strategy,
+                                            narrate_coverage=narrate_coverage)
+        if multi:
+            narrated_count = _estimate_union_size(
+                len(universe), strategies, narrate_coverage=narrate_coverage)
+            est = estimate_cost(narrated_count)
+        else:
+            est = estimate_cost(per_lens)
+    if multi and not run_mode_narrates(run_mode):
         st.caption(f"Multi-lens re-grade: **{len(strategies)}** strategies × "
                    f"**{len(universe)}** name(s) — deterministic ranker only "
                    f"(no narration, no cost), reported as ONE combined grid.")
@@ -2251,12 +2469,17 @@ def render_universe_tab(show_validation: bool = False) -> None:
     for msg in problems:
         st.info(msg)
 
-    # RUNMODE-1: the button says WHAT will happen and WHAT IT COSTS, on its own line.
-    run = st.button(run_button_label(run_mode, n_strategies=n_strategies, est_cost=est),
+    # RUNMODE-1 + NARR-UNION-1: the button says WHAT will happen and WHAT IT COSTS, on its
+    # own line — and on a multi-lens narrated run it says how many NAMES that is.
+    run = st.button(run_button_label(run_mode, n_strategies=n_strategies, est_cost=est,
+                                     narrated_count=narrated_count),
                     type="primary", disabled=bool(problems), key="uni_run")
     if est is not None:
+        basis = (f" ONE section per NAME over "
+                 f"{NARRATION_BASIS.get(narrate_coverage, narrate_coverage)} — a name "
+                 f"several lenses bought is narrated once." if multi else "")
         st.caption("The estimate is an upper bound (pre-screen); the exact shortlist "
-                   "(after the screen prefilter) is shown after ranking.")
+                   "(after the screen prefilter) is shown after ranking." + basis)
 
     if run and multi:
         run_start = datetime.now(timezone.utc)
@@ -2264,6 +2487,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
         try:
             from aristos_council.pipeline import run_multi_strategy_pipeline
 
+            # CONFIRM-SPEND-1 — PHASE ONE, always: the FREE ranking pass, no
+            # confirmation. This is work the pipeline does before any narration anyway;
+            # running it now is what turns an upper bound into the exact figure. In a
+            # narrating mode the result is HELD for confirmation rather than reported,
+            # and phase two consumes it — the ranking is never thrown away or re-run.
             multi_result = run_multi_strategy_pipeline(
                 universe, strategy_ids, universe_id=universe_id,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
@@ -2273,27 +2501,34 @@ def render_universe_tab(show_validation: bool = False) -> None:
             status.update(label="Run failed", state="error")
             st.exception(exc)
             st.session_state.pop("uni_multi_result", None)
+            st.session_state.pop("uni_pending_narration", None)
         else:
-            status.update(label="Done.", state="complete")
-            st.session_state["uni_multi_result"] = multi_result
             st.session_state["uni_run_start"] = run_start
             st.session_state["uni_universe_display_name"] = universe_display_name
-            # REPORT-2: ONE merged report for the whole run, however many lenses ran.
-            # (The per-strategy RECORDS are untouched — every column was frozen under
-            # runs/ by its own run_rank_pipeline call above, so each stays replayable.)
-            st.session_state["uni_persisted_paths"] = None
-            st.session_state["uni_multi_persisted"] = _persist_multi_strategy_run(
-                multi_result, run_start, universe_display_name)
             st.session_state.pop("uni_result", None)
+            if run_mode_narrates(run_mode):
+                status.update(label="Ranked — confirm the narration spend.",
+                              state="complete")
+                st.session_state["uni_pending_narration"] = {
+                    "kind": "multi", "result": multi_result, "mode": mode,
+                    "coverage": narrate_coverage}
+                st.session_state.pop("uni_multi_result", None)
+                st.session_state.pop("uni_multi_persisted", None)
+            else:
+                status.update(label="Done.", state="complete")
+                st.session_state.pop("uni_pending_narration", None)
+                _publish_multi(multi_result, run_start, universe_display_name)
     elif run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         status = st.status("Starting…", expanded=True)
         try:
             from aristos_council.pipeline import run_rank_pipeline
 
+            # CONFIRM-SPEND-1 — PHASE ONE: rank for free, always. A narrating mode
+            # HOLDS the result for confirmation; ranker-only reports it straight away.
             result = run_rank_pipeline(
                 universe, rank_strategy.id, universe_id=universe_id,
-                council_mode=mode, ranker_only=ranker_only,
+                council_mode=mode, ranker_only=True,
                 narrate_coverage=narrate_coverage,
                 with_valuation_band=with_valuation_band,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
@@ -2310,16 +2545,24 @@ def render_universe_tab(show_validation: bool = False) -> None:
             st.exception(exc)
             st.session_state.pop("uni_result", None)
         else:
-            status.update(label="Done.", state="complete")
-            st.session_state["uni_result"] = result
             st.session_state["uni_run_start"] = run_start
             st.session_state["uni_universe_display_name"] = universe_display_name
-            # UI-FIX-1: persist BEFORE rendering — a completed (possibly paid) run must
-            # survive a restart even if nobody clicks a download button.
-            st.session_state["uni_persisted_paths"] = _persist_universe_run(
-                result, run_start, universe_display_name)
             st.session_state.pop("uni_multi_result", None)
             st.session_state.pop("uni_multi_persisted", None)
+            if run_mode_narrates(run_mode):
+                status.update(label="Ranked — confirm the narration spend.",
+                              state="complete")
+                st.session_state["uni_pending_narration"] = {
+                    "kind": "single", "result": result, "mode": mode,
+                    "coverage": narrate_coverage}
+                st.session_state.pop("uni_result", None)
+                st.session_state.pop("uni_persisted_paths", None)
+            else:
+                status.update(label="Done.", state="complete")
+                st.session_state.pop("uni_pending_narration", None)
+                _publish_single(result, run_start, universe_display_name)
+
+    _render_narration_confirmation()
 
     multi_result = st.session_state.get("uni_multi_result")
     if multi_result is not None:

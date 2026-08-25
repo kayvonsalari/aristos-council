@@ -747,6 +747,25 @@ def multi_strategy_report_html(multi_result, *,
                          + _bullets(_esc(e["sentence"]) for e in entries))
         parts.append("</section>")
 
+    # ----- 6b (NARR-UNION-1): ONE narration section per NAME, over the union of every
+    # lens's BUYs — after the verdict table and the valuation band, in the table's order.
+    if multi_result.narratives:
+        basis = m.get("narration_basis", "")
+        count = m.get("narrated_count", len(multi_result.narratives))
+        parts.append('<section class="section"><h2>Narration</h2>'
+                     f'<p class="note">{_esc(count)} '
+                     f'name{"s" if count != 1 else ""} narrated — {_esc(basis)}. ONE '
+                     "section per NAME: a name several lenses bought is narrated once, "
+                     "with each lens's verdict attributed. The narrator explains the "
+                     "ranker's verdicts; it never weighs the lenses against each "
+                     "other.</p>")
+        for ticker, text in multi_result.narratives.items():
+            display = next((r.display for r in multi_result.rows if r.ticker == ticker),
+                           ticker)
+            parts.append(f'<details class="name-section" open><summary>{_esc(display)}'
+                         f"</summary>{_narration_html(text)}</details>")
+        parts.append("</section>")
+
     # ----- 7: ONE common footer.
     parts.append(_footer())
     return _document(title=f"{cohort} — {len(ids)} lenses", body="\n".join(parts))

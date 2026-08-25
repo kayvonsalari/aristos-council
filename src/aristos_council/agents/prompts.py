@@ -424,6 +424,26 @@ def critic_system(strategy: Strategy) -> str:
     )
 
 
+# NARR-UNION-1 — the doctrine boundary for a MULTI-LENS narration. When one cohort is
+# graded by several lenses, a name is narrated once and the writer is handed every lens's
+# verdict for it. That makes a new failure mode available that never existed before: the
+# writer could reconcile the lenses and hand back a net view — which is adjudication, and
+# adjudication is the ranker's alone. The narrator ATTRIBUTES; it never ADJUDICATES.
+#
+# Present in the narrator prompt unconditionally: a single-lens run simply has nothing to
+# synthesise, and stating the boundary costs nothing there.
+CROSS_LENS_CONSTRAINT = (
+    "CROSS-LENS CONSTRAINT — you ATTRIBUTE, you do not ADJUDICATE. When several lenses "
+    "have graded this name you MUST state what EACH lens found and why, lens by lens, "
+    "naming the lens for every claim. You MUST NOT weigh the lenses against each other, "
+    "reconcile their disagreement, say which lens is right or better suited, or offer any "
+    "overall/net view of the name. Banned moves include 'on balance', 'the weight of "
+    "evidence', 'taken together', 'the stronger signal', 'the more appropriate lens', and "
+    "any sentence that converts several lens verdicts into one. Where the lenses DISAGREE, "
+    "report the disagreement as a fact and LEAVE IT STANDING — it is the reader's to "
+    "resolve, not yours. Verdicts remain the ranker's.\n")
+
+
 def decision_system(strategy: Strategy,
                     council_mode: str = "second_opinion") -> str:
     if council_mode == "narrator":
@@ -441,7 +461,8 @@ def decision_system(strategy: Strategy,
             "or assert forward deterioration as FACT — the ranker's own experiment "
             "showed such 'insights' are unreliable. Phrase anything beyond the "
             "reported numbers as an explicit OPEN QUESTION ('worth checking: ...'), "
-            "never as a finding.\n\n")
+            "never as a finding.\n"
+            + CROSS_LENS_CONSTRAINT + "\n")
     else:
         # Option B (default): an INDEPENDENT SECOND OPINION that may disagree.
         role = (

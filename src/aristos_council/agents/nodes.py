@@ -571,7 +571,38 @@ def _ranker_block(state: ResearchState) -> str:
                   f"rank table.")
     return (f"\nRANKER VERDICT (the deterministic verdict-of-record for this name): "
             f"{state.ranker_verdict.value.upper()}{expl}{legend}"
-            f"{_boundary_tie_block(state)}\n")
+            f"{_boundary_tie_block(state)}{_cross_lens_block(state)}\n")
+
+
+def _cross_lens_block(state: ResearchState) -> str:
+    """EVERY selected lens's verdict for this name (NARR-UNION-1), plus the deterministic
+    reasons behind each BUY.
+
+    A multi-lens run narrates a name ONCE, so the writer is handed the WHOLE verdict row —
+    the lenses that bought it and the lenses that did not, in the run's own column order.
+    Without this the prose could present a name bought by one lens as simply "a BUY" while
+    another lens excluded it outright: a one-sided case assembled from a true fact.
+
+    The block is FACTS ONLY, and the accompanying constraint (see prompts.decision_system)
+    forbids weighing the lenses against one another. Empty on a single-lens run, so that
+    prompt is byte-unchanged."""
+    rows = state.cross_lens_verdicts or []
+    if not rows:
+        return ""
+    lines = [f"  - {r.get('lens', '')}: {r.get('cell', '')}" for r in rows]
+    reasons = state.cross_lens_reasons or []
+    why = ""
+    if reasons:
+        why = ("\nWHY EACH BUYING LENS RANKED IT THERE (that lens's own factor ranks and "
+               "the screen rules it passed — attribute each to the lens it came from):\n"
+               + "\n".join(
+                   f"  - {r.get('lens', '')}: {r.get('explain', '')}"
+                   + (f"\n      passed: {'; '.join(r.get('rules') or [])}"
+                      if r.get("rules") else "")
+                   for r in reasons))
+    return ("\nEVERY SELECTED LENS'S VERDICT FOR THIS NAME (state ALL of these before any "
+            "prose — the lenses that did NOT buy it are part of the record):\n"
+            + "\n".join(lines) + why)
 
 
 def _boundary_tie_block(state: ResearchState) -> str:

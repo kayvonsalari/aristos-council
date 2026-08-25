@@ -366,6 +366,18 @@ class ResearchState(BaseModel):
     # static, never a phantom fill. Empty for a stock run / a run with no static-sourced
     # factor, so the ledger stays byte-unchanged there. Rank-pipeline only.
     static_factor_evidence: list[dict] = Field(default_factory=list)
+    # CROSS-LENS narration (NARR-UNION-1). When one cohort is graded by SEVERAL lenses,
+    # a name is narrated ONCE for the whole run, so the writer must be handed EVERY
+    # lens's verdict for it — including the lenses that rated it HOLD or SELL or excluded
+    # it outright. A reader must never be shown a one-sided case.
+    #
+    # ``cross_lens_verdicts``: one entry per SELECTED lens, in the run's column order —
+    # ``{"lens", "lens_id", "cell", "status", "verdict"}``. ``cross_lens_reasons``: the
+    # deterministic reasons behind each BUY, per lens —
+    # ``{"lens", "lens_id", "explain", "rules"}``. Both empty on a single-lens run, which
+    # is then byte-identical to before.
+    cross_lens_verdicts: list[dict] = Field(default_factory=list)
+    cross_lens_reasons: list[dict] = Field(default_factory=list)
     # Ephemeral per-run disposition overrides applied on top of the base strategy
     # (e.g. {"partial_pass_allows_hold": false,
     #        "criteria.min_dividend_growth_streak.is_gating": true}). Empty for a

@@ -731,3 +731,125 @@ def check_narration(narrative: str, table: dict) -> list[str]:
                 flags.append(_tie_annotation(
                     claim, partner, str(boundary_tie.get("score_display", ""))))
     return flags
+
+
+# --------------------------------------------------------------------------- #
+# CROSS-LENS SYNTHESIS (NARR-UNION-1)
+# --------------------------------------------------------------------------- #
+# A multi-lens narration is handed several lenses' verdicts for one name, which makes a
+# failure mode available that never existed on a single-lens run: reconciling them into a
+# net view. That is ADJUDICATION, and adjudication is the ranker's alone — the narrator
+# attributes. Flagged exactly as an unsupported ordinal claim is: annotated, never
+# rewritten, and only when the sentence really does synthesise.
+#
+# Two things must BOTH hold before a sentence is flagged, so honest attribution survives:
+#   1. it uses a synthesising move ("on balance", "taken together", "the stronger lens"…)
+#   2. it is about the LENSES — it either names two of them, or uses a plural lens word.
+# "Classic Value ranked it #3 on earnings yield" names one lens and synthesises nothing;
+# "on balance the lenses favour it" does both and is stamped.
+_SYNTHESIS_MOVE = re.compile(
+    r"\b(?:on\s+balance|taken\s+together|net(?:\s+of\s+it)?|all\s+in\s+all|"
+    r"overall(?:\s+view)?|weigh(?:s|ed|ing)?\s+(?:up|against)|the\s+weight\s+of\s+"
+    r"(?:the\s+)?evidence|more\s+(?:appropriate|suitable|reliable|convincing)\s+lens|"
+    r"(?:the\s+)?(?:stronger|better|weaker|right|correct|wrong)\s+(?:lens|signal|"
+    r"verdict|read(?:ing)?)|outweigh\w*|carries?\s+more\s+weight|"
+    r"reconcil\w+|on\s+the\s+whole|in\s+aggregate|"
+    r"(?:should|ought\s+to)\s+be\s+(?:trusted|preferred|favoured|favored)|"
+    r"the\s+consensus\s+(?:is|view|across)|majority\s+of\s+the\s+lenses)\b", re.I)
+
+# Plural lens words — "the lenses agree", "three of the five strategies". A SINGULAR
+# mention ("Classic Value") is attribution and must pass untouched.
+_LENS_PLURAL = re.compile(
+    r"\b(?:lenses|strategies|both\s+lenses|all\s+(?:three|four|five|the)\s+lenses|"
+    r"the\s+other\s+lenses)\b", re.I)
+
+
+def _names_two_lenses(sentence: str, lens_labels: list[str]) -> bool:
+    """Does the sentence name at least TWO of the run's lenses? Naming one is attribution;
+    naming two in a synthesising sentence is the reconciliation being flagged."""
+    hits = 0
+    for label in lens_labels:
+        core = label.split(" (")[0].strip()
+        if core and re.search(rf"\b{re.escape(core)}\b", sentence, re.I):
+            hits += 1
+    return hits >= 2
+
+
+def _cross_lens_annotation(claim: str) -> str:
+    return (f'[⚠ narration check: "{claim}" weighs the lenses against each other — '
+            "the narrator attributes, it does not adjudicate; each lens's verdict stands "
+            "as issued]")
+
+
+def check_cross_lens(narrative: str, verdicts: list[dict] | None = None) -> list[str]:
+    """Annotations for sentences that SYNTHESISE across lenses (NARR-UNION-1).
+
+    ``verdicts`` is this name's cross-lens row (``pipeline.cross_lens_verdicts``); its
+    labels let a sentence naming two lenses be recognised. With none supplied only the
+    plural-lens form is detectable, which is the honest degradation — the check never
+    invents a contradiction.
+
+    Reporting a disagreement is NOT synthesis: "Classic Value bought it; Defensive Income
+    excluded it" states two facts and resolves nothing, and passes untouched."""
+    if not narrative:
+        return []
+    labels = [str(v.get("lens", "")) for v in (verdicts or [])]
+    flags: list[str] = []
+    seen: set[str] = set()
+    for sentence in _sentences(narrative):
+        parsed = _demark(sentence)
+        if not _SYNTHESIS_MOVE.search(parsed):
+            continue
+        if not (_LENS_PLURAL.search(parsed) or _names_two_lenses(parsed, labels)):
+            continue
+        claim = _claim(sentence)
+        if claim not in seen:
+            seen.add(claim)
+            flags.append(_cross_lens_annotation(claim))
+    return flags
+
+
+def check_narration_by_lens(narrative: str, tables_by_lens: dict,
+                            default_table: dict) -> list[str]:
+    """Rank-semantics checking for a CROSS-LENS narration (NARR-UNION-1).
+
+    A multi-lens section legitimately quotes SEVERAL lenses' rank tables — "Classic Value
+    ranked it #1 of 5", "Magic Formula RAW ranked it #1 of 6". Checking every sentence
+    against ONE table stamps those true statements as contradictions, which is exactly
+    what happened on the first live run: two of ADBE's correct per-lens citations were
+    flagged because they were judged against the lead lens's cohort.
+
+    So a sentence is checked against the table of the lens it NAMES — the same discipline
+    NARR-CHK-FP-2 already applies to a clause naming exactly one peer. A sentence naming
+    no lens is checked against ``default_table`` (the lead lens, as before); a sentence
+    naming SEVERAL is left alone, because no single table can adjudicate it and the check
+    never invents a contradiction.
+    """
+    if not narrative:
+        return []
+    flags: list[str] = []
+    seen: set[str] = set()
+    current: Optional[str] = None         # the lens most recently NAMED, carried forward
+    for sentence in _sentences(narrative):
+        named = [label for label in tables_by_lens
+                 if label and re.search(rf"\b{re.escape(label.split(' (')[0])}\b",
+                                        sentence, re.I)]
+        if len(named) > 1:
+            current = None                # ambiguous — never invent a contradiction
+            continue
+        if named:
+            current = named[0]
+        # A lens-by-lens section names its lens in a HEADING and then says "This lens":
+        # every sentence that follows belongs to it until another lens is named. Checking
+        # those against the LEAD lens's cohort stamped TRUE statements — AAPL's correct
+        # "#1 of 6 … rank-sum 9" under Magic Formula RAW, judged against Value +
+        # Momentum's five-name cohort, on the live 2026-08-25 run.
+        table = tables_by_lens[current] if current else default_table
+        if not table:
+            continue
+        for mark in check_narration(sentence, table):
+            claim = _claim(sentence)
+            if claim not in seen:
+                seen.add(claim)
+                flags.append(mark)
+    return flags

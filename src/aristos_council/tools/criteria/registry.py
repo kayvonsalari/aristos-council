@@ -571,6 +571,24 @@ def consumed_fundamentals_fields(selections) -> set[str]:
     return out
 
 
+def consumed_fields_for_strategies(strategies) -> set[str]:
+    """Union of the consumed Fundamentals fields across SEVERAL strategies (NARR-UNION-1).
+
+    A multi-lens run narrates a name ONCE, so its evidence packet is the union of the
+    fields consumed by the lenses that actually rated it BUY — not a dump of everything.
+    This EXTENDS ``consumed_fundamentals_fields`` to more than one strategy rather than
+    bypassing the scoping: a lens that did not buy the name contributes nothing, exactly
+    as a criterion the strategy does not select contributes nothing today.
+
+    A screen-LESS strategy (no criteria) contributes no fields, which is correct — it
+    consumed none."""
+    out: set[str] = set()
+    for strategy in strategies or []:
+        out.update(consumed_fundamentals_fields(
+            getattr(strategy, "criteria", None) or []))
+    return out
+
+
 def required_evidence(selections) -> set[str]:
     """Union of the Evidence KINDS the selected criteria require.
 
