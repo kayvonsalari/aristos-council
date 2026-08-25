@@ -1563,17 +1563,44 @@ def _shown_path(path) -> str:
         return str(path)
 
 
+def _supersede(run_start, new_paths) -> None:
+    """ONE RUN, ONE .md AND ONE .html (CONFIRM-SPEND-1).
+
+    A run can publish TWICE — once for the free ranking, once after narration is
+    confirmed — and the second pair is named for the narrated mode, so it does not
+    overwrite the first. Left alone that strands a stale ranker-only pair beside the real
+    report, and a reader sorting by name cannot tell which describes the run. The earlier
+    pair for the SAME run-start is therefore deleted as the new one lands. Files from any
+    OTHER run are never touched: the run-start must match."""
+    previous = st.session_state.get("uni_published")
+    st.session_state["uni_published"] = (run_start, [Path(p) for p in new_paths])
+    if not previous:
+        return
+    when, paths = previous
+    if when != run_start:
+        return
+    keep = {Path(p).name for p in new_paths}
+    for p in paths:
+        if Path(p).name not in keep:
+            Path(p).unlink(missing_ok=True)
+
+
 def _publish_multi(multi_result, run_start, universe_display_name) -> None:
     """Report a finished multi-lens run: persist it and put it on screen. Shared by the
     free path and the confirmed-narration path, so a kept ranking is reported exactly as
-    a narrated one is — the ranking work is never thrown away (CONFIRM-SPEND-1)."""
+    a narrated one is — the ranking work is never thrown away (CONFIRM-SPEND-1).
+
+    The files are re-rendered from the result HANDED IN, so a narrated result writes a
+    narrated report under a narrated filename: nothing about the mode, the header or the
+    name is carried over from an earlier publish of the same run."""
     st.session_state["uni_multi_result"] = multi_result
     st.session_state["uni_persisted_paths"] = None
     # REPORT-2: ONE merged report for the whole run, however many lenses ran. (The
     # per-strategy RECORDS are untouched — every column was frozen under runs/ by its own
     # run_rank_pipeline call, so each stays replayable.)
-    st.session_state["uni_multi_persisted"] = _persist_multi_strategy_run(
-        multi_result, run_start, universe_display_name)
+    paths = _persist_multi_strategy_run(multi_result, run_start, universe_display_name)
+    st.session_state["uni_multi_persisted"] = paths
+    _supersede(run_start, paths)
 
 
 def _publish_single(result, run_start, universe_display_name) -> None:
@@ -1581,8 +1608,9 @@ def _publish_single(result, run_start, universe_display_name) -> None:
     st.session_state["uni_result"] = result
     # UI-FIX-1: persist BEFORE rendering — a completed (possibly paid) run must survive a
     # restart even if nobody clicks a download button.
-    st.session_state["uni_persisted_paths"] = _persist_universe_run(
-        result, run_start, universe_display_name)
+    paths = _persist_universe_run(result, run_start, universe_display_name)
+    st.session_state["uni_persisted_paths"] = paths
+    _supersede(run_start, paths)
 
 
 def _render_narration_confirmation() -> None:
@@ -2376,32 +2404,33 @@ def render_universe_tab(show_validation: bool = False) -> None:
     #                          second lens moves the default to ranker-only (free, and
     #                          what a cross-lens comparison usually wants); touched, the
     #                          choice stands through ticking and unticking alike.
+    # SEEDED ONCE, then it is the user's. The lens count picks the STARTING mode and
+    # never touches it again.
+    #
+    # It used to re-default on every lens-count change, gated on an `uni_run_mode_touched`
+    # flag set from the radio's on_change. That flag could not do the job it was given:
+    # Streamlit fires on_change only when the value CHANGES, so a user who selects the
+    # option already showing (Narrator, on a one-lens run) registers as never having
+    # expressed a preference — and ticking a second lens then silently moved them to
+    # ranker-only. That is the CONFIRM-SPEND-1 live failure of 2026-08-25 11:21: narrator
+    # chosen, three lenses, and a ranker-only report with no narration and no confirmation
+    # step, because the mode in force was never the mode the user had picked.
+    #
+    # The re-default existed to stop a multi-lens run spending by accident. It is now
+    # redundant: CONFIRM-SPEND-1 ranks for free and spends only from a button carrying the
+    # exact figure, so nothing can be billed unasked whatever this control says. Between a
+    # guard that cannot misfire and one that silently overrides intent, the guard stays and
+    # the override goes.
     st.session_state.setdefault("uni_run_mode_choice", default_run_mode(n_strategies))
-    st.session_state.setdefault("uni_run_mode_touched", False)
-    remembered = effective_run_mode(
-        st.session_state["uni_run_mode_choice"]
-        if st.session_state["uni_run_mode_touched"]
-        else default_run_mode(n_strategies),
-        n_strategies=n_strategies)
-
-    def _run_mode_chosen() -> None:
-        st.session_state["uni_run_mode_touched"] = True
-
-    # PRE-INSTANTIATION session write (the convention the list selector already uses):
-    # a widget with a key ignores `index` once its key exists, so an UNTOUCHED control
-    # must be moved explicitly when the lens count changes what the default should be.
-    # Guarded on "untouched" and on an actual change, so a user's pick is never clobbered.
-    st.session_state.setdefault("uni_run_mode", remembered)
-    if (not st.session_state["uni_run_mode_touched"]
-            and st.session_state["uni_run_mode"] != remembered):
-        st.session_state["uni_run_mode"] = remembered
+    st.session_state.setdefault(
+        "uni_run_mode", effective_run_mode(st.session_state["uni_run_mode_choice"],
+                                           n_strategies=n_strategies))
 
     col_a, col_b = st.columns(2)
     with col_a:
         run_mode = st.radio(
             "Run mode", RUN_MODES,
             format_func=lambda m: RUN_MODE_LABELS[m], key="uni_run_mode",
-            on_change=_run_mode_chosen,
             help="Ranker only: the deterministic ranking, free. "
                  "Narrator: the LLM explains the ranker's verdict. "
                  "Second opinion: an independent comparison verdict — a "

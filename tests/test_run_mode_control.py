@@ -119,24 +119,40 @@ def _run_button(at):
     return next(b for b in at.button if b.label.startswith("▶ Run"))
 
 
-def test_a_second_lens_defaults_to_ranker_only_AND_displays_it_as_selected():
+def test_the_lens_count_SEEDS_the_mode_but_never_re_defaults_it():
     """The regression this control exists for. On the old flow the effective value was
     ranker-only while the control displayed an UNCHECKED "Ranker only" box and a
-    "narrator" mode — displayed != effective, in both controls at once. It is now the
-    DEFAULT rather than a lock (NARR-UNION-1), and the invariant is unchanged: what is
-    shown is what runs."""
+    "narrator" mode — displayed != effective, in both controls at once. The invariant is
+    unchanged: what is shown is what runs.
+
+    UPDATED (CONFIRM-SPEND-1, 2026-08-25). Ranker-only is still what several lenses START
+    on — ``default_run_mode`` is untouched and still says so — but it is now applied ONCE,
+    as a seed, and never re-applied when the lens count changes. Re-defaulting on every
+    change could not tell "the user picked the mode already showing" from "the user has
+    not picked", because Streamlit fires on_change only on an actual CHANGE; it therefore
+    silently overrode an explicit Narrator selection the moment a second lens was ticked,
+    and shipped a ranker-only report for a narrated run. The cost guard that re-default
+    provided is now structural (a free ranking, then a confirmation carrying the exact
+    figure), so the override is gone and the seed remains."""
     pytest.importorskip("streamlit")
+    # the seed itself — several lenses still START free
+    assert app.default_run_mode(2) == app.RUN_MODE_RANKER
+    assert app.default_run_mode(1) == app.RUN_MODE_NARRATOR
+
     at = _run_tab()
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
     at = _run_tab(extra_lens=raw)
 
     widget = _run_mode_widget(at)
     displayed = widget.value
-    effective = app.effective_run_mode(displayed, n_strategies=2)
-
-    assert displayed == app.RUN_MODE_RANKER          # SHOWN as selected...
-    assert displayed == effective                    # ...and it is the value in force
+    # THE invariant, whatever the mode is: what is shown is the value in force.
+    assert displayed == app.effective_run_mode(displayed, n_strategies=2)
     assert widget.disabled is False                  # ...and the user may change it
+
+    # ...and ticking a lens did not move it behind the user's back
+    _run_mode_widget(at).set_value(app.RUN_MODE_NARRATOR).run()
+    _lens_checkbox(at, raw).set_value(False).run()
+    assert _run_mode_widget(at).value == app.RUN_MODE_NARRATOR
 
 
 def test_no_disabled_control_in_the_run_flow_displays_a_value_it_is_not_using():
@@ -167,6 +183,8 @@ def test_narration_coverage_is_hidden_not_greyed_when_nothing_narrates():
     at = _run_tab()
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
     at = _run_tab(extra_lens=raw)
+    # the mode is no longer re-defaulted by the lens count, so SELECT the one under test
+    _run_mode_widget(at).set_value(app.RUN_MODE_RANKER).run()
     assert _run_mode_widget(at).value == app.RUN_MODE_RANKER      # nothing narrates
     assert not any(str(s.label) == "Narration coverage" for s in at.selectbox)
 
@@ -185,11 +203,12 @@ def test_choosing_narrator_on_a_multi_lens_run_brings_coverage_back():
     assert "ONE section per NAME" in captions or "narrated once" in captions
 
 
-def test_the_button_states_the_deterministic_free_run_when_lenses_are_ticked():
+def test_the_button_states_the_deterministic_free_run_in_ranker_only_mode():
     pytest.importorskip("streamlit")
     at = _run_tab()
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
     at = _run_tab(extra_lens=raw)
+    _run_mode_widget(at).set_value(app.RUN_MODE_RANKER).run()
     assert _run_button(at).label == "▶ Run 2 lenses — deterministic, free"
 
 

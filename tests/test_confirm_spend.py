@@ -349,3 +349,144 @@ def test_a_plan_with_nothing_to_narrate_never_asks_for_a_confirmation(monkeypatc
     assert not any(b.label.startswith("▶ Narrate") for b in at.button)
     infos = " ".join(str(getattr(i, "value", "")) for i in at.info)
     assert "nothing was charged" in infos
+
+
+# --------------------------------------------------------------------------- #
+# 4. THE 2026-08-25 LIVE FAILURE — the flow through the BUTTONS, end to end
+# --------------------------------------------------------------------------- #
+# Everything above drives phase two by seeding ``uni_pending_narration`` directly, which
+# is exactly why the flow shipped broken: the RUN -> CONFIRM transition was never
+# exercised, and that is where it failed. A 21-name adhoc cohort under three lenses with
+# Narrator selected produced a ranker-only report, no narration section and ZERO LLM
+# calls, twice.
+#
+# The cause was neither of the obvious candidates. Phase two was wired correctly and
+# re-persisted correctly; it was never REACHED, because the run mode in force was not the
+# one the user had picked. ``uni_run_mode_touched`` was set from the radio's on_change,
+# and Streamlit fires on_change only when the value CHANGES — so selecting the option
+# already displayed (Narrator, on a one-lens run) left the control marked untouched, and
+# ticking a second lens silently re-defaulted it to ranker-only.
+#
+# These tests drive the widgets in that order, so a re-default can never again hide
+# behind a directly-seeded session state.
+def _tick_two_lenses(at):
+    boxes = [c for c in at.checkbox if c.key and c.key.startswith("uni_lens_")]
+    for c in boxes[:2]:
+        at.session_state[c.key] = True
+    at.run()
+    return at
+
+
+def test_selecting_narrator_then_adding_lenses_KEEPS_narrator():
+    """The live bug, at its root. Selecting the option already shown fires no on_change,
+    so intent must not depend on having changed the value."""
+    pytest.importorskip("streamlit")
+    import app
+
+    at = _run_tab()
+    at.session_state["uni_coverage"] = "buys_only"
+    _mode(at).set_value(app.RUN_MODE_NARRATOR).run()
+    assert _mode(at).value == app.RUN_MODE_NARRATOR
+
+    _tick_two_lenses(at)
+    assert _mode(at).value == app.RUN_MODE_NARRATOR, (
+        "ticking a lens silently re-defaulted the run mode")
+    assert app.run_mode_narrates(_mode(at).value)
+    # ...and the button says so, rather than "deterministic, free"
+    assert "narrated" in next(b for b in at.button if b.key == "uni_run").label
+
+
+def test_the_mode_is_never_re_defaulted_by_the_lens_count_in_either_direction():
+    """Seeded once, then the user's — ticking AND unticking."""
+    pytest.importorskip("streamlit")
+    import app
+
+    at = _run_tab()
+    at.session_state["uni_coverage"] = "buys_only"
+    _mode(at).set_value(app.RUN_MODE_NARRATOR).run()
+    _tick_two_lenses(at)
+    assert _mode(at).value == app.RUN_MODE_NARRATOR
+
+    for c in [c for c in at.checkbox if c.key and c.key.startswith("uni_lens_")][:2]:
+        at.session_state[c.key] = False
+    at.run()
+    assert _mode(at).value == app.RUN_MODE_NARRATOR
+
+
+def _drive_two_phase(monkeypatch, tmp_path, *, confirm: bool):
+    """Click Run in narrator mode over three lenses, then click one of the two buttons.
+    Returns (AppTest, counting runners, files written)."""
+    import app
+    from aristos_council.agents import runners as runners_mod
+    from aristos_council.persistence import universe_runs as sink
+
+    counter = _CountingRunners()
+    monkeypatch.setattr(pipeline, "_build_adapter", lambda *a, **kw: _Adapter())
+    monkeypatch.setattr(runners_mod, "production_runners", lambda *a, **kw: counter)
+    real = sink.save_universe_run
+    monkeypatch.setattr(sink, "save_universe_run", lambda md, html, *, md_name,
+                        html_name, out_dir: real(md, html, md_name=md_name,
+                                                 html_name=html_name, out_dir=tmp_path))
+
+    at = _run_tab(timeout=300)
+    at.session_state["uni_coverage"] = "buys_only"
+    at.session_state["uni_tickers"] = "\n".join(UNIVERSE)
+    _mode(at).set_value(app.RUN_MODE_NARRATOR).run()
+    _tick_two_lenses(at)
+    assert app.run_mode_narrates(_mode(at).value)
+
+    next(b for b in at.button if b.key == "uni_run").click().run()
+    assert not at.exception, at.exception
+    # PHASE ONE is free and publishes NOTHING — it holds the ranking for confirmation.
+    assert counter.call_count == 0
+    assert not list(tmp_path.glob("*")), "phase one published before confirmation"
+
+    key = "uni_confirm_narrate" if confirm else "uni_keep_ranking"
+    next(b for b in at.button if b.key == key).click().run()
+    assert not at.exception, at.exception
+    return at, counter, sorted(tmp_path.glob("*"))
+
+
+def test_confirming_narrates_and_the_FILE_ON_DISK_carries_the_narration(monkeypatch,
+                                                                       tmp_path):
+    """Read the file back — not session state. The live failure was invisible in memory:
+    the report on disk was the thing that stayed ranker-only."""
+    pytest.importorskip("streamlit")
+    at, counter, files = _drive_two_phase(monkeypatch, tmp_path, confirm=True)
+
+    expected = narration_plan(_ranked_multi([SCREENED, RAW, MOMENTUM]))["count"]
+    assert counter.call_count == expected > 0
+
+    md = next(p for p in files if p.suffix == ".md")
+    text = md.read_text(encoding="utf-8")
+    assert "## Narration" in text
+    # every narrated name has its own section
+    for ticker in narrated_union(at.session_state["uni_multi_result"]):
+        assert ticker in text
+
+    # ...and the document says what actually ran, in the header AND in the filename
+    assert "ranker only" not in text
+    assert "Narrative: none" not in text
+    assert "_ranker_" not in md.name
+    assert "_narrator_" in md.name
+
+
+def test_one_run_leaves_exactly_one_md_and_one_html(monkeypatch, tmp_path):
+    _, _, files = _drive_two_phase(monkeypatch, tmp_path, confirm=True)
+    assert [p.suffix for p in files].count(".md") == 1
+    assert [p.suffix for p in files].count(".html") == 1
+    assert len(files) == 2
+
+
+def test_keeping_the_free_ranking_writes_a_ranker_report_with_zero_calls(monkeypatch,
+                                                                        tmp_path):
+    pytest.importorskip("streamlit")
+    _, counter, files = _drive_two_phase(monkeypatch, tmp_path, confirm=False)
+
+    assert counter.call_count == 0
+    assert len(files) == 2
+    md = next(p for p in files if p.suffix == ".md")
+    assert "_ranker_" in md.name
+    text = md.read_text(encoding="utf-8")
+    assert "## Narration" not in text
+    assert "no LLM ran" in text          # and it SAYS so, rather than claiming narration

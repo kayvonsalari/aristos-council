@@ -1110,9 +1110,12 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
     _lens_checkbox(at, raw).set_value(True).run()
     assert not at.exception
+    # CONFIRM-SPEND-1: the lens count SEEDS the mode and no longer re-defaults it (a
+    # silent re-default overrode explicit Narrator picks), so the deterministic run this
+    # test is about is selected rather than assumed. What it then asserts is unchanged.
+    next(r for r in at.radio if str(r.label) == "Run mode").set_value(
+        app.RUN_MODE_RANKER).run()
     blob = _caption_blob(at)
-    # Ranker-only is still the DEFAULT for several lenses (NARR-UNION-1 made it a default
-    # rather than a lock), so the deterministic caption is what a fresh tick shows.
     assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
     assert "ONE combined grid" in blob
     # the run button says how many lenses will run and what it costs, and is not gated
