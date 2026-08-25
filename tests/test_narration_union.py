@@ -16,6 +16,7 @@ fact and left standing (section 4).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 
 import pytest
@@ -635,3 +636,51 @@ def test_the_carried_lens_is_dropped_when_a_sentence_names_several():
     # the middle sentence names two lenses and is skipped; the last falls back to the
     # LEAD table rather than to a lens it never named.
     assert check_narration_by_lens(prose, tables, vm) == []
+
+
+# --------------------------------------------------------------------------- #
+# 6. THE HEADER MUST NOT LIE ABOUT WHETHER A MODEL RAN
+# --------------------------------------------------------------------------- #
+# Found in the 2026-08-25 report, AFTER the rest of NARR-UNION-1 was green: the merged
+# multi-lens header carried a HARDCODED "No LLM ran — narration stays a per-strategy
+# run". That sentence was true only while multi-lens runs were locked to ranker-only.
+# Lifting the lock turned it into a false claim printed above three narration sections
+# the same run had just paid for — the exact class of dishonest surface the house rules
+# exist to prevent. The line is now DERIVED from the result, so it cannot outlive the
+# behaviour it describes.
+def test_a_narrated_multi_lens_run_never_claims_no_LLM_ran():
+    from aristos_council.pipeline import multi_header_line
+
+    result = run_multi_strategy_pipeline(
+        UNIVERSE, [SCREENED, RAW], strategies_dir=STRAT_DIR, adapter=_Adapter(),
+        today=TODAY)
+    # ranker-only: no narratives, so the header says so — and says it in the SAME words
+    # the single-lens header has always used.
+    assert multi_header_line(result) == pipeline._pipeline_header("ranker-only")
+    assert "no LLM ran" in multi_header_line(result)
+
+    narrated = replace(result, narratives={"AAPL": "…", "MSFT": "…"})
+    line = multi_header_line(narrated)
+    assert "no LLM ran" not in line.lower()
+    assert "2 names narrated" in line
+    assert "union of every lens's BUYs" in line
+
+
+def test_the_honest_header_reaches_every_surface_that_prints_it():
+    """One derived line, three renderers — the markdown, the HTML and the app caption.
+    The bug shipped because the sentence was pasted into each of them separately."""
+    pytest.importorskip("streamlit")
+    import app
+
+    from aristos_council.export.report_html import multi_strategy_report_html
+
+    result = run_multi_strategy_pipeline(
+        UNIVERSE, [SCREENED, RAW], strategies_dir=STRAT_DIR, adapter=_Adapter(),
+        today=TODAY)
+    narrated = replace(result, narratives={"AAPL": "Adobe is …"})
+
+    md = app._multi_strategy_markdown(narrated, None)
+    doc = multi_strategy_report_html(narrated, run_start=None)
+    for surface in (md, doc):
+        assert "No LLM ran" not in surface
+        assert "1 name narrated" in surface

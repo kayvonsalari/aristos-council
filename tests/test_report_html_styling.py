@@ -12,6 +12,16 @@ the document's VISIBLE TEXT — every number, name, verdict, reason and heading,
 change ever drops, reorders or rewords a value, this fails.
 
 The .md report must be untouched by any of it, so that is asserted too.
+
+GOLDEN UPDATED ONCE, DELIBERATELY (2026-08-25, NARR-UNION-1 follow-up). The goldens
+pin VALUES against STYLING, not against every future content change, and one content
+change was owed: the header's hardcoded "No LLM ran — narration stays a per-strategy
+run" was true only while multi-lens runs were locked to ranker-only, and printed above
+three narration sections once that lock was lifted. It is now DERIVED
+(``pipeline.multi_header_line``). Exactly ONE of the 153 visible lines moved, and only
+to the wording the single-lens header already used; the replacement is pinned by
+``tests/test_narration_union.py::test_a_narrated_multi_lens_run_never_claims_no_LLM_ran``
+so the guard did not simply get relaxed.
 """
 
 from __future__ import annotations

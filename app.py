@@ -1732,7 +1732,8 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     returns. Merging the reports drops no per-strategy record."""
     from aristos_council.pipeline import (
         VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, exclusion_rows,
-        multi_strategy_grid_rows, multi_summary_line, provenance_sentences,
+        multi_header_line, multi_strategy_grid_rows, multi_summary_line,
+        provenance_sentences,
         valuation_band_table,
     )
     from aristos_council.export.report_html import DISCLAIMER, DOCTRINE
@@ -1753,8 +1754,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
                      f"{_mode_phrase(m.get('council_mode', ''))}**")
     else:
         lines.append(f"**Run: {_mode_phrase(m.get('council_mode', ''))}**")
-    lines += ["", "_Verdict: deterministic ranker. No LLM ran — narration stays a "
-                  "per-strategy run._", ""]
+    lines += ["", f"_{multi_header_line(multi_result)}_", ""]
 
     # 3 — the summary line (2 is the rules block, which is long; the one-liner leads).
     lines += [f"### {multi_summary_line(multi_result)}", ""]
@@ -1868,7 +1868,7 @@ def _render_multi_strategy_result(multi_result) -> None:
 
     from aristos_council.pipeline import (
         RULES_SECTION_TITLE, VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE,
-        multi_strategy_grid_rows, multi_summary_line, rules_applied,
+        multi_header_line, multi_strategy_grid_rows, multi_summary_line, rules_applied,
     )
     from aristos_council.report_language import label_with_id
 
@@ -1878,8 +1878,7 @@ def _render_multi_strategy_result(multi_result) -> None:
     st.markdown(f"#### {cohort} — {len(ids)} lenses × {m.get('universe_size', 0)} names")
     st.caption("Lenses: " + "; ".join(lens_labels.values()))
     st.markdown(f"### {multi_summary_line(multi_result)}")
-    st.caption("**Verdict: deterministic ranker.** No LLM ran — narration stays a "
-               "per-strategy run.")
+    st.caption(multi_header_line(multi_result))
 
     # REPORT-2: the rules EACH lens applied, before the verdicts — a name excluded by one
     # lens and ranked by another is only legible once both rule sets are stated.

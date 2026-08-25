@@ -2235,6 +2235,23 @@ def multi_strategy_grid_rows(result: MultiStrategyResult) -> tuple[list[dict], l
     return rows, head
 
 
+def multi_header_line(result: MultiStrategyResult) -> str:
+    """The house line at the top of a multi-lens report — DERIVED from whether narration
+    actually ran, never asserted.
+
+    It used to be a hardcoded "No LLM ran — narration stays a per-strategy run", true only
+    while multi-lens runs were locked to ranker-only. NARR-UNION-1 lifted that lock and the
+    sentence became a FALSE claim on any narrated multi-lens run: the 2026-08-25 report
+    carried three narration sections under a header swearing no model had been called.
+    Reading ``narratives`` means the line cannot outlive the behaviour it describes."""
+    if not result.narratives:
+        return _pipeline_header("ranker-only")
+    n = len(result.narratives)
+    return (f"{_pipeline_header(result.meta.get('council_mode') or 'narrator')}  "
+            f"One pass over the union of every lens's BUYs — {n} "
+            f"name{'s' if n != 1 else ''} narrated.")
+
+
 def multi_summary_line(result: MultiStrategyResult) -> str:
     """``"4 lenses × 16 names — 3 names rated BUY by every lens, 5 excluded by every
     lens, 10 of 16 ranked by at least one."``

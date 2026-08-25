@@ -619,6 +619,7 @@ def multi_strategy_report_html(multi_result, *,
         VERDICT_TABLE_TITLE,
         exclusion_rows,
         multi_strategy_grid_rows,
+        multi_header_line,
         multi_summary_line,
         provenance_sentences,
         rules_applied,
@@ -648,8 +649,7 @@ def multi_strategy_report_html(multi_result, *,
             ("Lenses", "<br>".join(_esc(lbl) for lbl in lens_labels)),
             ("Run", _esc(" — ".join(p for p in (stamp, mode_phrase) if p))),
         ])
-        + '<p class="house">Verdict: deterministic ranker. No LLM ran — narration '
-          "stays a per-strategy run.</p>"
+        + f'<p class="house">{_esc(multi_header_line(multi_result))}</p>'
         f'<p class="summary">{_esc(multi_summary_line(multi_result))}</p>'
         "</header>")
 

@@ -4,7 +4,7 @@
 **Lenses: Classic Value (magic_formula_v1); Magic Formula RAW (magic_formula_raw_v1); Value + Momentum (magic_formula_momentum_v1)**
 **Run: 24.08.2026 13:49 CEST — ranker only, no AI commentary**
 
-_Verdict: deterministic ranker. No LLM ran — narration stays a per-strategy run._
+_Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 
 ### 3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one
 
