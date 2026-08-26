@@ -848,7 +848,26 @@ def _gather_valuation_band(adapter, ticker: str, fundamentals, *, today: date
     bars = getattr(prices, "bars", None) or []
     if not bars:
         return ValuationBand(note="price history unavailable: no price bars returned")
-    return valuation_band(bars, fundamentals, asof=today)
+
+    # VALBAND-2 — an ADR reports in one currency and trades in another, which used to
+    # darken the band entirely. Fetch MONTHLY rates across the same window so every
+    # historical month converts at its OWN rate; today's rate never touches history.
+    # Best-effort like the rest of this function: no rates means the band abstains with
+    # the pair named, exactly as it abstained before.
+    fx = None
+    price_ccy = getattr(fundamentals, "currency", None)
+    acct_ccy = getattr(fundamentals, "financial_currency", None)
+    if price_ccy and acct_ccy and price_ccy != acct_ccy:
+        from .tools.fx import monthly_fx_series
+
+        try:
+            fx = monthly_fx_series(
+                adapter, acct_ccy, price_ccy,
+                start=today - timedelta(days=round(365.25 * BAND_YEARS) + 10),
+                end=today)
+        except Exception:
+            fx = None
+    return valuation_band(bars, fundamentals, asof=today, fx=fx)
 
 
 def gather_factor_inputs(adapter, ticker: str, *, today: date,
