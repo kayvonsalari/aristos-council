@@ -59,8 +59,6 @@ _REPORT_TERMS: tuple[tuple[str, str, str], ...] = (
     ("Reversion value", "reversion",
      "What the share price would be TODAY if the multiple returned to the company's own "
      "five-year median. Arithmetic on its own history — not a forecast and not a target."),
-    ("Rank-sum", "rank-sum",
-     "Each lens's position numbers added together; lower is better across lenses."),
     ("Quintile cut", "quintile",
      "The top fifth of ranked names are rated BUY, the bottom fifth SELL, and everything "
      "between them HOLD."),
@@ -76,9 +74,6 @@ _REPORT_TERMS: tuple[tuple[str, str, str], ...] = (
     ("Not assessed", "not assessed",
      "The evidence channel this specialist reads returned nothing, so it offered no "
      "view. A missing channel, not a measured neutral."),
-    ("‡", "‡",
-     "The rank-sum behind this figure covers fewer lenses than the others, because at "
-     "least one lens excluded the name before ranking it."),
     ("⚑", "⚑",
      "This verdict sits on a boundary: the name tied on score with another that got a "
      "DIFFERENT verdict, and the alphabetical tie-break decided which side each fell."),

@@ -197,22 +197,26 @@ def test_checkbox_lens_selection_yields_the_same_combined_grid_as_the_multiselec
 # --------------------------------------------------------------------------- #
 # The rendered grid
 # --------------------------------------------------------------------------- #
-def test_grid_text_carries_every_column_the_sums_and_the_incomparable_mark():
-    res = _multi([SCREENED, RAW])
-    text = format_multi_strategy_grid(res)
-    assert "COMBINED GRID" in text and "2 strategies" in text
-    assert SCREENED in text and RAW in text
-    assert "deterministic ranker" in text
-    # REPORT-2: an exclusion cell states the rule in REPORT-1 plain English rather than
-    # repeating the machine reason — the criterion id stays in the per-lens detail
-    # section of the merged report, where a whole line can carry it.
-    assert "excluded — return on invested capital" in text
-    assert "the rule requires at least" in text
-    # "no data" is its own axis, worded distinctly from an exclusion (a name with no
-    # data was not judged and failed nothing); its reason is kept in the detail section.
-    assert "no data" in text
-    assert "‡" in text                            # C: ranked by fewer lenses
+def test_grid_text_carries_every_lens_column_and_keeps_its_order():
+    """GRID-COLS-1: the rank-sum column and its "fewer lenses" marker are gone from the
+    rendered grid — they were incomparable on most rows of a real cohort. What the column
+    PRODUCED survives and is what this now pins: the row ORDER, which is computed in
+    combine_rank_results and merely rendered here."""
+    result = _multi([SCREENED, RAW])
+    text = format_multi_strategy_grid(result)
 
+    for sid in result.strategy_ids:                 # one column per lens, still
+        assert sid in text
+    assert "rank-sum" not in text                   # ...and no incomparable column
+    assert "\u2021" not in text                        # ...nor its footnote marker
+
+    # the ORDER is the grid's own, unchanged. Read the NAME COLUMN of the data rows
+    # rather than searching the whole text: the fixture's names are single letters and
+    # would match inside the header.
+    lines = text.splitlines()
+    head = next(i for i, l in enumerate(lines) if l.strip().startswith("name"))
+    rendered = [l[2:26].strip() for l in lines[head + 1:] if l.startswith("  ") and l.strip()]
+    assert rendered[:len(result.rows)] == [row.display for row in result.rows]
 
 def test_combine_is_pure_and_orders_comparable_names_first():
     res = _multi([SCREENED, RAW])

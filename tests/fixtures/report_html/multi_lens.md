@@ -39,14 +39,14 @@ _Evidence channels that returned nothing, stated BEFORE the prose that rests on 
 
 ## Verdict by lens
 
-One row per name, one column per lens. A ranked cell gives the name's position in THAT lens's cohort and its verdict; an excluded cell names the rule it failed; a name with no usable data reads “no data” and keeps its reason in that lens's own section below. Rank-sum adds the per-lens POSITIONS and is comparable only across names ranked by EVERY lens — ‡ marks a sum over fewer, and nothing is imputed for an exclusion.
+One row per name, one column per lens. A ranked cell gives the name's position in THAT lens's cohort and its verdict; an excluded cell names the rule it failed; a name with no usable data reads “no data” and keeps its reason in that lens's own section below.
 
-| Name | Classic Value | Magic Formula RAW | Value + Momentum | Rank-sum | Graded by |
-|---|---|---|---|---|---|
-| **A** | #1 of 2 · BUY | #1 of 3 · BUY | #1 of 2 · BUY | 3 | 3 of 3 |
-| **B** | #2 of 2 · HOLD | #2 of 3 · HOLD | #2 of 2 · HOLD | 6 | 3 of 3 |
-| **C** | excluded — return on invested capital 7.7%; the rule requires at least 12%. | #3 of 3 · HOLD | excluded — return on invested capital 7.7%; the rule requires at least 12%. | 3‡ | 1 of 3 |
-| **DEAD** | no data | no data | no data | — | 0 of 3 |
+| Name | Classic Value | Magic Formula RAW | Value + Momentum |
+|---|---|---|---|
+| **A** | #1 of 2 · BUY | #1 of 3 · BUY | #1 of 2 · BUY |
+| **B** | #2 of 2 · HOLD | #2 of 3 · HOLD | #2 of 2 · HOLD |
+| **C** | excluded — return on invested capital 7.7%; the rule requires at least 12%. | #3 of 3 · HOLD | excluded — return on invested capital 7.7%; the rule requires at least 12%. |
+| **DEAD** | no data | no data | no data |
 
 ## Share price & 52-week position
 
@@ -175,10 +175,8 @@ _Every term this report uses, in plain English. Terms the run did not use are le
 - **EPS (earnings per share)** — Annual profit divided by the number of shares.
 - **Not tested / not evaluated** — The data this check needed was missing, so the check was skipped honestly rather than guessed at. It is not a pass and it is not a fail.
 - **Quintile cut** — The top fifth of ranked names are rated BUY, the bottom fifth SELL, and everything between them HOLD.
-- **Rank-sum** — Each lens's position numbers added together; lower is better across lenses.
 - **Return on invested capital** — The profit the business earns on the money tied up in it. High means every euro invested in the company works hard.
 - **Return on invested capital (min_roic)** — The rule requires the company to earn at least this much profit on the money tied up in it — it screens out businesses that need a lot of capital to make a little profit.
-- **‡** — The rank-sum behind this figure covers fewer lenses than the others, because at least one lens excluded the name before ranking it.
 
 ---
 

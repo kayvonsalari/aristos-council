@@ -2246,11 +2246,18 @@ VERDICT_TABLE_NOTE = (
     "One row per name, one column per lens. A ranked cell gives the name's position in "
     "THAT lens's cohort and its verdict; an excluded cell names the rule it failed; a "
     "name with no usable data reads \u201cno data\u201d and keeps its reason in that "
-    "lens's own section below. Rank-sum adds the per-lens POSITIONS and is comparable "
-    "only across names ranked by EVERY lens \u2014 \u2021 marks a sum over fewer, and "
-    "nothing is imputed for an exclusion.")
-_COL_RANK_SUM = "Rank-sum"
-_COL_GRADED_BY = "Graded by"
+    "lens's own section below.")
+# GRID-COLS-1 \u2014 the Rank-sum and Graded-by COLUMNS are gone from every rendered
+# surface. On real portfolio runs almost every row carried the "fewer lenses" marker (a
+# sum over fewer lenses, so incomparable); on the 4-lens run of 2026-08-26, EVERY row
+# did. A column incomparable on most rows, needing a footnote symbol plus two glossary
+# entries to be read at all, adds confusion rather than information \u2014 and graded-by
+# was already legible from the row itself: ranked cells carry a verdict, excluded cells
+# name a rule.
+#
+# The COMPUTATION stays. rank_sum and graded remain on MultiStrategyRow, remain in
+# combine_rank_results, remain in the record layer, and STILL DECIDE THE ROW ORDER.
+# Only the two rendered columns go.
 
 
 def multi_strategy_columns(result: MultiStrategyResult) -> dict[str, str]:
@@ -2270,19 +2277,15 @@ def multi_strategy_grid_rows(result: MultiStrategyResult) -> tuple[list[dict], l
     """``(rows, columns)`` for THE verdict table — the ONE builder the Run tab, the
     merged markdown and the merged HTML all render, so the three cannot drift.
 
-    One row per name in the combined grid's own order (best rank-sum first, then the
-    partially-ranked, then the never-ranked — never re-sorted here). ``\u2021`` marks a
-    rank-sum over FEWER lenses than the run used, so a smaller sum is never misread as a
-    better one."""
+    One row per name in the combined grid's own order (lenses-graded, then rank-sum —
+    never re-sorted here). GRID-COLS-1 removed the Rank-sum and Graded-by COLUMNS; the
+    ORDER they produced is UNCHANGED, because it is computed upstream in
+    ``combine_rank_results`` and merely rendered here."""
     columns = multi_strategy_columns(result)
-    head = ["Name", *columns.values(), _COL_RANK_SUM, _COL_GRADED_BY]
+    head = ["Name", *columns.values()]
     rows = []
     for row in result.rows:
-        rs = "—" if row.rank_sum is None else str(row.rank_sum)
-        if row.rank_sum is not None and not row.comparable:
-            rs = f"{rs}\u2021"
-        cells = {"Name": row.display, _COL_RANK_SUM: rs,
-                 _COL_GRADED_BY: f"{row.graded} of {len(result.strategy_ids)}"}
+        cells = {"Name": row.display}
         for sid, header in columns.items():
             cells[header] = row.cells[sid].render()
         rows.append(cells)
@@ -2952,28 +2955,27 @@ def narration_evidence_strategies(result: MultiStrategyResult, ticker: str) -> l
 
 def format_multi_strategy_grid(result: MultiStrategyResult) -> str:
     """The combined grid as text (the CLI print and the UI download read this ONE
-    builder, so they cannot drift). One row per name: rank-sum, then one cell per
-    strategy. A name not ranked by every strategy carries ‡ — its smaller sum is over
-    fewer lenses and is NOT a better one."""
+    builder, so they cannot drift). One row per name, one cell per strategy.
+
+    GRID-COLS-1 dropped the rank-sum column here too \u2014 it was incomparable on most
+    rows of a real cohort. The ROW ORDER it produced is unchanged: that is computed in
+    ``combine_rank_results`` and only rendered here."""
     ids = result.strategy_ids
     m = result.meta
     lines = [
-        f"=== COMBINED GRID — {len(ids)} strategies over "
+        f"=== COMBINED GRID \u2014 {len(ids)} strategies over "
         f"{m.get('universe_size', 0)} name(s) in "
         f"{m.get('universe_id') or 'adhoc'} ===",
-        "  Verdict: deterministic ranker (no LLM ran — narration is per-strategy).",
+        "  Verdict: deterministic ranker (no LLM ran \u2014 narration is per-strategy).",
         "",
     ]
-    head = f"  {'name':<24} {'rank-sum':<10}" + "".join(f"{sid:<34}" for sid in ids)
+    head = f"  {'name':<24} " + "".join(f"{sid:<34}" for sid in ids)
     lines.append(head)
     for row in result.rows:
-        rs = "—" if row.rank_sum is None else str(row.rank_sum)
-        if row.rank_sum is not None and not row.comparable:
-            rs = f"{rs}‡"
         cells = "".join(f"{row.cells[sid].render():<34}" for sid in ids)
-        lines.append(f"  {_name_col(row.display, 24):<24} {rs:<10}{cells}")
+        lines.append(f"  {_name_col(row.display, 24):<24} {cells}")
     lines.append("")
-    lines.append(f"  rank-sum = sum of the per-strategy cohort POSITIONS; comparable only "
-                 f"across the {m.get('graded_by_all', 0)} name(s) ranked by ALL {len(ids)} "
-                 f"strategies (‡ = ranked by fewer, nothing imputed).")
+    lines.append(f"  ordered by how many lenses graded each name, then by its combined "
+                 f"position; {m.get('graded_by_all', 0)} name(s) were ranked by ALL "
+                 f"{len(ids)} strategies.")
     return "\n".join(lines)

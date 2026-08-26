@@ -63,11 +63,15 @@ def test_the_glossary_holds_only_terms_the_report_actually_uses():
     """A glossary of every registered term would be a wall to scroll past, and a reader
     could not tell which entries bear on what they just read."""
     used = FACTOR_REGISTRY["roic"]
-    entries = glossary_entries(factors=[used], criteria=[], text="ROIC and rank-sum.")
+    entries = glossary_entries(factors=[used], criteria=[],
+                               text="ROIC and the quintile cut.")
     terms = {e.term for e in entries}
 
     assert used.label in terms                       # the factor that ran
-    assert "Rank-sum" in terms                       # a report term the text mentions
+    assert "Quintile cut" in terms                   # a report term the text mentions
+    # GRID-COLS-1 removed the rank-sum COLUMN, so its glossary entry went with it —
+    # a definition for something nothing renders is noise.
+    assert not any("rank-sum" in t.lower() for t in terms)
     # ...and nothing the run never touched
     assert not any("volatility" in t.lower() for t in terms)
     assert not any("dividend" in t.lower() for t in terms)
@@ -82,7 +86,7 @@ def test_the_definitions_avoid_jargon_inside_a_definition():
     """A definition that needs its own glossary has not defined anything."""
     entries = glossary_entries(factors=FACTOR_REGISTRY.values(),
                                criteria=REGISTRY.values(), text="")
-    banned = ("EBIT/EV", "rank-sum", "quintile", "CAGR")
+    banned = ("EBIT/EV", "quintile", "CAGR")
     for entry in entries:
         body = entry.definition
         for token in banned:

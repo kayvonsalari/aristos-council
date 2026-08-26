@@ -281,10 +281,14 @@ def test_the_shared_price_and_valuation_section_appears_exactly_once():
 def test_the_verdict_table_appears_once_with_one_column_per_lens(three):
     rows, head = multi_strategy_grid_rows(three)
     assert head[0] == "Name"
-    assert head[-2:] == ["Rank-sum", "Graded by"]
-    assert len(head) == 1 + len(three.strategy_ids) + 2
+    # GRID-COLS-1: Name plus ONE column per lens, and nothing else. The Rank-sum and
+    # Graded-by columns are gone \u2014 incomparable on most rows of a real cohort, and
+    # graded-by was already legible from the cells themselves.
+    assert len(head) == 1 + len(three.strategy_ids)
+    assert "Rank-sum" not in head and "Graded by" not in head
     md = _markdown(three)
     assert md.count(f"## {VERDICT_TABLE_TITLE}") == 1
+    assert "\u2021" not in md          # the footnote marker has nothing left to mark
 
 
 def test_a_name_ranked_by_some_lenses_and_excluded_by_others_renders_in_every_cell(three):
@@ -301,8 +305,10 @@ def test_a_name_ranked_by_some_lenses_and_excluded_by_others_renders_in_every_ce
     # ...while the canonical no-screen lens RANKS it — the disagreement the grid exists
     # to show, readable in one row instead of across three files.
     assert c[columns[RAW]].startswith("#") and "·" in c[columns[RAW]]
-    assert c["Rank-sum"].endswith("‡")                            # graded by fewer
-    assert c["Graded by"] == f"1 of {len(three.strategy_ids)}"
+    # GRID-COLS-1: "graded by fewer lenses" is now read from the ROW \u2014 two excluded
+    # cells and one ranked one \u2014 rather than from a count column.
+    assert sum(1 for sid in three.strategy_ids
+               if c[columns[sid]].startswith("#")) == 1
 
 
 def test_an_unrateable_name_reads_no_data_and_keeps_its_reason_per_lens(three):
@@ -311,7 +317,7 @@ def test_an_unrateable_name_reads_no_data_and_keeps_its_reason_per_lens(three):
     dead = next(row for row in rows if row["Name"] == "DEAD")
 
     assert all(dead[columns[sid]] == "no data" for sid in three.strategy_ids)
-    assert dead["Rank-sum"] == "—" and dead["Graded by"] == "0 of 3"
+    assert set(dead) == {"Name", *columns.values()}      # no count columns left
     # the REASON is not lost — it is in each lens's own detail section
     md = _markdown(three)
     doc = multi_strategy_report_html(three, run_start=_RUN)
@@ -326,17 +332,20 @@ def test_the_row_order_is_the_combined_grids_own(three):
     assert [row["Name"] for row in rows] == [row.display for row in three.rows]
 
 
-def test_the_rank_sum_and_the_fewer_lenses_marker_match_the_grid(three):
-    rows, _head = multi_strategy_grid_rows(three)
-    by_name = {row["Name"]: row for row in rows}
+def test_the_rank_sum_still_computed_even_though_it_is_no_longer_rendered(three):
+    """GRID-COLS-1 removed the COLUMN, not the computation. rank_sum and graded stay on
+    the row, stay in the record layer, and still decide the order \u2014 so the ordering
+    this report depends on cannot quietly stop working because a column was dropped."""
     for row in three.rows:
-        cell = by_name[row.display]["Rank-sum"]
-        if row.rank_sum is None:
-            assert cell == "—"
-        elif row.comparable:
-            assert cell == str(row.rank_sum)
-        else:
-            assert cell == f"{row.rank_sum}‡"
+        assert hasattr(row, "rank_sum") and hasattr(row, "graded")
+    ranked = [r for r in three.rows if r.rank_sum is not None]
+    assert ranked, "the fixture should rank something"
+    assert any(not r.comparable for r in ranked), (
+        "the fixture should still contain a partially-graded name")
+
+    # ...and the rendered order is the order those numbers produced
+    rows, _head = multi_strategy_grid_rows(three)
+    assert [row["Name"] for row in rows] == [row.display for row in three.rows]
 
 
 # --------------------------------------------------------------------------- #

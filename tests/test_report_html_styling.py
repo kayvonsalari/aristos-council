@@ -31,6 +31,16 @@ structure and the guarantee underneath was re-expressed ORDER-INDEPENDENTLY:
 ``test_no_value_changed_when_REPORT_4_reordered_the_document`` asserts the multiset of
 numbers is unchanged against a snapshot of the pre-REPORT-4 render, in both the HTML and
 the markdown. A presentation change may move a value; it may never alter one.
+
+BASELINE MOVED ONCE MORE, DELIBERATELY (2026-08-26, GRID-COLS-1). The owner removed the
+Rank-sum and Graded-by COLUMNS from the verdict table: on real portfolio runs almost every
+row carried the "fewer lenses" marker, so the column was incomparable exactly where it was
+most needed. That is a deliberate REMOVAL of rendered values, which the "nothing lost"
+guard is built to catch — correctly. The snapshot is therefore re-taken at that point, so
+the guard goes on protecting every change AFTER it. What is removed is recorded here
+rather than exempted in the helper: the rank-sum figures and the "N of 3" graded counts,
+and nothing else. The COMPUTATION behind them is untouched and still orders the rows,
+which ``test_the_rank_sum_still_computed_even_though_it_is_no_longer_rendered`` pins.
 """
 
 from __future__ import annotations
