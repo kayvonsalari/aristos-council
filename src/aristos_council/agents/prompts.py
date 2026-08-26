@@ -444,6 +444,36 @@ CROSS_LENS_CONSTRAINT = (
     "resolve, not yours. Verdicts remain the ranker's.\n")
 
 
+# REPORT-4 — the narration arrives as FIELDS. Layout is the report's job, formatting is
+# the unit rules' job; left to invent its own the narrator invented a different one every
+# run ("---", ALL-CAPS pseudo-headings, once a markdown h2 that broke the document's
+# heading tree) and quoted numbers as strings mid-sentence, so a price could sit beside
+# another name's price in another currency with nothing to tell them apart.
+STRUCTURED_NARRATION = (
+    "OUTPUT SHAPE — fill the `narration` FIELDS; the report does the layout.\n"
+    "  echoed_verdict     the ranker's verdict for this name, quoted back in one line.\n"
+    "  lens_verdicts      ONE entry per selected lens — EVERY lens, including any that "
+    "rated it HOLD or SELL or excluded it. Give lens, verdict, and position/cohort_size "
+    "(omit those two for an excluded name and give excluded_reason instead).\n"
+    "  lens_attribution   ONE entry per lens that RANKED it: its factor_ranks "
+    "(factor, rank, cohort_size) and the screens_passed, plus `reasoning` in that lens's "
+    "own terms.\n"
+    "  disagreement_note  ONLY when the lenses disagree — state the disagreement and "
+    "LEAVE IT STANDING. Omit entirely when they agree.\n"
+    "  neutral_context    facts carrying no stance, one per entry.\n"
+    "  specialist_views   ONE entry per specialist. If a specialist could not assess for "
+    "want of data, set assessed=false and give not_assessed_reason, and give NO stance "
+    "and NO confidence — a missing channel is NOT a measured neutral. Otherwise set "
+    "assessed=true with stance, confidence and reasoning.\n"
+    "  open_questions     the 'worth checking' items, one per entry, no prefix.\n"
+    "FORBIDDEN IN EVERY FIELD: horizontal rules ('---'), ALL-CAPS headings, markdown "
+    "headings ('#'), bullet characters, numbered-section labels, or any other layout "
+    "markup. Write plain sentences; the report supplies every heading, table and list.\n"
+    "NUMBERS: never wrap a number in quotation marks. State a figure plainly and ALWAYS "
+    "with its unit, and name the currency for every monetary amount (the cohort spans "
+    "several currencies and they are never converted).\n")
+
+
 def decision_system(strategy: Strategy,
                     council_mode: str = "second_opinion") -> str:
     if council_mode == "narrator":
@@ -462,7 +492,8 @@ def decision_system(strategy: Strategy,
             "showed such 'insights' are unreliable. Phrase anything beyond the "
             "reported numbers as an explicit OPEN QUESTION ('worth checking: ...'), "
             "never as a finding.\n"
-            + CROSS_LENS_CONSTRAINT + "\n")
+            + CROSS_LENS_CONSTRAINT
+            + STRUCTURED_NARRATION + "\n")
     else:
         # Option B (default): an INDEPENDENT SECOND OPINION that may disagree.
         role = (

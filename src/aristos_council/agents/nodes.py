@@ -777,6 +777,19 @@ def make_decision_node(strategy: Strategy, runner,
         )
         out: DecisionOutput = runner.invoke(system, user)
 
+        # REPORT-4: when the narrator returned FIELDS, `rationale` becomes the flattened
+        # PROSE of those fields. Everything downstream that reads prose — the whole
+        # fact-checking layer, the provenance audit, saved-report rendering — keeps
+        # working unchanged, and the layout is rebuilt from the fields at render time.
+        # A model that filled `rationale` and left `narration` empty (second-opinion mode,
+        # any older record) is untouched.
+        if out.narration is not None:
+            from ..narration_render import narration_prose
+
+            prose = narration_prose(out.narration)
+            if prose:
+                out.rationale = prose
+
         # NARRATOR (Option A): the council does NOT issue an independent verdict — it
         # echoes the RANKER's verdict-of-record. SECOND_OPINION (Option B, default):
         # the agent's OWN verdict stands as the independent check.
@@ -827,6 +840,12 @@ def make_decision_node(strategy: Strategy, runner,
             gating_criterion_fired=fired_name,
             insufficient_evidence=insufficient,
             narration_only=narrator,
+            # REPORT-4: carry the STRUCTURED narration onto the state. Without this the
+            # fields reached the report only as the flattened prose in `rationale`, and
+            # the live 21:47 run rendered every narration as flat paragraphs while the
+            # "what the run could not see" section reported a clean bill of health beside
+            # two specialists that had plainly abstained.
+            narration=out.narration,
         )
         return state
 

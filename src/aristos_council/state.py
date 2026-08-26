@@ -204,6 +204,12 @@ class Decision(BaseModel):
     # independent second opinion, so `recommendation` echoes the ranker and is not a
     # ranker-vs-council comparison input. False = 'second_opinion' (Option B, default).
     narration_only: bool = False
+    # REPORT-4 — the narrator's STRUCTURED output, carried onto the state so the report
+    # can render real headings, tables and lists from it. Typed loosely (a plain dict is
+    # accepted) because `state.py` is the schema contract and must not import the agent
+    # schemas; `narration_render` reads it through attribute access either way. Optional,
+    # so second-opinion runs and every record written before REPORT-4 still parse.
+    narration: Optional[Any] = None
 
 
 # --------------------------------------------------------------------------- #

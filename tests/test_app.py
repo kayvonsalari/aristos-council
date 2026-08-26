@@ -414,7 +414,8 @@ def test_run_tab_renders_with_the_one_flow():
     # (Company Check has its own "▶ Run company check" button on another tab.)
     run_buttons = [b.label for b in at.button if b.label.startswith("▶ Run —")]
     assert len(run_buttons) == 1, run_buttons
-    assert run_buttons[0].startswith("▶ Run — narrated")     # the single-lens default
+    # the single-lens default. The click is FREE; narration is a second, priced button.
+    assert run_buttons[0].startswith("▶ Run — free · then choose whether to narrate")
 
 
 # --------------------------------------------------------------------------- #

@@ -238,8 +238,10 @@ def test_the_confirmation_carries_the_exact_count_and_estimate_and_the_names():
 
     blob = " ".join(str(getattr(m, "value", "")) for m in at.markdown)
     assert f"{plan['count']} names rated BUY by at least one lens" in blob
-    assert f"narrate all {plan['count']}?" in blob
-    assert f"est. ${plan['est_cost']:.2f}" in blob
+    # COST-2: the figure names its scope — total, one charge, and the per-name rate.
+    assert f"narrate all {plan['count']} for" in blob
+    assert "total (one charge, about \$" in blob
+    assert f"\${plan['est_cost']:.2f} total" in blob      # $-escaped for markdown
     assert "up to" not in blob                              # no bound, no coefficient
     # the NAMES are listed
     written = " ".join(str(getattr(w, "value", "")) for w in at.markdown) + \
@@ -249,13 +251,16 @@ def test_the_confirmation_carries_the_exact_count_and_estimate_and_the_names():
     for ticker in plan["names"]:
         assert labels[ticker] in body or ticker in body
 
-    assert any(b.label == f"▶ Narrate — ${plan['est_cost']:.2f}" for b in at.button)
+    assert any(b.label == f"▶ Narrate — \${plan['est_cost']:.2f} total"
+               for b in at.button)
     assert any(b.label == "Keep the free ranking" for b in at.button)
 
 
-def test_keeping_the_free_ranking_writes_the_report_and_spends_nothing(
+def test_keeping_the_free_ranking_reports_it_and_re_runs_NOTHING(
         tmp_path, monkeypatch):
-    """The ranking is DONE — it must be reported, not discarded and not re-run."""
+    """The ranking is DONE and, as of 2026-08-26, already REPORTED by the time the offer
+    is on screen. "Keep" therefore only dismisses the offer: it must not re-rank, must
+    not re-persist, and must not touch the files already written."""
     pytest.importorskip("streamlit")
     import app
 
@@ -268,17 +273,29 @@ def test_keeping_the_free_ranking_writes_the_report_and_spends_nothing(
     at.session_state["uni_run_start"] = _RUN
     at.session_state["uni_universe_display_name"] = "Growth 40"
     at.run()
+    # phase one's half of the state: the ranking reported and its pair on disk
+    paths = app._persist_multi_strategy_run(result, _RUN, "Growth 40")
+    at.session_state["uni_multi_result"] = result
+    at.session_state["uni_multi_persisted"] = paths
+    at.run()
+
+    before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    assert len(before) == 2
+    # the finished ranking is downloadable HERE, beside the narrate/keep choice
+    assert len([d for d in at.get("download_button")
+                if "the free ranking" in str(d.label)]) == 2
+
     next(b for b in at.button if b.label == "Keep the free ranking").click().run()
     assert not at.exception
 
-    assert _ss(at, "uni_pending_narration") is None
+    assert _ss(at, "uni_pending_narration") is None          # the offer is dismissed...
     published = _ss(at, "uni_multi_result")
-    assert published is result                              # the SAME ranking, reported
-    assert published.narratives == {}                       # ...and nothing was narrated
-    # a complete report pair was written
-    written = sorted(p.name for p in tmp_path.iterdir())
-    assert len(written) == 2 and written[0].endswith(".html") and written[1].endswith(".md")
-    md = (tmp_path / written[1]).read_text(encoding="utf-8")
+    assert published is result                               # ...the SAME ranking stands
+    assert published.narratives == {}                        # ...nothing was narrated
+    after = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    assert after == before, "keeping re-wrote the report instead of leaving it alone"
+
+    md = next(v for k, v in after.items() if k.endswith(".md")).decode("utf-8")
     for heading in ("Rules applied", "Verdict by lens"):
         assert heading in md
     assert "## Narration" not in md
@@ -312,7 +329,7 @@ def test_confirming_narrates_and_publishes_without_re_ranking(tmp_path, monkeypa
     at.session_state["uni_universe_display_name"] = "Growth 40"
     at.run()
     next(b for b in at.button
-         if b.label == f"▶ Narrate — ${plan['est_cost']:.2f}").click().run()
+         if b.label == f"▶ Narrate — \${plan['est_cost']:.2f} total").click().run()
     assert not at.exception
 
     assert seen["result"] is result                         # consumed, not re-ranked
@@ -392,8 +409,8 @@ def test_selecting_narrator_then_adding_lenses_KEEPS_narrator():
     assert _mode(at).value == app.RUN_MODE_NARRATOR, (
         "ticking a lens silently re-defaulted the run mode")
     assert app.run_mode_narrates(_mode(at).value)
-    # ...and the button says so, rather than "deterministic, free"
-    assert "narrated" in next(b for b in at.button if b.key == "uni_run").label
+    # ...and the button offers narration, rather than reading "deterministic, free"
+    assert "narrate" in next(b for b in at.button if b.key == "uni_run").label
 
 
 def test_the_mode_is_never_re_defaulted_by_the_lens_count_in_either_direction():
@@ -430,6 +447,10 @@ def _drive_two_phase(monkeypatch, tmp_path, *, confirm: bool):
 
     at = _run_tab(timeout=300)
     at.session_state["uni_coverage"] = "buys_only"
+    # COST-2: this fixture is ABOUT the confirm panel, so it pins the threshold at 0
+    # ("always ask"). The under-threshold path — where one click both ranks and narrates
+    # — is exercised by its own tests below.
+    at.session_state["uni_confirm_threshold"] = 0.0
     at.session_state["uni_tickers"] = "\n".join(UNIVERSE)
     _mode(at).set_value(app.RUN_MODE_NARRATOR).run()
     _tick_two_lenses(at)
@@ -437,9 +458,17 @@ def _drive_two_phase(monkeypatch, tmp_path, *, confirm: bool):
 
     next(b for b in at.button if b.key == "uni_run").click().run()
     assert not at.exception, at.exception
-    # PHASE ONE is free and publishes NOTHING — it holds the ranking for confirmation.
+    # PHASE ONE is free and REPORTS the ranking (2026-08-26): downloading the finished
+    # ranking and narrating it are not alternatives, so the pair is written and offered
+    # in the confirm panel. It still costs nothing, and it is still ONE pair.
     assert counter.call_count == 0
-    assert not list(tmp_path.glob("*")), "phase one published before confirmation"
+    phase_one = sorted(p.name for p in tmp_path.glob("*"))
+    assert len(phase_one) == 2, phase_one
+    assert all("_ranker_" in n for n in phase_one), phase_one
+    # ...and those files are downloadable right there, before any narration decision
+    offered = [d for d in at.get("download_button")
+               if "the free ranking" in str(d.label)]
+    assert len(offered) == 2, [str(d.label) for d in at.get("download_button")]
 
     key = "uni_confirm_narrate" if confirm else "uni_keep_ranking"
     next(b for b in at.button if b.key == key).click().run()

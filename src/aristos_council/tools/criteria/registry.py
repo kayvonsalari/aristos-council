@@ -125,6 +125,10 @@ class Criterion:
     # (observed <= threshold). Drives the plain-English threshold phrase and the
     # exclusion sentence's limit clause. Not new behaviour — it restates in data what
     # the criterion function has always done, so reports stop hardcoding it.
+    # GLOSSARY-1 — the plain-English definition of the RULE, for the report's "What the
+    # terms mean" section. Same contract as FactorDef.glossary: required, tested, and
+    # never jargon inside a definition.
+    glossary: str = ""
     comparison: str = "min"
     # The observation half of an exclusion sentence, e.g. "dividend yield {observed}".
     # Placeholders: ``{observed}`` (formatted by the threshold param's unit) and
@@ -384,6 +388,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_dividend_yield", _min_dividend_yield,
         label="Dividend yield",
+        glossary=("The rule requires the dividend to be at least this percentage of "
+                  "the share price."),
         comparison="min",
         observation="dividend yield {observed}",
         params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.005,
@@ -395,6 +401,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_payout_ratio", _max_payout_ratio,
         label="Dividends vs earnings",
+        glossary=("The rule caps the share of profit paid out as dividends, so the "
+                  "payout has room to survive a bad year."),
         comparison="max",
         observation="dividends took {observed} of earnings",
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.05,
@@ -406,6 +414,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_payout_ratio_fcf", _max_payout_ratio_fcf,
         label="Dividends vs free cash flow",
+        glossary=("The rule caps the share of free cash flow paid out as dividends "
+                  "— the cash test rather than the profit test."),
         comparison="max",
         observation="dividends took {observed} of free cash flow",
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.05,
@@ -419,6 +429,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_market_cap", _min_market_cap,
         label="Company size",
+        glossary=("The rule requires the company to be worth at least this much in "
+                  "total, so names too small to trade sensibly are skipped."),
         comparison="min",
         observation="market value {observed}",
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=1e9,
@@ -430,6 +442,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_dividend_growth_streak", _min_dividend_growth_streak,
         label="Consecutive years of dividend increases (from payment history)",
+        glossary=("The rule requires the dividend to have risen for at least this "
+                  "many consecutive years."),
         comparison="min",
         observation="{observed} consecutive years of dividend increases",
         params=(ParamSpec("threshold", "int", min=0.0, max=None, step=1.0,
@@ -442,6 +456,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_revenue_cagr", _min_revenue_cagr,
         label="Revenue growth (annual average)",
+        glossary=("The rule requires average yearly sales growth of at least this "
+                  "much over the measured period."),
         comparison="min",
         observation="revenue grew {observed} a year",
         params=(ParamSpec("years", "int", min=1, max=None, step=1.0,
@@ -455,6 +471,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_roic", _min_roic,
         label="Return on invested capital",
+        glossary=("The rule requires the company to earn at least this much profit "
+                  "on the money tied up in it — it screens out businesses that need "
+                  "a lot of capital to make a little profit."),
         comparison="min",
         observation="return on invested capital {observed}",
         params=(ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.01,
@@ -467,6 +486,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_peg_ratio", _max_peg_ratio,
         label="Price/earnings against growth (PEG)",
+        glossary=("The rule caps what you pay per unit of growth — the P/E divided "
+                  "by the growth rate. Lower means growth is cheaper."),
         comparison="max",
         observation="PEG ratio {observed}",
         # NB: PEG divides P/E by the SAME in-house revenue-CAGR window the
@@ -484,6 +505,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         PRICE_MOMENTUM_CRITERION, _min_price_momentum,
         label="12-month price change",
+        glossary=("The rule requires the share to have returned at least this much "
+                  "over the trailing twelve months. The floor catches breakdowns "
+                  "rather than flatness, so it may itself be negative."),
         comparison="min",
         observation="share price {signed} over 12 months",
         # Floor is a 12m RETURN and MAY be negative: the floor catches BREAKDOWNS, not
@@ -500,6 +524,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_dividend_streak", _min_dividend_streak,
         label="Consecutive years of dividend increases",
+        glossary=("The rule requires the dividend to have risen for at least this "
+                  "many consecutive years."),
         comparison="min",
         observation="{observed} consecutive years of dividend increases",
         params=(ParamSpec("threshold", "int", min=0, max=None, step=1, default=10,
@@ -511,6 +537,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_debt_to_market_cap", _max_debt_to_market_cap,
         label="Total debt vs market value",
+        glossary=("The rule caps borrowings against what the company is worth, so "
+                  "heavily indebted names are screened out."),
         comparison="max",
         observation="total debt {observed} of market value",
         params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.1,
@@ -523,6 +551,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_f_score", _min_f_score,
         label="Accounting quality (Piotroski F-Score, 0-9)",
+        glossary=("The rule requires at least this many points on a nine-point "
+                  "checklist of basic financial health."),
         comparison="min",
         observation="F-Score {observed} of 9",
         params=(ParamSpec("threshold", "int", min=0, max=9, step=1, default=5,
@@ -539,6 +569,8 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "valuation_band_percentile", _valuation_band_percentile,
         label="Valuation against its own 5-year range",
+        glossary=("Where today's valuation multiple sits in the company's own five- "
+                  "year history — context only, and it decides nothing."),
         comparison="max",
         observation="valuation at the {observed}th percentile of its own 5-year range",
         params=(ParamSpec("threshold", "float", min=0.0, max=100.0, step=5.0,

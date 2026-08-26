@@ -34,6 +34,7 @@ from aristos_council.data.adapter import (
 from aristos_council.demo_surface import (
     strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
+from aristos_council.costs import actual_vs_estimate, cost_phrase
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
     RunReport,
@@ -1250,17 +1251,70 @@ def run_button_label(run_mode: str, *, n_strategies: int,
     what = f"Run {n_strategies} lenses" if n_strategies > 1 else "Run"
     if not run_mode_narrates(run_mode):
         return f"▶ {what} — deterministic, free"
-    cost = f", est. ${est_cost:.2f}" if est_cost is not None else ""
+    # THIS BUTTON IS FREE. It runs the deterministic ranking and charges nothing —
+    # narration is offered afterwards, from a second button carrying the exact figure
+    # (CONFIRM-SPEND-1). The label used to read "Run 3 lenses — up to 12 names narrated,
+    # est. ≤ $2.28", which reads as this button's price; a second button then appeared at
+    # a DIFFERENT price and there was no way to tell which one spent. So "free" sits
+    # against the action that is free, and the upper bound is marked as describing a step
+    # that has not been offered yet.
+    #
+    # UP TO, still: the true union is only knowable after the ranking pass (lenses
+    # OVERLAP — five lenses produced 18 BUY verdicts over 13 distinct names on
+    # 2026-08-24), and predicting the overlap would mean inventing a coefficient.
+    # COST-2: every figure states its SCOPE. A bare "est. $0.95" could be read as the
+    # total, the per-name rate or the per-lens rate; it is the total, once, for all the
+    # sections, so the label says total and gives the per-name figure rather than leaving
+    # the reader to divide.
     if narrated_count is not None:
-        # UP TO: the true union is only knowable after the free ranking pass (lenses
-        # OVERLAP — five lenses produced 18 BUY verdicts over 13 distinct names on
-        # 2026-08-24), and there is no non-invented way to predict the overlap. So the
-        # pre-click number is stated as the CEILING it is, never as the figure it is not;
-        # the exact count is reported before narration starts and in the report header.
-        ceiling = cost.replace("est. $", "est. ≤ $")
-        return f"▶ {what} — up to {narrated_count} names narrated{ceiling}"
-    tail = "narrated" if run_mode == RUN_MODE_NARRATOR else "second opinion"
-    return f"▶ {what} — {tail}{cost}"
+        tail = (f" · ≤ {cost_phrase(est_cost, narrated_count)}"
+                if est_cost is not None else "")
+        return (f"▶ {what} — free · then choose whether to narrate "
+                f"up to {narrated_count} names{tail}")
+    verb = "narrate" if run_mode == RUN_MODE_NARRATOR else "take a second opinion"
+    tail = f" · ≤ ${est_cost:.2f} total" if est_cost is not None else ""
+    return f"▶ {what} — free · then choose whether to {verb}{tail}"
+
+
+# COST-2: a confirmation on EVERY run is friction, not a guard. The mode was already
+# chosen; a second click on a routine sub-dollar spend adds nothing but a step. So the
+# guard becomes PROPORTIONATE rather than absent — above the threshold nothing is ever
+# spent without an explicit click carrying the exact figure, and 0 restores "always ask".
+DEFAULT_CONFIRM_THRESHOLD = 5.00
+
+
+def read_threshold(raw, default: float = 0.0) -> float:
+    """The confirmation threshold as a NUMBER, whatever arrives.
+
+    ``st.number_input`` returns a float, so the comparison is already numeric — but a
+    threshold that fails to parse would silently skip BOTH branches (no auto-narrate, no
+    confirm panel), and "silently" is the part that matters. A European locale renders
+    the widget as "5,00"; if any future path ever hands this a display string,
+    ``float("5,00")`` would raise. This makes that impossible rather than merely
+    unlikely: a comma-decimal is understood, and anything unparseable falls back to the
+    SAFE end of the range — 0 means always ask, so a broken threshold can never cause an
+    unasked spend."""
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return float(raw)
+    try:
+        return float(str(raw).strip().replace(" ", "").replace(" ", "")
+                     .replace(",", "."))
+    except (TypeError, ValueError):
+        return default
+
+
+def needs_confirmation(est_cost: float, threshold: float) -> bool:
+    """Does this spend need an explicit second click?
+
+    ``threshold <= 0`` means ALWAYS ask. Otherwise a spend at or below the threshold runs
+    straight through and anything above it stops for confirmation. A missing estimate is
+    treated as needing confirmation: not knowing the cost is not the same as it being
+    small, and the safe reading of "unknown" is the one that asks."""
+    if est_cost is None:
+        return True
+    if threshold is None or threshold <= 0:
+        return True
+    return est_cost > threshold
 
 
 MULTI_LENS_NARRATION_NOTE = (
@@ -1387,17 +1441,23 @@ def _valuation_band_markdown(table) -> list[str]:
     return lines
 
 
-def _rules_applied_markdown(result) -> list[str]:
+def _rules_applied_markdown(result, *, include_title: bool = True) -> list[str]:
     """The RULES APPLIED block as markdown (REPORT-1) — every rule the run applied, its
     limit in plain English and what it did, BEFORE any result. Read from the strategies
-    that actually ran, so editing one changes this block with no code change."""
+    that actually ran, so editing one changes this block with no code change.
+
+    ``include_title=False`` for the MERGED report, where this block is already nested
+    under "Rules applied — by lens" and a per-lens "### <lens>" heading. It used to emit
+    its own "## Rules applied" there too, so a three-lens document carried four headings
+    of that name at two different depths — noise in the heading tree, and now noise in
+    the contents list REPORT-4 builds from it."""
     from aristos_council.pipeline import RULES_SECTION_TITLE, rules_applied
 
     block = rules_applied(result)
     if block is None:
         return []
-    lines = ["", f"## {RULES_SECTION_TITLE}", "",
-             f"**{block.screen_heading}**", "", block.screen_note, ""]
+    lines = (["", f"## {RULES_SECTION_TITLE}", ""] if include_title else [])
+    lines += [f"**{block.screen_heading}**", "", block.screen_note, ""]
     if block.rules:
         cols = ["Rule", "Limit", "What it did"]
         if any(r.measured for r in block.rules):
@@ -1642,11 +1702,15 @@ def _render_narration_confirmation() -> None:
 
     st.divider()
     st.subheader("Ranking complete — confirm the narration spend")
-    st.markdown(f"### {plan['count']} names rated BUY by at least one lens — "
-                f"narrate all {plan['count']}? est. ${plan['est_cost']:.2f}"
-                if pending["kind"] == "multi" else
-                f"### {plan['count']} names to narrate — narrate all "
-                f"{plan['count']}? est. ${plan['est_cost']:.2f}")
+    # COST-2: the figure states its SCOPE. "est. $0.95" could be the total, the per-name
+    # rate or the per-lens rate; it is the total, once, for all the sections.
+    priced = cost_phrase(plan["est_cost"], plan["count"])
+    st.markdown(_md(
+        f"### {plan['count']} names rated BUY by at least one lens — "
+        f"narrate all {plan['count']} for {priced}?"
+        if pending["kind"] == "multi" else
+        f"### {plan['count']} names to narrate — narrate all "
+        f"{plan['count']} for {priced}?"))
     st.caption(f"Exact figures from the ranking that has just run — {plan['basis']}. "
                "Nothing has been charged yet.")
     names = getattr(result, "rows", None)
@@ -1658,39 +1722,129 @@ def _render_narration_confirmation() -> None:
 
     c1, c2 = st.columns(2)
     with c1:
-        confirmed = st.button(f"▶ Narrate — ${plan['est_cost']:.2f}", type="primary",
-                              key="uni_confirm_narrate")
+        confirmed = st.button(
+            _md(f"▶ Narrate — ${plan['est_cost']:.2f} total"),
+            type="primary", key="uni_confirm_narrate")
     with c2:
         kept = st.button("Keep the free ranking", key="uni_keep_ranking")
 
+    # DOWNLOADING AND NARRATING ARE NOT ALTERNATIVES. The ranker-only report is already
+    # written by the time this panel renders, so its files are offered right here rather
+    # than only after the narrate/keep choice is made. Narrating replaces this pair
+    # (_supersede); keeping leaves it exactly as it is.
+    _render_pending_downloads()
+
     if kept:
-        # The ranking is DONE. Report it as a normal ranker-only run rather than
-        # discarding it or making the user pay to see it.
+        # The ranking is DONE and already reported — this only dismisses the offer.
+        # Nothing is re-run, nothing is re-persisted, nothing is charged.
         st.session_state.pop("uni_pending_narration", None)
-        (_publish_multi if pending["kind"] == "multi" else _publish_single)(
-            result, run_start, display_name)
         st.rerun()
 
     if confirmed:
         status = st.status("Narrating…", expanded=True)
-        try:
-            if pending["kind"] == "multi":
-                narrated = narrate_multi_strategy(
-                    result, coverage=pending.get("coverage", "buys_only"),
-                    progress=lambda msg: status.update(label=msg))
-            else:
-                narrated = narrate_rank_result(
-                    result, mode=pending.get("mode", "narrator"),
-                    progress=lambda msg: status.update(label=msg))
-        except Exception as exc:
-            status.update(label="Narration failed", state="error")
-            st.exception(exc)
-            return
+        if _run_narration(pending, status=status, run_start=run_start,
+                          display_name=display_name):
+            st.rerun()
+
+
+def _run_narration(pending, *, status, run_start, display_name) -> bool:
+    """Narrate a completed ranking and republish. ``True`` when it succeeded.
+
+    ONE implementation for both entry points — the confirm button and the under-threshold
+    automatic path — so the two can never diverge on what narrating means, what it costs,
+    or which files it leaves behind."""
+    from aristos_council.pipeline import narrate_multi_strategy, narrate_rank_result
+
+    result = pending["result"]
+    try:
+        if pending["kind"] == "multi":
+            narrated = narrate_multi_strategy(
+                result, coverage=pending.get("coverage", "buys_only"),
+                progress=lambda msg: status.update(label=msg))
+        else:
+            narrated = narrate_rank_result(
+                result, mode=pending.get("mode", "narrator"),
+                progress=lambda msg: status.update(label=msg))
+    except Exception as exc:
+        status.update(label="Narration failed", state="error")
+        st.exception(exc)
+        return False
+    status.update(label="Done.", state="complete")
+    st.session_state.pop("uni_pending_narration", None)
+    (_publish_multi if pending["kind"] == "multi" else _publish_single)(
+        narrated, run_start, display_name)
+    # COST-3: what it ACTUALLY cost, beside what was estimated — so the estimate can be
+    # checked against reality instead of being quoted for ever on trust.
+    meta = narrated.meta or {}
+    st.session_state["uni_last_spend"] = {
+        "names": meta.get("narrated_count") or len(narrated.narratives or {}),
+        "actual": meta.get("actual_cost"), "estimated": meta.get("est_cost")}
+    return True
+
+
+def _offer_or_narrate(pending, *, threshold, status, run_start, display_name) -> None:
+    """COST-2 — confirm only when it matters.
+
+    The ranking is already done and already reported. Below the threshold the run simply
+    continues into narration (the mode was chosen before the click; a second click on a
+    routine sub-dollar spend adds a step and no information). Above it, the run STOPS and
+    the confirm panel states the exact count and figure — nothing above the threshold is
+    ever spent without an explicit click."""
+    from aristos_council.pipeline import narration_plan
+
+    plan = narration_plan(pending["result"], pending.get("coverage", "buys_only"))
+    if not plan["count"]:
         status.update(label="Done.", state="complete")
         st.session_state.pop("uni_pending_narration", None)
-        (_publish_multi if pending["kind"] == "multi" else _publish_single)(
-            narrated, run_start, display_name)
-        st.rerun()
+        return
+    if needs_confirmation(plan["est_cost"], threshold):
+        status.update(label="Ranked — confirm the narration spend.", state="complete")
+        st.session_state["uni_pending_narration"] = pending
+        return
+    st.session_state.pop("uni_pending_narration", None)
+    status.update(label=_md(
+        f"Ranked — narrating {plan['count']} name(s), "
+        f"{cost_phrase(plan['est_cost'], plan['count'])}…"), state="running")
+    _run_narration(pending, status=status, run_start=run_start,
+                   display_name=display_name)
+
+
+def _render_last_spend() -> None:
+    """COST-3 — the run flow's report of what the last narration actually cost."""
+    spend = st.session_state.get("uni_last_spend")
+    if not spend:
+        return
+    line = actual_vs_estimate(spend.get("actual"), spend.get("estimated"),
+                              spend.get("names") or 0)
+    st.success(_md(f"Narrated {spend.get('names', 0)} names — {line}."))
+
+
+def _render_pending_downloads() -> None:
+    """The completed ranking's .md and .html, offered inside the confirm panel.
+
+    Read from the files ALREADY ON DISK rather than re-rendered, so what downloads is
+    byte-identical to what was persisted — and so this cannot become a second place that
+    decides what a report says. Silent when a run somehow persisted nothing, rather than
+    offering a button that would hand back an empty file."""
+    paths = (st.session_state.get("uni_multi_persisted")
+             or st.session_state.get("uni_persisted_paths"))
+    if not paths:
+        return
+    st.caption("The deterministic ranking is already saved — download it now if you "
+               "like. Narrating replaces these two files; keeping leaves them as they "
+               "are.")
+    cols = st.columns(len(paths))
+    mimes = {".md": "text/markdown", ".html": "text/html"}
+    for col, path in zip(cols, paths):
+        path = Path(path)
+        if not path.exists():
+            continue
+        with col:
+            st.download_button(
+                f"⬇ {path.suffix.lstrip('.') or 'file'} — the free ranking",
+                data=path.read_bytes(), file_name=path.name,
+                mime=mimes.get(path.suffix, "text/plain"),
+                key=f"uni_pending_dl_{path.suffix.lstrip('.')}")
 
 
 def display_name_of(result, ticker: str) -> str:
@@ -1714,12 +1868,19 @@ def _persist_multi_strategy_run(multi_result, run_start: datetime,
     from aristos_council.export.report_html import multi_strategy_report_html
     from aristos_council.persistence.universe_runs import save_universe_run
 
+    from aristos_council.report_language import cohort_filename_slug
+
     n = len(multi_result.strategy_ids)
     mode = multi_result.meta.get("council_mode", "ranker-only")
+    # REPORT-4 part 4: an edited list's file was named `universe_3lenses_...` — the cohort
+    # segment omitted, because the display name is blank on an ad-hoc run. It now falls
+    # back to the same description the header leads with, so a folder of reports reads
+    # the way the documents do.
+    cohort_slug = universe_display_name or cohort_filename_slug(multi_result.meta)
     md_name = multi_universe_download_name(
-        n, mode, run_start, universe_display_name=universe_display_name)
+        n, mode, run_start, universe_display_name=cohort_slug)
     html_name = multi_universe_download_name(
-        n, mode, run_start, ext="html", universe_display_name=universe_display_name)
+        n, mode, run_start, ext="html", universe_display_name=cohort_slug)
     md_bytes = _multi_strategy_markdown(multi_result, run_start).encode("utf-8")
     html_bytes = multi_strategy_report_html(
         multi_result, run_start=run_start).encode("utf-8")
@@ -1759,21 +1920,26 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     membership manifest and member hash, and still grades individually on forward
     returns. Merging the reports drops no per-strategy record."""
     from aristos_council.pipeline import (
-        VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, exclusion_rows,
+        CONTENTS_TITLE, EVIDENCE_GAPS_NOTE, EVIDENCE_GAPS_TITLE, compact_rules,
+        evidence_gaps_clean_note,
+        VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, evidence_gaps, exclusion_rows,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
-        provenance_sentences,
+        provenance_sentences, report_sections,
         valuation_band_table,
     )
     from aristos_council.export.report_html import DISCLAIMER, DOCTRINE
-    from aristos_council.report_language import label_with_id
+    from aristos_council.report_language import cohort_title, label_with_id
 
     m = multi_result.meta
     ids = multi_result.strategy_ids
     names = multi_result.strategy_names
     cohort = label_with_id(m.get("universe_name", ""), m.get("universe_id") or "adhoc")
+    # REPORT-4 part 4: the HUMAN description leads; the record id follows it, never
+    # replaces it. Markdown cannot mute, so the id is parenthesised — present, secondary.
+    title = cohort_title(m, n_lenses=len(ids))
 
     # 1 — ONE header, not four.
-    lines = [f"# Universe run — {cohort} under {len(ids)} lenses", ""]
+    lines = [f"# Universe run — {title.headline}", "", f"`{title.record_id}`", ""]
     lines.append(f"**Cohort: {cohort} — {m.get('universe_size', 0)} names**")
     lines.append(f"**Lenses: " + "; ".join(
         label_with_id(names.get(sid) or sid, sid) for sid in ids) + "**")
@@ -1783,20 +1949,33 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     else:
         lines.append(f"**Run: {_mode_phrase(m.get('council_mode', ''))}**")
     lines += ["", f"_{multi_header_line(multi_result)}_", ""]
-
-    # 3 — the summary line (2 is the rules block, which is long; the one-liner leads).
     lines += [f"### {multi_summary_line(multi_result)}", ""]
 
-    # 2 — rules applied, ONE sub-block per lens (each has its own screen and thresholds).
-    lines += ["", "## Rules applied — by lens", "",
-              "_Each lens screens on its own rules; a name excluded by one may be ranked "
-              "by another. The rules below are read from the strategies that actually "
-              "ran._"]
-    for sid in ids:
-        lines += ["", f"### {label_with_id(names.get(sid) or sid, sid)}"]
-        lines += _rules_applied_markdown(multi_result.results[sid])[1:]
+    # RULES-TOP-1 — what each lens IS, at the point the reader meets its verdicts. The
+    # full tables stay below, as reference; this is one line each, linked to them.
+    compact = compact_rules(multi_result)
+    if compact:
+        lines += [" · ".join(f"**{r['lens']}** — {r['summary']}" for r in compact)
+                  + "  ([details](#rules-applied--by-lens))", ""]
 
-    # 4 — THE VERDICT TABLE: one row per name, one column per lens.
+    # REPORT-4 part 3 — the contents list. The .md carries the same structure without
+    # relying on HTML anchors: markdown renderers derive their own heading ids, and a
+    # plain-text reader still gets the document's map and its order.
+    lines += _contents_markdown(report_sections(multi_result))
+
+    # 2 (REPORT-4) — what the run could NOT see, BEFORE any prose that rests on what it
+    # could. Rendered even when clean: an absent section is indistinguishable from a
+    # feature that was never switched on.
+    gaps = evidence_gaps(multi_result)
+    lines += ["", f"## {EVIDENCE_GAPS_TITLE}", "", f"_{EVIDENCE_GAPS_NOTE}_", ""]
+    if gaps:
+        lines += _md_table(["Channel", "Why it is dark", "Names affected"],
+                           [{"Channel": g["channel"], "Why it is dark": g["reason"],
+                             "Names affected": ", ".join(g["names"])} for g in gaps])
+    else:
+        lines.append(f"_{evidence_gaps_clean_note(multi_result)}_")
+
+    # 3 — THE VERDICT TABLE: the answer. One row per name, one column per lens.
     lines += ["", f"## {VERDICT_TABLE_TITLE}", "", VERDICT_TABLE_NOTE, ""]
     rows, head = multi_strategy_grid_rows(multi_result)
     if rows:
@@ -1804,17 +1983,28 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     else:
         lines.append("_(no names reported)_")
 
+    # 4 — NARR-UNION-1: ONE narration section per NAME, over the union of every lens's
+    # BUYs — the WHY, straight after the answer.
+    lines += _multi_narration_markdown(multi_result)
+
     # 5 — the per-NAME facts, ONCE: they do not vary by lens.
     first = multi_result.results[ids[0]] if ids else None
     if first is not None:
-        band_md = _valuation_band_markdown(valuation_band_table(first))
-        lines += band_md
+        lines += _valuation_band_markdown(valuation_band_table(first))
 
-    # 5b — NARR-UNION-1: ONE narration section per NAME, over the union of every lens's
-    # BUYs, placed after the verdict table and the valuation band.
-    lines += _multi_narration_markdown(multi_result)
+    # 6 — rules applied, ONE sub-block per lens (each has its own screen and thresholds).
+    # REFERENCE material: it sits after the answer, not in front of it. A reader used to
+    # meet three screens' worth of thresholds before learning what the run decided.
+    lines += ["", "## Rules applied — by lens", "",
+              "_Each lens screens on its own rules; a name excluded by one may be ranked "
+              "by another. The rules below are read from the strategies that actually "
+              "ran._"]
+    for sid in ids:
+        lines += ["", f"### {label_with_id(names.get(sid) or sid, sid)}"]
+        lines += _rules_applied_markdown(multi_result.results[sid],
+                                         include_title=False)
 
-    # 6 — what DOES vary per lens.
+    # 7 — what DOES vary per lens.
     for sid in ids:
         res = multi_result.results[sid]
         lines += ["", f"## {label_with_id(names.get(sid) or sid, sid)} — detail", "",
@@ -1842,9 +2032,56 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
 
     # ONE cohort under N lenses — so ONE membership record covers the whole grid.
     lines += _cohort_membership_lines(m)
+
+    # GLOSSARY-1 — the LAST section before the footer, and only the terms this run used.
+    # It reads the document rendered SO FAR, so a term is defined because the report
+    # actually says it, not because the registry knows about it.
+    lines += _glossary_markdown(multi_result, "\n".join(lines))
     # 7 — ONE common footer.
     lines += ["", "---", "", f"_{DOCTRINE}_", "", f"_{DISCLAIMER}_", ""]
     return "\n".join(lines)
+
+
+def _glossary_markdown(multi_result, rendered: str) -> list[str]:
+    """The report's own glossary, from the registries and from what this run used."""
+    from aristos_council.factors import FACTOR_REGISTRY
+    from aristos_council.glossary import glossary_entries, glossary_markdown
+    from aristos_council.pipeline import rules_applied
+    from aristos_council.tools.criteria.registry import REGISTRY
+
+    factors, criteria = {}, {}
+    for sid in multi_result.strategy_ids:
+        res = multi_result.results[sid]
+        for row in res.ranked:
+            for fname in (row.factor_ranks or {}):
+                if fname in FACTOR_REGISTRY:
+                    factors[fname] = FACTOR_REGISTRY[fname]
+        block = rules_applied(res)
+        for rule in (block.rules if block else []):
+            if rule.criterion in REGISTRY:
+                criteria[rule.criterion] = REGISTRY[rule.criterion]
+    return glossary_markdown(glossary_entries(
+        factors=factors.values(), criteria=criteria.values(), text=rendered))
+
+
+def _contents_markdown(sections) -> list[str]:
+    """REPORT-4 part 3 — the contents list in markdown.
+
+    The .md is the CANONICAL record and must stand alone, so this carries the document's
+    order and its narrated names as a plain nested list. Markdown renderers derive their
+    own heading ids from the heading text, so the links resolve where they are rendered
+    and the list still reads as a map where they are not — no HTML anchors, no colour."""
+    from aristos_council.pipeline import CONTENTS_TITLE
+
+    def _items(nodes, depth=0) -> list[str]:
+        out = []
+        for node in nodes:
+            out.append(f"{'  ' * depth}- {node['title']}")
+            out += _items(node["children"], depth + 1)
+        return out
+
+    body = _items(sections)
+    return ["", f"## {CONTENTS_TITLE}", ""] + body + [""] if body else []
 
 
 def _multi_narration_markdown(multi_result) -> list[str]:
@@ -2322,6 +2559,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
     unchanged = picked_list is not None and universe == list(picked_list.tickers)
     universe_id = picked_list.id if unchanged else None
     universe_display_name = picked_list.display_name if unchanged else ""
+    # REPORT-4 part 4: an edit FORKS to `adhoc:<hex8>` (FUND-UI-2), which is right for the
+    # record and useless as a title — "adhoc:507e10cf" names nothing a reader recognises.
+    # The parent's name rides along, display-only; the id stays the record key.
+    derived_from = ("" if unchanged or picked_list is None
+                    else (picked_list.display_name or picked_list.id))
 
     # An edit is ALWAYS a fork, never an in-place mutation of the manifest on disk: the run
     # grades an ad-hoc copy and the source file is untouched until you explicitly save. Say
@@ -2458,6 +2700,25 @@ def render_universe_tab(show_validation: bool = False) -> None:
             # The inert default the pipeline already receives on a ranker-only run.
             narrate_coverage = st.session_state.get("uni_coverage", "buys_only")
 
+    # COST-2 — the confirmation becomes PROPORTIONATE. Shown only where it applies:
+    # ranker-only spends nothing, so a threshold there would be a control with no effect.
+    if run_mode_narrates(run_mode):
+        confirm_threshold = read_threshold(st.number_input(
+            "Ask before narrating when the estimate exceeds:",
+            min_value=0.0, max_value=1000.0, step=1.0,
+            value=read_threshold(
+                st.session_state.get("uni_confirm_threshold",
+                                     DEFAULT_CONFIRM_THRESHOLD),
+                default=DEFAULT_CONFIRM_THRESHOLD),
+            format="%.2f", key="uni_confirm_threshold",
+            help="0 = always ask. At or below this figure a narrated run goes straight "
+                 "through after the free ranking; above it the run stops and shows the "
+                 "exact count and cost for you to confirm."), default=0.0)
+    else:
+        confirm_threshold = read_threshold(
+            st.session_state.get("uni_confirm_threshold", DEFAULT_CONFIRM_THRESHOLD),
+            default=0.0)
+
     # The two pipeline arguments, derived from the ONE control (UI layer only).
     ranker_only, mode = run_mode_arguments(run_mode)
 
@@ -2499,8 +2760,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
 
     # RUNMODE-1 + NARR-UNION-1: the button says WHAT will happen and WHAT IT COSTS, on its
     # own line — and on a multi-lens narrated run it says how many NAMES that is.
-    run = st.button(run_button_label(run_mode, n_strategies=n_strategies, est_cost=est,
-                                     narrated_count=narrated_count),
+    run = st.button(_md(run_button_label(
+                        run_mode, n_strategies=n_strategies, est_cost=est,
+                        narrated_count=narrated_count)),
                     type="primary", disabled=bool(problems), key="uni_run")
     if est is not None:
         basis = (f" ONE section per NAME over "
@@ -2524,6 +2786,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 universe, strategy_ids, universe_id=universe_id,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 freeze_dir=ROOT / "runs", with_valuation_band=with_valuation_band,
+                derived_from=derived_from,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")
@@ -2534,18 +2797,20 @@ def render_universe_tab(show_validation: bool = False) -> None:
             st.session_state["uni_run_start"] = run_start
             st.session_state["uni_universe_display_name"] = universe_display_name
             st.session_state.pop("uni_result", None)
+            # The free ranking is REPORTED either way — downloading it and narrating it
+            # are not alternatives (the confirm panel used to offer only "narrate" or
+            # "keep", with the finished ranking's downloads nowhere on screen). Narrating
+            # later REPLACES this pair rather than adding a second one (_supersede).
+            _publish_multi(multi_result, run_start, universe_display_name)
             if run_mode_narrates(run_mode):
-                status.update(label="Ranked — confirm the narration spend.",
-                              state="complete")
-                st.session_state["uni_pending_narration"] = {
-                    "kind": "multi", "result": multi_result, "mode": mode,
-                    "coverage": narrate_coverage}
-                st.session_state.pop("uni_multi_result", None)
-                st.session_state.pop("uni_multi_persisted", None)
+                _offer_or_narrate(
+                    {"kind": "multi", "result": multi_result, "mode": mode,
+                     "coverage": narrate_coverage},
+                    threshold=confirm_threshold, status=status,
+                    run_start=run_start, display_name=universe_display_name)
             else:
                 status.update(label="Done.", state="complete")
                 st.session_state.pop("uni_pending_narration", None)
-                _publish_multi(multi_result, run_start, universe_display_name)
     elif run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         status = st.status("Starting…", expanded=True)
@@ -2557,7 +2822,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
             result = run_rank_pipeline(
                 universe, rank_strategy.id, universe_id=universe_id,
                 council_mode=mode, ranker_only=True,
-                narrate_coverage=narrate_coverage,
+                narrate_coverage=narrate_coverage, derived_from=derived_from,
                 with_valuation_band=with_valuation_band,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 # Freeze this run's raw inputs so Company Check's reference-cohort reader
@@ -2577,19 +2842,18 @@ def render_universe_tab(show_validation: bool = False) -> None:
             st.session_state["uni_universe_display_name"] = universe_display_name
             st.session_state.pop("uni_multi_result", None)
             st.session_state.pop("uni_multi_persisted", None)
+            _publish_single(result, run_start, universe_display_name)
             if run_mode_narrates(run_mode):
-                status.update(label="Ranked — confirm the narration spend.",
-                              state="complete")
-                st.session_state["uni_pending_narration"] = {
-                    "kind": "single", "result": result, "mode": mode,
-                    "coverage": narrate_coverage}
-                st.session_state.pop("uni_result", None)
-                st.session_state.pop("uni_persisted_paths", None)
+                _offer_or_narrate(
+                    {"kind": "single", "result": result, "mode": mode,
+                     "coverage": narrate_coverage},
+                    threshold=confirm_threshold, status=status,
+                    run_start=run_start, display_name=universe_display_name)
             else:
                 status.update(label="Done.", state="complete")
                 st.session_state.pop("uni_pending_narration", None)
-                _publish_single(result, run_start, universe_display_name)
 
+    _render_last_spend()
     _render_narration_confirmation()
 
     multi_result = st.session_state.get("uni_multi_result")

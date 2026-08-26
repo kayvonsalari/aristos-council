@@ -81,21 +81,38 @@ class LangChainRunner:
     (see ``runner_metadata`` / the report's ``models`` field).
     """
 
-    def __init__(self, tier: str, schema: type[BaseModel]):
+    def __init__(self, tier: str, schema: type[BaseModel], meter=None):
         from langchain.chat_models import init_chat_model  # lazy
 
         self.tier = tier
         self.model_id = _model_for(tier)
         self.temperature = _temp_for(tier)
+        # COST-3: ONE meter shared across the tiers, because the bill for narrating a
+        # name is the whole council pass for it, not the narrator's call alone.
+        self.meter = meter
         # temperature is set on the BASE model BEFORE with_structured_output, so
         # the structured wrapper inherits it (init_chat_model forwards it to the
         # anthropic:* client).
+        #
+        # include_raw=True keeps the AIMessage alongside the parsed object so the
+        # provider's own usage_metadata can be read. Without it the token counts are
+        # discarded at the seam and the only cost figure available is the estimate. The
+        # parsed value is unwrapped below, so this class's contract is unchanged:
+        # invoke() still returns the schema instance, and a parse failure still raises.
         self._llm = init_chat_model(
             self.model_id, temperature=self.temperature
-        ).with_structured_output(schema)
+        ).with_structured_output(schema, include_raw=True)
 
     def invoke(self, system: str, user: str):
-        return self._llm.invoke([("system", system), ("user", user)])
+        out = self._llm.invoke([("system", system), ("user", user)])
+        if not isinstance(out, dict):           # a provider that ignored include_raw
+            return out
+        if out.get("parsing_error"):
+            raise out["parsing_error"]
+        if self.meter is not None:
+            raw = out.get("raw")
+            self.meter.record(self.model_id, getattr(raw, "usage_metadata", None))
+        return out.get("parsed")
 
 
 def runner_metadata(runners: dict) -> dict:
@@ -113,12 +130,30 @@ def runner_metadata(runners: dict) -> dict:
     return out
 
 
+def cost_meter(runners: dict):
+    """The shared ``CostMeter`` behind a runner set, or ``None`` for test fakes.
+
+    Callers use this to price ONE PHASE of a run (mark → work → since). A fake-runner
+    run has no meter, so the actual cost reports as NOT MEASURED rather than as zero."""
+    for r in runners.values():
+        meter = getattr(r, "meter", None)
+        if meter is not None:
+            return meter
+    return None
+
+
 def production_runners() -> dict[str, "LangChainRunner"]:
-    """Build the tiered runner set used by the real graph."""
+    """Build the tiered runner set used by the real graph.
+
+    All three tiers share ONE CostMeter (COST-3): what narrating a name costs is the
+    whole council pass for it — specialists on the cheap tier, critic and narrator on the
+    strong one — so a per-tier meter would only ever report a fraction of the bill."""
+    from ..costs import CostMeter
     from .schemas import CriticOutput, DecisionOutput, SpecialistOutput
 
+    meter = CostMeter()
     return {
-        "specialist": LangChainRunner("specialist", SpecialistOutput),
-        "critic": LangChainRunner("critic", CriticOutput),
-        "decision": LangChainRunner("decision", DecisionOutput),
+        "specialist": LangChainRunner("specialist", SpecialistOutput, meter=meter),
+        "critic": LangChainRunner("critic", CriticOutput, meter=meter),
+        "decision": LangChainRunner("decision", DecisionOutput, meter=meter),
     }

@@ -73,13 +73,31 @@ def test_the_button_says_what_will_happen_and_what_it_costs():
         "▶ Run 5 lenses — deterministic, free"
     assert app.run_button_label(app.RUN_MODE_RANKER, n_strategies=1) == \
         "▶ Run — deterministic, free"
-    assert app.run_button_label(app.RUN_MODE_NARRATOR, n_strategies=1,
-                                est_cost=0.42) == "▶ Run — narrated, est. $0.42"
+    # UPDATED (2026-08-26): this button runs the FREE ranking and charges nothing —
+    # narration is a SECOND button carrying the exact figure. The old label read
+    # "Run — narrated, est. $0.42", which reads as this button's price, and a second
+    # button then appeared at a different one. "free" now sits against the action that is
+    # free, and the upper bound reads as the conditional it is.
+    assert app.run_button_label(app.RUN_MODE_NARRATOR, n_strategies=1, est_cost=0.42) == \
+        "▶ Run — free · then choose whether to narrate · ≤ $0.42 total"
     assert app.run_button_label(app.RUN_MODE_SECOND_OPINION, n_strategies=1,
-                                est_cost=1.2) == "▶ Run — second opinion, est. $1.20"
+                                est_cost=1.2) == \
+        "▶ Run — free · then choose whether to take a second opinion · ≤ $1.20 total"
     # no estimate available (empty/oversized list) -> the claim is omitted, not invented
     assert app.run_button_label(app.RUN_MODE_NARRATOR, n_strategies=1) == \
-        "▶ Run — narrated"
+        "▶ Run — free · then choose whether to narrate"
+    # ...and in EVERY narrating shape the word "free" describes THIS click, while the
+    # estimate is explicitly conditional on a choice not yet offered.
+    for label in (app.run_button_label(app.RUN_MODE_NARRATOR, n_strategies=1,
+                                       est_cost=0.42),
+                  app.run_button_label(app.RUN_MODE_NARRATOR, n_strategies=3,
+                                       est_cost=2.28, narrated_count=12)):
+        assert "free" in label
+        assert "then choose whether to" in label
+        assert "≤ $" in label and "est. $" not in label
+        # COST-2: every figure names its SCOPE — never a bare number that could be read
+        # as per name or per lens.
+        assert "total" in label
 
 
 def test_every_mode_has_a_label_and_they_are_distinct():
@@ -228,8 +246,15 @@ def test_the_button_states_the_NAME_COUNT_and_cost_before_a_narrated_multi_lens_
     assert label.startswith("▶ Run 2 lenses — ")
     # stated as the CEILING it is: the true union is only knowable after the free
     # ranking pass, and there is no non-invented way to predict how far the lenses overlap.
-    assert "up to" in label and "names narrated" in label
-    assert "est. ≤ $" in label
+    assert "up to" in label and "names" in label
+    assert "free" in label and "then choose whether to narrate" in label
+    # LIVE 2026-08-26: the RENDERED label read "… ≤ [code]3.04 total (one charge,
+    # about[/code] 0.19 a name)" — Streamlit took the PAIR of "$" as LaTeX math
+    # delimiters and ate both. Labels bound for a markdown-rendering widget are escaped
+    # (`_md`), so the widget's label carries "\$" and BOTH costs survive on screen.
+    assert "≤ \$" in label
+    assert label.count("\$") == 2, label       # both costs kept their dollar sign
+    assert "$" not in label.replace("\$", "")   # ...and none was left unescaped
 
 
 def test_a_single_lens_narrated_run_is_unchanged():
@@ -239,7 +264,8 @@ def test_a_single_lens_narrated_run_is_unchanged():
     assert widget.value == app.RUN_MODE_NARRATOR         # the default, as before
     assert widget.disabled is False
     assert any(str(s.label) == "Narration coverage" for s in at.selectbox)
-    assert _run_button(at).label.startswith("▶ Run — narrated")
+    assert _run_button(at).label.startswith(
+        "▶ Run — free · then choose whether to narrate")
     assert app.run_mode_arguments(widget.value) == (False, "narrator")
 
 

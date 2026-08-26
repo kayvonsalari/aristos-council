@@ -22,6 +22,15 @@ three narration sections once that lock was lifted. It is now DERIVED
 to the wording the single-lens header already used; the replacement is pinned by
 ``tests/test_narration_union.py::test_a_narrated_multi_lens_run_never_claims_no_LLM_ran``
 so the guard did not simply get relaxed.
+
+GOLDENS REGENERATED AGAIN, DELIBERATELY (2026-08-25, REPORT-4). That change REORDERS the
+document, adds a contents list, adds a "what the run could not see" section and renders
+the narration from the narrator's structured fields — so "the visible text is identical"
+stops being the right question to ask of it. The goldens were rebuilt for the new
+structure and the guarantee underneath was re-expressed ORDER-INDEPENDENTLY:
+``test_no_value_changed_when_REPORT_4_reordered_the_document`` asserts the multiset of
+numbers is unchanged against a snapshot of the pre-REPORT-4 render, in both the HTML and
+the markdown. A presentation change may move a value; it may never alter one.
 """
 
 from __future__ import annotations
@@ -87,6 +96,58 @@ def test_the_visible_text_is_unchanged_by_the_styling(name):
     assert visible_text(_DOCS[name]()) == golden
 
 
+# REPORT-4 REORDERED the document and ADDED sections, so "the visible text is identical"
+# is no longer the right shape of guard for it — the goldens above were regenerated for
+# the new structure. The guarantee that must NOT weaken is the one underneath: a
+# presentation change may move a value, never alter one. So parity is re-expressed
+# order-INDEPENDENTLY, against a snapshot of the pre-REPORT-4 render, and it is strictly
+# harder to satisfy by accident than a diff of two files nobody reads.
+_PRE_REPORT4 = Path(__file__).resolve().parent / "fixtures" / "report_structure"
+_NUMBER = re.compile(r"-?\d[\d,]*\.?\d*%?")
+
+
+def _numbers(text: str) -> list[str]:
+    return sorted(_NUMBER.findall(text))
+
+
+def _assert_values_survived(before: str, after: str) -> None:
+    """Two things, and the pair is what makes this a real guard rather than a diff.
+
+    NOTHING LOST — every number the document carried, it still carries, as many times.
+    NOTHING INVENTED — a number that appears MORE often than before must be a value the
+    document already held (REPORT-4 states the cohort size in the new title, so "21"
+    legitimately appears once more). A value that is not in `before` at all cannot be a
+    reordering; it is a new claim, and the assertion fails on it."""
+    import collections
+
+    cb = collections.Counter(_numbers(before))
+    ca = collections.Counter(_numbers(after))
+    lost = sorted((cb - ca).elements())
+    assert not lost, f"values LOST in the restructure: {lost}"
+    invented = sorted(set((ca - cb).elements()) - set(cb))
+    assert not invented, f"values INVENTED by the restructure: {invented}"
+
+
+def test_no_value_changed_when_REPORT_4_reordered_the_document():
+    """Same multiset of numbers before and after the restructure — every verdict, rank,
+    percentage and price survives, wherever the section it lives in has moved to."""
+    before = (_PRE_REPORT4 / "pre_report4_visible.txt").read_text(encoding="utf-8")
+    after = visible_text(_multi_doc())
+    _assert_values_survived(before, after)
+
+
+def test_no_value_changed_in_the_markdown_when_REPORT_4_reordered_it():
+    pytest.importorskip("streamlit")
+    import app
+
+    from tests.test_merged_multi_report import MOMENTUM, _multi
+    from tests.test_multi_strategy_run import RAW, SCREENED
+
+    before = (_PRE_REPORT4 / "pre_report4.md").read_text(encoding="utf-8")
+    after = app._multi_strategy_markdown(_multi([SCREENED, RAW, MOMENTUM]), _RUN)
+    _assert_values_survived(before, after)
+
+
 @pytest.mark.parametrize("name", sorted(_DOCS))
 def test_the_document_stays_self_contained(name):
     """One file: inline CSS, no external request of any kind, and readable with no
@@ -123,9 +184,11 @@ def test_each_lens_gets_its_own_accent_in_all_three_places():
     doc = _multi_doc()
     for i in range(3):                                   # the fixture runs three lenses
         cls = lens_class(i)
-        assert f'<h3 class="lens-head {cls}">' in doc            # rules block heading
+        # Matched on the CLASS, not on the whole tag: REPORT-4 added anchor ids to these
+        # elements, and the property under test is the accent, not the attribute order.
+        assert f'class="lens-head {cls}"' in doc                 # rules block heading
         assert f'class="lens-col {cls}"' in doc                  # its grid column
-        assert f'<section class="section lens-card {cls}">' in doc   # its detail card
+        assert f'class="section lens-card {cls}"' in doc         # its detail card
     # ...and the accents are DEFINED, distinct, and legible in both schemes.
     css = doc.split("<style>", 1)[1].split("</style>", 1)[0]
     light = [f"--lens-{i}: " for i in range(LENS_ACCENTS)]

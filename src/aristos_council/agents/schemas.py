@@ -111,10 +111,123 @@ class CriticOutput(BaseModel):
                               mode="before")(_coerce_json_list)
 
 
+# --------------------------------------------------------------------------- #
+# REPORT-4 — the narration arrives as NAMED FIELDS, not as prose carrying layout
+# --------------------------------------------------------------------------- #
+# The narrator used to return one free-text `rationale` that the report pasted verbatim.
+# Left to invent its own structure it invented a different one every run — "---"
+# separators, ALL-CAPS pseudo-headings ("ALL LENS VERDICTS — STATED IN FULL BEFORE ANY
+# PROSE:"), even a markdown h2 that broke the document's own heading tree — and it quoted
+# numbers as strings mid-sentence ("46.92", "KRW 24,793,783,000,000"), so a price could
+# render beside another name's price in a different currency with nothing to tell them
+# apart. Layout is the REPORT's job and formatting is the unit rules' job; the narrator's
+# job is what it knows. So it fills these fields and renders nothing.
+class FactorRank(BaseModel):
+    """One factor's ordinal for this name under one lens. ``rank`` of ``cohort_size``."""
+
+    factor: str
+    rank: int
+    cohort_size: int
+    note: str = ""                      # optional plain gloss, e.g. "below the median"
+
+
+class LensVerdictItem(BaseModel):
+    """One lens's verdict for this name. EVERY selected lens appears — including the ones
+    that rated it HOLD/SELL or excluded it — because a reader is never shown a one-sided
+    case (NARR-UNION-1). ``position``/``cohort_size`` are omitted for an excluded name."""
+
+    lens: str
+    verdict: str
+    position: Optional[int] = None
+    cohort_size: Optional[int] = None
+    excluded_reason: str = ""
+
+
+class LensAttributionItem(BaseModel):
+    """Why ONE lens placed the name where it did — its factor ranks and the screens it
+    passed, in that lens's own terms. One entry per lens that ranked the name."""
+
+    lens: str
+    factor_ranks: list[FactorRank] = Field(default_factory=list)
+    screens_passed: list[str] = Field(default_factory=list)
+    reasoning: str = ""
+
+    _coerce = field_validator("factor_ranks", "screens_passed",
+                              mode="before")(_coerce_json_list)
+
+
+class SpecialistView(BaseModel):
+    """One specialist's contribution.
+
+    NOT ASSESSED is a first-class state, not a zero: ``assessed=False`` carries the CAUSE
+    and MUST carry no stance and no confidence. The sentiment specialist abstaining for
+    want of data used to render as "abstain, confidence 0.00", which reads as a measured
+    neutral rather than as a channel the system could not see at all (house rule 3 — null
+    is NOT EVALUATED, never false)."""
+
+    specialist: str
+    assessed: bool = True
+    stance: Optional[str] = None
+    confidence: Optional[float] = None
+    reasoning: str = ""
+    not_assessed_reason: str = ""
+
+
+class PeriodValue(BaseModel):
+    """One period of a multi-year series — ``FY2024``, ``69659000000``.
+
+    ``period`` may be empty when the statements genuinely carry no fiscal label; the
+    renderer then says "oldest first" rather than leaving the order to be guessed."""
+
+    period: str = ""
+    value: Optional[float] = None
+
+
+class MoneySeries(BaseModel):
+    """A multi-period money series, OLDEST FIRST, with its currency.
+
+    SERIES-LABEL-1. The narrator used to write these as prose — "the most recent figure
+    is USD 69,659,000,000, preceded by USD 28,989,000,000, USD 70,012,000,000, and
+    USD 64,134,000,000" — which leaves a reader unable to say which year is which. On the
+    2026-08-26 run that mattered: one year's free cash flow halved and recovered, and
+    "preceded by" cannot express that. Structured, the renderer can label and order it."""
+
+    label: str = ""
+    currency: str = ""
+    periods: list[PeriodValue] = Field(default_factory=list)
+
+    _coerce = field_validator("periods", mode="before")(_coerce_json_list)
+
+
+class Narration(BaseModel):
+    """The narrator's whole output, as fields. The report renders them."""
+
+    echoed_verdict: str = ""
+    # SERIES-LABEL-1 — multi-period money series as DATA, so the renderer can label the
+    # periods and order them oldest -> newest instead of the narrator writing
+    # "preceded by" and hoping.
+    money_series: list[MoneySeries] = Field(default_factory=list)
+    lens_verdicts: list[LensVerdictItem] = Field(default_factory=list)
+    lens_attribution: list[LensAttributionItem] = Field(default_factory=list)
+    # Present ONLY when the lenses disagree — the disagreement is reported and LEFT
+    # STANDING, never resolved (CROSS_LENS_CONSTRAINT).
+    disagreement_note: str = ""
+    neutral_context: list[str] = Field(default_factory=list)
+    specialist_views: list[SpecialistView] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+
+    _coerce = field_validator("lens_verdicts", "lens_attribution", "neutral_context",
+                              "specialist_views", "open_questions", "money_series",
+                              mode="before")(_coerce_json_list)
+
+
 class DecisionOutput(BaseModel):
     recommendation: Recommendation
     confidence: float = Field(ge=0.0, le=1.0)
     rationale: str
     dissent: list[SpecialistName] = Field(default_factory=list)
+    # REPORT-4. Optional so that SECOND-OPINION mode (which issues a verdict rather than
+    # narrating) and every report recorded before this change still load unchanged.
+    narration: Optional[Narration] = None
 
     _coerce = field_validator("dissent", mode="before")(_coerce_json_list)
