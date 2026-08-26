@@ -145,12 +145,16 @@ def test_a_not_assessed_specialist_renders_with_no_stance_and_no_confidence():
     """"abstain, confidence 0.00" reads as a measured neutral. The truth is the channel
     was dark and nothing was measured — house rule 3, in presentation form."""
     md = narration_markdown(_sk_hynix())
-    line = next(l for l in md.splitlines() if "sentiment" in l)
-    assert NOT_ASSESSED in line
-    assert "0.00" not in line
+    # SPEC-ROLE-1 gave each specialist a block (heading, role line, reasoning) rather
+    # than one table row, so the assertion reads the BLOCK. The guarantee is unchanged:
+    # no stance word, no confidence number, and the cause stated.
+    block = md.split("**sentiment**", 1)[1].split("**", 1)[0]
+    head = md.split("**sentiment**", 1)[1].splitlines()[0]
+    assert NOT_ASSESSED in head
+    assert "0.00" not in head and "confidence" not in head
     for stance in ("bullish", "bearish", "neutral", "abstain"):
-        assert stance not in line.lower(), line
-    assert "no sentiment data" in line          # ...but the CAUSE is stated
+        assert stance not in head.lower(), head
+    assert "no sentiment data" in block          # ...but the CAUSE is stated
 
 
 def test_the_assessed_specialists_keep_their_stance_and_confidence():
@@ -362,3 +366,84 @@ def test_the_evidence_gap_section_is_rendered_even_when_there_is_nothing_to_repo
     md = app._multi_strategy_markdown(_multi(), _RUN)
     assert EVIDENCE_GAPS_TITLE in md
     assert EVIDENCE_GAPS_TITLE in _h2s(md)
+
+
+# --------------------------------------------------------------------------- #
+# 9. GRID-COLS-1 / SCORE-NAME-1 / SPEC-ROLE-1 — three owner decisions
+# --------------------------------------------------------------------------- #
+def test_the_verdict_table_is_name_plus_one_column_per_lens():
+    """GRID-COLS-1. On the 4-lens run of 2026-08-26 EVERY row carried the "fewer lenses"
+    marker, so the rank-sum column was incomparable exactly where it mattered."""
+    from aristos_council.pipeline import multi_strategy_grid_rows
+
+    result = _multi()
+    rows, head = multi_strategy_grid_rows(result)
+    assert head == ["Name"] + [h for h in head[1:]]
+    assert len(head) == 1 + len(result.strategy_ids)
+    assert "Rank-sum" not in head and "Graded by" not in head
+    for row in rows:
+        assert set(row) == set(head)
+        assert not any("‡" in str(v) for v in row.values())
+
+
+def test_the_row_order_survives_the_removed_columns():
+    """The columns went; the ORDER they produced did not."""
+    from aristos_council.pipeline import multi_strategy_grid_rows
+
+    result = _multi()
+    rows, _ = multi_strategy_grid_rows(result)
+    assert [r["Name"] for r in rows] == [r.display for r in result.rows]
+
+
+def test_narration_never_says_rank_sum():
+    """SCORE-NAME-1. The word named two unrelated numbers; the within-lens one is the
+    FACTOR SCORE and nothing rendered is a rank-sum any more."""
+    from aristos_council.agents.schemas import LensAttributionItem
+    from aristos_council.narration_render import narration_html
+
+    n = _sk_hynix()
+    n.lens_attribution = [LensAttributionItem(
+        lens="Value + Momentum",
+        factor_ranks=[FactorRank(factor="roic", rank=2, cohort_size=12)],
+        factor_score=13, reasoning="Ranked on three factors.")]
+    md = narration_markdown(n)
+    doc = narration_html(n)
+    for surface in (md, doc):
+        assert "rank-sum" not in surface.lower()
+        assert "Factor score: 13" in surface
+
+
+def test_the_ranker_explanation_the_narrator_reads_says_factor_score():
+    """The rename has to land at the SOURCE, or the narrator copies the old word."""
+    from aristos_council.rank_engine import RankedTicker
+
+    r = RankedTicker(ticker="AAA", factor_ranks={"roic": 2.0}, factor_values={},
+                     combined_rank=13.0, universe_size=12, verdict="buy")
+    text = r.explain()
+    assert "factor score" in text and "rank-sum" not in text
+
+
+def test_each_narration_section_explains_why_cohort_sizes_differ():
+    from aristos_council.narration_render import COHORT_SIZE_NOTE, narration_html
+
+    n = _sk_hynix()
+    assert COHORT_SIZE_NOTE in narration_markdown(n)
+    assert "cohort sizes differ per lens" in narration_html(n)
+
+
+def test_every_specialist_carries_its_role_line_including_an_abstaining_one():
+    """SPEC-ROLE-1. The panel listed four stances and never said what question each one
+    answered, so a technical neutral beside a fundamental bullish read as a contradiction."""
+    from aristos_council.narration_render import (
+        SPECIALIST_STANDING_NOTE, narration_html, specialist_role)
+
+    n = _sk_hynix()
+    md = narration_markdown(n)
+    doc = narration_html(n)
+    for view in n.specialist_views:
+        role = specialist_role(view.specialist)
+        assert role, view.specialist
+        assert role in md and role in doc
+    # the abstaining one keeps its role AND still carries no confidence
+    assert specialist_role("sentiment") in md
+    assert SPECIALIST_STANDING_NOTE in md and SPECIALIST_STANDING_NOTE in doc

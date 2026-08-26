@@ -114,7 +114,29 @@ def test_no_stray_hardcoded_dividend_framing_in_the_package():
         p.relative_to(PKG).as_posix() for p in PKG.rglob("*.py")
         if any(phrase in p.read_text(encoding="utf-8")
                for phrase in _DIVIDEND_FRAMING))
-    assert offenders == ["agents/prompts.py"]
+    # SPEC-ROLE-1 added narration_render.SPECIALIST_ROLES — fixed, DISPLAY-ONLY lines
+    # describing what each specialist is for. They are rendered in the report and never
+    # sent to a model, which is the distinction this guard exists to protect: the danger
+    # was dividend framing reaching an AGENT on a growth run, not a reader seeing the
+    # word "payout" in a role description. The next test pins that they stay out of every
+    # prompt, so admitting the file here does not widen the hole.
+    assert offenders == ["agents/prompts.py", "narration_render.py"]
+
+
+def test_the_specialist_role_lines_never_reach_a_prompt():
+    """SPEC-ROLE-1's lines are for the READER. If one ever appears in an agent's system
+    prompt it becomes framing on every run, including the growth runs the lens brief was
+    built to keep clean."""
+    from aristos_council.narration_render import SPECIALIST_ROLES
+
+    frame = _frame("etf_core_v1.yaml")
+    prompts = [critic_system(frame), decision_system(frame, "narrator")]
+    prompts += [specialist_system(who, frame, "narrator")
+                for who in (SpecialistName.FUNDAMENTAL, SpecialistName.TECHNICAL,
+                            SpecialistName.SENTIMENT, SpecialistName.RISK)]
+    for role in SPECIALIST_ROLES.values():
+        for prompt in prompts:
+            assert role not in prompt
 
 
 def test_critic_and_narrator_carry_the_lens_honesty_note():

@@ -29,6 +29,12 @@ from typing import Iterable, Optional
 # channel was dark. House rule 3 in presentation form: null is NOT EVALUATED, not zero.
 NOT_ASSESSED = "not assessed"
 
+# SCORE-NAME-1 — "#1 of 6 (Growth)" is correct and unexplained: a reader cannot tell why
+# one lens's cohort is 6 and another's 18. Stated ONCE per narration section, where the
+# first position appears.
+COHORT_SIZE_NOTE = ("Each lens ranks only the names that passed its own screen, so "
+                    "cohort sizes differ per lens.")
+
 _SECTION_TITLES = {
     "verdict": "Ranker verdict",
     "lens_verdicts": "Every lens's verdict",
@@ -237,6 +243,38 @@ def _rank_cell(fr) -> str:
     return f"{fr.rank} of {fr.cohort_size}"
 
 
+# SPEC-ROLE-1 — what each specialist is FOR, in one line.
+#
+# The panel lists four stances and never says what question each one answers, so a reader
+# cannot tell why the technical specialist's neutral and the fundamental's bullish are not
+# a contradiction. These are FIXED strings held here beside the renderer, deliberately NOT
+# narrator-generated and NOT in the prompt: a role that varied per run would be one more
+# thing to fact-check, and the roles do not vary.
+SPECIALIST_ROLES = {
+    "fundamental": ("Is this a good business, and can it keep paying what it pays? "
+                    "Reads the company's own accounts: profitability, cash flow, "
+                    "payout."),
+    "technical": ("What is the price chart doing? Reads price against its own averages, "
+                  "distance from the 52-week high, volatility. A pullback alone is not "
+                  "bearish."),
+    "sentiment": ("What do the news and analysts say? Reads headlines and analyst "
+                  "recommendation counts only. Abstains when no news data exists."),
+    "risk": ("What could go wrong? Reads payout stretch, volatility, data-quality flags, "
+             "anything unverifiable."),
+}
+
+# The standing line under the panel. Specialists inform the COMMENTARY; the ranker owns
+# the verdict, and no stance here can move it.
+SPECIALIST_STANDING_NOTE = ("Specialists inform the commentary only — no specialist "
+                            "can change a verdict.")
+
+
+def specialist_role(name: str) -> str:
+    """The fixed role line for a specialist, or "" for one we have no line for —
+    omitted rather than invented."""
+    return SPECIALIST_ROLES.get((name or "").strip().lower(), "")
+
+
 def _specialist_cells(view) -> tuple[str, str, str]:
     """``(stance, confidence, why)`` — a NOT ASSESSED specialist carries neither a stance
     word nor a confidence number, only its cause."""
@@ -307,7 +345,8 @@ def narration_markdown(narration, *, level: int = 4,
         out.append("")
 
     if narration.lens_attribution:
-        out += [f"{h} {_SECTION_TITLES['attribution']}", ""]
+        out += [f"{h} {_SECTION_TITLES['attribution']}", "",
+                f"_{COHORT_SIZE_NOTE}_", ""]
     for a in narration.lens_attribution:
         out += [f"{'#' * (level + 1)} {a.lens} — why", ""]
         if a.factor_ranks:
@@ -315,6 +354,8 @@ def narration_markdown(narration, *, level: int = 4,
             out += [f"| {fr.factor} | {_rank_cell(fr)} | {(fr.note or '—')} |"
                     for fr in a.factor_ranks]
             out.append("")
+        if a.factor_score is not None:
+            out += [f"Factor score: {a.factor_score:g}", ""]
         if a.screens_passed:
             out += ["Screens passed: " + ", ".join(a.screens_passed), ""]
         if a.reasoning:
@@ -338,13 +379,16 @@ def narration_markdown(narration, *, level: int = 4,
         out.append("")
 
     if narration.specialist_views:
-        out += [f"{h} {_SECTION_TITLES['specialists']}", "",
-                "| Specialist | Stance | Confidence | Reasoning |",
-                "| --- | --- | --- | --- |"]
+        out += [f"{h} {_SECTION_TITLES['specialists']}", ""]
         for view in narration.specialist_views:
             stance, conf, why = _specialist_cells(view)
-            out.append(f"| {view.specialist} | {stance} | {conf} | {why or '—'} |")
-        out.append("")
+            role = specialist_role(view.specialist)
+            out.append(f"**{view.specialist}** — {stance}"
+                       + (f", confidence {conf}" if conf != "—" else ""))
+            if role:
+                out.append(f"_{role}_")
+            out += ["", why or "—", ""]
+        out += [f"_{SPECIALIST_STANDING_NOTE}_", ""]
 
     if narration.open_questions:
         out += [f"{h} {_SECTION_TITLES['questions']}", ""]
@@ -431,6 +475,9 @@ def narration_html(narration, *, anchor_prefix: str = "",
                 part.append(_table(["Factor", "Rank", "Note"],
                                    [[fr.factor, _rank_cell(fr), fr.note or "—"]
                                     for fr in a.factor_ranks]))
+            if a.factor_score is not None:
+                part.append(f'<p class="screens">Factor score: '
+                            f"{a.factor_score:g}</p>")
             if a.screens_passed:
                 part.append('<p class="screens">Screens passed: '
                             + _esc(", ".join(a.screens_passed)) + "</p>")
@@ -439,6 +486,7 @@ def narration_html(narration, *, anchor_prefix: str = "",
             blocks.append("".join(part))
         out.append(f'<section class="narr-block"{_id("attribution")}>'
                    f'<h4>{_esc(_SECTION_TITLES["attribution"])}</h4>'
+                   f'<p class="note">{_esc(COHORT_SIZE_NOTE)}</p>'
                    + "".join(blocks) + "</section>")
 
     if narration.disagreement_note:
@@ -465,14 +513,22 @@ def narration_html(narration, *, anchor_prefix: str = "",
                    f"<ul>{items}</ul></section>")
 
     if narration.specialist_views:
-        rows = []
+        blocks = []
         for view in narration.specialist_views:
             stance, conf, why = _specialist_cells(view)
-            rows.append([view.specialist, stance, conf, why or "—"])
+            role = specialist_role(view.specialist)
+            head = _esc(view.specialist) + " — " + _esc(stance)
+            if conf != "—":
+                head += f", confidence {_esc(conf)}"
+            part = [f"<h5>{head}</h5>"]
+            if role:
+                part.append(f'<p class="note">{_esc(role)}</p>')
+            part.append(_p_money(why or "—"))
+            blocks.append("".join(part))
         out.append(f'<section class="narr-block"{_id("specialists")}>'
                    f'<h4>{_esc(_SECTION_TITLES["specialists"])}</h4>'
-                   + _table(["Specialist", "Stance", "Confidence", "Reasoning"], rows,
-                            cls="specialists") + "</section>")
+                   + "".join(blocks)
+                   + f'<p class="note">{_esc(SPECIALIST_STANDING_NOTE)}</p></section>')
 
     if narration.open_questions:
         items = "".join(_li_money(q.strip()) for q in narration.open_questions)

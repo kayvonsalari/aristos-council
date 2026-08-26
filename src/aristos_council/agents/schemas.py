@@ -149,6 +149,11 @@ class LensAttributionItem(BaseModel):
 
     lens: str
     factor_ranks: list[FactorRank] = Field(default_factory=list)
+    # SCORE-NAME-1 — this lens's factor ranks ADDED UP, for this name. Named
+    # `factor_score` and never "rank-sum": that word meant two unrelated numbers, the
+    # cross-lens sum of POSITIONS and this within-lens sum of FACTOR RANKS, and the
+    # narration quoted one a section below a table showing the other.
+    factor_score: Optional[float] = None
     screens_passed: list[str] = Field(default_factory=list)
     reasoning: str = ""
 
