@@ -31,6 +31,7 @@ from aristos_council.reproducibility import (
     decision_stability_summary,
     run_decision_n,
 )
+from tests.fake_sentiment import FakeSentiment
 from aristos_council.state import Recommendation, ResearchState, Stance
 from aristos_council.strategy.loader import load_strategy
 
@@ -118,7 +119,7 @@ def _runners(decision_runner, *, adapter_specialist=None, critic=None):
 def test_fixed_verdict_is_stable():
     runners = _runners(_CountingRunner(_dec(Recommendation.BUY, 0.8)))
     rep = run_decision_n(ticker="AAA", strategy=STRATEGY,
-                         adapter=_FakeAdapter(), runners=runners, n=5)
+                         adapter=_FakeAdapter(), sentiment_adapter=FakeSentiment(), runners=runners, n=5)
     assert rep.stability == "stable"
     assert rep.distribution == {"buy": 5} and rep.modal_verdict == "buy"
     assert decision_stability_label(rep) == "STABLE BUY"
@@ -132,7 +133,7 @@ def test_split_verdict_is_borderline_leaning_modal():
                           _dec(Recommendation.HOLD, 0.58),
                           _dec(Recommendation.BUY, 0.61)])
     rep = run_decision_n(ticker="GOOGL", strategy=STRATEGY,
-                         adapter=_FakeAdapter(), runners=_runners(cyc), n=5)
+                         adapter=_FakeAdapter(), sentiment_adapter=FakeSentiment(), runners=_runners(cyc), n=5)
     assert rep.stability == "BORDERLINE"
     assert rep.distribution == {"buy": 3, "hold": 2}
     assert rep.modal_verdict == "buy"
@@ -150,7 +151,7 @@ def test_upstream_runners_invoked_exactly_once_decision_n_times():
     decision = _CountingRunner(_dec(Recommendation.BUY, 0.8))
     runners = _runners(decision, adapter_specialist=specialist, critic=critic)
 
-    run_decision_n(ticker="AAA", strategy=STRATEGY, adapter=_FakeAdapter(),
+    run_decision_n(ticker="AAA", strategy=STRATEGY, adapter=_FakeAdapter(), sentiment_adapter=FakeSentiment(),
                    runners=runners, n=5)
 
     # FOUR specialists -> one pipeline pass = 4 specialist calls; critic once.
@@ -208,7 +209,7 @@ def test_decision_stability_summary_shape():
                           _dec(Recommendation.HOLD, 0.58),
                           _dec(Recommendation.BUY, 0.61)])
     rep = run_decision_n(ticker="GOOGL", strategy=STRATEGY,
-                         adapter=_FakeAdapter(), runners=_runners(cyc), n=5)
+                         adapter=_FakeAdapter(), sentiment_adapter=FakeSentiment(), runners=_runners(cyc), n=5)
     summary = decision_stability_summary(rep)
     assert summary["stability"] == "BORDERLINE"
     assert summary["modal_verdict"] == "buy"

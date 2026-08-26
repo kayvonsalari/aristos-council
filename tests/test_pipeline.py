@@ -129,7 +129,12 @@ def test_only_shortlisted_names_enter_the_council():
     assert result.ranked[0].ticker == "A" and result.ranked[0].verdict == "buy"
     # the council ran on the shortlist ONLY: decision called once, NOT 3x.
     assert runners["decision"].calls == 1
-    assert runners["specialist"].calls == 4        # 4 specialists, ONE name
+    # 3 INVOCATIONS for ONE name, not 3 names. SENT-ISOLATE-1: the sentiment specialist
+    # has no channel on this fixture, so it abstains WITHOUT an LLM call — the fourth
+    # specialist still contributes an opinion, it just costs nothing to say "not
+    # assessed". The guarantee under test (the council ran on the shortlist only) is
+    # unchanged; what moved is that a dark channel no longer bills for a stance.
+    assert runners["specialist"].calls == 3
 
 
 def test_council_runs_on_all_overrides_the_shortlist():

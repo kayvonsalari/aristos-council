@@ -44,6 +44,7 @@ def build_council(
     sentiment_adapter: SentimentAdapter | None = None,
     *,
     sentiment_missing_key: bool = False,
+    sentiment_error: str = "",
     council_mode: str = "second_opinion",   # A/B toggle (B default); see prompts.py
     run_matrix: bool = True,                 # skip when a RANKER drives the pipeline
 ):
@@ -51,7 +52,8 @@ def build_council(
 
     g.add_node("gather",
                make_gather_node(adapter, strategy, sentiment_adapter,
-                                sentiment_missing_key=sentiment_missing_key))
+                                sentiment_missing_key=sentiment_missing_key,
+                                sentiment_error=sentiment_error))
     for who in SPECIALIST_ORDER:
         g.add_node(
             who.value,
@@ -91,6 +93,7 @@ def build_upstream_council(
     sentiment_adapter: SentimentAdapter | None = None,
     *,
     sentiment_missing_key: bool = False,
+    sentiment_error: str = "",
 ):
     """The UPSTREAM-ONLY graph: gather -> specialists -> critic -> END.
 
@@ -107,7 +110,8 @@ def build_upstream_council(
 
     g.add_node("gather",
                make_gather_node(adapter, strategy, sentiment_adapter,
-                                sentiment_missing_key=sentiment_missing_key))
+                                sentiment_missing_key=sentiment_missing_key,
+                                sentiment_error=sentiment_error))
     for who in SPECIALIST_ORDER:
         g.add_node(
             who.value,

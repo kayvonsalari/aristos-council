@@ -28,19 +28,34 @@ from typing import Callable, Optional
 _log = logging.getLogger(__name__)
 
 
-def _log_sentiment_status() -> None:
-    """ONE startup line stating the sentiment-provider status (ITEM 5 diagnostic).
+def _sentiment_wiring():
+    """``(adapter, missing_key)`` for a council run, plus ONE honest status line.
 
-    FINDING: the rank-pipeline council does NOT wire a sentiment adapter (this entry
-    never builds a FinnhubAdapter, unlike the legacy run_council), so the Sentiment
-    specialist ABSTAINS on every narrator run regardless of the key — it is (c) not-wired,
-    not (a) key-not-reaching-process. Diagnostic only; wiring it is a separate change."""
-    if os.environ.get("FINNHUB_API_KEY"):
-        _log.info("sentiment (finnhub): FINNHUB_API_KEY present, but run_rank_pipeline "
-                  "does not wire a sentiment adapter into the council — Sentiment "
-                  "specialist abstains (ITEM 5: not-wired, not a key/env issue)")
+    SENT-WIRE-1. This used to be ``_log_sentiment_status``, whose docstring recorded the
+    bug rather than fixing it: the rank pipeline accepted a ``sentiment_adapter`` and
+    threaded it to the agents, but nothing ever CONSTRUCTED one, so the Sentiment
+    specialist abstained on every universe run whatever the key said — and blamed a
+    missing key that was sitting in ``.env``. The plumbing existed at both ends; only
+    this call was missing.
+
+    The construction itself lives in ``data.sentiment.build_sentiment_adapter``, shared
+    with the legacy single-ticker entry, so the two cannot drift."""
+    from .data.sentiment import build_sentiment_adapter
+
+    adapter, missing_key, error = build_sentiment_adapter()
+    if adapter is not None:
+        _log.info("sentiment (%s): wired into the council", adapter.name)
+    elif missing_key:
+        _log.info("sentiment: no FINNHUB_API_KEY set — Sentiment specialist abstains")
     else:
-        _log.info("sentiment (finnhub): no FINNHUB_API_KEY — sentiment abstains")
+        _log.info("sentiment: FINNHUB_API_KEY present but the provider could not be "
+                  "constructed (%s) — Sentiment specialist abstains", error)
+    return adapter, missing_key, error
+
+
+def _log_sentiment_status() -> None:
+    """Back-compat shim — the status line without the adapter (callers that only log)."""
+    _sentiment_wiring()
 
 from .factors import (
     asset_kind_display,
@@ -383,6 +398,7 @@ def _static_factor_evidence(r: RankedTicker) -> list[dict]:
 def _council_stage(
     shortlist: list[RankedTicker], screen_strategy, adapter, runners, mode: str, *,
     sentiment_adapter=None, sentiment_missing_key: bool = False,
+    sentiment_error: str = "",
     progress: Optional[Callable[[str], None]] = None,
     boundary_ties: Optional[dict[str, dict]] = None,
     cohort: Optional[list[RankedTicker]] = None,
@@ -400,6 +416,7 @@ def _council_stage(
     app = build_council(adapter, screen_strategy, runners,
                         sentiment_adapter=sentiment_adapter,
                         sentiment_missing_key=sentiment_missing_key,
+                        sentiment_error=sentiment_error,
                         council_mode=mode, run_matrix=False)
     outcomes: list[CouncilOutcome] = []
     n = len(shortlist)
@@ -2538,7 +2555,7 @@ def _run_council_over(shortlist, council_frame, adapter, runners, mode, *, ranke
     """The council/narration invocation for a SINGLE-lens run — the body lifted out of
     ``run_rank_pipeline`` unchanged so phase two can reuse it verbatim (CONFIRM-SPEND-1).
     Behaviour is identical; only its address moved."""
-    _log_sentiment_status()              # ITEM 5 diagnostic — one line, no behavior change
+    sentiment_adapter, sentiment_missing_key, sentiment_error = _sentiment_wiring()
     # Disclose the ACTUAL post-screen shortlist cost before the narrator spends (ITEM 4)
     # — the pre-run estimate is an upper bound; this is the real number, from the
     # shortlist we already have (no second screen run).
@@ -2549,6 +2566,9 @@ def _run_council_over(shortlist, council_frame, adapter, runners, mode, *, ranke
         from .agents.runners import production_runners
         runners = production_runners()
     council = _council_stage(shortlist, council_frame, adapter, runners, mode,
+                             sentiment_adapter=sentiment_adapter,
+                             sentiment_missing_key=sentiment_missing_key,
+                             sentiment_error=sentiment_error,
                              progress=progress,
                              boundary_ties=boundary_tie_facts(ranked), cohort=ranked)
     return council, {o.ticker: _narrative_text(o) for o in council}
@@ -2708,7 +2728,11 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
         return [], {}
 
     frame = _multi_lens_frame(result)
+    sentiment_adapter, sentiment_missing_key, sentiment_error = _sentiment_wiring()
     app = build_council(adapter, frame, runners, council_mode="narrator",
+                        sentiment_adapter=sentiment_adapter,
+                        sentiment_missing_key=sentiment_missing_key,
+                        sentiment_error=sentiment_error,
                         run_matrix=False)
     outcomes: list[CouncilOutcome] = []
     total = len(names)

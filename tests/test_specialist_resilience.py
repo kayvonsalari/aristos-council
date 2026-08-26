@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from aristos_council.agents.nodes import make_specialist_node
+from aristos_council.agents.nodes import (
+    channel_tools, make_specialist_node)
 from aristos_council.agents.schemas import FigureRef, SpecialistOutput
 from aristos_council.state import (
     FailureKind,
@@ -42,6 +43,15 @@ class _FlakyRunner:
 
 def _run(who, runner):
     state = ResearchState(ticker="X", strategy_id=STRATEGY.id)
+    # SENT-ISOLATE-1: a channel-scoped specialist with an EMPTY channel abstains without
+    # invoking the model at all. These tests are about the RETRY path, so the channel is
+    # given something to read — otherwise the runner is never reached and the retry
+    # behaviour under test cannot happen.
+    if channel_tools(who):
+        state.tool_calls.append(ToolCall(
+            call_id="c-sent", tool_name="sentiment_snapshot",
+            inputs={"ticker": "X", "news_window_days": 14},
+            output={"news_count": 2, "buy_ratio": 0.6}))
     make_specialist_node(who, STRATEGY, runner)(state)
     return state
 
