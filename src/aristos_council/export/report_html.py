@@ -956,7 +956,12 @@ def _band_section(band_table, *, anchor: str = "") -> str:
             tint = percentile_class(row[columns[pct_col]])
             if tint:
                 cell_classes[(r, pct_col)] = tint
-    return (f'<section class="section"{f' id="{anchor}"' if anchor else ""}>'
+    # Hoisted out of the f-string on purpose: nesting an f-string that REUSES the outer
+    # delimiter inside a replacement field is PEP 701, i.e. Python 3.12+. CI runs 3.11
+    # too, where it is a SyntaxError at import — so the whole module failed to collect
+    # while a 3.14 dev box saw nothing wrong.
+    anchor_attr = f' id="{anchor}"' if anchor else ""
+    return (f'<section class="section"{anchor_attr}>'
             f"<h2>{_esc(band_table.title)}</h2>"
             f'<p class="note">{_esc(band_table.intro)}</p>'
             + _table(columns, body, cls="ranked", cell_classes=cell_classes)
