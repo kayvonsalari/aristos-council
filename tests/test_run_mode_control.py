@@ -18,7 +18,13 @@ from pathlib import Path
 
 import pytest
 
-import app
+# CI installs test deps only — no streamlit, no network providers. ``app`` imports
+# streamlit at module scope, so importing it unguarded turns a skip into a COLLECTION
+# ERROR and takes the whole module down with it. Every other UI test module already
+# guards it this way; this one did not, and CI caught what a 3.14 dev box could not.
+pytest.importorskip("streamlit")
+
+import app  # noqa: E402
 
 _APP = Path(__file__).resolve().parents[1] / "app.py"
 

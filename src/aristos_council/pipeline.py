@@ -43,12 +43,18 @@ def _sentiment_wiring():
     from .data.sentiment import build_sentiment_adapter
 
     adapter, missing_key, error = build_sentiment_adapter()
+    # ONE greppable prefix across all three states. They used to diverge ("sentiment
+    # (finnhub): …" when wired, "sentiment: …" otherwise), which made the status line
+    # findable only in the state you happened to be in — and made a test asserting on it
+    # pass or fail depending on whether the machine had a key. A diagnostic you can only
+    # grep half the time is not a diagnostic.
     if adapter is not None:
-        _log.info("sentiment (%s): wired into the council", adapter.name)
+        _log.info("sentiment (finnhub): wired into the council")
     elif missing_key:
-        _log.info("sentiment: no FINNHUB_API_KEY set — Sentiment specialist abstains")
+        _log.info("sentiment (finnhub): no FINNHUB_API_KEY set — Sentiment specialist "
+                  "abstains")
     else:
-        _log.info("sentiment: FINNHUB_API_KEY present but the provider could not be "
+        _log.info("sentiment (finnhub): key present but the provider could not be "
                   "constructed (%s) — Sentiment specialist abstains", error)
     return adapter, missing_key, error
 

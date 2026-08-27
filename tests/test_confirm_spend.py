@@ -501,6 +501,7 @@ def test_confirming_narrates_and_the_FILE_ON_DISK_carries_the_narration(monkeypa
 
 
 def test_one_run_leaves_exactly_one_md_and_one_html(monkeypatch, tmp_path):
+    pytest.importorskip("streamlit")        # drives the UI; CI has test deps only
     _, _, files = _drive_two_phase(monkeypatch, tmp_path, confirm=True)
     assert [p.suffix for p in files].count(".md") == 1
     assert [p.suffix for p in files].count(".html") == 1
