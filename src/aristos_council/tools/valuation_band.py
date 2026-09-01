@@ -113,6 +113,19 @@ class ValuationBand:
     # Empty for a same-currency band, so those render byte-identically to before.
     fx_note: str = ""                        # "DKK accounts converted to USD, monthly …"
     fx_months_missing: int = 0               # months dropped for want of a rate
+    # VALBAND-FX-1 — the CURRENT point's conversion, recorded so the reversion value can
+    # be stated in the same currency as the price it sits beside. The percentile loop
+    # already converted each month; these three make that conversion legible downstream
+    # instead of leaving `current_earnings`/`current_net_debt` as raw home-currency
+    # figures a reader would take for quote-currency ones.
+    fx_rate_current: Optional[float] = None  # quote units per 1 accounts unit, at the
+                                             # CURRENT month — 1.0 when same-currency
+    fx_rate_asof: Optional[date] = None      # the month that rate belongs to
+    fx_pair: str = ""                        # e.g. "DKKUSD=X", or "" same-currency
+    # Quoted UNITS outstanding, implied by market cap / price. For a foreign listing the
+    # quoted unit is an ADR that may bundle several ordinary shares, so this is NOT
+    # `shares_outstanding`; dividing by it keeps the reversion price per QUOTED unit.
+    quoted_units: Optional[float] = None
 
     @property
     def available(self) -> bool:
@@ -363,9 +376,16 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
     # taken at the same month `current_day`. Pure bookkeeping: no value below feeds the
     # percentile, the coverage counts or any abstention.
     current_day = series[-1][0]
+    current_rate = (fx.rate_for(current_day) if cross_currency and fx is not None
+                    else 1.0)
     return ValuationBand(
         fx_note=(fx.provenance() if cross_currency and fx is not None else ""),
         fx_months_missing=fx_missing,
+        fx_rate_current=current_rate,
+        fx_rate_asof=current_day,
+        fx_pair=((fx.direct_pair if fx.source_for(current_day) != "inverted"
+                  else fx.reverse_pair) if cross_currency and fx is not None else ""),
+        quoted_units=(mcap_now / price_now if price_now else None),
         percentile=_percentile(values, current), basis=basis, current=current,
         months_covered=covered, months_total=total, years_covered=span,
         window_years=years, net_debt_basis=(net_debt_basis if basis == _EV_EBIT else ""),
