@@ -82,6 +82,10 @@ class ReversionValue:
     months_total: int = 0
     currency: Optional[str] = None
     note: str = ""
+    # VALBAND-FX-1 — the conversion this value passed through, when it passed through
+    # one. Empty for a same-currency name. Rendered so every figure is traceable back to
+    # a labelled rate and the month it belongs to.
+    fx_note: str = ""
 
     @property
     def available(self) -> bool:
@@ -102,6 +106,7 @@ class ReversionValue:
                 f"({self.gap:+.0%}) if {phrase} returned to its own "
                 f"{self.window_years}-year median of {self.median_multiple:.1f}x; "
                 f"{self.months_covered} of {self.months_total} months usable"
+                f"{('; ' + self.fx_note) if self.fx_note else ''}"
                 f"{currency_note(self.currency)}")
 
 
@@ -112,6 +117,23 @@ def _abstain(note: str, band: Optional[ValuationBand] = None,
         window_years=band.window_years if band is not None else 0,
         months_covered=band.months_covered if band is not None else 0,
         months_total=band.months_total if band is not None else 0)
+
+
+def _fx_note(band: ValuationBand) -> str:
+    """The labelled rate this value was converted at — pair, rate and the month it
+    belongs to, e.g. "DKK->USD @ 0.1550 (2026-08-31)".
+
+    Empty for a same-currency name, so a domestic row gains nothing to read past. A
+    converted row without this line would be a number a reader cannot retrace."""
+    pair = getattr(band, "fx_pair", "")
+    rate = getattr(band, "fx_rate_current", None)
+    if not pair or rate is None:
+        return ""
+    base = pair.replace("=X", "")
+    lead = f"{base[:3]}->{base[3:6]}" if len(base) >= 6 else base
+    asof = getattr(band, "fx_rate_asof", None)
+    when = f" ({asof.isoformat()})" if asof is not None else ""
+    return f"converted {lead} @ {rate:.4f}{when}"
 
 
 def reversion_value(band: Optional[ValuationBand], fundamentals, *,
@@ -149,20 +171,57 @@ def reversion_value(band: Optional[ValuationBand], fundamentals, *,
         if net_debt is None:
             return _abstain("net debt is not computable on the band's basis",
                             band, currency)
-        shares = band.current_shares
-        if shares is None or shares <= 0:
-            return _abstain("shares outstanding unavailable", band, currency)
-        implied_equity = ebit * median - net_debt
+        # VALBAND-FX-1 — TWO conversions, both of which this used to skip.
+        #
+        # 1. CURRENCY. `current_earnings` and `current_net_debt` are recorded in the
+        #    ACCOUNTS currency. The band's percentile loop converts each month at that
+        #    month's rate, but these two were carried out raw — so the implied price came
+        #    out in the home currency and was rendered under the quote currency's symbol.
+        #    Live on 2026-09-01: NVO showed "$874.75 (+1830%)" from a 10.4x -> 29.6x
+        #    reversion, which cannot produce a 19x price gap. 874.75 was DKK.
+        #
+        # 2. SHARE CLASS. Dividing by `shares_outstanding` gives a price per ORDINARY
+        #    share, but the quote is per QUOTED UNIT, and a depositary receipt can bundle
+        #    several ordinaries. GSK showed "$20.10 (-60%)" against a near-flat 11.0x vs
+        #    11.8x — that is GBP per ordinary, and one GSK ADR is two ordinaries.
+        #
+        # Both are fixed with recorded data, not assumptions: the band's own rate for the
+        # current month, and the quoted-unit count implied by market cap / price. No ADR
+        # ratio is guessed anywhere — the unit count comes from the same two vendor
+        # figures the band already builds its current point from.
+        rate = band.fx_rate_current
+        if rate is None or rate <= 0:
+            return _abstain(
+                "the accounts currency could not be converted to the quote currency for "
+                "the current month, so a reversion price cannot be stated in the same "
+                "currency as the price", band, currency)
+        implied_equity = (ebit * median - net_debt) * rate
         if implied_equity <= 0:
             return _abstain("implied equity value is not positive at the median "
                             "multiple (net debt exceeds the implied enterprise value)",
                             band, currency)
-        price = implied_equity / shares
+        if band.fx_pair:
+            # A cross-currency name is quoted in units that need not be ordinary shares.
+            units = band.quoted_units
+            if units is None or units <= 0:
+                return _abstain(
+                    "not evaluated — share-class mismatch: the quoted unit could not be "
+                    "reconciled with reported shares outstanding, so a per-share price "
+                    "cannot be stated against this quote", band, currency)
+        else:
+            # A domestic listing is quoted in its own ordinary shares by construction,
+            # so the reported share count IS the quoted-unit count. Kept explicitly so
+            # same-currency names are byte-identical to their pre-VALBAND-FX-1 values.
+            units = band.current_shares
+            if units is None or units <= 0:
+                return _abstain("shares outstanding unavailable", band, currency)
+        price = implied_equity / units
 
     return ReversionValue(
         price=price, gap=price / last_close - 1.0, median_multiple=median,
         basis=band.basis, window_years=band.window_years,
         months_covered=band.months_covered, months_total=band.months_total,
         currency=currency,
+        fx_note=_fx_note(band),
         note=f"{_BASIS_PHRASE.get(band.basis or '', 'multiple')} median "
              f"{median:.4g} over {band.months_covered} of {band.months_total} months")

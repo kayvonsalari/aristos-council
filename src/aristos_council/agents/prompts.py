@@ -475,7 +475,13 @@ STRUCTURED_NARRATION = (
     "markup. Write plain sentences; the report supplies every heading, table and list.\n"
     "NUMBERS: never wrap a number in quotation marks. State a figure plainly and ALWAYS "
     "with its unit, and name the currency for every monetary amount (the cohort spans "
-    "several currencies and they are never converted).\n")
+    "several currencies and they are never converted).\n"
+    "CURRENCY: copy the currency from the `display` string of the field you are quoting. "
+    "Do NOT infer it from the instrument's `currency` field — a company can report its "
+    "accounts in one currency and trade in another, so its operating income, free cash "
+    "flow and invested capital may be in a DIFFERENT currency from its market cap and "
+    "share price. If a figure carries no currency in the evidence, state it without "
+    "one.\n")
 
 
 def decision_system(strategy: Strategy,

@@ -30,6 +30,7 @@ from datetime import date, timedelta
 from ..data.adapter import DataUnavailable, MarketDataAdapter
 from ..data.sentiment import SentimentAdapter, SentimentDataUnavailable
 from ..presentation import (
+    _ACCOUNTS_CURRENCY_FIELDS,
     dividend_view,
     format_factor_value,
     recommendation_view,
@@ -428,7 +429,24 @@ def _ledger_currency(state: ResearchState) -> str | None:
     return None
 
 
-def _display_map(output, currency: str | None) -> dict:
+def _accounts_currency(state: ResearchState) -> str | None:
+    """The currency the STATEMENTS are kept in — ``financial_currency``, falling back to
+    the quote currency when the provider reports only one.
+
+    For a domestic listing the two are the same and nothing changes. For an ADR they are
+    not, and conflating them is how Novo's DKK operating income reached a report as
+    "USD 128.3bn" (2026-09-01). Never invented: absent -> None -> the amount renders with
+    no currency at all, which is honest, rather than with the wrong one."""
+    for tc in state.tool_calls:
+        if tc.tool_name == "get_fundamentals" and tc.ok and tc.output is not None:
+            out = tc.output
+            get = (out.get if isinstance(out, dict) else lambda k: getattr(out, k, None))
+            return get("financial_currency") or get("currency")
+    return None
+
+
+def _display_map(output, currency: str | None,
+                 accounts_currency: str | None = None) -> dict:
     """A ``{field: formatted_string}`` display map over the numeric fields of a tool
     output (NARR-2), skipping fields without a formatting convention. Presentation
     only — the raw numbers stay in the output for provenance/audit; the narrator is
@@ -438,7 +456,14 @@ def _display_map(output, currency: str | None) -> dict:
                     for f in dataclass_fields(type(output))})
     out: dict = {}
     for name, value in fields.items():
-        cur = currency if name in _CURRENCY_DISPLAY_FIELDS else None
+        # Quote-currency fields take the instrument's currency; statement-side money
+        # takes the ACCOUNTS currency. Anything else formats without one.
+        if name in _CURRENCY_DISPLAY_FIELDS:
+            cur = currency
+        elif name in _ACCOUNTS_CURRENCY_FIELDS:
+            cur = accounts_currency
+        else:
+            cur = None
         disp = format_factor_value(name, value, currency=cur)
         if disp is not None:
             out[name] = disp
@@ -534,6 +559,7 @@ def _evidence_block(state: ResearchState, strategy: Strategy,
         | consumed_fundamentals_fields(strategy.criteria)
     )
     currency = _ledger_currency(state) if narrator else None
+    accounts_ccy = _accounts_currency(state) if narrator else None
     lines = []
     for tc in state.tool_calls:
         if only_tools and tc.tool_name not in only_tools:
@@ -587,7 +613,7 @@ def _evidence_block(state: ResearchState, strategy: Strategy,
                                    else dict(e))
                 output = {**output, "factors": factors}
             else:
-                disp = _display_map(output, currency)
+                disp = _display_map(output, currency, accounts_ccy)
                 if disp:
                     output = {**output, "display": disp}
         # Agent-facing tool label is strategy-neutral; the stored tc.tool_name
