@@ -201,3 +201,93 @@ def test_the_gap_is_recomputed_from_the_corrected_price():
     bars, f, band = _cross_currency_band(rate=0.15)
     rev = reversion_value(band, f, last_close=100.0, currency="USD")
     assert rev.gap == pytest.approx(rev.price / 100.0 - 1.0, rel=1e-12)
+
+
+# --------------------------------------------------------------------------- #
+# 4. THE EVIDENCE LAYER — a DKK figure must never reach a report labelled USD
+# --------------------------------------------------------------------------- #
+# OBSERVED 2026-09-01 15:23: NVO's "Neutral context" and "Reported series" carried
+# operating income "USD 128.3bn", FCF "USD 70.01bn" and invested capital "USD 316.4bn".
+# Novo's real operating income is about USD 20bn — those are DKK figures under a dollar
+# sign. The band fix above does not reach them: they are STATEMENT-side money in the
+# agent's evidence packet, and they had no formatting convention at all, so they arrived
+# as bare numbers beside a `currency: USD` field and the narrator labelled them from the
+# only currency it could see.
+def _dkk_state():
+    """A ResearchState whose fundamentals are DKK-reported and USD-quoted."""
+    from aristos_council.state import ResearchState, ToolCall
+
+    state = ResearchState(ticker="NVO", strategy_id="x")
+    state.tool_calls.append(ToolCall(
+        call_id="f1", tool_name="get_fundamentals",
+        inputs={"ticker": "NVO"},
+        output={"ticker": "NVO", "currency": "USD", "financial_currency": "DKK",
+                "market_cap": 208_600_000_000.0,
+                "operating_income": 128_300_000_000.0,
+                "free_cash_flow": 70_010_000_000.0,
+                "invested_capital": 316_400_000_000.0}))
+    return state
+
+
+def test_statement_money_carries_the_ACCOUNTS_currency_not_the_quote_currency():
+    from aristos_council.agents.nodes import _accounts_currency, _display_map
+
+    state = _dkk_state()
+    assert _accounts_currency(state) == "DKK"
+
+    out = state.tool_calls[0].output
+    disp = _display_map(out, "USD", _accounts_currency(state))
+
+    # statement side -> DKK
+    for field in ("operating_income", "free_cash_flow", "invested_capital"):
+        assert disp[field].startswith("DKK "), (field, disp[field])
+        assert "USD" not in disp[field] and "$" not in disp[field]
+    # quote side -> USD, unchanged
+    assert disp["market_cap"].startswith("USD ")
+
+
+def test_no_raw_home_currency_value_is_rendered_under_a_dollar_label():
+    """The shape of the live defect, asserted directly: the DKK magnitudes must never
+    appear anywhere in the packet beside USD or a dollar sign."""
+    import re
+
+    from aristos_council.agents.nodes import _accounts_currency, _display_map
+
+    state = _dkk_state()
+    disp = _display_map(state.tool_calls[0].output, "USD", _accounts_currency(state))
+    blob = " ".join(disp.values())
+
+    # 128.3 / 70.0 / 316.4 are the DKK figures; none may sit against a USD marker
+    for magnitude in ("128.3", "70.0", "316.4"):
+        for hit in re.finditer(re.escape(magnitude), blob):
+            window = blob[max(0, hit.start() - 6):hit.start()]
+            assert "USD" not in window and "$" not in window, (magnitude, window)
+
+
+def test_a_domestic_name_is_unaffected_by_the_accounts_currency_split():
+    """One currency reported, so quote and accounts are the same and every field reads
+    exactly as it did before."""
+    from aristos_council.agents.nodes import _accounts_currency, _display_map
+    from aristos_council.state import ResearchState, ToolCall
+
+    state = ResearchState(ticker="JNJ", strategy_id="x")
+    state.tool_calls.append(ToolCall(
+        call_id="f1", tool_name="get_fundamentals", inputs={"ticker": "JNJ"},
+        output={"ticker": "JNJ", "currency": "USD",
+                "market_cap": 400_000_000_000.0,
+                "operating_income": 25_000_000_000.0}))
+
+    assert _accounts_currency(state) == "USD"      # falls back to the quote currency
+    disp = _display_map(state.tool_calls[0].output, "USD", _accounts_currency(state))
+    assert disp["market_cap"].startswith("USD ")
+    assert disp["operating_income"].startswith("USD ")
+
+
+def test_an_unknown_accounts_currency_renders_bare_rather_than_wrong():
+    """Omit, never invent: with no currency reported the amount carries none, which a
+    reader can question — instead of one that is confidently wrong."""
+    from aristos_council.agents.nodes import _display_map
+
+    disp = _display_map({"operating_income": 128_300_000_000.0}, "USD", None)
+    assert disp["operating_income"] == "128.3bn"
+    assert "USD" not in disp["operating_income"]

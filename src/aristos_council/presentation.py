@@ -83,9 +83,22 @@ _PRICE_FIELDS = frozenset({
     "sma_50", "sma_200", "last_close", "last_adj_close", "price",
 })
 # Large MONEY amounts rendered with an explicit currency label + abbreviation.
-_CURRENCY_FIELDS = frozenset({
+# Money reported in the QUOTE currency — what the instrument trades in.
+_QUOTE_CURRENCY_FIELDS = frozenset({
     "fund_size", "total_assets", "market_cap", "enterprise_value",
 })
+# VALBAND-FX-1 (evidence layer) — money reported in the ACCOUNTS currency, which for a
+# foreign listing is NOT the quote currency. These had no formatting convention at all,
+# so they reached the narrator as bare numbers next to a `currency: USD` field, and it
+# labelled them USD: the 2026-09-01 15:23 run rendered Novo's operating income as
+# "USD 128.3bn" when the real figure is about USD 20bn — a DKK number under a dollar
+# sign. They now format WITH their own currency, which the caller supplies.
+_ACCOUNTS_CURRENCY_FIELDS = frozenset({
+    "operating_income", "free_cash_flow", "invested_capital", "total_debt", "cash",
+    "cash_and_equivalents", "ebit", "net_income", "total_revenue", "revenue",
+    "pretax_income", "tax_provision", "gross_profit", "total_equity",
+})
+_CURRENCY_FIELDS = _QUOTE_CURRENCY_FIELDS | _ACCOUNTS_CURRENCY_FIELDS
 # Plain ratios rendered as a 2-decimal NUMBER (not a percent): a P/E, P/B, PEG.
 _RATIO_FIELDS = frozenset({"pe_ratio", "price_to_book", "peg_ratio", "peg"})
 
