@@ -204,6 +204,12 @@ class Decision(BaseModel):
     # independent second opinion, so `recommendation` echoes the ranker and is not a
     # ranker-vs-council comparison input. False = 'second_opinion' (Option B, default).
     narration_only: bool = False
+    # REPORT-4 — the narrator's STRUCTURED output, carried onto the state so the report
+    # can render real headings, tables and lists from it. Typed loosely (a plain dict is
+    # accepted) because `state.py` is the schema contract and must not import the agent
+    # schemas; `narration_render` reads it through attribute access either way. Optional,
+    # so second-opinion runs and every record written before REPORT-4 still parse.
+    narration: Optional[Any] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -366,6 +372,18 @@ class ResearchState(BaseModel):
     # static, never a phantom fill. Empty for a stock run / a run with no static-sourced
     # factor, so the ledger stays byte-unchanged there. Rank-pipeline only.
     static_factor_evidence: list[dict] = Field(default_factory=list)
+    # CROSS-LENS narration (NARR-UNION-1). When one cohort is graded by SEVERAL lenses,
+    # a name is narrated ONCE for the whole run, so the writer must be handed EVERY
+    # lens's verdict for it — including the lenses that rated it HOLD or SELL or excluded
+    # it outright. A reader must never be shown a one-sided case.
+    #
+    # ``cross_lens_verdicts``: one entry per SELECTED lens, in the run's column order —
+    # ``{"lens", "lens_id", "cell", "status", "verdict"}``. ``cross_lens_reasons``: the
+    # deterministic reasons behind each BUY, per lens —
+    # ``{"lens", "lens_id", "explain", "rules"}``. Both empty on a single-lens run, which
+    # is then byte-identical to before.
+    cross_lens_verdicts: list[dict] = Field(default_factory=list)
+    cross_lens_reasons: list[dict] = Field(default_factory=list)
     # Ephemeral per-run disposition overrides applied on top of the base strategy
     # (e.g. {"partial_pass_allows_hold": false,
     #        "criteria.min_dividend_growth_streak.is_gating": true}). Empty for a

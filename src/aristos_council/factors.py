@@ -494,6 +494,13 @@ class FactorDef:
     # which is what keeps the next addition honest.
     unit: str = "ratio"
     currency: Optional[str] = None
+    # GLOSSARY-1 — the PLAIN-ENGLISH definition, for the report's "What the terms mean"
+    # section. Distinct from ``label``: the label is the term as a table shows it (and,
+    # being load-bearing in the agent prompts, is not free to reword); this is the
+    # sentence that explains it to a reader who does not know the term. No jargon inside
+    # a definition. Every registered factor must declare one — a test fails the registry
+    # otherwise, so the next factor added arrives explained rather than bare.
+    glossary: str = ""
     fallback_note: str = ""
     # Optional per-name SOURCE tag (ITEM 1). None -> the source is derived generically
     # as "computed"/"abstained" from the value; set it for factors WITH fallbacks so the
@@ -504,6 +511,9 @@ class FactorDef:
 FACTOR_REGISTRY: dict[str, FactorDef] = {
     "earnings_yield": FactorDef(
         "earnings_yield", _earnings_yield, "high", "Earnings yield (EBIT/EV)",
+        glossary=("Operating profit divided by what the whole company costs to buy — "
+                  "shares plus debt. The inverse of how expensive it is: higher means "
+                  "more profit per euro paid."),
         unit="percent",
         fallback_note="EBIT / (market cap + total debt − cash); EBIT/market_cap "
                       "fallback when EV components missing, then 1/PE; net-cash "
@@ -511,37 +521,55 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         source_fn=_earnings_yield_source),
     "roic": FactorDef(
         "roic", _return_on_capital, "high", "Return on invested capital",
+        glossary=("The profit the business earns on the money tied up in it. High "
+                  "means every euro invested in the company works hard."),
         unit="percent"),
     "momentum_12m": FactorDef(
         "momentum_12m", _momentum_12m, "high", "12-month price momentum",
+        glossary=("What buying the share twelve months ago would have returned by "
+                  "today. Measures trend, not value."),
         unit="percent"),
     "momentum_6m": FactorDef(
-        "momentum_6m", _momentum_6m, "high", "6-month price momentum", unit="percent"),
+        "momentum_6m", _momentum_6m, "high", "6-month price momentum",
+        glossary=("What buying the share six months ago would have returned by today. "
+                  "Measures trend, not value."), unit="percent"),
     "low_volatility": FactorDef(
         "low_volatility", _low_volatility, "low", "Annualized volatility (low best)",
+        glossary=("How violently the share price swings in a typical year. Lower "
+                  "means a calmer ride."),
         unit="percent"),
     "net_payout_yield": FactorDef(
         "net_payout_yield", _net_payout_yield, "high", "Net payout yield",
+        glossary=("Dividends plus share buybacks, as a percentage of what the company "
+                  "costs — the total cash returned to owners."),
         unit="percent",
         fallback_note="dividend-yield fallback (buybacks unavailable on free "
                       "fundamentals)",
         source_fn=_net_payout_source),
     "revenue_growth": FactorDef(
         "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3y)",
+        glossary="Average yearly sales growth over the measured period.",
         unit="percent"),
     "dividend_streak": FactorDef(
         "dividend_streak", _dividend_streak, "high",
-        "Dividend-growth streak (years)", unit="count"),
+        "Dividend-growth streak (years)",
+        glossary=("How many consecutive years the dividend per share has risen. A "
+                  "floor, not a verified total — the price history only reaches so "
+                  "far back."), unit="count"),
     # Financials lens (FIN-1): the measures banks & insurers are actually priced by,
     # since EBIT/EV and ROIC are not computable for them (the Greenblatt exclusion,
     # inverted). Vendor value primary, derived fallback, abstain on non-positive book.
     "price_to_book": FactorDef(
         "price_to_book", _price_to_book, "low", "Price / book (low best)",
+        glossary=("Share price divided by the accounting value of what the company "
+                  "owns outright."),
         unit="multiple",
         fallback_note="vendor priceToBook; fallback market_cap / closing equity; "
                       "abstains on book ≤ 0"),
     "return_on_equity": FactorDef(
         "return_on_equity", _return_on_equity, "high", "Return on equity",
+        glossary=("Profit as a percentage of the shareholders' own money in the "
+                  "business."),
         unit="percent",
         fallback_note="vendor returnOnEquity (TTM); fallback net_income / "
                       "mean(opening+closing equity); abstains on equity ≤ 0"),
@@ -551,7 +579,9 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
     # holder). Field coverage confirmed 100% on both ITEM-4 universes (ITEM 1 probe).
     "distribution_yield": FactorDef(
         "distribution_yield", _distribution_yield, "high",
-        "Distribution yield", unit="percent",
+        "Distribution yield",
+        glossary=("The income a fund pays out over a year, as a percentage of its "
+                  "price."), unit="percent",
         fallback_note="ETF trailing distribution/dividend yield (decimal)",
         source_fn=_distribution_yield_source),
     # unit="ratio" DELIBERATELY, not "percent": the vendor's expense-ratio convention is
@@ -560,13 +590,16 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
     # whose unit is unknown — house rule: abstain rather than invent.
     "expense_ratio": FactorDef(
         "expense_ratio", _expense_ratio, "low",
-        "Expense ratio (low best)", unit="ratio",
+        "Expense ratio (low best)",
+        glossary=("The annual fee a fund charges, as a percentage of the money you "
+                  "hold in it."), unit="ratio",
         fallback_note="ETF ongoing cost; ranked relatively, direction low; the vendor's "
                       "unit convention is not asserted here",
         source_fn=_expense_ratio_source),
     "fund_size": FactorDef(
         "fund_size", _fund_size, "high",
-        "Fund size (total assets, EUR)", unit="currency", currency="EUR",
+        "Fund size (total assets, EUR)",
+        glossary="How much money the fund manages in total.", unit="currency", currency="EUR",
         fallback_note="ETF net assets — liquidity + closure-risk proxy; normalised to "
                       "EUR at a dated FX rate (DATA-HYGIENE-1), abstains when the rate "
                       "is unavailable, flagged when the fund's base currency is unknown",
@@ -576,7 +609,9 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
     # min_f_score screen criterion (tools/screening.piotroski_f_score).
     "piotroski_f_score": FactorDef(
         "piotroski_f_score", _piotroski_f_score, "high",
-        "Piotroski F-Score (0-9)", unit="score",
+        "Piotroski F-Score (0-9)",
+        glossary=("A nine-point checklist of basic financial health: profitability, "
+                  "debt and efficiency each score a point when improving."), unit="score",
         fallback_note="nine annual-statement checks; abstains below 5 computable "
                       "checks; coarse integer -> large tied blocks on a small universe "
                       "(screen beats rank leg)"),
@@ -585,7 +620,10 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
     # cheap, the 92nd is near its own peak.
     "valuation_band_percentile": FactorDef(
         "valuation_band_percentile", _valuation_band_percentile, "low",
-        "Valuation vs own 5y band (percentile, low best)", unit="score",
+        "Valuation vs own 5y band (percentile, low best)",
+        glossary=("Where today's valuation multiple sits within this company's own "
+                  "five-year history. The 10th percentile is cheaper than 90% of that "
+                  "period; the 90th dearer than 90% of it."), unit="score",
         fallback_note="monthly EV/EBIT over 5y (P/E fallback, labelled); abstains below "
                       "3y of computable history or without dated statements"),
 }
@@ -810,7 +848,26 @@ def _gather_valuation_band(adapter, ticker: str, fundamentals, *, today: date
     bars = getattr(prices, "bars", None) or []
     if not bars:
         return ValuationBand(note="price history unavailable: no price bars returned")
-    return valuation_band(bars, fundamentals, asof=today)
+
+    # VALBAND-2 — an ADR reports in one currency and trades in another, which used to
+    # darken the band entirely. Fetch MONTHLY rates across the same window so every
+    # historical month converts at its OWN rate; today's rate never touches history.
+    # Best-effort like the rest of this function: no rates means the band abstains with
+    # the pair named, exactly as it abstained before.
+    fx = None
+    price_ccy = getattr(fundamentals, "currency", None)
+    acct_ccy = getattr(fundamentals, "financial_currency", None)
+    if price_ccy and acct_ccy and price_ccy != acct_ccy:
+        from .tools.fx import monthly_fx_series
+
+        try:
+            fx = monthly_fx_series(
+                adapter, acct_ccy, price_ccy,
+                start=today - timedelta(days=round(365.25 * BAND_YEARS) + 10),
+                end=today)
+        except Exception:
+            fx = None
+    return valuation_band(bars, fundamentals, asof=today, fx=fx)
 
 
 def gather_factor_inputs(adapter, ticker: str, *, today: date,

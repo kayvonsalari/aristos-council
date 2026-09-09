@@ -42,6 +42,7 @@ verdict.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Optional, Sequence
@@ -62,17 +63,49 @@ CURRENCY_UNKNOWN_NOTE = " — currency not reported, so the amounts above carry 
                         "currency (never assumed to be USD)"
 
 
+def currency_note(currency: Optional[str]) -> str:
+    """The one-per-line disclosure that a rendered amount has no known currency."""
+    return "" if currency else CURRENCY_UNKNOWN_NOTE
+
+
+# MONEY-ABBREV-1 — magnitude abbreviation, in the ONE helper every surface reads.
+# "USD 69,659,000,000" is thirteen digits a reader has to COUNT to understand, and the
+# 2026-08-26 12:33 run put four of them in a single sentence next to a
+# "KRW 24,793,783,000,000". Abbreviating is display-only: the ledger, the records and the
+# provenance audit keep full precision, and ``format_money_full`` is what a hover title
+# shows so the exact figure is always one gesture away.
+_MAGNITUDES = ((1e12, "tn"), (1e9, "bn"), (1e6, "m"))
+
+
 def format_money(value: Optional[float], currency: Optional[str], *,
-                 decimals: int = 2) -> str:
+                 decimals: int = 2, abbreviate: bool = False) -> str:
     """One money amount as every PRICE-1 surface renders it: ``$27.14``, ``€61.30``,
     ``CHF 84.20`` — or a BARE ``27.14`` when the provider reported no currency.
 
     NEVER converts. The currency is part of the number, so a EUR-denominated ETF and a
     USD stock in the same table can't be read as comparable amounts. An unknown currency
     is stated ONCE per rendered line via ``currency_note`` rather than repeated after
-    every amount — never silently defaulted to dollars."""
+    every amount — never silently defaulted to dollars.
+
+    ``abbreviate=True`` collapses large magnitudes (``$69.7bn``, ``KRW 24.8tn``). The
+    thresholds are ABSOLUTE, so a negative free-cash-flow year abbreviates the same way a
+    positive one does — ``-$4.5bn``, never ``-4,501,657,000``. Default off, so every
+    existing caller is byte-unchanged.
+    """
     if value is None:
         return "—"
+    if abbreviate:
+        size = abs(value)
+        for cut, suffix in _MAGNITUDES:
+            if size >= cut:
+                amount = f"{value / cut:,.1f}{suffix}"
+                if not currency:
+                    return amount
+                sym = _SYMBOLS.get(currency)
+                return f"{sym}{amount}" if sym else f"{currency} {amount}"
+        # under a million: thousands separators, unabbreviated, and NO forced decimals —
+        # "950,000" reads as money; "950,000.00" reads as a spreadsheet.
+        decimals = 0 if float(value).is_integer() else decimals
     amount = f"{value:,.{decimals}f}"
     if not currency:
         return amount
@@ -80,9 +113,17 @@ def format_money(value: Optional[float], currency: Optional[str], *,
     return f"{sym}{amount}" if sym else f"{currency} {amount}"
 
 
-def currency_note(currency: Optional[str]) -> str:
-    """The one-per-line disclosure that a rendered amount has no known currency."""
-    return "" if currency else CURRENCY_UNKNOWN_NOTE
+def format_money_full(value: Optional[float], currency: Optional[str]) -> str:
+    """The UNABBREVIATED amount — what a hover title carries beside an abbreviated one,
+    and what the fact-checker resolves an abbreviated figure back to."""
+    if value is None:
+        return "—"
+    decimals = 0 if float(value).is_integer() else 2
+    amount = f"{value:,.{decimals}f}"
+    if not currency:
+        return amount
+    sym = _SYMBOLS.get(currency)
+    return f"{sym}{amount}" if sym else f"{currency} {amount}"
 
 
 @dataclass(frozen=True)
@@ -199,3 +240,59 @@ def price_context(bars: Sequence, *, currency: Optional[str] = None,
     # "at the high reads 100%" governs — no interpolation over a zero denominator.
     pos = 100.0 if high <= low else 100.0 * (last_close - low) / (high - low)
     return replace(base, high_52w=high, low_52w=low, position_pct=round(pos, 1))
+
+
+# --------------------------------------------------------------------------- #
+# MONEY-ABBREV-2 — the shared rule, applied to text the MODEL wrote
+# --------------------------------------------------------------------------- #
+# MONEY-ABBREV-1 gave every STRUCTURED money field the abbreviation rule. It did not
+# reach the narrator's FREE-TEXT fields, and that is where the offenders live: the
+# 2026-08-26 15:40 report still read "USD 28,989,000,000; USD 69,659,000,000; ..." inside
+# neutral_context, a specialist's reasoning and an open question. Instructing the model
+# not to do it is not a guarantee — this is, and it routes through the SAME
+# ``format_money``, so there is still exactly one rule.
+#
+# Deliberately NARROW. A token is money only when a currency marker sits against it, or
+# when it carries thousands-groups reaching a million. Percentages, ranks ("22 of 37"),
+# years and plain counts are left alone.
+_CCY = r"(?:[$€£¥]|(?:USD|EUR|GBP|JPY|CHF|KRW|SEK|DKK|NOK|CAD|AUD|HKD|TWD|GBp))"
+_AMOUNT = r"-?\d{1,3}(?:,\d{3})+(?:\.\d+)?"
+_MONEY_IN_TEXT = re.compile(
+    rf"(?P<pre>{_CCY})\s?(?P<amt_a>{_AMOUNT})"          # USD 28,989,000,000 / $29,000,000
+    rf"|(?P<amt_b>{_AMOUNT})\s?\((?P<post_p>{_CCY})\)"  # 1,671,000.00 (KRW)
+    rf"|(?P<amt_c>{_AMOUNT})\s(?P<post>{_CCY})\b"       # 1,671,000.00 KRW
+)
+
+# Below this the raw figure is already readable and abbreviating only loses precision.
+ABBREVIATE_FROM = 1_000_000
+
+
+def abbreviate_money_in_text(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """``(rendered, [(abbreviated, full), …])`` — every money amount in ``text`` at or
+    above a million, rewritten through ``format_money``.
+
+    The second element is what a hover title is built from, so the exact figure the
+    ledger holds stays one gesture away. Text with no qualifying amount is returned
+    unchanged and with an empty list, so this is safe to run over everything."""
+    if not text:
+        return text, []
+    swaps: list[tuple[str, str]] = []
+
+    def _sub(m: "re.Match") -> str:
+        raw = m.group("amt_a") or m.group("amt_b") or m.group("amt_c")
+        ccy = m.group("pre") or m.group("post_p") or m.group("post")
+        try:
+            value = float(raw.replace(",", ""))
+        except ValueError:                                   # pragma: no cover
+            return m.group(0)
+        if abs(value) < ABBREVIATE_FROM:
+            return m.group(0)
+        code = ccy if ccy and ccy.isalpha() else _CODE_FOR_SYMBOL.get(ccy, "")
+        short = format_money(value, code or None, abbreviate=True)
+        swaps.append((short, format_money_full(value, code or None)))
+        return short
+
+    return _MONEY_IN_TEXT.sub(_sub, text), swaps
+
+
+_CODE_FOR_SYMBOL = {"$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY"}

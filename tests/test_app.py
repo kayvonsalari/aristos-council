@@ -409,7 +409,13 @@ def test_run_tab_renders_with_the_one_flow():
     assert any(s.label == "List" for s in at.selectbox)
     assert any("Tickers" in str(t.label) for t in at.text_area)
     # ONE run button on this tab (Company Check has its own; the flow used to have two).
-    assert [b.label for b in at.button if b.label == "▶ Run"] == ["▶ Run"]
+    # RUNMODE-1: the button now says WHAT will happen and WHAT IT COSTS on its own line,
+    # so it is matched on its stem rather than on the bare word.
+    # (Company Check has its own "▶ Run company check" button on another tab.)
+    run_buttons = [b.label for b in at.button if b.label.startswith("▶ Run —")]
+    assert len(run_buttons) == 1, run_buttons
+    # the single-lens default. The click is FREE; narration is a second, priced button.
+    assert run_buttons[0].startswith("▶ Run — free · then choose whether to narrate")
 
 
 # --------------------------------------------------------------------------- #
@@ -1105,11 +1111,17 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
     _lens_checkbox(at, raw).set_value(True).run()
     assert not at.exception
+    # CONFIRM-SPEND-1: the lens count SEEDS the mode and no longer re-defaults it (a
+    # silent re-default overrode explicit Narrator picks), so the deterministic run this
+    # test is about is selected rather than assumed. What it then asserts is unchanged.
+    next(r for r in at.radio if str(r.label) == "Run mode").set_value(
+        app.RUN_MODE_RANKER).run()
     blob = _caption_blob(at)
     assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
     assert "ONE combined grid" in blob
-    # the run button says how many lenses will run, and is not gated on an API key
-    assert any("Run 2 strategies (free)" in b.label for b in at.button)
+    # the run button says how many lenses will run and what it costs, and is not gated
+    # on an API key (RUNMODE-1 moved the estimate onto the button's own line).
+    assert any("Run 2 lenses — deterministic, free" in b.label for b in at.button)
     assert not any("ANTHROPIC_API_KEY" in str(getattr(i, "value", "")) for i in at.info)
 
 

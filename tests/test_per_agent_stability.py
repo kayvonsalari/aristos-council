@@ -30,6 +30,7 @@ from aristos_council.reproducibility import (
     per_agent_csv_row,
     run_per_agent_n,
 )
+from tests.fake_sentiment import FakeSentiment
 from aristos_council.state import Recommendation, Stance
 from aristos_council.strategy.loader import load_strategy
 
@@ -128,7 +129,7 @@ def test_specialists_stable_decision_borderline():
                                     _dec(Recommendation.HOLD)]),
     }
     rep = run_per_agent_n(ticker="GOOGL", strategy=STRATEGY,
-                          adapter=_FakeAdapter(), runners=runners, n=n)
+                          adapter=_FakeAdapter(), sentiment_adapter=FakeSentiment(), runners=runners, n=n)
     assert rep.n_run == 5
     by = {a.agent: a for a in rep.agents}
     assert by["fundamental"].label == "STABLE" and by["fundamental"].modal == "bullish"
@@ -156,7 +157,7 @@ def test_sentiment_specialist_wobbles_is_flagged_upstream():
         "decision": _StaticRunner(_dec(Recommendation.HOLD)),
     }
     rep = run_per_agent_n(ticker="META", strategy=STRATEGY,
-                          adapter=_FakeAdapter(), runners=runners, n=5)
+                          adapter=_FakeAdapter(), sentiment_adapter=FakeSentiment(), runners=runners, n=5)
     by = {a.agent: a for a in rep.agents}
     assert by["sentiment"].label == "WOBBLES"
     assert by["sentiment"].distribution == {"neutral": 3, "bearish": 2}
@@ -174,7 +175,7 @@ def test_per_agent_capture_is_one_record_per_full_run():
     decision = _CyclingRunner([_dec(Recommendation.BUY)])
     runners = {"specialist": spec, "critic": critic, "decision": decision}
     rep = run_per_agent_n(ticker="AAA", strategy=STRATEGY,
-                          adapter=_FakeAdapter(), runners=runners, n=n)
+                          adapter=_FakeAdapter(), sentiment_adapter=FakeSentiment(), runners=runners, n=n)
     assert rep.n_run == 5
     # FULL pipeline each run: 4 specialist calls x 5 runs, critic + decision x 5.
     assert spec.calls == 20 and critic.calls == 5 and decision.calls == 5
@@ -191,7 +192,8 @@ def test_gated_outcome_short_circuits_per_agent():
                "critic": _StaticRunner(CriticOutput(counter_thesis="c")),
                "decision": _StaticRunner(_dec(Recommendation.BUY))}
     rep = run_per_agent_n(ticker="LMT", strategy=STRATEGY,
-                          adapter=_ShortStreakAdapter(), runners=runners, n=5)
+                          adapter=_ShortStreakAdapter(),
+                          sentiment_adapter=FakeSentiment(), runners=runners, n=5)
     assert rep.gated is True and rep.n_run == 1
     assert spec.calls == 4                            # exactly one pipeline pass
     assert "GATED" in rep.diagnosis

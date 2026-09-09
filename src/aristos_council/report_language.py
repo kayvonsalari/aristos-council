@@ -29,6 +29,7 @@ verdict, a rank, a threshold or an abstention — this module only chooses words
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional
 
 from .tools.price_context import format_money
@@ -249,3 +250,66 @@ SYMBOL_NOTES: tuple[tuple[str, str], ...] = (
           "that received a DIFFERENT verdict, and the alphabetical tie-break, not a "
           "score difference, decided which side of the line each fell on."),
 )
+
+
+# --------------------------------------------------------------------------- #
+# REPORT-4 — the cohort's HUMAN description, with the record id kept beside it
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class CohortTitle:
+    """What a run's cohort is CALLED, and the id it is filed under.
+
+    The title and h1 read "adhoc:507e10cf — 3 lenses". That is the record key doing a job
+    it cannot do: it names nothing a reader recognises, and two edits of the same list are
+    two different opaque hex strings. An edit FORKS rather than mutating the manifest
+    (FUND-UI-2), which is right — but the parent's name was dropped with it, so the report
+    could not say what the cohort actually was.
+
+    ``headline`` leads; ``record_id`` stays present and MUTED beside it, everywhere the id
+    appears today. Nothing is renamed and nothing is hidden."""
+
+    headline: str
+    record_id: str
+
+    def full(self) -> str:
+        """Headline with the id appended — for a plain-text surface that cannot mute."""
+        return f"{self.headline} ({self.record_id})" if self.record_id else self.headline
+
+
+def cohort_title(meta: dict, *, n_lenses: int = 0) -> CohortTitle:
+    """``"Edited from Growth 40 — 21 names · 3 lenses"`` + ``adhoc:507e10cf``.
+
+    Three shapes, in order of how much the run knows about itself:
+      * a SAVED list run unchanged   -> its own display name, its own id;
+      * an EDITED saved list         -> "Edited from <list>", filed under the ad-hoc id;
+      * a pasted list with no parent -> "Pasted list", filed under the ad-hoc id.
+    """
+    record_id = str(meta.get("universe_id") or "") or "adhoc"
+    name = str(meta.get("universe_name") or "").strip()
+    parent = str(meta.get("derived_from") or "").strip()
+    size = meta.get("universe_size", 0)
+
+    if name:
+        lead = name
+    elif parent:
+        lead = f"Edited from {parent}"
+    else:
+        lead = "Pasted list"
+
+    bits = [f"{size} name{'s' if size != 1 else ''}"] if size else []
+    if n_lenses:
+        bits.append(f"{n_lenses} lens{'es' if n_lenses != 1 else ''}")
+    tail = " · ".join(bits)
+    return CohortTitle(headline=f"{lead} — {tail}" if tail else lead,
+                       record_id=record_id)
+
+
+def cohort_filename_slug(meta: dict) -> str:
+    """The cohort segment of a run's FILENAME, taken from the same description the header
+    shows — so a folder of reports reads the way the documents do. Empty (the segment is
+    then omitted) rather than inventing a name."""
+    name = str(meta.get("universe_name") or "").strip()
+    if name:
+        return name
+    parent = str(meta.get("derived_from") or "").strip()
+    return f"Edited from {parent}" if parent else ""

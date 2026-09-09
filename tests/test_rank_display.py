@@ -119,7 +119,7 @@ def test_explain_leads_with_the_ordinal_after_ranking():
     expl = by["A"].explain()
     assert expl.startswith("A:")
     assert "#1 of 3 — " in expl                     # ordinal first
-    assert "combined rank-sum 2 across a 3-name cohort" in expl   # sum as detail
+    assert "factor score 2 across a 3-name cohort" in expl   # sum as detail
     assert "(best 2, worst 6)" in expl              # bounds disclosed
 
 
@@ -129,9 +129,9 @@ def test_explain_keeps_a_half_point_rank_sum_intact():
     # "6" (round-half-even), the narrator faithfully echoed "6", and the narration check then
     # flagged the prose for contradicting the rank table — a contradiction the display made.
     r = _rt("A", 6.5, factors=2, n=5)
-    assert "combined rank-sum 6.5 across a 5-name cohort" in r.explain()
+    assert "factor score 6.5 across a 5-name cohort" in r.explain()
     # whole numbers are byte-unchanged (no ".0" tail).
-    assert "combined rank-sum 6 across a 5-name cohort" in _rt("B", 6, factors=2,
+    assert "factor score 6 across a 5-name cohort" in _rt("B", 6, factors=2,
                                                                n=5).explain()
 
 

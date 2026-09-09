@@ -102,7 +102,8 @@ def _screen_criteria(state: ResearchState) -> list:
 # --------------------------------------------------------------------------- #
 def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                      sentiment_adapter: SentimentAdapter | None = None,
-                     *, sentiment_missing_key: bool = False):
+                     *, sentiment_missing_key: bool = False,
+                     sentiment_error: str = ""):
     def gather(state: ResearchState) -> ResearchState:
         today = date.today()
         lookback_start = today - timedelta(days=400)   # enough for SMA200
@@ -144,10 +145,26 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
         # An optional source with no API key is a MISSING_KEY tool gap, not honest
         # absence: record it so the run is flagged degraded and the banner names it
         # (the FINNHUB_API_KEY-unset case that silently dragged verdicts bearish).
+        # SENT-WIRE-1 — REPORT THE TRUE CAUSE. This said "FINNHUB_API_KEY not set" for
+        # every abstention, and for months that was FALSE: the key was set and the
+        # universe pipeline simply never constructed an adapter. A dark channel naming
+        # the wrong cause is worse than one naming none — it sends the reader to fix
+        # something that was never broken. The three cases are now distinguished, and
+        # "wired but the call failed" carries the provider's own error (logged per call
+        # below), never a key story.
         if sentiment_adapter is None and sentiment_missing_key:
             state.run_issues.append(RunIssue(
                 source="sentiment", reason=FailureKind.MISSING_KEY,
-                detail="FINNHUB_API_KEY not set — Sentiment specialist abstained"))
+                detail="no FINNHUB_API_KEY set — Sentiment specialist abstained"))
+        elif sentiment_adapter is None and sentiment_error:
+            # A key WAS present and the provider still could not be built. That is a
+            # fixable tool failure and carries the provider's own message. A caller that
+            # simply does not configure sentiment passes neither flag and is untouched —
+            # a run with no sentiment by design is not a DEGRADED run.
+            state.run_issues.append(RunIssue(
+                source="sentiment", reason=FailureKind.FETCH_ERROR,
+                detail=f"sentiment provider could not be constructed ({sentiment_error})"
+                       " — Sentiment specialist abstained"))
 
         # `provider` tags each market-data call with the adapter that actually
         # produced it. For a single-source adapter that's its own name; for the
@@ -428,8 +445,72 @@ def _display_map(output, currency: str | None) -> dict:
     return out
 
 
+# --------------------------------------------------------------------------- #
+# SENT-ISOLATE-1 — a specialist may only see ITS OWN evidence channel
+# --------------------------------------------------------------------------- #
+# LIVE, 2026-08-26: with no news data at all, the Sentiment specialist returned
+# "bullish 0.72" for ASML, reasoning from "Value + Momentum's rank-sum of 12 and Magic
+# Formula RAW's rank-sum of 19". On NVO, MSFT and GOOGL the same specialist in the same
+# run abstained correctly. That is the worst shape this failure can take: the panel reads
+# as several independent views, so a sentiment specialist reporting the RANKER's verdicts
+# back as sentiment manufactures corroboration — the reader sees three signals agreeing
+# where there are two, one of them counted twice.
+#
+# A prompt instruction cannot fix it (the model already had one, and complied on three
+# names out of four). The fix is structural: if the specialist cannot SEE the other
+# channels, it cannot cite them.
+#
+# Only SENTIMENT is strictly scoped today. Fundamental, technical and risk are
+# deliberately left on the full ledger for now: risk is cross-cutting BY DESIGN (it reads
+# volatility against fundamentals), and narrowing the other two would change narration
+# nobody has reported a problem with. Declared here rather than assumed, so widening the
+# map later is a one-line change with a test to match.
+SPECIALIST_CHANNELS: dict[str, tuple[str, ...]] = {
+    "sentiment": ("get_company_news", "get_recommendation_trends", "sentiment_snapshot"),
+}
+
+
+def channel_tools(who) -> tuple[str, ...]:
+    """The tool names this specialist may see, or ``()`` when it sees the whole ledger."""
+    return SPECIALIST_CHANNELS.get(getattr(who, "value", who), ())
+
+
+def _channel_absent_reason(state: ResearchState, who) -> str:
+    """WHY this channel is dark, in the specialist's own abstention.
+
+    Read from the run's own record rather than assumed, so the four cases stay
+    distinguishable: no key, a provider that could not be built, a call that FAILED (the
+    provider's own error, status code and all), and a call that succeeded but returned
+    nothing — which is a real finding about the name, not a fault."""
+    tools = channel_tools(who)
+    failed = [tc for tc in state.tool_calls if tc.tool_name in tools and not tc.ok]
+    if failed:
+        return "; ".join(sorted({tc.error or "provider call failed" for tc in failed}))
+    issues = [i for i in state.run_issues if i.source == getattr(who, "value", who)]
+    if issues:
+        return issues[0].detail
+    if any(tc.tool_name in tools for tc in state.tool_calls):
+        return "the provider returned nothing in the window"
+    return "the provider was not available for this run"
+
+
+def channel_is_empty(state: ResearchState, who) -> bool:
+    """True when a strictly-scoped specialist's OWN channel produced nothing.
+
+    ``()`` (unscoped) is never "empty" — an unscoped specialist has no single channel to
+    be empty. A scoped one with no successful call in its channel MUST abstain, and does
+    so without an LLM invocation, which is what makes "bullish 0.72 on an empty channel"
+    structurally impossible rather than merely discouraged."""
+    tools = channel_tools(who)
+    if not tools:
+        return False
+    return not any(tc.tool_name in tools and tc.ok and tc.output is not None
+                   for tc in state.tool_calls)
+
+
 def _evidence_block(state: ResearchState, strategy: Strategy,
-                    *, narrator: bool = False) -> str:
+                    *, narrator: bool = False,
+                    only_tools: tuple[str, ...] = ()) -> str:
     """Serialize the ledger for prompts, with a per-call size guard.
 
     The ledger itself is never truncated (it is the audit record); only the
@@ -444,6 +525,9 @@ def _evidence_block(state: ResearchState, strategy: Strategy,
     human-formatted strings (percent/price/currency) so the writer quotes
     "22.0%" / "USD 149.8bn", not a raw float. Display-only: the raw values remain
     for the provenance audit; non-narrator councils are byte-identical (default off).
+
+    SENT-ISOLATE-1: ``only_tools`` restricts the packet to ONE channel. Empty (the
+    default) is the whole ledger, so every existing caller is byte-unchanged.
     """
     allowed_fundamentals = (
         set(_CORE_FUNDAMENTALS_FIELDS)
@@ -452,6 +536,8 @@ def _evidence_block(state: ResearchState, strategy: Strategy,
     currency = _ledger_currency(state) if narrator else None
     lines = []
     for tc in state.tool_calls:
+        if only_tools and tc.tool_name not in only_tools:
+            continue
         output = tc.output
         # Fundamentals: render only the fields the active strategy cares about.
         if tc.tool_name == "get_fundamentals" and tc.ok and output is not None:
@@ -571,7 +657,38 @@ def _ranker_block(state: ResearchState) -> str:
                   f"rank table.")
     return (f"\nRANKER VERDICT (the deterministic verdict-of-record for this name): "
             f"{state.ranker_verdict.value.upper()}{expl}{legend}"
-            f"{_boundary_tie_block(state)}\n")
+            f"{_boundary_tie_block(state)}{_cross_lens_block(state)}\n")
+
+
+def _cross_lens_block(state: ResearchState) -> str:
+    """EVERY selected lens's verdict for this name (NARR-UNION-1), plus the deterministic
+    reasons behind each BUY.
+
+    A multi-lens run narrates a name ONCE, so the writer is handed the WHOLE verdict row —
+    the lenses that bought it and the lenses that did not, in the run's own column order.
+    Without this the prose could present a name bought by one lens as simply "a BUY" while
+    another lens excluded it outright: a one-sided case assembled from a true fact.
+
+    The block is FACTS ONLY, and the accompanying constraint (see prompts.decision_system)
+    forbids weighing the lenses against one another. Empty on a single-lens run, so that
+    prompt is byte-unchanged."""
+    rows = state.cross_lens_verdicts or []
+    if not rows:
+        return ""
+    lines = [f"  - {r.get('lens', '')}: {r.get('cell', '')}" for r in rows]
+    reasons = state.cross_lens_reasons or []
+    why = ""
+    if reasons:
+        why = ("\nWHY EACH BUYING LENS RANKED IT THERE (that lens's own factor ranks and "
+               "the screen rules it passed — attribute each to the lens it came from):\n"
+               + "\n".join(
+                   f"  - {r.get('lens', '')}: {r.get('explain', '')}"
+                   + (f"\n      passed: {'; '.join(r.get('rules') or [])}"
+                      if r.get("rules") else "")
+                   for r in reasons))
+    return ("\nEVERY SELECTED LENS'S VERDICT FOR THIS NAME (state ALL of these before any "
+            "prose — the lenses that did NOT buy it are part of the record):\n"
+            + "\n".join(lines) + why)
 
 
 def _boundary_tie_block(state: ResearchState) -> str:
@@ -596,19 +713,27 @@ def _boundary_tie_block(state: ResearchState) -> str:
 
 
 def _user_message(state: ResearchState, strategy: Strategy,
-                  *, narrator: bool = False) -> str:
+                  *, narrator: bool = False, who=None) -> str:
     # NARR-2: in narrator mode the evidence carries human-formatted `display`
     # strings; the note points the writer at them so prose never quotes raw floats.
     display_note = (
         "\nIn PROSE, quote the `display` string for any number (already formatted "
         "with units/currency, e.g. \"22.0%\", \"USD 149.8bn\") — never a raw ratio "
         "or an unlabelled large number.\n" if narrator else "")
+    # SENT-ISOLATE-1: a channel-scoped specialist sees ITS OWN evidence and NOT the
+    # ranker's verdicts — the rank-sums it was caught reciting as "sentiment" are simply
+    # not in the packet. Unscoped specialists (and the critic/narrator) are unchanged.
+    only = channel_tools(who) if who is not None else ()
+    ranker = "" if only else f"{_ranker_block(state)}\n"
+    scope_note = ("\nThis packet contains YOUR channel's evidence only. If it is empty, "
+                  "abstain — do not substitute another channel's inputs.\n"
+                  if only else "")
     return (
         f"Ticker under review: {state.ticker}\n"
-        f"{_ranker_block(state)}\n"
+        f"{ranker}"
         f"EVIDENCE (one JSON tool call per line — the complete record):\n"
-        f"{_evidence_block(state, strategy, narrator=narrator)}\n"
-        f"{display_note}"
+        f"{_evidence_block(state, strategy, narrator=narrator, only_tools=only)}\n"
+        f"{scope_note}{display_note}"
     )
 
 
@@ -622,7 +747,22 @@ def make_specialist_node(who: SpecialistName, strategy: Strategy, runner,
         # run (all prior councils' spend wasted). Retry ONCE, then degrade THIS
         # specialist to ABSTAIN with a typed run issue — abstention exists for exactly
         # this. Scoped to the LLM parse; opinion construction stays outside.
-        user_msg = _user_message(state, strategy, narrator=narrator)
+        # SENT-ISOLATE-1 — an EMPTY channel abstains WITHOUT an LLM call. Not a prompt
+        # rule the model may or may not follow (it followed it on three names out of four
+        # and returned "bullish 0.72" from rank-sums on the fourth): with no call there is
+        # no stance to invent, and the behaviour is identical for every name in the run.
+        if channel_is_empty(state, who):
+            reason = _channel_absent_reason(state, who)
+            state.specialist_opinions.append(SpecialistOpinion(
+                specialist=who, stance=Stance.ABSTAIN, confidence=0.0,
+                thesis=f"No {who.value} evidence was available for this name: {reason}. "
+                       "This is a missing data channel, not a measured neutral — no "
+                       "stance is offered and no other channel's inputs are substituted.",
+                caveats=[f"{who.value} channel empty — abstained"],
+                agrees_with_ranker=None))
+            return state
+
+        user_msg = _user_message(state, strategy, narrator=narrator, who=who)
         try:
             out: SpecialistOutput = runner.invoke(system, user_msg)
         except Exception:                                   # e.g. pydantic ValidationError
@@ -746,6 +886,19 @@ def make_decision_node(strategy: Strategy, runner,
         )
         out: DecisionOutput = runner.invoke(system, user)
 
+        # REPORT-4: when the narrator returned FIELDS, `rationale` becomes the flattened
+        # PROSE of those fields. Everything downstream that reads prose — the whole
+        # fact-checking layer, the provenance audit, saved-report rendering — keeps
+        # working unchanged, and the layout is rebuilt from the fields at render time.
+        # A model that filled `rationale` and left `narration` empty (second-opinion mode,
+        # any older record) is untouched.
+        if out.narration is not None:
+            from ..narration_render import narration_prose
+
+            prose = narration_prose(out.narration)
+            if prose:
+                out.rationale = prose
+
         # NARRATOR (Option A): the council does NOT issue an independent verdict — it
         # echoes the RANKER's verdict-of-record. SECOND_OPINION (Option B, default):
         # the agent's OWN verdict stands as the independent check.
@@ -796,6 +949,12 @@ def make_decision_node(strategy: Strategy, runner,
             gating_criterion_fired=fired_name,
             insufficient_evidence=insufficient,
             narration_only=narrator,
+            # REPORT-4: carry the STRUCTURED narration onto the state. Without this the
+            # fields reached the report only as the flattened prose in `rationale`, and
+            # the live 21:47 run rendered every narration as flat paragraphs while the
+            # "what the run could not see" section reported a clean bill of health beside
+            # two specialists that had plainly abstained.
+            narration=out.narration,
         )
         return state
 

@@ -123,7 +123,14 @@ class RankedTicker:
         # half-point (9.5, not a `:.0f`-rounded 10). Rounding it here handed the narrator a
         # number the rank table contradicts, which the narration check then flagged as the
         # narrator's hallucination (NARR-CHK-5); whole numbers render exactly as before.
-        core = (f"combined rank-sum {format_score(self.combined_rank)} "
+        # SCORE-NAME-1: "rank-sum" named TWO unrelated numbers. Cross-lens it meant
+        # positions added ACROSS lenses (NVO 2+1+1 = 4); within a lens it meant ONE
+        # lens's factor ranks added up (NVO in Value + Momentum: 2+3+8 = 13). The
+        # narration said "combined rank-sum 13" one section below a table showing 4.
+        # The within-lens number is now "factor score" everywhere, matching the
+        # single-lens report's existing "score N (best 3 · worst 36)" wording — and with
+        # the cross-lens COLUMN removed (GRID-COLS-1), nothing rendered is a "rank-sum".
+        core = (f"factor score {format_score(self.combined_rank)} "
                 f"across a {n}-name cohort")
         # RANK-DISPLAY-1: lead with the ORDINAL position (tie-shared) so the rank-sum is
         # never misread as a position, and disclose the best/worst bounds. When the

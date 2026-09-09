@@ -89,6 +89,70 @@ _BULLET_MARK = re.compile(r"^\s*[-•]\s*")
 LENS_ACCENTS = 5
 
 
+def _compact_rules_html(multi_result) -> str:
+    """RULES-TOP-1 — one short line per lens under the header, linked to the full
+    tables. Derived from the strategies that ran (``pipeline.compact_rules``)."""
+    from ..pipeline import compact_rules
+
+    rows = compact_rules(multi_result)
+    if not rows:
+        return ""
+    body = " · ".join(f"<strong>{_esc(r['lens'])}</strong> — {_esc(r['summary'])}"
+                      for r in rows)
+    return (f'<p class="rules-compact">{body} '
+            f'<a href="#rules">[details]</a></p>')
+
+
+def _glossary_html(multi_result, rendered: str) -> str:
+    from ..factors import FACTOR_REGISTRY
+    from ..glossary import glossary_entries, glossary_html
+    from ..pipeline import rules_applied
+    from ..tools.criteria.registry import REGISTRY
+
+    factors, criteria = {}, {}
+    for sid in multi_result.strategy_ids:
+        res = multi_result.results[sid]
+        for row in res.ranked:
+            for fname in (row.factor_ranks or {}):
+                if fname in FACTOR_REGISTRY:
+                    factors[fname] = FACTOR_REGISTRY[fname]
+        block = rules_applied(res)
+        for rule in (block.rules if block else []):
+            if rule.criterion in REGISTRY:
+                criteria[rule.criterion] = REGISTRY[rule.criterion]
+    entries = glossary_entries(factors=factors.values(), criteria=criteria.values(),
+                               text=_visible(rendered))
+    return glossary_html(entries, esc=_esc)
+
+
+def _visible(html_text: str) -> str:
+    """Tag-stripped text, so the glossary decides on what a READER sees rather than on
+    class names and attributes."""
+    return re.sub(r"<[^>]+>", " ", html_text)
+
+
+def _contents(sections) -> str:
+    """REPORT-4 part 3 — the contents list, built from ``pipeline.report_sections``.
+
+    The document runs to ~70KB across seven sections and a narration block per name, and
+    had no way to jump. Every entry is an in-page anchor to a section this render will
+    actually emit (the section list is the same one the renderer walks, so a link cannot
+    point at a section that was skipped). It stays useful on paper: the print stylesheet
+    keeps it, because a printed contents list is still a map even without the links."""
+    def _items(nodes) -> str:
+        out = []
+        for node in nodes:
+            kids = _items(node["children"]) if node["children"] else ""
+            out.append(f'<li><a href="#{html.escape(node["anchor"], quote=True)}">'
+                       f'{html.escape(str(node["title"]))}</a>{kids}</li>')
+        return f"<ul>{''.join(out)}</ul>" if out else ""
+
+    body = _items(sections)
+    if not body:
+        return ""
+    return f'<nav class="contents" aria-label="Contents"><h2>Contents</h2>{body}</nav>'
+
+
 def lens_class(index: int) -> str:
     """The accent class for the nth lens in the run — wraps past five, so a six-lens run
     repeats a colour rather than silently rendering one lens unaccented."""
@@ -230,6 +294,40 @@ li { margin: 3px 0; }
    rule — so the eye finds its edges instead of reading one long column of
    text. (The valuation band was being missed entirely for want of this.)
    -------------------------------------------------------------------------- */
+/* REPORT-4 — the record id kept BESIDE the human title, muted, never removed. */
+.record-id { font-size: 13px; font-weight: 400; color: var(--fg-quiet);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+
+/* REPORT-4 — contents. Anchors survive print (the list is a map on paper too). */
+nav.contents { margin: 14px 0 0; padding: 10px 14px; background: var(--panel-alt);
+  border: 1px solid var(--rule); border-radius: 6px; }
+nav.contents h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+  margin: 0 0 6px; color: var(--fg-quiet); }
+nav.contents ul { margin: 0; padding-left: 18px; }
+nav.contents ul ul { padding-left: 16px; }
+nav.contents li { margin: 2px 0; }
+nav.contents a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted
+  var(--rule); }
+nav.contents a:hover { border-bottom-style: solid; }
+
+/* NARR-SCHEMA-1 — the structural warning banner. Shares the callout's shape so it
+   reads as the same CLASS of annotation as a fact-check stamp, with its own edge so
+   the two are distinguishable at a glance. Print rules already force callouts to
+   white-on-black, so this stays legible in grayscale. */
+.callout.structural { border-left-color: var(--sell); background: var(--alert-bg); }
+.callout.structural ul { margin: 6px 0 0; padding-left: 18px; }
+.callout.structural p { margin: 4px 0; }
+
+/* REPORT-4 — the narration's own sub-blocks, rendered from the narrator's FIELDS. */
+.narr-block { margin: 0 0 14px; }
+.narr-block h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--fg-quiet); margin: 0 0 6px; border-bottom: 1px solid var(--rule);
+  padding-bottom: 3px; }
+.narr-block h5 { font-size: 13px; margin: 10px 0 4px; }
+.narr-block p.echoed { font-weight: 600; }
+.narr-block p.screens { color: var(--fg-quiet); font-size: 13px; margin: 4px 0; }
+p.clean { color: var(--fg-quiet); font-style: italic; margin: 4px 0; }
+
 .section { margin: 0 0 18px; padding: 14px 16px 10px; background: var(--panel);
            border: 1px solid var(--rule); border-radius: 6px;
            border-top: 3px solid var(--rule-strong); }
@@ -339,6 +437,14 @@ footer.doc .disclaimer { color: var(--fg-quiet); font-size: 12px; margin: 0; }
   table { font-size: 8pt; table-layout: auto; width: 100%; }
   th, td { padding: 3px 4px; overflow-wrap: anywhere; word-break: break-word; }
   .pos .detail { font-size: 7.5pt; }
+  /* REPORT-4: the contents list SURVIVES printing. The links are inert on paper, but
+     the list is still the document's map, and the section titles still name the order.
+     Kept off its own page — it belongs with the header it explains. */
+  nav.contents { background: #ffffff !important; border: 1px solid #000000;
+                 break-inside: avoid; page-break-inside: avoid; }
+  nav.contents a { color: #000000 !important; border-bottom: none; }
+  .record-id { color: #000000 !important; }
+  .narr-block h4 { color: #000000 !important; border-bottom-color: #000000; }
   /* One per-name narration per page. */
   .name-section { break-before: page; page-break-before: always; border: none;
                   padding: 0; }
@@ -613,76 +719,82 @@ def multi_strategy_report_html(multi_result, *,
     RECORD LAYER UNTOUCHED: only the human-facing report merges. Each strategy's run is
     still frozen individually under ``runs/`` and still grades individually."""
     from ..pipeline import (
+        evidence_gaps_clean_note,
+        EVIDENCE_GAPS_NOTE,
+        EVIDENCE_GAPS_TITLE,
         PROVENANCE_SECTION_TITLE,
         RULES_SECTION_TITLE,
         VERDICT_TABLE_NOTE,
         VERDICT_TABLE_TITLE,
+        evidence_gaps,
         exclusion_rows,
         multi_strategy_grid_rows,
+        multi_header_line,
         multi_summary_line,
+        narration_issues,
+        narration_structs,
         provenance_sentences,
+        report_sections,
         rules_applied,
         valuation_band_table,
     )
     from ..data.adapter import display_name
-    from ..report_language import label_with_id
+    from ..download_names import slugify as _slug
+    from ..narration_render import narration_html, split_stamps
+    from ..report_language import cohort_title, label_with_id
 
     m = multi_result.meta
     ids = multi_result.strategy_ids
     names = multi_result.strategy_names
     cohort = label_with_id(m.get("universe_name", ""), m.get("universe_id") or "adhoc")
+    # REPORT-4 part 4: the HUMAN description leads; the record id stays beside it, muted.
+    title = cohort_title(m, n_lenses=len(ids))
     stamp = _local_stamp(run_start)
     mode = m.get("council_mode", "")
     mode_phrase = ("ranker only, no AI commentary" if mode == "ranker-only"
                    else f"{mode} commentary" if mode else "")
     lens_labels = [label_with_id(names.get(sid) or sid, sid) for sid in ids]
+    structs = narration_structs(multi_result)
+    issues = narration_issues(multi_result)
+    sections = report_sections(multi_result)
     parts: list[str] = []
 
     # ----- 1: ONE header, not one per lens.
     parts.append(
         '<header class="doc">'
         '<p class="kicker">Aristos Council · universe run · multi-lens</p>'
-        f"<h1>{_esc(cohort)} — {len(ids)} lenses</h1>"
+        f"<h1>{_esc(title.headline)} "
+        f'<span class="record-id">{_esc(title.record_id)}</span></h1>'
         + _kv([
             ("Cohort", _esc(f'{cohort} — {m.get("universe_size", 0)} names')),
             ("Lenses", "<br>".join(_esc(lbl) for lbl in lens_labels)),
             ("Run", _esc(" — ".join(p for p in (stamp, mode_phrase) if p))),
         ])
-        + '<p class="house">Verdict: deterministic ranker. No LLM ran — narration '
-          "stays a per-strategy run.</p>"
+        + f'<p class="house">{_esc(multi_header_line(multi_result))}</p>'
         f'<p class="summary">{_esc(multi_summary_line(multi_result))}</p>'
-        "</header>")
+        + _compact_rules_html(multi_result)
+        + _contents(sections)
+        + "</header>")
 
-    # ----- 2: rules applied, ONE sub-block per lens — each screens on its own rules.
-    parts.append(f'<section class="section"><h2>{_esc(RULES_SECTION_TITLE)} — by lens</h2>'
-                 '<p class="note">Each lens screens on its own rules; a name excluded by '
-                 "one may be ranked by another. The rules below are read from the "
-                 "strategies that actually ran.</p>")
-    for i, (sid, label) in enumerate(zip(ids, lens_labels)):
-        rules = rules_applied(multi_result.results[sid])
-        # Each lens keeps ONE accent in all three places it appears — here, its column in
-        # the verdict grid, and its detail section — so a reader can follow it down the
-        # page by colour. The label is always present; the colour only helps find it.
-        parts.append(f'<h3 class="lens-head {lens_class(i)}">{_esc(label)}</h3>')
-        if rules is None:
-            parts.append('<p class="note">This lens declares no screen.</p>')
-            continue
-        show_basis = any(r.measured for r in rules.rules)
-        head = ["Rule", "Limit", "What it did"] + (["Measured on"] if show_basis else [])
-        body = [[f'<strong>{_esc(r.label)}</strong>'
-                 f'<br><code class="muted">{_esc(r.criterion)}</code>',
-                 _esc(r.threshold_phrase), _esc(r.tally)]
-                + ([_esc(r.measured or "—")] if show_basis else [])
-                for r in rules.rules]
-        parts.append(f'<p class="note"><strong>{_esc(rules.screen_heading)}</strong><br>'
-                     f'{_esc(rules.screen_note)}</p>'
-                     + (_table(head, body, cls="ranked") if body else "")
-                     + _bullets(_esc(line) for line in rules.ranker_lines))
+    # ----- 2 (REPORT-4): what the run could NOT see, BEFORE any prose resting on what it
+    # could. Rendered even when empty — an absent section is indistinguishable from a
+    # feature that was never switched on.
+    gaps = evidence_gaps(multi_result)
+    parts.append(f'<section class="section" id="gaps"><h2>{_esc(EVIDENCE_GAPS_TITLE)}</h2>'
+                 f'<p class="note">{_esc(EVIDENCE_GAPS_NOTE)}</p>')
+    if gaps:
+        parts.append(_table(
+            ["Channel", "Why it is dark", "Names affected"],
+            [[_esc(g["channel"]), _esc(g["reason"]), _esc(", ".join(g["names"]))]
+             for g in gaps], cls="ranked"))
+    else:
+        parts.append(f'<p class="clean">{_esc(evidence_gaps_clean_note(multi_result))}</p>')
     parts.append("</section>")
 
-    # ----- 4: THE VERDICT TABLE — the heart of the merged report.
+    # ----- 3: THE VERDICT TABLE — the answer, and the heart of the merged report.
     rows, head = multi_strategy_grid_rows(multi_result)
-    parts.append(f'<section class="section"><h2>{_esc(VERDICT_TABLE_TITLE)}</h2>'
+    parts.append(f'<section class="section" id="verdicts">'
+                 f'<h2>{_esc(VERDICT_TABLE_TITLE)}</h2>'
                  f'<p class="note">{_esc(VERDICT_TABLE_NOTE)}</p>')
     if rows:
         body = [[f'<strong>{_esc(row[head[0]])}</strong>']
@@ -705,17 +817,84 @@ def multi_strategy_report_html(multi_result, *,
         parts.append('<p class="note">(no names reported)</p>')
     parts.append("</section>")
 
+    # ----- 4 (NARR-UNION-1 + REPORT-4): ONE narration per NAME, over the union of every
+    # lens's BUYs — the WHY, straight after the answer. Rendered from the narrator's
+    # FIELDS into real headings, tables and lists; a pre-REPORT-4 record with only prose
+    # still renders through the paragraph path.
+    if multi_result.narratives:
+        basis = m.get("narration_basis", "")
+        count = m.get("narrated_count", len(multi_result.narratives))
+        parts.append('<section class="section" id="narration"><h2>Narration</h2>'
+                     f'<p class="note">{_esc(count)} '
+                     f'name{"s" if count != 1 else ""} narrated — {_esc(basis)}. ONE '
+                     "section per NAME: a name several lenses bought is narrated once, "
+                     "with each lens's verdict attributed. The narrator explains the "
+                     "ranker's verdicts; it never weighs the lenses against each "
+                     "other.</p>")
+        kids = {c["title"]: c["anchor"]
+                for s in sections if s["anchor"] == "narration" for c in s["children"]}
+        for ticker, text in multi_result.narratives.items():
+            display = next((r.display for r in multi_result.rows if r.ticker == ticker),
+                           ticker)
+            anchor = kids.get(display, "")
+            narration = structs.get(ticker)
+            if narration is not None:
+                _, stamps = split_stamps(text)
+                # NARR-SCHEMA-1: the same banner the .md carries, from the same
+                # validator — the two surfaces cannot disagree about whether a narration
+                # met its contract.
+                inner = narration_html(narration, anchor_prefix=anchor, stamps=stamps,
+                                       issues=issues.get(ticker, []),
+                                       callout=_callout)
+            else:
+                inner = _narration_html(text)
+            parts.append(f'<details class="name-section" open id="{_esc(anchor)}">'
+                         f"<summary>{_esc(display)}</summary>{inner}</details>")
+        parts.append("</section>")
+
     # ----- 5: the per-NAME facts, ONCE — they do not vary by lens.
     first = multi_result.results[ids[0]] if ids else None
     band_table = valuation_band_table(first) if first is not None else None
     if band_table is not None:
-        parts.append(_band_section(band_table))
+        parts.append(_band_section(band_table, anchor="band"))
 
-    # ----- 6: what DOES vary per lens, clearly headed by lens — and carrying that lens's
+    # ----- 6: rules applied, ONE sub-block per lens — each screens on its own rules.
+    # REFERENCE material, so it sits after the answer rather than in front of it.
+    parts.append('<section class="section" id="rules">'
+                 f'<h2>{_esc(RULES_SECTION_TITLE)} — by lens</h2>'
+                 '<p class="note">Each lens screens on its own rules; a name excluded by '
+                 "one may be ranked by another. The rules below are read from the "
+                 "strategies that actually ran.</p>")
+    for i, (sid, label) in enumerate(zip(ids, lens_labels)):
+        rules = rules_applied(multi_result.results[sid])
+        # Each lens keeps ONE accent in all three places it appears — here, its column in
+        # the verdict grid, and its detail section — so a reader can follow it down the
+        # page by colour. The label is always present; the colour only helps find it.
+        parts.append(f'<h3 class="lens-head {lens_class(i)}" '
+                     f'id="rules-{_esc(_slug(sid))}">{_esc(label)}</h3>')
+        if rules is None:
+            parts.append('<p class="note">This lens declares no screen.</p>')
+            continue
+        show_basis = any(r.measured for r in rules.rules)
+        head = ["Rule", "Limit", "What it did"] + (["Measured on"] if show_basis else [])
+        body = [[f'<strong>{_esc(r.label)}</strong>'
+                 f'<br><code class="muted">{_esc(r.criterion)}</code>',
+                 _esc(r.threshold_phrase), _esc(r.tally)]
+                + ([_esc(r.measured or "—")] if show_basis else [])
+                for r in rules.rules]
+        parts.append(f'<p class="note"><strong>{_esc(rules.screen_heading)}</strong><br>'
+                     f'{_esc(rules.screen_note)}</p>'
+                     + (_table(head, body, cls="ranked") if body else "")
+                     + _bullets(_esc(line) for line in rules.ranker_lines))
+    parts.append("</section>")
+
+    # ----- 7: what DOES vary per lens, clearly headed by lens — and carrying that lens's
     # accent on its own card, so the section is findable by the same colour as its column.
+    parts.append('<div id="detail"></div>')
     for i, (sid, label) in enumerate(zip(ids, lens_labels)):
         res = multi_result.results[sid]
-        parts.append(f'<section class="section lens-card {lens_class(i)}">'
+        parts.append(f'<section class="section lens-card {lens_class(i)}" '
+                     f'id="detail-{_esc(_slug(sid))}">'
                      f"<h2>{_esc(label)} — detail</h2>"
                      f'<p class="note">Ranked {res.meta["ranked_count"]} of '
                      f'{res.meta["universe_size"]} names.</p>')
@@ -747,12 +926,16 @@ def multi_strategy_report_html(multi_result, *,
                          + _bullets(_esc(e["sentence"]) for e in entries))
         parts.append("</section>")
 
-    # ----- 7: ONE common footer.
+    # ----- 8 (GLOSSARY-1): the LAST section before the footer, built from the
+    # registries and holding only the terms this report actually uses.
+    parts.append(_glossary_html(multi_result, "\n".join(parts)))
+
+    # ----- 9: ONE common footer.
     parts.append(_footer())
-    return _document(title=f"{cohort} — {len(ids)} lenses", body="\n".join(parts))
+    return _document(title=title.full(), body="\n".join(parts))
 
 
-def _band_section(band_table) -> str:
+def _band_section(band_table, *, anchor: str = "") -> str:
     """The price-and-valuation section — the ONE builder both the single-lens and the
     merged report render, so they cannot drift apart visually any more than they can
     numerically.
@@ -773,7 +956,12 @@ def _band_section(band_table) -> str:
             tint = percentile_class(row[columns[pct_col]])
             if tint:
                 cell_classes[(r, pct_col)] = tint
-    return ('<section class="section">'
+    # Hoisted out of the f-string on purpose: nesting an f-string that REUSES the outer
+    # delimiter inside a replacement field is PEP 701, i.e. Python 3.12+. CI runs 3.11
+    # too, where it is a SyntaxError at import — so the whole module failed to collect
+    # while a 3.14 dev box saw nothing wrong.
+    anchor_attr = f' id="{anchor}"' if anchor else ""
+    return (f'<section class="section"{anchor_attr}>'
             f"<h2>{_esc(band_table.title)}</h2>"
             f'<p class="note">{_esc(band_table.intro)}</p>'
             + _table(columns, body, cls="ranked", cell_classes=cell_classes)

@@ -19,14 +19,14 @@ from aristos_council.strategy.rank_loader import load_rank_strategy
 
 
 def test_explain_phrases_the_combined_rank_as_a_cohort_statement():
-    # ITEM 3 (narrator source wording): "combined rank-sum N across an M-name cohort",
+    # ITEM 3 (narrator source wording): "factor score N across an M-name cohort",
     # never "combined rank of N/M-name cohort" — this text is fed to the narrator.
     r = RankedTicker(
         ticker="AAA", factor_ranks={"roic": 10.0, "earnings_yield": 14.0},
         factor_values={"roic": 0.2, "earnings_yield": 0.08},
         combined_rank=24.0, universe_size=23, verdict="buy")
     expl = r.explain()
-    assert "combined rank-sum 24 across a 23-name cohort" in expl
+    assert "factor score 24 across a 23-name cohort" in expl
     assert "combined 24 " not in expl                     # the old bare phrasing is gone
 
 MAGIC = load_rank_strategy(
@@ -34,7 +34,7 @@ MAGIC = load_rank_strategy(
 
 
 # --------------------------------------------------------------------------- #
-# Per-factor ranks + combined rank-sum (Greenblatt's exact mechanic)
+# Per-factor ranks + factor score (Greenblatt's exact mechanic)
 # --------------------------------------------------------------------------- #
 def test_rank_sum_reproduces_greenblatt_on_a_known_table():
     # earnings_yield (high best) and roic (high best). Hand-rank to check.

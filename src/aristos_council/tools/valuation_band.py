@@ -109,6 +109,10 @@ class ValuationBand:
     current_earnings: Optional[float] = None  # EBIT (ev_ebit) / net income (pe), as-of
     current_net_debt: Optional[float] = None  # net debt at current_point, band's basis
     current_shares: Optional[float] = None    # shares outstanding as-of, same lag rule
+    # --- VALBAND-2: FX provenance, when accounts and price are in different currencies.
+    # Empty for a same-currency band, so those render byte-identically to before.
+    fx_note: str = ""                        # "DKK accounts converted to USD, monthly …"
+    fx_months_missing: int = 0               # months dropped for want of a rate
 
     @property
     def available(self) -> bool:
@@ -143,10 +147,14 @@ class ValuationBand:
         # 19 are absent. When every month IS computable there is no "rest" to explain.
         gap = ", the rest lack usable statements" \
             if self.months_covered < self.months_total else ""
+        # VALBAND-2: a converted band SAYS it was converted, and by which pair. A reader
+        # comparing an ADR's band to a domestic name's must be able to see that one of
+        # them crossed a currency to get there.
+        fx = f"; {self.fx_note}" if self.fx_note else ""
         return (f"{lead}{ordinal(pct)} percentile ({percentile_gloss(self.percentile)}) "
                 f"of its own {self.window_years}-year range "
                 f"(based on {self.months_covered} of {self.months_total} months"
-                f"{gap}{tail})")
+                f"{gap}{tail}{fx})")
 
 
 # Plain-English gloss for a percentile (PRICE-2). FIXED cutoffs, documented in
@@ -259,7 +267,8 @@ def _asof(series: tuple[list[date], list[Optional[float]]], when: date
 # --------------------------------------------------------------------------- #
 def valuation_band(bars: Sequence, fundamentals, *, asof: date,
                    years: int = BAND_YEARS,
-                   min_years: float = MIN_YEARS) -> ValuationBand:
+                   min_years: float = MIN_YEARS,
+                   fx=None) -> ValuationBand:
     """Today's valuation as a percentile of the stock's own ``years``-year band.
 
     ``bars`` is any sequence of ``PriceBar``-shaped objects (``.day``, ``.close``);
@@ -272,9 +281,15 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
 
     price_ccy = getattr(f, "currency", None)
     acct_ccy = getattr(f, "financial_currency", None)
-    if price_ccy and acct_ccy and price_ccy != acct_ccy:
-        return _abstain(f"accounts currency {acct_ccy} vs price currency {price_ccy} — "
-                        "no FX conversion, band not evaluated")
+    cross_currency = bool(price_ccy and acct_ccy and price_ccy != acct_ccy)
+    if cross_currency and (fx is None or not getattr(fx, "available", False)):
+        # VALBAND-2: the abstention NAMES what was missing, so "no FX" is actionable
+        # instead of mysterious. v1 abstained here unconditionally; it now only abstains
+        # when no rate could be had for the window at all.
+        pairs = ", ".join(getattr(fx, "missing_pairs", ()) or ()) if fx is not None else ""
+        detail = f" — no rates from {pairs}" if pairs else ""
+        return _abstain(f"accounts currency {acct_ccy} vs price currency {price_ccy}"
+                        f"{detail} — band not evaluated")
 
     start = asof - timedelta(days=round(365.25 * years))
     points = month_end_closes(bars, start, asof)
@@ -295,18 +310,29 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
                         "cannot be placed in time", total=total)
 
     series: list[tuple[date, float]] = []
+    fx_missing = 0
     for day, close in points:
         e = _asof(earnings, day)
         if e is None or e <= 0:
             continue                       # loss / pre-history month: drops out, counted
+        # VALBAND-2: the price side is already in the PRICE currency; the statement side
+        # is in the ACCOUNTS currency. Convert the statement side at THIS MONTH's rate —
+        # never today's, which would rescale the whole history by a currency move and
+        # reshape the band. A month with no rate is dropped and counted, never guessed.
+        rate = 1.0
+        if cross_currency:
+            rate = fx.rate_for(day)
+            if rate is None or rate <= 0:
+                fx_missing += 1
+                continue
         mcap = mcap_now * (close / price_now)
         if basis == _EV_EBIT:
             nd = _net_debt(f, debt, cash, net_debt_basis, day)
             if nd is None:
                 continue
-            value = (mcap + nd) / e
+            value = (mcap + nd * rate) / (e * rate)
         else:
-            value = mcap / e
+            value = mcap / (e * rate)
         if value <= 0:
             continue                       # net-cash EV <= 0: not a meaningful multiple
         series.append((day, value))
@@ -338,6 +364,8 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
     # percentile, the coverage counts or any abstention.
     current_day = series[-1][0]
     return ValuationBand(
+        fx_note=(fx.provenance() if cross_currency and fx is not None else ""),
+        fx_months_missing=fx_missing,
         percentile=_percentile(values, current), basis=basis, current=current,
         months_covered=covered, months_total=total, years_covered=span,
         window_years=years, net_debt_basis=(net_debt_basis if basis == _EV_EBIT else ""),

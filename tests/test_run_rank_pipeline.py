@@ -159,7 +159,12 @@ def test_sentiment_provider_status_is_logged(caplog):
             strategies_dir=STRAT_DIR, adapter=_Adapter(), runners=_runners(
                 DecisionOutput(recommendation=Recommendation.BUY, confidence=0.8,
                                rationale="r")), today=date(2026, 6, 30))
-    assert any("sentiment (finnhub)" in r.message for r in caplog.records)
+    # SENT-WIRE-1: the line now reports which of the three states the run is in, and
+    # every state carries the same prefix — so this holds with a key and without one.
+    line = next(r.message for r in caplog.records if "sentiment (finnhub)" in r.message)
+    assert any(state in line for state in
+               ("wired into the council", "no FINNHUB_API_KEY set",
+                "could not be constructed")), line
 
 
 def test_actual_shortlist_cost_disclosed_before_narration():

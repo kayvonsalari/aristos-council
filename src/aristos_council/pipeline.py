@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from typing import Callable, Optional
@@ -27,19 +28,40 @@ from typing import Callable, Optional
 _log = logging.getLogger(__name__)
 
 
-def _log_sentiment_status() -> None:
-    """ONE startup line stating the sentiment-provider status (ITEM 5 diagnostic).
+def _sentiment_wiring():
+    """``(adapter, missing_key)`` for a council run, plus ONE honest status line.
 
-    FINDING: the rank-pipeline council does NOT wire a sentiment adapter (this entry
-    never builds a FinnhubAdapter, unlike the legacy run_council), so the Sentiment
-    specialist ABSTAINS on every narrator run regardless of the key — it is (c) not-wired,
-    not (a) key-not-reaching-process. Diagnostic only; wiring it is a separate change."""
-    if os.environ.get("FINNHUB_API_KEY"):
-        _log.info("sentiment (finnhub): FINNHUB_API_KEY present, but run_rank_pipeline "
-                  "does not wire a sentiment adapter into the council — Sentiment "
-                  "specialist abstains (ITEM 5: not-wired, not a key/env issue)")
+    SENT-WIRE-1. This used to be ``_log_sentiment_status``, whose docstring recorded the
+    bug rather than fixing it: the rank pipeline accepted a ``sentiment_adapter`` and
+    threaded it to the agents, but nothing ever CONSTRUCTED one, so the Sentiment
+    specialist abstained on every universe run whatever the key said — and blamed a
+    missing key that was sitting in ``.env``. The plumbing existed at both ends; only
+    this call was missing.
+
+    The construction itself lives in ``data.sentiment.build_sentiment_adapter``, shared
+    with the legacy single-ticker entry, so the two cannot drift."""
+    from .data.sentiment import build_sentiment_adapter
+
+    adapter, missing_key, error = build_sentiment_adapter()
+    # ONE greppable prefix across all three states. They used to diverge ("sentiment
+    # (finnhub): …" when wired, "sentiment: …" otherwise), which made the status line
+    # findable only in the state you happened to be in — and made a test asserting on it
+    # pass or fail depending on whether the machine had a key. A diagnostic you can only
+    # grep half the time is not a diagnostic.
+    if adapter is not None:
+        _log.info("sentiment (finnhub): wired into the council")
+    elif missing_key:
+        _log.info("sentiment (finnhub): no FINNHUB_API_KEY set — Sentiment specialist "
+                  "abstains")
     else:
-        _log.info("sentiment (finnhub): no FINNHUB_API_KEY — sentiment abstains")
+        _log.info("sentiment (finnhub): key present but the provider could not be "
+                  "constructed (%s) — Sentiment specialist abstains", error)
+    return adapter, missing_key, error
+
+
+def _log_sentiment_status() -> None:
+    """Back-compat shim — the status line without the adapter (callers that only log)."""
+    _sentiment_wiring()
 
 from .factors import (
     asset_kind_display,
@@ -81,6 +103,7 @@ from .report_language import (
     format_value,
     label_with_id,
 )
+from .costs import cost_phrase, final_cost_phrase
 from .reproducibility import estimate_cost
 from .state import Recommendation, ResearchState
 from .universe import member_hash
@@ -381,6 +404,7 @@ def _static_factor_evidence(r: RankedTicker) -> list[dict]:
 def _council_stage(
     shortlist: list[RankedTicker], screen_strategy, adapter, runners, mode: str, *,
     sentiment_adapter=None, sentiment_missing_key: bool = False,
+    sentiment_error: str = "",
     progress: Optional[Callable[[str], None]] = None,
     boundary_ties: Optional[dict[str, dict]] = None,
     cohort: Optional[list[RankedTicker]] = None,
@@ -398,6 +422,7 @@ def _council_stage(
     app = build_council(adapter, screen_strategy, runners,
                         sentiment_adapter=sentiment_adapter,
                         sentiment_missing_key=sentiment_missing_key,
+                        sentiment_error=sentiment_error,
                         council_mode=mode, run_matrix=False)
     outcomes: list[CouncilOutcome] = []
     n = len(shortlist)
@@ -497,6 +522,10 @@ class RankPipelineResult:
     # display_name(ticker, names.get(ticker)); a missing entry falls back to the bare
     # ticker (ITEM 1).
     names: dict[str, str] = field(default_factory=dict)
+    # CONFIRM-SPEND-1 — the council frame this run would narrate under. Display/runtime
+    # scaffolding only: it never affects a verdict, and it is what lets the paid phase
+    # consume the free phase's result instead of re-running it.
+    council_frame: object = None
     # REPORT-1 — what EVERY screen rule did for EVERY screened name:
     # {ticker: {criterion: {"passed", "observed", "threshold", "note", "basis",
     # "borderline"}}}. The old report could only ever name the FIRST rule a name failed,
@@ -546,7 +575,34 @@ def _pipeline_header(mode: str) -> str:
 
 
 def _narrative_text(outcome: CouncilOutcome) -> str:
+    """One name's narration as MARKDOWN.
+
+    REPORT-4: when the narrator returned FIELDS, the layout is rebuilt from them here —
+    real headings, tables and lists — instead of pasting whatever structure the model
+    improvised. The ⚠ fact-check stamps the pipeline appended to the flattened prose are
+    lifted back out and re-attached, so nothing the checker said is dropped. A decision
+    with no `narration` (second-opinion mode, any pre-REPORT-4 record) renders exactly as
+    it always did."""
     d = outcome.report.decision
+    if d is None:
+        return "(no narrative produced)"
+    from .narration_render import as_narration, narration_markdown, split_stamps
+
+    narration = as_narration(getattr(d, "narration", None))
+    if narration is not None:
+        from .narration_schema import validate_narration
+
+        _, stamps = split_stamps(d.rationale or "")
+        # NARR-SCHEMA-1 — validated synchronously, on the way into the report. Pure
+        # parsing, zero LLM calls. A failing narration still ships, with the banner.
+        issues = validate_narration(narration,
+                                    ranker_verdict=getattr(outcome, "ranker_verdict",
+                                                           None),
+                                    ticker=getattr(outcome, "ticker", ""))
+        rendered = narration_markdown(narration, stamps=stamps,
+                                      issues=issues).strip()
+        if rendered:
+            return rendered
     return (d.rationale.strip() if d and d.rationale else "") or "(no narrative produced)"
 
 
@@ -585,7 +641,7 @@ def run_rank_pipeline(
     adapter=None, runners=None, today: Optional[date] = None,
     use_cache: bool = True, progress: Optional[Callable[[str], None]] = None,
     freeze_dir: str | Path | None = None, replay_run_id: Optional[str] = None,
-    with_valuation_band: bool = False,
+    with_valuation_band: bool = False, derived_from: str = "",
 ) -> RankPipelineResult:
     """Rank a universe under a RANK strategy, then (unless ``ranker_only``) narrate
     the shortlist with the LLM council. The single entrypoint the CLI and Council
@@ -682,21 +738,9 @@ def run_rank_pipeline(
     council: list[CouncilOutcome] = []
     narratives: dict[str, str] = {}
     if not ranker_only and shortlist:
-        _log_sentiment_status()          # ITEM 5 diagnostic — one line, no behavior change
-        # Disclose the ACTUAL post-screen shortlist cost before the narrator spends
-        # (ITEM 4) — the pre-run estimate is an upper bound; this is the real number,
-        # from the shortlist we already have (no second screen run).
-        if progress is not None:
-            progress(f"Shortlist: {len(shortlist)} name(s) → ${est:.2f} — "
-                     "starting narration…")
-        if runners is None:
-            from .agents.runners import production_runners
-            runners = production_runners()
-        council = _council_stage(shortlist, council_frame, adapter, runners, mode,
-                                 progress=progress,
-                                 boundary_ties=boundary_tie_facts(ranked),
-                                 cohort=ranked)
-        narratives = {o.ticker: _narrative_text(o) for o in council}
+        council, narratives = _run_council_over(
+            shortlist, council_frame, adapter, runners, mode, ranked=ranked,
+            est=est, progress=progress)
 
     # Freeze the captured inputs into a run record (ITEM 4). Replay runs record which
     # run_id they reproduced. The frozen values are what make the run replayable.
@@ -725,6 +769,12 @@ def run_rank_pipeline(
                                  or getattr(screen_strategy, "name", "") or ""
                                  ) if screen_strategy is not None else "",
         "universe_name": universe_name,
+        # REPORT-4: the SAVED LIST an ad-hoc run was edited from. An edit forks rather
+        # than mutating (FUND-UI-2), so the run is filed under `adhoc:<hex8>` and its
+        # provenance was simply lost — the report could only say "adhoc:507e10cf", which
+        # names nothing a reader recognises. The parent is display-only; the id stays the
+        # record key.
+        "derived_from": derived_from,
         # Whether the screen ran as a PREFILTER (names failing a rule were never ranked)
         # or not at all. Material: a reader must know whether a failing name was excluded
         # before ranking or merely flagged.
@@ -761,7 +811,11 @@ def run_rank_pipeline(
         # REPORT-1: the per-rule record and the strategies that produced it, so the
         # "Rules applied" block reads from what ACTUALLY RAN (overrides included).
         screen_outcomes=screen_outcomes, rank_strategy=rank_strategy,
-        screen_strategy=screen_strategy)
+        screen_strategy=screen_strategy,
+        # CONFIRM-SPEND-1: the council FRAME this run would narrate under, kept so a
+        # later phase-two call narrates the ALREADY-RANKED result without re-deriving
+        # (and therefore without any chance of re-ranking) it.
+        council_frame=council_frame)
 
     if csv_path and not ranker_only and mode != "narrator":
         _append_agreement_csv(result, Path(csv_path))
@@ -1922,12 +1976,11 @@ def format_narratives(result: PipelineResult) -> str:
     if not result.council:
         lines.append("  (no names reached the council)")
     for o in result.council:
-        d = o.report.decision
-        narrative = (d.rationale.strip() if d and d.rationale else "") \
-            or "(no narrative produced)"
+        # REPORT-4: the CLI reads the SAME renderer the reports do, so a structured
+        # narration reaches every surface rather than only the two that were rewritten.
         lines.append(f"\n{display_name(o.ticker, names.get(o.ticker))} — "
                      f"ranker verdict {o.ranker_verdict.upper()}")
-        lines.append(narrative)
+        lines.append(_narrative_text(o))
     return "\n".join(lines)
 
 
@@ -2024,6 +2077,11 @@ class MultiStrategyResult:
     results: dict[str, RankPipelineResult]
     rows: list[MultiStrategyRow]
     meta: dict
+    # NARR-UNION-1 — ONE narration pass over the UNION of every lens's BUYs, so a name
+    # three lenses bought gets ONE section and ONE call. Empty on a ranker-only run (the
+    # default for a multi-lens run), which then costs nothing and is byte-unchanged.
+    narratives: dict[str, str] = field(default_factory=dict)
+    council: list[CouncilOutcome] = field(default_factory=list)
 
 
 def combine_rank_results(results: dict[str, RankPipelineResult],
@@ -2090,6 +2148,8 @@ def run_multi_strategy_pipeline(
     progress: Optional[Callable[[str], None]] = None,
     freeze_dir: str | Path | None = None,
     with_valuation_band: bool = False,
+    ranker_only: bool = True, narrate_coverage: str = "buys_only",
+    runners=None, derived_from: str = "",
 ) -> MultiStrategyResult:
     """Grade ONE cohort under N rank strategies and return the combined grid (FUND-RUN-1).
 
@@ -2127,29 +2187,61 @@ def run_multi_strategy_pipeline(
             # first lens) — the shared cache means later lenses would only re-read the same
             # 5-year fetch. Every column's ranked tickers still describe the same cohort;
             # the band column is read off this first result (app renders it beside the grid).
-            with_valuation_band=(with_valuation_band and i == 1))
+            with_valuation_band=(with_valuation_band and i == 1),
+            derived_from=derived_from)
         results[sid] = res
         names[sid] = res.meta.get("rank_strategy_name", "") or sid
 
     rows = combine_rank_results(results, ids)
     first = results[ids[0]]
+
+    # NARR-UNION-1 — ONE narration pass over the UNION of every lens's BUYs. Ranker-only
+    # (the default) does not build a council, does not construct runners and makes ZERO
+    # LLM calls, so a deterministic comparison stays byte-identical to before.
+    narratives: dict[str, str] = {}
+    council: list[CouncilOutcome] = []
+    provisional = MultiStrategyResult(
+        strategy_ids=list(ids), strategy_names=names, results=results, rows=rows,
+        meta={"strategy_ids": list(ids)})
+    union = narrated_union(provisional, narrate_coverage)
+    if not ranker_only and union:
+        _log_sentiment_status()
+        if progress is not None:
+            progress(f"Narrating {len(union)} name(s) — one pass over the union of "
+                     f"every lens's BUYs…")
+        if runners is None:
+            from .agents.runners import production_runners
+            runners = production_runners()
+        council, narratives = _multi_narration_stage(
+            provisional, adapter, runners, coverage=narrate_coverage,
+            progress=progress)
     meta = {
         "strategy_ids": list(ids),
         "universe_id": first.meta.get("universe_id"),
         # REPORT-1/REPORT-2: the cohort's HUMAN name, carried up so the merged report's
         # single header can lead with it and keep the id beside it.
         "universe_name": first.meta.get("universe_name", ""),
+        # REPORT-4 — the saved list this cohort was edited from, carried up like the name.
+        "derived_from": first.meta.get("derived_from", ""),
         # ONE cohort under N lenses, so the membership record is the same for every column
         # (FUND-UI-2) — carried up from the first run rather than recomputed.
         "universe_members": list(first.meta.get("universe_members") or []),
         "universe_member_hash": first.meta.get("universe_member_hash", ""),
         "universe_size": first.meta.get("universe_size", 0),
-        "council_mode": "ranker-only",
-        "ranker_only": True,
+        "council_mode": "ranker-only" if ranker_only else "narrator",
+        "ranker_only": ranker_only,
         "graded_by_all": sum(1 for row in rows if row.comparable),
+        # NARR-UNION-1: what was narrated, how many, and on what basis — so the report's
+        # header can say it and the cost can be checked against it after the fact.
+        "narrated": list(union),
+        "narrated_count": len(union),
+        "narrate_coverage": narrate_coverage,
+        "narration_basis": NARRATION_BASIS.get(narrate_coverage, narrate_coverage),
+        "est_cost": estimate_cost(len(union)) if not ranker_only else 0.0,
     }
     return MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
-                               results=results, rows=rows, meta=meta)
+                               results=results, rows=rows, meta=meta,
+                               narratives=narratives, council=council)
 
 
 # --------------------------------------------------------------------------- #
@@ -2160,11 +2252,18 @@ VERDICT_TABLE_NOTE = (
     "One row per name, one column per lens. A ranked cell gives the name's position in "
     "THAT lens's cohort and its verdict; an excluded cell names the rule it failed; a "
     "name with no usable data reads \u201cno data\u201d and keeps its reason in that "
-    "lens's own section below. Rank-sum adds the per-lens POSITIONS and is comparable "
-    "only across names ranked by EVERY lens \u2014 \u2021 marks a sum over fewer, and "
-    "nothing is imputed for an exclusion.")
-_COL_RANK_SUM = "Rank-sum"
-_COL_GRADED_BY = "Graded by"
+    "lens's own section below.")
+# GRID-COLS-1 \u2014 the Rank-sum and Graded-by COLUMNS are gone from every rendered
+# surface. On real portfolio runs almost every row carried the "fewer lenses" marker (a
+# sum over fewer lenses, so incomparable); on the 4-lens run of 2026-08-26, EVERY row
+# did. A column incomparable on most rows, needing a footnote symbol plus two glossary
+# entries to be read at all, adds confusion rather than information \u2014 and graded-by
+# was already legible from the row itself: ranked cells carry a verdict, excluded cells
+# name a rule.
+#
+# The COMPUTATION stays. rank_sum and graded remain on MultiStrategyRow, remain in
+# combine_rank_results, remain in the record layer, and STILL DECIDE THE ROW ORDER.
+# Only the two rendered columns go.
 
 
 def multi_strategy_columns(result: MultiStrategyResult) -> dict[str, str]:
@@ -2184,23 +2283,243 @@ def multi_strategy_grid_rows(result: MultiStrategyResult) -> tuple[list[dict], l
     """``(rows, columns)`` for THE verdict table — the ONE builder the Run tab, the
     merged markdown and the merged HTML all render, so the three cannot drift.
 
-    One row per name in the combined grid's own order (best rank-sum first, then the
-    partially-ranked, then the never-ranked — never re-sorted here). ``\u2021`` marks a
-    rank-sum over FEWER lenses than the run used, so a smaller sum is never misread as a
-    better one."""
+    One row per name in the combined grid's own order (lenses-graded, then rank-sum —
+    never re-sorted here). GRID-COLS-1 removed the Rank-sum and Graded-by COLUMNS; the
+    ORDER they produced is UNCHANGED, because it is computed upstream in
+    ``combine_rank_results`` and merely rendered here."""
     columns = multi_strategy_columns(result)
-    head = ["Name", *columns.values(), _COL_RANK_SUM, _COL_GRADED_BY]
+    head = ["Name", *columns.values()]
     rows = []
     for row in result.rows:
-        rs = "—" if row.rank_sum is None else str(row.rank_sum)
-        if row.rank_sum is not None and not row.comparable:
-            rs = f"{rs}\u2021"
-        cells = {"Name": row.display, _COL_RANK_SUM: rs,
-                 _COL_GRADED_BY: f"{row.graded} of {len(result.strategy_ids)}"}
+        cells = {"Name": row.display}
         for sid, header in columns.items():
             cells[header] = row.cells[sid].render()
         rows.append(cells)
     return rows, head
+
+
+EVIDENCE_GAPS_TITLE = "What the run could not see"
+EVIDENCE_GAPS_NOTE = (
+    "Evidence channels that returned nothing, stated BEFORE the prose that rests on the "
+    "channels that did. A dark channel is not a neutral reading — nothing was measured, "
+    "so nothing below is informed by it.")
+EVIDENCE_GAPS_CLEAN = "Every evidence channel used by this run returned data."
+# A RANKER-ONLY run consulted none of the narration channels — no specialist ran at all.
+# Saying "every channel returned data" there is a claim about channels that were never
+# opened, which is the same misreading as reporting an abstention as a measured neutral.
+EVIDENCE_GAPS_RANKER_ONLY = (
+    "No AI commentary ran, so no sentiment, news or analyst-trend data was consulted. "
+    "The verdicts below rest on the deterministic factors alone.")
+
+
+def evidence_gaps_clean_note(result) -> str:
+    """What to say when ``evidence_gaps`` is empty — and the two cases are NOT the same.
+
+    A narrated run with nothing dark genuinely had every channel return data. A
+    ranker-only run never asked: no specialist ran, so sentiment, news and analyst trend
+    were not consulted rather than consulted-and-clean. The empty list looks identical
+    from here, which is exactly why the caller must not phrase it from the list alone."""
+    narrated = bool(getattr(result, "narratives", None))
+    return EVIDENCE_GAPS_CLEAN if narrated else EVIDENCE_GAPS_RANKER_ONLY
+
+
+def evidence_gaps(result) -> list[dict]:
+    """The evidence channels this run could NOT read — ``[{channel, reason, names}]``.
+
+    REPORT-4 puts this before the confident prose. It is DERIVED, never newly computed:
+    the causes are the narrator's own NOT ASSESSED entries (schemas.SpecialistView, whose
+    ``assessed=False`` already carries the reason), aggregated across the narrated names,
+    plus the names the ranker could not grade at all. Nothing here re-decides anything —
+    it relocates facts the report already held, into the place a reader needs them.
+
+    A run with no gaps returns ``[]``, and the caller still renders the section saying so:
+    an ABSENT section is indistinguishable from a feature that was never switched on, and
+    that ambiguity has cost this project two debugging rounds already."""
+    from .narration_render import as_narration
+
+    by_channel: dict[tuple[str, str], list[str]] = {}
+    names: dict[str, str] = {}
+    for outcome in getattr(result, "council", None) or []:
+        decision = getattr(getattr(outcome, "report", None), "decision", None)
+        narration = as_narration(getattr(decision, "narration", None))
+        if narration is None:
+            continue
+        for view in narration.specialist_views:
+            if view.assessed:
+                continue
+            reason = (view.not_assessed_reason or "").strip() or "no reason recorded"
+            by_channel.setdefault((view.specialist, reason), []).append(outcome.ticker)
+
+    for sid_result in _each_result(result):
+        names.update(getattr(sid_result, "names", None) or {})
+
+    out = [{"channel": channel, "reason": reason,
+            "names": sorted(set(tickers), key=tickers.index)}
+           for (channel, reason), tickers in by_channel.items()]
+    out.sort(key=lambda g: (g["channel"], g["reason"]))
+
+    # Names the RANKER could not grade — a per-name data gap rather than a per-channel
+    # one, but the same question ("what could this run not see?") and the same section.
+    unrateable: list[str] = []
+    for sid_result in _each_result(result):
+        unrateable += [t for t, _ in (getattr(sid_result, "unrateable", None) or [])]
+    if unrateable:
+        ordered = sorted(set(unrateable))
+        out.append({"channel": "Company data",
+                    "reason": "no usable data, so the name was never ranked",
+                    "names": ordered})
+    return out
+
+
+CONTENTS_TITLE = "Contents"
+from .glossary import SECTION_TITLE as GLOSSARY_SECTION_TITLE  # noqa: E402
+
+
+def compact_rules(multi_result) -> list[dict]:
+    """RULES-TOP-1 — one short line per lens, for under the header summary.
+
+    The FULL "Rules applied" tables stay where REPORT-4 put them (reference material,
+    after the answer). This is the reader's reminder of what each lens even IS, at the
+    point they meet its verdicts — derived from the strategies that ran, never
+    hardcoded, so it cannot describe a screen the run did not use.
+
+    ``[{lens, summary}]``; a lens with no screen says so rather than being omitted."""
+    out = []
+    for sid in multi_result.strategy_ids:
+        label = multi_result.strategy_names.get(sid) or sid
+        rules = rules_applied(multi_result.results[sid])
+        if rules is None or not rules.rules:
+            out.append({"lens": label, "summary": "no screen (ranking only)"})
+            continue
+        n = len(rules.rules)
+        # The full heading reads "Screen: Quality-value screen (magic_value_screen_v1)".
+        # This line sits inside a header summary, so it keeps the screen's NAME and drops
+        # the prefix and the id — both are one click away in the full section.
+        heading = (rules.screen_heading or "").strip().rstrip(".")
+        heading = re.sub(r"^screen:\s*", "", heading, flags=re.I)
+        heading = re.sub(r"\s*\([^)]*\)\s*$", "", heading).strip()
+        out.append({"lens": label,
+                    "summary": f"{heading}, {n} rule{'s' if n != 1 else ''}"
+                               if heading else f"{n} rule{'s' if n != 1 else ''}"})
+    return out
+
+
+def report_sections(multi_result) -> list[dict]:
+    """The merged report's sections, IN READING ORDER, as ``[{anchor, title, children}]``.
+
+    REPORT-4 part 2 fixes the order and part 3 hangs a contents list off it, so both come
+    from ONE list rather than from a renderer's arrangement of its own `parts`. A section
+    that will not render (no band, no narration) is absent here too, which is what keeps
+    every contents link pointing at something that exists.
+
+    The order answers the document's questions in the order a reader has them:
+      1 header and summary, 2 what the run could not see, 3 the verdict by lens (the
+      answer), 4 the narration (the why), 5 the valuation band, 6 the rules applied,
+      7 the per-lens detail. Rules and per-lens detail are REFERENCE — they were in front
+      of the answer, and a reader met three screens' worth of thresholds before learning
+      what the run decided."""
+    from .download_names import slugify
+
+    ids = multi_result.strategy_ids
+    names = multi_result.strategy_names
+    first = multi_result.results[ids[0]] if ids else None
+
+    out: list[dict] = [{"anchor": "gaps", "title": EVIDENCE_GAPS_TITLE, "children": []},
+                       {"anchor": "verdicts", "title": VERDICT_TABLE_TITLE,
+                        "children": []}]
+
+    if multi_result.narratives:
+        kids = []
+        for ticker in multi_result.narratives:
+            display = next((r.display for r in multi_result.rows if r.ticker == ticker),
+                           ticker)
+            kids.append({"anchor": f"narr-{slugify(ticker) or slugify(display)}",
+                         "title": display, "children": []})
+        out.append({"anchor": "narration", "title": "Narration", "children": kids})
+
+    if first is not None and valuation_band_table(first) is not None:
+        out.append({"anchor": "band", "title": VALUATION_BAND_SECTION_TITLE, "children": []})
+
+    out.append({"anchor": "rules", "title": f"{RULES_SECTION_TITLE} — by lens",
+                "children": [{"anchor": f"rules-{slugify(sid)}",
+                              "title": names.get(sid) or sid, "children": []}
+                             for sid in ids]})
+    out.append({"anchor": "detail", "title": "Per-lens detail",
+                "children": [{"anchor": f"detail-{slugify(sid)}",
+                              "title": names.get(sid) or sid, "children": []}
+                             for sid in ids]})
+    # GLOSSARY-1 — last, and linked, so a reader meeting an unfamiliar term can jump
+    # to its definition instead of scrolling for it.
+    out.append({"anchor": "glossary", "title": GLOSSARY_SECTION_TITLE, "children": []})
+    return out
+
+
+def _each_result(result):
+    """Iterate the per-strategy results of either result shape, so a helper written once
+    serves the single-lens and the multi-lens report alike."""
+    results = getattr(result, "results", None)
+    if isinstance(results, dict):
+        return list(results.values())
+    return [result]
+
+
+def narration_issues(result) -> dict:
+    """ticker -> its structural issues as RECORDS (NARR-SCHEMA-1).
+
+    Recomputed from the narration rather than cached, so it cannot fall out of step with
+    what the report actually renders — the validator is pure, so this is free."""
+    from .narration_render import as_narration
+    from .narration_schema import issues_as_records, validate_narration
+
+    out: dict[str, list[dict]] = {}
+    for outcome in getattr(result, "council", None) or []:
+        decision = getattr(getattr(outcome, "report", None), "decision", None)
+        narration = as_narration(getattr(decision, "narration", None))
+        if narration is None:
+            continue
+        found = validate_narration(
+            narration, ranker_verdict=getattr(outcome, "ranker_verdict", None),
+            ticker=outcome.ticker)
+        if found:
+            out[outcome.ticker] = issues_as_records(found)
+    return out
+
+
+def narration_structs(result) -> dict:
+    """ticker -> its structured ``Narration`` (REPORT-4), for renderers that build real
+    elements rather than markdown. Empty for pre-REPORT-4 records and for second-opinion
+    mode, whose callers then fall back to the prose they already handled."""
+    from .narration_render import as_narration
+
+    out = {}
+    for outcome in getattr(result, "council", None) or []:
+        decision = getattr(getattr(outcome, "report", None), "decision", None)
+        narration = as_narration(getattr(decision, "narration", None))
+        if narration is not None:
+            out[outcome.ticker] = narration
+    return out
+
+
+def multi_header_line(result: MultiStrategyResult) -> str:
+    """The house line at the top of a multi-lens report — DERIVED from whether narration
+    actually ran, never asserted.
+
+    It used to be a hardcoded "No LLM ran — narration stays a per-strategy run", true only
+    while multi-lens runs were locked to ranker-only. NARR-UNION-1 lifted that lock and the
+    sentence became a FALSE claim on any narrated multi-lens run: the 2026-08-25 report
+    carried three narration sections under a header swearing no model had been called.
+    Reading ``narratives`` means the line cannot outlive the behaviour it describes."""
+    if not result.narratives:
+        return _pipeline_header("ranker-only")
+    n = len(result.narratives)
+    # COST-4: ONE cost figure in the record — the FINAL one. The estimate is a decision
+    # INPUT: it belongs on the button and in the confirm panel, before the spend, and has
+    # no bearing on the record of what happened. Keeping it here stacked two parentheticals
+    # and three numbers into a line describing a run that had already finished.
+    spend = final_cost_phrase(result.meta.get("actual_cost"), n)
+    return (f"{_pipeline_header(result.meta.get('council_mode') or 'narrator')}  "
+            f"One pass over the union of every lens's BUYs — {n} "
+            f"name{'s' if n != 1 else ''} narrated — {spend}.")
 
 
 def multi_summary_line(result: MultiStrategyResult) -> str:
@@ -2230,30 +2549,439 @@ def multi_summary_line(result: MultiStrategyResult) -> str:
     return f"{n_lenses} {lens_word} × {size} names — " + ", ".join(parts)
 
 
+# --------------------------------------------------------------------------- #
+# CONFIRM-SPEND-1 — the seam between the FREE ranking and the paid narration
+# --------------------------------------------------------------------------- #
+# The ranking pass already runs before any narration; it is free, and it is what turns an
+# UPPER BOUND on the spend into the EXACT figure. Surfacing that seam lets a caller stop
+# there, show the real count, and spend only on an explicit confirmation carrying it.
+# Nothing new happens in either half — phase two consumes phase one's result, and never
+# re-ranks or re-fetches.
+
+
+def _run_council_over(shortlist, council_frame, adapter, runners, mode, *, ranked,
+                      est: float, progress=None):
+    """The council/narration invocation for a SINGLE-lens run — the body lifted out of
+    ``run_rank_pipeline`` unchanged so phase two can reuse it verbatim (CONFIRM-SPEND-1).
+    Behaviour is identical; only its address moved."""
+    sentiment_adapter, sentiment_missing_key, sentiment_error = _sentiment_wiring()
+    # Disclose the ACTUAL post-screen shortlist cost before the narrator spends (ITEM 4)
+    # — the pre-run estimate is an upper bound; this is the real number, from the
+    # shortlist we already have (no second screen run).
+    if progress is not None:
+        progress(f"Shortlist: {len(shortlist)} name(s) → ${est:.2f} — "
+                 "starting narration…")
+    if runners is None:
+        from .agents.runners import production_runners
+        runners = production_runners()
+    council = _council_stage(shortlist, council_frame, adapter, runners, mode,
+                             sentiment_adapter=sentiment_adapter,
+                             sentiment_missing_key=sentiment_missing_key,
+                             sentiment_error=sentiment_error,
+                             progress=progress,
+                             boundary_ties=boundary_tie_facts(ranked), cohort=ranked)
+    return council, {o.ticker: _narrative_text(o) for o in council}
+
+
+def narrate_rank_result(result: RankPipelineResult, *, adapter=None, runners=None,
+                        mode: str = "narrator",
+                        progress: Optional[Callable[[str], None]] = None,
+                        today: Optional[date] = None, use_cache: bool = True,
+                        ) -> RankPipelineResult:
+    """PHASE TWO for a SINGLE-lens run: narrate an ALREADY-RANKED result.
+
+    Consumes phase one's result — the ranking is not re-run and nothing is re-fetched.
+    The ranked rows and verdicts are the same objects, so the figure the user confirmed
+    and the run they paid for describe the same grading."""
+    plan = narration_plan(result)
+    if not plan["count"] or result.council_frame is None:
+        return result
+    if adapter is None:
+        adapter = _build_adapter(today=today or date.today(), use_cache=use_cache)
+    shortlist = [r for r in result.ranked if r.ticker in set(plan["names"])]
+    # Resolve the runners HERE rather than leaving it to _run_council_over: the cost
+    # meter lives on them, and a meter obtained after the calls have run measures
+    # nothing. Same object either way, so behaviour is unchanged.
+    if runners is None:
+        from .agents.runners import production_runners
+        runners = production_runners()
+    meter, mark = _cost_mark(runners)
+    council, narratives = _run_council_over(
+        shortlist, result.council_frame, adapter, runners, mode, ranked=result.ranked,
+        est=plan["est_cost"], progress=progress)
+    meta = dict(result.meta)
+    meta.update({"council_mode": mode, "ranker_only": False,
+                 "est_cost": plan["est_cost"]})
+    meta.update(_cost_meta(meter, mark))
+    meta["narration_structure"] = narration_issues(
+        replace(result, council=council, narratives=narratives))
+    return replace(result, meta=meta, narratives=narratives, council=council,
+                   council_mode=mode,
+                   header=_pipeline_header(mode))
+
+
+def _cost_mark(runners):
+    """``(meter, cursor)`` for pricing one phase — ``(None, 0)`` when the runners carry
+    no meter (every test fake), which is what makes "not measured" reachable."""
+    if not runners:
+        return None, 0
+    from .agents.runners import cost_meter
+
+    meter = cost_meter(runners)
+    return meter, (meter.mark() if meter is not None else 0)
+
+
+def _cost_meta(meter, mark: int) -> dict:
+    """The MEASURED spend for the phase just run (COST-3).
+
+    ``actual_cost`` is None when nothing could be measured — a run with fake runners, or
+    a provider that stopped returning usage. None is NOT zero: a bill that could not be
+    read must never render as a free run."""
+    if meter is None:
+        return {"actual_cost": None, "actual_calls": 0, "actual_unpriced": 0}
+    total = meter.since(mark)
+    return {"actual_cost": total.usd, "actual_calls": total.calls,
+            "actual_unpriced": total.unpriced_calls,
+            "actual_input_tokens": total.input_tokens,
+            "actual_output_tokens": total.output_tokens}
+
+
+def narration_plan(result, coverage: str = "buys_only") -> dict:
+    """What a narration of ``result`` WOULD cost, exactly — computed from a completed
+    ranking, so there is no bound and no guess.
+
+    Accepts either a ``MultiStrategyResult`` (the names are the UNION of every lens's
+    BUYs) or a single-lens ``RankPipelineResult`` (its own shortlist). Returns
+    ``{"names", "count", "est_cost", "basis"}``; ``count`` is 0 when there is nothing to
+    narrate, which is the caller's cue to skip the confirmation entirely."""
+    if isinstance(result, MultiStrategyResult):
+        names = narrated_union(result, coverage)
+        basis = NARRATION_BASIS.get(coverage, coverage)
+    else:
+        names = list((result.meta or {}).get("shortlist") or [])
+        basis = ("every name the ranker rated BUY" if coverage == "buys_only"
+                 else "every ranked name")
+    return {"names": names, "count": len(names),
+            "est_cost": estimate_cost(len(names)), "basis": basis}
+
+
+def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners=None,
+                           coverage: str = "buys_only",
+                           progress: Optional[Callable[[str], None]] = None,
+                           today: Optional[date] = None, use_cache: bool = True,
+                           ) -> MultiStrategyResult:
+    """PHASE TWO: narrate an ALREADY-RANKED multi-lens result.
+
+    Consumes phase one's result — the ranking is not re-run and no price or fundamental
+    is re-fetched. Returns a NEW result carrying the narratives; the ranked rows,
+    verdicts and per-strategy records are the same objects, so nothing about the grading
+    can shift between the figure the user confirmed and the run they paid for."""
+    plan = narration_plan(result, coverage)
+    if not plan["count"]:
+        return result
+    if adapter is None:
+        adapter = _build_adapter(today=today or date.today(), use_cache=use_cache)
+    if runners is None:
+        from .agents.runners import production_runners
+        runners = production_runners()
+    _log_sentiment_status()
+    if progress is not None:
+        progress(f"Narrating {plan['count']} name(s) — one pass over the union of "
+                 f"every lens's BUYs…")
+    # COST-3: price THIS PHASE only. The mark/since pair means the figure covers the
+    # narration that was just confirmed, not anything the runner set did earlier.
+    meter, mark = _cost_mark(runners)
+    council, narratives = _multi_narration_stage(
+        result, adapter, runners, coverage=coverage, progress=progress)
+    meta = dict(result.meta)
+    meta.update({"council_mode": "narrator", "ranker_only": False,
+                 "narrated": list(plan["names"]), "narrated_count": plan["count"],
+                 "narrate_coverage": coverage, "narration_basis": plan["basis"],
+                 "est_cost": plan["est_cost"]})
+    meta.update(_cost_meta(meter, mark))
+    provisional = MultiStrategyResult(
+        strategy_ids=result.strategy_ids, strategy_names=result.strategy_names,
+        results=result.results, rows=result.rows, meta=meta,
+        narratives=narratives, council=council)
+    # NARR-SCHEMA-1 — the structural failures, recorded MACHINE-READABLY on the run so a
+    # later pass can find them without re-parsing a report.
+    meta["narration_structure"] = narration_issues(provisional)
+    return MultiStrategyResult(
+        strategy_ids=result.strategy_ids, strategy_names=result.strategy_names,
+        results=result.results, rows=result.rows, meta=meta,
+        narratives=narratives, council=council)
+
+
+# --------------------------------------------------------------------------- #
+# NARR-UNION-1 — narrate the UNION of every lens's BUYs, once per NAME
+# --------------------------------------------------------------------------- #
+def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
+                           coverage: str = "buys_only",
+                           progress: Optional[Callable[[str], None]] = None,
+                           ) -> tuple[list[CouncilOutcome], dict[str, str]]:
+    """ONE narration pass over the union — exactly one LLM invocation per narrated NAME.
+
+    Not one per name-and-lens: a name three lenses bought is one section and one call.
+    That is the cost argument and it is asserted by a test, because the obvious
+    implementation (loop the lenses, narrate each lens's BUYs) silently multiplies the
+    bill by the lens count for names the lenses agree on.
+
+    The council frame is SCREEN-LESS and carries the RUN's identity, not any one lens's
+    (the NARR-FRAME-1 precedent): framing a cross-lens narration by the first lens would
+    impose that lens's terms on a name a different lens bought. Every lens's verdict and
+    each buying lens's own reasons ride in the evidence instead, attributed."""
+    from .graph import build_council
+
+    names = narrated_union(result, coverage)
+    if not names:
+        return [], {}
+
+    frame = _multi_lens_frame(result)
+    sentiment_adapter, sentiment_missing_key, sentiment_error = _sentiment_wiring()
+    app = build_council(adapter, frame, runners, council_mode="narrator",
+                        sentiment_adapter=sentiment_adapter,
+                        sentiment_missing_key=sentiment_missing_key,
+                        sentiment_error=sentiment_error,
+                        run_matrix=False)
+    outcomes: list[CouncilOutcome] = []
+    total = len(names)
+    for i, ticker in enumerate(names, 1):
+        if progress is not None:
+            progress(f"Narrating {ticker} ({i} of {total})…")
+        lead = _lead_row(result, ticker)
+        if lead is None:
+            continue
+        sid, r = lead
+        res = result.results[sid]
+        imputed = (len(r.imputed_factors) / len(r.factor_ranks)
+                   if r.factor_ranks else 0.0)
+        state = ResearchState.model_validate(app.invoke(ResearchState(
+            ticker=ticker, strategy_id=frame.id,
+            ranker_verdict=Recommendation(r.verdict),
+            ranker_explanation=r.explain(),
+            ranker_cohort_size=r.universe_size,
+            ranker_imputed_fraction=imputed,
+            ranker_boundary_tie=dict(
+                boundary_tie_facts(res.ranked).get(ticker, {})),
+            static_factor_evidence=_static_factor_evidence(r),
+            cross_lens_verdicts=cross_lens_verdicts(result, ticker),
+            cross_lens_reasons=cross_lens_reasons(result, ticker))))
+        rep = report_from_state(state)
+        # A cross-lens section quotes SEVERAL lenses' rank tables, so each claim is
+        # checked against the table of the lens it NAMES — checking them all against the
+        # lead lens's cohort stamped true statements as contradictions on the first live
+        # run (ADBE's correct "#1 of 6" under Magic Formula RAW, judged against Classic
+        # Value's 5-name cohort).
+        _annotate_narration_by_lens(rep, result, ticker, lead=(sid, r))
+        _annotate_cross_lens(rep, cross_lens_verdicts(result, ticker))
+        outcomes.append(CouncilOutcome(
+            ticker=ticker, ranker_verdict=r.verdict,
+            council_verdict=rep.council_verdict,
+            agreement=rep.ranker_council_agreement,
+            dissent_notes=list(rep.dissent_notes or []), report=rep))
+    return outcomes, {o.ticker: _narrative_text(o) for o in outcomes}
+
+
+def _lead_row(result: MultiStrategyResult, ticker: str):
+    """``(strategy_id, RankedTicker)`` for the lens whose ranked row anchors the narration
+    — the FIRST lens (in the run's column order) that rated the name BUY, else the first
+    that ranked it at all. Only the deterministic scaffolding (cohort size, tie facts)
+    comes from it; every lens's verdict rides in the cross-lens evidence."""
+    order = buying_lenses(result, ticker) or [
+        sid for sid in result.strategy_ids
+        if any(x.ticker == ticker for x in result.results[sid].ranked)]
+    for sid in order:
+        r = next((x for x in result.results[sid].ranked if x.ticker == ticker), None)
+        if r is not None:
+            return sid, r
+    return None
+
+
+def _multi_lens_frame(result: MultiStrategyResult):
+    """A SCREEN-LESS council frame carrying the RUN's identity (NARR-FRAME-1's mechanism).
+
+    A cross-lens narration must not be framed by one lens's philosophy — the name may have
+    been bought by a different one. So the frame names the run and its lenses and declares
+    NO criteria; the per-lens terms arrive as evidence, attributed, and the narrator's
+    cross-lens constraint forbids reconciling them."""
+    from .strategy.loader import Strategy
+
+    labels = multi_strategy_columns(result)
+    lenses = ", ".join(labels[sid] for sid in result.strategy_ids)
+    return Strategy.model_construct(
+        id="multi_lens_run", name=f"{len(result.strategy_ids)}-lens comparison",
+        version=1, criteria=[],
+        description=(f"One cohort graded independently by {len(result.strategy_ids)} "
+                     f"lenses: {lenses}."),
+        rationale=("Each lens reaches its own verdict on its own terms. This narration "
+                   "ATTRIBUTES what each lens found; it never reconciles them, ranks "
+                   "them against each other, or issues a net view."),
+        notes="", lens_kind="", lens_factor_labels=[])
+
+
+def _lens_rank_table(res, r, ticker: str) -> dict:
+    """The authoritative rank table for ONE name under ONE lens — the same shape
+    ``_annotate_narration`` builds, so both paths check against identical facts."""
+    return {"N": r.universe_size, "combined_position": r.cohort_position,
+            "factors": dict(r.factor_ranks), "ticker": ticker,
+            "score": r.combined_rank,
+            "boundary_tie": boundary_tie_facts(res.ranked).get(ticker, {}),
+            "peers": _peer_rows(res.ranked, ticker)}
+
+
+def _annotate_narration_by_lens(rep, result: MultiStrategyResult, ticker: str,
+                                *, lead) -> None:
+    """Rank-semantics annotations for a cross-lens narration, routed per lens.
+
+    Builds one table per lens that RANKED this name, keyed by that lens's column label,
+    and hands them to ``check_narration_by_lens``: a sentence naming a lens is judged
+    against THAT lens's cohort, not the lead's. Never rewrites the prose."""
+    from .narration_check import check_narration_by_lens
+
+    d = getattr(rep, "decision", None)
+    if d is None or not getattr(d, "rationale", ""):
+        return
+    columns = multi_strategy_columns(result)
+    tables: dict[str, dict] = {}
+    for sid in result.strategy_ids:
+        res = result.results[sid]
+        row = next((x for x in res.ranked if x.ticker == ticker), None)
+        if row is not None:
+            tables[columns[sid]] = _lens_rank_table(res, row, ticker)
+    lead_sid, lead_row = lead
+    default = _lens_rank_table(result.results[lead_sid], lead_row, ticker)
+    marks = check_narration_by_lens(d.rationale, tables, default)
+    if marks:
+        d.rationale = d.rationale.rstrip() + "\n" + "\n".join(marks)
+
+
+def _annotate_cross_lens(rep, verdicts: list[dict]) -> None:
+    """Append the fact-checker's CROSS-LENS SYNTHESIS annotations in place — the same
+    treatment an unsupported ordinal claim already gets. Never rewrites the prose."""
+    from .narration_check import check_cross_lens
+    d = getattr(rep, "decision", None)
+    if d is None or not getattr(d, "rationale", ""):
+        return
+    marks = check_cross_lens(d.rationale, verdicts)
+    if marks:
+        d.rationale = d.rationale.rstrip() + "\n\n" + "\n".join(marks)
+
+
+
+NARRATION_BASIS = {
+    "buys_only": "every name rated BUY by at least one lens",
+    "all": "every name ranked by at least one lens",
+}
+
+
+def narrated_union(result: MultiStrategyResult,
+                   coverage: str = "buys_only") -> list[str]:
+    """The names a multi-lens run narrates: the UNION across lenses, each name ONCE.
+
+    ``buys_only`` (the default) is every name rated BUY by ANY selected lens;
+    ``all`` is every name RANKED by any lens. Deduplicated by construction — a name three
+    lenses bought is one name, one section and ONE narration call, which is the whole cost
+    argument: five lenses over forty names produced 18 BUY verdicts across only 13 distinct
+    names on the 2026-08-24 run.
+
+    Returned in the combined grid's own order, so the narration sections run down the page
+    in the same order as the verdict table above them."""
+    if coverage == "all":
+        keep = lambda cells: any(c.status == _RANKED for c in cells.values())   # noqa: E731
+    else:
+        keep = lambda cells: any(                                               # noqa: E731
+            c.status == _RANKED and c.verdict == "buy" for c in cells.values())
+    return [row.ticker for row in result.rows if keep(row.cells)]
+
+
+def buying_lenses(result: MultiStrategyResult, ticker: str) -> list[str]:
+    """The strategy ids that rated ``ticker`` BUY, in the run's column order."""
+    row = next((r for r in result.rows if r.ticker == ticker), None)
+    if row is None:
+        return []
+    return [sid for sid in result.strategy_ids
+            if row.cells[sid].status == _RANKED and row.cells[sid].verdict == "buy"]
+
+
+def cross_lens_verdicts(result: MultiStrategyResult, ticker: str) -> list[dict]:
+    """EVERY selected lens's verdict for ``ticker`` — including the lenses that rated it
+    HOLD or SELL or excluded it. This is what makes the narration two-sided: a reader is
+    never shown the buying lenses alone."""
+    from .report_language import label_with_id
+
+    row = next((r for r in result.rows if r.ticker == ticker), None)
+    if row is None:
+        return []
+    columns = multi_strategy_columns(result)
+    out = []
+    for sid in result.strategy_ids:
+        cell = row.cells[sid]
+        out.append({"lens": columns[sid], "lens_id": sid,
+                    "lens_label": label_with_id(columns[sid], sid),
+                    "cell": cell.render(), "status": cell.status,
+                    "verdict": cell.verdict})
+    return out
+
+
+def cross_lens_reasons(result: MultiStrategyResult, ticker: str) -> list[dict]:
+    """The DETERMINISTIC reasons behind each BUY: that lens's factor ranks (its own
+    ``explain()``) and the screen rules the name passed there, attributed per lens and
+    stated in that lens's own terms. Only the BUYING lenses appear — a lens that did not
+    buy the name has no BUY to explain, and its verdict is already in the row above."""
+    from .tools.criteria.registry import REGISTRY
+
+    out = []
+    columns = multi_strategy_columns(result)
+    for sid in buying_lenses(result, ticker):
+        res = result.results[sid]
+        r = next((x for x in res.ranked if x.ticker == ticker), None)
+        if r is None:
+            continue
+        rules = []
+        for crit, outcome in (res.screen_outcomes.get(ticker) or {}).items():
+            if outcome.get("passed") is True:
+                label = getattr(REGISTRY.get(crit), "label", "") or crit
+                rules.append(label)
+        out.append({"lens": columns[sid], "lens_id": sid,
+                    "explain": r.explain(), "rules": sorted(rules)})
+    return out
+
+
+def narration_evidence_strategies(result: MultiStrategyResult, ticker: str) -> list:
+    """The SCREEN strategies whose consumed fields scope this name's evidence packet: the
+    lenses that rated it BUY. Union, via the existing scoping (NARR-UNION-1) — never a
+    dump of every field the run touched."""
+    out = []
+    for sid in buying_lenses(result, ticker):
+        screen = getattr(result.results[sid], "screen_strategy", None)
+        if screen is not None:
+            out.append(screen)
+    return out
+
+
 def format_multi_strategy_grid(result: MultiStrategyResult) -> str:
     """The combined grid as text (the CLI print and the UI download read this ONE
-    builder, so they cannot drift). One row per name: rank-sum, then one cell per
-    strategy. A name not ranked by every strategy carries ‡ — its smaller sum is over
-    fewer lenses and is NOT a better one."""
+    builder, so they cannot drift). One row per name, one cell per strategy.
+
+    GRID-COLS-1 dropped the rank-sum column here too \u2014 it was incomparable on most
+    rows of a real cohort. The ROW ORDER it produced is unchanged: that is computed in
+    ``combine_rank_results`` and only rendered here."""
     ids = result.strategy_ids
     m = result.meta
     lines = [
-        f"=== COMBINED GRID — {len(ids)} strategies over "
+        f"=== COMBINED GRID \u2014 {len(ids)} strategies over "
         f"{m.get('universe_size', 0)} name(s) in "
         f"{m.get('universe_id') or 'adhoc'} ===",
-        "  Verdict: deterministic ranker (no LLM ran — narration is per-strategy).",
+        "  Verdict: deterministic ranker (no LLM ran \u2014 narration is per-strategy).",
         "",
     ]
-    head = f"  {'name':<24} {'rank-sum':<10}" + "".join(f"{sid:<34}" for sid in ids)
+    head = f"  {'name':<24} " + "".join(f"{sid:<34}" for sid in ids)
     lines.append(head)
     for row in result.rows:
-        rs = "—" if row.rank_sum is None else str(row.rank_sum)
-        if row.rank_sum is not None and not row.comparable:
-            rs = f"{rs}‡"
         cells = "".join(f"{row.cells[sid].render():<34}" for sid in ids)
-        lines.append(f"  {_name_col(row.display, 24):<24} {rs:<10}{cells}")
+        lines.append(f"  {_name_col(row.display, 24):<24} {cells}")
     lines.append("")
-    lines.append(f"  rank-sum = sum of the per-strategy cohort POSITIONS; comparable only "
-                 f"across the {m.get('graded_by_all', 0)} name(s) ranked by ALL {len(ids)} "
-                 f"strategies (‡ = ranked by fewer, nothing imputed).")
+    lines.append(f"  ordered by how many lenses graded each name, then by its combined "
+                 f"position; {m.get('graded_by_all', 0)} name(s) were ranked by ALL "
+                 f"{len(ids)} strategies.")
     return "\n".join(lines)

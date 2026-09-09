@@ -163,16 +163,22 @@ def test_no_dated_statements_abstains_rather_than_guessing_a_denominator():
     assert "no dated statement history" in band.note
 
 
-def test_confirmed_currency_mismatch_abstains_never_mixes():
+def test_confirmed_currency_mismatch_with_NO_RATES_abstains_never_mixes():
     """House rule 8: market cap is in the price currency, EBIT and debt in the accounts
-    currency. A confirmed mismatch abstains — no FX, no mixed multiple."""
+    currency, so a mixed multiple is meaningless.
+
+    UPDATED (VALBAND-2): the mismatch is now CONVERTIBLE when monthly rates are
+    available. The guarantee this test exists for is unchanged and, if anything,
+    sharper: with no rates the band still abstains and still never mixes — and the
+    abstention now NAMES the pairs it could not get, so "no FX" is actionable."""
     bars, _ = _flat_ev_ebit([100.0] * 61)
     f = _fundamentals(ebit=100.0, debt=200.0, cash=50.0,
                       currency="USD", financial_currency="KRW")
-    band = valuation_band(bars, f, asof=TODAY)
+    band = valuation_band(bars, f, asof=TODAY)          # no fx supplied
 
     assert not band.available
-    assert "no FX conversion" in band.note
+    assert "KRW" in band.note and "USD" in band.note
+    assert band.percentile is None                       # nothing was mixed
 
 
 # --------------------------------------------------------------------------- #
