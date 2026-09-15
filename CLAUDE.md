@@ -147,6 +147,34 @@ LangGraph orchestration, Anthropic models, pydantic state.
 
 Every change that adds or alters user-visible functionality (new strategy, factor, gate, universe, UI element, report line, data source) carries a documentation duty: before finishing, assess which docs are affected (README, CALCULATIONS.md, REPORT_MARKS.md, strategy YAML rationales) and — do not silently edit them. Instead: (a) if working a spec that already includes doc items, do them as specced; (b) otherwise, list the proposed doc updates explicitly in the PR description or done-report as 'DOCS PROPOSED: …' with one line per change, and WAIT for owner approval before a docs commit. Never let functionality merge undocumented without at least the proposal list; never write docs the owner hasn't seen described. A gap sweep like DOCS-1 should not be needed again — this rule replaces it with a per-change duty.
 
+## Shipping duty (what "done" means — learned the expensive way)
+
+Every change that adds or alters user-visible functionality carries a shipping duty on
+top of the documentation duty. Green tests are NOT done. Two rules:
+
+1. SEE IT WORK. Before reporting a change complete, run the actual app on a real cohort
+   and paste the actual output — the report lines, the table, the column — into the
+   done-report. A passing suite proves the code does not crash; it does not prove the
+   feature produces a correct, visible result. (Live: VALBAND-1 shipped 2026-08-21 with
+   green CI and produced "not evaluated — insufficient history: 1.1y" for EVERY name on
+   EVERY run, because the day-cache ignored the requested date window and served the
+   ranking legs' 400-day series to the band's 5-year request. Nothing in the pipeline
+   ever looked at a rendered band. Found by the owner two days later, in a report.)
+
+2. NO FEATURE WITHOUT A CONSUMER. A factor, screen or column that is registered but
+   selected by no strategy and shown on no surface is invisible to the owner, so a defect
+   in it cannot be noticed. Either wire it to something that uses it, or state explicitly
+   in the done-report that it ships dormant, WHY, and what would activate it. "Registered
+   but not selected by any strategy" is a status to declare loudly, never a quiet default.
+   (Live: piotroski_f_score and valuation_band_percentile both sat registered-and-unused;
+   the F-Score also shipped undocumented for a week, and the band's data path was broken
+   the whole time it was dormant.)
+
+Corollary for failure paths: when a requested feature cannot compute, it must say so
+visibly. An absent section is indistinguishable from a feature that was never switched on
+— that ambiguity cost two full debugging rounds on 2026-08-22. Honest abstention with a
+reason, never silence.
+
 ## Criterion registry (how the screen works, Sprint 4A)
 
 The screen is a registry of named, pure criterion functions; strategies select
