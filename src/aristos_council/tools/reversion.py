@@ -52,8 +52,11 @@ when the implied equity value is not positive.
 today's shows a huge gap, and that number is rendered as-is beside the median multiple
 that produced it — auditable, rather than tidied into plausibility.
 
-**One exception, and it is an ABSTENTION, not a clamp (BAND-3).** Past ``GAP_SANITY``
-(±150%) the value is not rendered at all. A three-fold implied move is not a reading of
+**One exception, and it is an ABSTENTION, not a clamp (BAND-3, REV-BOUND-1).** Past
+``GAP_SANITY`` (+150%) upward or ``GAP_SANITY_DOWN`` (-75%) downward the value is not
+rendered at all. The two are different sizes for a reason given at the constants, and the
+abstention names WHICH of them fired rather than quoting a symmetric bound that does not
+exist (REV-BOUND-2). A three-fold implied move is not a reading of
 anything — it is what a thin EBIT year, a share-count mismatch or a currency basis error
 looks like coming out the far end. Left in the table it sits beside the sane rows with
 exactly their authority, which is the one thing an honest number must never do. So the
@@ -103,6 +106,12 @@ GAP_SANITY_DOWN = -0.75
 
 # The phrase naming the multiple in the rendered line, per basis.
 _BASIS_PHRASE = {_EV_EBIT: "EV/EBIT", _PE: "P/E"}
+
+# REV-BOUND-2 — the profit line whose thinness produces the artefact, named per BASIS.
+# The abstention said "thin EBIT year" whatever the basis, and on the P/E route there is
+# no EBIT in the arithmetic at all: the denominator is EPS. A reader told to suspect a
+# line the calculation never read has been sent to look in the wrong place.
+_THIN_PROFIT = {_EV_EBIT: "a thin EBIT year", _PE: "a thin earnings year"}
 
 
 @dataclass(frozen=True)
@@ -259,10 +268,22 @@ def reversion_value(band: Optional[ValuationBand], fundamentals, *,
         # BAND-3: past the bound this is an artefact, not a reading. Abstain through the
         # SAME path every other unstateable case takes, so the row keeps its shape and the
         # reason travels with it. The band's percentile is untouched.
+        #
+        # REV-BOUND-2 — say WHICH bound fired, and quote that bound's own number. The two
+        # are not the same size and never were: REV-BOUND-1 set the downward bound at -75%
+        # precisely because an implied price cannot fall past -100%, so a symmetric 150%
+        # could never fire that way. The sentence nonetheless quoted "±150%" on both
+        # sides, so a withheld collapse read "implied move -98% exceeds the sanity bound
+        # (±150%)" — a sentence that disproves itself, on the one line whose whole job is
+        # to be checkable.
+        upward = gap > GAP_SANITY
+        bound = GAP_SANITY if upward else GAP_SANITY_DOWN
+        crossed = "exceeds the upper" if upward else "falls past the lower"
+        thin = _THIN_PROFIT.get(band.basis or "", "a thin profit year")
         return _abstain(
-            f"implied move {gap:+.0%} exceeds the sanity bound "
-            f"(±{GAP_SANITY:.0%}) — inputs suspect (thin EBIT year, share-count or "
-            "currency mismatch); not stated", band, currency)
+            f"implied move {gap:+.0%} {crossed} sanity bound ({bound:+.0%}) — inputs "
+            f"suspect ({thin}, a share-count or a currency mismatch); not stated",
+            band, currency)
 
     return ReversionValue(
         price=price, gap=gap, median_multiple=median,

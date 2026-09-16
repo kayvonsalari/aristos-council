@@ -58,9 +58,9 @@ def test_a_three_fold_implied_move_abstains_with_its_reason():
     assert not rev.available
     assert rev.price is None and rev.gap is None
     assert "implied move +200%" in rev.note
-    assert "exceeds the sanity bound (±150%)" in rev.note
+    assert "exceeds the upper sanity bound (+150%)" in rev.note
     assert "inputs suspect" in rev.note
-    assert "thin EBIT year, share-count or currency mismatch" in rev.note
+    assert "a thin EBIT year, a share-count or a currency mismatch" in rev.note
     assert "not stated" in rev.note
     # ...and the abstention renders as one honest line, not a blank.
     assert rev.display.startswith("reversion value not evaluated — ")
@@ -120,7 +120,7 @@ def test_the_guard_is_basis_agnostic():
 
     band = _band(40.0, basis="pe")             # eps 10 x median 40 = 400 vs a 100 close
     rev = reversion_value(band, _F(), last_close=100.0, currency="USD")
-    assert not rev.available and "exceeds the sanity bound" in rev.note
+    assert not rev.available and "exceeds the upper sanity bound" in rev.note
 
 
 # --------------------------------------------------------------------------- #
@@ -146,7 +146,7 @@ def test_the_band_row_keeps_its_percentile():
     row = table.rows[0]
     assert "50th" in row["Percentile"]                       # the band still speaks
     assert row["Reversion value"].startswith("not evaluated — ")
-    assert "exceeds the sanity bound" in row["Reversion value"]
+    assert "exceeds the upper sanity bound" in row["Reversion value"]
     assert row["Gap"] == "—"                                 # no number where none is due
 
 
@@ -175,7 +175,7 @@ def test_a_ninety_percent_fall_now_abstains():
     rev = _gap_for(1.0, 100.0)
     assert not rev.available
     assert "implied move -90%" in rev.note
-    assert "exceeds the sanity bound" in rev.note
+    assert "falls past the lower sanity bound" in rev.note
 
 
 def test_the_murphy_and_bp_shapes_abstain():
@@ -209,3 +209,60 @@ def test_the_boundary_itself_is_stated_on_the_downward_side_too():
     at = _gap_for(2.5, 100.0)                   # implied 25.00 = -75% exactly
     assert at.available and at.gap == pytest.approx(GAP_SANITY_DOWN)
     assert not _gap_for(2.4, 100.0).available   # just past it
+
+
+# --------------------------------------------------------------------------- #
+# REV-BOUND-2 — the abstention names the bound that fired, and the right profit line
+# --------------------------------------------------------------------------- #
+# One sentence served both directions and quoted "±150%" on both. The downward bound has
+# been -75% since REV-BOUND-1 — deliberately, because an implied price cannot fall past
+# -100%, so a symmetric 150% could never fire that way. So a withheld collapse read
+# "implied move -98% exceeds the sanity bound (±150%)": a sentence that disproves itself,
+# on the one line in the report whose entire purpose is to be checkable by a reader.
+
+def test_the_upward_abstention_names_the_upper_bound_and_its_own_number():
+    rev = _gap_for(30.0, 100.0)                 # +200%
+    assert "exceeds the upper sanity bound (+150%)" in rev.note
+    assert "±" not in rev.note                  # no symmetric bound is claimed
+    assert "-75%" not in rev.note               # ...and not the other side's, either
+
+
+def test_the_downward_abstention_names_the_LOWER_bound_and_its_own_number():
+    """The self-disproving sentence, fixed: -98% is past -75%, and says so."""
+    rev = _gap_for(0.2, 100.0)                  # -98%, the Murphy Oil shape
+    assert "implied move -98%" in rev.note
+    assert "falls past the lower sanity bound (-75%)" in rev.note
+    assert "150%" not in rev.note               # the bound it did NOT cross is not quoted
+    assert "±" not in rev.note
+
+
+def test_neither_wording_claims_the_other_bound():
+    """Whichever side fires, the number in the sentence is the number that was crossed."""
+    from aristos_council.tools.reversion import GAP_SANITY, GAP_SANITY_DOWN
+
+    for median, expected in ((30.0, f"{GAP_SANITY:+.0%}"), (0.2, f"{GAP_SANITY_DOWN:+.0%}")):
+        note = _gap_for(median, 100.0).note
+        assert f"sanity bound ({expected})" in note
+
+
+def test_the_suspect_profit_line_is_the_basis_own():
+    """On the P/E route there is no EBIT in the arithmetic at all — the denominator is
+    EPS. Telling a reader to suspect a line the calculation never read sends them to the
+    wrong place."""
+
+    class _F:
+        eps = 10.0
+
+    ev = _gap_for(30.0, 100.0)
+    assert "a thin EBIT year" in ev.note
+
+    pe = reversion_value(_band(40.0, basis="pe"), _F(), last_close=100.0, currency="USD")
+    assert "a thin earnings year" in pe.note
+    assert "EBIT" not in pe.note
+
+
+def test_the_reader_facts_still_recognise_a_withheld_reversion():
+    """reader_facts distinguishes a bound-withheld value from every other abstention by
+    matching "sanity bound" in the note. Both wordings must keep that substring."""
+    for median in (30.0, 0.2):
+        assert "sanity bound" in _gap_for(median, 100.0).note
