@@ -783,6 +783,9 @@ def multi_strategy_report_html(multi_result, *,
         + _contents(sections)
         + "</header>")
 
+    # ----- 1a (READER-1): the note that explains the rest, above everything it explains.
+    parts.append(_reader_section(getattr(multi_result, "reader", None)))
+
     # ----- 1b (SHORTLIST-1): the answer, before the evidence for it. Derived from the
     # grid below; the grid itself is untouched.
     parts.append(_shortlist_section(getattr(multi_result, "shortlist", None)))
@@ -954,6 +957,25 @@ def multi_strategy_report_html(multi_result, *,
     parts.append(_footer())
     return _document(title=title.full(), body="\n".join(parts))
 
+
+
+
+def _reader_section(reader) -> str:
+    """READER-1 — five short paragraphs, or the one line saying why there are none."""
+    from ..reader import (READER_SECTION_NOTE, READER_SECTION_TITLE,
+                          reader_paragraphs)
+
+    if reader is None:
+        return ""
+    body = [f'<section class="section" id="summary">'
+            f"<h2>{_esc(READER_SECTION_TITLE)}</h2>"]
+    if not reader.available:
+        body.append(f'<p class="note">{_esc(reader.note)}</p></section>')
+        return "".join(body)
+    for lead, text in reader_paragraphs(reader.summary):
+        body.append(f"<p><strong>{_esc(lead)}</strong> {_esc(text)}</p>")
+    body.append(f'<p class="note">{_esc(READER_SECTION_NOTE)}</p></section>')
+    return "".join(body)
 
 
 def _shortlist_section(sl) -> str:
