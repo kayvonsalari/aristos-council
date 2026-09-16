@@ -16,6 +16,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from ..factors import FACTOR_REGISTRY
 
 
+# KIND-1 / THESIS-1 — the closed vocabularies. Closed on purpose: a typo in a YAML must
+# fail at LOAD time, not read as a lens that fits nothing and warn on every cohort.
+_LENS_KINDS = frozenset({"selector", "check"})
+_THESES = frozenset({"value", "growth", "income", "quality", "funds"})
 _MISSING_MODES = ("worst", "exclude", "neutral")
 
 
@@ -63,6 +67,19 @@ class RankStrategy(BaseModel):
     # Display-only, and ABSENT renders NOTHING — a strategy whose YAML has no `asks` is
     # byte-identical to before.
     asks: str = ""
+    # KIND-1 — what this lens is FOR. Two runs on 2026-09-16 established the reading rule
+    # this encodes: ONE selector lens per run, chosen to match what the cohort was built
+    # for, decides "worth owning"; a CHECK lens only says "reason to doubt the selector's
+    # yes". A check never selects, so a BUY under a check is not a recommendation and a
+    # SELL under one is not a rejection — it is a doubt raised about someone else's pick.
+    # Default "selector", so every existing strategy keeps its meaning.
+    kind: str = "selector"          # selector | check
+    # THESIS-1 — the cohort theses this SELECTOR fits. A check lens declares none: it
+    # doubts every cohort alike, so a thesis would be a claim it does not make. Used only
+    # to warn when a lens is pointed at a list built for a different question; it never
+    # filters a strategy out of the picker and never blocks a run (the 2026-08-10 lesson:
+    # hiding a runnable lens is worse than letting a reader choose badly with a caption).
+    thesis: list[str] = Field(default_factory=list)
     # UI visibility (Sprint 4C): "hidden" -> not listed in the dropdowns by default
     # (legacy/superseded configs). Still fully loadable via the loader/CLI — hidden means
     # not listed, not removed. Default "" == visible. Presentation only.
@@ -162,6 +179,21 @@ class RankStrategy(BaseModel):
     def _id_carries_version(cls, v: str) -> str:
         if "_v" not in v:
             raise ValueError(f"rank-strategy id '{v}' must encode a version, e.g. '..._v1'")
+        return v
+
+    @field_validator("kind")
+    @classmethod
+    def _kind_valid(cls, v):
+        if v not in _LENS_KINDS:
+            raise ValueError(f"kind must be one of {sorted(_LENS_KINDS)}, got {v!r}")
+        return v
+
+    @field_validator("thesis")
+    @classmethod
+    def _thesis_valid(cls, v):
+        bad = [t for t in (v or []) if t not in _THESES]
+        if bad:
+            raise ValueError(f"thesis entries must be in {sorted(_THESES)}, got {bad!r}")
         return v
 
     @field_validator("cut")

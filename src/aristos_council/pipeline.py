@@ -2666,6 +2666,35 @@ def lens_asks(result) -> str:
     return (getattr(getattr(result, "rank_strategy", None), "asks", "") or "").strip()
 
 
+def cohort_fit_line(primary, cohort_thesis: str) -> str:
+    """One line per RUN saying the primary lens answers a different question than the list
+    was built for — or ``""`` when there is nothing to say (THESIS-1).
+
+    Two cases, both advisory and NEITHER blocking:
+
+    * the primary is a CHECK lens — it doubts, it does not select, so a run with it as
+      primary produces no shortlist and the reader should know before the run, not after;
+    * the primary is a selector whose thesis does not include the cohort's — a value lens
+      pointed at an income list still ranks honestly, it just answers a question the list
+      was not built around.
+
+    Silent whenever the claim cannot be made: an unmarked list (most local lists), a lens
+    with no declared thesis, or a genuine match. Never filters, never blocks — the
+    2026-08-10 lesson was that hiding a runnable lens is worse than letting a reader choose
+    badly with a caption in front of them."""
+    if primary is None:
+        return ""
+    label = getattr(primary, "display_name", "") or getattr(primary, "name", "") or ""
+    if getattr(primary, "kind", "selector") == "check":
+        return (f"ℹ {label} is a check lens; it doubts, it does not select. "
+                "Pick a selector as primary for a shortlist.")
+    own = list(getattr(primary, "thesis", []) or [])
+    if not cohort_thesis or not own or cohort_thesis in own:
+        return ""
+    return (f"⚠ {label} is a {'/'.join(own)} lens; this list is marked {cohort_thesis}. "
+            "Its verdicts answer a different question than the list was built for.")
+
+
 def multi_header_line(result: MultiStrategyResult) -> str:
     """The house line at the top of a multi-lens report — DERIVED from whether narration
     actually ran, never asserted.

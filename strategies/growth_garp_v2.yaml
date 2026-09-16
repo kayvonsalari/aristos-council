@@ -32,6 +32,13 @@ version: 2
 # meeting a verdict without having read the YAML.
 asks: >-
   Growing fast at a fair price: sales up at least 10% a year, and not overpaying for that growth.
+
+# KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting a
+# growth cohort. The thesis only drives a caption when a list says it was built
+# for something else; it never filters this lens out of the picker.
+kind: selector
+thesis:
+  - growth
 created: "2026-07-09"
 
 description: >-

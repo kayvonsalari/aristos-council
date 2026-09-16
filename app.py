@@ -2690,6 +2690,18 @@ def render_universe_tab(show_validation: bool = False) -> None:
                    "portfolio-class data never rides a commit.")
         name = st.text_input("List name", key="uni_list_name",
                              placeholder="My Portfolio")
+        # THESIS-1: what the list was BUILT FOR. Blank is allowed and is the default —
+        # an unmarked list makes no claim, so it never triggers the fit caption.
+        _theses = ["", "value", "growth", "income", "quality", "funds"]
+        _current = getattr(picked_list, "thesis", "") or ""
+        list_thesis = st.selectbox(
+            "Built for (optional)", _theses,
+            index=_theses.index(_current) if _current in _theses else 0,
+            format_func=lambda t: t or "— not stated —",
+            key="uni_list_thesis",
+            help="What this list was assembled to find. Used only to caption a run whose "
+                 "primary lens answers a different question; it never filters a lens or "
+                 "blocks a run. Leave blank to make no claim.")
         col_save, col_saveas = st.columns(2)
         with col_save:
             save_over = st.button("Save changes", key="uni_save_over",
@@ -2706,13 +2718,14 @@ def render_universe_tab(show_validation: bool = False) -> None:
                     path = save_local_universe(
                         UNIVERSES_DIR, id=picked_list.id, tickers=universe,
                         created=created, display_name=name.strip() or picked_list.id,
-                        graded_ids=graded, overwrite=True)
+                        graded_ids=graded, overwrite=True, thesis=list_thesis)
                 else:
                     new_id = list_id_from_name(name,
                                                existing_universe_ids(UNIVERSES_DIR))
                     path = save_local_universe(
                         UNIVERSES_DIR, id=new_id, tickers=universe, created=created,
-                        display_name=name.strip(), graded_ids=graded)
+                        display_name=name.strip(), graded_ids=graded,
+                        thesis=list_thesis)
             except (ValueError, ValidationError) as exc:
                 st.error(str(exc))
             else:
@@ -2731,6 +2744,16 @@ def render_universe_tab(show_validation: bool = False) -> None:
     applicable = applicable_rank_strategies(all_rank_strategies, cohort_kind)
     st.caption(cohort_scope_note(cohort_kind, len(applicable),
                                  adhoc=universe_id is None))
+    # THESIS-1 — one line per RUN (never per name) when the PRIMARY lens answers a
+    # different question than this list was built for, or is a check lens that cannot
+    # select at all. It sits here, beside the asset-kind scope note, because this is the
+    # first point at which BOTH the lens and the cohort are known — and because the two
+    # captions answer the same shape of question: is this lens the right one for this
+    # list. Advisory, like its neighbour: it never filters a lens and never blocks a run.
+    from aristos_council.pipeline import cohort_fit_line
+    _fit = cohort_fit_line(primary, getattr(picked_list, "thesis", "") or "")
+    if _fit:
+        st.info(_fit)
     for s in strategies:
         scope_warning = out_of_scope_note(s, cohort_kind)
         if scope_warning:

@@ -26,6 +26,13 @@ version: 1
 asks: >-
   Index trackers: fee, size and trend.
 
+# KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting a
+# funds cohort. The thesis only drives a caption when a list says it was built
+# for something else; it never filters this lens out of the picker.
+kind: selector
+thesis:
+  - funds
+
 description: >-
   Rank broad-market ("core") ETFs on expense ratio (cost, ranked low), fund size
   (liquidity + closure risk), and 12-month momentum (trend). Rank-first, no screens;

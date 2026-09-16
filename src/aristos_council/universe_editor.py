@@ -154,6 +154,10 @@ def _dump_manifest_yaml(u: Universe, *, created: str) -> str:
         data["role"] = u.role
     if u.description:
         data["description"] = u.description
+    # THESIS-1: written only when stated, so an unmarked list round-trips byte-identically
+    # to a pre-THESIS-1 save.
+    if u.thesis:
+        data["thesis"] = u.thesis
     data["created"] = created
     if u.rationale:
         data["rationale"] = u.rationale
@@ -165,7 +169,7 @@ def save_local_universe(universes_dir: str | Path, *, id: str, tickers: list[str
                         created: str, display_name: str = "", rationale: str = "",
                         description: str = "", role: str = "",
                         graded_ids: set[str] | frozenset[str] | None = None,
-                        overwrite: bool = False) -> Path:
+                        overwrite: bool = False, thesis: str = "") -> Path:
     """Validate and write a personal list to ``universes/local/<id>.yaml``.
 
     ``overwrite=True`` rewrites one of YOUR OWN lists in place — a list is a plain,
@@ -197,7 +201,11 @@ def save_local_universe(universes_dir: str | Path, *, id: str, tickers: list[str
     # reused so a saved file is guaranteed loadable by the same path everything else uses.
     u = Universe(id=id, display_name=display_name.strip(), role=role.strip(),
                  description=description.strip(), tickers=list(tickers),
-                 created=created, rationale=rationale.strip())
+                 created=created, rationale=rationale.strip(),
+                 # THESIS-1: what the list was built for. Blank makes no claim, and the
+                 # Universe model validates the vocabulary, so a bad value fails here
+                 # rather than being written and failing on the next load.
+                 thesis=(thesis or "").strip())
 
     if u.id in existing_universe_ids(universes_dir):
         if not overwrite:

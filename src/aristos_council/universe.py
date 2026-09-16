@@ -44,6 +44,12 @@ class Universe(BaseModel):
     # universe — graded quarterly"). Display-only.
     role: str = ""
     description: str = ""
+    # THESIS-1 — what this list was BUILT FOR, so a run can say when the lens pointed at
+    # it answers a different question. Optional and blank by default: an unmarked list
+    # makes no claim and therefore never triggers the warning. Same closed vocabulary as
+    # a rank strategy's `thesis`, validated at load so a typo fails loudly rather than
+    # reading as a cohort that fits nothing.
+    thesis: str = ""
     tickers: list[str] = Field(min_length=1)
     created: str = ""
     rationale: str = ""
@@ -52,6 +58,15 @@ class Universe(BaseModel):
     # in selectors; local lists are gitignored portfolio-class data, so they never ride a
     # commit by default.
     local: bool = False
+
+    @field_validator("thesis")
+    @classmethod
+    def _thesis_valid(cls, v: str) -> str:
+        from .strategy.rank_loader import _THESES
+        if v and v not in _THESES:
+            raise ValueError(
+                f"universe thesis must be one of {sorted(_THESES)} (or empty), got {v!r}")
+        return v
 
     @field_validator("id")
     @classmethod

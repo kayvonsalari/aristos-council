@@ -22,6 +22,8 @@
 # committed static layer where the free vendor is thin — rows to follow via the established
 # EODHD-fundamentals-API-sourced static CSV process (scripts/generate_etf_static_rows.py).
 id: etf_core_ucits_v1
+# THESIS-1 — what this list was built for.
+thesis: funds
 display_name: ETF Index Tracker — UCITS
 role: euro-investable exploration — observation only
 description: >-
