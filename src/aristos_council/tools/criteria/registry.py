@@ -34,6 +34,7 @@ from typing import Callable
 
 from ...data.adapter import DividendEvent, Fundamentals
 from ..screening import (
+    max_dividend_cuts_criterion,
     max_payout_fcf_criterion,
     CriterionResult,
     ScreenResult,
@@ -137,6 +138,13 @@ class Criterion:
     # ``{signed}`` (a direction + magnitude, "fell 14.0%"). Empty -> the report falls
     # back to "<label> {observed}", which is correct if plain.
     observation: str = ""
+    # CRIT-NOCUT-1 — the RULE phrase, for a criterion whose threshold is not a limit on
+    # the observed value. The generated phrase ("at most 5") assumes observed and
+    # threshold share a unit; ``max_dividend_cuts`` measures a CUT SIZE against a WINDOW
+    # of years, so the generated phrase would compare a percentage to a year count.
+    # A ``{threshold}`` template here replaces it at every render site. Empty -> the
+    # generated phrase, so every existing criterion is untouched.
+    threshold_text: str = ""
     # Evidence kinds (fundamentals / dividends / last_close) that must be
     # available for this criterion to evaluate.
     requires: tuple[str, ...] = ()
@@ -186,6 +194,12 @@ def _min_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
 def _min_dividend_growth_streak(ev: Evidence, threshold: float) -> CriterionResult:
     return min_growth_streak_criterion(
         ev.dividends, min_years=int(threshold), method=ev.streak_method)
+
+
+def _max_dividend_cuts(ev: Evidence, threshold: float) -> CriterionResult:
+    # CRIT-NOCUT-1: "was it ever cut?", not "did it rise?". The threshold is the NUMBER
+    # OF YEARS to examine, not a count of permitted cuts — one cut fails.
+    return max_dividend_cuts_criterion(ev.dividends, years=int(threshold))
 
 
 # --- Growth / quality criteria (Sprint 4B; hardened post-SK-Hynix) ------- #
@@ -491,6 +505,26 @@ _CRITERIA: tuple[Criterion, ...] = (
                 _UNVERIFIABLE_BLOCKS),
         requires=("dividends",),
         fundamentals_fields=("years_dividend_growth",),
+    ),
+    Criterion(
+        "max_dividend_cuts", _max_dividend_cuts,
+        label="Dividend cuts in the last N years",
+        glossary=("The rule requires that no calendar year in the window paid a lower "
+                  "total dividend than the year before. It asks whether the dividend "
+                  "was ever CUT, which is a different question from whether it ROSE: a "
+                  "company that held its dividend flat through a downturn passes this "
+                  "rule and fails a growth-streak rule. For a cyclical payer the flat "
+                  "dividend is the evidence of durability."),
+        comparison="max",
+        observation="the dividend was cut — the largest fall was {observed} of the "
+                    "prior year's total",
+        threshold_text="no year paid less than the year before, "
+                       "across the last {threshold} complete years",
+        params=(ParamSpec("threshold", "int", min=1.0, max=None, step=1.0,
+                          default=5, unit="count"),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("dividends",),
+        fundamentals_fields=("dividend_per_share",),
     ),
     # --- Growth / quality criteria (Sprint 4B) ---
     Criterion(

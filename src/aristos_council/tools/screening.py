@@ -518,6 +518,82 @@ def dividend_growth_streak_by_calendar_year(
     return streak, note
 
 
+def dividend_cuts_by_calendar_year(
+    dividends: list[DividendEvent], *, years: int,
+) -> tuple[float | None, str]:
+    """The LARGEST dividend cut in the last ``years`` complete calendar years, as a
+    fraction (0.50 = the total halved), or 0.0 when no year paid less than the one
+    before. ``None`` (NOT-EVAL) when the history cannot answer the question.
+
+    CRIT-NOCUT-1. A different question from the growth streak, deliberately computed
+    beside it on the SAME event source, the SAME calendar-year totals, the SAME adjusted
+    per-share values and the SAME "drop the latest, possibly-incomplete year" rule — so
+    the two can never disagree about what a year paid.
+
+    Why not the streak with a low threshold: a streak of 3 asserts the dividend ROSE three
+    times. A company that holds its dividend flat through a downturn has a streak of 0 and
+    has cut nothing, and for a cyclical payer that flat dividend is the evidence of
+    durability. So flat must PASS here and FAIL a streak test. Chevron (a 9-year streak),
+    Kinder Morgan and Hess Midstream (8) are not cutters; BP, which halved in 2020, is.
+
+    KNOWN FALSE POSITIVE, not detected in v1: a SPECIAL dividend inflates one year's
+    total, so the following ordinary year reads as a cut. The measure is the year total by
+    design (it is what makes a cadence change safe), and separating specials from ordinary
+    payments needs a payment-type the free data does not carry reliably. A name flagged
+    this way is wrong about the cause, never about the arithmetic — the note names the
+    year, so it can be checked by eye. Documented in CALCULATIONS.md.
+    """
+    if not dividends:
+        return None, "no dividend history"
+
+    totals: dict[int, float] = {}
+    for ev in dividends:
+        totals[ev.ex_date.year] = totals.get(ev.ex_date.year, 0.0) + ev.amount
+
+    # Drop the latest calendar year — it may be incomplete (only Interim paid so far),
+    # which would read as a cut on a mid-year run. Identical to the streak's rule.
+    complete_years = sorted(totals)[:-1]
+    # Answering "no cut in N years" needs N+1 totals: N transitions to inspect.
+    needed = years + 1
+    if len(complete_years) < needed:
+        return None, (f"only {len(complete_years)} complete years of dividend history; "
+                      f"the rule needs {needed} (the latest year is excluded as "
+                      f"possibly incomplete)")
+
+    window = complete_years[-needed:]
+    worst = 0.0
+    worst_year: int | None = None
+    for prev, year in zip(window, window[1:]):
+        before, after = totals[prev], totals[year]
+        if before > 0 and after < before:
+            cut = (before - after) / before
+            if cut > worst:
+                worst, worst_year = cut, year
+    if worst_year is not None:
+        return worst, (f"dividend cut in {worst_year}: the calendar-year total fell "
+                       f"{worst:.0%} against {worst_year - 1} (adjusted value, summed "
+                       f"per year) across the last {years} complete years")
+    return 0.0, (f"no calendar year paid less than the year before across the last "
+                 f"{years} complete years (adjusted value, summed per year; the latest "
+                 f"year is excluded as possibly incomplete)")
+
+
+def max_dividend_cuts_criterion(
+    dividends: list[DividendEvent], *, years: int,
+) -> CriterionResult:
+    """"No dividend cut in the last ``years`` complete calendar years" as a criterion.
+
+    PASS with ``observed=0.0`` when no year paid less than the one before; FAIL with
+    ``observed`` = the size of the largest cut; NOT-EVAL (``passed=None``) when there is
+    no dividend history at all, or too little of it. A non-payer is failed by the YIELD
+    criterion, never by this one — absence of a dividend is not a cut."""
+    worst, note = dividend_cuts_by_calendar_year(dividends, years=years)
+    return CriterionResult(
+        name="max_dividend_cuts",
+        passed=None if worst is None else worst == 0.0,
+        observed=worst, threshold=float(years), note=note)
+
+
 def min_growth_streak_criterion_by_year(
     dividends: list[DividendEvent], *, min_years: int
 ) -> CriterionResult:
