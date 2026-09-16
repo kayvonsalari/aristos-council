@@ -46,7 +46,10 @@ description: >-
   durability it is. Ranks on how much cash is returned to owners, how comfortably that
   is covered, and how much debt sits on top of it. It applies NO trend rule, so it WILL
   rank a name whose price has fallen — that is the point of it, and it is the difference
-  from Defensive Income.
+  from Defensive Income. One thing it cannot do: a company that sets out to vary its
+  dividend with the commodity will read as a cutter in the year the variable part falls,
+  because that is what the numbers show. This lens is for payers whose dividend is meant to
+  hold.
 
 # Suggested universes (UNI-1): surfaced first in the selectors; a hierarchy, never a
 # lock. This lens was built against the oil dividend cohort that exposed the gap.
