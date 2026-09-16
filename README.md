@@ -67,10 +67,24 @@ deterministically. Its valid insights were extracted and hardened into rules (a 
 factor; a screen-as-prefilter); what remained was noise. The narrative layer is what an
 LLM demonstrably does well here, so that is the job it keeps.
 
-The rank strategies run on one engine — each is a versioned YAML file, not code. Five rank
+The rank strategies run on one engine — each is a versioned YAML file, not code. Seven rank
 over stocks:
 - **Defensive income** (`conservative_plus_v1`) — van Vliet's Conservative Formula: low volatility,
   high net payout (dividends plus buybacks), momentum guard. For steady income portfolios.
+  **(The trend must be intact — by design.)** Because it requires no fall of more than 10% over
+  twelve months, it will not rank a quality income name at the moment it is cheapest: on
+  `defensive_income_16_v1` the two cheapest names on the valuation band (McDonald's, 1st
+  percentile; Kimberly-Clark, 17th) were both excluded by that rule. For cyclical or
+  currently-derated payers use Cyclical Income.
+- **Cyclical income** (`cyclical_income_v1`) — income from companies whose profits move with a
+  cycle (oil, mining, shipping, chemicals), where a ten-year record of dividend increases is the
+  wrong test and removes the sector rather than sorting it. Keeps the income floors — a real
+  yield, covered out of **cash** rather than accounting profit, from a large company whose debt has
+  not become the story — and replaces "raised for ten years" with **"has not cut in five"**, so a
+  dividend held flat through a downturn counts as the evidence of durability it is. Ranks on net
+  payout yield (high), dividend coverage against four-year free cash flow (**low**) and net debt
+  against four-year operating profit (**low**). It applies **no trend rule**, so it will rank a
+  name whose price has fallen — that is the point of it, and the difference from Defensive Income.
 - **Value + momentum** (`magic_formula_momentum_v1`) — the flagship: Greenblatt's two factors plus
   a 12-month momentum rank (per the value-and-momentum literature), which keeps falling knives out
   of the top **quintile** (the ranked list cut into fifths; the top fifth is BUY).
@@ -86,6 +100,10 @@ over stocks:
 - **Financials** (`financials_v1`) — banks, insurers, and payment networks ranked on price-to-book +
   return-on-equity + momentum: the value lenses' sector exclusion **inverted** so financials get
   their own one-yardstick table. Exploratory.
+- **Forensic** (`forensic_v1`) — companies ranked on whether their reported profits are backed by
+  cash and how far the balance sheet sits from distress, rather than on how cheap or how
+  fast-growing they are: accrual ratio (the Sloan measure), Altman Z-Score, and the Piotroski
+  F-Score. A cross-check on the other lenses, gating by none of them.
 - **Classic value** (`magic_formula_v1`) — Greenblatt's Magic Formula: high return on capital,
   bought at a high **earnings yield** (operating profit as a percentage of the cost to buy the whole
   business, debt included — the inverse of a P/E; higher means cheaper). The audited baseline, kept
@@ -105,9 +123,10 @@ ONE picker (`strategy/picker.py`) serves every surface that offers strategies, s
 on one and miss the other. Labels are **plain names** — what a strategy is, not its rank in the
 line-up or the method behind it; qualifiers like *flagship* or *baseline — kept for comparison*
 live in the strategy's `role`, which renders as its own caption. The visible set is currently
-eight — five stock lenses (**Defensive Income** `conservative_plus_v1`, **Value + Momentum**
-`magic_formula_momentum_v1`, **Growth** `growth_garp_v2`, **Magic Formula RAW**
-`magic_formula_raw_v1`, **Financials** `financials_v1`) and three ETF lenses (**Dividend ETFs**
+ten — seven stock lenses (**Defensive Income** `conservative_plus_v1`, **Cyclical Income**
+`cyclical_income_v1`, **Value + Momentum** `magic_formula_momentum_v1`, **Growth**
+`growth_garp_v2`, **Magic Formula RAW** `magic_formula_raw_v1`, **Financials**
+`financials_v1`, **Forensic** `forensic_v1`) and three ETF lenses (**Dividend ETFs**
 `etf_dividend_v1`, **Growth ETFs** `etf_growth_v1`, **ETF Index Tracker** `etf_core_v1`);
 superseded/legacy configs (`growth_garp_v1`, `magic_formula_v1`, `dividend_aristocrats_v1`) are
 marked `ui: hidden` and stay fully loadable via the loader/CLI but unlisted. Where two configs
