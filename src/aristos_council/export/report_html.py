@@ -736,7 +736,7 @@ def multi_strategy_report_html(multi_result, *,
         provenance_sentences,
         report_sections,
         rules_applied,
-        valuation_band_table,
+        union_valuation_band_table,
     )
     from ..data.adapter import display_name
     from ..download_names import slugify as _slug
@@ -853,8 +853,10 @@ def multi_strategy_report_html(multi_result, *,
         parts.append("</section>")
 
     # ----- 5: the per-NAME facts, ONCE — they do not vary by lens.
-    first = multi_result.results[ids[0]] if ids else None
-    band_table = valuation_band_table(first) if first is not None else None
+    # BAND-2: over the UNION of every lens's ranked names, not the first lens's. A lens
+    # attaches a band only to what it ranked, so reading the first one made the section's
+    # size an accident of lens order (2 rows vs 81 on the same 121-name cohort).
+    band_table = union_valuation_band_table(multi_result) if ids else None
     if band_table is not None:
         parts.append(_band_section(band_table, anchor="band"))
 

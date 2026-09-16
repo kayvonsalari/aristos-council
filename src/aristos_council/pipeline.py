@@ -1747,6 +1747,69 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
         footnotes=_band_footnotes(live, uniform, coverage, has_band=has_band))
 
 
+class _UnionBandView:
+    """A result-shaped view over the UNION of a multi-lens run's ranked names (BAND-2).
+
+    ``valuation_band_table`` reads exactly two things off a result — ``ranked`` and
+    ``names`` — so the union is expressed as that shape rather than by duplicating the
+    table builder. Nothing here re-grades: the rows ARE the per-lens ranked rows, carrying
+    the band, price and reversion objects their own lens attached."""
+
+    __slots__ = ("ranked", "names")
+
+    def __init__(self, ranked, names):
+        self.ranked = ranked
+        self.names = names
+
+
+def union_valuation_band_table(multi_result) -> Optional[ValuationBandTable]:
+    """The valuation-band table for a MULTI-LENS run: one row per name that at least one
+    lens ranked (BAND-2).
+
+    The band is per-NAME and display-only — it describes where a price sits against that
+    name's own history, which no lens has a view on. But a lens attaches a band only to the
+    names it ranked, so reading the table off the first lens alone made the section's size
+    an accident of lens order: Defensive Income first gave 2 rows of 121 names, Magic
+    Formula RAW first gave 81.
+
+    Walks ``results`` in STRATEGY ORDER and takes the FIRST band seen per ticker, so the
+    output is deterministic and independent of which lens is first in any other sense: a
+    name ranked by several lenses carries one row, not several. Abstentions keep their row
+    (the existing doctrine — an absent row is indistinguishable from a feature that was
+    never switched on).
+
+    Returns None when no lens ranked anything rateable, exactly as the single-lens builder
+    does. Single-lens paths are untouched and still call ``valuation_band_table``."""
+    results = getattr(multi_result, "results", None) or {}
+    ids = [s for s in (getattr(multi_result, "strategy_ids", None) or list(results))
+           if s in results]
+    if not ids:
+        return None
+
+    seen: dict[str, object] = {}
+    order: list[str] = []
+    names: dict[str, str] = {}
+    for sid in ids:
+        res = results[sid]
+        # Names are merged across lenses too: they grade the same cohort, so a label one
+        # lens resolved is the right label everywhere. First non-empty wins.
+        for ticker, label in (getattr(res, "names", None) or {}).items():
+            if label and ticker not in names:
+                names[ticker] = label
+        for r in res.ranked:
+            if r.excluded or r.ticker in seen:
+                continue
+            # Same admission rule as the single-lens table: a row needs a price or a band.
+            if (getattr(r, "valuation_band", None) is None
+                    and getattr(r, "price", None) is None):
+                continue
+            seen[r.ticker] = r
+            order.append(r.ticker)
+    if not order:
+        return None
+    return valuation_band_table(_UnionBandView([seen[t] for t in order], names))
+
+
 def _band_footnotes(live, uniform: bool, coverage: set, *,
                     has_band: bool = True) -> list[str]:
     """The notes that belong BELOW the table: the shared month coverage, the net-debt
@@ -2183,11 +2246,16 @@ def run_multi_strategy_pipeline(
             universes_dir=universes_dir, strategies_dir=strategies_dir,
             ranker_only=True, adapter=adapter, today=today, use_cache=use_cache,
             freeze_dir=freeze_dir,
-            # VALBAND-1: the band is per-NAME, not per-strategy, so compute it once (on the
-            # first lens) — the shared cache means later lenses would only re-read the same
-            # 5-year fetch. Every column's ranked tickers still describe the same cohort;
-            # the band column is read off this first result (app renders it beside the grid).
-            with_valuation_band=(with_valuation_band and i == 1),
+            # VALBAND-1 / BAND-2: the band is per-NAME, not per-strategy — so it is computed
+            # for EVERY lens, not just the first. Computing it once looked equivalent, but a
+            # lens only attaches a band to the names IT ranked, so the first lens's ranked
+            # set silently decided who got a band at all: ordering Defensive Income first on
+            # the 121-name USD cohort (its 10-year dividend-streak rule ranked 2 names) left
+            # the band section with 2 rows; Magic Formula RAW first produced 81. Which lens
+            # happened to run first must not decide that. The per-day cache means the later
+            # lenses re-read the SAME 5-year fetch rather than issuing a second network call
+            # (see test_band_computed_for_every_lens_costs_one_fetch).
+            with_valuation_band=with_valuation_band,
             derived_from=derived_from)
         results[sid] = res
         names[sid] = res.meta.get("rank_strategy_name", "") or sid

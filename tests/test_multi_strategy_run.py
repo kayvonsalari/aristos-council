@@ -226,3 +226,170 @@ def test_combine_is_pure_and_orders_comparable_names_first():
     assert graded == sorted(graded, reverse=True)      # fully-graded names first
     sums = [r.rank_sum for r in rows if r.graded == 2]
     assert sums == sorted(sums)                        # then best rank-sum first
+
+
+# --------------------------------------------------------------------------- #
+# BAND-2 — the valuation band covers every ranked name, not the first lens's
+# --------------------------------------------------------------------------- #
+# The band is per-NAME and display-only: it says where a price sits against that name's
+# OWN history, which no lens has a view on. But a lens attaches a band only to names IT
+# ranked, so computing it on the first lens alone made the section's size an accident of
+# lens ORDER. Live, 2026-09-15, the 121-name USD-listed cohort: Defensive Income first
+# (its 10-year dividend-streak rule ranked 2 of 121) produced a 2-row band section
+# (PSX, SOBO); re-running with Magic Formula RAW first produced 81 rows.
+class _Row:
+    """The two attributes the band table reads off a ranked row, plus the ticker."""
+
+    def __init__(self, ticker, band=None, price=None, excluded=False):
+        self.ticker = ticker
+        self.valuation_band = band
+        self.price = price
+        self.reversion = None
+        self.excluded = excluded
+
+
+class _Res:
+    def __init__(self, ranked, names=None):
+        self.ranked = ranked
+        self.names = names or {}
+
+
+class _Multi:
+    def __init__(self, strategy_ids, results):
+        self.strategy_ids = list(strategy_ids)
+        self.results = results
+
+
+def _band(current=12.0):
+    from aristos_council.tools.valuation_band import ValuationBand
+    return ValuationBand(basis="ev_ebit", current=current, median_multiple=10.0,
+                         percentile=55.0, months_covered=61, months_total=61,
+                         window_years=5, net_debt_basis="asof")
+
+
+def test_union_band_table_covers_every_name_any_lens_ranked():
+    """Lens A ranks {X}; lens B ranks {X, Y}. The union has a row for X AND Y."""
+    from aristos_council.pipeline import union_valuation_band_table
+
+    a = _Res([_Row("X", _band(11.0))])
+    b = _Res([_Row("X", _band(11.0)), _Row("Y", _band(22.0))])
+
+    forward = union_valuation_band_table(_Multi(["A", "B"], {"A": a, "B": b}))
+    reverse = union_valuation_band_table(_Multi(["B", "A"], {"A": a, "B": b}))
+
+    names = lambda t: [r["Name"] for r in t.rows]          # noqa: E731
+    assert set(names(forward)) == {"X", "Y"} == set(names(reverse))
+    # ...and X appears ONCE even though two lenses ranked it.
+    assert len(forward.rows) == 2 and len(reverse.rows) == 2
+
+
+def test_union_band_takes_the_first_band_seen_per_ticker_in_strategy_order():
+    """Deterministic by construction: strategy order decides, not dict iteration."""
+    from aristos_council.pipeline import union_valuation_band_table
+
+    a = _Res([_Row("X", _band(11.0))])
+    b = _Res([_Row("X", _band(99.0))])
+    table = union_valuation_band_table(_Multi(["A", "B"], {"A": a, "B": b}))
+    assert [r["EV/EBIT"] for r in table.rows] == ["11.0x"]
+    flipped = union_valuation_band_table(_Multi(["B", "A"], {"A": a, "B": b}))
+    assert [r["EV/EBIT"] for r in flipped.rows] == ["99.0x"]
+
+
+def test_union_band_keeps_an_abstaining_row():
+    """Existing doctrine: an abstention keeps its row and states its own reason."""
+    from aristos_council.pipeline import union_valuation_band_table
+    from aristos_council.tools.valuation_band import ValuationBand
+
+    out = ValuationBand(note="insufficient history: 1.1y")
+    table = union_valuation_band_table(
+        _Multi(["A"], {"A": _Res([_Row("X", out)])}))
+    assert len(table.rows) == 1
+    assert "insufficient history" in table.rows[0]["Percentile"]
+
+
+def test_union_band_ignores_excluded_rows_and_empty_runs():
+    from aristos_council.pipeline import union_valuation_band_table
+
+    excluded_only = _Res([_Row("X", _band(), excluded=True)])
+    assert union_valuation_band_table(_Multi(["A"], {"A": excluded_only})) is None
+    assert union_valuation_band_table(_Multi([], {})) is None
+
+
+def test_single_lens_band_table_is_unchanged():
+    """BAND-2 touches the multi-lens path only."""
+    from aristos_council.pipeline import valuation_band_table
+
+    table = valuation_band_table(_Res([_Row("X", _band(11.0)), _Row("Y", _band(22.0))]))
+    assert [r["Name"] for r in table.rows] == ["X", "Y"]
+    assert [r["EV/EBIT"] for r in table.rows] == ["11.0x", "22.0x"]
+
+
+def test_band_is_computed_for_every_lens_not_just_the_first():
+    """The end-to-end shape of the live failure: C is EXCLUDED by the screened lens and
+    RANKED by the raw one, so ordering the screened lens first used to cost C its row."""
+    res = run_multi_strategy_pipeline(UNIVERSE, [SCREENED, RAW], strategies_dir=STRAT_DIR,
+                                      adapter=_Adapter(), today=TODAY,
+                                      with_valuation_band=True)
+    # EVERY lens now carries bands for what IT ranked — not just the first.
+    for sid in (SCREENED, RAW):
+        ranked = [r for r in res.results[sid].ranked if not r.excluded]
+        assert ranked and all(getattr(r, "valuation_band", None) is not None
+                              for r in ranked), sid
+
+    from aristos_council.pipeline import union_valuation_band_table
+    names = {r["Name"] for r in union_valuation_band_table(res).rows}
+    assert "C" in names                       # the name only the RAW lens ranked
+    # ...and lens order does not decide it.
+    flipped = run_multi_strategy_pipeline(UNIVERSE, [RAW, SCREENED],
+                                          strategies_dir=STRAT_DIR,
+                                          adapter=_Adapter(), today=TODAY,
+                                          with_valuation_band=True)
+    assert {r["Name"] for r in union_valuation_band_table(flipped).rows} == names
+
+
+def test_band_for_every_lens_costs_no_second_network_fetch(tmp_path):
+    """The claim the change rests on: the per-day cache serves the later lenses, so
+    banding EVERY lens re-reads the same 5-year fetch instead of issuing a new one.
+
+    Stated as a marginal cost: adding a second lens adds ZERO provider calls for every
+    ticker that can be cached. DEAD is the one exception and not a BAND-2 one — its fetch
+    RAISES, an exception is not a cacheable result, so it is retried by each lens exactly
+    as it was before this change."""
+    from aristos_council.data.cache import CachingAdapter
+
+    class _Counting(_Adapter):
+        def __init__(self):
+            self.price_calls = []
+
+        def get_price_history(self, ticker, *, start, end):
+            self.price_calls.append((ticker, start, end))
+            return super().get_price_history(ticker, start=start, end=end)
+
+    def _calls(ids, cache_dir):
+        inner = _Counting()
+        run_multi_strategy_pipeline(
+            UNIVERSE, ids, strategies_dir=STRAT_DIR, today=TODAY,
+            with_valuation_band=True,
+            adapter=CachingAdapter(inner, cache_dir=cache_dir, today=TODAY))
+        return inner.price_calls
+
+    one = _calls([RAW], tmp_path / "one")
+    two = _calls([SCREENED, RAW], tmp_path / "two")
+
+    live = lambda calls: [c for c in calls if c[0] != "DEAD"]      # noqa: E731
+    # Each (ticker, window) reaches the provider exactly once, however many lenses ran...
+    assert len(live(two)) == len(set(live(two)))
+    # ...so the SECOND lens costs nothing: same provider calls as a single-lens run.
+    assert sorted(set(live(two))) == sorted(set(live(one)))
+    assert len(live(two)) == len(live(one))
+
+    # The 5-year band window is among them, fetched once per name (not once per lens).
+    windows = {w for _, w, _ in ((t, s, e) for t, s, e in live(two))}
+    assert len(windows) == 2                    # the 400-day legs window + the 5y band
+    for ticker in ("A", "B", "C"):
+        for start in windows:
+            assert sum(1 for c in live(two) if c[0] == ticker and c[1] == start) == 1
+
+    # DEAD is retried per lens because it raises; that is unchanged, and it is not a fetch
+    # of anything (the provider has no data for it).
+    assert [c[0] for c in two if c[0] == "DEAD"]

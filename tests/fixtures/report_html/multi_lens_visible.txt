@@ -82,6 +82,10 @@ B
 121.90
 not evaluated — only 0 weeks of closes
 —
+C
+121.90
+not evaluated — only 0 weeks of closes
+—
 Prices are the last close on 2026-01-01, each in the name's own quoted currency, never converted. A stale cache shows up here.
 Rules applied — by lens
 Each lens screens on its own rules; a name excluded by one may be ranked by another. The rules below are read from the strategies that actually ran.

@@ -1955,6 +1955,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, evidence_gaps, exclusion_rows,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
         provenance_sentences, report_sections,
+        union_valuation_band_table,
         valuation_band_table,
     )
     from aristos_council.export.report_html import DISCLAIMER, DOCTRINE
@@ -2018,9 +2019,10 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     lines += _multi_narration_markdown(multi_result)
 
     # 5 — the per-NAME facts, ONCE: they do not vary by lens.
-    first = multi_result.results[ids[0]] if ids else None
-    if first is not None:
-        lines += _valuation_band_markdown(valuation_band_table(first))
+    # BAND-2: the UNION of every lens's ranked names — a lens bands only what it ranked,
+    # so the first lens's ranked set must not decide who gets a row.
+    if ids:
+        lines += _valuation_band_markdown(union_valuation_band_table(multi_result))
 
     # 6 — rules applied, ONE sub-block per lens (each has its own screen and thresholds).
     # REFERENCE material: it sits after the answer, not in front of it. A reader used to
@@ -2205,13 +2207,14 @@ def _render_multi_strategy_result(multi_result) -> None:
                "lenses — only those rank-sums are comparable.")
 
     # PRICE-1 / VALBAND-1: per-NAME context beside the combined grid, never a verdict.
-    # The price is identical under every lens so it is read off the first one — and it is
-    # ALWAYS shown; the band (and the reversion value riding with it) only when the
+    # It is ALWAYS shown; the band (and the reversion value riding with it) only when the
     # checkbox was on.
-    from aristos_council.pipeline import valuation_band_table
-    first = multi_result.results[ids[0]] if ids else None
+    # BAND-2: over the UNION of every lens's ranked names. Reading it off the first lens
+    # made the section's size an accident of lens order — Defensive Income first showed
+    # 2 rows of a 121-name cohort, Magic Formula RAW first showed 81.
+    from aristos_council.pipeline import union_valuation_band_table
     _render_valuation_band_table(
-        valuation_band_table(first) if first is not None else None)
+        union_valuation_band_table(multi_result) if ids else None)
 
     # What DOES vary per lens — exclusion reasons, no-data names, factor sourcing.
     from aristos_council.pipeline import exclusion_rows, provenance_sentences
