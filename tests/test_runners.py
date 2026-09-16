@@ -18,8 +18,12 @@ from aristos_council.agents.runners import (
 
 def test_default_temps_are_zero_on_every_tier():
     # Reproducibility first: the verdict (and everything feeding it) runs at temp 0.
-    assert _DEFAULT_TEMPS == {"specialist": 0.0, "critic": 0.0, "decision": 0.0}
-    for tier in ("specialist", "critic", "decision"):
+    # READER-1 adds a fourth tier and it is held to the same bar — the same run must not
+    # produce a differently-worded summary. The exact-equality assertion is KEPT (a new
+    # tier must be added here deliberately, not slip in unpinned); only the roster grows.
+    assert _DEFAULT_TEMPS == {"specialist": 0.0, "critic": 0.0, "decision": 0.0,
+                              "reader": 0.0}
+    for tier in ("specialist", "critic", "decision", "reader"):
         assert _DEFAULT_TEMPS[tier] == 0.0
 
 

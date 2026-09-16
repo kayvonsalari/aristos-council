@@ -12,10 +12,12 @@ temperature) never requires a code change:
     ARISTOS_MODEL_SPECIALIST  (default: anthropic:claude-haiku-4-5)
     ARISTOS_MODEL_CRITIC      (default: anthropic:claude-sonnet-4-6)
     ARISTOS_MODEL_DECISION    (default: anthropic:claude-sonnet-4-6)
+    ARISTOS_MODEL_READER      (default: anthropic:claude-haiku-4-5)
 
     ARISTOS_TEMP_SPECIALIST   (default: 0.0)
     ARISTOS_TEMP_CRITIC       (default: 0.0)
     ARISTOS_TEMP_DECISION     (default: 0.0)
+    ARISTOS_TEMP_READER       (default: 0.0)
 
 Temperature defaults to 0.0 on EVERY tier for reproducibility: Claude's own
 default is 1.0 (maximum randomness), which made the verdict on a screen-passing,
@@ -50,6 +52,11 @@ _DEFAULTS = {
     "specialist": "anthropic:claude-haiku-4-5",
     "critic": "anthropic:claude-sonnet-4-6",
     "decision": "anthropic:claude-sonnet-4-6",
+    # READER-1 — the cheapest tier already configured. The reader writes ONE short note
+    # per RUN from a facts pack that is already decided, so nothing is being reasoned
+    # about; a stronger model would buy nothing and would cost per run rather than
+    # per name.
+    "reader": "anthropic:claude-haiku-4-5",
 }
 
 # Default temperature per tier. 0.0 everywhere — reproducibility first; the
@@ -59,6 +66,7 @@ _DEFAULT_TEMPS = {
     "specialist": 0.0,   # was implicitly 1.0 (Claude default)
     "critic": 0.0,
     "decision": 0.0,     # the verdict MUST be stable — temp 0
+    "reader": 0.0,       # the same run must not produce a differently-worded summary
 }
 
 

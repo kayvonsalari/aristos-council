@@ -1,0 +1,216 @@
+{
+ "cohort": {
+  "built_for": "income",
+  "name": "Oil — Dividend-type",
+  "size": 134
+ },
+ "could_not_see": [],
+ "fit_note": "⚠ Magic Formula RAW is a value lens; this list is marked income. Its verdicts answer a different question than the list was built for.",
+ "lenses": [
+  {
+   "asks": "Cheap and good: high profit on the money invested, a low price for that profit, and a rising share.",
+   "dominant_rule": null,
+   "excluded": 29,
+   "factor_abstentions": {
+    "momentum_12m": 2,
+    "roic": 8
+   },
+   "kind": "selector",
+   "name": "Magic Formula RAW",
+   "no_data": 0,
+   "ranked": 105,
+   "rules": [],
+   "verdicts": {
+    "buy": 21,
+    "hold": 63,
+    "sell": 21
+   }
+  },
+  {
+   "asks": "Are the profits real: cash behind the earnings, a safe balance sheet, and improving health checks.",
+   "dominant_rule": null,
+   "excluded": 28,
+   "factor_abstentions": {
+    "accrual_ratio": 4,
+    "altman_z": 40
+   },
+   "kind": "check",
+   "name": "Forensic",
+   "no_data": 0,
+   "ranked": 106,
+   "rules": [],
+   "verdicts": {
+    "buy": 22,
+    "hold": 63,
+    "sell": 21
+   }
+  },
+  {
+   "asks": "Income that survives the cycle: a covered dividend not cut in five years, with manageable debt.",
+   "dominant_rule": {
+    "failed": 67,
+    "rule": "Dividend cuts in the last N years"
+   },
+   "excluded": 111,
+   "factor_abstentions": {
+    "payout_coverage_fcf": 3
+   },
+   "kind": "selector",
+   "name": "Cyclical Income",
+   "no_data": 0,
+   "ranked": 23,
+   "rules": [
+    {
+     "failed": 8,
+     "limit": "at least 1.5%",
+     "not_tested": 0,
+     "passed": 98,
+     "rule": "Dividend yield"
+    },
+    {
+     "failed": 28,
+     "limit": "at most 80%",
+     "not_tested": 7,
+     "passed": 71,
+     "rule": "Dividends vs free cash flow"
+    },
+    {
+     "failed": 0,
+     "limit": "at least $5.0bn",
+     "not_tested": 50,
+     "passed": 56,
+     "rule": "Company size"
+    },
+    {
+     "failed": 67,
+     "limit": "no year paid less than the year before, across the last 5 complete years",
+     "not_tested": 15,
+     "passed": 24,
+     "rule": "Dividend cuts in the last N years"
+    },
+    {
+     "failed": 6,
+     "limit": "at most 1.0x",
+     "not_tested": 7,
+     "passed": 93,
+     "rule": "Total debt vs market value"
+    }
+   ],
+   "verdicts": {
+    "buy": 5,
+    "hold": 14,
+    "sell": 4
+   }
+  }
+ ],
+ "overrides": {},
+ "primary_lens": "Magic Formula RAW",
+ "shortlist": {
+  "available": true,
+  "candidates": 21,
+  "dropped": [
+   {
+    "name": "Aker Solutions ASA (AKSO.OL)",
+    "why": "SELL under Forensic"
+   },
+   {
+    "name": "Cheniere Energy Partners, L.P. (CQP)",
+    "why": "SELL under Forensic"
+   }
+  ],
+  "dropped_count": 2,
+  "kept": [
+   {
+    "name": "Ecopetrol S.A. (EC)",
+    "rank": 1
+   },
+   {
+    "name": "Türkiye Petrol Rafinerileri A.S. (TUPRS.IS)",
+    "rank": 2
+   },
+   {
+    "name": "OMV Aktiengesellschaft (OMV.VI)",
+    "rank": 3
+   },
+   {
+    "name": "Marathon Petroleum Corporation (MPC)",
+    "rank": 4
+   },
+   {
+    "name": "MOL Magyar Olaj- és Gázipari Nyilvánosan Muködo Részvénytársaság (MOL.BD)",
+    "rank": 5
+   },
+   {
+    "name": "Canadian Natural Resources Limited (CNQ)",
+    "rank": 6
+   },
+   {
+    "name": "PTT Exploration and Production Public Company Limited (PTTEP.BK)",
+    "rank": 6
+   },
+   {
+    "name": "CNOOC Limited (0883.HK)",
+    "rank": 8
+   },
+   {
+    "name": "Tenaris S.A. (TS)",
+    "rank": 9
+   },
+   {
+    "name": "Galp Energia, SGPS, S.A. (GALP.LS)",
+    "rank": 10
+   },
+   {
+    "name": "Ultrapar Participações S.A. (UGP)",
+    "rank": 10
+   },
+   {
+    "name": "Repsol, S.A. (REP.MC)",
+    "rank": 12
+   },
+   {
+    "name": "Suncor Energy Inc. (SU)",
+    "rank": 13
+   },
+   {
+    "name": "SBM Offshore N.V. (SBMO.AS)",
+    "rank": 14
+   },
+   {
+    "name": "Valero Energy Corporation (VLO)",
+    "rank": 15
+   },
+   {
+    "name": "Halliburton Company (HAL)",
+    "rank": 17
+   },
+   {
+    "name": "PetroChina Company Limited (0857.HK)",
+    "rank": 18
+   },
+   {
+    "name": "Eni S.p.A. (E)",
+    "rank": 18
+   },
+   {
+    "name": "Seplat Energy Plc (SEPL.L)",
+    "rank": 20
+   }
+  ],
+  "kept_count": 19,
+  "reason": "",
+  "rule": "BUY under Magic Formula RAW, not SELL under Forensic, and below the 80th percentile of its own valuation history."
+ },
+ "valuation_band": {
+  "buckets": {
+   "cheap": 0,
+   "cheapest": 0,
+   "dear": 0,
+   "dearest": 0,
+   "mid": 0
+  },
+  "evaluated": 0,
+  "not_evaluated": 106,
+  "withheld_as_implausible": 0
+ }
+}

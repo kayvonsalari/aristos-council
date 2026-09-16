@@ -35,6 +35,11 @@ from aristos_council.demo_surface import (
     strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
 from aristos_council.costs import actual_vs_estimate, cost_phrase
+
+# READER-1 — what one summary costs, for the checkbox label and the Run-button line. One
+# call on the cheapest tier over a facts pack of a few thousand tokens; stated as "about"
+# because it is a hint on a control, not a billed figure (the run records the real one).
+READER_COST_HINT = "1 cent"
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
     RunReport,
@@ -1255,7 +1260,8 @@ def run_mode_narrates(run_mode: str) -> bool:
 
 def run_button_label(run_mode: str, *, n_strategies: int,
                      est_cost: float | None = None,
-                     narrated_count: int | None = None) -> str:
+                     narrated_count: int | None = None,
+                     with_reader: bool = False) -> str:
     """The button says what will happen and what it costs, on its own line:
 
         ``▶ Run 5 lenses — deterministic, free``
@@ -1267,8 +1273,12 @@ def run_button_label(run_mode: str, *, n_strategies: int,
     only 13 distinct names on the 2026-08-24 run, and it is the 13 that gets charged, so
     it is the 13 the button states."""
     what = f"Run {n_strategies} lenses" if n_strategies > 1 else "Run"
+    # READER-1: the summary is ONE call and is independent of the run mode, so a
+    # ranker-only run with it ticked is no longer free and the button must stop saying so.
+    reader_tail = f" + summary ~{READER_COST_HINT}" if with_reader else ""
     if not run_mode_narrates(run_mode):
-        return f"▶ {what} — deterministic, free"
+        return (f"▶ {what} — deterministic, free{reader_tail}" if with_reader
+                else f"▶ {what} — deterministic, free")
     # THIS BUTTON IS FREE. It runs the deterministic ranking and charges nothing —
     # narration is offered afterwards, from a second button carrying the exact figure
     # (CONFIRM-SPEND-1). The label used to read "Run 3 lenses — up to 12 names narrated,
@@ -1287,11 +1297,11 @@ def run_button_label(run_mode: str, *, n_strategies: int,
     if narrated_count is not None:
         tail = (f" · ≤ {cost_phrase(est_cost, narrated_count)}"
                 if est_cost is not None else "")
-        return (f"▶ {what} — free · then choose whether to narrate "
+        return (f"▶ {what} — free{reader_tail} · then choose whether to narrate "
                 f"up to {narrated_count} names{tail}")
     verb = "narrate" if run_mode == RUN_MODE_NARRATOR else "take a second opinion"
     tail = f" · ≤ ${est_cost:.2f} total" if est_cost is not None else ""
-    return f"▶ {what} — free · then choose whether to {verb}{tail}"
+    return f"▶ {what} — free{reader_tail} · then choose whether to {verb}{tail}"
 
 
 # COST-2: a confirmation on EVERY run is friction, not a guard. The mode was already
@@ -1988,6 +1998,22 @@ def _multi_grid_rows(multi_result) -> list[dict]:
 
 
 
+
+def _reader_markdown(reader) -> list[str]:
+    """READER-1 in the .md — the same five paragraphs the HTML renders."""
+    from aristos_council.reader import (READER_SECTION_NOTE, READER_SECTION_TITLE,
+                                        reader_paragraphs)
+
+    if reader is None:
+        return []
+    lines = ["", f"## {READER_SECTION_TITLE}", ""]
+    if not reader.available:
+        return lines + [f"_{reader.note}_"]
+    for lead, text in reader_paragraphs(reader.summary):
+        lines += [f"**{lead}** {text}", ""]
+    return lines + [f"_{READER_SECTION_NOTE}_"]
+
+
 def _shortlist_markdown(sl, shortlist_table) -> list[str]:
     """SHORTLIST-1 in the .md — the same cells the HTML renders, from the same builder."""
     if sl is None:
@@ -2073,6 +2099,9 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     # relying on HTML anchors: markdown renderers derive their own heading ids, and a
     # plain-text reader still gets the document's map and its order.
     lines += _contents_markdown(report_sections(multi_result))
+
+    # 1a (READER-1) — the note that explains the rest, above everything it explains.
+    lines += _reader_markdown(getattr(multi_result, "reader", None))
 
     # 1b (SHORTLIST-1) — the answer, before the evidence for it.
     lines += _shortlist_markdown(getattr(multi_result, "shortlist", None),
@@ -2631,6 +2660,19 @@ def render_universe_tab(show_validation: bool = False) -> None:
              "cheap, 92nd = near its own peak. Unlike the extra lenses above it never "
              "grades, reorders, or narrates; it only contextualizes. Off by default — "
              "ticking it fetches each name's 5-year price history.")
+    # READER-1: ONE short AI note about the whole RUN, not about a name. It rides beside
+    # the band toggle because neither is a lens: the band adds context, this adds prose,
+    # and neither grades anything. Default OFF, and INDEPENDENT of the run mode — ticked
+    # on a ranker-only run it makes exactly one model call and nothing else.
+    with_reader = st.checkbox(
+        f"Plain-English summary (one short AI note, about {READER_COST_HINT})",
+        value=False, key="uni_reader",
+        help="Adds a short note at the top of the report saying what the run asked, what "
+             "happened, what survived the checks and what to doubt — in language a "
+             "non-specialist reads in a minute. It is written from the tables, and every "
+             "number in it is checked back against them; a summary that fails that check "
+             "is withheld with its reason rather than published. It explains the results; "
+             "it never recommends anything.")
     picked_labels = selected_labels(primary_label, extras)
     # OFFER order, not click order (picker.resolve_all), so the combined grid's columns are
     # reproducible. ``or [primary]`` only covers a stale widget value: with a required
@@ -2927,7 +2969,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # own line — and on a multi-lens narrated run it says how many NAMES that is.
     run = st.button(_md(run_button_label(
                         run_mode, n_strategies=n_strategies, est_cost=est,
-                        narrated_count=narrated_count)),
+                        narrated_count=narrated_count, with_reader=with_reader)),
                     type="primary", disabled=bool(problems), key="uni_run")
     if est is not None:
         basis = (f" ONE section per NAME over "
@@ -2956,6 +2998,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 # SHORTLIST-1: the lens the reader picked as primary, which is NOT
                 # necessarily the grid's first column (that is offer order).
                 primary_id=primary.id,
+                # READER-1: one call per run, off unless asked for.
+                with_reader=with_reader,
+                cohort_thesis=getattr(picked_list, "thesis", "") or "",
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")

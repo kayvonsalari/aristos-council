@@ -236,3 +236,22 @@ class DecisionOutput(BaseModel):
     narration: Optional[Narration] = None
 
     _coerce = field_validator("dissent", mode="before")(_coerce_json_list)
+
+
+class ReaderSummary(BaseModel):
+    """READER-1 — one short plain-English note about the WHOLE RUN.
+
+    Five named fields rather than one blob: the shape is the point. A reader wants what
+    was asked, what happened, what survived and what to doubt, in that order, and a model
+    given one free-text field writes an essay. The renderer joins them as five short
+    paragraphs under their own bold leads.
+
+    ``cannot_say`` is not a disclaimer and not optional. Every other section of the report
+    states what it could not see; a summary that only reported findings would be the one
+    place in the document that implies completeness."""
+
+    asked: str          # 1-2 sentences: the list, its size, the tests that ran
+    happened: str       # 2-4 sentences: what each test did, and any dominant rule
+    survived: str       # 1-3 sentences: the shortlist, or why there is none
+    doubt: str          # 1-3 sentences: abstentions, gaps, withheld figures
+    cannot_say: str     # 1 sentence: the question this run structurally cannot answer

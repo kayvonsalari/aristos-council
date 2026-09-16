@@ -2221,6 +2221,9 @@ class MultiStrategyResult:
     # than each recomputing the rule. None on a run where it was not computed (a caller
     # that predates this field), which renders no section at all.
     shortlist: "Optional[Shortlist]" = None
+    # READER-1 — the run's plain-English summary, or the note saying why there is none.
+    # None when the reader was not asked for (the default), which renders no section.
+    reader: "Optional[object]" = None
 
 
 def combine_rank_results(results: dict[str, RankPipelineResult],
@@ -2311,6 +2314,7 @@ def run_multi_strategy_pipeline(
     runners=None, derived_from: str = "",
     min_market_cap_override: float | None = None,
     primary_id: Optional[str] = None,
+    with_reader: bool = False, reader_runner=None, cohort_thesis: str = "",
 ) -> MultiStrategyResult:
     """Grade ONE cohort under N rank strategies and return the combined grid (FUND-RUN-1).
 
@@ -2431,7 +2435,29 @@ def run_multi_strategy_pipeline(
     built = MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
                                 results=results, rows=rows, meta=meta,
                                 narratives=narratives, council=council)
-    return replace(built, shortlist=shortlist(built, primary_id=resolved_primary))
+    built = replace(built, shortlist=shortlist(built, primary_id=resolved_primary))
+
+    # READER-1 — LAST, so the facts pack can see the shortlist and the band. Opt-in: off,
+    # nothing is built and nothing is called, so a ranker-only run stays free and its
+    # output is byte-identical to a pre-READER-1 run.
+    if not with_reader:
+        return built
+    from .reader import write_summary
+    if reader_runner is None and os.environ.get("ANTHROPIC_API_KEY"):
+        from .agents.runners import LangChainRunner
+        from .agents.schemas import ReaderSummary
+        reader_runner = LangChainRunner("reader", ReaderSummary)
+    if reader_runner is None:
+        from .reader import NO_KEY_NOTE, ReaderResult
+        out = ReaderResult(note=NO_KEY_NOTE, meta={"written": False, "reason": "no key"})
+    else:
+        if progress is not None:
+            progress("Writing the plain-English summary…")
+        out = write_summary(built, runner=reader_runner,
+                            cohort_name=meta.get("universe_name", ""),
+                            cohort_thesis=cohort_thesis)
+    meta["reader"] = out.meta
+    return replace(built, reader=out)
 
 
 # --------------------------------------------------------------------------- #
@@ -2615,6 +2641,11 @@ def report_sections(multi_result) -> list[dict]:
     first = multi_result.results[ids[0]] if ids else None
 
     out: list[dict] = []
+    # READER-1 — the note that explains the rest, registered so the contents list and the
+    # document cannot disagree. Absent when no reader ran.
+    if getattr(multi_result, "reader", None) is not None:
+        from .reader import READER_SECTION_TITLE
+        out.append({"anchor": "summary", "title": READER_SECTION_TITLE, "children": []})
     # SHORTLIST-1 — the answer, ahead of the evidence for it. It is registered HERE and
     # not only rendered, so the contents list and the document cannot disagree about what
     # the report contains (test_report_structure pins that they agree). Absent when the
