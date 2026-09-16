@@ -157,6 +157,7 @@ carries on: it never hides a lens or blocks a run.
 | Lens | Kind | Asks |
 |---|---|---|
 | **Defensive Income** (`conservative_plus_v1`) | selector · income | Steady income with the trend intact: a calm share, a covered dividend raised for 10 years, and no recent fall. |
+| **Cyclical Income** (`cyclical_income_v1`) | selector · income | Income that survives the cycle: a covered dividend not cut in five years, with manageable debt. |
 | **Value + Momentum** (`magic_formula_momentum_v1`) | selector · value | The same as Magic Formula RAW, but only for companies earning at least 12% on their capital. |
 | **Magic Formula RAW** (`magic_formula_raw_v1`) | selector · value | Cheap and good: high profit on the money invested, a low price for that profit, and a rising share. |
 | **Growth** (`growth_garp_v2`) | selector · growth | Growing fast at a fair price: sales up at least 10% a year, and not overpaying for that growth. |

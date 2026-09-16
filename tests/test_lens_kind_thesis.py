@@ -45,8 +45,7 @@ EXPECTED = {
     "etf_growth_v1": ("selector", ["funds"]),
     "etf_core_v1": ("selector", ["funds"]),
     "forensic_v1": ("check", []),
-    # TODO(CYCLICAL-INCOME-1): absent on this branch — when feat/cyclical-income-1 lands,
-    # cyclical_income_v1 declares ("selector", ["income"]). The loop skips missing ids.
+    "cyclical_income_v1": ("selector", ["income"]),
 }
 
 

@@ -23,6 +23,19 @@ display_name: Cyclical Income
 version: 1
 role: income through the cycle — screened
 
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Income that survives the cycle: a covered dividend not cut in five years, with
+  manageable debt.
+
+# KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting an
+# income cohort. The thesis only drives a caption when a list says it was built
+# for something else; it never filters this lens out of the picker.
+kind: selector
+thesis:
+  - income
+
 description: >-
   Income from companies whose profits move with a cycle — oil, mining, shipping,
   chemicals — where a ten-year record of dividend increases is the wrong test and
