@@ -17,6 +17,7 @@ to exactly one of these outputs.
 from __future__ import annotations
 
 import math
+import statistics
 from dataclasses import dataclass
 
 from ..data.adapter import DividendEvent, Fundamentals
@@ -594,15 +595,55 @@ def dividend_growth_streak_by_calendar_year(
     return streak, note
 
 
-def _cuts_from_year_totals(totals: dict[int, float], *, years: int,
-                           flat_tol: float = _FLAT_TOL) -> tuple[float | None, str]:
-    """The shared arithmetic behind ``dividend_cuts_by_calendar_year`` — see it for the
-    contract. Split out so the EVENT source and the adapter's carried YEAR TOTALS reach
-    exactly the same answer rather than two implementations of one rule."""
-    # Drop the latest calendar year — it may be incomplete (only Interim paid so far),
-    # which would read as a cut on a mid-year run. Identical to the streak's rule.
-    complete_years = sorted(totals)[:-1]
-    # Answering "no cut in N years" needs N+1 totals: N transitions to inspect.
+# CRIT-NOCUT-2 — how far BOTH measures must fall before a year counts as a cut. 10% is
+# the value docs/diagnosis_dividend_history_2026-09-16.md defends: the largest FALSE reading
+# it found was 8.3% (TotalEnergies on the median, from a 5->4 payment year), and the
+# SMALLEST real cut on record was Equinor's 2020 at 24.8% in NOK. It sits roughly a factor
+# of two clear of both. NOT 40% — that figure was asserted in the original brief and the
+# diagnosis disproved it: a 40% bound would wave through Equinor's 2020 cut and Eni's
+# (34.5% in EUR).
+CUT_TOLERANCE = 0.10
+
+
+def _year_stats(payments_by_year: dict) -> dict:
+    """``{year: (total, median, n)}`` from ``{year: [amount, ...]}``."""
+    return {y: (sum(a), statistics.median(a), len(a))
+            for y, a in payments_by_year.items() if a}
+
+
+def _cuts_from_year_stats(stats: dict, *, years: int,
+                          tolerance: float = CUT_TOLERANCE) -> tuple:
+    """The rule: a year is a CUT only when the year's TOTAL **and** its TYPICAL PAYMENT
+    both fell by more than ``tolerance`` against the prior year.
+
+    CRIT-NOCUT-2. The first version compared year totals alone and failed 67 of 91 names on
+    the oil cohort, not one of which had cut its dividend. The reason is that each ordinary
+    accounting artefact moves exactly ONE of the two measures, while a real cut moves BOTH:
+
+      * a year with one fewer payment drops the TOTAL and leaves the typical payment alone
+        (Canadian Natural, 5 payments then 4: total -22.1%, median payment +15.6%);
+      * a special dividend does the same (EOG: the regular dividend rose 10% while the
+        total fell 34%);
+      * a CADENCE change does the opposite — it halves the typical payment while the total
+        rises (Eni, 2 payments a year then 4: total +14.4%, median -44.1%), which is why
+        the median alone is not a safe measure either;
+      * a real cut moves both together (BP, Shell, SLB, Suncor and Equinor in 2020).
+
+    So neither measure is trustworthy alone and the AND of the two is. ``observed`` is the
+    size of the largest qualifying fall in the TOTAL, as a fraction.
+
+    SINGLE-PAYMENT YEARS. A median of one number is not a typical payment — it IS that
+    payment — so a year with one payment following a year with several is compared on the
+    TOTAL alone. Judging an annual payer's single payment as though it were a "typical" one
+    would make every switch to annual payment read as a cut.
+
+    ROBUST TO A MISSING PAYMENT, and deliberately so: when a provider's record drops the
+    last payments of a year (the US ADR lines for CNQ and Eni both stop mid-2025), the
+    total falls but the typical payment does not, so this rule passes the name. The YIELD
+    criterion reading the same short record is NOT protected that way — it is a separate
+    queued item and is not addressed here.
+    """
+    complete_years = sorted(stats)[:-1]
     needed = years + 1
     if len(complete_years) < needed:
         return None, (f"only {len(complete_years)} complete years of dividend history; "
@@ -611,29 +652,54 @@ def _cuts_from_year_totals(totals: dict[int, float], *, years: int,
 
     window = complete_years[-needed:]
     worst = 0.0
-    worst_year: int | None = None
+    worst_year = None
+    worst_median_fall = 0.0
     for prev, year in zip(window, window[1:]):
-        before, after = totals[prev], totals[year]
-        if before <= 0:
+        (t_prev, m_prev, n_prev), (t_now, m_now, n_now) = stats[prev], stats[year]
+        if t_prev <= 0:
             continue
-        cut = (before - after) / before
-        # FLAT is not a CUT — the same tolerance, and the same reasoning, as the sibling
-        # ``dividend_streak`` primitive reading the same totals: a year within +/-flat_tol
-        # of the prior ends a GROWTH streak but is not a reduction. Without it these two
-        # readings of one history would disagree about what happened in a year.
-        if cut > flat_tol and cut > worst:
-            worst, worst_year = cut, year
+        total_fall = (t_prev - t_now) / t_prev
+        if total_fall <= tolerance:
+            continue                      # the total held; nothing else to check
+        if n_now == 1 and n_prev > 1:
+            median_fall = total_fall      # single payment: the total IS the measure
+        elif m_prev <= 0:
+            continue
+        else:
+            median_fall = (m_prev - m_now) / m_prev
+        if median_fall <= tolerance:
+            continue                      # the typical payment held -> not a cut
+        if total_fall > worst:
+            worst, worst_year, worst_median_fall = total_fall, year, median_fall
+
     if worst_year is not None:
-        return worst, (f"dividend cut in {worst_year}: the calendar-year total fell "
-                       f"{worst:.0%} against {worst_year - 1} (adjusted value, summed "
-                       f"per year) across the last {years} complete years")
-    return 0.0, (f"no calendar year paid less than the year before across the last "
-                 f"{years} complete years (adjusted value, summed per year; the latest "
-                 f"year is excluded as possibly incomplete)")
+        return worst, (f"the dividend was cut in {worst_year}: the year's total fell "
+                       f"{worst:.0%} and the typical payment fell {worst_median_fall:.0%} "
+                       f"against {worst_year - 1}")
+    return 0.0, (f"no year cut the dividend across the last {years} complete years — a cut "
+                 f"needs the year's total AND its typical payment both to fall more than "
+                 f"{tolerance:.0%} (adjusted values; the latest year is excluded as "
+                 "possibly incomplete)")
+
+
+def _cuts_from_year_totals(totals: dict, *, years: int,
+                           tolerance: float = CUT_TOLERANCE) -> tuple:
+    """TOTALS ONLY — the degraded path, for a provider record that carries year totals but
+    not the payments behind them.
+
+    It cannot apply the typical-payment half of the rule, so it says so in its note rather
+    than reporting a confident answer from half the evidence. Reached only for a
+    Fundamentals record written before ``dividend_year_stats`` existed (the day cache ages
+    out within a day); every live path has the payments."""
+    stats = {y: (t, t, 1) for y, t in totals.items()}
+    worst, note = _cuts_from_year_stats(stats, years=years, tolerance=tolerance)
+    if worst:
+        note += " (typical-payment check unavailable: this record carries year totals only)"
+    return worst, note
 
 
 def dividend_cuts_by_calendar_year(
-    dividends: list[DividendEvent], *, years: int,
+    dividends: list[DividendEvent], *, years: int, tolerance: float = CUT_TOLERANCE,
 ) -> tuple[float | None, str]:
     """The LARGEST dividend cut in the last ``years`` complete calendar years, as a
     fraction (0.50 = the total halved), or 0.0 when no year paid less than the one
@@ -659,19 +725,23 @@ def dividend_cuts_by_calendar_year(
     """
     if not dividends:
         return None, "no dividend history"
-    totals: dict[int, float] = {}
+    per_year: dict = {}
     for ev in dividends:
-        totals[ev.ex_date.year] = totals.get(ev.ex_date.year, 0.0) + ev.amount
-    return _cuts_from_year_totals(totals, years=years)
+        per_year.setdefault(ev.ex_date.year, []).append(ev.amount)
+    return _cuts_from_year_stats(_year_stats(per_year), years=years,
+                                 tolerance=tolerance)
 
 
 def max_dividend_cuts_criterion(
     dividends: list[DividendEvent], *, years: int, fundamentals=None,
+    tolerance: float = CUT_TOLERANCE,
 ) -> CriterionResult:
     """"No dividend cut in the last ``years`` complete calendar years" as a criterion.
 
-    PASS with ``observed=0.0`` when no year paid less than the one before; FAIL with
-    ``observed`` = the size of the largest cut; NOT-EVAL (``passed=None``) when there is
+    PASS with ``observed=0.0`` when no year cut the dividend; FAIL with ``observed`` = the
+    size of the largest qualifying fall in the year TOTAL. A year is a cut only when its
+    total AND its typical payment both fell more than ``CUT_TOLERANCE`` (CRIT-NOCUT-2 — see
+    ``_cuts_from_year_stats``); NOT-EVAL (``passed=None``) when there is
     no dividend history at all, or too little of it. A non-payer is failed by the YIELD
     criterion, never by this one — absence of a dividend is not a cut.
 
@@ -684,14 +754,26 @@ def max_dividend_cuts_criterion(
     totals it already summed to derive that scalar. Same numbers, same rule, no extra
     fetch, and the lens works on both paths."""
     if dividends:
-        worst, note = dividend_cuts_by_calendar_year(dividends, years=years)
+        worst, note = dividend_cuts_by_calendar_year(dividends, years=years,
+                                                     tolerance=tolerance)
     else:
+        # CRIT-NOCUT-2 prefers the richer carried field: the two-measure rule needs the
+        # typical payment as well as the total. `dividend_year_totals` remains as the
+        # degraded path for a Fundamentals record written before the stats existed (the
+        # day cache ages out within a day), and it SAYS so in its note rather than
+        # reporting a confident answer from half the evidence.
+        stats = getattr(fundamentals, "dividend_year_stats", None) if fundamentals else None
         carried = getattr(fundamentals, "dividend_year_totals", None) if fundamentals             else None
-        if not carried:
-            worst, note = None, "no dividend history"
-        else:
+        if stats:
+            worst, note = _cuts_from_year_stats(
+                {int(r[0]): (float(r[1]), float(r[2]), int(r[3])) for r in stats},
+                years=years, tolerance=tolerance)
+        elif carried:
             worst, note = _cuts_from_year_totals(
-                {int(y): float(t) for y, t in carried}, years=years)
+                {int(y): float(t) for y, t in carried}, years=years,
+                tolerance=tolerance)
+        else:
+            worst, note = None, "no dividend history"
     return CriterionResult(
         name="max_dividend_cuts",
         passed=None if worst is None else worst == 0.0,

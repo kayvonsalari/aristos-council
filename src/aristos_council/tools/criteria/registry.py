@@ -34,6 +34,7 @@ from typing import Callable
 
 from ...data.adapter import DividendEvent, Fundamentals
 from ..screening import (
+    CUT_TOLERANCE,
     max_dividend_cuts_criterion,
     max_payout_fcf_criterion,
     CriterionResult,
@@ -523,6 +524,9 @@ _CRITERIA: tuple[Criterion, ...] = (
                        "across the last {threshold} complete years",
         params=(ParamSpec("threshold", "int", min=1.0, max=None, step=1.0,
                           default=5, unit="count"),
+                # CRIT-NOCUT-2: how far BOTH measures must fall before a year is a cut.
+                ParamSpec("cut_tolerance", "float", min=0.0, max=1.0, step=0.01,
+                          default=CUT_TOLERANCE, unit="percent"),
                 _UNVERIFIABLE_BLOCKS),
         requires=("dividends",),
         fundamentals_fields=("dividend_per_share",),

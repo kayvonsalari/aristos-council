@@ -128,12 +128,26 @@ def _year_totals(ticker):
     return [[float(y), annual[y]] for y in sorted(annual)] or None
 
 
+def _year_stats(ticker):
+    """CRIT-NOCUT-2: the same years with the TYPICAL PAYMENT and the payment count, which
+    is what the two-measure cut rule reads. A real adapter carries both fields; a fixture
+    that carried only totals would silently exercise the degraded path."""
+    import statistics
+
+    per_year: dict = {}
+    for ev in _DIVIDENDS[ticker]:
+        per_year.setdefault(ev.ex_date.year, []).append(ev.amount)
+    return [[float(y), float(sum(v)), float(statistics.median(v)), float(len(v))]
+            for y, v in sorted(per_year.items())] or None
+
+
 class _Adapter(MarketDataAdapter):
     name = "fake"
 
     def get_fundamentals(self, ticker):
         return Fundamentals(ticker=ticker, name=ticker, quote_type="EQUITY",
                             dividend_year_totals=_year_totals(ticker),
+                            dividend_year_stats=_year_stats(ticker),
                             dividend_streak_years=_STREAK_YEARS[ticker],
                             **_FUND[ticker])
 
@@ -222,7 +236,11 @@ def test_the_cutter_is_excluded_and_the_year_is_named():
     assert "max_dividend_cuts" in reasons["C"]          # the terse reason names the rule
     # The YEAR rides in the per-criterion record the report renders, not in the terse
     # reason string (which the scoreboard parses and must stay stable).
-    assert "dividend cut in 2024" in res.screen_outcomes["C"]["max_dividend_cuts"]["note"]
+    note = res.screen_outcomes["C"]["max_dividend_cuts"]["note"]
+    assert "the dividend was cut in 2024" in note
+    # CRIT-NOCUT-2: both falls are named, and the full check ran (no degraded-path note).
+    assert "the year's total fell 50% and the typical payment fell 50%" in note
+    assert "typical-payment check unavailable" not in note
     row = next(r for r in exclusion_rows(res) if r["criterion"] == "max_dividend_cuts")
     assert "the dividend was cut" in row["sentence"]
 

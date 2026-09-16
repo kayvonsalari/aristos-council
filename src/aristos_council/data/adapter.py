@@ -230,6 +230,12 @@ class Fundamentals:
     # examines is a per-strategy threshold rather than a fixed one. None when the
     # provider/history cannot supply them (honest abstain).
     dividend_year_totals: list[list[float]] | None = None
+    # CRIT-NOCUT-2: the same years with the TYPICAL PAYMENT and the payment COUNT beside
+    # the total — ``[[year, total, median, n], …]``, oldest-first. The cut rule needs both
+    # measures, because each ordinary artefact (a missing payment, a special, a cadence
+    # change) moves exactly ONE of them while a real cut moves both. Same source, same
+    # fetch: the adapter already had the individual payments in hand.
+    dividend_year_stats: list[list[float]] | None = None
     total_debt: float | None = None
     debt_to_equity: float | None = None          # yfinance percent-ish; may be None
     # Cash & short-term investments (yfinance info 'totalCash'). With total_debt +
