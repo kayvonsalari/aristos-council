@@ -135,6 +135,25 @@ names exactly one strategy. The `id` is the stable record key and is never renam
 appears simply by adding a YAML to `strategies/` — never by editing a published one (configs are
 versioned and superseded, not mutated).
 
+### The plain-English summary (optional, about a cent)
+
+A tick-box on the Run tab, **off by default**, adds one short note at the top of the report:
+what the run asked, what happened, what survived the checks, what to doubt, and what the run
+structurally cannot tell you. It is written for someone who does not work in finance and
+reads in about a minute.
+
+It is **one model call per run**, not per name, on the cheapest configured tier — so ticking
+it on an otherwise-free ranker-only run costs about a cent, and the Run button says so
+instead of saying "free". Untick it and nothing is built, nothing is called, and the report
+is byte-identical to one from before the feature existed.
+
+**The writer never sees the report.** It sees a compact facts pack built from the run's own
+tables — counts, verdicts, rule tallies, the shortlist and its reasons, what could not be
+measured — so it cannot quote a price or a company the run does not hold. Every number it
+writes is then checked back against that pack, and a summary that fails **is withheld with
+its reason** rather than published: *"Summary withheld: number not in the facts: 120"*. It
+explains the results; it never recommends anything.
+
 ### How to read a multi-lens grid
 
 The lenses answer **different questions**, so a BUY on one beside a SELL on another is not

@@ -2446,7 +2446,12 @@ def run_multi_strategy_pipeline(
     if reader_runner is None and os.environ.get("ANTHROPIC_API_KEY"):
         from .agents.runners import LangChainRunner
         from .agents.schemas import ReaderSummary
-        reader_runner = LangChainRunner("reader", ReaderSummary)
+        from .costs import CostMeter
+        # Its OWN meter: the reader is one call about the whole run, not part of a
+        # council pass over a name, so folding it into the narration meter would make
+        # both figures unreadable. A meter of its own is what lets the run state the
+        # summary's real token count and price rather than an estimate.
+        reader_runner = LangChainRunner("reader", ReaderSummary, meter=CostMeter())
     if reader_runner is None:
         from .reader import NO_KEY_NOTE, ReaderResult
         out = ReaderResult(note=NO_KEY_NOTE, meta={"written": False, "reason": "no key"})
@@ -2457,6 +2462,14 @@ def run_multi_strategy_pipeline(
                             cohort_name=meta.get("universe_name", ""),
                             cohort_thesis=cohort_thesis)
     meta["reader"] = out.meta
+    # What it actually cost, from the provider's own usage figures — recorded whether the
+    # summary was published or withheld, because a withheld one was still paid for.
+    _meter = getattr(reader_runner, "meter", None)
+    if _meter is not None and getattr(_meter, "calls", None):
+        _t = _meter.total()
+        meta["reader"]["input_tokens"] = _t.input_tokens
+        meta["reader"]["output_tokens"] = _t.output_tokens
+        meta["reader"]["usd"] = _t.usd
     return replace(built, reader=out)
 
 

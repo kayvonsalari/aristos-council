@@ -171,3 +171,65 @@ def test_a_number_the_pack_states_only_in_prose_is_quotable():
     """A rule's limit reads "at least $5.0bn"; quoting 5.0 must be allowed."""
     assert any("5.0bn" in r["limit"] for r in PACK["lenses"][2]["rules"])
     assert check_summary(_summary(doubt="The size floor is $5.0bn."), PACK).ok
+
+
+# --------------------------------------------------------------------------- #
+# The prompt's worked example, against THIS pack — a finding, pinned
+# --------------------------------------------------------------------------- #
+REFERENCE_EXAMPLE = ReaderSummary(
+    asked=("It tested 135 oil and gas companies that pay dividends. Three tests ran. "
+           "Defensive Income looks for steady payers with a calm share price. Forensic "
+           "checks whether the profits are real. Magic Formula looks for cheap, good "
+           "businesses."),
+    happened=("Defensive Income ranked only 3 of 135 names. One rule did that: it wants "
+              "10 years of dividend rises in a row, and 126 names failed it. Forensic "
+              "ranked 106 names and rated 21 BUY. Magic Formula ranked 105 and rated 21 "
+              "BUY. Only 3 names were BUY on both Forensic and Magic Formula: Marathon "
+              "Petroleum, Suncor and Orlen."),
+    survived=("No name made the shortlist. The 3 names both tests liked are all at the "
+              "top of their own 5-year price range, so the price check dropped them."),
+    doubt=("Forensic could not compute its balance-sheet score for 39 of 106 names, "
+           "mostly foreign listings. 28 names were too small for any test ($5bn floor). "
+           "The price check was withheld for 2 names because the numbers looked wrong."),
+    cannot_say=("This list was built for income, and no income test fit it. The BUY "
+                "ratings here come from a value test, run while oil prices are at a high."),
+)
+
+
+def test_the_prompts_worked_example_is_a_TONE_exemplar_not_a_claim_about_this_pack():
+    """FINDING, pinned so it is not rediscovered as a bug.
+
+    The worked example in ``reader_v1.md`` is prose about the 2026-09-16 run where
+    Defensive Income was primary over 135 names. The frozen artefacts in ``runs/`` are a
+    DIFFERENT run: 134 names (CTRA had been removed) under Magic Formula RAW, Forensic and
+    Cyclical Income, with no Defensive Income lens at all.
+
+    So three of the example's numbers are genuinely absent from this pack, and the
+    validator is RIGHT to withhold it:
+
+        135 -> the pack says 134      (the cohort before CTRA was dropped)
+        126 -> Defensive Income's streak failures; that lens is not in this run
+         39 -> the pack says 40       (Forensic's balance-sheet abstentions)
+
+    That is the guard working, not failing. The prompt says in terms "Do not copy its
+    numbers — use the pack's", so the example is a model of REGISTER and LENGTH; checking
+    its figures against a pack it was not written from tests the wrong thing. What the
+    example must satisfy is the style budget, which it does.
+    """
+    check = check_summary(REFERENCE_EXAMPLE, PACK)
+    assert not check.ok
+    assert check.problems == ["number not in the facts: 39, 126, 135"]
+
+    # ...and every OTHER check passes, which is what makes it a usable exemplar: it is
+    # inside the word budget, free of advice words, and names only companies in the run.
+    assert check.words == 192 and check.words < WORD_LIMIT
+    assert not any("forbidden" in p for p in check.problems)
+    assert not any("name not in the run" in p for p in check.problems)
+
+
+def test_the_three_absent_numbers_are_absent_for_the_reason_documented():
+    """The claim above, verified rather than asserted in a comment."""
+    assert PACK["cohort"]["size"] == 134                        # not 135
+    assert "Defensive Income" not in [l["name"] for l in PACK["lenses"]]   # so not 126
+    forensic = next(l for l in PACK["lenses"] if l["name"] == "Forensic")
+    assert forensic["factor_abstentions"]["altman_z"] == 40     # not 39

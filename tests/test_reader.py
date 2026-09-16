@@ -209,3 +209,45 @@ def test_the_contents_list_gains_the_entry_when_on():
     res = _multi(with_reader=True, reader_runner=_FakeRunner(_good()))
     sections = report_sections(res)
     assert sections[0]["anchor"] == "summary"      # first: it explains the rest
+
+
+def test_the_run_records_what_the_summary_cost():
+    """Acceptance item 4 needs a real figure, so the reader runs on its own CostMeter and
+    the run records the provider's counts — not an estimate, and recorded whether the
+    summary was published or withheld, because a withheld one was still paid for."""
+    from aristos_council.costs import CostMeter
+
+    class _MeteredRunner(_FakeRunner):
+        def __init__(self, summary):
+            super().__init__(summary)
+            self.meter = CostMeter()
+
+        def invoke(self, system, user):
+            out = super().invoke(system, user)
+            self.meter.record("fake:reader",
+                              {"input_tokens": 3200, "output_tokens": 180})
+            return out
+
+    res = _multi(with_reader=True, reader_runner=_MeteredRunner(_good()))
+    assert res.meta["reader"]["input_tokens"] == 3200
+    assert res.meta["reader"]["output_tokens"] == 180
+    assert "usd" in res.meta["reader"]
+
+
+def test_a_withheld_summary_still_records_its_cost():
+    from aristos_council.costs import CostMeter
+
+    class _MeteredRunner(_FakeRunner):
+        def __init__(self, summary):
+            super().__init__(summary)
+            self.meter = CostMeter()
+
+        def invoke(self, system, user):
+            out = super().invoke(system, user)
+            self.meter.record("fake:reader", {"input_tokens": 100, "output_tokens": 10})
+            return out
+
+    bad = _good(survived="You should buy everything.")
+    res = _multi(with_reader=True, reader_runner=_MeteredRunner(bad))
+    assert not res.reader.available                     # withheld...
+    assert res.meta["reader"]["input_tokens"] == 100    # ...and still billed
