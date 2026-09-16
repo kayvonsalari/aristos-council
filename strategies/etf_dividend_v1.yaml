@@ -10,6 +10,18 @@ name: Dividend ETFs
 display_name: Dividend ETFs
 version: 1
 
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Distributing funds: payout, fee, size and trend.
+
+# KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting a
+# funds cohort. The thesis only drives a caption when a list says it was built
+# for something else; it never filters this lens out of the picker.
+kind: selector
+thesis:
+  - funds
+
 description: >-
   Rank dividend-oriented ETFs on distribution yield (income), expense ratio (cost, ranked
   low), fund size (liquidity + closure risk), and 12-month momentum (trend). Rank-first,

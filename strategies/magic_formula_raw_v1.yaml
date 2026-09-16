@@ -22,6 +22,18 @@ name: Magic Formula RAW
 display_name: Magic Formula RAW
 role: canonical — no screens, gates only
 version: 1
+
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Cheap and good: high profit on the money invested, a low price for that profit, and a rising share.
+
+# KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting a
+# value cohort. The thesis only drives a caption when a list says it was built
+# for something else; it never filters this lens out of the picker.
+kind: selector
+thesis:
+  - value
 created: "2026-07-09"
 
 description: >-

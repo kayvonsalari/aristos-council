@@ -11,6 +11,8 @@
 # missing-data error, and it is distinct from an abstention (CNDX abstains on fund_size
 # because the vendor value was implausible and was deliberately withheld).
 id: etf_growth_ucits_v1
+# THESIS-1 — what this list was built for.
+thesis: funds
 display_name: Growth ETFs (UCITS)
 role: euro-investable exploration — observation only
 description: >-

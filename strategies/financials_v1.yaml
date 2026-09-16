@@ -22,6 +22,18 @@ name: Financials (rank-based)
 display_name: Financials
 version: 1
 
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Banks and insurers on their own terms: return on equity against price-to-book.
+
+# KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting a
+# value cohort. The thesis only drives a caption when a list says it was built
+# for something else; it never filters this lens out of the picker.
+kind: selector
+thesis:
+  - value
+
 description: >-
   Banks, insurers, and payment networks ranked on the measures they are actually
   priced by — price-to-book (value) and return-on-equity (quality) — with 12-month

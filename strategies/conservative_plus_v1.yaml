@@ -19,6 +19,18 @@ name: Conservative Formula+ (rank-based)
 display_name: Defensive Income
 version: 1
 
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Steady income with the trend intact: a calm share, a covered dividend raised for 10 years, and no recent fall.
+
+# KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting a
+# income cohort. The thesis only drives a caption when a list says it was built
+# for something else; it never filters this lens out of the picker.
+kind: selector
+thesis:
+  - income
+
 description: >
   Low-risk, income, and trend — the best risk-adjusted of the classic formulas.
   Ranks the universe on low volatility, net payout yield, and 12-month momentum, and

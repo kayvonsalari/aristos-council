@@ -1550,7 +1550,7 @@ def _universe_markdown(result) -> str:
     REPORT-1: the header leads with the HUMAN names and keeps every id beside them as
     the stable record key, a one-line verdict summary sits directly under it, and the
     rules that were applied are stated before any result."""
-    from aristos_council.pipeline import (floor_override_line, header_lines,
+    from aristos_council.pipeline import (floor_override_line, header_lines, lens_asks,
                                           summary_line)
     from aristos_council.report_language import label_with_id
 
@@ -1563,6 +1563,10 @@ def _universe_markdown(result) -> str:
     _floor = floor_override_line(m)
     if _floor:
         lines.append(f"**{_floor}**")
+    # CAPTION-1: what this lens asks of a company, under the header. Absent -> no line.
+    _asks = lens_asks(result)
+    if _asks:
+        lines += ["", f"_{_asks}_"]
     lines += ["", f"### {summary_line(result)}", "",
               f"_{_confirmation_line(m)}_", "",
               f"_{result.header}_", "",
@@ -1983,6 +1987,27 @@ def _multi_grid_rows(multi_result) -> list[dict]:
     return multi_strategy_grid_rows(multi_result)[0]
 
 
+
+def _shortlist_markdown(sl, shortlist_table) -> list[str]:
+    """SHORTLIST-1 in the .md — the same cells the HTML renders, from the same builder."""
+    if sl is None:
+        return []
+    lines = ["", f"## {sl.title}", ""]
+    if not sl.available:
+        return lines + [f"_{sl.reason}._"]
+    lines += [f"_{sl.rule_sentence}_", ""]
+    cols, rows = shortlist_table(sl)
+    if rows:
+        lines += _md_table(cols, rows)
+    else:
+        lines.append("_No candidate survived the checks. That is a result, not a gap — "
+                     "every drop and its reason is below._")
+    if sl.dropped:
+        lines += ["", f"**Dropped · {len(sl.dropped)}**", ""]
+        lines += [f"- **{r.display}** — {r.dropped_by}" for r in sl.dropped]
+    return lines
+
+
 def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     """ONE merged markdown report for the whole run, however many lenses ran (REPORT-2).
 
@@ -2003,7 +2028,8 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, evidence_gaps, exclusion_rows,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
         floor_override_line,
-        provenance_sentences, report_sections,
+        lens_asks,
+        provenance_sentences, report_sections, shortlist_table,
         union_valuation_band_table,
         valuation_band_table,
     )
@@ -2048,6 +2074,10 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     # plain-text reader still gets the document's map and its order.
     lines += _contents_markdown(report_sections(multi_result))
 
+    # 1b (SHORTLIST-1) — the answer, before the evidence for it.
+    lines += _shortlist_markdown(getattr(multi_result, "shortlist", None),
+                                 shortlist_table)
+
     # 2 (REPORT-4) — what the run could NOT see, BEFORE any prose that rests on what it
     # could. Rendered even when clean: an absent section is indistinguishable from a
     # feature that was never switched on.
@@ -2087,14 +2117,21 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
               "ran._"]
     for sid in ids:
         lines += ["", f"### {label_with_id(names.get(sid) or sid, sid)}"]
+        # CAPTION-1: the question, under the lens's name, so the rules read as the answer
+        # to something. Absent `asks` adds no line.
+        _asks = lens_asks(multi_result.results[sid])
+        if _asks:
+            lines += ["", f"_{_asks}_"]
         lines += _rules_applied_markdown(multi_result.results[sid],
                                          include_title=False)
 
     # 7 — what DOES vary per lens.
     for sid in ids:
         res = multi_result.results[sid]
-        lines += ["", f"## {label_with_id(names.get(sid) or sid, sid)} — detail", "",
-                  f"- Ranked: {res.meta['ranked_count']} of "
+        lines += ["", f"## {label_with_id(names.get(sid) or sid, sid)} — detail", ""]
+        if lens_asks(res):                                   # CAPTION-1
+            lines += [f"_{lens_asks(res)}_", ""]
+        lines += [f"- Ranked: {res.meta['ranked_count']} of "
                   f"{res.meta['universe_size']} names"]
         if res.excluded:
             lines += ["", "**Excluded — did not pass a rule, so was never ranked**", ""]
@@ -2606,6 +2643,13 @@ def render_universe_tab(show_validation: bool = False) -> None:
         if strategy_role(s):
             bits += f" · {strategy_role(s)}"
         st.caption(bits)
+        # CAPTION-1: what this lens asks of a company, for EVERY selected lens — a
+        # multi-lens run used to caption none of them, so a reader comparing a BUY under
+        # one lens with a SELL under another had nothing saying they ask different
+        # questions. Absent `asks` renders nothing.
+        _asks = (getattr(s, "asks", "") or "").strip()
+        if _asks:
+            st.caption(_asks)
     if len(strategies) == 1 and getattr(strategies[0], "description", ""):
         st.caption(strategies[0].description.strip())
     # The cost estimate + the narration settings describe the PRIMARY strategy (the only one
@@ -2671,6 +2715,18 @@ def render_universe_tab(show_validation: bool = False) -> None:
                    "portfolio-class data never rides a commit.")
         name = st.text_input("List name", key="uni_list_name",
                              placeholder="My Portfolio")
+        # THESIS-1: what the list was BUILT FOR. Blank is allowed and is the default —
+        # an unmarked list makes no claim, so it never triggers the fit caption.
+        _theses = ["", "value", "growth", "income", "quality", "funds"]
+        _current = getattr(picked_list, "thesis", "") or ""
+        list_thesis = st.selectbox(
+            "Built for (optional)", _theses,
+            index=_theses.index(_current) if _current in _theses else 0,
+            format_func=lambda t: t or "— not stated —",
+            key="uni_list_thesis",
+            help="What this list was assembled to find. Used only to caption a run whose "
+                 "primary lens answers a different question; it never filters a lens or "
+                 "blocks a run. Leave blank to make no claim.")
         col_save, col_saveas = st.columns(2)
         with col_save:
             save_over = st.button("Save changes", key="uni_save_over",
@@ -2687,13 +2743,14 @@ def render_universe_tab(show_validation: bool = False) -> None:
                     path = save_local_universe(
                         UNIVERSES_DIR, id=picked_list.id, tickers=universe,
                         created=created, display_name=name.strip() or picked_list.id,
-                        graded_ids=graded, overwrite=True)
+                        graded_ids=graded, overwrite=True, thesis=list_thesis)
                 else:
                     new_id = list_id_from_name(name,
                                                existing_universe_ids(UNIVERSES_DIR))
                     path = save_local_universe(
                         UNIVERSES_DIR, id=new_id, tickers=universe, created=created,
-                        display_name=name.strip(), graded_ids=graded)
+                        display_name=name.strip(), graded_ids=graded,
+                        thesis=list_thesis)
             except (ValueError, ValidationError) as exc:
                 st.error(str(exc))
             else:
@@ -2712,6 +2769,16 @@ def render_universe_tab(show_validation: bool = False) -> None:
     applicable = applicable_rank_strategies(all_rank_strategies, cohort_kind)
     st.caption(cohort_scope_note(cohort_kind, len(applicable),
                                  adhoc=universe_id is None))
+    # THESIS-1 — one line per RUN (never per name) when the PRIMARY lens answers a
+    # different question than this list was built for, or is a check lens that cannot
+    # select at all. It sits here, beside the asset-kind scope note, because this is the
+    # first point at which BOTH the lens and the cohort are known — and because the two
+    # captions answer the same shape of question: is this lens the right one for this
+    # list. Advisory, like its neighbour: it never filters a lens and never blocks a run.
+    from aristos_council.pipeline import cohort_fit_line
+    _fit = cohort_fit_line(primary, getattr(picked_list, "thesis", "") or "")
+    if _fit:
+        st.info(_fit)
     for s in strategies:
         scope_warning = out_of_scope_note(s, cohort_kind)
         if scope_warning:
@@ -2886,6 +2953,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 freeze_dir=ROOT / "runs", with_valuation_band=with_valuation_band,
                 derived_from=derived_from,
                 min_market_cap_override=min_market_cap_override,
+                # SHORTLIST-1: the lens the reader picked as primary, which is NOT
+                # necessarily the grid's first column (that is offer order).
+                primary_id=primary.id,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")

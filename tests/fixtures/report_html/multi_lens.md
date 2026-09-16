@@ -8,13 +8,14 @@
 
 _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 
-### 3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one
+### 3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one — shortlist: 1 of 1 BUY
 
 **Classic Value** — Quality-value screen, 2 rules · **Magic Formula RAW** — no screen (ranking only) · **Value + Momentum** — Quality-value screen, 2 rules  ([details](#rules-applied--by-lens))
 
 
 ## Contents
 
+- Shortlist — 1 of 1 BUY survived the checks
 - What the run could not see
 - Verdict by lens
 - Valuation band (absolute — vs each name's own history)
@@ -28,6 +29,14 @@ _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
   - Value + Momentum
 - What the terms mean
 
+
+## Shortlist — 1 of 1 BUY survived the checks
+
+_BUY under Classic Value and below the 80th percentile of its own valuation history._
+
+| Name | Rank | Valuation percentile |
+|---|---|---|
+| **A** | #1 | not evaluated |
 
 ## What the run could not see
 
@@ -82,6 +91,8 @@ Used as a prefilter — names failing any rule below were never ranked.
 - Missing factor values are ranked worst.
 
 ### Magic Formula RAW (magic_formula_raw_v1)
+
+_Cheap and good: high profit on the money invested, a low price for that profit, and a rising share._
 **Screen: none**
 
 This strategy screens nothing: no rule filtered the cohort, and quality enters only through the ranking below.
@@ -94,6 +105,8 @@ This strategy screens nothing: no rule filtered the cohort, and quality enters o
 - Missing factor values are ranked worst.
 
 ### Value + Momentum (magic_formula_momentum_v1)
+
+_The same as Magic Formula RAW, but only for companies earning at least 12% on their capital._
 **Screen: Quality-value screen (magic_value_screen_v1)**
 
 Used as a prefilter — names failing any rule below were never ranked.
@@ -129,6 +142,8 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 ## Magic Formula RAW (magic_formula_raw_v1) — detail
 
+_Cheap and good: high profit on the money invested, a low price for that profit, and a rising share._
+
 - Ranked: 3 of 4 names
 
 **No usable data — no verdict was formed**
@@ -142,6 +157,8 @@ Used as a prefilter — names failing any rule below were never ranked.
 - 12-month price momentum — no usable data for all 3 names.
 
 ## Value + Momentum (magic_formula_momentum_v1) — detail
+
+_The same as Magic Formula RAW, but only for companies earning at least 12% on their capital._
 
 - Ranked: 2 of 4 names
 
@@ -175,6 +192,7 @@ _Every term this report uses, in plain English. Terms the run did not use are le
 - **Earnings yield (EBIT/EV)** — Operating profit divided by what the whole company costs to buy — shares plus debt. The inverse of how expensive it is: higher means more profit per euro paid.
 - **EPS (earnings per share)** — Annual profit divided by the number of shares.
 - **Not tested / not evaluated** — The data this check needed was missing, so the check was skipped honestly rather than guessed at. It is not a pass and it is not a fail.
+- **Percentile (valuation band)** — Where today's multiple sits in that five-year history. The 10th percentile is cheaper than 90% of the period; the 90th is dearer than 90% of it.
 - **Quintile cut** — The top fifth of ranked names are rated BUY, the bottom fifth SELL, and everything between them HOLD.
 - **Return on invested capital** — The profit the business earns on the money tied up in it. High means every euro invested in the company works hard.
 - **Return on invested capital (min_roic)** — The rule requires the company to earn at least this much profit on the money tied up in it — it screens out businesses that need a lot of capital to make a little profit.

@@ -653,6 +653,40 @@ availability report over any cohort is what `examples/piotroski_probe.py` exists
 it is the gate question ("is it computable here at all?") that precedes any question about
 whether the score is *useful* here.
 
+### 4.3 The shortlist (SHORTLIST-1) — derived, not decided
+
+Nothing here is calculated: every input is a verdict or a percentile the run already
+produced. The rule is stated in full because a derived section that a reader cannot
+re-derive is just another opinion.
+
+Given a run's **primary** lens (the one the reader picked; on the CLI, the first lens whose
+`kind` is `selector`):
+
+1. **Candidates** are the names the primary rated **BUY**. Nothing else is a candidate — a
+   name only a check or a non-primary lens liked never enters.
+2. **Drop** a candidate if ANY lens with `kind: check` in this run rated it **SELL**. Every
+   doubting check is named in the reason, not just the first. A check's BUY or HOLD does
+   nothing: a check only ever subtracts.
+3. **Drop** a candidate whose valuation-band percentile is **≥ 80** (`SHORTLIST_BAND_CUTOFF`,
+   recorded in `meta["shortlist_band_cutoff"]`; a constant in v1, not a UI control). The
+   percentile is named in the reason.
+   **A band that ABSTAINED does not drop the name.** It is kept and flagged "not evaluated"
+   with the band's own reason. Null is not false (house rule 3): *we could not tell* is not
+   *it is expensive*. A band-OFF run therefore drops nobody on valuation.
+4. **What remains** is the shortlist, in the primary's rank order.
+
+A check doubt takes precedence over the valuation drop, so each dropped name carries exactly
+ONE reason — the more specific one.
+
+**Two kinds of nothing, and they read differently.** An empty shortlist *with* drop reasons
+is a RESULT: the checks removed every candidate, and the section says so and lists why. A
+`reason` is set instead — and the tables are empty — only when no list could be formed at
+all: the primary is a check lens (it doubts, it cannot select), or it rated nothing BUY.
+
+The section is placed directly after the summary line and before the verdict grid, because
+it is the answer and the grid is the evidence for it. The grid itself is untouched; drop a
+lens from the run and the same names come back with fewer checks applied.
+
 ## 5. Guards
 
 - **UNRATEABLE** — a ticker with failed fundamentals *and* no usable price history (a

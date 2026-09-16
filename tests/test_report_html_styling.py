@@ -53,6 +53,36 @@ four visible-text lines. Nothing was removed, reordered or reworded — `git sho
 regeneration commit is +5/-0. The behaviour is pinned independently of these goldens by
 ``test_multi_strategy_run.py::test_band_is_computed_for_every_lens_not_just_the_first``
 and the union-table unit tests beside it, so the guard was not simply relaxed.
+
+GOLDENS MOVED AGAIN, DELIBERATELY (2026-09-16, CAPTION-1). Every lens now carries one
+plain-English line saying what it ASKS OF A COMPANY, rendered under its name in the rules
+section and under its detail heading — because two runs that day showed a BUY under a
+value lens sitting beside a SELL under an income one with nothing on the page to say they
+were answering different questions. The delta is +12/-0 across the two fixtures: four
+added lines in the visible text, eight in the markdown (two lenses x two places, plus the
+markdown's blank lines). Nothing was removed, reordered or reworded.
+
+``magic_formula_v1`` is in this fixture and declares NO ``asks``, so it gains no line —
+the absent-renders-nothing property demonstrated inside the golden itself rather than only
+asserted in a unit test. The texts are pinned verbatim by ``tests/test_lens_asks.py``.
+
+BASELINE MOVED AGAIN, DELIBERATELY (2026-09-16, SHORTLIST-1). A new DERIVED section --
+the names the primary selector rated BUY that no check doubted -- is added directly after
+the summary and before the verdict grid, and the summary line gains a "shortlist: N of M
+BUYs" clause. Four fixtures move, and the "nothing lost" snapshot is re-taken here, which
+is the GRID-COLS-1 treatment applied to an ADDITION rather than a removal.
+
+What is added, isolated by rendering the same document with the shortlist suppressed
+(which produced invented=[] lost=[], i.e. the rest of the document is untouched):
+  - the summary line's new clause (the old line is REPLACED, not lost);
+  - the contents entry and the section itself (title, rule sentence, one-row table);
+  - the GLOSSARY entry for "Percentile (valuation band)". That one is not the section's
+    own text: the glossary tracks terms the document actually USES, and this fixture's
+    bands all abstain, so no percentile was mentioned anywhere until the rule sentence
+    mentioned one. A new section bringing its vocabulary's definition with it is the
+    glossary working, and it is why the guard reported 10/90/90% alongside the cutoff 80.
+Nothing was removed and no value changed. The shortlist RULE is pinned independently of
+every fixture here by ``tests/test_shortlist.py``, so the guard was not simply relaxed.
 """
 
 from __future__ import annotations
