@@ -207,28 +207,30 @@ def test_the_override_applies_to_every_lens_in_a_multi_lens_run():
     assert "MID" in {r.ticker for r in res.results[RAW].ranked if not r.excluded}
 
 
-def test_KNOWN_LIMIT_a_prefilter_screens_own_market_cap_criterion_is_not_overridden():
-    """SCOPE, pinned so it is deliberate rather than discovered in a report.
+def test_a_prefilter_screens_own_market_cap_criterion_IS_now_overridden():
+    """LIMIT LIFTED (2026-09-17, FLOOR-2). This test pinned the OPPOSITE until today.
 
-    FLOOR-1 overrides ``rank_strategy.min_market_cap`` — the RANKER's floor, applied in
-    the rank stage. It does NOT reach a ``min_market_cap`` CRITERION inside a lens's
-    prefilter screen, which is a different mechanism (a registry criterion with its own
-    threshold) excluding at a different point.
+    FLOOR-1 overrode ``rank_strategy.min_market_cap`` and deliberately stopped there, so a
+    ``min_market_cap`` CRITERION inside a lens's prefilter screen went on excluding at its
+    own threshold. The consequence was a run that said one thing and did another: on the
+    tier-2 list with a $1bn override, four screened lenses still dropped names at "market
+    value $4.9bn; the rule requires at least $5.0bn" beneath a header reading $1bn.
 
-    conservative_plus_v1 has both: a ranker floor of 1.0e9 and a screen criterion at
-    5.0e9. So overriding the floor to 0.5bn moves the ranker's gate and the name is still
-    excluded by the screen — for a DIFFERENT, correctly-named reason. A cohort built for
-    mid-caps therefore still will not grade under a screened lens on this change alone.
+    FLOOR-2 closes it. conservative_plus_v1 carries BOTH a ranker floor (1.0e9) and a
+    screen criterion (5.0e9), so it is the lens that showed the bug and the one that proves
+    the fix.
     """
     res = run_rank_pipeline(UNIVERSE, CONSERVATIVE, strategies_dir=STRAT_DIR,
                             ranker_only=True, adapter=_Adapter(), today=TODAY,
                             min_market_cap_override=0.5e9)
-    reasons = dict(res.excluded)
-    assert "MID" in reasons
-    # NOT the ranker's floor message — the screen criterion names itself and its threshold.
-    assert "screen: min_market_cap" in reasons["MID"]
-    assert "threshold 5000000000" in reasons["MID"]
-    assert "below min market cap" not in reasons["MID"]
+    assert "MID" in {r.ticker for r in res.ranked if not r.excluded}
+    assert "MID" not in dict(res.excluded)
+
+    # ...and WITHOUT the override the screen's own $5bn still excludes it, under its own
+    # correctly-named reason. The rule did not go away; it follows the run's floor.
+    plain = run_rank_pipeline(UNIVERSE, CONSERVATIVE, strategies_dir=STRAT_DIR,
+                              ranker_only=True, adapter=_Adapter(), today=TODAY)
+    assert "screen: min_market_cap" in dict(plain.excluded)["MID"]
 
 
 def test_the_merged_record_names_each_lens_own_file_floor():
@@ -282,3 +284,72 @@ def test_the_sidebar_control_treats_blank_and_default_as_no_override():
     assert app.floor_override_from_input(1.0, file_value=5.0e9) == 1.0e9
     assert app.floor_override_from_input(0.0, file_value=5.0e9) == 0.0    # remove it
     assert app.floor_override_from_input(2.0, file_value=None) == 2.0e9
+
+
+# --------------------------------------------------------------------------- #
+# FLOOR-2 — the override reaches the SCREENS, not only the ranker
+# --------------------------------------------------------------------------- #
+def test_the_override_re_thresholds_the_screens_min_market_cap_criterion():
+    from aristos_council.pipeline import load_screen_from_id, screen_with_floor_override
+
+    screen = load_screen_from_id("cyclical_income_screen_v1", STRAT_DIR)
+    assert [c.threshold for c in screen.criteria if c.name == "min_market_cap"] == [5.0e9]
+
+    effective, file_value = screen_with_floor_override(screen, 1.0e9)
+    assert [c.threshold for c in effective.criteria
+            if c.name == "min_market_cap"] == [1.0e9]
+    assert file_value == 5.0e9
+    # COPIED, never mutated — rule 7, published strategy files are immutable.
+    assert [c.threshold for c in screen.criteria if c.name == "min_market_cap"] == [5.0e9]
+
+
+def test_no_override_returns_the_SAME_screen_object():
+    """Byte-identical: not an equal copy, the same object, so nothing downstream differs."""
+    from aristos_council.pipeline import load_screen_from_id, screen_with_floor_override
+
+    screen = load_screen_from_id("cyclical_income_screen_v1", STRAT_DIR)
+    same, record = screen_with_floor_override(screen, None)
+    assert same is screen and record is None
+
+
+def test_an_override_equal_to_the_screens_own_value_is_a_no_op():
+    from aristos_council.pipeline import load_screen_from_id, screen_with_floor_override
+
+    screen = load_screen_from_id("cyclical_income_screen_v1", STRAT_DIR)
+    same, record = screen_with_floor_override(screen, 5.0e9)
+    assert same is screen and record is None
+
+
+def test_a_two_billion_name_passes_the_screen_under_a_one_billion_override():
+    from aristos_council.tools.criteria.registry import Evidence, run_screen
+    from aristos_council.pipeline import load_screen_from_id, screen_with_floor_override
+
+    screen = load_screen_from_id("cyclical_income_screen_v1", STRAT_DIR)
+    effective, _ = screen_with_floor_override(screen, 1.0e9)
+    mid = Fundamentals(ticker="MID", name="MID", **_FUND["MID"])
+    ev = Evidence(fundamentals=mid, dividends=[], last_close=100.0)
+
+    only = lambda st: [c for c in st.criteria if c.name == "min_market_cap"]  # noqa: E731
+    assert run_screen(only(screen), ev, ticker="MID").criteria[0].passed is False
+    assert run_screen(only(effective), ev, ticker="MID").criteria[0].passed is True
+
+
+def test_the_rule_table_quotes_the_effective_floor():
+    """rules_applied reads the screen that ACTUALLY RAN, so overriding the strategy object
+    moves the Limit column with no separate change."""
+    from aristos_council.pipeline import (load_screen_from_id, rules_applied,
+                                          screen_with_floor_override)
+
+    screen = load_screen_from_id("cyclical_income_screen_v1", STRAT_DIR)
+    effective, _ = screen_with_floor_override(screen, 1.0e9)
+
+    class _Res:
+        screen_strategy = effective
+        rank_strategy = None
+        screen_outcomes = {}
+        screen_bases = {}
+        meta = {}
+        ranked = []
+
+    row = next(r for r in rules_applied(_Res()).rules if r.criterion == "min_market_cap")
+    assert row.threshold_phrase == "at least $1.0bn"

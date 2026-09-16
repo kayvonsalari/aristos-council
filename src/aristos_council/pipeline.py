@@ -199,6 +199,32 @@ def min_market_cap_override_record(file_value: Optional[float],
     return {"file": file_value, "run": run_value}
 
 
+def screen_with_floor_override(screen_strategy, override: Optional[float]):
+    """``(screen, file_value)`` — the lens screen with its ``min_market_cap`` criterion
+    re-thresholded to the run's floor, and the value its FILE declared (FLOOR-2).
+
+    FLOOR-1 replaced the RANK strategy's floor and stopped there, so a screened lens went
+    on excluding at its own criterion's threshold: on the tier-2 list with a $1bn override,
+    four lenses still dropped names at "market value $4.9bn; the rule requires at least
+    $5.0bn" under a header saying the floor was $1bn. The run said one thing and did
+    another.
+
+    Returns the screen UNCHANGED (and ``None``) when there is no override or no such
+    criterion, so a run without one is byte-identical. The strategy object is COPIED — the
+    file is never touched, and because ``rules_applied`` reads the screen that actually
+    ran, the rule table's Limit column and the exclusion sentence both quote the effective
+    value with no further change."""
+    if override is None or screen_strategy is None:
+        return screen_strategy, None
+    criteria = list(getattr(screen_strategy, "criteria", None) or [])
+    file_value = next((c.threshold for c in criteria if c.name == "min_market_cap"), None)
+    if file_value is None or file_value == override:
+        return screen_strategy, None
+    swapped = [c.model_copy(update={"threshold": override})
+               if c.name == "min_market_cap" else c for c in criteria]
+    return screen_strategy.model_copy(update={"criteria": swapped}), file_value
+
+
 def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None,
                 with_valuation_band=False):
     from .data.adapter import TransientFetchError
@@ -760,6 +786,11 @@ def run_rank_pipeline(
             recording = RecordingAdapter(adapter)
             adapter = recording
 
+    # FLOOR-2: the run's floor reaches the SCREEN too, not only the ranker. Applied to a
+    # copy, before the prefilter is taken from it and before the screen is attached to the
+    # result, so the evaluation and the rule table read one number.
+    screen_strategy, screen_floor_file = screen_with_floor_override(
+        screen_strategy, min_market_cap_override)
     if progress is not None:
         progress("Screening & ranking the universe…")
     prefilter = (screen_strategy.criteria
@@ -846,7 +877,12 @@ def run_rank_pipeline(
         # FLOOR-1: the ephemeral floor, recorded beside the existing override record so
         # the report and the frozen run both carry it. ABSENT (not None, not {}) when no
         # override applied, so a no-override run's meta is byte-identical to before.
-        **({"overrides": {"min_market_cap": override_record}}
+        **({"overrides": {"min_market_cap": {
+               **override_record,
+               # FLOOR-2: what the SCREEN's own criterion said, when it differed and was
+               # overridden too. Absent when the lens has no such criterion.
+               **({"screen_file": screen_floor_file} if screen_floor_file is not None
+                  else {})}}}
            if override_record is not None else {}),
         "universe_size": len(universe),
         "ranked_count": len(live),
