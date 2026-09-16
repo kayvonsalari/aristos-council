@@ -2652,6 +2652,20 @@ def narration_structs(result) -> dict:
     return out
 
 
+def lens_asks(result) -> str:
+    """What this run's lens ASKS OF A COMPANY, in one sentence — or ``""`` (CAPTION-1).
+
+    ONE accessor for every surface that captions a lens (the Run tab, both reports, both
+    single-lens paths), reading the strategy that ACTUALLY RAN rather than re-deriving the
+    text at each render site. Empty when the strategy's YAML declares no ``asks``, and an
+    empty string renders nothing anywhere — so a strategy without the field is unchanged.
+
+    It exists because a verdict is meaningless without the question it answers: on
+    2026-09-16 a BUY under a value lens sat beside a SELL under an income lens in one grid,
+    with nothing on the page to say they were not contradicting each other."""
+    return (getattr(getattr(result, "rank_strategy", None), "asks", "") or "").strip()
+
+
 def multi_header_line(result: MultiStrategyResult) -> str:
     """The house line at the top of a multi-lens report — DERIVED from whether narration
     actually ran, never asserted.

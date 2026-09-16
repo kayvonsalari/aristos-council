@@ -12,6 +12,11 @@ name: Growth ETFs
 display_name: Growth ETFs
 version: 1
 
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Growth funds: fee, trend and scale, no yield.
+
 description: >-
   Rank growth-oriented ETFs on expense ratio (cost, ranked low), 12-month momentum
   (trend), and fund size (liquidity + closure risk). Rank-first, no screens; abstention

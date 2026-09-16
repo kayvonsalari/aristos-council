@@ -21,6 +21,11 @@ name: ETF Index Tracker
 display_name: ETF Index Tracker
 version: 1
 
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Index trackers: fee, size and trend.
+
 description: >-
   Rank broad-market ("core") ETFs on expense ratio (cost, ranked low), fund size
   (liquidity + closure risk), and 12-month momentum (trend). Rank-first, no screens;

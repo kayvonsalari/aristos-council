@@ -22,6 +22,11 @@ name: Magic Formula RAW
 display_name: Magic Formula RAW
 role: canonical — no screens, gates only
 version: 1
+
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Cheap and good: high profit on the money invested, a low price for that profit, and a rising share.
 created: "2026-07-09"
 
 description: >-

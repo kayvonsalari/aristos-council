@@ -736,6 +736,7 @@ def multi_strategy_report_html(multi_result, *,
         provenance_sentences,
         report_sections,
         floor_override_line,
+        lens_asks,
         rules_applied,
         union_valuation_band_table,
     )
@@ -879,6 +880,11 @@ def multi_strategy_report_html(multi_result, *,
         # page by colour. The label is always present; the colour only helps find it.
         parts.append(f'<h3 class="lens-head {lens_class(i)}" '
                      f'id="rules-{_esc(_slug(sid))}">{_esc(label)}</h3>')
+        # CAPTION-1: the question this lens asks, directly under its name — so the rules
+        # below read as the answer to something rather than as a list of floors.
+        _asks = lens_asks(multi_result.results[sid])
+        if _asks:
+            parts.append(f'<p class="note">{_esc(_asks)}</p>')
         if rules is None:
             parts.append('<p class="note">This lens declares no screen.</p>')
             continue
@@ -903,8 +909,10 @@ def multi_strategy_report_html(multi_result, *,
         parts.append(f'<section class="section lens-card {lens_class(i)}" '
                      f'id="detail-{_esc(_slug(sid))}">'
                      f"<h2>{_esc(label)} — detail</h2>"
-                     f'<p class="note">Ranked {res.meta["ranked_count"]} of '
-                     f'{res.meta["universe_size"]} names.</p>')
+                     + (f'<p class="note">{_esc(lens_asks(res))}</p>'
+                        if lens_asks(res) else "")          # CAPTION-1
+                     + f'<p class="note">Ranked {res.meta["ranked_count"]} of '
+                       f'{res.meta["universe_size"]} names.</p>')
         if res.excluded:
             items = []
             for row in exclusion_rows(res):
@@ -1023,6 +1031,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         exclusion_rows,
         header_lines,
         floor_override_line,
+        lens_asks,
         provenance_sentences,
         rules_applied,
         summary_line,
@@ -1058,6 +1067,9 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
                               f'{m.get("universe_size", "—")} names')),
             ("Strategy", _esc(label_with_id(m.get("rank_strategy_name", ""),
                                             strategy_id))),
+            # CAPTION-1 — the question this lens asks, beside the lens's name. _kv omits
+            # an empty value, so a strategy with no `asks` renders no row at all.
+            ("Asks", _esc(lens_asks(result))),
             ("Screen", _esc(label_with_id(m.get("screen_strategy_name", ""),
                                           m.get("screen_strategy_id", "")))),
             # FLOOR-1 — see the multi-lens header above; empty unless overridden.

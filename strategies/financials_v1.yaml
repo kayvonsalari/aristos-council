@@ -22,6 +22,11 @@ name: Financials (rank-based)
 display_name: Financials
 version: 1
 
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Banks and insurers on their own terms: return on equity against price-to-book.
+
 description: >-
   Banks, insurers, and payment networks ranked on the measures they are actually
   priced by — price-to-book (value) and return-on-equity (quality) — with 12-month

@@ -10,6 +10,11 @@ name: Dividend ETFs
 display_name: Dividend ETFs
 version: 1
 
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Distributing funds: payout, fee, size and trend.
+
 description: >-
   Rank dividend-oriented ETFs on distribution yield (income), expense ratio (cost, ranked
   low), fund size (liquidity + closure risk), and 12-month momentum (trend). Rank-first,

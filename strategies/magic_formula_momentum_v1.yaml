@@ -22,6 +22,11 @@ display_name: Value + Momentum
 role: flagship
 version: 1
 
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  The same as Magic Formula RAW, but only for companies earning at least 12% on their capital.
+
 description: >-
   Greenblatt two-factor (ROIC quality + earnings-yield value) with a 12-month
   momentum rank added per the value+momentum literature — guards the value screen's

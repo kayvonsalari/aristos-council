@@ -26,6 +26,11 @@ name: Forensic (rank-based)
 # DISPLAY LABEL ONLY: the `id` is the stable record key.
 display_name: Forensic
 version: 1
+
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Are the profits real: cash behind the earnings, a safe balance sheet, and improving health checks.
 role: earnings quality & distress — non-gating
 
 description: >-

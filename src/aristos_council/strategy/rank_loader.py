@@ -52,6 +52,17 @@ class RankStrategy(BaseModel):
     display_name: str = ""
     # Optional one-line role caption shown under the selected entry. Display-only.
     role: str = ""
+    # CAPTION-1 — what this lens ASKS OF A COMPANY, in one plain-English sentence, for a
+    # reader who has not read the YAML. Distinct from every neighbouring string: `name` and
+    # `display_name` are what the lens is CALLED, `role` is where it sits in the line-up,
+    # `description` is the paragraph, `rationale` is the argument for the method. This is
+    # the question, and it is the thing a reader needs beside a verdict to know what the
+    # verdict MEANS. Two runs on 2026-09-16 showed the grid gives no way to tell a BUY on
+    # a value lens from a BUY on an income one, so a BUY beside a SELL read as a
+    # contradiction rather than as two different questions answered.
+    # Display-only, and ABSENT renders NOTHING — a strategy whose YAML has no `asks` is
+    # byte-identical to before.
+    asks: str = ""
     # UI visibility (Sprint 4C): "hidden" -> not listed in the dropdowns by default
     # (legacy/superseded configs). Still fully loadable via the loader/CLI — hidden means
     # not listed, not removed. Default "" == visible. Presentation only.

@@ -1550,7 +1550,7 @@ def _universe_markdown(result) -> str:
     REPORT-1: the header leads with the HUMAN names and keeps every id beside them as
     the stable record key, a one-line verdict summary sits directly under it, and the
     rules that were applied are stated before any result."""
-    from aristos_council.pipeline import (floor_override_line, header_lines,
+    from aristos_council.pipeline import (floor_override_line, header_lines, lens_asks,
                                           summary_line)
     from aristos_council.report_language import label_with_id
 
@@ -1563,6 +1563,10 @@ def _universe_markdown(result) -> str:
     _floor = floor_override_line(m)
     if _floor:
         lines.append(f"**{_floor}**")
+    # CAPTION-1: what this lens asks of a company, under the header. Absent -> no line.
+    _asks = lens_asks(result)
+    if _asks:
+        lines += ["", f"_{_asks}_"]
     lines += ["", f"### {summary_line(result)}", "",
               f"_{_confirmation_line(m)}_", "",
               f"_{result.header}_", "",
@@ -2003,6 +2007,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, evidence_gaps, exclusion_rows,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
         floor_override_line,
+        lens_asks,
         provenance_sentences, report_sections,
         union_valuation_band_table,
         valuation_band_table,
@@ -2087,14 +2092,21 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
               "ran._"]
     for sid in ids:
         lines += ["", f"### {label_with_id(names.get(sid) or sid, sid)}"]
+        # CAPTION-1: the question, under the lens's name, so the rules read as the answer
+        # to something. Absent `asks` adds no line.
+        _asks = lens_asks(multi_result.results[sid])
+        if _asks:
+            lines += ["", f"_{_asks}_"]
         lines += _rules_applied_markdown(multi_result.results[sid],
                                          include_title=False)
 
     # 7 — what DOES vary per lens.
     for sid in ids:
         res = multi_result.results[sid]
-        lines += ["", f"## {label_with_id(names.get(sid) or sid, sid)} — detail", "",
-                  f"- Ranked: {res.meta['ranked_count']} of "
+        lines += ["", f"## {label_with_id(names.get(sid) or sid, sid)} — detail", ""]
+        if lens_asks(res):                                   # CAPTION-1
+            lines += [f"_{lens_asks(res)}_", ""]
+        lines += [f"- Ranked: {res.meta['ranked_count']} of "
                   f"{res.meta['universe_size']} names"]
         if res.excluded:
             lines += ["", "**Excluded — did not pass a rule, so was never ranked**", ""]
@@ -2606,6 +2618,13 @@ def render_universe_tab(show_validation: bool = False) -> None:
         if strategy_role(s):
             bits += f" · {strategy_role(s)}"
         st.caption(bits)
+        # CAPTION-1: what this lens asks of a company, for EVERY selected lens — a
+        # multi-lens run used to caption none of them, so a reader comparing a BUY under
+        # one lens with a SELL under another had nothing saying they ask different
+        # questions. Absent `asks` renders nothing.
+        _asks = (getattr(s, "asks", "") or "").strip()
+        if _asks:
+            st.caption(_asks)
     if len(strategies) == 1 and getattr(strategies[0], "description", ""):
         st.caption(strategies[0].description.strip())
     # The cost estimate + the narration settings describe the PRIMARY strategy (the only one

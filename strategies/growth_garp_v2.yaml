@@ -27,6 +27,11 @@ name: Growth at a Reasonable Price
 # stable record key and is NEVER renamed.
 display_name: Growth
 version: 2
+
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Growing fast at a fair price: sales up at least 10% a year, and not overpaying for that growth.
 created: "2026-07-09"
 
 description: >-

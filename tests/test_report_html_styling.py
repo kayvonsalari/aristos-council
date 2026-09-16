@@ -53,6 +53,18 @@ four visible-text lines. Nothing was removed, reordered or reworded — `git sho
 regeneration commit is +5/-0. The behaviour is pinned independently of these goldens by
 ``test_multi_strategy_run.py::test_band_is_computed_for_every_lens_not_just_the_first``
 and the union-table unit tests beside it, so the guard was not simply relaxed.
+
+GOLDENS MOVED AGAIN, DELIBERATELY (2026-09-16, CAPTION-1). Every lens now carries one
+plain-English line saying what it ASKS OF A COMPANY, rendered under its name in the rules
+section and under its detail heading — because two runs that day showed a BUY under a
+value lens sitting beside a SELL under an income one with nothing on the page to say they
+were answering different questions. The delta is +12/-0 across the two fixtures: four
+added lines in the visible text, eight in the markdown (two lenses x two places, plus the
+markdown's blank lines). Nothing was removed, reordered or reworded.
+
+``magic_formula_v1`` is in this fixture and declares NO ``asks``, so it gains no line —
+the absent-renders-nothing property demonstrated inside the golden itself rather than only
+asserted in a unit test. The texts are pinned verbatim by ``tests/test_lens_asks.py``.
 """
 
 from __future__ import annotations

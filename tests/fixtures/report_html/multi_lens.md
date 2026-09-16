@@ -82,6 +82,8 @@ Used as a prefilter — names failing any rule below were never ranked.
 - Missing factor values are ranked worst.
 
 ### Magic Formula RAW (magic_formula_raw_v1)
+
+_Cheap and good: high profit on the money invested, a low price for that profit, and a rising share._
 **Screen: none**
 
 This strategy screens nothing: no rule filtered the cohort, and quality enters only through the ranking below.
@@ -94,6 +96,8 @@ This strategy screens nothing: no rule filtered the cohort, and quality enters o
 - Missing factor values are ranked worst.
 
 ### Value + Momentum (magic_formula_momentum_v1)
+
+_The same as Magic Formula RAW, but only for companies earning at least 12% on their capital._
 **Screen: Quality-value screen (magic_value_screen_v1)**
 
 Used as a prefilter — names failing any rule below were never ranked.
@@ -129,6 +133,8 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 ## Magic Formula RAW (magic_formula_raw_v1) — detail
 
+_Cheap and good: high profit on the money invested, a low price for that profit, and a rising share._
+
 - Ranked: 3 of 4 names
 
 **No usable data — no verdict was formed**
@@ -142,6 +148,8 @@ Used as a prefilter — names failing any rule below were never ranked.
 - 12-month price momentum — no usable data for all 3 names.
 
 ## Value + Momentum (magic_formula_momentum_v1) — detail
+
+_The same as Magic Formula RAW, but only for companies earning at least 12% on their capital._
 
 - Ranked: 2 of 4 names
 
