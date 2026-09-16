@@ -2204,13 +2204,27 @@ class MultiStrategyCell:
     # flow; the rule allows at most 80%"). Computed by ``combine_rank_results``, which
     # has the result the sentence needs; empty when there is no rule to name.
     reason_plain: str = ""
+    # FACTOR-MARK-1 — how many of the lens's factors this name was actually MEASURED on.
+    # Under an imputing policy (missing: neutral) a name short a factor is scored from the
+    # ranks it has, which is the right call and invisible: Forensic ranked 39 of 106 oil
+    # names without an Altman Z, and those cells read identically to fully measured ones.
+    # (0, 0) when the counts are unknown, which renders nothing.
+    factors_measured: int = 0
+    factors_total: int = 0
+
+    @property
+    def factor_note(self) -> str:
+        """" · ranked on 2 of 3 factors", or "". Display only."""
+        if not self.factors_total or self.factors_measured >= self.factors_total:
+            return ""
+        return (f" · ranked on {self.factors_measured} of {self.factors_total} factors")
 
     def render(self) -> str:
         """The cell as one honest line — each axis reads distinctly (an exclusion is not
         a bad rank, and no-data is not an exclusion)."""
         if self.status == _RANKED:
             pos = f"#{self.position} of {self.cohort_size}" if self.position else "ranked"
-            return f"{pos} · {self.verdict.upper()}"
+            return f"{pos} · {self.verdict.upper()}{self.factor_note}"
         if self.status == _EXCLUDED:
             return f"excluded — {self.reason_plain or self.reason}"
         if self.status == _UNRATEABLE:
@@ -2290,7 +2304,11 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
             pos, _tied = positions.get(r.ticker, (None, False))
             _cell(r.ticker, MultiStrategyCell(
                 strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,
-                verdict=r.verdict, score=r.combined_rank))
+                verdict=r.verdict, score=r.combined_rank,
+                # FACTOR-MARK-1: measured = the lens's factors this name actually had a
+                # value for. An imputed factor is not a measurement of the name.
+                factors_total=len(r.factor_ranks or {}),
+                factors_measured=len(r.factor_ranks or {}) - len(r.imputed_factors or [])))
         for status, pairs in ((_EXCLUDED, res.excluded),
                               (_UNRATEABLE, res.unrateable),
                               (_FETCH_ERROR, res.fetch_errors)):
