@@ -75,6 +75,8 @@ All factors are pure functions of adapter data; each returns a float or `None`
 | `expense_ratio` | The fund's ongoing charge (`net_expense_ratio`), vendor value as-is | **low** | ETF lenses only — the sole LOW-direction ETF leg: cost compounds against the holder forever, so cheaper ranks better. See §2.1 for the percent-not-fraction unit trap. |
 | `fund_size` | The fund's net assets (`total_assets`) | high | ETF lenses only — a liquidity and closure-risk proxy. See §2.1. |
 | `piotroski_f_score` | The Piotroski F-Score: nine binary accounting checks over the two most recent annual periods, 0–9 | high | Registered but selected by **no strategy**; shares its arithmetic with the `min_f_score` screen criterion. **Abstains** below 5 computable checks. A coarse integer, so it ties heavily on a small cohort — better as a screen than a rank leg. Full definition in **§4.1**. |
+| `payout_coverage_fcf` | Dividends / free cash flow, **through-cycle**: CURRENT-year `dividends_paid` ÷ the MEAN free cash flow over the last up-to-4 fiscal years | **low** | The cyclical-income lens's coverage leg. Shares ONE helper (`screening.payout_coverage_fcf`) with the `max_payout_ratio_fcf` screen criterion, so the screened number and the ranked number are the same number — asserted by float equality, not by inspection. A non-payer is **0.0** (it pays out none of its cash, a fact rather than a gap). **Abstains** when the 4-year mean FCF is ≤ 0 (the utilities lesson) or the dividend figure is missing — and, unlike the criterion, also where that criterion would take its MARKED EPS fallback: a screen floor may accept a disclosed proxy, a rank COLUMN may not, or names are ordered against two different measures without saying so. |
+| `net_debt_to_operating_income` | (`total_debt` − `total_cash`) ÷ the MEAN operating income over the last 4 fiscal years | **low** | Roughly how many average years of profit the debt represents. The window matches ROIC's and exists for the same reason: against a single peak year a cyclical looks almost debt-free (Valero, 15,751m of operating income in FY2022 against 4,312m in FY2025 — the same balance sheet reads 3.5× heavier on the second). **Net cash is NEGATIVE and ranks best**, which needs no special case under the LOW direction. **Abstains** when the 4-year mean operating income is ≤ 0 (the ratio would invert, making more debt read as better) or either balance-sheet figure is missing. Deliberately generic — it reads no dividend field, so the planned `quality_v1` lens reuses it. |
 | `valuation_band_percentile` | Where today's valuation sits in the name's **OWN** 5-year monthly distribution, 0–100 (15th = historically cheap, 92nd = near its own peak) | **low** | ABSOLUTE, not cohort-relative — the one factor that asks "expensive vs its own past?". Registered but selected by **no strategy**; shares its arithmetic with the `valuation_band_percentile` screen criterion. **Abstains** below 3 years of computable history. Opt-in (an extra 5-year fetch). Full definition in **§2.3**. |
 
 ### 2.1 ETF factors
@@ -480,6 +482,7 @@ strategy YAML, not code. Current registry (thresholds shown from the live strate
 | `min_market_cap` | strategy-specific | Micro-cap noise. |
 | `min_price_momentum` | −0.10 (12m) | **Breakdowns, not flatness**: a defensive down >10% on the year is breaking (T at −26%); a quiet staple down 0–10% passes. The ranker handles the gradient among survivors. |
 | `min_dividend_streak` | 10 years | Cut history: T (cut 2022 → streak 0) and MMM (cut 2024) fail; PG/KO/JNJ/MCD pass. |
+| `max_dividend_cuts` | 5 years | **"Was it ever CUT?", which is not "did it RISE?"** Passes when no calendar year in the window paid a lower TOTAL than the year before. The threshold is the WINDOW (a count of complete years), not a cap on the observed value — so the rule renders its own phrase ("no year paid less than the year before, across the last 5 complete years") rather than the generated "at most 5", which would compare a percentage to a year count. `observed` is the size of the LARGEST cut as a fraction (0.32 = the total fell 32%), and 0.0 on a pass. A company that held its dividend flat through a downturn has a growth streak of 0 and **passes** this rule; for a cyclical payer that flat dividend is the evidence of durability. Built on the same calendar-year totals, the same adjusted per-share values and the same "drop the latest, possibly-incomplete year" rule as `min_dividend_growth_streak`, and it applies the same ±0.5% `flat_tol`, so the two readings of one history cannot disagree about whether a year was a reduction. Too little history (fewer than window+1 complete years) or no dividend history at all is **NOT-EVAL**, never a fail — a non-payer is failed by `min_dividend_yield`. **KNOWN FALSE POSITIVE, not detected in v1:** a SPECIAL dividend inflates one year's total, so the next ordinary year reads as a cut. The year total is the measure by design (it is what makes a cadence change safe), and separating specials needs a payment type the free data does not carry reliably; the note names the year, so it can be checked by eye. On a variable-dividend sector this fires often and honestly — see §4.2. |
 | `max_debt_to_market_cap` | 1.0 | Balance-sheet risk: total debt ≤ market cap. VZ (~1.13×, $201B) fails. Uses debt/market-cap, **not** debt/equity — robust to negative-equity buyback names (MCD). |
 | `min_roic` | 0.12 (magic_value_screen) | The quality floor for value strategies. |
 | `min_f_score` | *none — enabled by no lens* | Accounting quality: nine binary checks on the annual statements (see **§4.1**). Registered and optional; no threshold is documented because no strategy adopts one yet. |
@@ -652,6 +655,45 @@ three non-lender financials in that cohort (BLK, V, MA) compute all nine. A per-
 availability report over any cohort is what `examples/piotroski_probe.py` exists to produce;
 it is the gate question ("is it computable here at all?") that precedes any question about
 whether the score is *useful* here.
+
+### 4.2 `max_dividend_cuts` on a variable-dividend sector — measured, not assumed
+
+The rule is strict by construction: ANY calendar year whose total fell more than ±0.5%
+against the prior year is a cut. On a sector where a large part of the payout is variable
+by design — oil & gas base-plus-variable programmes, and non-USD listings whose declared
+dividend is translated at a moving rate — that fires often. The acceptance run of
+2026-09-16 (`oil_dividend_v1`, 134 names after CTRA delisted) measured it rather than
+guessing:
+
+| Rule | passed | failed | not tested |
+|---|---|---|---|
+| Dividend yield (≥ 1.5%) | 98 | 8 | 0 |
+| Dividends vs free cash flow (≤ 80%) | 71 | 28 | 7 |
+| Company size (≥ $5.0bn) | 56 | 0 | 50 |
+| **Dividend cuts in the last 5 years** | **24** | **67** | **15** |
+| Total debt vs market value (≤ 1.0x) | 92 | 7 | 7 |
+
+Of the 67 failures, 5 were declines under 10% and 21 between 10% and 25% — the band where
+a variable-dividend programme and an FX translation are indistinguishable from a policy
+cut on year totals alone. 43 names were excluded by this rule ALONE (every other rule they
+were tested on passed), so the rule is what decides the cohort's size:
+
+| a decline under X counts as the variable band, not a cut | names ranked |
+|---|---|
+| (today — no band) | 23 |
+| 10% | 26 |
+| 15% | 29 |
+| 20% | 38 |
+| 25% | 41 |
+| 33% | 47 |
+| 50% | 57 |
+
+This is recorded as a MEASUREMENT, not a recommendation. Reaching a 50-60 name cohort
+would mean calling a 33-50% reduction "not a cut", which is not defensible; 23 is the
+honest answer to the rule as written, and it is still 7.7× what Defensive Income's
+ten-year streak rule admitted on the same cohort (3). Whether a materiality band belongs
+in the rule at all — and, if so, whether it is better expressed as a threshold on the cut
+SIZE than as a widened `flat_tol` — is an open policy question, not a defect.
 
 ### 4.3 The shortlist (SHORTLIST-1) — derived, not decided
 

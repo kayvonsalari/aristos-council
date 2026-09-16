@@ -23,9 +23,10 @@ STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 
 def test_raw_is_discovered_visible_and_matches_the_flagship_factors_and_gates():
     visible = {s.id for s in visible_rank_strategies(STRAT_DIR)}
-    assert "magic_formula_raw_v1" in visible                # visible (six stock lenses)
-    # six stock + three ETF lenses (ETFCORE-1 added etf_core_v1; FORENSIC-1 forensic_v1).
-    assert len(visible) == 9
+    assert "magic_formula_raw_v1" in visible              # visible (seven stock lenses)
+    # seven stock + three ETF lenses (ETFCORE-1 added etf_core_v1; FORENSIC-1
+    # forensic_v1; CYCLICAL-INCOME-1 cyclical_income_v1).
+    assert len(visible) == 10
     assert any(s.id == "magic_formula_raw_v1" and s.kind == "rank"
                for s in rank_strategies(STRAT_DIR))
 

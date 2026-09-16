@@ -1,0 +1,123 @@
+# Aristos Council — RANK strategy: Cyclical Income (v1)
+# =====================================================
+# An income lens for sectors whose dividends move with a commodity or a cycle — oil,
+# mining, shipping, chemicals — where a ten-year raise streak is the wrong test of
+# durability and removes the sector instead of sorting it.
+#
+# THE EVIDENCE (2026-09-16, two runs). Defensive Income on the 135-name oil dividend
+# cohort ranked 3 names: min_dividend_streak >= 10 failed 126 of 128 tested, while the
+# other five rules were survivable (yield 15, payout-vs-FCF 33, size 14, debt 9,
+# momentum 2). The same lens on its home cohort (defensive_income_16_v1) ranked 9 of 16
+# with every exclusion meaningful. So Defensive Income is right for its purpose; this
+# sector needs a different income test, not a loosened one.
+#
+# WHAT IT RANKS. Three legs, all about whether the income SURVIVES rather than how large
+# it is today: how much cash is returned, how well that return is covered, and how much
+# debt sits on top of it. Two of the three are LOW-direction, which is unusual for an
+# income lens and deliberate — a big yield out of borrowed money is the trap this exists
+# to avoid, not the thing it looks for.
+
+id: cyclical_income_v1
+name: Cyclical Income (screened)
+display_name: Cyclical Income
+version: 1
+role: income through the cycle — screened
+
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
+# meeting a verdict without having read the YAML.
+asks: >-
+  Income that survives the cycle: a covered dividend not cut in five years, with
+  manageable debt.
+
+# KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting an
+# income cohort. The thesis only drives a caption when a list says it was built
+# for something else; it never filters this lens out of the picker.
+kind: selector
+thesis:
+  - income
+
+description: >-
+  Income from companies whose profits move with a cycle — oil, mining, shipping,
+  chemicals — where a ten-year record of dividend increases is the wrong test and
+  excludes the whole sector rather than sorting it. Keeps the income floors that matter:
+  a real yield, paid out of cash rather than accounting profit, from a large company
+  whose debt has not become the story. Replaces "raised for ten years" with "has not cut
+  in five", so a dividend held flat through a downturn counts as the evidence of
+  durability it is. Ranks on how much cash is returned to owners, how comfortably that
+  is covered, and how much debt sits on top of it. It applies NO trend rule, so it WILL
+  rank a name whose price has fallen — that is the point of it, and it is the difference
+  from Defensive Income.
+
+# Suggested universes (UNI-1): surfaced first in the selectors; a hierarchy, never a
+# lock. This lens was built against the oil dividend cohort that exposed the gap.
+suggested_universes:
+  - oil_dividend_v1
+
+# Asset-kind scope (ETF-1 ITEM 2): a stock lens admits ONLY equities. A fund scored on
+# the vendor's look-through "fundamentals" is quiet garbage, so the confirmed-only kind
+# gate walls it out before any factor path.
+asset_kinds:
+  - equity
+asset_kind_rationale: >-
+  Every leg describes an operating company: the cash IT generates, the dividend IT pays
+  and the debt IT carries. A fund has none of those in its own right — a look-through
+  average of its holdings' figures would be a different measurement wearing the same
+  column heading — so funds are gated out rather than ranked badly.
+
+factors:
+  - name: net_payout_yield            # high — dividends (+ buybacks where available).
+                                      # The income itself; the only HIGH leg, and the
+                                      # only one a yield trap can score well on, which
+                                      # is why the other two exist.
+  - name: payout_coverage_fcf         # low — dividends / 4-year mean free cash flow.
+                                      # Shares its arithmetic with the screen's
+                                      # max_payout_ratio_fcf floor (FACTOR-COVER-1), so
+                                      # the screened number and the ranked number are
+                                      # one number. The screen sets the floor at 0.80;
+                                      # this leg sorts the survivors by how far BELOW it
+                                      # they sit.
+  - name: net_debt_to_operating_income  # low — net debt / 4-year mean operating income.
+                                      # Through-cycle for the same reason ROIC is: a
+                                      # peak year makes a cyclical's balance sheet look
+                                      # light. Net cash is negative and ranks best.
+
+cut: quintile
+k: 6
+percentile: 0.2
+
+council_screen_strategy: cyclical_income_screen_v1
+# SCREEN-AS-PREFILTER: rank ONLY names that already pass the income floors, so the
+# ranker orders names already known to qualify instead of letting a name strong on two
+# legs through despite failing a hard floor on the third. ONE definition of "cyclical
+# income", shared with the council.
+prefilter_screen: true
+
+# A missing factor takes the WORST rank rather than being imputed. An income lens has no
+# business ranking a name whose payout data is absent: the whole judgement is about the
+# payout, so a gap there is not a neutral gap — unlike Defensive Income, where a
+# buyback-only non-payer is still legitimately judged on low-vol and momentum.
+missing: worst
+
+min_market_cap: 5.0e9
+
+exclude_sectors:
+  - Financial Services        # yfinance label
+  - Financials                # EODHD / GICS label
+sector_exclusion_rationale: >-
+  Net debt is not a meaningful measure for a bank or an insurer. Borrowing is their raw
+  material rather than a claim ahead of the shareholder, so net-debt-to-operating-profit
+  would rank the most conservatively funded lender worst. Banks are a category error for
+  this lens in the same way they are for the Greenblatt lenses; financials_v1 ranks them
+  on the measures they are actually priced by.
+
+rationale: >-
+  A cyclical payer earns its place by paying through the cycle, not by raising every
+  year. Requiring a decade of increases asks a commodity producer to pretend the
+  commodity is not cyclical, and the honest operators — the ones that hold the dividend
+  flat in a bad year and raise it again in a good one — fail that test while a company
+  borrowing to sustain an unaffordable payout can pass it for a while. So the durability
+  test is "no cut in five years", and the ranking asks what the payout is made of: cash
+  covering it, and how much debt sits ahead of it. Carrying no trend rule is deliberate
+  and is the lens's main risk as well as its purpose — it will rank a name whose price
+  has fallen, including one falling for a reason the numbers have not reached yet, which
+  is exactly what the council stage is for.

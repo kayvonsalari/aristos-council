@@ -1208,7 +1208,14 @@ def exclusion_sentence(result, ticker: str, reason: str) -> str:
     observed = template.format(
         observed=format_value(o["observed"], unit, currency=currency),
         signed=format_signed_change(o["observed"], unit))
-    limit = format_limit_clause(comparison, o["threshold"], unit, currency=currency)
+    # CRIT-NOCUT-1: a criterion whose threshold is a WINDOW states its own rule phrase —
+    # the generated "at most N" would compare this criterion's cut PERCENTAGE against a
+    # count of years. Empty for every other criterion, which keeps their sentences
+    # byte-identical.
+    own = getattr(crit, "threshold_text", "")
+    limit = (f"the rule requires {own.format(threshold=_plain_threshold(o['threshold']))}"
+             if own else
+             format_limit_clause(comparison, o["threshold"], unit, currency=currency))
     tail = ""
     basis = o.get("basis") or ""
     if basis and basis != "abstained":
@@ -1216,6 +1223,13 @@ def exclusion_sentence(result, ticker: str, reason: str) -> str:
     if o.get("borderline"):
         tail += " This is a borderline miss — it is still a miss."
     return f"{observed}; {limit}.{tail}"
+
+
+def _plain_threshold(value) -> str:
+    """A window threshold as a bare number — ``5``, not ``5.0`` (CRIT-NOCUT-1)."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
 
 
 def _failing_outcome(result, ticker: str, reason: str):
@@ -1427,9 +1441,15 @@ def rules_applied(result) -> Optional[RulesApplied]:
         label = getattr(crit, "label", "") or name
         comparison = getattr(crit, "comparison", COMPARISON_MIN)
         spec = crit.threshold_param if crit is not None else None
-        phrase = ("limit not recorded" if threshold is None else format_threshold(
-            comparison, threshold, getattr(spec, "unit", "") or UNIT_RATIO,
-            currency=getattr(spec, "currency", None)))
+        own = getattr(crit, "threshold_text", "")
+        if threshold is None:
+            phrase = "limit not recorded"
+        elif own:                       # CRIT-NOCUT-1 — see _exclusion_sentence
+            phrase = own.format(threshold=_plain_threshold(threshold))
+        else:
+            phrase = format_threshold(
+                comparison, threshold, getattr(spec, "unit", "") or UNIT_RATIO,
+                currency=getattr(spec, "currency", None))
         passed = failed = not_tested = 0
         for per_name in outcomes.values():
             o = per_name.get(name)

@@ -134,7 +134,7 @@ class YFinanceAdapter(MarketDataAdapter):
         dps = _dividend_per_share(info)
         # Dividend-growth streak + last cut, DERIVED from the payment history (a
         # yield-trap separator that's free but yfinance never surfaces as a scalar).
-        streak_years, last_cut = _dividend_streak_from_ticker(tk)
+        streak_years, last_cut, year_totals = _dividend_streak_from_ticker(tk)
         # Period-labelled series for the F-Score (PIOTROSKI-2): same statement
         # lines as the positional series above, but WITH period-end dates and
         # None holes kept in place, so cross-statement checks can period-match
@@ -205,6 +205,9 @@ class YFinanceAdapter(MarketDataAdapter):
             # Defensive-risk signals (free-data yield-trap separators).
             dividend_streak_years=streak_years,
             last_dividend_reduction_year=last_cut,
+            # CRIT-NOCUT-1 — the totals the two signals above came from, carried so a
+            # criterion can ask its own question of them. No extra fetch.
+            dividend_year_totals=year_totals,
             total_debt=_as_float(info.get("totalDebt")),
             debt_to_equity=_as_float(info.get("debtToEquity")),
             total_cash=_as_float(info.get("totalCash")),   # EV = mcap + debt − cash
@@ -344,24 +347,33 @@ def _dividend_per_share(info: dict) -> float | None:
     return _as_float(info.get("trailingAnnualDividendRate"))
 
 
-def _dividend_streak_from_ticker(tk) -> tuple[int | None, int | None]:
-    """(streak_years, last_reduction_year) from a yfinance Ticker's dividend history.
+def _dividend_streak_from_ticker(tk) -> tuple[int | None, int | None,
+                                              list[list[float]] | None]:
+    """(streak_years, last_reduction_year, year_totals) from a yfinance Ticker's
+    dividend history.
 
     Reads ``tk.dividends`` (already split-adjusted), sums per calendar year, and
     delegates to ``screening.dividend_streak`` (which excludes the current partial
     year and distinguishes FLAT from a CUT). Any failure/empty history -> (None,
-    None), a clean abstain — this must never fail the whole fundamentals fetch."""
+    None, None), a clean abstain — this must never fail the whole fundamentals fetch.
+
+    CRIT-NOCUT-1 returns the per-year totals as well. They were already computed here
+    and thrown away; carrying them lets a criterion ask its own question of the same
+    history (how big was the cut, and was it inside MY window) without a second fetch
+    and without the two ever disagreeing about what a year paid."""
     from ..tools.screening import dividend_streak
     try:
         divs = tk.dividends
         if divs is None or len(divs) == 0:
-            return None, None
+            return None, None, None
         annual: dict[int, float] = {}
         for ts, amt in divs.items():
             annual[ts.year] = annual.get(ts.year, 0.0) + float(amt)
     except Exception:
-        return None, None
-    return dividend_streak(annual, date.today().year)
+        return None, None, None
+    streak, last_cut = dividend_streak(annual, date.today().year)
+    totals = [[float(y), float(annual[y])] for y in sorted(annual)]
+    return streak, last_cut, totals
 
 
 def _dividend_yield(info: dict) -> float | None:

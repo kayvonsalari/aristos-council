@@ -36,6 +36,10 @@ description: >
   Ranks the universe on low volatility, net payout yield, and 12-month momentum, and
   combines the ranks. Momentum + low-vol exclude actively-declining names by
   construction.
+  Because it requires the trend to be intact (no fall of more than 10% over twelve
+  months), this lens will not rank a quality income name at the moment it is cheapest;
+  that is by design. For cyclical or currently-derated payers use the Cyclical Income
+  lens.
 
 # Suggested universes (UNI-1): surfaced first in the selectors; a hierarchy, never a
 # lock — cross-lens runs stay one-click. This defensive-income lens pairs with the

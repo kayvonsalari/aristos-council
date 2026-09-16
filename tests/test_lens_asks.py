@@ -49,12 +49,12 @@ EXPECTED = {
     "etf_dividend_v1": "Distributing funds: payout, fee, size and trend.",
     "etf_growth_v1": "Growth funds: fee, trend and scale, no yield.",
     "etf_core_v1": "Index trackers: fee, size and trend.",
-    # TODO(CYCLICAL-INCOME-1): feat/cyclical-income-1 had not landed on main when this
-    # branch was cut, so cyclical_income_v1 is absent here. When it merges, its YAML gains
-    #   asks: "Income that survives the cycle: a covered dividend not cut in five years,
-    #          with manageable debt."
-    # and its id joins this table. The loop below skips ids that do not exist, so this
-    # file needs no other change when that happens.
+    # Added when feat/cyclical-income-1 was rebased onto SHORTLIST-1: the guard
+    # `test_every_visible_lens_has_one` caught the new lens arriving without a question,
+    # which is exactly what it is for.
+    "cyclical_income_v1":
+        "Income that survives the cycle: a covered dividend not cut in five years, with "
+        "manageable debt.",
 }
 
 

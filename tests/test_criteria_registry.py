@@ -115,6 +115,10 @@ def test_registry_holds_dividend_and_growth_criteria():
         "min_price_momentum",
         # defensive-risk (free-data yield-trap separators)
         "min_dividend_streak", "max_debt_to_market_cap",
+        # income durability for a CYCLICAL payer (CRIT-NOCUT-1): "was it ever cut?",
+        # which a growth streak cannot answer — a dividend held flat through a downturn
+        # has a streak of 0 and has cut nothing.
+        "max_dividend_cuts",
         # accounting quality (PIOTROSKI-1)
         "min_f_score",
         # forensic: earnings quality + distress (FORENSIC-1) — gating by no strategy
