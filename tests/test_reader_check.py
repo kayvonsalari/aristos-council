@@ -263,11 +263,27 @@ def test_a_glossed_term_passes():
     assert check.ok, check.reason
 
 
-@pytest.mark.parametrize("term", ["free cash flow", "accrual", "balance sheet",
-                                  "momentum", "valuation"])
+@pytest.mark.parametrize("term", ["free cash flow", "accrual", "momentum", "valuation"])
 def test_every_glossed_term_is_enforced(term):
     check = check_summary(_s(happened=f"The {term} was weak."), {})
     assert not check.ok and f"term without gloss: {term}" in check.reason
+
+
+def test_the_enforced_list_is_exactly_the_terms_of_art():
+    """READER-3. The parametrize above must not drift from the list it claims to cover."""
+    from aristos_council.reader_check import GLOSS_TERMS
+
+    assert set(GLOSS_TERMS) == {"percentile", "free cash flow", "accrual", "momentum",
+                                "valuation"}
+
+
+def test_balance_sheet_is_deliberately_NOT_enforced():
+    """READER-3. The gloss rule exists for terms of art a general reader may not hold. A
+    balance sheet is a household phrase, and this was the single most common reason a
+    written summary was withheld — a summary lost over a word everyone already knows is a
+    worse outcome than the word left unglossed."""
+    check = check_summary(_s(happened="The balance sheet was weak."), {})
+    assert check.ok, check.reason
 
 
 def test_a_vague_range_is_withheld_and_named():

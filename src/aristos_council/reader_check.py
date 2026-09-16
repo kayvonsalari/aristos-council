@@ -50,8 +50,12 @@ _TICKER = re.compile(r"\b([A-Z]{1,6}(?:[.-][A-Z0-9]{1,4})?)\b")
 # READER-2 — terms the prompt already demands be glossed on first use. The demand was
 # unchecked, and the first live summary duly used "percentile" bare. A gloss is a bracketed
 # phrase within GLOSS_WINDOW characters of the term, which is where a reader looks for it.
-GLOSS_TERMS = ("percentile", "free cash flow", "accrual", "balance sheet", "momentum",
-               "valuation")
+# READER-3 — "balance sheet" is OFF this list. The others are terms of art a general
+# reader may genuinely not hold ("accrual", "percentile", "momentum"); a balance sheet is a
+# household phrase, and demanding a bracketed gloss for it bought nothing while costing
+# real summaries — a summary WITHHELD over a word every reader already knows is a worse
+# outcome than the word left unglossed.
+GLOSS_TERMS = ("percentile", "free cash flow", "accrual", "momentum", "valuation")
 GLOSS_WINDOW = 60
 
 # READER-2 — "2 to 3 names" when the pack holds the exact figure. A range is a way of not

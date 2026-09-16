@@ -256,4 +256,115 @@ def test_a_withheld_summary_still_records_its_cost():
     bad = _good(survived="You should buy everything.")
     res = _multi(with_reader=True, reader_runner=_MeteredRunner(bad))
     assert not res.reader.available                     # withheld...
-    assert res.meta["reader"]["input_tokens"] == 100    # ...and still billed
+    # ...and still billed, for BOTH attempts. READER-3 asks again when the check fails, so
+    # a withheld summary costs two calls, and the run must state what it actually spent
+    # rather than what one call would have cost.
+    assert res.meta["reader"]["attempts"] == 2
+    assert res.meta["reader"]["input_tokens"] == 200
+    assert res.meta["reader"]["output_tokens"] == 20
+
+
+# --------------------------------------------------------------------------- #
+# READER-3 — one retry, with the check's own complaint fed back
+# --------------------------------------------------------------------------- #
+# A failed check is usually one fixable slip. Withholding the whole summary over it throws
+# away a call already paid for and leaves a reader "Summary withheld: 312 words" and
+# nothing else. One retry recovers most of them; a second would not, because the check is
+# deterministic and the writer has already been shown exactly what it said.
+
+class _ScriptedRunner:
+    """Returns each summary in turn, and records every user message it was sent."""
+
+    model_id = "fake:reader"
+    temperature = 0.0
+
+    def __init__(self, *summaries):
+        self.summaries = list(summaries)
+        self.messages = []
+
+    def invoke(self, system, user):
+        self.messages.append(user)
+        return self.summaries[min(len(self.messages) - 1, len(self.summaries) - 1)]
+
+
+def test_a_first_attempt_that_passes_is_not_retried():
+    """The common case costs exactly what it always did — one call."""
+    runner = _ScriptedRunner(_good())
+    res = _multi(with_reader=True, reader_runner=runner)
+    assert res.reader.available
+    assert len(runner.messages) == 1
+    assert res.meta["reader"]["attempts"] == 1
+    assert res.meta["reader"]["checks"] == ["ok"]
+
+
+def test_a_failed_check_is_retried_once_and_can_be_recovered():
+    runner = _ScriptedRunner(_good(survived="You should buy everything."), _good())
+    res = _multi(with_reader=True, reader_runner=runner)
+    assert res.reader.available                      # the retry was published
+    assert len(runner.messages) == 2
+    assert res.meta["reader"]["attempts"] == 2
+    # BOTH checks are recorded: a summary that passed on the retry is not the same event
+    # as one that passed first time, and the meta is where that shows.
+    assert len(res.meta["reader"]["checks"]) == 2
+    assert 'forbidden word: "buy"' in res.meta["reader"]["checks"][0]
+    assert res.meta["reader"]["checks"][1] == "ok"
+    assert res.meta["reader"]["check"] == "ok"
+
+
+def test_the_retry_is_told_exactly_what_the_check_said():
+    """A retry at temperature 0 against a byte-identical message returns a byte-identical
+    summary and fails the same check. The complaint has to travel, or the retry is only a
+    second bill."""
+    runner = _ScriptedRunner(_good(survived="You should buy everything."), _good())
+    _multi(with_reader=True, reader_runner=runner)
+    first, second = runner.messages
+    assert "REJECTED" not in first                   # the first ask is unchanged
+    assert "REJECTED by the automatic check" in second
+    assert 'forbidden word: "buy"' in second
+    # The FACTS are unchanged between attempts — the retry may reword, never be given
+    # more to say.
+    assert second.startswith(first)
+
+
+def test_a_second_failure_withholds_exactly_as_before():
+    bad = _good(survived="You should buy everything.")
+    runner = _ScriptedRunner(bad, bad)
+    res = _multi(with_reader=True, reader_runner=runner)
+    assert not res.reader.available
+    assert res.reader.note.startswith("Summary withheld: ")
+    assert len(runner.messages) == 2                 # and STOPS there
+    assert res.meta["reader"]["attempts"] == 2
+    assert all("buy" in c for c in res.meta["reader"]["checks"])
+
+
+def test_a_model_error_on_the_retry_still_records_the_first_attempt():
+    """The first call was made and paid for; an exception on the second must not erase
+    the fact that it happened."""
+
+    class _ThenRaises(_ScriptedRunner):
+        def invoke(self, system, user):
+            if self.messages:
+                self.messages.append(user)
+                raise RuntimeError("provider said no")
+            return super().invoke(system, user)
+
+    runner = _ThenRaises(_good(survived="You should buy everything."))
+    res = _multi(with_reader=True, reader_runner=runner)
+    assert not res.reader.available
+    assert res.reader.note == "Summary not written: RuntimeError"
+    assert res.meta["reader"]["attempts"] == 2
+    assert len(res.meta["reader"]["checks"]) == 1    # only the first got as far as a check
+
+
+def test_the_retry_ceiling_is_two():
+    from aristos_council.reader import MAX_ATTEMPTS
+
+    assert MAX_ATTEMPTS == 2
+
+
+def test_the_run_tab_cost_hint_covers_both_calls():
+    """A hint that quotes only the best case is not a hint."""
+    pytest.importorskip("streamlit")
+    import app
+
+    assert app.READER_COST_HINT == "1-2 cents"

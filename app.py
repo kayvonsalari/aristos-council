@@ -39,7 +39,9 @@ from aristos_council.costs import actual_vs_estimate, cost_phrase
 # READER-1 — what one summary costs, for the checkbox label and the Run-button line. One
 # call on the cheapest tier over a facts pack of a few thousand tokens; stated as "about"
 # because it is a hint on a control, not a billed figure (the run records the real one).
-READER_COST_HINT = "1 cent"
+# READER-3: the reader may be asked twice (one retry on a failed check), so the
+# hint covers both calls. A hint that quotes only the best case is not a hint.
+READER_COST_HINT = "1-2 cents"
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
     RunReport,
