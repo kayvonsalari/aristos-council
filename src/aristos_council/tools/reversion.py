@@ -88,6 +88,18 @@ _PE = "pe"
 # GAP_SANITY``, because the symmetric form stays correct if the arithmetic ever changes
 # shape. Pinned by test_reversion_sanity.py so the dead half is not mistaken for a bug.
 GAP_SANITY = 1.5
+# REV-BOUND-1 — the DOWNWARD bound, which BAND-3 left unreachable.
+#
+# BAND-3 wrote its bound on the magnitude (+/-150%) and noted that only the upward side
+# could ever fire, because an implied price is never negative so the gap floors at -100%.
+# That note was right about the arithmetic and wrong about the consequence: Murphy Oil came
+# back at -98% and BP at -96%, both comfortably inside the bound and both absurd. A name
+# that must fall by more than three quarters to reach its OWN median is telling you the
+# median is wrong, not that the shares are worth a fifth of their price.
+#
+# -75% rather than -50%: a cyclical at a genuine peak can carry a halving to its own
+# through-cycle median, and that IS a reading. Three quarters is not.
+GAP_SANITY_DOWN = -0.75
 
 # The phrase naming the multiple in the rendered line, per basis.
 _BASIS_PHRASE = {_EV_EBIT: "EV/EBIT", _PE: "P/E"}
@@ -243,7 +255,7 @@ def reversion_value(band: Optional[ValuationBand], fundamentals, *,
         price = implied_equity / units
 
     gap = price / last_close - 1.0
-    if abs(gap) > GAP_SANITY:
+    if gap > GAP_SANITY or gap < GAP_SANITY_DOWN:
         # BAND-3: past the bound this is an artefact, not a reading. Abstain through the
         # SAME path every other unstateable case takes, so the row keeps its shape and the
         # reason travels with it. The band's percentile is untouched.
