@@ -146,7 +146,7 @@ def test_short_history_abstains_with_the_years_in_the_reason():
     assert not band.available
     assert band.percentile is None                    # never a fabricated middle
     assert "insufficient history" in band.note
-    assert band.note.rstrip().endswith("y")           # e.g. "insufficient history: 1.4y"
+    assert band.note.startswith("insufficient history: ")           # e.g. "insufficient history: 1.4y"
     assert band.display.startswith("not evaluated — ")
 
 
@@ -438,9 +438,26 @@ class _BandAdapter(MarketDataAdapter):
         ends = _fiscal_years(6)
         # shares_outstanding is dated too, so the PRICE-1 reversion value computes on the
         # SAME point-in-time discipline as net debt (it abstains without it).
-        aligned = {"ebit": [_BAND_FUND[ticker]["ebit"][0]] * 6,
-                   "total_debt": [200.0] * 6, "cash": [50.0] * 6,
-                   "shares_outstanding": [1e9] * 6}
+        # BAND-SANITY-1 made the fixture's own scale visible: its EBIT was in bare units
+        # while its market cap was in dollars, so every band computed at ~6,666,667x. That
+        # never mattered while nothing checked plausibility, and it means these tests were
+        # asserting their subjects against a number no company could have. The statement
+        # lines are now on the same scale as the price series (mcap ~5e10-1.1e11 against
+        # EBIT 5e9 gives EV/EBIT ~10-22x), so the rising/falling trends still put P near
+        # its own peak and Q near its own floor — the property every test here turns on.
+        # BAND-SANITY-1 made two scale faults in this fixture visible, both harmless
+        # until something checked plausibility:
+        #   1. EBIT was in bare units while market cap was in dollars, so every band
+        #      computed at ~6,666,667x -- a number no company could have;
+        #   2. market cap (2e10) and the price series ($50-$110) implied share counts five
+        #      times apart, so the reversion value came out at -87% of the price.
+        # The fixture is now internally coherent -- cap, price and share count agree, as a
+        # real company's do -- which is what every test here was always assuming.
+        last_close = _BAND_TRENDS[ticker][-1]
+        shares = _BAND_FUND[ticker]["market_cap"] / last_close
+        aligned = {"ebit": [5e9] * 6,
+                   "total_debt": [2e9] * 6, "cash": [5e8] * 6,
+                   "shares_outstanding": [shares] * 6}
         period_ends = {k: ends[:6] for k in aligned}
         return Fundamentals(ticker=ticker, name=ticker, currency="USD",
                             aligned_annual=aligned, aligned_period_ends=period_ends,
@@ -629,3 +646,59 @@ def test_band_requested_and_all_compute_is_unchanged_no_failure_text():
     assert not any("not evaluated" in cell for r in rows for cell in r.values())
     assert all(r["Reversion value"].startswith("$") for r in rows)
     assert all(r["Gap"].startswith(("+", "-")) for r in rows)
+
+
+# --------------------------------------------------------------------------- #
+# BAND-SANITY-1 — an implausible multiple abstains
+# --------------------------------------------------------------------------- #
+def test_an_implausible_multiple_abstains():
+    """MODEC came back at EV/EBIT 1144x and PTTEP at 0.6x, and both were rendered as
+    percentiles with exactly the authority of a sane row. A multiple this far outside the
+    plausible range is an input fault — a thin EBIT year, a share count in the wrong units,
+    a currency mismatch — not a reading."""
+    from aristos_council.tools.valuation_band import MULTIPLE_MAX
+
+    assert MULTIPLE_MAX == 200.0
+    # 61 months at a price that makes the multiple ~1144x
+    f = _fundamentals(ebit=1e6, debt=0.0, cash=0.0, market_cap=1.144e9)
+    band = valuation_band(_bars([1144.0] * 61), f, asof=TODAY)
+    assert not band.available
+    assert "multiple implausible" in band.note and "inputs suspect" in band.note
+
+
+def test_a_non_positive_multiple_abstains():
+    f = _fundamentals(ebit=-1e8, debt=0.0, cash=0.0, market_cap=1e9)
+    band = valuation_band(_bars([100.0] * 61), f, asof=TODAY)
+    assert not band.available
+
+
+def test_an_ordinary_multiple_is_unaffected():
+    f = _fundamentals(ebit=1e8, debt=2e8, cash=5e7, market_cap=1.2e9)
+    band = valuation_band(_bars([100.0] * 61), f, asof=TODAY)
+    assert band.available and 0 < band.current <= 200.0
+
+
+def test_an_impossibly_cheap_multiple_abstains():
+    """The second half of BAND-SANITY-1's evidence, which its rule text did not reach.
+
+    PTTEP came back at 0.61x against an own-history median of 0.06x — an enterprise costing
+    six weeks of operating profit. No going concern with positive EBIT is priced below one
+    year of it, so a multiple under 1x is a unit or currency fault (THB statements against a
+    USD enterprise value, or the reverse). The rule as originally written ("above 200x or
+    at/below 0") passed it, because 0.06 is positive."""
+    from aristos_council.tools.valuation_band import MULTIPLE_MIN
+
+    assert MULTIPLE_MIN == 1.0
+    f = _fundamentals(ebit=1e10, debt=0.0, cash=0.0, market_cap=6e9)
+    band = valuation_band(_bars([100.0] * 61), f, asof=TODAY)
+    assert not band.available
+    assert "multiple implausible" in band.note
+    # the figure is shown to 2dp below 10x, or "0x" would hide which end it failed
+    assert "0.60x" in band.note or "0.6" in band.note
+
+
+def test_a_low_but_believable_multiple_is_still_stated():
+    """Deep value is a reading. 3x is cheap, not impossible."""
+    f = _fundamentals(ebit=4e8, debt=0.0, cash=0.0, market_cap=1.2e9)
+    band = valuation_band(_bars([100.0] * 61), f, asof=TODAY)
+    assert band.available and band.current >= 1.0

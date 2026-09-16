@@ -135,8 +135,8 @@ class YFinanceAdapter(MarketDataAdapter):
         dps = _dividend_per_share(info)
         # Dividend-growth streak + last cut, DERIVED from the payment history (a
         # yield-trap separator that's free but yfinance never surfaces as a scalar).
-        streak_years, last_cut, year_totals, year_stats = \
-            _dividend_streak_from_ticker(tk)
+        (streak_years, last_cut, year_totals, year_stats,
+         pay_dates) = _dividend_streak_from_ticker(tk)
         # Period-labelled series for the F-Score (PIOTROSKI-2): same statement
         # lines as the positional series above, but WITH period-end dates and
         # None holes kept in place, so cross-statement checks can period-match
@@ -188,7 +188,7 @@ class YFinanceAdapter(MarketDataAdapter):
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
             company_name=(info.get("longName") or None),   # display label (None-guarded)
-            market_cap=_as_float(info.get("marketCap")),
+            market_cap=_market_cap(info),
             sector=(info.get("sector") or None),   # rank-engine sector exclusions
             # Currencies drive honest abstention on USD-denominated thresholds
             # (a non-USD listing makes min_market_cap meaningless). Strings, not
@@ -211,6 +211,7 @@ class YFinanceAdapter(MarketDataAdapter):
             # criterion can ask its own question of them. No extra fetch.
             dividend_year_totals=year_totals,
             dividend_year_stats=year_stats,
+            dividend_payment_dates=pay_dates,
             total_debt=_as_float(info.get("totalDebt")),
             debt_to_equity=_as_float(info.get("debtToEquity")),
             total_cash=_as_float(info.get("totalCash")),   # EV = mcap + debt − cash
@@ -367,14 +368,20 @@ def _dividend_streak_from_ticker(tk) -> tuple:
     try:
         divs = tk.dividends
         if divs is None or len(divs) == 0:
-            return None, None, None, None
+            return None, None, None, None, None
         annual: dict[int, float] = {}
         per_year: dict = {}
+        pay_dates: list = []
         for ts, amt in divs.items():
             annual[ts.year] = annual.get(ts.year, 0.0) + float(amt)
             per_year.setdefault(ts.year, []).append(float(amt))
+            # YIELD-STALE-1: the dates, for "does this record still reach the present".
+            try:
+                pay_dates.append(ts.date().isoformat())
+            except Exception:
+                pass
     except Exception:
-        return None, None, None, None
+        return None, None, None, None, None
     streak, last_cut = dividend_streak(annual, date.today().year)
     totals = [[float(y), float(annual[y])] for y in sorted(annual)]
     # CRIT-NOCUT-2: the per-year payments reduced to (total, median, count). Computed here
@@ -382,7 +389,40 @@ def _dividend_streak_from_ticker(tk) -> tuple:
     # downstream would be a second reading of one history.
     stats = [[float(y), float(sum(per_year[y])), float(statistics.median(per_year[y])),
               float(len(per_year[y]))] for y in sorted(per_year)]
-    return streak, last_cut, totals, stats
+    return streak, last_cut, totals, stats, sorted(pay_dates)
+
+
+def _market_cap(info: dict) -> float | None:
+    """Market capitalisation, from whichever field the provider actually filled.
+
+    MCAP-NA-1. Six names in the oil cohort -- IMO, WDS, KEY.TO, IOC.NS, BPT.AX, STO.AX --
+    came back with ``marketCap`` absent and were sized by nothing, so every lens's size
+    floor abstained for them and the reports read "market cap unavailable" on companies
+    worth tens of billions. The figure was there the whole time under a different key:
+
+        IMO     nonDilutedMarketCap  65,486,230,831
+        WDS                          43,886,829,885
+        KEY.TO                       15,839,965,368
+        IOC.NS                    1,864,427,103,707   (INR -- the currency guard still
+                                                       abstains on the USD threshold)
+        BPT.AX                        2,053,200,290
+        STO.AX                       28,353,057,949
+
+    Order: the diluted figure the vendor normally gives, then the non-diluted one, then
+    shares x price as a last resort. All three are the vendor's own arithmetic on the
+    vendor's own numbers -- nothing here estimates a share count. None when the provider
+    filled none of them, which the size floor already treats as NOT TESTED rather than as
+    a failure (a missing figure is never a phantom fail, house rule 3)."""
+    direct = _as_float(info.get("marketCap")) or _as_float(info.get("nonDilutedMarketCap"))
+    if direct:
+        return direct
+    shares = _as_float(info.get("sharesOutstanding"))
+    price = (_as_float(info.get("regularMarketPrice"))
+             or _as_float(info.get("currentPrice"))
+             or _as_float(info.get("previousClose")))
+    if shares and price:
+        return shares * price
+    return None
 
 
 def _dividend_yield(info: dict) -> float | None:

@@ -233,3 +233,108 @@ def test_the_three_absent_numbers_are_absent_for_the_reason_documented():
     assert "Defensive Income" not in [l["name"] for l in PACK["lenses"]]   # so not 126
     forensic = next(l for l in PACK["lenses"] if l["name"] == "Forensic")
     assert forensic["factor_abstentions"]["altman_z"] == 40     # not 39
+
+
+# --------------------------------------------------------------------------- #
+# READER-2 — two checks the prompt already demanded but nothing enforced
+# --------------------------------------------------------------------------- #
+# The first live summary (oil_dividend_v1, 2026-09-16 20:47) passed every check and read
+# well. Its slips were things the prompt asked for and the checker never looked at.
+def _s(**over):
+    base = dict(asked="a", happened="b", survived="c", doubt="d", cannot_say="e")
+    base.update(over)
+    return ReaderSummary(**base)
+
+
+def test_a_glossed_term_used_bare_is_withheld_and_named():
+    from aristos_council.reader_check import GLOSS_TERMS
+
+    assert "percentile" in GLOSS_TERMS
+    check = check_summary(_s(doubt="It sits at the 99th percentile of its own range."),
+                          {"n": 99})
+    assert not check.ok
+    assert "term without gloss: percentile" in check.reason
+
+
+def test_a_glossed_term_passes():
+    check = check_summary(
+        _s(doubt="It sits at the 99th percentile (dearer than 99% of its own past)."),
+        {"n": 99})
+    assert check.ok, check.reason
+
+
+@pytest.mark.parametrize("term", ["free cash flow", "accrual", "balance sheet",
+                                  "momentum", "valuation"])
+def test_every_glossed_term_is_enforced(term):
+    check = check_summary(_s(happened=f"The {term} was weak."), {})
+    assert not check.ok and f"term without gloss: {term}" in check.reason
+
+
+def test_a_vague_range_is_withheld_and_named():
+    """The pack always holds the exact figure; a range is a way of not saying it."""
+    check = check_summary(_s(happened="Only 2 to 3 names were rated."), {"a": 2, "b": 3})
+    assert not check.ok
+    assert "vague range: 2 to 3" in check.reason
+
+
+def test_an_exact_figure_is_fine():
+    assert check_summary(_s(happened="Exactly 134 names were tested."), {"n": 134}).ok
+
+
+def test_a_date_range_is_not_a_vague_range():
+    """"2021 to 2025" is a window, not a hedge — both numbers are in the pack."""
+    check = check_summary(_s(happened="It held from 2021 to 2025."),
+                          {"from": 2021, "to": 2025})
+    assert "vague range" in check.reason      # caught by shape...
+    # ...which is a deliberate false positive: the writer should say "for five years", and
+    # the pack carries that figure. Recorded here so the behaviour is chosen, not accidental.
+
+
+# --------------------------------------------------------------------------- #
+# The 20:47 live summary, before and after the corrections
+# --------------------------------------------------------------------------- #
+LIVE_2047_AS_WRITTEN = ReaderSummary(
+    asked=("This run tested 134 oil and gas companies built for income. Three tests ran, "
+           "each asking something different."),
+    happened=("Cyclical Income ranked 23 names. One rule did that: it wants no dividend "
+              "cut, and 67 names failed it. Forensic ranked 106 names and rated 22 BUY. "
+              "Magic Formula RAW ranked 105 and rated 21 BUY."),
+    survived=("No company made the shortlist. Between 2 to 3 names were at the top of "
+              "their own price range, and the rest were rated SELL by Forensic."),
+    doubt=("Forensic could not work out its score for 40 names. The valuation percentile "
+           "could not be worked out for 106 names."),
+    cannot_say=("This list was built for income, and the test that picked these names "
+                "looks for value instead."),
+)
+
+
+def test_the_20_47_summary_as_written_is_NOW_withheld():
+    """It passed every check on the day. The two new checks catch exactly its slips."""
+    pack = {"cohort": {"size": 134}, "n": [23, 67, 106, 22, 105, 21, 40, 2, 3]}
+    check = check_summary(LIVE_2047_AS_WRITTEN, pack)
+    assert not check.ok
+    assert "term without gloss: percentile" in check.reason
+    assert "vague range: 2 to 3" in check.reason
+
+
+def test_the_corrected_exemplar_from_the_v2_prompt_passes():
+    """The prompt's worked example must itself satisfy the rules it states — an exemplar
+    that breaks them teaches the model to break them."""
+    corrected = ReaderSummary(
+        asked=("This is a list of 134 oil and gas companies built for income. Three tests "
+               "ran, each asking something different."),
+        happened=("Cyclical Income ranked 43 names and rated 9 BUY. One rule shaped that "
+                  "list: it wants no dividend cut in five years, and 39 names failed it. "
+                  "Forensic ranked 105 names and rated 22 BUY."),
+        survived=("No company made the shortlist. Chord Energy and Magnolia were at the "
+                  "top of their own five-year valuation (price against its own past) "
+                  "range."),
+        doubt=("Forensic could not work out its balance sheet (what a company owns "
+               "against what it owes) score for 40 names."),
+        cannot_say=("This list was built for income, and the test that picked these names "
+                    "looks for value instead."),
+    )
+    pack = {"n": [134, 43, 9, 5, 39, 105, 22, 40],
+            "kept": [{"name": "Chord Energy"}, {"name": "Magnolia"}]}
+    check = check_summary(corrected, pack)
+    assert check.ok, check.reason

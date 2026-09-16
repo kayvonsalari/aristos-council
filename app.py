@@ -1368,6 +1368,15 @@ def _estimate_union_size(n_names: int, strategies, *,
     return min(total, n_names)
 
 
+def lens_caption(strategy) -> str:
+    """The one-line definition to show under a lens's own control — its ``asks``, or "".
+
+    CAPTION-2. CAPTION-1 put this sentence under the lenses a reader had ALREADY chosen,
+    which is the wrong moment: the question a lens asks is what you need in order to choose
+    it. Pure, so the text a checkbox carries is unit-tested rather than eyeballed."""
+    return (getattr(strategy, "asks", "") or "").strip()
+
+
 def floor_override_from_input(raw, *, file_value: float | None) -> float | None:
     """The run's floor from the sidebar's number input, in DOLLARS — or None (FLOOR-1).
 
@@ -2053,6 +2062,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         evidence_gaps_clean_note,
         VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, evidence_gaps, exclusion_rows,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
+        fetch_guard_line,
         floor_override_line,
         lens_asks,
         provenance_sentences, report_sections, shortlist_table,
@@ -2080,6 +2090,11 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     _floor = floor_override_line(m)
     if _floor:
         lines.append(f"**{_floor}**")
+    # FETCH-GUARD-1 — above the lenses and the run line, because it governs how to read
+    # everything below it.
+    _guard = fetch_guard_line(m.get("fetch_guard") or {})
+    if _guard:
+        lines.append(f"**⚠ {_guard}**")
     if run_start is not None:
         lines.append(f"**Run: {_local_stamp(run_start)} — "
                      f"{_mode_phrase(m.get('council_mode', ''))}**")
@@ -2628,6 +2643,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
         help="Runs the full flow: screen → rank → gates issue the verdict, and the LLM "
              "narrates it. Exactly one, because narration is single-strategy.")
     primary = resolve(choices, primary_label) or choices[0].strategy
+    # CAPTION-2: what the chosen lens asks of a company, at the point of choosing.
+    if lens_caption(primary):
+        st.caption(lens_caption(primary))
 
     # Extra lenses are CHECKBOXES, one per lens, so every lens you could add is visible at
     # once instead of hidden behind a dropdown (FUND-UI-2 item 5). Presentation only: the
@@ -2648,6 +2666,10 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 for c in extra_choices[i * per_col:(i + 1) * per_col]:
                     extras.append((c.label,
                                    st.checkbox(c.label, key=lens_checkbox_key(c.id))))
+                    # CAPTION-2: a VISIBLE caption, not a hover tooltip — a reader
+                    # comparing five checkboxes cannot hover five things at once.
+                    if lens_caption(c.strategy):
+                        st.caption(lens_caption(c.strategy))
     # VALBAND-1: the valuation-band toggle rides WITH the extra-lens group but is NOT a
     # lens — extra lenses GRADE (add a verdict column), the band CONTEXTUALIZES (adds an
     # absolute percentile column, re-grades nothing). Default OFF: unticked -> no band

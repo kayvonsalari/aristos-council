@@ -718,6 +718,28 @@ The section is placed directly after the summary line and before the verdict gri
 it is the answer and the grid is the evidence for it. The grid itself is untouched; drop a
 lens from the run and the same names come back with fewer checks applied.
 
+### 4.4 The Altman Z-Score — what it is built for, and what it is not (ALTMAN-DOC-1)
+
+The forensic lens's distress leg is the **Altman Z-Score**: five balance-sheet and earnings
+ratios combined into one distance-from-distress number, higher being safer. It is the
+standard measure and it does what it says — but two properties decide how a reading from it
+should be taken, and neither is visible in the number itself.
+
+**It was built for industrial balance sheets**, and one of its five ratios is asset
+turnover. So it structurally marks down **asset-heavy, low-turnover businesses** — pipelines,
+midstream, shipping, utilities — because they carry very large assets that turn over slowly.
+For those businesses that is the *design of the business*, not a weakness in it. A Forensic
+SELL on a pipeline is very often this property rather than a finding about the company, and
+should be read that way; a Forensic SELL on an asset-light services company is a much
+stronger signal.
+
+**It abstains for many foreign listings.** The score needs retained earnings, which are not
+reported in the same shape outside US filings, so for a large share of non-US names it
+cannot be computed at all and says so rather than guessing. On the 2026-09-16 oil cohort it
+abstained for 40 of 106 ranked names, most of them foreign listings — which is why those
+names carry the "ranked on 2 of 3 factors" marker (FACTOR-MARK-1) and why the lens's other
+two legs are doing the work there.
+
 ## 5. Guards
 
 - **UNRATEABLE** — a ticker with failed fundamentals *and* no usable price history (a

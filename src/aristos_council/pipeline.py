@@ -199,6 +199,32 @@ def min_market_cap_override_record(file_value: Optional[float],
     return {"file": file_value, "run": run_value}
 
 
+def screen_with_floor_override(screen_strategy, override: Optional[float]):
+    """``(screen, file_value)`` — the lens screen with its ``min_market_cap`` criterion
+    re-thresholded to the run's floor, and the value its FILE declared (FLOOR-2).
+
+    FLOOR-1 replaced the RANK strategy's floor and stopped there, so a screened lens went
+    on excluding at its own criterion's threshold: on the tier-2 list with a $1bn override,
+    four lenses still dropped names at "market value $4.9bn; the rule requires at least
+    $5.0bn" under a header saying the floor was $1bn. The run said one thing and did
+    another.
+
+    Returns the screen UNCHANGED (and ``None``) when there is no override or no such
+    criterion, so a run without one is byte-identical. The strategy object is COPIED — the
+    file is never touched, and because ``rules_applied`` reads the screen that actually
+    ran, the rule table's Limit column and the exclusion sentence both quote the effective
+    value with no further change."""
+    if override is None or screen_strategy is None:
+        return screen_strategy, None
+    criteria = list(getattr(screen_strategy, "criteria", None) or [])
+    file_value = next((c.threshold for c in criteria if c.name == "min_market_cap"), None)
+    if file_value is None or file_value == override:
+        return screen_strategy, None
+    swapped = [c.model_copy(update={"threshold": override})
+               if c.name == "min_market_cap" else c for c in criteria]
+    return screen_strategy.model_copy(update={"criteria": swapped}), file_value
+
+
 def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None,
                 with_valuation_band=False):
     from .data.adapter import TransientFetchError
@@ -760,6 +786,11 @@ def run_rank_pipeline(
             recording = RecordingAdapter(adapter)
             adapter = recording
 
+    # FLOOR-2: the run's floor reaches the SCREEN too, not only the ranker. Applied to a
+    # copy, before the prefilter is taken from it and before the screen is attached to the
+    # result, so the evaluation and the rule table read one number.
+    screen_strategy, screen_floor_file = screen_with_floor_override(
+        screen_strategy, min_market_cap_override)
     if progress is not None:
         progress("Screening & ranking the universe…")
     prefilter = (screen_strategy.criteria
@@ -846,7 +877,12 @@ def run_rank_pipeline(
         # FLOOR-1: the ephemeral floor, recorded beside the existing override record so
         # the report and the frozen run both carry it. ABSENT (not None, not {}) when no
         # override applied, so a no-override run's meta is byte-identical to before.
-        **({"overrides": {"min_market_cap": override_record}}
+        **({"overrides": {"min_market_cap": {
+               **override_record,
+               # FLOOR-2: what the SCREEN's own criterion said, when it differed and was
+               # overridden too. Absent when the lens has no such criterion.
+               **({"screen_file": screen_floor_file} if screen_floor_file is not None
+                  else {})}}}
            if override_record is not None else {}),
         "universe_size": len(universe),
         "ranked_count": len(live),
@@ -2168,13 +2204,27 @@ class MultiStrategyCell:
     # flow; the rule allows at most 80%"). Computed by ``combine_rank_results``, which
     # has the result the sentence needs; empty when there is no rule to name.
     reason_plain: str = ""
+    # FACTOR-MARK-1 — how many of the lens's factors this name was actually MEASURED on.
+    # Under an imputing policy (missing: neutral) a name short a factor is scored from the
+    # ranks it has, which is the right call and invisible: Forensic ranked 39 of 106 oil
+    # names without an Altman Z, and those cells read identically to fully measured ones.
+    # (0, 0) when the counts are unknown, which renders nothing.
+    factors_measured: int = 0
+    factors_total: int = 0
+
+    @property
+    def factor_note(self) -> str:
+        """" · ranked on 2 of 3 factors", or "". Display only."""
+        if not self.factors_total or self.factors_measured >= self.factors_total:
+            return ""
+        return (f" · ranked on {self.factors_measured} of {self.factors_total} factors")
 
     def render(self) -> str:
         """The cell as one honest line — each axis reads distinctly (an exclusion is not
         a bad rank, and no-data is not an exclusion)."""
         if self.status == _RANKED:
             pos = f"#{self.position} of {self.cohort_size}" if self.position else "ranked"
-            return f"{pos} · {self.verdict.upper()}"
+            return f"{pos} · {self.verdict.upper()}{self.factor_note}"
         if self.status == _EXCLUDED:
             return f"excluded — {self.reason_plain or self.reason}"
         if self.status == _UNRATEABLE:
@@ -2254,7 +2304,11 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
             pos, _tied = positions.get(r.ticker, (None, False))
             _cell(r.ticker, MultiStrategyCell(
                 strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,
-                verdict=r.verdict, score=r.combined_rank))
+                verdict=r.verdict, score=r.combined_rank,
+                # FACTOR-MARK-1: measured = the lens's factors this name actually had a
+                # value for. An imputed factor is not a measurement of the name.
+                factors_total=len(r.factor_ranks or {}),
+                factors_measured=len(r.factor_ranks or {}) - len(r.imputed_factors or [])))
         for status, pairs in ((_EXCLUDED, res.excluded),
                               (_UNRATEABLE, res.unrateable),
                               (_FETCH_ERROR, res.fetch_errors)):
@@ -2425,6 +2479,12 @@ def run_multi_strategy_pipeline(
         # recorded an override, keeping a no-override run byte-identical.
         **_multi_floor_override(results, ids),
     }
+    # FETCH-GUARD-1 — computed once, recorded, and read by every surface.
+    _guard = fetch_guard(MultiStrategyResult(
+        strategy_ids=list(ids), strategy_names=names, results=results, rows=rows,
+        meta={"universe_size": meta.get("universe_size", 0)}))
+    if _guard:
+        meta["fetch_guard"] = _guard
     # SHORTLIST-1 — the PRIMARY is the lens whose verdicts are the run's answer. It is
     # NOT simply ids[0]: the grid's column order is the OFFER order (picker.resolve_all),
     # deliberately, so the columns are reproducible — which means the first column need
@@ -2834,6 +2894,60 @@ def floor_override_line(meta: dict) -> str:
             f"(strategy file: {format_floor(file_value)}).")
 
 
+# --------------------------------------------------------------------------- #
+# FETCH-GUARD-1 — a run that measured nothing must say so
+# --------------------------------------------------------------------------- #
+# On 2026-09-16 a helper bug made every fundamentals fetch raise. The pipeline caught each
+# one as a fetch failure, exactly as designed, and produced a report that looked entirely
+# normal: 134 names "graded", 0 ranked, 0 excluded, a verdict grid full of ties. Nothing
+# was wrong with any individual behaviour — the failure was that NOTHING SAID the run had
+# measured nothing, so the only signal was a reader noticing the numbers were absurd.
+#
+# This is that signal, stated once, at the top. It blocks nothing: the run still renders,
+# because a half-fetched run is still evidence of something. It just stops the document
+# reading like an ordinary one.
+FETCH_GUARD_SHARE = 0.5          # more than half the cohort failing to fetch
+
+
+def fetch_guard(multi_result) -> dict:
+    """``{"failed": N, "total": M}`` when this run measured almost nothing, else ``{}``.
+
+    Two triggers, because the 2026-09-16 failure could present either way:
+
+    * more than ``FETCH_GUARD_SHARE`` of the cohort ended in a fetch error — the ordinary
+      shape of a provider outage;
+    * every lens ranked ZERO and excluded ZERO — the shape that bug actually produced,
+      where the fetch "succeeded" into an empty object so nothing was ever a fetch error
+      and every name fell through every gate untested.
+    """
+    results = getattr(multi_result, "results", None) or {}
+    ids = [s for s in (getattr(multi_result, "strategy_ids", None) or []) if s in results]
+    if not ids:
+        return {}
+    total = (getattr(multi_result, "meta", None) or {}).get("universe_size", 0) or len(
+        getattr(multi_result, "rows", []) or [])
+    if not total:
+        return {}
+    failed = max(len(getattr(results[sid], "fetch_errors", []) or []) for sid in ids)
+    if failed > total * FETCH_GUARD_SHARE:
+        return {"failed": failed, "total": total}
+    graded_nothing = all(
+        not [r for r in results[sid].ranked if not r.excluded]
+        and not results[sid].excluded for sid in ids)
+    if graded_nothing:
+        return {"failed": total, "total": total}
+    return {}
+
+
+def fetch_guard_line(guard: dict) -> str:
+    """The warning, or "". One sentence: what happened, and what not to do with the run."""
+    if not guard:
+        return ""
+    return (f"Data fetch failed for {guard['failed']} of {guard['total']} names; this run "
+            "measured almost nothing. Check the provider and the cache before reading any "
+            "verdict.")
+
+
 def multi_summary_line(result: MultiStrategyResult) -> str:
     """``"4 lenses × 16 names — 3 names rated BUY by every lens, 5 excluded by every
     lens, 10 of 16 ranked by at least one."``
@@ -2859,6 +2973,11 @@ def multi_summary_line(result: MultiStrategyResult) -> str:
     parts.append(f"{ranked_any} of {size} ranked by at least one")
     lens_word = "lens" if n_lenses == 1 else "lenses"
     line = f"{n_lenses} {lens_word} × {size} names — " + ", ".join(parts)
+    # FETCH-GUARD-1: PREFIXED, not appended. A reader who stops after the first clause
+    # must not be told a normal-looking summary of a run that measured nothing.
+    warning = fetch_guard_line((result.meta or {}).get("fetch_guard") or {})
+    if warning:
+        line = f"⚠ {warning} — {line}"
     # SHORTLIST-1: the one number a reader wants first. Appended only when a shortlist
     # could be formed AND some name survived — a zero is noise here, exactly as the
     # clauses above omit their zeros, and the section itself states an empty result.

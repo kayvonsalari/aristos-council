@@ -75,22 +75,32 @@ def test_a_modest_gap_is_stated_exactly_as_before():
     assert "+40%" in rev.display
 
 
-def test_the_bound_is_written_on_the_magnitude_but_only_bites_upward():
-    """``abs(gap) > GAP_SANITY`` is symmetric as written, and the DOWNSIDE is
-    unreachable by construction — worth pinning so nobody later "fixes" a bound they
-    think is broken.
+def test_the_downward_bound_is_now_REACHABLE():
+    """DOCTRINE MOVED, DELIBERATELY (2026-09-17, REV-BOUND-1). This test pinned the
+    opposite until today.
 
-    ``gap = implied_price / last_close - 1`` and an implied price is never negative (a
-    non-positive implied equity value abstains earlier), so the gap floors at -100% and
-    can never pass -150%. A collapse is therefore always stated, however severe; only an
-    implausible SPIKE is withheld. That is the honest reach of this guard."""
+    BAND-3 wrote its bound on the MAGNITUDE (+/-150%) and observed that only the upward
+    side could ever fire: an implied price is never negative, so the gap floors at -100%
+    and can never pass -150%. That observation was right about the arithmetic and wrong
+    about the consequence -- it left the downward side with no bound at all, and Murphy
+    Oil came back at -98% and BP at -96%, both inside +/-150% and both absurd.
+
+    A name that must fall by more than three quarters to reach its OWN median is telling
+    you the median is wrong, not that the shares are worth a fifth of their price. So the
+    downward bound is now stated separately at -75%, and the two are no longer one number.
+    """
+    from aristos_council.tools.reversion import GAP_SANITY, GAP_SANITY_DOWN
+
+    assert GAP_SANITY_DOWN == -0.75 and GAP_SANITY == 1.5
+
     deep = reversion_value(_band(10.0, earnings=1.0), None, last_close=100.0,
                            currency="USD")
-    assert deep.available                       # -99.9%: extreme, but stateable
-    assert deep.gap == pytest.approx(-0.999)
-    assert deep.gap > -1.0                      # the floor the symmetry runs into
-    # The upward side is the one that fires.
-    assert not _gap_for(30.0, 100.0).available
+    assert not deep.available                      # -99.9%, formerly stated in full
+    assert "implied move -100%" in deep.note or "implied move -99%" in deep.note
+
+    # A severe but believable fall is still a reading: a cyclical at a genuine peak can
+    # carry a halving to its through-cycle median.
+    assert _gap_for(5.0, 100.0).available           # -50%
 
 
 def test_the_boundary_itself_is_stated_not_abstained():
@@ -147,3 +157,55 @@ def test_an_abstaining_band_still_gives_its_own_reason_not_this_one():
     assert not rev.available
     assert "the valuation band abstained for this name" in rev.note
     assert "sanity bound" not in rev.note
+
+
+# --------------------------------------------------------------------------- #
+# REV-BOUND-1 — the downward bound BAND-3 left unreachable
+# --------------------------------------------------------------------------- #
+# BAND-3 wrote its bound on the magnitude and noted only the upward side could fire, because
+# an implied price is never negative so the gap floors at -100%. That was right about the
+# arithmetic and wrong about the consequence: Murphy Oil came back at -98% and BP at -96%,
+# both inside the bound and both absurd. A name that must fall by more than three quarters
+# to reach its OWN median is saying the median is wrong.
+def test_a_ninety_percent_fall_now_abstains():
+    from aristos_council.tools.reversion import GAP_SANITY_DOWN
+
+    assert GAP_SANITY_DOWN == -0.75
+    # earnings 1000 x median 1 / 100 shares = implied 10.00 against a 100.00 close = -90%
+    rev = _gap_for(1.0, 100.0)
+    assert not rev.available
+    assert "implied move -90%" in rev.note
+    assert "exceeds the sanity bound" in rev.note
+
+
+def test_the_murphy_and_bp_shapes_abstain():
+    """-98% and -96%: inside BAND-3's magnitude bound, outside this one."""
+    for median, close, expected in ((0.2, 100.0, "-98%"), (0.4, 100.0, "-96%")):
+        rev = _gap_for(median, close)
+        assert not rev.available, expected
+        assert expected in rev.note
+
+
+def test_a_forty_percent_fall_is_still_stated():
+    rev = _gap_for(6.0, 100.0)                  # implied 60.00 vs 100.00 = -40%
+    assert rev.available and rev.gap == pytest.approx(-0.4)
+
+
+def test_a_halving_to_the_own_median_is_still_a_reading():
+    """-75% is the bound and -50% is well inside it: a cyclical at a genuine peak can carry
+    a halving to its through-cycle median, and that IS a reading."""
+    rev = _gap_for(5.0, 100.0)                  # implied 50.00 vs 100.00 = -50%
+    assert rev.available and rev.gap == pytest.approx(-0.5)
+
+
+def test_the_upward_bound_is_unchanged():
+    assert not _gap_for(30.0, 100.0).available      # +200%
+    assert _gap_for(25.0, 100.0).available          # +150% exactly, still stated
+
+
+def test_the_boundary_itself_is_stated_on_the_downward_side_too():
+    from aristos_council.tools.reversion import GAP_SANITY_DOWN
+
+    at = _gap_for(2.5, 100.0)                   # implied 25.00 = -75% exactly
+    assert at.available and at.gap == pytest.approx(GAP_SANITY_DOWN)
+    assert not _gap_for(2.4, 100.0).available   # just past it

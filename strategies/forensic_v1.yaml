@@ -43,6 +43,12 @@ description: >-
   their balance sheet sits from distress, rather than on how cheap or how fast-growing
   they are. It is a cross-check on the other lenses: a name that ranks well on value or
   growth but badly here is being priced on numbers worth a second look.
+  One thing to know before acting on a SELL from this lens: its distress score (the Altman
+  Z-Score) was built for industrial balance sheets, and it structurally marks down
+  asset-heavy, low-turnover businesses — pipelines, midstream, shipping — because they
+  carry large assets that turn over slowly, which is their design rather than a weakness.
+  It also cannot be computed for many foreign listings, where retained earnings are not
+  reported in the same shape, and abstains there rather than guessing.
 
 # Asset-kind scope: a stock lens admits ONLY equities. A fund scored on the vendor's
 # look-through "fundamentals" would produce quiet garbage, so the confirmed-only kind

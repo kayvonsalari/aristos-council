@@ -47,6 +47,17 @@ _NUMBER = re.compile(r"(?<![\w.])(\d[\d,]*(?:\.\d+)?)")
 # A ticker as the reports render one: 2-6 capitals, optionally dotted (BRK-B, 0857.HK).
 _TICKER = re.compile(r"\b([A-Z]{1,6}(?:[.-][A-Z0-9]{1,4})?)\b")
 
+# READER-2 — terms the prompt already demands be glossed on first use. The demand was
+# unchecked, and the first live summary duly used "percentile" bare. A gloss is a bracketed
+# phrase within GLOSS_WINDOW characters of the term, which is where a reader looks for it.
+GLOSS_TERMS = ("percentile", "free cash flow", "accrual", "balance sheet", "momentum",
+               "valuation")
+GLOSS_WINDOW = 60
+
+# READER-2 — "2 to 3 names" when the pack holds the exact figure. A range is a way of not
+# saying a number, and the writer is never short of the number.
+_VAGUE_RANGE = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s+to\s+(\d[\d,]*(?:\.\d+)?)")
+
 _FIELDS = ("asked", "happened", "survived", "doubt", "cannot_say")
 
 
@@ -173,6 +184,24 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
                     key=lambda t: (len(t), t))
     if strays:
         problems.append("number not in the facts: " + ", ".join(strays))
+
+    # READER-2: a term the prompt requires glossed, used bare on FIRST appearance.
+    ungloss = []
+    lowered = text.lower()
+    for term in GLOSS_TERMS:
+        at = lowered.find(term)
+        if at < 0:
+            continue
+        window = text[at:at + len(term) + GLOSS_WINDOW]
+        if "(" not in window:
+            ungloss.append(term)
+    if ungloss:
+        problems.append("term without gloss: " + ", ".join(ungloss))
+
+    # READER-2: a vague range where the pack has the figure.
+    ranges = [f"{a} to {b}" for a, b in _VAGUE_RANGE.findall(text)]
+    if ranges:
+        problems.append("vague range: " + ", ".join(ranges))
 
     known_names = _pack_names(pack)
     # Only check tokens that look like a ticker AND are not ordinary capitalised prose;

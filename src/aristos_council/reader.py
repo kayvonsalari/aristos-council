@@ -19,8 +19,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-PROMPT_VERSION = "reader_v1"
-_PROMPT_PATH = Path(__file__).resolve().parent / "agents" / "prompts" / "reader_v1.md"
+# READER-2: v1 is kept on disk, so a run recorded under it stays reproducible.
+PROMPT_VERSION = "reader_v2"
+_PROMPT_PATH = (Path(__file__).resolve().parent / "agents" / "prompts"
+                / f"{PROMPT_VERSION}.md")
 
 NO_KEY_NOTE = "Summary not written: no API key"
 NO_RUNNER_NOTE = "Summary not written: no reader model configured"

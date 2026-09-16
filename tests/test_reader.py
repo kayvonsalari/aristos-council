@@ -130,7 +130,13 @@ def test_the_prompt_is_the_versioned_file_on_disk():
     assert "Under 300 words" in text
     assert "banned: buy, sell, should" in text
     assert 'Say "list" for cohort' in text          # the de-jargon rule
-    assert "reader_v1" in PROMPT_VERSION
+    # READER-2 moved the live version to v2; v1 stays on disk so a run recorded under it
+    # is still reproducible.
+    assert PROMPT_VERSION == "reader_v2"
+    assert (FIXTURES.parents[1].parent / "src" / "aristos_council" / "agents" / "prompts"
+            / "reader_v1.md").exists()
+    # the v2 rules the checker now enforces are stated in the prompt itself
+    assert "No ranges" in text and "is CHECKED" in text
 
 
 # --------------------------------------------------------------------------- #

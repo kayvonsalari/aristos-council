@@ -498,9 +498,16 @@ class _PriceAdapter(MarketDataAdapter):
 
     def get_fundamentals(self, ticker):
         ends = [f"{2025 - i}-12-31" for i in range(6)]
-        aligned = {"ebit": [_PIPE_FUND[ticker]["ebit"][0]] * 6,
-                   "total_debt": [200.0] * 6, "cash": [50.0] * 6,
-                   "shares_outstanding": [1e9] * 6}
+        # BAND-SANITY-1 made this fixture's own scale visible: its EBIT was in bare units
+        # while its market cap was in dollars, so every band computed at ~6,666,667x, and
+        # its share count disagreed with cap and price by a factor of five. Neither
+        # mattered while nothing checked plausibility. The numbers are now coherent -- cap,
+        # price and share count agree, as a real company's do -- which is what every test
+        # here was always assuming when it asserted a multiple or a reversion value.
+        last_close = _PIPE_TRENDS[ticker][-1]
+        aligned = {"ebit": [5e9] * 6,
+                   "total_debt": [2e9] * 6, "cash": [5e8] * 6,
+                   "shares_outstanding": [_PIPE_FUND[ticker]["market_cap"] / last_close] * 6}
         return Fundamentals(ticker=ticker, name=ticker, currency=self.currency,
                             aligned_annual=aligned,
                             aligned_period_ends={k: ends for k in aligned},

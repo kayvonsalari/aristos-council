@@ -56,6 +56,7 @@ Pure and deterministic: same inputs -> same percentile. No IO, no LLM, no foreca
 
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Optional, Sequence
@@ -197,6 +198,21 @@ def ordinal(n: int) -> str:
     return f"{n}" + {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
 
 
+# BAND-SANITY-1 — the plausible range for a valuation multiple. Above this, or at/below
+# zero, the arithmetic has been fed something wrong: a thin or near-zero EBIT year, a share
+# count in the wrong units, a currency mismatch. Live on 2026-09-16: MODEC EV/EBIT 1144x and
+# PTTEP 0.6x, both rendered as percentiles beside sane rows. 200x is generous on purpose --
+# a genuinely expensive company trades at 40-60x, so this catches faults, not opinions.
+MULTIPLE_MAX = 200.0
+# ...and the lower bound. The item's rule text said "above 200x or at/below 0", which does
+# not reach the second case its own evidence names: PTTEP came back at 0.61x today against
+# an own-history median of 0.06x — an enterprise costing six weeks of operating profit.
+# No going concern with positive EBIT is priced below one year of it; a multiple under 1x
+# is a unit or currency fault (THB statements against a USD enterprise value, or the
+# reverse), which is exactly what this guard is for.
+MULTIPLE_MIN = 1.0
+
+
 def _abstain(note: str, *, covered: int = 0, total: int = 0,
              years: float = 0.0) -> ValuationBand:
     return ValuationBand(note=note, months_covered=covered, months_total=total,
@@ -278,6 +294,28 @@ def _asof(series: tuple[list[date], list[Optional[float]]], when: date
 # --------------------------------------------------------------------------- #
 # The band
 # --------------------------------------------------------------------------- #
+def _statement_note(f, earnings) -> str:
+    """" (4 annual statements seen, fiscal year ends June)" — what the band actually had.
+
+    BAND-STMT-1. Procter & Gamble read "insufficient history: 3.0y" on a company with
+    decades of published statements, which reads as a fact about P&G and is a fact about
+    the PROVIDER: it returned four annual periods, on a June fiscal year. The bare span
+    sends a reader to check the company; naming what was seen sends them to check the feed,
+    which is where the problem is.
+
+    Empty when the dates are not available, so the reason degrades to what it said before
+    rather than to a wrong claim about them."""
+    dates = [d for d in (earnings[0] if earnings else []) if d is not None]
+    if not dates:
+        return ""
+    months = {d.month for d in dates}
+    month_note = ""
+    if len(months) == 1:
+        month_note = f", fiscal year ends {calendar.month_name[dates[0].month]}"
+    return (f" ({len(dates)} annual statement{'s' if len(dates) != 1 else ''} seen"
+            f"{month_note}; the band needs {BAND_YEARS} years)")
+
+
 def valuation_band(bars: Sequence, fundamentals, *, asof: date,
                    years: int = BAND_YEARS,
                    min_years: float = MIN_YEARS,
@@ -351,13 +389,15 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
         series.append((day, value))
 
     covered = len(series)
+    stmt = _statement_note(f, earnings)          # BAND-STMT-1
     if covered < 2:
-        return _abstain(f"insufficient history: band from {covered} of {total} months",
-                        covered=covered, total=total)
+        return _abstain(
+            f"insufficient history: band from {covered} of {total} months{stmt}",
+            covered=covered, total=total)
 
     span = (series[-1][0] - series[0][0]).days / 365.25
     if span < min_years:
-        return _abstain(f"insufficient history: {span:.1f}y", covered=covered,
+        return _abstain(f"insufficient history: {span:.1f}y{stmt}", covered=covered,
                         total=total, years=span)
     months_in_span = sum(1 for d, _ in points if series[0][0] <= d <= series[-1][0])
     if months_in_span and covered / months_in_span < MIN_COVERAGE:
@@ -371,6 +411,21 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
 
     values = [v for _, v in series]
     current = values[-1]
+    # BAND-SANITY-1 — a multiple this far outside the plausible range is an input fault,
+    # not a reading. MODEC came back at EV/EBIT 1144x and PTTEP at 0.6x, and both were
+    # rendered as percentiles with exactly the authority of a sane row. Checked on the
+    # MEDIAN too: a believable current multiple against an absurd own-history median gives
+    # an equally absurd percentile.
+    _median_now = _median(values)
+    for _label, _value in (("", current), ("own 5-year median ", _median_now)):
+        if _value is None:
+            continue
+        if _value > MULTIPLE_MAX or _value < MULTIPLE_MIN:
+            # ".2f" below 10x: "0x" would hide which end of the range it failed.
+            _shown = f"{_value:.2f}" if _value < 10 else f"{_value:.0f}"
+            return _abstain(
+                f"multiple implausible ({_label}{_shown}x); inputs suspect, "
+                "not stated", covered=covered, total=total, years=span)
     # PRICE-1: record (never recompute) the reversion inputs — the median of THIS series
     # and the three point-in-time quantities the CURRENT point above was built from, all
     # taken at the same month `current_day`. Pure bookkeeping: no value below feeds the
