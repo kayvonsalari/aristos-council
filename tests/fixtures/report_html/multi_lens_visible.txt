@@ -150,17 +150,31 @@ Sectors excluded: Financial Services, Financials, Utilities.
 Asset kinds admitted: equity.
 Missing factor values are ranked worst.
 Classic Value (magic_formula_v1) — detail
-Ranked 2 of 4 names.
-Excluded — did not pass a rule · 1
-C
-— return on invested capital 7.7%; the rule requires at least 12%.
+Ranked 2 of 4 names. Excluded 1: by rule below, worst miss first.
+Return on invested capital
 min_roic
+· rule: at least 12%
+·
+1 name
+A business that earns less on the capital it employs than that capital costs destroys value by growing, so its growth is a reason for concern rather than for a premium.
+Name
+Measured
+Note
+C
+7.7%
 No usable data — no verdict · 1
 DEAD
 — UNRATEABLE: no data — possibly delisted
 Where the numbers came from
-Return on invested capital — real data for all 2 names.
-Earnings yield (EBIT/EV) — from the EBIT / market-cap proxy for all 2 names.
+Factor
+Real data
+Abstained
+Return on invested capital
+2 of 2
+—
+Earnings yield (EBIT/EV)
+2 of 2
+—
 Magic Formula RAW (magic_formula_raw_v1) — detail
 Cheap and good: high profit on the money invested, a low price for that profit, and a rising share.
 Ranked 3 of 4 names.
@@ -168,23 +182,48 @@ No usable data — no verdict · 1
 DEAD
 — UNRATEABLE: no data — possibly delisted
 Where the numbers came from
-Return on invested capital — real data for all 3 names.
-Earnings yield (EBIT/EV) — from the EBIT / market-cap proxy for all 3 names.
-12-month price momentum — no usable data for all 3 names.
+Factor
+Real data
+Abstained
+Return on invested capital
+3 of 3
+—
+Earnings yield (EBIT/EV)
+3 of 3
+—
+12-month price momentum
+0 of 3
+3 — A, B, C
 Value + Momentum (magic_formula_momentum_v1) — detail
 The same as Magic Formula RAW, but only for companies earning at least 12% on their capital.
-Ranked 2 of 4 names.
-Excluded — did not pass a rule · 1
-C
-— return on invested capital 7.7%; the rule requires at least 12%.
+Ranked 2 of 4 names. Excluded 1: by rule below, worst miss first.
+Return on invested capital
 min_roic
+· rule: at least 12%
+·
+1 name
+A business that earns less on the capital it employs than that capital costs destroys value by growing, so its growth is a reason for concern rather than for a premium.
+Name
+Measured
+Note
+C
+7.7%
 No usable data — no verdict · 1
 DEAD
 — UNRATEABLE: no data — possibly delisted
 Where the numbers came from
-Return on invested capital — real data for all 2 names.
-Earnings yield (EBIT/EV) — from the EBIT / market-cap proxy for all 2 names.
-12-month price momentum — no usable data for all 2 names.
+Factor
+Real data
+Abstained
+Return on invested capital
+2 of 2
+—
+Earnings yield (EBIT/EV)
+2 of 2
+—
+12-month price momentum
+0 of 2
+2 — A, B
 What the terms mean
 Every term this report uses, in plain English. Terms the run did not use are left out.
 12-month price momentum

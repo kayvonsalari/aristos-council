@@ -70,8 +70,15 @@ VWCE.DE
 — SELL — 1 rule could not be tested: Dividends vs free cash flow (mean FCF non-positive) [max_payout_ratio_fcf]
 Where the numbers came from
 How each ranked name's value for each factor was actually produced — a silent fallback (a proxy, a stale cache, a missing field) reads in plain text here instead of looking identical to a real measurement.
-Expense ratio (low best) — static: 2026-07-21, EODHD for all 3 names.
-Fund size (total assets, EUR) — real data for all 3 names.
+Factor
+Real data
+Abstained
+Expense ratio (low best)
+3 of 3
+—
+Fund size (total assets, EUR)
+3 of 3
+—
 Valuation band (absolute — vs each name's own history)
 What each name costs today, where that sits in its own 12-month range, where today's multiple sits in its OWN multi-year range, and what the price would be at that name's own MEDIAN past multiple. Rows follow the ranked table's order — they are deliberately not re-sorted by gap.
 Name
@@ -114,8 +121,12 @@ Prices are the last close on 2026-07-09, each in the name's own quoted currency,
 Every rated name here is placed on the same 55 of 60 monthly observations in the window; the other 5 months lack usable statements, so they drop out rather than being filled in.
 Arithmetic on each company's own history — not a forecast, not a target price and not a recommendation. A business that has permanently derated should trade below its own past median, and arithmetic cannot tell decline from mispricing. Not ranked, not screened, and never shown to any model.
 Excluded — did not pass a rule, so was never ranked · 1
+Asset kind
+· rule: applied before the screen
+·
+1 name
+(no other rule was tested on these)
 IWDA.AS
-— asset kind 'ETF' outside this strategy's scope
 Unrateable — no data, no verdict · 1
 A SELL implies an assessment was made; these names had no usable data at all, so they receive NO verdict and reached no model.
 DEAD.DE

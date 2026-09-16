@@ -395,6 +395,13 @@ td.lens-col.cell-buy, td.lens-col.cell-hold, td.lens-col.cell-sell {
         padding: 1px 5px; background: var(--head); white-space: normal; }
 .status { font-weight: 700; white-space: nowrap; }
 
+/* DETAIL-1 — a pre-screen gate's names fold away behind their own summary. The names
+   are always THERE; they are one click from view rather than thirty lines in front of
+   the first rule. Print forces every <details> open (see the print block below), so the
+   paper copy loses nothing. */
+details.gate > summary { cursor: pointer; margin: 14px 0 4px; }
+details.gate > summary::marker { color: var(--fg-quiet); }
+
 .badge { display: inline-block; border: 1px solid var(--fg-quiet); border-radius: 999px;
          background: var(--head); color: var(--fg); padding: 0 7px;
          font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -738,6 +745,7 @@ def multi_strategy_report_html(multi_result, *,
         fetch_guard_line,
         floor_override_line,
         lens_asks,
+        lens_detail,
         rules_applied,
         shortlist_table,
         union_valuation_band_table,
@@ -918,36 +926,7 @@ def multi_strategy_report_html(multi_result, *,
         parts.append(f'<section class="section lens-card {lens_class(i)}" '
                      f'id="detail-{_esc(_slug(sid))}">'
                      f"<h2>{_esc(label)} — detail</h2>"
-                     + (f'<p class="note">{_esc(lens_asks(res))}</p>'
-                        if lens_asks(res) else "")          # CAPTION-1
-                     + f'<p class="note">Ranked {res.meta["ranked_count"]} of '
-                       f'{res.meta["universe_size"]} names.</p>')
-        if res.excluded:
-            items = []
-            for row in exclusion_rows(res):
-                muted = (f' <code class="muted">{_esc(row["criterion"])}</code>'
-                         if row["criterion"] else "")
-                flag = (f'<br><span class="flag">{_esc(row["flag"])}</span>'
-                        if row["flag"] else "")
-                items.append(f'<strong>{_esc(row["name"])}</strong> — '
-                             f'{_esc(row["sentence"])}{muted}{flag}')
-            parts.append(f"<h3>Excluded — did not pass a rule · {len(res.excluded)}</h3>"
-                         + _bullets(items))
-        if res.unrateable:
-            parts.append(f"<h3>No usable data — no verdict · {len(res.unrateable)}</h3>"
-                         + _bullets(
-                             f'<strong>{_esc(display_name(t, res.names.get(t)))}</strong>'
-                             f" — {_inline(why)}" for t, why in res.unrateable))
-        if getattr(res, "fetch_errors", None):
-            parts.append(f"<h3>Data fetch failed — re-run to recover · "
-                         f"{len(res.fetch_errors)}</h3>"
-                         + _bullets(
-                             f'<strong>{_esc(display_name(t, res.names.get(t)))}</strong>'
-                             f" — {_inline(why)}" for t, why in res.fetch_errors))
-        entries = provenance_sentences(res)
-        if entries:
-            parts.append(f"<h3>{_esc(PROVENANCE_SECTION_TITLE)}</h3>"
-                         + _bullets(_esc(e["sentence"]) for e in entries))
+                     + _lens_detail_html(lens_detail(res, strategy_id=sid, label=label)))
         parts.append("</section>")
 
     # ----- 8 (GLOSSARY-1): the LAST section before the footer, built from the
@@ -1052,6 +1031,104 @@ def _band_section(band_table, *, anchor: str = "") -> str:
 _CELL_MARKER = re.compile(r" · ranked on \d+ of \d+ factors$")
 
 
+
+# --------------------------------------------------------------------------- #
+# DETAIL-1 — the per-lens detail section
+# --------------------------------------------------------------------------- #
+# The section used to be one bullet per excluded name, each repeating the rule sentence in
+# full: 91 bullets on the oil run's income lens, the same free-cash-flow sentence 27 times
+# running. Grouped by the rule that fired, the same data answers the question a reader
+# actually has — which rule removed the most names, how far each missed, and which misses
+# were close enough to argue about.
+#
+# Every number here is the run's own; ``lens_detail`` decides the arrangement and this
+# decides the markup. Nothing is re-graded on either side of that line.
+
+
+def _badges_html(badges) -> str:
+    """The row's badges. Each is a WORD, never a bare colour or symbol on its own — the ⚠
+    badge carries its figure, and the lens states what the symbol means once, above."""
+    return " ".join(f'<span class="badge">{_esc(b)}</span>' for b in badges)
+
+
+def _detail_heading_html(group) -> str:
+    """The group's heading LINE (no tag): title, the criterion id, the rule stated once,
+    the count. The id is muted and second, never dropped — the old bullet list carried it
+    on every name for auditability, and grouping must not cost the document that."""
+    return (f"<strong>{_esc(group.title)}</strong>"
+            + (f' <code class="muted">{_esc(group.key)}</code>'
+               if not group.is_gate else "")
+            + (f' <span class="muted">· rule: {_esc(group.rule)}</span>'
+               if group.rule else "")
+            + f' · <strong>{group.count} '
+              f'{"name" if group.count == 1 else "names"}</strong>'
+            + (f' <span class="muted">({_esc(group.note)})</span>' if group.note else ""))
+
+
+def _detail_group_html(group) -> str:
+    """One rule's group: the rule stated ONCE, what it is for, then the names it removed
+    with their measured values, worst miss first."""
+    heading = _detail_heading_html(group)
+    why = f'<p class="note">{_esc(group.why)}</p>' if group.why else ""
+
+    # A GATE collapses. A name under the size floor or outside the lens's scope was never
+    # tested on anything below, so its margin is not a reading, and a reader scanning the
+    # rules should not have to pass thirty of them to reach the first one. Present, named
+    # and one click away — never dropped, because "excluded and not shown" is the shape of
+    # a report you cannot check.
+    if group.keeps_sentences:
+        return (f"<h3>{heading}</h3>"
+                + _bullets(f"<strong>{_esc(n.name)}</strong> — {_esc(n.sentence)}"
+                           for n in group.names))
+    if group.is_gate:
+        names = ", ".join(_esc(n.name) for n in group.names)
+        return (f'<details class="gate"><summary>{heading}</summary>'
+                f'{why}<p class="note">{names}</p></details>')
+
+    body = [[_esc(n.name), _esc(n.measured) or "—", _badges_html(n.badges)]
+            for n in group.names]
+    return (f"<h3>{heading}</h3>" + why
+            + _table(["Name", "Measured", "Note"], body, cls="ranked",
+                     col_classes=["", "num", ""]))
+
+
+def _lens_detail_html(detail) -> str:
+    """One whole lens detail section (without its own <section> wrapper)."""
+    from ..pipeline import DETAIL_SOURCES_TITLE
+
+    out = []
+    if detail.asks:
+        out.append(f'<p class="note">{_esc(detail.asks)}</p>')          # CAPTION-1
+    line = f'<strong>{_esc(detail.headline)}</strong>'
+    if detail.badge_note:
+        line += f' {_esc(detail.badge_note)}'
+    out.append(f'<p class="note">{line}</p>')
+
+    for group in detail.groups:
+        out.append(_detail_group_html(group))
+
+    if detail.unrateable:
+        out.append(f"<h3>No usable data — no verdict · {len(detail.unrateable)}</h3>"
+                   + _bullets(f"<strong>{_esc(name)}</strong> — {_inline(why)}"
+                              for name, why in detail.unrateable))
+    if detail.fetch_errors:
+        out.append("<h3>Data fetch failed — re-run to recover · "
+                   f"{len(detail.fetch_errors)}</h3>"
+                   + _bullets(f"<strong>{_esc(name)}</strong> — {_inline(why)}"
+                              for name, why in detail.fetch_errors))
+    if detail.sources:
+        # The provenance block as a TABLE. The same counts, and the same abstention
+        # reasons, that it stated as one sentence per factor — which read well for three
+        # factors and badly for ten, while the thing a reader checks (did this factor
+        # abstain, and for whom) is a column.
+        out.append(f"<h3>{_esc(DETAIL_SOURCES_TITLE)}</h3>"
+                   + _table(["Factor", "Real data", "Abstained"],
+                            [[_esc(r["label"]), _esc(r["real"]), _esc(r["abstained"])]
+                             for r in detail.sources],
+                            cls="ranked", col_classes=["", "num", ""]))
+    return "".join(out)
+
+
 def verdict_of_cell(text: str) -> str:
     """The VERDICT a verdict-grid cell carries ("BUY"/"HOLD"/"SELL"), or "" for a cell on
     another axis (excluded / no data / fetch failed) — those are not verdicts and must
@@ -1105,6 +1182,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         header_lines,
         floor_override_line,
         lens_asks,
+        lens_detail,
         provenance_sentences,
         rules_applied,
         summary_line,
@@ -1237,11 +1315,17 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
 
     # ----- 2 (REPORT-1): "Where the numbers came from" — was "Factor integrity", which
     # was internal jargon. Same counts, one sentence per factor.
-    entries = provenance_sentences(result)
-    if entries:
+    # DETAIL-1: the same three-column table the merged report renders, from the same
+    # builder. The counts a reader is actually checking — did this factor abstain, and
+    # for whom — are columns, not the tail of a sentence.
+    detail = lens_detail(result)
+    if detail.sources:
         parts.append(f'<section class="section"><h2>{_esc(PROVENANCE_SECTION_TITLE)}</h2>'
                      f'<p class="note">{_esc(PROVENANCE_SECTION_NOTE)}</p>'
-                     + _bullets(_esc(e["sentence"]) for e in entries)
+                     + _table(["Factor", "Real data", "Abstained"],
+                              [[_esc(r["label"]), _esc(r["real"]), _esc(r["abstained"])]
+                               for r in detail.sources],
+                              cls="ranked", col_classes=["", "num", ""])
                      + "</section>")
 
     # ----- 2b: price and valuation as ONE table (PRICE-2, extended by REPORT-1). The
@@ -1264,18 +1348,13 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         # in their proper units — the raw form was "screen: min_dividend_yield (observed
         # 0.009547 vs threshold 0.015)". The criterion id stays, muted, for auditability,
         # and a warning flag becomes its own marked line rather than brackets mid-sentence.
-        items = []
-        for row in exclusion_rows(result):
-            muted = (f' <code class="muted">{_esc(row["criterion"])}</code>'
-                     if row["criterion"] else "")
-            flag = (f'<br><span class="flag">{_esc(row["flag"])}</span>'
-                    if row["flag"] else "")
-            items.append(f'<strong>{_esc(row["name"])}</strong> — '
-                         f'{_esc(row["sentence"])}{muted}{flag}')
         parts.append('<section class="section">'
                      f"<h2>Excluded — did not pass a rule, so was never ranked · "
                      f"{len(result.excluded)}</h2>"
-                     + _bullets(items) + "</section>")
+                     + (f'<p class="note">{_esc(detail.badge_note)}</p>'
+                        if detail.badge_note else "")
+                     + "".join(_detail_group_html(g) for g in detail.groups)
+                     + "</section>")
     if result.unrateable:
         parts.append('<section class="section">'
                      f"<h2>Unrateable — no data, no verdict · {len(result.unrateable)}</h2>"

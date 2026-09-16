@@ -595,11 +595,38 @@ def test_the_three_surfaces_carry_the_same_values(result):
             assert value in md, (value, "md")
             assert _html.escape(value, quote=False) in doc, (value, "html")
 
-    # every exclusion sentence
+    # every exclusion, on every surface.
+    #
+    # DETAIL-1 changed the SHAPE of this on the two report surfaces: the CLI still prints
+    # one sentence per name, while the HTML and the markdown group the names under the
+    # rule that removed them, state the rule once, and give each name its measured value
+    # in a column. So "the same sentence appears three times" is no longer the right
+    # question — but the guarantee underneath it is unchanged and is asserted here
+    # directly: every excluded NAME, the VALUE it was measured at, and the RULE it missed
+    # reach all three surfaces. No surface may drop a name or invent one.
+    from aristos_council.pipeline import lens_detail
+
+    detail = lens_detail(result)
+    seen = set()
+    for group in detail.groups:
+        for name in group.names:
+            seen.add(name.ticker)
+            for value in (name.name, name.measured):
+                if not value:
+                    continue
+                assert value in cli, (value, "cli")
+                assert value in md, (value, "md")
+                assert _html.escape(value, quote=False) in doc, (value, "html")
+        if group.rule:
+            assert group.rule in md and _html.escape(group.rule, quote=False) in doc
+    # ...and every excluded name reached a group: nothing is silently unplaced.
+    assert seen == {t for t, _ in result.excluded}
+
+    # The per-name SENTENCE itself is still built, unchanged, and still carried by the
+    # CLI and by Company Check — grouping decided where it is printed, not whether it
+    # exists.
     for row in exclusion_rows(result):
         assert row["sentence"].rstrip() in cli
-        assert row["sentence"].rstrip() in md
-        assert _html.escape(row["sentence"].rstrip(), quote=False) in doc
 
     # every price / valuation cell
     table = valuation_band_table(result)
