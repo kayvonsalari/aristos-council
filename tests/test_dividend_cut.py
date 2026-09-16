@@ -339,3 +339,40 @@ def test_the_tolerance_is_the_value_the_diagnosis_defends():
     spec = next(p for p in REGISTRY.get("max_dividend_cuts").params
                 if p.name == "cut_tolerance")
     assert spec.default == CUT_TOLERANCE and spec.type == "float"
+
+
+# --------------------------------------------------------------------------- #
+# P5 — the display bug: a cut SIZE is a fraction, not a year count
+# --------------------------------------------------------------------------- #
+def test_the_cut_size_renders_as_a_whole_percentage():
+    """It used to render with the THRESHOLD's unit, which for this criterion is a count of
+    YEARS — so a 32% cut printed as "the largest fall was 0 of the prior year's total" and
+    a 55% cut as "was 1". "0" reads as NO cut, the opposite of what fired the rule."""
+    from aristos_council.report_language import UNIT_PERCENT0, format_value
+
+    assert format_value(0.523, UNIT_PERCENT0) == "52%"
+    assert format_value(0.0, UNIT_PERCENT0) == "0%"
+    assert format_value(0.32, UNIT_PERCENT0) == "32%"
+    assert REGISTRY.get("max_dividend_cuts").observed_unit == UNIT_PERCENT0
+
+
+def test_no_other_criterion_declares_a_separate_observed_unit():
+    """For every other criterion the observed IS compared to the threshold, so they share a
+    unit and nothing about their sentences changes."""
+    odd = [n for n, c in REGISTRY.items() if getattr(c, "observed_unit", "")]
+    assert odd == ["max_dividend_cuts"]
+
+
+def test_the_exclusion_sentence_reads_as_a_percentage_end_to_end():
+    from aristos_council.pipeline import exclusion_sentence
+
+    class _Res:
+        screen_outcomes = {"X": {"max_dividend_cuts": {
+            "passed": False, "observed": 0.523, "threshold": 5.0,
+            "note": "the dividend was cut in 2021", "basis": "", "borderline": False}}}
+        names = {"X": "X"}
+
+    sentence = exclusion_sentence(
+        _Res(), "X", "screen: max_dividend_cuts (observed 0.523 vs threshold 5.0)")
+    assert "the largest fall was 52% of the prior year's total" in sentence
+    assert "was 0 of" not in sentence and "was 1 of" not in sentence

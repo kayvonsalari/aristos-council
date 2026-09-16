@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from ...data.adapter import DividendEvent, Fundamentals
+from ...report_language import UNIT_PERCENT0
 from ..screening import (
     CUT_TOLERANCE,
     max_dividend_cuts_criterion,
@@ -146,6 +147,13 @@ class Criterion:
     # A ``{threshold}`` template here replaces it at every render site. Empty -> the
     # generated phrase, so every existing criterion is untouched.
     threshold_text: str = ""
+    # P5 — the unit of the OBSERVED value, when it differs from the threshold's. For every
+    # other criterion the observed IS compared to the threshold, so they share a unit and
+    # this stays empty; ``max_dividend_cuts`` measures a FRACTION (how big a cut was)
+    # against a WINDOW (a count of years), so formatting its observed with the threshold's
+    # unit printed a 32% cut as "0" and a 55% cut as "1" — "0" reading as NO cut, the
+    # opposite of what fired the rule. Empty -> the threshold's unit, unchanged.
+    observed_unit: str = ""
     # Evidence kinds (fundamentals / dividends / last_close) that must be
     # available for this criterion to evaluate.
     requires: tuple[str, ...] = ()
@@ -522,6 +530,7 @@ _CRITERIA: tuple[Criterion, ...] = (
                     "prior year's total",
         threshold_text="no year paid less than the year before, "
                        "across the last {threshold} complete years",
+        observed_unit=UNIT_PERCENT0,     # the cut SIZE is a fraction, not a year count
         params=(ParamSpec("threshold", "int", min=1.0, max=None, step=1.0,
                           default=5, unit="count"),
                 # CRIT-NOCUT-2: how far BOTH measures must fall before a year is a cut.

@@ -1205,8 +1205,12 @@ def exclusion_sentence(result, ticker: str, reason: str) -> str:
     comparison = getattr(crit, "comparison", COMPARISON_MIN)
     template = (getattr(crit, "observation", "")
                 or (getattr(crit, "label", "") or name) + " {observed}")
+    # P5: the OBSERVED value's own unit when it differs from the threshold's. Only
+    # max_dividend_cuts declares one (a cut SIZE measured against a WINDOW of years);
+    # empty everywhere else, so every other sentence is byte-identical.
+    observed_unit = getattr(crit, "observed_unit", "") or unit
     observed = template.format(
-        observed=format_value(o["observed"], unit, currency=currency),
+        observed=format_value(o["observed"], observed_unit, currency=currency),
         signed=format_signed_change(o["observed"], unit))
     # CRIT-NOCUT-1: a criterion whose threshold is a WINDOW states its own rule phrase —
     # the generated "at most N" would compare this criterion's cut PERCENTAGE against a

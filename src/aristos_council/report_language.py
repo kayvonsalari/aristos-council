@@ -41,6 +41,11 @@ from .tools.price_context import format_money
 # module formats from the declaration. Adding a seventh unit is a change HERE plus the
 # registry entries that use it — never a special case at a render site.
 UNIT_PERCENT = "percent"        # a DECIMAL fraction: 0.015 -> "1.5%"
+# P5 / CRIT-NOCUT-2 — a decimal fraction rendered as a WHOLE percent: 0.523 -> "52%". For a
+# figure that is a MAGNITUDE rather than a rate (how big a cut was), where a tenth of a
+# percent is false precision. UNIT_PERCENT's magnitude-appropriate decimals are right for a
+# yield and wrong here, so this is a separate unit rather than a change to that one.
+UNIT_PERCENT0 = "percent0"
 UNIT_RATIO = "ratio"            # a bare ratio with no natural unit: 2.0 -> "2.00"
 UNIT_MULTIPLE = "multiple"      # a times-covered figure: 1.0 -> "1.0x"
 UNIT_CURRENCY = "currency"      # a money amount, rendered compactly: 5e9 -> "$5.0bn"
@@ -74,6 +79,8 @@ def format_value(value, unit: str, *, currency: Optional[str] = None) -> str:
     v = float(value)
     if unit == UNIT_PERCENT:
         return _percent(v)
+    if unit == UNIT_PERCENT0:
+        return f"{v:.0%}"
     if unit == UNIT_MULTIPLE:
         return f"{v:,.1f}x"
     if unit == UNIT_CURRENCY:
