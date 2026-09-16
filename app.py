@@ -1141,9 +1141,27 @@ def render_strategy_tab(selected_path: Path | None = None) -> None:
 # Run tab — the ONE run flow: strategies + a ticker list + run (FUND-UI-2), over the v2
 # rank pipeline (screen -> rank -> gates -> narrator)
 # --------------------------------------------------------------------------- #
-# The interactive run cap — ONE number, shared by the guard and its message. It used to be
-# re-declared per section, which is how the run flow and the editor drifted apart.
-UNIVERSE_CAP = 60
+# The run cap — shared by the guard and its message. It used to be re-declared per section,
+# which is how the run flow and the editor drifted apart.
+#
+# CAP-1: ONE number became TWO, because the two run modes are capped for different reasons.
+# A NARRATED run bills one LLM call per shortlisted name, so its cap protects API spend and
+# stays where it was. A DETERMINISTIC run (ranker-only, and a multi-lens re-grade that does
+# not narrate) spends nothing — its only cost is wall-clock on the free ranking pass, so the
+# cap there protects patience, nothing more. Holding both to 60 blocked every saved oil list
+# above that size (top-100 = 100, dividend-type = 135, USD-listed = 121, non-USD = 72) from a
+# run that costs nothing.
+UNIVERSE_CAP_NARRATED = 60
+UNIVERSE_CAP_DETERMINISTIC = 250
+# Kept as the NARRATED value so existing imports and tests resolve to the spend-protecting
+# number — the one a bare `UNIVERSE_CAP` has always meant.
+UNIVERSE_CAP = UNIVERSE_CAP_NARRATED
+
+
+def universe_cap(deterministic: bool) -> int:
+    """The cap that applies to a run in this mode (CAP-1) — one place, so the guard, its
+    message and the Run tab's caption can never quote three different numbers."""
+    return UNIVERSE_CAP_DETERMINISTIC if deterministic else UNIVERSE_CAP_NARRATED
 
 
 def saved_list_labels(saved) -> list[str]:
@@ -1341,22 +1359,34 @@ def _estimate_union_size(n_names: int, strategies, *,
 
 
 def run_problems(universe: list[str], *, n_strategies: int, deterministic: bool,
-                 has_key: bool, cap: int = UNIVERSE_CAP) -> list[str]:
+                 has_key: bool, cap: int | None = None) -> list[str]:
     """Why the Run button is disabled, in plain sentences (empty list = runnable).
 
     Pure, so the one run flow's guards are unit-tested rather than eyeballed in a browser —
     and there is now ONE guard set instead of the two that had already drifted. A
     ``deterministic`` run (ranker-only, or several strategies — which is ranker-only by
     construction) cannot spend, so it never asks for an API key.
+
+    CAP-1: the cap follows the run MODE unless an explicit ``cap=`` overrides it — a
+    narrated run is capped to protect API spend, a deterministic one only to protect
+    patience, so a 135-name ranker-only run is no longer refused for a cost it cannot incur.
     """
+    if cap is None:
+        cap = universe_cap(deterministic)
     problems: list[str] = []
     if n_strategies < 1:
         problems.append("Pick at least one strategy.")
     if not universe:
         problems.append("Add at least one ticker.")
     if len(universe) > cap:
-        problems.append(f"List too large ({len(universe)} > {cap}) for an interactive "
-                        "run — trim it.")
+        # The message names the MODE, so the number is never mistaken for a single global
+        # limit — and the narrated case points at the way out rather than only forbidding.
+        if deterministic:
+            problems.append(f"List too large ({len(universe)} > {cap}) for an "
+                            "interactive run — trim it.")
+        else:
+            problems.append(f"List too large ({len(universe)} > {cap}) for a narrated "
+                            "run — trim it, or switch to Ranker only.")
     if not deterministic and not has_key:
         problems.append("Narrator / second-opinion needs ANTHROPIC_API_KEY (set it "
                         "in the environment or a local .env). Use **Ranker only** to "
@@ -2722,7 +2752,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # The two pipeline arguments, derived from the ONE control (UI layer only).
     ranker_only, mode = run_mode_arguments(run_mode)
 
-    st.caption(f"**{len(universe)}** ticker(s).")
+    # CAP-1: the caption quotes the cap that actually applies to the SELECTED mode, read
+    # from the same helper the guard uses, so the two can never disagree.
+    _cap_now = universe_cap(ranker_only)
+    st.caption(f"**{len(universe)}** ticker(s) — up to **{_cap_now}** for "
+               f"{'a ranker-only' if ranker_only else 'a narrated'} run.")
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     # NARR-UNION-1: a multi-lens run is no longer deterministic BY CONSTRUCTION — it can

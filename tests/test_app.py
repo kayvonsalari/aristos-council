@@ -234,12 +234,54 @@ def test_run_problems_names_every_blocker():
 
 
 def test_run_problems_enforces_one_shared_cap():
-    over = ["T%d" % i for i in range(app.UNIVERSE_CAP + 1)]
+    # CAP-1: this run is deterministic, so the cap it must be measured against is the
+    # DETERMINISTIC one. The assertion is unchanged — only the constant it reads.
+    over = ["T%d" % i for i in range(app.UNIVERSE_CAP_DETERMINISTIC + 1)]
     assert any("too large" in p for p in
                app.run_problems(over, n_strategies=1, deterministic=True, has_key=True))
-    at_cap = ["T%d" % i for i in range(app.UNIVERSE_CAP)]
+    at_cap = ["T%d" % i for i in range(app.UNIVERSE_CAP_DETERMINISTIC)]
     assert app.run_problems(at_cap, n_strategies=1, deterministic=True,
                             has_key=True) == []
+
+
+def test_the_cap_follows_the_run_mode():
+    """CAP-1: the saved oil lists (121, 135 names) cost nothing to rank and must run."""
+    oil_list = ["T%d" % i for i in range(135)]
+    # Ranker-only: nothing to spend, so nothing to protect. Runnable.
+    assert app.run_problems(oil_list, n_strategies=1, deterministic=True,
+                            has_key=False) == []
+    # Narrated: one LLM call per shortlisted name, so the spend cap still bites.
+    narrated = app.run_problems(oil_list, n_strategies=1, deterministic=False,
+                                has_key=True)
+    assert any("too large" in p for p in narrated)
+    blob = " ".join(narrated)
+    assert "135 > 60" in blob                  # the number quoted is the NARRATED cap
+    assert "narrated run" in blob              # the message names the mode
+    assert "Ranker only" in blob               # ...and the way out
+
+
+def test_the_deterministic_cap_still_bites_eventually():
+    """It protects patience, not spend — but it is a cap, not an absence of one."""
+    huge = ["T%d" % i for i in range(app.UNIVERSE_CAP_DETERMINISTIC + 50)]
+    problems = app.run_problems(huge, n_strategies=1, deterministic=True, has_key=True)
+    assert any("too large" in p for p in problems)
+    assert "300 > 250" in " ".join(problems)
+    assert "interactive run" in " ".join(problems)
+
+
+def test_universe_cap_alias_stays_the_narrated_number():
+    """Existing imports/tests that say UNIVERSE_CAP mean the spend-protecting cap."""
+    assert app.UNIVERSE_CAP == app.UNIVERSE_CAP_NARRATED == 60
+    assert app.UNIVERSE_CAP_DETERMINISTIC == 250
+    assert app.universe_cap(True) == 250 and app.universe_cap(False) == 60
+
+
+def test_an_explicit_cap_argument_still_wins():
+    """The mode picks the default; a caller passing cap= overrides it (unchanged API)."""
+    names = ["T%d" % i for i in range(10)]
+    assert any("too large" in p for p in
+               app.run_problems(names, n_strategies=1, deterministic=True,
+                                has_key=True, cap=5))
 
 
 def test_a_deterministic_run_never_asks_for_a_key():
