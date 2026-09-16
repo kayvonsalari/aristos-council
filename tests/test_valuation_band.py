@@ -676,3 +676,29 @@ def test_an_ordinary_multiple_is_unaffected():
     f = _fundamentals(ebit=1e8, debt=2e8, cash=5e7, market_cap=1.2e9)
     band = valuation_band(_bars([100.0] * 61), f, asof=TODAY)
     assert band.available and 0 < band.current <= 200.0
+
+
+def test_an_impossibly_cheap_multiple_abstains():
+    """The second half of BAND-SANITY-1's evidence, which its rule text did not reach.
+
+    PTTEP came back at 0.61x against an own-history median of 0.06x — an enterprise costing
+    six weeks of operating profit. No going concern with positive EBIT is priced below one
+    year of it, so a multiple under 1x is a unit or currency fault (THB statements against a
+    USD enterprise value, or the reverse). The rule as originally written ("above 200x or
+    at/below 0") passed it, because 0.06 is positive."""
+    from aristos_council.tools.valuation_band import MULTIPLE_MIN
+
+    assert MULTIPLE_MIN == 1.0
+    f = _fundamentals(ebit=1e10, debt=0.0, cash=0.0, market_cap=6e9)
+    band = valuation_band(_bars([100.0] * 61), f, asof=TODAY)
+    assert not band.available
+    assert "multiple implausible" in band.note
+    # the figure is shown to 2dp below 10x, or "0x" would hide which end it failed
+    assert "0.60x" in band.note or "0.6" in band.note
+
+
+def test_a_low_but_believable_multiple_is_still_stated():
+    """Deep value is a reading. 3x is cheap, not impossible."""
+    f = _fundamentals(ebit=4e8, debt=0.0, cash=0.0, market_cap=1.2e9)
+    band = valuation_band(_bars([100.0] * 61), f, asof=TODAY)
+    assert band.available and band.current >= 1.0

@@ -204,6 +204,13 @@ def ordinal(n: int) -> str:
 # PTTEP 0.6x, both rendered as percentiles beside sane rows. 200x is generous on purpose --
 # a genuinely expensive company trades at 40-60x, so this catches faults, not opinions.
 MULTIPLE_MAX = 200.0
+# ...and the lower bound. The item's rule text said "above 200x or at/below 0", which does
+# not reach the second case its own evidence names: PTTEP came back at 0.61x today against
+# an own-history median of 0.06x — an enterprise costing six weeks of operating profit.
+# No going concern with positive EBIT is priced below one year of it; a multiple under 1x
+# is a unit or currency fault (THB statements against a USD enterprise value, or the
+# reverse), which is exactly what this guard is for.
+MULTIPLE_MIN = 1.0
 
 
 def _abstain(note: str, *, covered: int = 0, total: int = 0,
@@ -413,9 +420,11 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
     for _label, _value in (("", current), ("own 5-year median ", _median_now)):
         if _value is None:
             continue
-        if _value > MULTIPLE_MAX or _value <= 0:
+        if _value > MULTIPLE_MAX or _value < MULTIPLE_MIN:
+            # ".2f" below 10x: "0x" would hide which end of the range it failed.
+            _shown = f"{_value:.2f}" if _value < 10 else f"{_value:.0f}"
             return _abstain(
-                f"multiple implausible ({_label}{_value:.0f}x); inputs suspect, "
+                f"multiple implausible ({_label}{_shown}x); inputs suspect, "
                 "not stated", covered=covered, total=total, years=span)
     # PRICE-1: record (never recompute) the reversion inputs — the median of THIS series
     # and the three point-in-time quantities the CURRENT point above was built from, all
