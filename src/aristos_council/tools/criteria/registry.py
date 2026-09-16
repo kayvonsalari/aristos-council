@@ -147,6 +147,15 @@ class Criterion:
     # A ``{threshold}`` template here replaces it at every render site. Empty -> the
     # generated phrase, so every existing criterion is untouched.
     threshold_text: str = ""
+    # NOCUT-3 — the criterion states its OWN reason, and the report prints it verbatim.
+    # The generated clause is assembled from the label and the observed value, which is
+    # all most criteria have to say. ``max_dividend_cuts`` has more: it knows WHICH YEAR
+    # the cut landed in and how far BOTH measures fell, and it writes that sentence while
+    # it computes. The report was throwing it away and rendering the smaller one — "the
+    # dividend was cut — the largest fall was 33% of the prior year's total" tells a
+    # reader nothing they can go and check, where "cut in 2021 ... against 2020" does.
+    # False everywhere else, so every other sentence is byte-identical.
+    observation_from_note: bool = False
     # P5 — the unit of the OBSERVED value, when it differs from the threshold's. For every
     # other criterion the observed IS compared to the threshold, so they share a unit and
     # this stays empty; ``max_dividend_cuts`` measures a FRACTION (how big a cut was)
@@ -528,6 +537,9 @@ _CRITERIA: tuple[Criterion, ...] = (
         comparison="max",
         observation="the dividend was cut — the largest fall was {observed} of the "
                     "prior year's total",
+        # NOCUT-3: ...but the criterion's own note names the YEAR and both falls, so the
+        # report prints that instead. The fallback above still serves the degraded paths.
+        observation_from_note=True,
         threshold_text="no year paid less than the year before, "
                        "across the last {threshold} complete years",
         observed_unit=UNIT_PERCENT0,     # the cut SIZE is a fraction, not a year count

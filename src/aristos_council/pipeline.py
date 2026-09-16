@@ -1245,9 +1245,18 @@ def exclusion_sentence(result, ticker: str, reason: str) -> str:
     # max_dividend_cuts declares one (a cut SIZE measured against a WINDOW of years);
     # empty everywhere else, so every other sentence is byte-identical.
     observed_unit = getattr(crit, "observed_unit", "") or unit
-    observed = template.format(
-        observed=format_value(o["observed"], observed_unit, currency=currency),
-        signed=format_signed_change(o["observed"], unit))
+    # NOCUT-3: a criterion that wrote its own reason has it printed VERBATIM. Only
+    # max_dividend_cuts declares this, because only it knows something the generated
+    # clause cannot express — the YEAR the cut landed in, and that BOTH the year's total
+    # and its typical payment fell. Empty note (a degraded path that could not say which
+    # year) falls back to the generated clause rather than printing nothing.
+    note = (o.get("note") or "").strip()
+    if getattr(crit, "observation_from_note", False) and note:
+        observed = note
+    else:
+        observed = template.format(
+            observed=format_value(o["observed"], observed_unit, currency=currency),
+            signed=format_signed_change(o["observed"], unit))
     # CRIT-NOCUT-1: a criterion whose threshold is a WINDOW states its own rule phrase —
     # the generated "at most N" would compare this criterion's cut PERCENTAGE against a
     # count of years. Empty for every other criterion, which keeps their sentences

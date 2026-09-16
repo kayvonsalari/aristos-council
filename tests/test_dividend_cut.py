@@ -363,19 +363,94 @@ def test_no_other_criterion_declares_a_separate_observed_unit():
     assert odd == ["max_dividend_cuts"]
 
 
-def test_the_exclusion_sentence_reads_as_a_percentage_end_to_end():
+def _sentence(observed=0.523, note=""):
+    """One excluded name's sentence, from a hand-built outcome record."""
     from aristos_council.pipeline import exclusion_sentence
 
     class _Res:
         screen_outcomes = {"X": {"max_dividend_cuts": {
-            "passed": False, "observed": 0.523, "threshold": 5.0,
-            "note": "the dividend was cut in 2021", "basis": "", "borderline": False}}}
+            "passed": False, "observed": observed, "threshold": 5.0,
+            "note": note, "basis": "", "borderline": False}}}
+        names = {"X": "X"}
+
+    return exclusion_sentence(
+        _Res(), "X", f"screen: max_dividend_cuts (observed {observed} vs threshold 5.0)")
+
+
+def test_the_exclusion_sentence_reads_as_a_percentage_end_to_end():
+    """P5. The GENERATED clause — reached when the criterion could not write its own
+    reason — still formats the cut SIZE as a percentage rather than as a year count. "0"
+    read as NO cut, which is the opposite of what fired the rule."""
+    sentence = _sentence(note="")
+    assert "the largest fall was 52% of the prior year's total" in sentence
+    assert "was 0 of" not in sentence and "was 1 of" not in sentence
+
+
+# --------------------------------------------------------------------------- #
+# NOCUT-3 — the report prints the criterion's own reason, including the year
+# --------------------------------------------------------------------------- #
+# The criterion knows which YEAR the cut landed in and how far BOTH measures fell, and it
+# writes that sentence while it computes. The report was discarding it and rendering a
+# generated clause built from the label and one number — which tells a reader nothing they
+# can go and check. A dividend cut is checkable BY EYE if you know the year.
+
+def test_the_sentence_names_the_year_the_cut_landed_in():
+    note = ("the dividend was cut in 2021: the year's total fell 33% and the typical "
+            "payment fell 33% against 2020")
+    sentence = _sentence(observed=0.331, note=note)
+    assert note in sentence
+    # ...and the RULE clause still follows it, so the sentence is still complete.
+    assert "no year paid less than the year before" in sentence
+    # the generated clause is gone, not doubled up
+    assert "the largest fall was" not in sentence
+
+
+def test_both_falls_survive_into_the_sentence():
+    """The two-measure rule is the reason the exclusion is trustworthy, so both numbers
+    have to reach the reader — a reader who sees only the total cannot tell this apart
+    from a missing payment."""
+    note = ("the dividend was cut in 2020: the year's total fell 50% and the typical "
+            "payment fell 47% against 2019")
+    sentence = _sentence(observed=0.50, note=note)
+    assert "the year's total fell 50%" in sentence
+    assert "the typical payment fell 47%" in sentence
+
+
+def test_the_degraded_note_reaches_the_reader_too():
+    """The totals-only path says what it could not check. That caveat is the most
+    important thing on the line, so it must not be the thing the report drops."""
+    note = ("the dividend was cut in 2020: the year's total fell 50% and the typical "
+            "payment fell 50% against 2019 (typical-payment check unavailable: this "
+            "record carries year totals only)")
+    assert "typical-payment check unavailable" in _sentence(observed=0.50, note=note)
+
+
+def test_only_the_cut_criterion_states_its_own_reason():
+    """Every other criterion's sentence is byte-identical to before this change."""
+    from aristos_council.tools.criteria.registry import REGISTRY
+
+    own = [n for n, c in REGISTRY.items()
+           if getattr(c, "observation_from_note", False)]
+    assert own == ["max_dividend_cuts"]
+
+
+def test_a_borderline_tail_still_follows_the_criterion_reason():
+    """The report's own annotations are appended to the criterion's sentence, not
+    replaced by it."""
+    from aristos_council.pipeline import exclusion_sentence
+
+    class _Res:
+        screen_outcomes = {"X": {"max_dividend_cuts": {
+            "passed": False, "observed": 0.12, "threshold": 5.0,
+            "note": "the dividend was cut in 2022: the year's total fell 12% and the "
+                    "typical payment fell 11% against 2021",
+            "basis": "", "borderline": True}}}
         names = {"X": "X"}
 
     sentence = exclusion_sentence(
-        _Res(), "X", "screen: max_dividend_cuts (observed 0.523 vs threshold 5.0)")
-    assert "the largest fall was 52% of the prior year's total" in sentence
-    assert "was 0 of" not in sentence and "was 1 of" not in sentence
+        _Res(), "X", "screen: max_dividend_cuts (observed 0.12 vs threshold 5.0)")
+    assert "cut in 2022" in sentence
+    assert "borderline miss" in sentence
 
 
 # --------------------------------------------------------------------------- #
