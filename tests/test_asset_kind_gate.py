@@ -25,10 +25,11 @@ STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 UNIV_DIR = Path(__file__).resolve().parents[1] / "universes"
 RUNS_DIR = Path(__file__).resolve().parents[1] / "runs"
 
-# Every existing STOCK rank lens must declare equity-only scope (5 visible + 2 hidden).
+# Every existing STOCK rank lens must declare equity-only scope (6 visible + 2 hidden).
 STOCK_LENSES = [
-    "conservative_plus_v1", "financials_v1", "growth_garp_v1", "growth_garp_v2",
-    "magic_formula_momentum_v1", "magic_formula_raw_v1", "magic_formula_v1",
+    "conservative_plus_v1", "financials_v1", "forensic_v1", "growth_garp_v1",
+    "growth_garp_v2", "magic_formula_momentum_v1", "magic_formula_raw_v1",
+    "magic_formula_v1",
 ]
 
 

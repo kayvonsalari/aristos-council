@@ -556,8 +556,9 @@ def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
     assert any("Growth ETFs" in o for o in rank)                    # ETF-1 growth lens
     assert any("ETF Index Tracker" in o for o in rank)              # ETFCORE-1 lens (UI-RENAME-1)
     assert not any("Core Market ETFs" in o for o in rank)           # old label gone
-    # 5 stock lenses + 3 visible ETF lenses (dividend, growth, core [ETFCORE-1]).
-    assert len(rank) == 8
+    assert any("Forensic" in o for o in rank)                       # forensic lens (FORENSIC-1)
+    # 6 stock lenses + 3 visible ETF lenses (dividend, growth, core [ETFCORE-1]).
+    assert len(rank) == 9
 
 
 def test_both_strategy_pickers_list_the_live_strategies():
@@ -574,8 +575,9 @@ def test_both_strategy_pickers_list_the_live_strategies():
         assert any("RAW" in o for o in opts)                         # canonical raw
         assert any("Financials" in o for o in opts)                  # financials lens (FIN-1)
         assert not any("_" in o for o in opts)                       # display names, no ids
-        # 5 stock lenses + 3 visible ETF lenses (dividend, growth, core [ETFCORE-1]).
-        assert len(opts) == 8
+        assert any("Forensic" in o for o in opts)                    # forensic lens (FORENSIC-1)
+        # 6 stock lenses + 3 visible ETF lenses (dividend, growth, core [ETFCORE-1]).
+        assert len(opts) == 9
 
 
 def test_the_same_lists_are_offered_in_both_selectors():
@@ -1122,7 +1124,7 @@ def test_adhoc_cohort_filters_nothing_and_says_so():
     assert not at.exception
     blob = _caption_blob(at)
     assert "Ad-hoc cohort" in blob and "nothing is filtered out" in blob
-    assert len(_strategy_picker(at).options) == 8      # every live lens (5 stock + 3 ETF)
+    assert len(_strategy_picker(at).options) == 9      # every live lens (6 stock + 3 ETF)
 
 
 def test_every_strategy_stays_offered_even_for_a_cohort_of_the_other_kind():

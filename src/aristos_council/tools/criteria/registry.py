@@ -37,6 +37,8 @@ from ..screening import (
     max_payout_fcf_criterion,
     CriterionResult,
     ScreenResult,
+    accrual_ratio,
+    altman_z_score,
     max_payout_criterion,
     min_growth_streak_criterion,
     min_market_cap_criterion,
@@ -333,6 +335,44 @@ def _valuation_band_percentile(ev: Evidence, threshold: float) -> CriterionResul
                            observed=pct, threshold=threshold, note=note)
 
 
+def _max_accrual_ratio(ev: Evidence, threshold: float) -> CriterionResult:
+    """Sloan accrual ratio against a CEILING — an earnings-quality screen.
+
+    All arithmetic comes from ``screening.accrual_ratio``, the SAME function the
+    rankable ``accrual_ratio`` factor calls (two registries, one computation), so the
+    screened and ranked values can never diverge. ABSTAINS (passed=None, rule 3) on a
+    missing input or a non-positive asset base, carrying the reason verbatim.
+
+    Gating-eligible? NOT decided here, and forensic_v1 sets no ``is_gating`` flag. The
+    generic machinery would honour one — this is a statement about the EVIDENCE, not the
+    plumbing: a high accrual ratio is a legitimate warning, and whether it is
+    DISQUALIFYING is a call for the scoreboard to make, exactly as the 12% ROIC bar was.
+    """
+    r = accrual_ratio(ev.fundamentals)
+    if r.value is None:
+        return CriterionResult(name="max_accrual_ratio", passed=None, observed=None,
+                               threshold=threshold, note=r.note)
+    return CriterionResult(name="max_accrual_ratio", passed=r.value <= threshold,
+                           observed=r.value, threshold=threshold, note=r.note)
+
+
+def _min_altman_z(ev: Evidence, threshold: float) -> CriterionResult:
+    """Altman Z-Score against a FLOOR — a distress screen. Higher is safer.
+
+    Shares ``screening.altman_z_score`` with the rankable ``altman_z`` factor. ABSTAINS
+    on a missing input, a non-positive denominator, and on the CROSS-CURRENCY case
+    (rule 8): the score's fourth term divides a quote-currency market cap by
+    statement-currency liabilities, so an ADR or a non-USD reporter abstains with the
+    note naming the reason rather than summing two currencies. No strategy marks it
+    gating (see ``_max_accrual_ratio``'s note)."""
+    r = altman_z_score(ev.fundamentals)
+    if r.value is None:
+        return CriterionResult(name="min_altman_z", passed=None, observed=None,
+                               threshold=threshold, note=r.note)
+    return CriterionResult(name="min_altman_z", passed=r.value >= threshold,
+                           observed=r.value, threshold=threshold, note=r.note)
+
+
 def _max_debt_to_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
     """Balance-sheet leverage as total_debt / market_cap (a yield-trap separator:
     VZ ~1.2x fails). Chosen over debt-to-equity BECAUSE it is ROBUST TO NEGATIVE
@@ -564,6 +604,39 @@ _CRITERIA: tuple[Criterion, ...] = (
                              "shares_outstanding_annual", "gross_profit_annual",
                              "net_income", "operating_cash_flow_annual",
                              "total_revenue"),
+    ),
+    # --- Forensic criteria (FORENSIC-1) — selectable by any strategy, GATING BY NONE.
+    # Both share their arithmetic with the like-named rank factor. forensic_v1 ranks on
+    # the factors and sets no threshold; these exist so a later lens CAN put a floor on
+    # earnings quality once the scoreboard justifies one.
+    Criterion(
+        "max_accrual_ratio", _max_accrual_ratio,
+        label="Profit backed by cash (accrual ratio)",
+        glossary=("The rule caps how much of the reported profit may be accounting "
+                  "entries rather than cash the business actually collected."),
+        comparison="max",
+        observation="accruals {observed} of assets",
+        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.01,
+                          default=0.10, unit="ratio"),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+        fundamentals_fields=("net_income", "operating_cash_flow_annual",
+                             "total_assets_annual"),
+    ),
+    Criterion(
+        "min_altman_z", _min_altman_z,
+        label="Distance from financial distress (Altman Z-Score)",
+        glossary=("The rule requires a minimum score on a five-part measure of "
+                  "financial strength, so companies close to trouble are screened out."),
+        comparison="min",
+        observation="Z-Score {observed}",
+        params=(ParamSpec("threshold", "float", min=0.0, max=None, step=0.1,
+                          default=1.8, unit="score"),
+                _UNVERIFIABLE_BLOCKS),
+        requires=("fundamentals",),
+        fundamentals_fields=("current_assets_annual", "current_liabilities_annual",
+                             "retained_earnings_annual", "ebit", "total_assets_annual",
+                             "total_liabilities_annual", "total_revenue", "market_cap"),
     ),
     # --- Absolute valuation band (VALBAND-1) — OPTIONAL, no strategy selects it --- #
     Criterion(

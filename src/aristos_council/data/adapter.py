@@ -292,6 +292,17 @@ class Fundamentals:
     current_liabilities_annual: list[float] = field(default_factory=list)
     shares_outstanding_annual: list[float] = field(default_factory=list)
     gross_profit_annual: list[float] = field(default_factory=list)
+    # --- Forensic-lens balance-sheet series (FORENSIC-1), NEWEST-FIRST ------ #
+    # The two lines the Altman Z-Score needs beyond the F-Score set: accumulated
+    # retained earnings (its X2 term) and TOTAL liabilities (its X4 denominator).
+    # ``total_liabilities_annual`` is deliberately NOT ``total_debt`` — Z's fourth
+    # term divides market value of equity by ALL liabilities, not just borrowings,
+    # so reusing the debt scalar would compute a different (larger) score and call
+    # it Altman's. Empty when the provider omits the statement -> the Z-Score
+    # ABSTAINS (never a phantom zero-liability company). Same no-schema-bump note
+    # as the F-Score series above: cache._schema_marker folds the field names in.
+    retained_earnings_annual: list[float] = field(default_factory=list)
+    total_liabilities_annual: list[float] = field(default_factory=list)
     # --- Period-labelled statement series (PIOTROSKI-2) --------------------- #
     # The F-Score's cross-statement checks must compare values from the SAME
     # fiscal period. The positional lists above CANNOT guarantee that: NaN cells
@@ -302,9 +313,11 @@ class Fundamentals:
     # series name ("net_income", "total_assets", "operating_cash_flow",
     # "long_term_debt", "current_assets", "current_liabilities",
     # "shares_outstanding", "gross_profit", "total_revenue"). Newest-first;
-    # values and dates are index-parallel per series. ONLY the F-Score reads
-    # them (tools/screening._f_score_pairs) — every other criterion keeps
-    # consuming the NaN-dropped positional lists above, byte-identical.
+    # values and dates are index-parallel per series. FORENSIC-1 adds
+    # "retained_earnings" and "total_liabilities" here (and reads the existing
+    # "ebit" / "current_assets" / "current_liabilities" keys) through the shared
+    # ``screening.period_matched`` walk — every other criterion keeps consuming
+    # the NaN-dropped positional lists above, byte-identical.
     # Empty dicts when the provider/adapter doesn't supply them (EODHD, fakes)
     # -> the F-Score falls back to the positional path (PIOTROSKI-1 behavior).
     # NO ADAPTER_SCHEMA_VERSION bump needed: cache._schema_marker folds the

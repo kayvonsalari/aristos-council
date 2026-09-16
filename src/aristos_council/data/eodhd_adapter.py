@@ -221,6 +221,14 @@ def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
         tax_provision=_annual_series(income_yearly, "incomeTaxExpense"),
         pretax_income=_annual_series(income_yearly, "incomeBeforeTax"),
         invested_capital=_annual_series(balance_yearly, "netInvestedCapital"),
+        # Forensic-lens balance-sheet lines (FORENSIC-1). Present in EODHD's yearly
+        # balance sheet under these keys; ABSENT ones map to an empty list, which makes
+        # the Z-Score abstain — the honest outcome, never a fabricated zero. EODHD does
+        # NOT supply the period-labelled aligned dicts, so the forensic measures take
+        # ``screening.period_matched``'s positional fallback here, exactly as the
+        # F-Score already does on this provider.
+        retained_earnings_annual=_annual_series(balance_yearly, "retainedEarnings"),
+        total_liabilities_annual=_annual_series(balance_yearly, "totalLiab"),
     )
 
 

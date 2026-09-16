@@ -1129,6 +1129,224 @@ def piotroski_f_score(fundamentals: Fundamentals | None) -> FScoreResult:
 
 
 # --------------------------------------------------------------------------- #
+# Forensic measures (FORENSIC-1) — are the reported profits real, and could the
+# balance sheet break?
+# --------------------------------------------------------------------------- #
+# Statement-series key -> the POSITIONAL Fundamentals attribute carrying the same
+# line. The key is ALSO the key in the period-labelled ``aligned_annual`` /
+# ``aligned_period_ends`` dicts (PIOTROSKI-2), so one name addresses both paths.
+_SERIES_ATTR: dict[str, str] = {
+    "net_income": "net_income",
+    "total_assets": "total_assets_annual",
+    "operating_cash_flow": "operating_cash_flow_annual",
+    "current_assets": "current_assets_annual",
+    "current_liabilities": "current_liabilities_annual",
+    "gross_profit": "gross_profit_annual",
+    "total_revenue": "total_revenue",
+    "ebit": "ebit",
+    "operating_income": "operating_income",
+    "retained_earnings": "retained_earnings_annual",
+    "total_liabilities": "total_liabilities_annual",
+}
+
+
+def period_matched(f, keys, *, periods: int = 1) -> list[dict[str, float | None]]:
+    """``periods`` newest-first ``{key: value}`` dicts, PERIOD-MATCHED when the adapter
+    supplied period-labelled series (PIOTROSKI-2), positional otherwise.
+
+    The same discipline as ``_f_score_pairs``, generalized to any subset of statement
+    lines and any depth: a value is read only at a REFERENCE period-end date, so a line
+    absent at that date contributes None — the caller then ABSTAINS rather than quietly
+    mixing two fiscal years inside one ratio. Holes stay holes (a None cell is an
+    absence, never a value).
+
+    One deliberate difference from ``_f_score_pairs``: the reference dates are drawn
+    from the REQUESTED keys only, not from every recorded series. A measure reading
+    three lines must not abstain because some unrelated statement line happens to carry
+    a newer period-end. ``_f_score_pairs`` therefore keeps its own copy of this walk —
+    its reference dates ARE drawn from every recorded series and its output is pinned by
+    an equivalence test, so it must not change shape here.
+
+    Positional fallback (aligned dicts absent/empty — EODHD, fakes, hand-built
+    fixtures): index ``i`` of the NaN-dropped list per series, the pre-existing
+    convention.
+    """
+    wanted = [k for k in keys if k in _SERIES_ATTR]
+    aligned = getattr(f, "aligned_annual", None) or {}
+    ends = getattr(f, "aligned_period_ends", None) or {}
+    usable = {k for k in wanted
+              if aligned.get(k) and ends.get(k)
+              and len(aligned[k]) == len(ends[k])}
+    if usable:
+        by_date: dict[str, dict[str, float]] = {}
+        for key in usable:
+            vals: dict[str, float] = {}
+            for d, v in zip(ends[key], aligned[key]):
+                if v is None or isinstance(v, bool) or not isinstance(v, (int, float)):
+                    continue                      # a hole stays a hole
+                vals[str(d)] = float(v)
+            by_date[key] = vals
+        dates = sorted({d for m in by_date.values() for d in m}, reverse=True)
+        out: list[dict[str, float | None]] = []
+        for i in range(periods):
+            ref = dates[i] if i < len(dates) else None
+            out.append({k: (by_date.get(k, {}).get(ref) if ref is not None else None)
+                        for k in wanted})
+        return out
+    return [{k: _newest_first_at(getattr(f, _SERIES_ATTR[k], None) or [], i)
+             for k in wanted} for i in range(periods)]
+
+
+@dataclass(frozen=True)
+class ForensicResult:
+    """One forensic measure's outcome.
+
+    ``value`` is None for NOT-EVAL (rule 3 — never a zero, never a phantom fail),
+    ``note`` is the human sentence the screen criterion reports, and ``detail`` is the
+    short tag the rank factor's ``source_fn`` appends ("single-year assets",
+    "cross-currency: market cap vs statements") so the report discloses which path was
+    taken per name.
+    """
+
+    value: float | None = None
+    note: str = ""
+    detail: str = ""
+
+
+def _cross_currency(fundamentals) -> bool:
+    """True iff the listing currency and the STATEMENTS currency are both KNOWN and
+    DIFFER — the case where a market-cap term and a balance-sheet term cannot be summed.
+
+    Unknown on either side returns False (evaluate normally), the same discipline as
+    ``_non_usd_currency``: absent provider data must never manufacture an abstention.
+    This is the rule-8 guard for a measure that MIXES the two currencies inside one
+    formula, where ``_non_usd_currency`` guards a USD-denominated threshold.
+    """
+    price = (getattr(fundamentals, "currency", None) or "").strip().upper()
+    acct = (getattr(fundamentals, "financial_currency", None) or "").strip().upper()
+    return bool(price and acct and price != acct)
+
+
+CROSS_CURRENCY_NOTE = "cross-currency: market cap vs statements"
+
+_ACCRUAL_KEYS = ("net_income", "operating_cash_flow", "total_assets")
+
+
+def accrual_ratio(fundamentals) -> ForensicResult:
+    """Sloan accrual ratio: (net income − operating cash flow) / average total assets.
+
+    The share of last year's reported profit that arrived as an accounting entry rather
+    than as cash. LOW is better — a large positive ratio is profit the business has not
+    collected, the classic earnings-quality warning.
+
+    Inputs are PERIOD-MATCHED at the newest reference period (``period_matched``), with
+    the positional fallback. The denominator averages the current and PRIOR year's total
+    assets; when the prior year is absent it falls back to the CURRENT year alone and
+    says so ("single-year assets") rather than silently changing the base.
+
+    NOT-EVAL (never a zero, never a phantom fail) on a missing numerator input or on
+    total assets <= 0 — a non-positive asset base makes the ratio meaningless.
+
+    CURRENCY: numerator and denominator are both statement-currency figures, so the
+    ratio is currency-INVARIANT and needs no rule-8 abstention.
+    """
+    if fundamentals is None:
+        return ForensicResult(note="accrual ratio unavailable: no fundamentals",
+                              detail="no fundamentals")
+    now, prior = period_matched(fundamentals, _ACCRUAL_KEYS, periods=2)
+    ni, ocf, ta = now["net_income"], now["operating_cash_flow"], now["total_assets"]
+    absent = [label for label, v in (("net income", ni),
+                                     ("operating cash flow", ocf)) if v is None]
+    if absent:
+        reason = f"{' and '.join(absent)} missing"
+        return ForensicResult(note=f"accrual ratio unavailable: {reason}", detail=reason)
+    if ta is None or ta <= 0:
+        reason = "total assets missing or non-positive"
+        return ForensicResult(note=f"accrual ratio unavailable: {reason}", detail=reason)
+    ta_prior = prior["total_assets"]
+    if ta_prior is not None and ta_prior > 0:
+        denominator, basis, detail = (ta + ta_prior) / 2.0, "average total assets", ""
+    else:
+        denominator, basis, detail = ta, "total assets", "single-year assets"
+    ratio = (ni - ocf) / denominator
+    note = (f"accrual ratio = (net income − operating cash flow) / {basis} "
+            f"= {ratio:.4f}")
+    if detail:
+        note += f" ({detail}: prior-year assets unavailable)"
+    return ForensicResult(value=ratio, note=note, detail=detail)
+
+
+# Altman (1968) Z-Score, the public-manufacturer coefficients. Kept as named constants
+# rather than inline magic numbers so the formula reads as the published one.
+_ALTMAN_KEYS = ("current_assets", "current_liabilities", "retained_earnings", "ebit",
+                "total_assets", "total_liabilities", "total_revenue")
+_ALTMAN_WC, _ALTMAN_RE, _ALTMAN_EBIT = 1.2, 1.4, 3.3
+_ALTMAN_EQUITY, _ALTMAN_SALES = 0.6, 1.0
+
+
+def altman_z_score(fundamentals) -> ForensicResult:
+    """Altman Z-Score — 1.2·WC/TA + 1.4·RE/TA + 3.3·EBIT/TA + 0.6·MktCap/TL + 1.0·Sales/TA.
+
+    A distress measure: HIGHER is safer (the published reading is above 2.99 safe, below
+    1.81 distressed). This lens RANKS it, so those bands are context for a reader, never
+    a gate.
+
+    Working capital is current assets minus current liabilities. Every statement line is
+    PERIOD-MATCHED at the newest reference period (``period_matched``, positional
+    fallback); the market value of equity is the CURRENT ``market_cap`` scalar.
+
+    NOT-EVAL on any missing input, on total assets <= 0 or total liabilities <= 0 (both
+    are denominators), and — house rule 8 — when the listing currency and the statements
+    currency are BOTH known and DIFFER: the fourth term divides a market cap quoted in
+    one currency by liabilities reported in another, so the five terms could not be
+    summed without inventing an exchange rate. We ABSTAIN instead; no FX conversion
+    happens here (an FX-aware variant belongs with the valuation-band FX work). A
+    MISSING currency on either side evaluates normally — absent data must not
+    manufacture an abstention.
+    """
+    if fundamentals is None:
+        return ForensicResult(note="Altman Z-Score unavailable: no fundamentals",
+                              detail="no fundamentals")
+    if _cross_currency(fundamentals):
+        return ForensicResult(note=f"Altman Z-Score unavailable: {CROSS_CURRENCY_NOTE}",
+                              detail=CROSS_CURRENCY_NOTE)
+    (now,) = period_matched(fundamentals, _ALTMAN_KEYS, periods=1)
+    market_cap = getattr(fundamentals, "market_cap", None)
+    inputs = {
+        "current assets": now["current_assets"],
+        "current liabilities": now["current_liabilities"],
+        "retained earnings": now["retained_earnings"],
+        "EBIT": now["ebit"],
+        "total assets": now["total_assets"],
+        "total liabilities": now["total_liabilities"],
+        "revenue": now["total_revenue"],
+        "market cap": market_cap if isinstance(market_cap, (int, float))
+        and not isinstance(market_cap, bool) else None,
+    }
+    absent = [label for label, v in inputs.items() if v is None]
+    if absent:
+        reason = f"{', '.join(absent)} missing"
+        return ForensicResult(note=f"Altman Z-Score unavailable: {reason}",
+                              detail=reason)
+    ta, tl = inputs["total assets"], inputs["total liabilities"]
+    if ta <= 0 or tl <= 0:
+        reason = "total assets or total liabilities non-positive"
+        return ForensicResult(note=f"Altman Z-Score unavailable: {reason}",
+                              detail=reason)
+    working_capital = inputs["current assets"] - inputs["current liabilities"]
+    z = (_ALTMAN_WC * working_capital / ta
+         + _ALTMAN_RE * inputs["retained earnings"] / ta
+         + _ALTMAN_EBIT * inputs["EBIT"] / ta
+         + _ALTMAN_EQUITY * inputs["market cap"] / tl
+         + _ALTMAN_SALES * inputs["revenue"] / ta)
+    return ForensicResult(
+        value=z,
+        note=(f"Altman Z-Score = {z:.2f} (1.2·working capital + 1.4·retained earnings "
+              f"+ 3.3·EBIT + 1.0·revenue, each over total assets, plus 0.6·market cap "
+              f"over total liabilities)"))
+
+
+# --------------------------------------------------------------------------- #
 # Aggregate screen
 # --------------------------------------------------------------------------- #
 def run_strategy_screen(

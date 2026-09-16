@@ -1,0 +1,88 @@
+# Forensic — are the reported profits real, and could the balance sheet break?
+# =============================================================================
+# Every other stock lens ranks on numbers the company reported. This one asks whether
+# those numbers can be trusted, and what happens if they cannot. Three legs:
+#
+#   accrual_ratio      — how much of last year's profit arrived as an accounting entry
+#                        rather than as cash (low best; the Sloan measure)
+#   altman_z           — five balance-sheet and earnings ratios combined into one
+#                        distance-from-distress score (high best)
+#   piotroski_f_score  — nine binary checks on profitability, leverage and efficiency
+#                        (high best), registered since PIOTROSKI-1 and until now
+#                        selected by nothing
+#
+# NON-GATING BY CONSTRUCTION. This lens marks NOTHING is_gating, and the two forensic
+# criteria it makes available (max_accrual_ratio, min_altman_z) are set by no strategy.
+# It adds a column and an argument; it can never lower a verdict on its own. That is the
+# 12% ROIC precedent: evidence on a frozen scoreboard FIRST, a hard floor only after.
+#
+# RANK-FIRST — NO screen criteria and no council lens, the financials_v1 / raw shape.
+#
+# EXPLORATORY: never on the prospective scoreboard until a run is deliberately frozen
+# and graded. First baseline is ranker-only (no LLM, no cost).
+
+id: forensic_v1
+name: Forensic (rank-based)
+# DISPLAY LABEL ONLY: the `id` is the stable record key.
+display_name: Forensic
+version: 1
+role: earnings quality & distress — non-gating
+
+description: >-
+  Companies ranked on whether their reported profits are backed by cash and how far
+  their balance sheet sits from distress, rather than on how cheap or how fast-growing
+  they are. It is a cross-check on the other lenses: a name that ranks well on value or
+  growth but badly here is being priced on numbers worth a second look.
+
+# Asset-kind scope: a stock lens admits ONLY equities. A fund scored on the vendor's
+# look-through "fundamentals" would produce quiet garbage, so the confirmed-only kind
+# gate walls it out before any factor path runs.
+asset_kinds:
+  - equity
+asset_kind_rationale: >-
+  Accruals, the Z-Score and the F-Score all read one company's own income statement and
+  balance sheet. A fund has neither, and a vendor's look-through figures for one are not
+  a substitute, so ETFs are gated out rather than scored on borrowed numbers.
+
+factors:
+  - name: accrual_ratio       # earnings quality (registry direction: low — less accrued
+                              #                   profit is better)
+  - name: altman_z            # distress        (registry direction: high)
+  - name: piotroski_f_score   # accounting health (registry direction: high)
+
+cut: quintile                 # top 20% BUY, middle 60% HOLD, bottom 20% SELL
+
+# missing: NEUTRAL, deliberately — and this is the one setting that differs from the
+# value lenses' `worst`. A forensic lens must not manufacture a SELL out of a data gap:
+# an absent statement line is an absence of evidence about earnings quality, not evidence
+# of bad earnings quality. The Z-Score in particular abstains for every cross-currency
+# name (rule 8) until the FX work lands, and dumping every ADR to the bottom of a
+# forensic table would be a false accusation, not a verdict.
+missing: neutral
+
+min_market_cap: 5.0e9         # large-cap floor, as the other stock lenses
+
+# Financials are excluded, as they are from the value lenses and for the same reason:
+# neither measure means anything on a bank's balance sheet.
+exclude_sectors:
+  - Financial Services        # yfinance label
+  - Financials                # EODHD / GICS label
+sector_exclusion_rationale: >-
+  Neither leg is meaningful for a bank or insurer. The accrual ratio scales earnings
+  against total assets, which for a bank are its loan book rather than its operating
+  capital; the Altman Z-Score was fitted on manufacturers and reads a leveraged balance
+  sheet — the normal state of a bank — as distress. The financials_v1 lens ranks them on
+  price-to-book and return-on-equity instead.
+
+# No council_screen_strategy and no prefilter_screen — rank-first, no lens screen.
+
+rationale: >-
+  The other stock lenses all take the reported numbers at face value: a cheap
+  price-to-earnings, a fast sales growth rate and a high return on capital are each
+  computed from figures the company published. This lens asks the prior question. Profit
+  that never turns into cash is the single best-documented warning sign in accounting
+  research, a balance sheet close to distress makes every other number provisional, and
+  nine simple health checks catch the slow deteriorations that a single year's ratio
+  hides. It decides nothing by itself — it is a deliberately non-gating second opinion
+  on names the other lenses already like, and the place to look when two lenses
+  disagree.
