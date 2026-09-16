@@ -143,9 +143,12 @@ structurally cannot tell you. It is written for someone who does not work in fin
 reads in about a minute.
 
 It is **one model call per run**, not per name, on the cheapest configured tier — so ticking
-it on an otherwise-free ranker-only run costs about a cent, and the Run button says so
-instead of saying "free". Untick it and nothing is built, nothing is called, and the report
-is byte-identical to one from before the feature existed.
+it on an otherwise-free ranker-only run costs about a cent or two, and the Run button says so
+instead of saying "free". A note that fails its check is rewritten **once**, with the check's
+own complaint in front of the writer, which is why the hint says one to two cents rather than
+one; the facts stay identical between attempts, so the retry may reword but is never given
+more to say. Untick it and nothing is built, nothing is called, and the report is
+byte-identical to one from before the feature existed.
 
 **The writer never sees the report.** It sees a compact facts pack built from the run's own
 tables — counts, verdicts, rule tallies, the shortlist and its reasons, what could not be
@@ -186,6 +189,31 @@ carries on: it never hides a lens or blocks a run.
 | **Growth ETFs** (`etf_growth_v1`) | selector · funds | Growth funds: fee, trend and scale, no yield. |
 | **ETF Index Tracker** (`etf_core_v1`) | selector · funds | Index trackers: fee, size and trend. |
 
+
+### How to read a lens's detail section
+
+Under every lens, the names it did **not** rank, grouped by the rule that removed them and
+ordered largest group first — because the rule that removed the most names is the one that
+decided what the lens is looking at.
+
+Each group states its rule **once**, says what the rule is **for**, and lists the names in a
+table with the value each was measured at, **worst miss first**. So a group reads: *Dividends
+vs free cash flow · rule: at most 80% of 4-year average free cash flow · 27 names*, then TC
+Energy at 669%, down to three names sitting at 81% with a **borderline** badge. A borderline
+miss is still a miss; the badge only says it was close.
+
+Rules that ran **before** the screen — the size floor, the sector gate, the asset-kind gate —
+come first and fold away behind a summary line. Their names are all there, one click away,
+and the line says *"no other rule was tested on these"*: their absence from every group below
+is an artefact of the order, not evidence about them.
+
+The section ends with **Where the numbers came from**: one row per factor, how many names it
+measured, and the names it abstained on with the reason. An abstention is a measurement that
+could not be made — never a bad reading, and never a fail.
+
+Nothing in the section is re-graded. Every name, reason and number is the one the run
+recorded; grouping decided only where each is printed. The full per-name sentence is still
+what the CLI and Company Check show, because those look at one name at a time.
 
 New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — the plain-language
 walkthrough. Want the formulas? **[The Calculations](docs/CALCULATIONS.md)** — every
