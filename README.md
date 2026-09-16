@@ -116,6 +116,38 @@ names exactly one strategy. The `id` is the stable record key and is never renam
 appears simply by adding a YAML to `strategies/` — never by editing a published one (configs are
 versioned and superseded, not mutated).
 
+### How to read a multi-lens grid
+
+The lenses answer **different questions**, so a BUY on one beside a SELL on another is not
+a contradiction — it is two questions answered. Three things make that readable:
+
+- **Every lens says what it asks.** One plain-English line under its name, in the Run tab
+  and in both reports: what it wants of a company.
+- **A lens is a selector or a check.** ONE **selector** per run — chosen to match what the
+  list was built for — decides *worth owning*. A **check** (Forensic today; quality and
+  earnings-power lenses later) only says *reason to doubt that yes*: its SELL subtracts, and
+  its BUY is not an endorsement.
+- **The shortlist is what survived.** The names the selector rated BUY that no check
+  doubted and that are not dear against their own history. It is **derived** from the grid —
+  no new judgement, nothing re-graded — and every dropped name gives its one reason.
+
+A list can also say what it was **built for** (`thesis:` — value, growth, income, quality,
+funds). When the primary lens answers a different question, the run says so in one line and
+carries on: it never hides a lens or blocks a run.
+
+| Lens | Kind | Asks |
+|---|---|---|
+| **Defensive Income** (`conservative_plus_v1`) | selector · income | Steady income with the trend intact: a calm share, a covered dividend raised for 10 years, and no recent fall. |
+| **Value + Momentum** (`magic_formula_momentum_v1`) | selector · value | The same as Magic Formula RAW, but only for companies earning at least 12% on their capital. |
+| **Magic Formula RAW** (`magic_formula_raw_v1`) | selector · value | Cheap and good: high profit on the money invested, a low price for that profit, and a rising share. |
+| **Growth** (`growth_garp_v2`) | selector · growth | Growing fast at a fair price: sales up at least 10% a year, and not overpaying for that growth. |
+| **Financials** (`financials_v1`) | selector · value | Banks and insurers on their own terms: return on equity against price-to-book. |
+| **Forensic** (`forensic_v1`) | **check** | Are the profits real: cash behind the earnings, a safe balance sheet, and improving health checks. |
+| **Dividend ETFs** (`etf_dividend_v1`) | selector · funds | Distributing funds: payout, fee, size and trend. |
+| **Growth ETFs** (`etf_growth_v1`) | selector · funds | Growth funds: fee, trend and scale, no yield. |
+| **ETF Index Tracker** (`etf_core_v1`) | selector · funds | Index trackers: fee, size and trend. |
+
+
 New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — the plain-language
 walkthrough. Want the formulas? **[The Calculations](docs/CALCULATIONS.md)** — every
 factor, criterion, and guard, generated from the code. Meeting a mark you don't recognize
