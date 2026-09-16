@@ -2640,10 +2640,25 @@ _GATE_TITLES = {
 }
 _GATE_NOTE = "no other rule was tested on these"
 
-# The verbatim badge note. Stated once per lens, above the groups, because the badge is
-# an abbreviation and an abbreviation used without its expansion is a private code.
-DETAIL_BADGE_NOTE = ("A ⚠ badge is the 12-month price move where it exceeds the "
-                     "disclosure threshold (cyclical inflection or mania; human review).")
+# The badge note, stated ONCE per lens above the groups. The badge in a row is an
+# abbreviation ("⚠ +47% 12m") and an abbreviation used without its expansion is a private
+# code — so the full disclosure the flag carries is written out here, once, in the words
+# the flag itself uses, with the threshold read from the code rather than retyped.
+def detail_badge_note() -> str:
+    """"A ⚠ badge is the 12-month price move where it exceeds +30% …" — the flag's own
+    wording, stated once so the rows can be short."""
+    from .factors import _DIVERGENCE_MOMENTUM_THRESHOLD
+
+    return (f"A ⚠ badge is the 12-month price move where it exceeds "
+            f"{_DIVERGENCE_MOMENTUM_THRESHOLD:+.0%} — a price that ran up hard while a "
+            "floor the lens screens on was failing (cyclical inflection or mania; human "
+            "review). It never altered the exclusion.")
+
+
+# A price-divergence flag, shortened to its figure for a table cell. The full sentence is
+# stated once per lens by ``detail_badge_note`` rather than repeated on every row — which
+# is the same reason this section groups at all.
+_FLAG_MOVE = re.compile(r"([+-]\d+% 12m)")
 DETAIL_SOURCES_TITLE = "Where the numbers came from"
 
 
@@ -2719,6 +2734,14 @@ def _detail_group_key(criterion: str, reason: str) -> str:
     return DETAIL_GROUP_OTHER
 
 
+def _short_flag(flag: str) -> str:
+    """"⚠ +47% 12m" from the full disclosure sentence, or the sentence when it holds no
+    figure to abbreviate. A badge that cannot be shortened is never truncated — a cut-off
+    warning is worse than a long one."""
+    found = _FLAG_MOVE.search(flag or "")
+    return f"⚠ {found.group(1)}" if found else (flag or "").strip("[]").strip()
+
+
 def _measured_text(outcome, crit) -> str:
     """The failing value in its own unit. Empty when the run recorded no number — which
     happens, and an empty cell is the honest rendering of it."""
@@ -2778,7 +2801,7 @@ def lens_detail(result, *, strategy_id: str = "", label: str = "") -> LensDetail
         if outcome is not None and outcome.get("borderline"):
             badges.append("borderline")
         if row["flag"]:
-            badges.append(row["flag"].strip("[]").strip())
+            badges.append(_short_flag(row["flag"]))
         buckets.setdefault(key, []).append(
             (_miss_size(outcome, crit),
              DetailName(ticker=row["ticker"], name=row["name"],
@@ -2819,7 +2842,7 @@ def lens_detail(result, *, strategy_id: str = "", label: str = "") -> LensDetail
         label=label or meta.get("rank_strategy_name", "") or strategy_id,
         asks=lens_asks(result),
         headline=_detail_headline(result),
-        badge_note=DETAIL_BADGE_NOTE if any(
+        badge_note=detail_badge_note() if any(
             b.startswith("⚠") for g in groups for n in g.names for b in n.badges) else "",
         groups=tuple(gates + rest),
         sources=tuple(_detail_sources(result)),

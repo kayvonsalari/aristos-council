@@ -287,3 +287,49 @@ def test_company_check_still_prints_the_whole_per_name_sentence():
     rows = exclusion_rows(_run())
     assert rows and all(r["sentence"] for r in rows)
     assert any("the rule" in r["sentence"] for r in rows)
+
+
+# --------------------------------------------------------------------------- #
+# The ⚠ badge — the figure in the row, the sentence stated once
+# --------------------------------------------------------------------------- #
+# Found in acceptance, on the real 134-name oil cohort: every flagged row carried the
+# whole disclosure sentence inside a badge — "⚠ price diverging: +47% 12m — cyclical
+# inflection or mania; human review" — in a table cell, on 30-odd rows. That is the exact
+# repetition this section exists to remove, reintroduced one column to the right.
+
+def test_the_badge_is_the_figure_and_nothing_else():
+    from aristos_council.pipeline import _short_flag
+
+    assert _short_flag("[⚠ price diverging: +47% 12m — cyclical inflection or mania; "
+                       "human review]") == "⚠ +47% 12m"
+    assert _short_flag("[⚠ price diverging: -12% 12m — …]") == "⚠ -12% 12m"
+
+
+def test_a_badge_that_cannot_be_shortened_is_never_truncated():
+    """A cut-off warning is worse than a long one."""
+    from aristos_council.pipeline import _short_flag
+
+    assert _short_flag("[⚠ something new with no figure]") == "⚠ something new with no figure"
+    assert _short_flag("") == ""
+
+
+def test_the_badge_note_quotes_the_real_threshold_and_the_flags_own_words():
+    """The note is the badge's expansion, so it must not drift from the flag it expands —
+    the threshold is read from the code rather than retyped into prose."""
+    from aristos_council.factors import _DIVERGENCE_MOMENTUM_THRESHOLD
+    from aristos_council.pipeline import detail_badge_note
+
+    note = detail_badge_note()
+    assert f"{_DIVERGENCE_MOMENTUM_THRESHOLD:+.0%}" in note
+    assert "12-month price move" in note
+    assert "cyclical inflection or mania; human review" in note   # the flag's own words
+    assert "never altered the exclusion" in note                  # ...and what it is not
+
+
+def test_the_note_appears_only_when_a_badge_does():
+    """An abbreviation without its expansion is a private code; an expansion with nothing
+    to expand is noise."""
+    from aristos_council.pipeline import DetailName, LensDetail, lens_detail
+    from tests.test_cyclical_income import _run
+
+    assert lens_detail(_run()).badge_note == ""     # no flagged name in this fixture
