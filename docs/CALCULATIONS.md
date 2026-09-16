@@ -494,6 +494,12 @@ outlier can't dominate) an extreme growth input, so a trough-inflated CAGR
 cannot make a stock look spuriously cheap; and `roic` is computed on through-cycle
 (multi-year mean) operating income, not a single peak. Each degrades to **not-evaluated**
 rather than guessing when the statements are too short or earnings are negative.
+The window dampens a single peak year but not a *multi-year* boom: while boom years remain
+inside the 4-year window, a cyclical's post-boom ROIC reads as permanent for up to four
+years (Valero, September 2026 — through-cycle 20.2% against a latest-year 9.4%, because
+FY2022–23 refining profits still fill half the window), and the **valuation band is the
+intended counterweight** — it priced the same name at 34.1x EV/EBIT, the 99th percentile of
+its own 5-year range, in the same report.
 
 **Screen-as-prefilter.** Rank strategies set `prefilter_screen: true`: only names that
 pass the lens screen's absolute floors are ranked. This enforces **one definition per
