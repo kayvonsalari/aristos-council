@@ -381,7 +381,7 @@ def test_the_exclusion_sentence_reads_as_a_percentage_end_to_end():
 # --------------------------------------------------------------------------- #
 # The adapter seam — the gap that let a real bug ship past a green suite
 # --------------------------------------------------------------------------- #
-def test_the_adapter_helper_returns_four_values_on_EVERY_path():
+def test_the_adapter_helper_returns_the_SAME_WIDTH_on_every_path():
     """REGRESSION. CRIT-NOCUT-2 widened ``_dividend_streak_from_ticker`` from a 3-tuple to
     a 4-tuple and the SUCCESS path was missed, so every real fundamentals fetch raised
     ValueError, the pipeline degraded to empty fundamentals, and a 134-name run ranked
@@ -407,18 +407,20 @@ def test_the_adapter_helper_returns_four_values_on_EVERY_path():
             self.year = y
 
     paid = _Series({_TS(2021): 0.25, _TS(2022): 0.30, _TS(2023): 0.35})
-    streak, last_cut, totals, stats = _dividend_streak_from_ticker(_Ticker(paid))
+    # YIELD-STALE-1 widened this again, from 4 to 5 (the payment DATES joined the
+    # amounts). The test caught that widening on the first run, which is the point of it.
+    streak, last_cut, totals, stats, dates = _dividend_streak_from_ticker(_Ticker(paid))
     assert totals and stats
     assert [r[0] for r in stats] == [2021.0, 2022.0, 2023.0]
     assert stats[0] == [2021.0, 0.25, 0.25, 1.0]        # year, total, median, count
 
     # ...and both failure paths return the same width, so no caller can unpack wrongly.
-    assert len(_dividend_streak_from_ticker(_Ticker(_Series()))) == 4
-    assert len(_dividend_streak_from_ticker(_Ticker(None))) == 4
+    assert len(_dividend_streak_from_ticker(_Ticker(_Series()))) == 5
+    assert len(_dividend_streak_from_ticker(_Ticker(None))) == 5
 
     class _Boom:
         @property
         def dividends(self):
             raise RuntimeError("provider down")
 
-    assert len(_dividend_streak_from_ticker(_Boom())) == 4
+    assert len(_dividend_streak_from_ticker(_Boom())) == 5

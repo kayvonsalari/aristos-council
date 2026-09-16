@@ -236,6 +236,10 @@ class Fundamentals:
     # change) moves exactly ONE of them while a real cut moves both. Same source, same
     # fetch: the adapter already had the individual payments in hand.
     dividend_year_stats: list[list[float]] | None = None
+    # YIELD-STALE-1: the payment DATES behind those years, ISO strings, oldest-first. The
+    # cut rule needs amounts; the yield needs to know whether the record still reaches the
+    # present. Same source, same fetch -- the adapter already had the dates in hand.
+    dividend_payment_dates: list[str] | None = None
     total_debt: float | None = None
     debt_to_equity: float | None = None          # yfinance percent-ish; may be None
     # Cash & short-term investments (yfinance info 'totalCash'). With total_debt +

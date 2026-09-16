@@ -134,6 +134,13 @@ def min_yield_criterion(
     field is never compared against the threshold; if a paying company's price
     is missing, the criterion is UNVERIFIABLE rather than silently trusted.
     """
+    # YIELD-STALE-1: a record that stops short understates the trailing dividend, and
+    # nothing about the resulting yield looks wrong. Checked BEFORE the value is used.
+    stale, stale_reason = dividend_record_staleness(
+        _payment_dates(fundamentals), today=_today_for(fundamentals))
+    if stale:
+        return CriterionResult(name="min_dividend_yield", passed=None, observed=None,
+                               threshold=min_yield, basis="abstained", note=stale_reason)
     dps = fundamentals.dividend_per_share
     if dps is None:
         return CriterionResult(
@@ -696,6 +703,78 @@ def _cuts_from_year_totals(totals: dict, *, years: int,
     if worst:
         note += " (typical-payment check unavailable: this record carries year totals only)"
     return worst, note
+
+
+def _payment_dates(fundamentals):
+    """The dividend payment dates the adapter carried, as dates. Empty when absent."""
+    from datetime import date as _date
+
+    raw = getattr(fundamentals, "dividend_payment_dates", None) or []
+    out = []
+    for value in raw:
+        if isinstance(value, _date):
+            out.append(value)
+            continue
+        try:
+            out.append(_date.fromisoformat(str(value)[:10]))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _today_for(fundamentals):
+    """The date staleness is measured against. ``as_of`` when the record carries one (a
+    frozen/replayed run must be judged as of ITS day, not today's), else today."""
+    from datetime import date as _date
+
+    stamped = getattr(fundamentals, "as_of", None)
+    return stamped if isinstance(stamped, _date) else _date.today()
+
+
+# YIELD-STALE-1 — when a provider's dividend record simply stops.
+# The US-listed series for CNQ and Eni both end mid-2025, two payments short of the year
+# (docs/diagnosis_dividend_history_2026-09-16.md). The CUT rule survives that, because the
+# typical payment does not fall when a payment is merely absent. The YIELD does not: a
+# trailing-12-month dividend built from half a year of payments, over a full year of price,
+# is a yield roughly half what the company actually pays -- and it is not visibly wrong,
+# which is what makes it worth catching.
+STALE_GAP_MULTIPLE = 2.0      # the record is stale past twice the usual gap...
+STALE_MIN_DAYS = 120          # ...but never on a quarterly payer inside one quarter
+STALE_ANNUAL_DAYS = 730       # an ANNUAL payer is only stale after two years
+
+
+def dividend_record_staleness(payment_dates, *, today) -> tuple[bool, str]:
+    """``(is_stale, reason)`` for a provider's dividend record.
+
+    The test is relative, not absolute: an annual payer 300 days after its payment is
+    perfectly current, and a quarterly payer 300 days after its last is not. So the gap a
+    name USUALLY pays at is the yardstick -- the median of its last 8 intervals -- and the
+    record is stale past ``STALE_GAP_MULTIPLE`` of that.
+
+    Two floors stop it firing on ordinary shapes. ``STALE_MIN_DAYS`` keeps a quarterly
+    payer safe inside one quarter (a 91-day gap doubles to 182, but a name 130 days out is
+    simply between payments). ``STALE_ANNUAL_DAYS`` means a name whose usual gap is a year
+    is flagged only after two, because an annual dividend that is merely late is the norm,
+    not a gap in the record.
+
+    Fewer than 3 payments -> never stale: there is no usual gap to be late against, and
+    asserting one from two payments would be inventing the yardstick."""
+    dates = sorted(d for d in (payment_dates or []) if d is not None)
+    if len(dates) < 3:
+        return False, ""
+    recent = dates[-9:]                      # the last 8 intervals, at most
+    gaps = [(b - a).days for a, b in zip(recent, recent[1:])]
+    gaps = [g for g in gaps if g > 0]
+    if not gaps:
+        return False, ""
+    usual = statistics.median(gaps)
+    since = (today - dates[-1]).days
+    floor = STALE_ANNUAL_DAYS if usual >= 300 else STALE_MIN_DAYS
+    if since <= floor or since <= usual * STALE_GAP_MULTIPLE:
+        return False, ""
+    return True, (f"dividend record stops {dates[-1].isoformat()}: last payment "
+                  f"{since} days ago against a usual gap of {int(round(usual))} days; "
+                  "yield not stated")
 
 
 def dividend_cuts_by_calendar_year(

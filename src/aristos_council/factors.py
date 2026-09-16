@@ -264,16 +264,40 @@ def _low_volatility(fi: FactorInputs) -> Optional[float]:
     return fi.annualized_volatility
 
 
+def _dividend_record_stale(fi: FactorInputs) -> str:
+    """The staleness reason for this name's dividend record, or "" (YIELD-STALE-1).
+
+    Shared with ``min_dividend_yield`` so the screen and the rank cannot disagree about
+    whether a record still reaches the present."""
+    from .tools.screening import _payment_dates, _today_for, dividend_record_staleness
+
+    f = fi.fundamentals
+    if f is None:
+        return ""
+    stale, reason = dividend_record_staleness(_payment_dates(f), today=_today_for(f))
+    return reason if stale else ""
+
+
 def _net_payout_yield(fi: FactorInputs) -> Optional[float]:
     """Net payout = dividends + buybacks / market cap. Buyback data isn't on free
     fundamentals, so this falls back to DIVIDEND YIELD (an under-count for big
-    repurchasers — documented). Higher is better."""
+    repurchasers — documented). Higher is better.
+
+    YIELD-STALE-1: ABSTAINS when the provider's dividend record stops short. A trailing
+    yield built from half a year of payments over a full year of price is roughly half the
+    real one and looks entirely ordinary, so ranking on it would be worse than not ranking
+    at all."""
     f = fi.fundamentals
-    return f.dividend_yield if f is not None else None
+    if f is None or _dividend_record_stale(fi):
+        return None
+    return f.dividend_yield
 
 
 def _net_payout_source(fi: FactorInputs) -> str:
     f = fi.fundamentals
+    stale = _dividend_record_stale(fi) if f is not None else ""
+    if stale:
+        return f"{SRC_ABSTAINED}: {stale}"
     if f is None or f.dividend_yield is None:
         return SRC_ABSTAINED
     return SRC_DIVIDEND_YIELD              # buybacks unavailable -> always the fallback
