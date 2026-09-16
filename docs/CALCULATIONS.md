@@ -482,7 +482,7 @@ strategy YAML, not code. Current registry (thresholds shown from the live strate
 | `min_market_cap` | strategy-specific | Micro-cap noise. |
 | `min_price_momentum` | −0.10 (12m) | **Breakdowns, not flatness**: a defensive down >10% on the year is breaking (T at −26%); a quiet staple down 0–10% passes. The ranker handles the gradient among survivors. |
 | `min_dividend_streak` | 10 years | Cut history: T (cut 2022 → streak 0) and MMM (cut 2024) fail; PG/KO/JNJ/MCD pass. |
-| `max_dividend_cuts` | 5 years | **"Was it ever CUT?", which is not "did it RISE?"** Passes when no calendar year in the window paid a lower TOTAL than the year before. The threshold is the WINDOW (a count of complete years), not a cap on the observed value — so the rule renders its own phrase ("no year paid less than the year before, across the last 5 complete years") rather than the generated "at most 5", which would compare a percentage to a year count. `observed` is the size of the LARGEST cut as a fraction (0.32 = the total fell 32%), and 0.0 on a pass. A company that held its dividend flat through a downturn has a growth streak of 0 and **passes** this rule; for a cyclical payer that flat dividend is the evidence of durability. Built on the same calendar-year totals, the same adjusted per-share values and the same "drop the latest, possibly-incomplete year" rule as `min_dividend_growth_streak`, and it applies the same ±0.5% `flat_tol`, so the two readings of one history cannot disagree about whether a year was a reduction. Too little history (fewer than window+1 complete years) or no dividend history at all is **NOT-EVAL**, never a fail — a non-payer is failed by `min_dividend_yield`. **KNOWN FALSE POSITIVE, not detected in v1:** a SPECIAL dividend inflates one year's total, so the next ordinary year reads as a cut. The year total is the measure by design (it is what makes a cadence change safe), and separating specials needs a payment type the free data does not carry reliably; the note names the year, so it can be checked by eye. On a variable-dividend sector this fires often and honestly — see §4.2. |
+| `max_dividend_cuts` | 5 years | **"Was it ever CUT?", which is not "did it RISE?"** A year is a cut only when its **year total AND its typical payment** both fell more than `cut_tolerance` (default **10%**) against the prior year. Neither measure is safe alone, and that is the whole rule: each ordinary artefact moves exactly ONE of them while a real cut moves BOTH. A year with one fewer payment drops the total and leaves the typical payment alone (Canadian Natural, 5 payments then 4: total −22.1%, median payment +15.6%); a special dividend does the same (EOG: regular +10%, total −34%); a **cadence change does the opposite**, halving the typical payment while the total rises (Eni, 2 payments a year then 4: total +14.4%, median −44.1%) — which is why the median alone is not an improvement on the total. Real cuts (BP, Shell, SLB, Suncor, Equinor in 2020) move both together. `observed` is the size of the largest qualifying fall in the TOTAL, as a fraction, rendered as a whole percentage. The threshold is the WINDOW (a count of complete years), not a cap on the observed value, so the rule states its own phrase rather than the generated "at most 5". **Single-payment years** are compared on the total alone: a median of one number is not a *typical* payment, it IS that payment, and judging it as typical would make every switch to annual payment read as a cut. A company that held its dividend flat passes; for a cyclical payer that flat dividend is the evidence of durability. Too little history (fewer than window+1 complete years) or no dividend history is **NOT-EVAL**, never a fail — a non-payer is failed by `min_dividend_yield`. See **§4.2** for the tolerance and the stated limitation. |
 | `max_debt_to_market_cap` | 1.0 | Balance-sheet risk: total debt ≤ market cap. VZ (~1.13×, $201B) fails. Uses debt/market-cap, **not** debt/equity — robust to negative-equity buyback names (MCD). |
 | `min_roic` | 0.12 (magic_value_screen) | The quality floor for value strategies. |
 | `min_f_score` | *none — enabled by no lens* | Accounting quality: nine binary checks on the annual statements (see **§4.1**). Registered and optional; no threshold is documented because no strategy adopts one yet. |
@@ -656,44 +656,33 @@ availability report over any cohort is what `examples/piotroski_probe.py` exists
 it is the gate question ("is it computable here at all?") that precedes any question about
 whether the score is *useful* here.
 
-### 4.2 `max_dividend_cuts` on a variable-dividend sector — measured, not assumed
+### 4.2 `max_dividend_cuts` — the tolerance, and what it cannot see
 
-The rule is strict by construction: ANY calendar year whose total fell more than ±0.5%
-against the prior year is a cut. On a sector where a large part of the payout is variable
-by design — oil & gas base-plus-variable programmes, and non-USD listings whose declared
-dividend is translated at a moving rate — that fires often. The acceptance run of
-2026-09-16 (`oil_dividend_v1`, 134 names after CTRA delisted) measured it rather than
-guessing:
+**The tolerance is 10%, and the number was measured rather than chosen.**
+`docs/diagnosis_dividend_history_2026-09-16.md` took eight oil majors that had not cut their
+dividends and found the largest FALSE reading was **8.3%** (TotalEnergies, on the typical
+payment, from a 5→4 payment year). The smallest REAL cut on record in the same sector was
+**Equinor's 2020 at 24.8% in NOK** (Eni's was 34.5% in EUR, Shell's 49.8% in GBp). 10% sits
+roughly a factor of two clear of both.
 
-| Rule | passed | failed | not tested |
-|---|---|---|---|
-| Dividend yield (≥ 1.5%) | 98 | 8 | 0 |
-| Dividends vs free cash flow (≤ 80%) | 71 | 28 | 7 |
-| Company size (≥ $5.0bn) | 56 | 0 | 50 |
-| **Dividend cuts in the last 5 years** | **24** | **67** | **15** |
-| Total debt vs market value (≤ 1.0x) | 92 | 7 | 7 |
+It is explicitly **not 40%**. That figure was asserted when the work was commissioned and the
+diagnosis disproved it: a 40% bound would wave through both Equinor's and Eni's genuine 2020
+cuts.
 
-Of the 67 failures, 5 were declines under 10% and 21 between 10% and 25% — the band where
-a variable-dividend programme and an FX translation are indistinguishable from a policy
-cut on year totals alone. 43 names were excluded by this rule ALONE (every other rule they
-were tested on passed), so the rule is what decides the cohort's size:
+**What the rule is robust to.** A missing payment at the end of a provider's record — the US
+ADR lines for CNQ and Eni both stop mid-2025, two payments short — drops the year total but
+not the typical payment, so the name passes. That is deliberate. **The `min_dividend_yield`
+criterion reading the same short record is NOT protected that way**; it is a separate queued
+item and this change does not address it.
 
-| a decline under X counts as the variable band, not a cut | names ranked |
-|---|---|
-| (today — no band) | 23 |
-| 10% | 26 |
-| 15% | 29 |
-| 20% | 38 |
-| 25% | 41 |
-| 33% | 47 |
-| 50% | 57 |
-
-This is recorded as a MEASUREMENT, not a recommendation. Reaching a 50-60 name cohort
-would mean calling a 33-50% reduction "not a cut", which is not defensible; 23 is the
-honest answer to the rule as written, and it is still 7.7× what Defensive Income's
-ten-year streak rule admitted on the same cohort (3). Whether a materiality band belongs
-in the rule at all — and, if so, whether it is better expressed as a threshold on the cut
-SIZE than as a widened `flat_tol` — is an open policy question, not a defect.
+**The stated limitation.** A company whose dividend is *deliberately variable* — Equinor's
+extraordinary tranche, Petrobras, Woodside, Santos — will read as a cutter in the year the
+variable part falls, because both its total and its typical payment genuinely fall. The free
+data does not label which payments were extraordinary, so no measure built on these payments
+can separate them. This is **by design**: the lens exists for payers whose dividend is meant
+to hold, and a payout that is designed to move with the commodity is not that. Such a name is
+excluded with an accurate sentence naming the year and both falls; it is the *interpretation*
+that differs, not the arithmetic.
 
 ### 4.3 The shortlist (SHORTLIST-1) — derived, not decided
 

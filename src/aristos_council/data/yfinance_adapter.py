@@ -22,6 +22,7 @@ over:
 
 from __future__ import annotations
 
+import statistics
 from datetime import date
 
 from .adapter import (
@@ -134,7 +135,8 @@ class YFinanceAdapter(MarketDataAdapter):
         dps = _dividend_per_share(info)
         # Dividend-growth streak + last cut, DERIVED from the payment history (a
         # yield-trap separator that's free but yfinance never surfaces as a scalar).
-        streak_years, last_cut, year_totals = _dividend_streak_from_ticker(tk)
+        streak_years, last_cut, year_totals, year_stats = \
+            _dividend_streak_from_ticker(tk)
         # Period-labelled series for the F-Score (PIOTROSKI-2): same statement
         # lines as the positional series above, but WITH period-end dates and
         # None holes kept in place, so cross-statement checks can period-match
@@ -208,6 +210,7 @@ class YFinanceAdapter(MarketDataAdapter):
             # CRIT-NOCUT-1 — the totals the two signals above came from, carried so a
             # criterion can ask its own question of them. No extra fetch.
             dividend_year_totals=year_totals,
+            dividend_year_stats=year_stats,
             total_debt=_as_float(info.get("totalDebt")),
             debt_to_equity=_as_float(info.get("debtToEquity")),
             total_cash=_as_float(info.get("totalCash")),   # EV = mcap + debt − cash
@@ -347,10 +350,9 @@ def _dividend_per_share(info: dict) -> float | None:
     return _as_float(info.get("trailingAnnualDividendRate"))
 
 
-def _dividend_streak_from_ticker(tk) -> tuple[int | None, int | None,
-                                              list[list[float]] | None]:
-    """(streak_years, last_reduction_year, year_totals) from a yfinance Ticker's
-    dividend history.
+def _dividend_streak_from_ticker(tk) -> tuple:
+    """(streak_years, last_reduction_year, year_totals, year_stats) from a yfinance
+    Ticker's dividend history.
 
     Reads ``tk.dividends`` (already split-adjusted), sums per calendar year, and
     delegates to ``screening.dividend_streak`` (which excludes the current partial
@@ -365,15 +367,22 @@ def _dividend_streak_from_ticker(tk) -> tuple[int | None, int | None,
     try:
         divs = tk.dividends
         if divs is None or len(divs) == 0:
-            return None, None, None
+            return None, None, None, None
         annual: dict[int, float] = {}
+        per_year: dict = {}
         for ts, amt in divs.items():
             annual[ts.year] = annual.get(ts.year, 0.0) + float(amt)
+            per_year.setdefault(ts.year, []).append(float(amt))
     except Exception:
-        return None, None, None
+        return None, None, None, None
     streak, last_cut = dividend_streak(annual, date.today().year)
     totals = [[float(y), float(annual[y])] for y in sorted(annual)]
-    return streak, last_cut, totals
+    # CRIT-NOCUT-2: the per-year payments reduced to (total, median, count). Computed here
+    # because this is where the individual payments already are; deriving them again
+    # downstream would be a second reading of one history.
+    stats = [[float(y), float(sum(per_year[y])), float(statistics.median(per_year[y])),
+              float(len(per_year[y]))] for y in sorted(per_year)]
+    return streak, last_cut, totals, stats
 
 
 def _dividend_yield(info: dict) -> float | None:
