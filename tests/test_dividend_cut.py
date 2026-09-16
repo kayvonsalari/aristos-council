@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from aristos_council.data.adapter import DividendEvent
 from aristos_council.tools.criteria.registry import REGISTRY, Evidence, run_screen
 from aristos_council.tools.screening import (
@@ -180,3 +182,24 @@ def test_a_strategy_can_select_it_by_name():
     result = out.criteria[0]
     assert result.name == "max_dividend_cuts" and result.passed is False
     assert result.observed == 0.50
+
+
+def test_flat_is_not_a_cut_at_the_same_tolerance_the_streak_uses():
+    """A rounding-level wobble in a year total is FLAT, not a reduction — the same
+    +/-0.5% tolerance ``dividend_streak`` applies to the same totals. Without it the two
+    readings of one history would disagree about whether a year was a cut."""
+    wobble = _events((2020, 1.000), (2021, 0.998), (2022, 1.000), (2023, 1.000),
+                     (2024, 1.000), (2025, 1.000), _PARTIAL)
+    assert _cuts(wobble).passed is True                 # 0.2% -> flat
+    real = _events((2020, 1.000), (2021, 0.980), (2022, 1.000), (2023, 1.000),
+                   (2024, 1.000), (2025, 1.000), _PARTIAL)
+    assert _cuts(real).passed is False                  # 2.0% -> a cut
+    assert _cuts(real).observed == pytest.approx(0.02)
+
+
+def test_the_tolerance_matches_the_streak_primitives():
+    from aristos_council.tools.screening import _FLAT_TOL, dividend_streak
+    import inspect
+
+    assert _FLAT_TOL == inspect.signature(
+        dividend_streak).parameters["flat_tol"].default

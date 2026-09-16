@@ -239,6 +239,10 @@ def max_payout_criterion(
 
 # Through-cycle window for the FCF payout denominator — matches ROIC's 4-year smoothing.
 _FCF_WINDOW = 4
+# CRIT-NOCUT-1: FLAT is not a CUT. The same tolerance ``dividend_streak`` applies to the
+# same calendar-year totals, so the two readings of one history cannot disagree about
+# whether a year was a reduction.
+_FLAT_TOL = 0.005
 # FACTOR-NDOI-1: the same 4-year window for the operating-income denominator, for the same
 # reason ROIC smooths — a single peak year makes a cyclical's balance sheet look light
 # (Valero: 15,751m of operating income in FY2022 against 4,312m in FY2025).
@@ -591,7 +595,7 @@ def dividend_growth_streak_by_calendar_year(
 
 
 def _cuts_from_year_totals(totals: dict[int, float], *, years: int,
-                           ) -> tuple[float | None, str]:
+                           flat_tol: float = _FLAT_TOL) -> tuple[float | None, str]:
     """The shared arithmetic behind ``dividend_cuts_by_calendar_year`` — see it for the
     contract. Split out so the EVENT source and the adapter's carried YEAR TOTALS reach
     exactly the same answer rather than two implementations of one rule."""
@@ -610,10 +614,15 @@ def _cuts_from_year_totals(totals: dict[int, float], *, years: int,
     worst_year: int | None = None
     for prev, year in zip(window, window[1:]):
         before, after = totals[prev], totals[year]
-        if before > 0 and after < before:
-            cut = (before - after) / before
-            if cut > worst:
-                worst, worst_year = cut, year
+        if before <= 0:
+            continue
+        cut = (before - after) / before
+        # FLAT is not a CUT — the same tolerance, and the same reasoning, as the sibling
+        # ``dividend_streak`` primitive reading the same totals: a year within +/-flat_tol
+        # of the prior ends a GROWTH streak but is not a reduction. Without it these two
+        # readings of one history would disagree about what happened in a year.
+        if cut > flat_tol and cut > worst:
+            worst, worst_year = cut, year
     if worst_year is not None:
         return worst, (f"dividend cut in {worst_year}: the calendar-year total fell "
                        f"{worst:.0%} against {worst_year - 1} (adjusted value, summed "
