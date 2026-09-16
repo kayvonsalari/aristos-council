@@ -10,7 +10,7 @@ Value + Momentum (magic_formula_momentum_v1)
 Run
 24.08.2026 13:49 CEST — ranker only, no AI commentary
 Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran).
-3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one
+3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one — shortlist: 1 of 1 BUY
 Classic Value
 — Quality-value screen, 2 rules ·
 Magic Formula RAW
@@ -19,6 +19,7 @@ Value + Momentum
 — Quality-value screen, 2 rules
 [details]
 Contents
+Shortlist — 1 of 1 BUY survived the checks
 What the run could not see
 Verdict by lens
 Valuation band (absolute — vs each name's own history)
@@ -31,6 +32,14 @@ Classic Value
 Magic Formula RAW
 Value + Momentum
 What the terms mean
+Shortlist — 1 of 1 BUY survived the checks
+BUY under Classic Value and below the 80th percentile of its own valuation history.
+Name
+Rank
+Valuation percentile
+A
+#1
+not evaluated
 What the run could not see
 Evidence channels that returned nothing, stated BEFORE the prose that rests on the channels that did. A dark channel is not a neutral reading — nothing was measured, so nothing below is informed by it.
 Channel
@@ -188,6 +197,8 @@ EPS (earnings per share)
 Annual profit divided by the number of shares.
 Not tested / not evaluated
 The data this check needed was missing, so the check was skipped honestly rather than guessed at. It is not a pass and it is not a fail.
+Percentile (valuation band)
+Where today's multiple sits in that five-year history. The 10th percentile is cheaper than 90% of the period; the 90th is dearer than 90% of it.
 Quintile cut
 The top fifth of ranked names are rated BUY, the bottom fifth SELL, and everything between them HOLD.
 Return on invested capital

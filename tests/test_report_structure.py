@@ -315,7 +315,12 @@ def test_the_html_sections_are_in_the_same_order_as_the_markdown():
 
     doc = multi_strategy_report_html(_multi(), run_start=_RUN)
     order = [m for m in re.findall(r'<section class="section[^"]*" id="([^"]+)"', doc)]
-    expected = [a for a in ("gaps", "verdicts", "narration", "band", "rules") if a in order]
+    # SHORTLIST-1 sits FIRST: it is the answer, and the sections after it are the
+    # evidence for it. The list is the documented reading order, so a new section is
+    # added here at the position it is specified to occupy — never by relaxing the
+    # assertion to a subset check.
+    expected = [a for a in ("shortlist", "gaps", "verdicts", "narration", "band", "rules")
+                if a in order]
     assert order[:len(expected)] == expected, order
 
 

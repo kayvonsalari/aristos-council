@@ -1987,6 +1987,27 @@ def _multi_grid_rows(multi_result) -> list[dict]:
     return multi_strategy_grid_rows(multi_result)[0]
 
 
+
+def _shortlist_markdown(sl, shortlist_table) -> list[str]:
+    """SHORTLIST-1 in the .md — the same cells the HTML renders, from the same builder."""
+    if sl is None:
+        return []
+    lines = ["", f"## {sl.title}", ""]
+    if not sl.available:
+        return lines + [f"_{sl.reason}._"]
+    lines += [f"_{sl.rule_sentence}_", ""]
+    cols, rows = shortlist_table(sl)
+    if rows:
+        lines += _md_table(cols, rows)
+    else:
+        lines.append("_No candidate survived the checks. That is a result, not a gap — "
+                     "every drop and its reason is below._")
+    if sl.dropped:
+        lines += ["", f"**Dropped · {len(sl.dropped)}**", ""]
+        lines += [f"- **{r.display}** — {r.dropped_by}" for r in sl.dropped]
+    return lines
+
+
 def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     """ONE merged markdown report for the whole run, however many lenses ran (REPORT-2).
 
@@ -2008,7 +2029,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
         floor_override_line,
         lens_asks,
-        provenance_sentences, report_sections,
+        provenance_sentences, report_sections, shortlist_table,
         union_valuation_band_table,
         valuation_band_table,
     )
@@ -2052,6 +2073,10 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     # relying on HTML anchors: markdown renderers derive their own heading ids, and a
     # plain-text reader still gets the document's map and its order.
     lines += _contents_markdown(report_sections(multi_result))
+
+    # 1b (SHORTLIST-1) — the answer, before the evidence for it.
+    lines += _shortlist_markdown(getattr(multi_result, "shortlist", None),
+                                 shortlist_table)
 
     # 2 (REPORT-4) — what the run could NOT see, BEFORE any prose that rests on what it
     # could. Rendered even when clean: an absent section is indistinguishable from a
@@ -2928,6 +2953,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 freeze_dir=ROOT / "runs", with_valuation_band=with_valuation_band,
                 derived_from=derived_from,
                 min_market_cap_override=min_market_cap_override,
+                # SHORTLIST-1: the lens the reader picked as primary, which is NOT
+                # necessarily the grid's first column (that is offer order).
+                primary_id=primary.id,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")

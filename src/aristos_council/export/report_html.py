@@ -738,6 +738,7 @@ def multi_strategy_report_html(multi_result, *,
         floor_override_line,
         lens_asks,
         rules_applied,
+        shortlist_table,
         union_valuation_band_table,
     )
     from ..data.adapter import display_name
@@ -781,6 +782,10 @@ def multi_strategy_report_html(multi_result, *,
         + _compact_rules_html(multi_result)
         + _contents(sections)
         + "</header>")
+
+    # ----- 1b (SHORTLIST-1): the answer, before the evidence for it. Derived from the
+    # grid below; the grid itself is untouched.
+    parts.append(_shortlist_section(getattr(multi_result, "shortlist", None)))
 
     # ----- 2 (REPORT-4): what the run could NOT see, BEFORE any prose resting on what it
     # could. Rendered even when empty — an absent section is indistinguishable from a
@@ -948,6 +953,35 @@ def multi_strategy_report_html(multi_result, *,
     # ----- 9: ONE common footer.
     parts.append(_footer())
     return _document(title=title.full(), body="\n".join(parts))
+
+
+
+def _shortlist_section(sl) -> str:
+    """SHORTLIST-1 — the derived section. Placed directly after the summary and BEFORE the
+    verdict grid, because it is the answer the grid is evidence for."""
+    from ..pipeline import shortlist_table
+
+    if sl is None:
+        return ""
+    body = [f'<section class="section" id="shortlist">'
+            f"<h2>{_esc(sl.title)}</h2>"]
+    if not sl.available:
+        body.append(f'<p class="note">{_esc(sl.reason)}.</p></section>')
+        return "".join(body)
+    body.append(f'<p class="note">{_esc(sl.rule_sentence)}</p>')
+    cols, rows = shortlist_table(sl)
+    if rows:
+        body.append(_table(cols, [[_esc(r[c]) for c in cols] for r in rows],
+                           cls="ranked"))
+    else:
+        body.append('<p class="note">No candidate survived the checks. That is a '
+                    'result, not a gap — every drop and its reason is below.</p>')
+    if sl.dropped:
+        body.append(f"<h3>Dropped · {len(sl.dropped)}</h3>" + _bullets(
+            f'<strong>{_esc(r.display)}</strong> — {_esc(r.dropped_by)}'
+            for r in sl.dropped))
+    body.append("</section>")
+    return "".join(body)
 
 
 def _band_section(band_table, *, anchor: str = "") -> str:

@@ -2196,6 +2196,11 @@ class MultiStrategyResult:
     # default for a multi-lens run), which then costs nothing and is byte-unchanged.
     narratives: dict[str, str] = field(default_factory=dict)
     council: list[CouncilOutcome] = field(default_factory=list)
+    # SHORTLIST-1 — the names the PRIMARY selector picked that no check doubted. DERIVED
+    # from the results above, attached so every surface renders the same object rather
+    # than each recomputing the rule. None on a run where it was not computed (a caller
+    # that predates this field), which renders no section at all.
+    shortlist: "Optional[Shortlist]" = None
 
 
 def combine_rank_results(results: dict[str, RankPipelineResult],
@@ -2285,6 +2290,7 @@ def run_multi_strategy_pipeline(
     ranker_only: bool = True, narrate_coverage: str = "buys_only",
     runners=None, derived_from: str = "",
     min_market_cap_override: float | None = None,
+    primary_id: Optional[str] = None,
 ) -> MultiStrategyResult:
     """Grade ONE cohort under N rank strategies and return the combined grid (FUND-RUN-1).
 
@@ -2391,9 +2397,21 @@ def run_multi_strategy_pipeline(
         # recorded an override, keeping a no-override run byte-identical.
         **_multi_floor_override(results, ids),
     }
-    return MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
-                               results=results, rows=rows, meta=meta,
-                               narratives=narratives, council=council)
+    # SHORTLIST-1 — the PRIMARY is the lens whose verdicts are the run's answer. It is
+    # NOT simply ids[0]: the grid's column order is the OFFER order (picker.resolve_all),
+    # deliberately, so the columns are reproducible — which means the first column need
+    # not be the lens the reader picked as primary. Callers that know say so; the
+    # fallback is the first SELECTOR in the run, never a check.
+    resolved_primary = primary_id if primary_id in results else next(
+        (sid for sid in ids
+         if getattr(getattr(results[sid], "rank_strategy", None), "kind", "selector")
+         != "check"), ids[0])
+    meta["shortlist_primary_id"] = resolved_primary
+    meta["shortlist_band_cutoff"] = SHORTLIST_BAND_CUTOFF
+    built = MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
+                                results=results, rows=rows, meta=meta,
+                                narratives=narratives, council=council)
+    return replace(built, shortlist=shortlist(built, primary_id=resolved_primary))
 
 
 # --------------------------------------------------------------------------- #
@@ -2576,9 +2594,16 @@ def report_sections(multi_result) -> list[dict]:
     names = multi_result.strategy_names
     first = multi_result.results[ids[0]] if ids else None
 
-    out: list[dict] = [{"anchor": "gaps", "title": EVIDENCE_GAPS_TITLE, "children": []},
-                       {"anchor": "verdicts", "title": VERDICT_TABLE_TITLE,
-                        "children": []}]
+    out: list[dict] = []
+    # SHORTLIST-1 — the answer, ahead of the evidence for it. It is registered HERE and
+    # not only rendered, so the contents list and the document cannot disagree about what
+    # the report contains (test_report_structure pins that they agree). Absent when the
+    # run computed no shortlist, which keeps every contents link pointing at something.
+    sl = getattr(multi_result, "shortlist", None)
+    if sl is not None:
+        out.append({"anchor": "shortlist", "title": sl.title, "children": []})
+    out += [{"anchor": "gaps", "title": EVIDENCE_GAPS_TITLE, "children": []},
+            {"anchor": "verdicts", "title": VERDICT_TABLE_TITLE, "children": []}]
 
     if multi_result.narratives:
         kids = []
@@ -2765,7 +2790,202 @@ def multi_summary_line(result: MultiStrategyResult) -> str:
         parts.append(f"{excluded_all} excluded by every lens")
     parts.append(f"{ranked_any} of {size} ranked by at least one")
     lens_word = "lens" if n_lenses == 1 else "lenses"
-    return f"{n_lenses} {lens_word} × {size} names — " + ", ".join(parts)
+    line = f"{n_lenses} {lens_word} × {size} names — " + ", ".join(parts)
+    # SHORTLIST-1: the one number a reader wants first. Appended only when a shortlist
+    # could be formed AND some name survived — a zero is noise here, exactly as the
+    # clauses above omit their zeros, and the section itself states an empty result.
+    sl = getattr(result, "shortlist", None)
+    if sl is not None and sl.available and sl.kept:
+        line += (f" — shortlist: {len(sl.kept)} of {sl.candidates} "
+                 f"BUY{'s' if sl.candidates != 1 else ''}")
+    return line
+
+
+# --------------------------------------------------------------------------- #
+# SHORTLIST-1 — the names a selector picked that no check doubted
+# --------------------------------------------------------------------------- #
+# Two runs on 2026-09-16 showed the grid gives a reader no way to tell WHICH BUYs to take
+# seriously: the lenses answer different questions, so a BUY on one beside a SELL on
+# another is not a contradiction. The owner's reading rule, made structural here: ONE
+# SELECTOR decides "worth owning"; CHECK lenses and the valuation band only say "reason to
+# doubt that yes". The shortlist is what survives.
+#
+# DERIVED, never a new judgement. Every input is a verdict or a percentile the run already
+# produced; nothing is re-graded, re-ranked or re-weighted, and the grid it is drawn from
+# is untouched. Drop a lens from the run and the same names come back with fewer checks
+# applied — the rule has no memory and no opinion.
+SHORTLIST_BAND_CUTOFF = 80.0     # a percentile at or above this is "dear against its own
+                                 # history"; recorded in meta, not a UI control in v1.
+
+
+@dataclass(frozen=True)
+class ShortlistRow:
+    """One candidate, kept or dropped, with everything that decided it."""
+
+    ticker: str
+    display: str
+    rank_position: Optional[int]          # position in the PRIMARY's cohort
+    check_verdicts: dict[str, str]        # check lens id -> its verdict for this name
+    band_percentile: Optional[float]      # None when the band abstained or was off
+    band_note: str = ""                   # the abstention's own reason, when there is one
+    dropped_by: str = ""                  # "" when kept; else the ONE reason
+
+
+@dataclass(frozen=True)
+class Shortlist:
+    """The section's whole content. ``reason`` is set ONLY when no list could be formed —
+    an empty ``kept`` with an empty ``reason`` means the checks removed everything, which
+    is a RESULT and reads differently from "there was nothing to check"."""
+
+    primary_id: str
+    primary_label: str
+    check_ids: list[str]
+    check_labels: dict[str, str]
+    kept: list[ShortlistRow]
+    dropped: list[ShortlistRow]
+    band_cutoff: float = SHORTLIST_BAND_CUTOFF
+    reason: str = ""                      # why there is no shortlist at all
+
+    @property
+    def available(self) -> bool:
+        return not self.reason
+
+    @property
+    def candidates(self) -> int:
+        return len(self.kept) + len(self.dropped)
+
+    @property
+    def title(self) -> str:
+        if not self.available:
+            return "Shortlist"
+        return (f"Shortlist — {len(self.kept)} of {self.candidates} "
+                f"BUY{'s' if self.candidates != 1 else ''} survived the checks")
+
+    @property
+    def rule_sentence(self) -> str:
+        """The rule in plain English, with the lenses NAMED — so a reader can see what was
+        applied without having to trust the section's title."""
+        from .tools.valuation_band import ordinal
+        parts = [f"BUY under {self.primary_label}"]
+        for sid in self.check_ids:
+            parts.append(f"not SELL under {self.check_labels.get(sid, sid)}")
+        tail = (f"and below the {ordinal(int(self.band_cutoff))} percentile of its own "
+                "valuation history")
+        if len(parts) == 1:                       # no checks ran
+            return f"{parts[0]} {tail}."
+        return ", ".join(parts) + f", {tail}."
+
+
+def shortlist_table(sl) -> tuple[list[str], list[dict]]:
+    """``(columns, rows)`` for the KEPT table — ONE builder, so the Run tab, the markdown
+    and the HTML render the same cells and cannot drift (the valuation_band_table
+    pattern). Every cell is already a display string."""
+    from .tools.valuation_band import ordinal
+    cols = ["Name", "Rank"] + [sl.check_labels.get(sid, sid) for sid in sl.check_ids] \
+        + ["Valuation percentile"]
+    rows = []
+    for r in sl.kept:
+        cells = {"Name": r.display,
+                 "Rank": (f"#{r.rank_position}" if r.rank_position else "—")}
+        for sid in sl.check_ids:
+            cells[sl.check_labels.get(sid, sid)] = (
+                r.check_verdicts.get(sid, "—").upper()
+                if r.check_verdicts.get(sid) else "not ranked")
+        cells["Valuation percentile"] = (
+            f"{ordinal(round(r.band_percentile))}" if r.band_percentile is not None
+            else ("not evaluated" + (f" — {r.band_note}" if r.band_note else "")))
+        rows.append(cells)
+    return cols, rows
+
+
+def shortlist(multi_result, *, primary_id: str,
+              band_cutoff: float = SHORTLIST_BAND_CUTOFF) -> Shortlist:
+    """The names the PRIMARY selector rated BUY that no check doubted (SHORTLIST-1).
+
+    The rule, in order, with no judgement anywhere in it:
+
+    1. candidates are the names the PRIMARY rated BUY;
+    2. drop one if ANY lens with ``kind: check`` in this run rated it SELL (the check is
+       named in the reason);
+    3. drop one whose valuation-band percentile is >= ``band_cutoff`` (the percentile is
+       named). A band that ABSTAINED does NOT drop the name — it is kept and flagged.
+       Null is not false, house rule 3: "we could not tell" is not "it is expensive";
+    4. what remains is the shortlist, in the PRIMARY's rank order.
+
+    Returns a ``Shortlist`` whose ``reason`` is set, and whose tables are empty, when no
+    list could be formed at all: the primary is a check lens (it doubts, it cannot select)
+    or it rated nothing BUY. That is deliberately distinct from an empty shortlist with no
+    reason, which means the checks removed every candidate — a finding, not an absence."""
+    from .tools.valuation_band import ordinal
+
+    results = getattr(multi_result, "results", None) or {}
+    names = getattr(multi_result, "strategy_names", None) or {}
+    label = names.get(primary_id, "") or primary_id
+    primary = results.get(primary_id)
+
+    def _label(sid):
+        return names.get(sid, "") or sid
+
+    def _kind(sid):
+        return getattr(getattr(results[sid], "rank_strategy", None), "kind", "selector")
+
+    check_ids = [sid for sid in getattr(multi_result, "strategy_ids", []) or []
+                 if sid in results and sid != primary_id and _kind(sid) == "check"]
+    check_labels = {sid: _label(sid) for sid in check_ids}
+    empty = dict(primary_id=primary_id, primary_label=label, check_ids=check_ids,
+                 check_labels=check_labels, kept=[], dropped=[], band_cutoff=band_cutoff)
+
+    if primary is None:
+        return Shortlist(**empty, reason="the primary lens did not run")
+    if _kind(primary_id) == "check":
+        return Shortlist(**empty, reason=(
+            f"no selector among the lenses picked — {label} is a check lens; it doubts, "
+            "it does not select"))
+
+    buys = [r for r in primary.ranked if not r.excluded and r.verdict == "buy"]
+    if not buys:
+        return Shortlist(**empty,
+                         reason=f"the selector rated no name BUY — {label} picked nothing")
+
+    # Per-name check verdicts and band percentiles, read from what the run ALREADY
+    # produced. The band is taken from whichever lens computed one for the name (BAND-2
+    # bands every lens), so a name is found even when the primary did not rank it.
+    check_verdict: dict[str, dict[str, str]] = {}
+    for sid in check_ids:
+        for r in results[sid].ranked:
+            if not r.excluded:
+                check_verdict.setdefault(r.ticker, {})[sid] = r.verdict
+
+    pct: dict[str, tuple] = {}
+    for sid in (getattr(multi_result, "strategy_ids", []) or []):
+        for r in results[sid].ranked:
+            band = getattr(r, "valuation_band", None)
+            if band is None or r.ticker in pct:
+                continue
+            pct[r.ticker] = ((band.percentile, "") if band.available
+                             else (None, band.note or ""))
+
+    kept: list[ShortlistRow] = []
+    dropped: list[ShortlistRow] = []
+    for r in buys:                                   # already in the primary's rank order
+        verdicts = check_verdict.get(r.ticker, {})
+        percentile, note = pct.get(r.ticker, (None, ""))
+        row = ShortlistRow(
+            ticker=r.ticker, display=_disp(primary, r.ticker),
+            rank_position=getattr(r, "cohort_position", None),
+            check_verdicts=verdicts, band_percentile=percentile,
+            band_note=note if percentile is None else "")
+        doubting = [sid for sid, v in verdicts.items() if v == "sell"]
+        if doubting:
+            named = ", ".join(check_labels.get(sid, sid) for sid in doubting)
+            dropped.append(replace(row, dropped_by=f"SELL under {named}"))
+        elif percentile is not None and percentile >= band_cutoff:
+            dropped.append(replace(row, dropped_by=(
+                f"valuation at the {ordinal(round(percentile))} percentile of its own "
+                f"history (the rule drops {int(band_cutoff)}th and above)")))
+        else:
+            kept.append(row)
+    return Shortlist(**{**empty, "kept": kept, "dropped": dropped})
 
 
 # --------------------------------------------------------------------------- #
