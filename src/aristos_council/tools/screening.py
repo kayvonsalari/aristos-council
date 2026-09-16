@@ -239,6 +239,10 @@ def max_payout_criterion(
 
 # Through-cycle window for the FCF payout denominator — matches ROIC's 4-year smoothing.
 _FCF_WINDOW = 4
+# FACTOR-NDOI-1: the same 4-year window for the operating-income denominator, for the same
+# reason ROIC smooths — a single peak year makes a cyclical's balance sheet look light
+# (Valero: 15,751m of operating income in FY2022 against 4,312m in FY2025).
+_OI_WINDOW = 4
 
 
 def fcf_annual_series(f: Fundamentals) -> list[float]:
@@ -261,6 +265,70 @@ def through_cycle_fcf(f: Fundamentals, *, window: int = _FCF_WINDOW):
     if not series:
         return None, 0
     return sum(series) / len(series), len(series)
+
+
+def payout_coverage_fcf(f: Fundamentals, *, window: int = _FCF_WINDOW):
+    """``(coverage, note)`` — current ``dividends_paid`` over the THROUGH-CYCLE MEAN free
+    cash flow, or ``(None, reason)`` when that basis is not available.
+
+    FACTOR-COVER-1. THE one place this ratio is computed. ``max_payout_ratio_fcf`` (the
+    screen floor) and ``payout_coverage_fcf`` (the rank factor) both call it, so the
+    number a report shows in the rules table and the number it shows in the ranked table
+    are the same number, not two implementations that agree today.
+
+    Returns None — never a guess and never a zero — when the mean free cash flow is
+    non-positive (investment-driven, the utilities lesson) or the dividend figure is
+    missing. A NON-PAYER is coverage 0.0, which is honest: it pays out none of its cash.
+    """
+    if f is None:
+        return None, "no fundamentals"
+    if f.dividend_per_share is None:
+        return None, "dividend figure unavailable (dividend_per_share is null)"
+    if not _has_current_dividend(f):
+        return 0.0, "no current dividend — nothing is paid out"
+    mean_fcf, n_years = through_cycle_fcf(f, window=window)
+    if n_years < 2 or mean_fcf is None:
+        return None, f"fewer than 2 years of free-cash-flow history ({n_years})"
+    if f.dividends_paid is None:
+        return None, "dividends paid unavailable"
+    if mean_fcf <= 0:
+        return None, (f"{n_years}y-mean free cash flow ≤ 0 (investment-driven, not "
+                      "dividend distress)")
+    return (f.dividends_paid / mean_fcf,
+            f"current dividends_paid / {n_years}y-mean free cash flow")
+
+
+def net_debt_to_operating_income(f: Fundamentals, *, window: int = _OI_WINDOW):
+    """``(ratio, note)`` — net debt over the THROUGH-CYCLE MEAN operating income, or
+    ``(None, reason)``.
+
+    FACTOR-NDOI-1. The window matches ``through_cycle_roic``'s and exists for the same
+    reason: measured against a single peak year a cyclical looks almost debt-free. Valero
+    earned 15,751m in FY2022 and 4,312m in FY2025 — the same balance sheet reads three and
+    a half times heavier on the second number than the first, and neither is the truth.
+
+    NET CASH (cash exceeds debt) returns a NEGATIVE ratio and therefore ranks best under
+    the factor's LOW direction — correct, and not a special case.
+
+    Abstains when the mean operating income is non-positive (the ratio would invert: more
+    debt would read as better) or either balance-sheet figure is missing. Generic on
+    purpose — the planned quality_v1 lens wants this same measure, so it is built once
+    here rather than inside an income lens.
+    """
+    if f is None:
+        return None, "no fundamentals"
+    if f.total_debt is None or f.total_cash is None:
+        missing = "total debt" if f.total_debt is None else "cash"
+        return None, f"{missing} unavailable"
+    series = (f.operating_income or [])[:window]
+    if not series:
+        return None, "no operating-income history"
+    mean_oi = sum(series) / len(series)
+    if mean_oi <= 0:
+        return None, (f"{len(series)}y-mean operating income ≤ 0 — the ratio would "
+                      "invert, making more debt read as better")
+    return ((f.total_debt - f.total_cash) / mean_oi,
+            f"net debt / {len(series)}y-mean operating income")
 
 
 def max_payout_fcf_criterion(
@@ -302,7 +370,11 @@ def max_payout_fcf_criterion(
                                    note=f"not evaluated: {n_years}y-mean free cash flow "
                                         "≤ 0 (investment-driven, not dividend distress) "
                                         "— the utilities lesson")
-        payout = fundamentals.dividends_paid / mean_fcf
+        # FACTOR-COVER-1: the arithmetic lives in payout_coverage_fcf, which the
+        # like-named RANK FACTOR also calls — so the screen's number and the rank's
+        # number are one number. The surrounding branches (the abstentions above, the
+        # marked EPS fallback below) are this CRITERION's contract and stay here.
+        payout, _ = payout_coverage_fcf(fundamentals)
         return CriterionResult(name=name, passed=payout <= max_payout, observed=payout,
                                threshold=max_payout, basis="fcf",
                                note=f"FCF basis: current dividends_paid / {n_years}y-mean "

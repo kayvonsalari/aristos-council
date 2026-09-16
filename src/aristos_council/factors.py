@@ -34,6 +34,8 @@ from .fund_currency import (
 from .tools.screening import (
     accrual_ratio,
     altman_z_score,
+    net_debt_to_operating_income,
+    payout_coverage_fcf,
     piotroski_f_score,
     revenue_cagr,
     through_cycle_roic,
@@ -203,6 +205,36 @@ def _earnings_yield(fi: FactorInputs) -> Optional[float]:
 
 def _earnings_yield_source(fi: FactorInputs) -> str:
     return _earnings_yield_outcome(fi)[1]
+
+
+# --- Income-durability legs (CYCLICAL-INCOME-1) ---------------------------- #
+# Both share their arithmetic with the like-named screen primitive, so a value that is
+# ranked and a value that is screened can never diverge (the FORENSIC-1 pattern).
+def _payout_coverage_fcf(fi: FactorInputs) -> Optional[float]:
+    """How much of the cash it generates the company pays out. LOW is better.
+
+    THE SAME helper ``max_payout_ratio_fcf`` screens on — not a second implementation
+    that agrees today. Abstains where the criterion would fall back to its MARKED GAAP
+    proxy: a screen floor may take a disclosed proxy, but a RANK COLUMN must be one
+    measure, or names are ordered against different things without saying so.
+    """
+    return payout_coverage_fcf(fi.fundamentals)[0]
+
+
+def _payout_coverage_source(fi: FactorInputs) -> str:
+    value, note = payout_coverage_fcf(fi.fundamentals)
+    return SRC_COMPUTED if value is not None else f"{SRC_ABSTAINED}: {note}"
+
+
+def _net_debt_to_operating_income(fi: FactorInputs) -> Optional[float]:
+    """Net debt measured against THROUGH-CYCLE operating profit. LOW is better; net cash
+    is negative and ranks best. Generic — quality_v1 wants this same measure."""
+    return net_debt_to_operating_income(fi.fundamentals)[0]
+
+
+def _net_debt_to_oi_source(fi: FactorInputs) -> str:
+    value, note = net_debt_to_operating_income(fi.fundamentals)
+    return SRC_COMPUTED if value is not None else f"{SRC_ABSTAINED}: {note}"
 
 
 def _return_on_capital(fi: FactorInputs) -> Optional[float]:
@@ -596,6 +628,25 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         fallback_note="dividend-yield fallback (buybacks unavailable on free "
                       "fundamentals)",
         source_fn=_net_payout_source),
+    # CYCLICAL-INCOME-1 — the two legs that ask whether an income stream can SURVIVE,
+    # rather than how large it is. Both LOW-direction, both through-cycle.
+    "payout_coverage_fcf": FactorDef(
+        "payout_coverage_fcf", _payout_coverage_fcf, "low",
+        "Dividend coverage (dividends / 4-year free cash flow)",
+        glossary=("What share of the cash the business actually generated is paid out "
+                  "as dividends, measured against a four-year average so one strong or "
+                  "one weak year does not decide it. Lower means the dividend is paid "
+                  "more comfortably; above 1.0 the company is paying out more than it "
+                  "earned in cash."),
+        unit="percent", source_fn=_payout_coverage_source),
+    "net_debt_to_operating_income": FactorDef(
+        "net_debt_to_operating_income", _net_debt_to_operating_income, "low",
+        "Net debt to operating profit (4-year average)",
+        glossary=("Borrowings less cash, measured against a four-year average of "
+                  "operating profit — roughly how many average years of profit the debt "
+                  "represents. Lower is safer, and a company holding more cash than debt "
+                  "shows a negative figure."),
+        unit="multiple", source_fn=_net_debt_to_oi_source),
     "revenue_growth": FactorDef(
         "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3y)",
         glossary="Average yearly sales growth over the measured period.",
