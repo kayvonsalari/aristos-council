@@ -2425,6 +2425,12 @@ def run_multi_strategy_pipeline(
         # recorded an override, keeping a no-override run byte-identical.
         **_multi_floor_override(results, ids),
     }
+    # FETCH-GUARD-1 — computed once, recorded, and read by every surface.
+    _guard = fetch_guard(MultiStrategyResult(
+        strategy_ids=list(ids), strategy_names=names, results=results, rows=rows,
+        meta={"universe_size": meta.get("universe_size", 0)}))
+    if _guard:
+        meta["fetch_guard"] = _guard
     # SHORTLIST-1 — the PRIMARY is the lens whose verdicts are the run's answer. It is
     # NOT simply ids[0]: the grid's column order is the OFFER order (picker.resolve_all),
     # deliberately, so the columns are reproducible — which means the first column need
@@ -2834,6 +2840,60 @@ def floor_override_line(meta: dict) -> str:
             f"(strategy file: {format_floor(file_value)}).")
 
 
+# --------------------------------------------------------------------------- #
+# FETCH-GUARD-1 — a run that measured nothing must say so
+# --------------------------------------------------------------------------- #
+# On 2026-09-16 a helper bug made every fundamentals fetch raise. The pipeline caught each
+# one as a fetch failure, exactly as designed, and produced a report that looked entirely
+# normal: 134 names "graded", 0 ranked, 0 excluded, a verdict grid full of ties. Nothing
+# was wrong with any individual behaviour — the failure was that NOTHING SAID the run had
+# measured nothing, so the only signal was a reader noticing the numbers were absurd.
+#
+# This is that signal, stated once, at the top. It blocks nothing: the run still renders,
+# because a half-fetched run is still evidence of something. It just stops the document
+# reading like an ordinary one.
+FETCH_GUARD_SHARE = 0.5          # more than half the cohort failing to fetch
+
+
+def fetch_guard(multi_result) -> dict:
+    """``{"failed": N, "total": M}`` when this run measured almost nothing, else ``{}``.
+
+    Two triggers, because the 2026-09-16 failure could present either way:
+
+    * more than ``FETCH_GUARD_SHARE`` of the cohort ended in a fetch error — the ordinary
+      shape of a provider outage;
+    * every lens ranked ZERO and excluded ZERO — the shape that bug actually produced,
+      where the fetch "succeeded" into an empty object so nothing was ever a fetch error
+      and every name fell through every gate untested.
+    """
+    results = getattr(multi_result, "results", None) or {}
+    ids = [s for s in (getattr(multi_result, "strategy_ids", None) or []) if s in results]
+    if not ids:
+        return {}
+    total = (getattr(multi_result, "meta", None) or {}).get("universe_size", 0) or len(
+        getattr(multi_result, "rows", []) or [])
+    if not total:
+        return {}
+    failed = max(len(getattr(results[sid], "fetch_errors", []) or []) for sid in ids)
+    if failed > total * FETCH_GUARD_SHARE:
+        return {"failed": failed, "total": total}
+    graded_nothing = all(
+        not [r for r in results[sid].ranked if not r.excluded]
+        and not results[sid].excluded for sid in ids)
+    if graded_nothing:
+        return {"failed": total, "total": total}
+    return {}
+
+
+def fetch_guard_line(guard: dict) -> str:
+    """The warning, or "". One sentence: what happened, and what not to do with the run."""
+    if not guard:
+        return ""
+    return (f"Data fetch failed for {guard['failed']} of {guard['total']} names; this run "
+            "measured almost nothing. Check the provider and the cache before reading any "
+            "verdict.")
+
+
 def multi_summary_line(result: MultiStrategyResult) -> str:
     """``"4 lenses × 16 names — 3 names rated BUY by every lens, 5 excluded by every
     lens, 10 of 16 ranked by at least one."``
@@ -2859,6 +2919,11 @@ def multi_summary_line(result: MultiStrategyResult) -> str:
     parts.append(f"{ranked_any} of {size} ranked by at least one")
     lens_word = "lens" if n_lenses == 1 else "lenses"
     line = f"{n_lenses} {lens_word} × {size} names — " + ", ".join(parts)
+    # FETCH-GUARD-1: PREFIXED, not appended. A reader who stops after the first clause
+    # must not be told a normal-looking summary of a run that measured nothing.
+    warning = fetch_guard_line((result.meta or {}).get("fetch_guard") or {})
+    if warning:
+        line = f"⚠ {warning} — {line}"
     # SHORTLIST-1: the one number a reader wants first. Appended only when a shortlist
     # could be formed AND some name survived — a zero is noise here, exactly as the
     # clauses above omit their zeros, and the section itself states an empty result.

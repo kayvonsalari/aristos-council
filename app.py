@@ -2062,6 +2062,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         evidence_gaps_clean_note,
         VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, evidence_gaps, exclusion_rows,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
+        fetch_guard_line,
         floor_override_line,
         lens_asks,
         provenance_sentences, report_sections, shortlist_table,
@@ -2089,6 +2090,11 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     _floor = floor_override_line(m)
     if _floor:
         lines.append(f"**{_floor}**")
+    # FETCH-GUARD-1 — above the lenses and the run line, because it governs how to read
+    # everything below it.
+    _guard = fetch_guard_line(m.get("fetch_guard") or {})
+    if _guard:
+        lines.append(f"**⚠ {_guard}**")
     if run_start is not None:
         lines.append(f"**Run: {_local_stamp(run_start)} — "
                      f"{_mode_phrase(m.get('council_mode', ''))}**")
