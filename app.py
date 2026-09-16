@@ -1358,6 +1358,48 @@ def _estimate_union_size(n_names: int, strategies, *,
     return min(total, n_names)
 
 
+def floor_override_from_input(raw, *, file_value: float | None) -> float | None:
+    """The run's floor from the sidebar's number input, in DOLLARS — or None (FLOOR-1).
+
+    Pure, so the control's semantics are unit-tested rather than eyeballed: BLANK means
+    "no override, use the strategy's own floor" (None), and a value EQUAL to the file's
+    is also no override, so nudging the control back to the default leaves the run
+    byte-identical rather than recording a no-op. The input is in BILLIONS because that is
+    how the floor is discussed; the pipeline takes dollars."""
+    if raw is None:
+        return None
+    dollars = float(raw) * 1e9
+    return None if file_value is not None and dollars == file_value else dollars
+
+
+def _company_size_floor_override(rank_strategy, n_strategies: int) -> float | None:
+    """The Run tab's ephemeral company-size floor control (FLOOR-1).
+
+    Defaults to the PRIMARY strategy's own floor, so the control opens showing what the
+    run would do untouched; clearing it removes the floor for this run entirely."""
+    file_value = getattr(rank_strategy, "min_market_cap", None)
+    with st.expander("⚙️ Run overrides — this run only", expanded=False):
+        st.caption("Applied to THIS run only and stamped on the report. The strategy "
+                   "file is never modified.")
+        raw = st.number_input(
+            "Company size floor (USD bn)",
+            min_value=0.0, max_value=5_000.0, step=0.5, value=None,
+            placeholder=(f"{file_value / 1e9:g} (strategy default)"
+                         if file_value else "no floor (strategy default)"),
+            key="uni_floor_override",
+            help="Blank = use the strategy's own floor. The floor is applied BEFORE the "
+                 "screen and before any factor, so a name below it is excluded before "
+                 "anything is measured about it. 0 removes the floor for this run.")
+        override = floor_override_from_input(raw, file_value=file_value)
+        if override is not None:
+            from aristos_council.pipeline import format_floor
+            lenses = ("every lens in this run" if n_strategies > 1
+                      else "this run")
+            st.caption(f"Floor for {lenses}: **{format_floor(override)}** "
+                       f"(strategy file: {format_floor(file_value)}).")
+    return override
+
+
 def run_problems(universe: list[str], *, n_strategies: int, deterministic: bool,
                  has_key: bool, cap: int | None = None) -> list[str]:
     """Why the Run button is disabled, in plain sentences (empty list = runnable).
@@ -1508,13 +1550,19 @@ def _universe_markdown(result) -> str:
     REPORT-1: the header leads with the HUMAN names and keeps every id beside them as
     the stable record key, a one-line verdict summary sits directly under it, and the
     rules that were applied are stated before any result."""
-    from aristos_council.pipeline import header_lines, summary_line
+    from aristos_council.pipeline import (floor_override_line, header_lines,
+                                          summary_line)
     from aristos_council.report_language import label_with_id
 
     m = result.meta
     head = header_lines(result)
     lines = [f"# Universe run — {head[0]}", ""]
     lines += [f"**{line}**" for line in head[1:]]
+    # FLOOR-1: one line under the header when the cohort was widened for this run;
+    # absent otherwise, so a no-override report is byte-identical to before.
+    _floor = floor_override_line(m)
+    if _floor:
+        lines.append(f"**{_floor}**")
     lines += ["", f"### {summary_line(result)}", "",
               f"_{_confirmation_line(m)}_", "",
               f"_{result.header}_", "",
@@ -1954,6 +2002,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         evidence_gaps_clean_note,
         VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, evidence_gaps, exclusion_rows,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
+        floor_override_line,
         provenance_sentences, report_sections,
         union_valuation_band_table,
         valuation_band_table,
@@ -1974,6 +2023,11 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     lines.append(f"**Cohort: {cohort} — {m.get('universe_size', 0)} names**")
     lines.append(f"**Lenses: " + "; ".join(
         label_with_id(names.get(sid) or sid, sid) for sid in ids) + "**")
+    # FLOOR-1: one line under the lenses when the cohort was widened for this run. Empty
+    # (and so absent) otherwise, which keeps a no-override report byte-identical.
+    _floor = floor_override_line(m)
+    if _floor:
+        lines.append(f"**{_floor}**")
     if run_start is not None:
         lines.append(f"**Run: {_local_stamp(run_start)} — "
                      f"{_mode_phrase(m.get('council_mode', ''))}**")
@@ -2755,6 +2809,13 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # The two pipeline arguments, derived from the ONE control (UI layer only).
     ranker_only, mode = run_mode_arguments(run_mode)
 
+    # FLOOR-1 — the EPHEMERAL company-size floor. Same doctrine as the council strategy's
+    # "Run overrides — this run only" block: applied to THIS run, stamped on the report,
+    # the strategy file never touched. It sits here because the floor is a COHORT
+    # statement — it decides who is in the room — so it applies to every lens in a
+    # multi-lens run rather than being set per lens.
+    min_market_cap_override = _company_size_floor_override(rank_strategy, len(strategies))
+
     # CAP-1: the caption quotes the cap that actually applies to the SELECTED mode, read
     # from the same helper the guard uses, so the two can never disagree.
     _cap_now = universe_cap(ranker_only)
@@ -2824,6 +2885,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 freeze_dir=ROOT / "runs", with_valuation_band=with_valuation_band,
                 derived_from=derived_from,
+                min_market_cap_override=min_market_cap_override,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")
@@ -2866,6 +2928,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 # (_latest_reference_run) can replay it offline — without this the UI
                 # never wrote runs/ and cohort context was dead code (ITEM 1).
                 freeze_dir=ROOT / "runs",
+                min_market_cap_override=min_market_cap_override,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")

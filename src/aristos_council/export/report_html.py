@@ -735,6 +735,7 @@ def multi_strategy_report_html(multi_result, *,
         narration_structs,
         provenance_sentences,
         report_sections,
+        floor_override_line,
         rules_applied,
         union_valuation_band_table,
     )
@@ -768,6 +769,10 @@ def multi_strategy_report_html(multi_result, *,
         + _kv([
             ("Cohort", _esc(f'{cohort} — {m.get("universe_size", 0)} names')),
             ("Lenses", "<br>".join(_esc(lbl) for lbl in lens_labels)),
+            # FLOOR-1: directly under the lenses, and only when the cohort was widened
+            # for this run. _kv omits an empty value, so a no-override report is
+            # byte-identical to before.
+            ("Company size floor", _esc(floor_override_line(m))),
             ("Run", _esc(" — ".join(p for p in (stamp, mode_phrase) if p))),
         ])
         + f'<p class="house">{_esc(multi_header_line(multi_result))}</p>'
@@ -1017,6 +1022,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         RULES_SECTION_TITLE,
         exclusion_rows,
         header_lines,
+        floor_override_line,
         provenance_sentences,
         rules_applied,
         summary_line,
@@ -1054,6 +1060,8 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
                                             strategy_id))),
             ("Screen", _esc(label_with_id(m.get("screen_strategy_name", ""),
                                           m.get("screen_strategy_id", "")))),
+            # FLOOR-1 — see the multi-lens header above; empty unless overridden.
+            ("Company size floor", _esc(floor_override_line(m))),
             # A missing run timestamp is OMITTED, never guessed — so the mode must not
             # be left dangling behind an em-dash with nothing before it.
             ("Run", _esc(" — ".join(p for p in (stamp, mode_phrase) if p))),
