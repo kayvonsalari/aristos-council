@@ -51,6 +51,15 @@ when the implied equity value is not positive.
 **No clamping, no capping, no smoothing.** A name whose median multiple is three times
 today's shows a huge gap, and that number is rendered as-is beside the median multiple
 that produced it — auditable, rather than tidied into plausibility.
+
+**One exception, and it is an ABSTENTION, not a clamp (BAND-3).** Past ``GAP_SANITY``
+(±150%) the value is not rendered at all. A three-fold implied move is not a reading of
+anything — it is what a thin EBIT year, a share-count mismatch or a currency basis error
+looks like coming out the far end. Left in the table it sits beside the sane rows with
+exactly their authority, which is the one thing an honest number must never do. So the
+value abstains and says why, rather than being quietly shrunk into plausibility — a clamp
+would keep a wrong number and hide its wrongness. The band row keeps its percentile: the
+percentile is computed from the distribution, not from this arithmetic, and is unaffected.
 """
 
 from __future__ import annotations
@@ -63,6 +72,22 @@ from .valuation_band import ValuationBand
 
 _EV_EBIT = "ev_ebit"
 _PE = "pe"
+
+# BAND-3 — the sanity bound on the implied move, either way. Beyond ±150% the inputs are
+# not believable as a reading: Kinetik (KNTK) rendered +322% off an EV/EBIT of 16.4x
+# against its own median of 23.2x on 2026-09-15, on the same page as Cheniere's sane +24%.
+# A bound, never a clamp: past it the value ABSTAINS with its reason (see the module
+# docstring). Basis-agnostic on purpose — it catches a thin EBIT year, a share-count
+# mismatch and a currency error alike, and does NOT overlap or second-guess VALBAND-FX.
+#
+# Written on the MAGNITUDE (±150%), but only the upward side is reachable: the gap is
+# ``implied_price / last_close - 1`` and an implied price is never negative (a
+# non-positive implied equity value abstains earlier), so the gap floors at -100% and
+# cannot pass -150%. A collapse is therefore always stated, however severe; only an
+# implausible spike is withheld. Left symmetric rather than written as ``gap >
+# GAP_SANITY``, because the symmetric form stays correct if the arithmetic ever changes
+# shape. Pinned by test_reversion_sanity.py so the dead half is not mistaken for a bug.
+GAP_SANITY = 1.5
 
 # The phrase naming the multiple in the rendered line, per basis.
 _BASIS_PHRASE = {_EV_EBIT: "EV/EBIT", _PE: "P/E"}
@@ -217,8 +242,18 @@ def reversion_value(band: Optional[ValuationBand], fundamentals, *,
                 return _abstain("shares outstanding unavailable", band, currency)
         price = implied_equity / units
 
+    gap = price / last_close - 1.0
+    if abs(gap) > GAP_SANITY:
+        # BAND-3: past the bound this is an artefact, not a reading. Abstain through the
+        # SAME path every other unstateable case takes, so the row keeps its shape and the
+        # reason travels with it. The band's percentile is untouched.
+        return _abstain(
+            f"implied move {gap:+.0%} exceeds the sanity bound "
+            f"(±{GAP_SANITY:.0%}) — inputs suspect (thin EBIT year, share-count or "
+            "currency mismatch); not stated", band, currency)
+
     return ReversionValue(
-        price=price, gap=price / last_close - 1.0, median_multiple=median,
+        price=price, gap=gap, median_multiple=median,
         basis=band.basis, window_years=band.window_years,
         months_covered=band.months_covered, months_total=band.months_total,
         currency=currency,
