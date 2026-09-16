@@ -735,8 +735,9 @@ def multi_strategy_report_html(multi_result, *,
         narration_structs,
         provenance_sentences,
         report_sections,
+        floor_override_line,
         rules_applied,
-        valuation_band_table,
+        union_valuation_band_table,
     )
     from ..data.adapter import display_name
     from ..download_names import slugify as _slug
@@ -768,6 +769,10 @@ def multi_strategy_report_html(multi_result, *,
         + _kv([
             ("Cohort", _esc(f'{cohort} — {m.get("universe_size", 0)} names')),
             ("Lenses", "<br>".join(_esc(lbl) for lbl in lens_labels)),
+            # FLOOR-1: directly under the lenses, and only when the cohort was widened
+            # for this run. _kv omits an empty value, so a no-override report is
+            # byte-identical to before.
+            ("Company size floor", _esc(floor_override_line(m))),
             ("Run", _esc(" — ".join(p for p in (stamp, mode_phrase) if p))),
         ])
         + f'<p class="house">{_esc(multi_header_line(multi_result))}</p>'
@@ -853,8 +858,10 @@ def multi_strategy_report_html(multi_result, *,
         parts.append("</section>")
 
     # ----- 5: the per-NAME facts, ONCE — they do not vary by lens.
-    first = multi_result.results[ids[0]] if ids else None
-    band_table = valuation_band_table(first) if first is not None else None
+    # BAND-2: over the UNION of every lens's ranked names, not the first lens's. A lens
+    # attaches a band only to what it ranked, so reading the first one made the section's
+    # size an accident of lens order (2 rows vs 81 on the same 121-name cohort).
+    band_table = union_valuation_band_table(multi_result) if ids else None
     if band_table is not None:
         parts.append(_band_section(band_table, anchor="band"))
 
@@ -1015,6 +1022,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         RULES_SECTION_TITLE,
         exclusion_rows,
         header_lines,
+        floor_override_line,
         provenance_sentences,
         rules_applied,
         summary_line,
@@ -1052,6 +1060,8 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
                                             strategy_id))),
             ("Screen", _esc(label_with_id(m.get("screen_strategy_name", ""),
                                           m.get("screen_strategy_id", "")))),
+            # FLOOR-1 — see the multi-lens header above; empty unless overridden.
+            ("Company size floor", _esc(floor_override_line(m))),
             # A missing run timestamp is OMITTED, never guessed — so the mode must not
             # be left dangling behind an em-dash with nothing before it.
             ("Run", _esc(" — ".join(p for p in (stamp, mode_phrase) if p))),

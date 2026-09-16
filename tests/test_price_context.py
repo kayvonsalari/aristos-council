@@ -329,10 +329,22 @@ def test_the_pe_basis_reverts_on_eps_times_the_median_pe():
                            "5-year median of 6.2x; 61 of 61 months usable")
 
 
-def test_an_extreme_reversion_value_is_shown_as_is_never_clamped():
-    """A name whose own median multiple is far from today's produces a big number. It is
-    rendered as-is BESIDE the median that produced it, so a reader can audit it — capping
-    or smoothing would hide exactly the case worth looking at."""
+def test_an_extreme_reversion_value_is_never_clamped_it_is_withheld(): #  BAND-3
+    """DOCTRINE MOVED, DELIBERATELY (2026-09-16, BAND-3). This case used to assert that a
+    +900% implied move is RENDERED AS-IS, on the reasoning that capping or smoothing would
+    hide the case worth looking at. That reasoning was right about clamping and wrong about
+    silence: live on 2026-09-15, Kinetik's +322% sat in the table beside Cheniere's +24%,
+    formatted identically, carrying the same authority — and a three-fold implied move off
+    a 1.4x move in the multiple is not a reading, it is a thin EBIT year or a share-count
+    or currency mismatch arriving at the far end of the arithmetic.
+
+    What this test protected is UNCHANGED and still asserted below: the number is never
+    clamped, capped or smoothed. Past ``GAP_SANITY`` it is WITHHELD with its reason, which
+    is the opposite of tidying it into plausibility — a clamp keeps a wrong number and
+    hides that it is wrong; an abstention says so. Inside the bound, nothing changed
+    (``test_the_pe_basis_reverts_on_eps_times_the_median_pe`` above still pins a -75% gap
+    rendered exactly as before).
+    """
     # 31 months at close 1000 (multiple 101.5), 30 at close 100 (11.5) -> median 101.5.
     f = _fundamentals(ebit=100.0, total_debt=200.0, cash=50.0, shares_outstanding=10.0,
                       currency="USD")
@@ -340,9 +352,16 @@ def test_an_extreme_reversion_value_is_shown_as_is_never_clamped():
     rev = reversion_value(band, f, last_close=100.0, currency="USD")
 
     assert band.median_multiple == 101.5
-    assert rev.price == pytest.approx((100.0 * 101.5 - 150.0) / 10.0)   # 1,000.00
-    assert rev.gap == pytest.approx(9.0)                                # +900%
-    assert "+900%" in rev.display and "median of 101.5x" in rev.display
+    # NOT clamped: no shrunken stand-in value is offered in place of the real one.
+    assert rev.price is None and rev.gap is None
+    assert not rev.available
+    # The withheld figure is NAMED in the reason, so the case stays auditable — the
+    # reader is told what the arithmetic produced and why it is not being stated.
+    assert "implied move +900%" in rev.note
+    assert "exceeds the sanity bound (±150%)" in rev.note
+    assert rev.display.startswith("reversion value not evaluated — ")
+    # The band itself is untouched: it still reports where the price sits.
+    assert band.available and band.percentile is not None
 
 
 # --------------------------------------------------------------------------- #

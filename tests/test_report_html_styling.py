@@ -41,6 +41,18 @@ the guard goes on protecting every change AFTER it. What is removed is recorded 
 rather than exempted in the helper: the rank-sum figures and the "N of 3" graded counts,
 and nothing else. The COMPUTATION behind them is untouched and still orders the rows,
 which ``test_the_rank_sum_still_computed_even_though_it_is_no_longer_rendered`` pins.
+
+GOLDENS MOVED AGAIN, DELIBERATELY (2026-09-16, BAND-2). The per-NAME section used to be
+read off the FIRST lens, so a name that lens did not rank had no row — which made the
+section's size an accident of lens ORDER (live, 2026-09-15: Defensive Income first gave 2
+rows of a 121-name cohort, Magic Formula RAW first gave 81). It is now built over the
+UNION of every lens's ranked names. In this fixture C is excluded by the screened lens and
+ranked by the raw one, so C gains a row. The delta is exactly that, in both goldens: ONE
+added row (``| **C** | 121.90 | not evaluated — only 0 weeks of closes | — |``) and its
+four visible-text lines. Nothing was removed, reordered or reworded — `git show` on the
+regeneration commit is +5/-0. The behaviour is pinned independently of these goldens by
+``test_multi_strategy_run.py::test_band_is_computed_for_every_lens_not_just_the_first``
+and the union-table unit tests beside it, so the guard was not simply relaxed.
 """
 
 from __future__ import annotations

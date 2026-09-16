@@ -1141,9 +1141,27 @@ def render_strategy_tab(selected_path: Path | None = None) -> None:
 # Run tab — the ONE run flow: strategies + a ticker list + run (FUND-UI-2), over the v2
 # rank pipeline (screen -> rank -> gates -> narrator)
 # --------------------------------------------------------------------------- #
-# The interactive run cap — ONE number, shared by the guard and its message. It used to be
-# re-declared per section, which is how the run flow and the editor drifted apart.
-UNIVERSE_CAP = 60
+# The run cap — shared by the guard and its message. It used to be re-declared per section,
+# which is how the run flow and the editor drifted apart.
+#
+# CAP-1: ONE number became TWO, because the two run modes are capped for different reasons.
+# A NARRATED run bills one LLM call per shortlisted name, so its cap protects API spend and
+# stays where it was. A DETERMINISTIC run (ranker-only, and a multi-lens re-grade that does
+# not narrate) spends nothing — its only cost is wall-clock on the free ranking pass, so the
+# cap there protects patience, nothing more. Holding both to 60 blocked every saved oil list
+# above that size (top-100 = 100, dividend-type = 135, USD-listed = 121, non-USD = 72) from a
+# run that costs nothing.
+UNIVERSE_CAP_NARRATED = 60
+UNIVERSE_CAP_DETERMINISTIC = 250
+# Kept as the NARRATED value so existing imports and tests resolve to the spend-protecting
+# number — the one a bare `UNIVERSE_CAP` has always meant.
+UNIVERSE_CAP = UNIVERSE_CAP_NARRATED
+
+
+def universe_cap(deterministic: bool) -> int:
+    """The cap that applies to a run in this mode (CAP-1) — one place, so the guard, its
+    message and the Run tab's caption can never quote three different numbers."""
+    return UNIVERSE_CAP_DETERMINISTIC if deterministic else UNIVERSE_CAP_NARRATED
 
 
 def saved_list_labels(saved) -> list[str]:
@@ -1340,23 +1358,77 @@ def _estimate_union_size(n_names: int, strategies, *,
     return min(total, n_names)
 
 
+def floor_override_from_input(raw, *, file_value: float | None) -> float | None:
+    """The run's floor from the sidebar's number input, in DOLLARS — or None (FLOOR-1).
+
+    Pure, so the control's semantics are unit-tested rather than eyeballed: BLANK means
+    "no override, use the strategy's own floor" (None), and a value EQUAL to the file's
+    is also no override, so nudging the control back to the default leaves the run
+    byte-identical rather than recording a no-op. The input is in BILLIONS because that is
+    how the floor is discussed; the pipeline takes dollars."""
+    if raw is None:
+        return None
+    dollars = float(raw) * 1e9
+    return None if file_value is not None and dollars == file_value else dollars
+
+
+def _company_size_floor_override(rank_strategy, n_strategies: int) -> float | None:
+    """The Run tab's ephemeral company-size floor control (FLOOR-1).
+
+    Defaults to the PRIMARY strategy's own floor, so the control opens showing what the
+    run would do untouched; clearing it removes the floor for this run entirely."""
+    file_value = getattr(rank_strategy, "min_market_cap", None)
+    with st.expander("⚙️ Run overrides — this run only", expanded=False):
+        st.caption("Applied to THIS run only and stamped on the report. The strategy "
+                   "file is never modified.")
+        raw = st.number_input(
+            "Company size floor (USD bn)",
+            min_value=0.0, max_value=5_000.0, step=0.5, value=None,
+            placeholder=(f"{file_value / 1e9:g} (strategy default)"
+                         if file_value else "no floor (strategy default)"),
+            key="uni_floor_override",
+            help="Blank = use the strategy's own floor. The floor is applied BEFORE the "
+                 "screen and before any factor, so a name below it is excluded before "
+                 "anything is measured about it. 0 removes the floor for this run.")
+        override = floor_override_from_input(raw, file_value=file_value)
+        if override is not None:
+            from aristos_council.pipeline import format_floor
+            lenses = ("every lens in this run" if n_strategies > 1
+                      else "this run")
+            st.caption(f"Floor for {lenses}: **{format_floor(override)}** "
+                       f"(strategy file: {format_floor(file_value)}).")
+    return override
+
+
 def run_problems(universe: list[str], *, n_strategies: int, deterministic: bool,
-                 has_key: bool, cap: int = UNIVERSE_CAP) -> list[str]:
+                 has_key: bool, cap: int | None = None) -> list[str]:
     """Why the Run button is disabled, in plain sentences (empty list = runnable).
 
     Pure, so the one run flow's guards are unit-tested rather than eyeballed in a browser —
     and there is now ONE guard set instead of the two that had already drifted. A
     ``deterministic`` run (ranker-only, or several strategies — which is ranker-only by
     construction) cannot spend, so it never asks for an API key.
+
+    CAP-1: the cap follows the run MODE unless an explicit ``cap=`` overrides it — a
+    narrated run is capped to protect API spend, a deterministic one only to protect
+    patience, so a 135-name ranker-only run is no longer refused for a cost it cannot incur.
     """
+    if cap is None:
+        cap = universe_cap(deterministic)
     problems: list[str] = []
     if n_strategies < 1:
         problems.append("Pick at least one strategy.")
     if not universe:
         problems.append("Add at least one ticker.")
     if len(universe) > cap:
-        problems.append(f"List too large ({len(universe)} > {cap}) for an interactive "
-                        "run — trim it.")
+        # The message names the MODE, so the number is never mistaken for a single global
+        # limit — and the narrated case points at the way out rather than only forbidding.
+        if deterministic:
+            problems.append(f"List too large ({len(universe)} > {cap}) for an "
+                            "interactive run — trim it.")
+        else:
+            problems.append(f"List too large ({len(universe)} > {cap}) for a narrated "
+                            "run — trim it, or switch to Ranker only.")
     if not deterministic and not has_key:
         problems.append("Narrator / second-opinion needs ANTHROPIC_API_KEY (set it "
                         "in the environment or a local .env). Use **Ranker only** to "
@@ -1478,13 +1550,19 @@ def _universe_markdown(result) -> str:
     REPORT-1: the header leads with the HUMAN names and keeps every id beside them as
     the stable record key, a one-line verdict summary sits directly under it, and the
     rules that were applied are stated before any result."""
-    from aristos_council.pipeline import header_lines, summary_line
+    from aristos_council.pipeline import (floor_override_line, header_lines,
+                                          summary_line)
     from aristos_council.report_language import label_with_id
 
     m = result.meta
     head = header_lines(result)
     lines = [f"# Universe run — {head[0]}", ""]
     lines += [f"**{line}**" for line in head[1:]]
+    # FLOOR-1: one line under the header when the cohort was widened for this run;
+    # absent otherwise, so a no-override report is byte-identical to before.
+    _floor = floor_override_line(m)
+    if _floor:
+        lines.append(f"**{_floor}**")
     lines += ["", f"### {summary_line(result)}", "",
               f"_{_confirmation_line(m)}_", "",
               f"_{result.header}_", "",
@@ -1924,7 +2002,9 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         evidence_gaps_clean_note,
         VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, evidence_gaps, exclusion_rows,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
+        floor_override_line,
         provenance_sentences, report_sections,
+        union_valuation_band_table,
         valuation_band_table,
     )
     from aristos_council.export.report_html import DISCLAIMER, DOCTRINE
@@ -1943,6 +2023,11 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     lines.append(f"**Cohort: {cohort} — {m.get('universe_size', 0)} names**")
     lines.append(f"**Lenses: " + "; ".join(
         label_with_id(names.get(sid) or sid, sid) for sid in ids) + "**")
+    # FLOOR-1: one line under the lenses when the cohort was widened for this run. Empty
+    # (and so absent) otherwise, which keeps a no-override report byte-identical.
+    _floor = floor_override_line(m)
+    if _floor:
+        lines.append(f"**{_floor}**")
     if run_start is not None:
         lines.append(f"**Run: {_local_stamp(run_start)} — "
                      f"{_mode_phrase(m.get('council_mode', ''))}**")
@@ -1988,9 +2073,10 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     lines += _multi_narration_markdown(multi_result)
 
     # 5 — the per-NAME facts, ONCE: they do not vary by lens.
-    first = multi_result.results[ids[0]] if ids else None
-    if first is not None:
-        lines += _valuation_band_markdown(valuation_band_table(first))
+    # BAND-2: the UNION of every lens's ranked names — a lens bands only what it ranked,
+    # so the first lens's ranked set must not decide who gets a row.
+    if ids:
+        lines += _valuation_band_markdown(union_valuation_band_table(multi_result))
 
     # 6 — rules applied, ONE sub-block per lens (each has its own screen and thresholds).
     # REFERENCE material: it sits after the answer, not in front of it. A reader used to
@@ -2175,13 +2261,14 @@ def _render_multi_strategy_result(multi_result) -> None:
                "lenses — only those rank-sums are comparable.")
 
     # PRICE-1 / VALBAND-1: per-NAME context beside the combined grid, never a verdict.
-    # The price is identical under every lens so it is read off the first one — and it is
-    # ALWAYS shown; the band (and the reversion value riding with it) only when the
+    # It is ALWAYS shown; the band (and the reversion value riding with it) only when the
     # checkbox was on.
-    from aristos_council.pipeline import valuation_band_table
-    first = multi_result.results[ids[0]] if ids else None
+    # BAND-2: over the UNION of every lens's ranked names. Reading it off the first lens
+    # made the section's size an accident of lens order — Defensive Income first showed
+    # 2 rows of a 121-name cohort, Magic Formula RAW first showed 81.
+    from aristos_council.pipeline import union_valuation_band_table
     _render_valuation_band_table(
-        valuation_band_table(first) if first is not None else None)
+        union_valuation_band_table(multi_result) if ids else None)
 
     # What DOES vary per lens — exclusion reasons, no-data names, factor sourcing.
     from aristos_council.pipeline import exclusion_rows, provenance_sentences
@@ -2722,7 +2809,18 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # The two pipeline arguments, derived from the ONE control (UI layer only).
     ranker_only, mode = run_mode_arguments(run_mode)
 
-    st.caption(f"**{len(universe)}** ticker(s).")
+    # FLOOR-1 — the EPHEMERAL company-size floor. Same doctrine as the council strategy's
+    # "Run overrides — this run only" block: applied to THIS run, stamped on the report,
+    # the strategy file never touched. It sits here because the floor is a COHORT
+    # statement — it decides who is in the room — so it applies to every lens in a
+    # multi-lens run rather than being set per lens.
+    min_market_cap_override = _company_size_floor_override(rank_strategy, len(strategies))
+
+    # CAP-1: the caption quotes the cap that actually applies to the SELECTED mode, read
+    # from the same helper the guard uses, so the two can never disagree.
+    _cap_now = universe_cap(ranker_only)
+    st.caption(f"**{len(universe)}** ticker(s) — up to **{_cap_now}** for "
+               f"{'a ranker-only' if ranker_only else 'a narrated'} run.")
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     # NARR-UNION-1: a multi-lens run is no longer deterministic BY CONSTRUCTION — it can
@@ -2787,6 +2885,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 freeze_dir=ROOT / "runs", with_valuation_band=with_valuation_band,
                 derived_from=derived_from,
+                min_market_cap_override=min_market_cap_override,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")
@@ -2829,6 +2928,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 # (_latest_reference_run) can replay it offline — without this the UI
                 # never wrote runs/ and cohort context was dead code (ITEM 1).
                 freeze_dir=ROOT / "runs",
+                min_market_cap_override=min_market_cap_override,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")

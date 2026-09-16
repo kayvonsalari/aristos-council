@@ -56,6 +56,7 @@ The last close in the name's OWN quoted currency (never converted) with the date
 |---|---|---|---|
 | **A** | 121.90 | not evaluated — only 0 weeks of closes | — |
 | **B** | 121.90 | not evaluated — only 0 weeks of closes | — |
+| **C** | 121.90 | not evaluated — only 0 weeks of closes | — |
 
 - Prices are the last close on 2026-01-01, each in the name's own quoted currency, never converted. A stale cache shows up here.
 

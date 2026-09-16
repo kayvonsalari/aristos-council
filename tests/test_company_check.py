@@ -560,9 +560,13 @@ def test_verdict_of_record_quotes_exclusion_with_reason(tmp_path):
     runs = tmp_path / "runs"
     _freeze_financials_run(runs, low_cap=("MET",))     # MET below the 5B cap -> excluded
     r = _fin_check("MET", runs, low_cap=("MET",))
+    # FLOOR-1: the reason now quotes the EFFECTIVE floor. The assertion's subject is
+    # unchanged — the verdict of record still carries the exclusion's real reason — and
+    # is strictly more specific, because a run whose floor was overridden must not read
+    # identically to one that used the strategy file's.
     assert r.verdict_of_record == (
         f"excluded in the latest frozen run of financials_16_v1 "
-        f"({r.reference_run_date}) — below min market cap.")
+        f"({r.reference_run_date}) — below min market cap ($5.0bn).")
     assert f"VERDICT OF RECORD: {r.verdict_of_record}" in format_company_check(r)
 
 

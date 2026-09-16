@@ -172,6 +172,33 @@ def _screenless_frame(rank_strategy):
         lens_factor_labels=list(lens.factor_labels))
 
 
+def format_floor(value: Optional[float]) -> str:
+    """A company-size floor as money a reader recognises: ``$5.0bn``, ``$750m``.
+
+    FLOOR-1 — one formatter for the exclusion reason, the report header line and the UI
+    caption, so the same floor is never printed three ways."""
+    if value is None:
+        return "no floor"
+    if abs(value) >= 1e9:
+        return f"${value / 1e9:.1f}bn"
+    if abs(value) >= 1e6:
+        return f"${value / 1e6:.0f}m"
+    return f"${value:,.0f}"
+
+
+def min_market_cap_override_record(file_value: Optional[float],
+                                   run_value: Optional[float]) -> Optional[dict]:
+    """``{"file": 5.0e9, "run": 1.0e9}`` when the run's floor differs from the file's,
+    else None (FLOOR-1).
+
+    Diffed rather than recorded on intent, exactly as ``applied_overrides`` is: setting
+    the control back to the file's own value records NOTHING, so a no-op override leaves
+    meta and the report byte-identical to a run that never touched the control."""
+    if run_value is None or run_value == file_value:
+        return None
+    return {"file": file_value, "run": run_value}
+
+
 def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None,
                 with_valuation_band=False):
     from .data.adapter import TransientFetchError
@@ -220,7 +247,12 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         if (rank_strategy.min_market_cap is not None and f is not None
                 and f.market_cap is not None
                 and f.market_cap < rank_strategy.min_market_cap):
-            excluded.append((t, "below min market cap"))
+            # FLOOR-1: the reason quotes the EFFECTIVE floor — the one that actually
+            # excluded this name, which is the run's override when there is one. A bare
+            # "below min market cap" left a reader unable to tell WHICH floor applied on a
+            # run whose floor was not the file's.
+            excluded.append((t, f"below min market cap "
+                                f"({format_floor(rank_strategy.min_market_cap)})"))
             continue
         if f is not None and is_sector_excluded(f.sector, rank_strategy.exclude_sectors):
             excluded.append((t, f"sector excluded ({f.sector})"))
@@ -642,6 +674,7 @@ def run_rank_pipeline(
     use_cache: bool = True, progress: Optional[Callable[[str], None]] = None,
     freeze_dir: str | Path | None = None, replay_run_id: Optional[str] = None,
     with_valuation_band: bool = False, derived_from: str = "",
+    min_market_cap_override: float | None = None,
 ) -> RankPipelineResult:
     """Rank a universe under a RANK strategy, then (unless ``ranker_only``) narrate
     the shortlist with the LLM council. The single entrypoint the CLI and Council
@@ -673,6 +706,19 @@ def run_rank_pipeline(
         universe, universe_id,
         Path(universes_dir) if universes_dir else _UNIVERSES_DIR)
     rank_strategy = load_rank_strategy_from_id(strategy_id, strategies_dir)
+    # FLOOR-1 — the EPHEMERAL company-size floor, applied to a COPY before the ranker
+    # runs, never to the file on disk. The floor is enforced ahead of the screen and ahead
+    # of every factor, so a name below it is excluded before anything is measured about it:
+    # on 2026-09-15 the $5bn floor took 39 of 121 USD names, 29 of 52 services names and 27
+    # of 41 tier-2 names out before a single factor was computed, and two cohorts built for
+    # mid-caps were never graded at all. This is the throwaway path for asking "and what if
+    # the floor were $1bn?" without spawning a strategy version to answer it.
+    min_market_cap_file = rank_strategy.min_market_cap
+    override_record = min_market_cap_override_record(min_market_cap_file,
+                                                     min_market_cap_override)
+    if override_record is not None:
+        rank_strategy = rank_strategy.model_copy(
+            update={"min_market_cap": min_market_cap_override})
     # NARR-FRAME-1 (same root as CCFIX-2): resolve the lens WITHOUT the blunt default. A
     # strategy that declares no council_screen_strategy (and none was passed) is
     # SCREEN-LESS — the narrator/council is framed by the strategy's OWN identity, never
@@ -797,6 +843,11 @@ def run_rank_pipeline(
         # VALBAND-1: whether the opt-in absolute valuation band was computed this run
         # (a context column, never a verdict input). False -> no band section anywhere.
         "with_valuation_band": with_valuation_band,
+        # FLOOR-1: the ephemeral floor, recorded beside the existing override record so
+        # the report and the frozen run both carry it. ABSENT (not None, not {}) when no
+        # override applied, so a no-override run's meta is byte-identical to before.
+        **({"overrides": {"min_market_cap": override_record}}
+           if override_record is not None else {}),
         "universe_size": len(universe),
         "ranked_count": len(live),
         "shortlist": [r.ticker for r in shortlist],
@@ -1747,6 +1798,69 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
         footnotes=_band_footnotes(live, uniform, coverage, has_band=has_band))
 
 
+class _UnionBandView:
+    """A result-shaped view over the UNION of a multi-lens run's ranked names (BAND-2).
+
+    ``valuation_band_table`` reads exactly two things off a result — ``ranked`` and
+    ``names`` — so the union is expressed as that shape rather than by duplicating the
+    table builder. Nothing here re-grades: the rows ARE the per-lens ranked rows, carrying
+    the band, price and reversion objects their own lens attached."""
+
+    __slots__ = ("ranked", "names")
+
+    def __init__(self, ranked, names):
+        self.ranked = ranked
+        self.names = names
+
+
+def union_valuation_band_table(multi_result) -> Optional[ValuationBandTable]:
+    """The valuation-band table for a MULTI-LENS run: one row per name that at least one
+    lens ranked (BAND-2).
+
+    The band is per-NAME and display-only — it describes where a price sits against that
+    name's own history, which no lens has a view on. But a lens attaches a band only to the
+    names it ranked, so reading the table off the first lens alone made the section's size
+    an accident of lens order: Defensive Income first gave 2 rows of 121 names, Magic
+    Formula RAW first gave 81.
+
+    Walks ``results`` in STRATEGY ORDER and takes the FIRST band seen per ticker, so the
+    output is deterministic and independent of which lens is first in any other sense: a
+    name ranked by several lenses carries one row, not several. Abstentions keep their row
+    (the existing doctrine — an absent row is indistinguishable from a feature that was
+    never switched on).
+
+    Returns None when no lens ranked anything rateable, exactly as the single-lens builder
+    does. Single-lens paths are untouched and still call ``valuation_band_table``."""
+    results = getattr(multi_result, "results", None) or {}
+    ids = [s for s in (getattr(multi_result, "strategy_ids", None) or list(results))
+           if s in results]
+    if not ids:
+        return None
+
+    seen: dict[str, object] = {}
+    order: list[str] = []
+    names: dict[str, str] = {}
+    for sid in ids:
+        res = results[sid]
+        # Names are merged across lenses too: they grade the same cohort, so a label one
+        # lens resolved is the right label everywhere. First non-empty wins.
+        for ticker, label in (getattr(res, "names", None) or {}).items():
+            if label and ticker not in names:
+                names[ticker] = label
+        for r in res.ranked:
+            if r.excluded or r.ticker in seen:
+                continue
+            # Same admission rule as the single-lens table: a row needs a price or a band.
+            if (getattr(r, "valuation_band", None) is None
+                    and getattr(r, "price", None) is None):
+                continue
+            seen[r.ticker] = r
+            order.append(r.ticker)
+    if not order:
+        return None
+    return valuation_band_table(_UnionBandView([seen[t] for t in order], names))
+
+
 def _band_footnotes(live, uniform: bool, coverage: set, *,
                     has_band: bool = True) -> list[str]:
     """The notes that belong BELOW the table: the shared month coverage, the net-debt
@@ -2140,6 +2254,26 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
     return rows
 
 
+def _multi_floor_override(results: dict, ids: list[str]) -> dict:
+    """The cohort's company-size override for the merged meta, or ``{}`` (FLOOR-1).
+
+    ``run`` is the one floor every lens was asked to use; ``file`` maps each lens that
+    recorded a real change to its OWN file value, because the lens YAMLs disagree
+    (magic_formula_raw_v1 5.0e9, conservative_plus_v1 1.0e9) and an override can be a
+    genuine change for one and a no-op for another. Built by reading what the per-lens runs
+    RECORDED, never by re-deriving it, so the merged record can never disagree with the
+    columns it summarises."""
+    per_lens = {sid: results[sid].meta.get("overrides", {}).get("min_market_cap")
+                for sid in ids}
+    recorded = {sid: rec for sid, rec in per_lens.items() if rec}
+    if not recorded:
+        return {}
+    return {"overrides": {"min_market_cap": {
+        "run": next(iter(recorded.values()))["run"],
+        "file": {sid: rec["file"] for sid, rec in recorded.items()},
+    }}}
+
+
 def run_multi_strategy_pipeline(
     universe: Optional[list[str]] = None, strategy_ids: Optional[list[str]] = None, *,
     universe_id: Optional[str] = None, universes_dir: str | Path | None = None,
@@ -2150,6 +2284,7 @@ def run_multi_strategy_pipeline(
     with_valuation_band: bool = False,
     ranker_only: bool = True, narrate_coverage: str = "buys_only",
     runners=None, derived_from: str = "",
+    min_market_cap_override: float | None = None,
 ) -> MultiStrategyResult:
     """Grade ONE cohort under N rank strategies and return the combined grid (FUND-RUN-1).
 
@@ -2183,11 +2318,21 @@ def run_multi_strategy_pipeline(
             universes_dir=universes_dir, strategies_dir=strategies_dir,
             ranker_only=True, adapter=adapter, today=today, use_cache=use_cache,
             freeze_dir=freeze_dir,
-            # VALBAND-1: the band is per-NAME, not per-strategy, so compute it once (on the
-            # first lens) — the shared cache means later lenses would only re-read the same
-            # 5-year fetch. Every column's ranked tickers still describe the same cohort;
-            # the band column is read off this first result (app renders it beside the grid).
-            with_valuation_band=(with_valuation_band and i == 1),
+            # VALBAND-1 / BAND-2: the band is per-NAME, not per-strategy — so it is computed
+            # for EVERY lens, not just the first. Computing it once looked equivalent, but a
+            # lens only attaches a band to the names IT ranked, so the first lens's ranked
+            # set silently decided who got a band at all: ordering Defensive Income first on
+            # the 121-name USD cohort (its 10-year dividend-streak rule ranked 2 names) left
+            # the band section with 2 rows; Magic Formula RAW first produced 81. Which lens
+            # happened to run first must not decide that. The per-day cache means the later
+            # lenses re-read the SAME 5-year fetch rather than issuing a second network call
+            # (see test_band_computed_for_every_lens_costs_one_fetch).
+            with_valuation_band=with_valuation_band,
+            # FLOOR-1: the floor is a COHORT statement, not a lens one — "grade mid-caps
+            # this run" is a claim about who is in the room, so it applies to every lens
+            # alike. Each lens still diffs it against its OWN file value, so a lens whose
+            # file already carries the override's number records no override.
+            min_market_cap_override=min_market_cap_override,
             derived_from=derived_from)
         results[sid] = res
         names[sid] = res.meta.get("rank_strategy_name", "") or sid
@@ -2238,6 +2383,13 @@ def run_multi_strategy_pipeline(
         "narrate_coverage": narrate_coverage,
         "narration_basis": NARRATION_BASIS.get(narrate_coverage, narrate_coverage),
         "est_cost": estimate_cost(len(union)) if not ranker_only else 0.0,
+        # FLOOR-1: one cohort-wide floor, so the record is carried up from the lenses that
+        # actually recorded one. Lens files differ (magic_formula_raw 5.0e9,
+        # conservative_plus 1.0e9), so an override can be a real change for one lens and a
+        # no-op for another — "file" is therefore per-lens, keyed by strategy id, while
+        # "run" is the single number every lens was asked to use. Absent when no lens
+        # recorded an override, keeping a no-override run byte-identical.
+        **_multi_floor_override(results, ids),
     }
     return MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
                                results=results, rows=rows, meta=meta,
@@ -2520,6 +2672,30 @@ def multi_header_line(result: MultiStrategyResult) -> str:
     return (f"{_pipeline_header(result.meta.get('council_mode') or 'narrator')}  "
             f"One pass over the union of every lens's BUYs — {n} "
             f"name{'s' if n != 1 else ''} narrated — {spend}.")
+
+
+def floor_override_line(meta: dict) -> str:
+    """``"Company size floor overridden for this run: $1.0bn (strategy file: $5.0bn)."``
+    — or ``""`` when the run used each strategy's own floor (FLOOR-1).
+
+    ONE builder for the markdown report, the HTML report and the Run tab, so a run whose
+    cohort was widened says so identically wherever it is read. Empty string on a
+    no-override run, which is what keeps that run's report byte-identical to before.
+
+    A multi-lens record keys ``file`` by strategy id (the lens YAMLs disagree), so several
+    file values are named rather than one being picked to stand for the rest."""
+    rec = (meta or {}).get("overrides", {}).get("min_market_cap")
+    if not rec:
+        return ""
+    run = format_floor(rec.get("run"))
+    file_value = rec.get("file")
+    if isinstance(file_value, dict):
+        parts = ", ".join(f"{sid} {format_floor(v)}"
+                          for sid, v in sorted(file_value.items()))
+        return (f"Company size floor overridden for this run: {run} "
+                f"(strategy files: {parts}).")
+    return (f"Company size floor overridden for this run: {run} "
+            f"(strategy file: {format_floor(file_value)}).")
 
 
 def multi_summary_line(result: MultiStrategyResult) -> str:
