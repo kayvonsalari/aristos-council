@@ -22,6 +22,7 @@ over:
 
 from __future__ import annotations
 
+import statistics
 from datetime import date
 
 from .adapter import (
@@ -376,7 +377,12 @@ def _dividend_streak_from_ticker(tk) -> tuple:
         return None, None, None, None
     streak, last_cut = dividend_streak(annual, date.today().year)
     totals = [[float(y), float(annual[y])] for y in sorted(annual)]
-    return streak, last_cut, totals
+    # CRIT-NOCUT-2: the per-year payments reduced to (total, median, count). Computed here
+    # because this is where the individual payments already are; deriving them again
+    # downstream would be a second reading of one history.
+    stats = [[float(y), float(sum(per_year[y])), float(statistics.median(per_year[y])),
+              float(len(per_year[y]))] for y in sorted(per_year)]
+    return streak, last_cut, totals, stats
 
 
 def _dividend_yield(info: dict) -> float | None:

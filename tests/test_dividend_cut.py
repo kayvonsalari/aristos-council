@@ -376,3 +376,49 @@ def test_the_exclusion_sentence_reads_as_a_percentage_end_to_end():
         _Res(), "X", "screen: max_dividend_cuts (observed 0.523 vs threshold 5.0)")
     assert "the largest fall was 52% of the prior year's total" in sentence
     assert "was 0 of" not in sentence and "was 1 of" not in sentence
+
+
+# --------------------------------------------------------------------------- #
+# The adapter seam — the gap that let a real bug ship past a green suite
+# --------------------------------------------------------------------------- #
+def test_the_adapter_helper_returns_four_values_on_EVERY_path():
+    """REGRESSION. CRIT-NOCUT-2 widened ``_dividend_streak_from_ticker`` from a 3-tuple to
+    a 4-tuple and the SUCCESS path was missed, so every real fundamentals fetch raised
+    ValueError, the pipeline degraded to empty fundamentals, and a 134-name run ranked
+    every name and excluded none. The whole suite stayed green, because every other test
+    injects a fake adapter and none of them reaches this function.
+
+    A fake TICKER — not a fake adapter — is what closes that gap: it exercises the real
+    parsing code with no network."""
+    from datetime import date as _date
+
+    from aristos_council.data.yfinance_adapter import _dividend_streak_from_ticker
+
+    class _Series(dict):
+        def items(self):            # yfinance hands back a pandas Series
+            return super().items()
+
+    class _Ticker:
+        def __init__(self, payments):
+            self.dividends = payments
+
+    class _TS:
+        def __init__(self, y):
+            self.year = y
+
+    paid = _Series({_TS(2021): 0.25, _TS(2022): 0.30, _TS(2023): 0.35})
+    streak, last_cut, totals, stats = _dividend_streak_from_ticker(_Ticker(paid))
+    assert totals and stats
+    assert [r[0] for r in stats] == [2021.0, 2022.0, 2023.0]
+    assert stats[0] == [2021.0, 0.25, 0.25, 1.0]        # year, total, median, count
+
+    # ...and both failure paths return the same width, so no caller can unpack wrongly.
+    assert len(_dividend_streak_from_ticker(_Ticker(_Series()))) == 4
+    assert len(_dividend_streak_from_ticker(_Ticker(None))) == 4
+
+    class _Boom:
+        @property
+        def dividends(self):
+            raise RuntimeError("provider down")
+
+    assert len(_dividend_streak_from_ticker(_Boom())) == 4
