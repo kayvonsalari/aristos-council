@@ -43,9 +43,12 @@ def test_council_strategies_are_the_single_ticker_ones():
 def test_lens_screens_are_derived_and_hidden():
     lens = lens_strategy_ids(STRAT_DIR)
     # exactly the screens referenced by a rank strategy's council_screen_strategy
-    # (growth_screen_v1/v2 are growth_garp_v1/v2's lenses)
+    # (growth_screen_v1/v2 are growth_garp_v1/v2's lenses; CYCLICAL-INCOME-1 adds
+    # cyclical_income_screen_v1 as cyclical_income_v1's). The set is DERIVED, so a new
+    # lens arriving here is the derivation working, not a list needing maintenance.
     assert lens == {"conservative_screen_v1", "magic_value_screen_v1",
-                    "growth_screen_v1", "growth_screen_v2"}
+                    "growth_screen_v1", "growth_screen_v2",
+                    "cyclical_income_screen_v1"}
 
 
 def test_every_live_strategy_gets_exactly_one_kind():
@@ -58,12 +61,14 @@ def test_every_live_strategy_gets_exactly_one_kind():
         "magic_formula_raw_v1": "rank",       # RAW-1: canonical no-screen variant
         "financials_v1": "rank",              # FIN-1: financials lens (include_sectors)
         "forensic_v1": "rank",                # FORENSIC-1: earnings quality & distress
+        "cyclical_income_v1": "rank",         # CYCLICAL-INCOME-1: income for cyclical payers
         "dividend_aristocrats_v1": "council",
         "growth_v1": "council",
         "conservative_screen_v1": "lens",
         "magic_value_screen_v1": "lens",
         "growth_screen_v1": "lens",           # Sprint 4C: the GARP lens
         "growth_screen_v2": "lens",           # 4C-FIX-1: the v2 lens (no momentum gate)
+        "cyclical_income_screen_v1": "lens",  # CYCLICAL-INCOME-1: its screen lens
         "etf_dividend_v1": "rank",            # ETF-1 ITEM 3: dividend-ETF lens
         "etf_growth_v1": "rank",              # ETF-1 ITEM 3: growth-ETF lens
         "etf_core_v1": "rank",                # ETFCORE-1 ITEM 1: core-market-ETF lens
@@ -89,9 +94,10 @@ def test_visible_rank_set_is_the_live_strategies():
     # financials lens -> five. FORENSIC-1 adds the forensic lens -> six stock lenses.
     # ETF-1 ITEM 3: the two exploratory ETF lenses are visible too.
     # ETFCORE-1 ITEM 1: the core-market ETF lens joins them.
+    # CYCLICAL-INCOME-1 adds the cyclical-income stock lens -> seven stock lenses.
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
                        "growth_garp_v2", "magic_formula_raw_v1", "financials_v1",
-                       "forensic_v1",
+                       "forensic_v1", "cyclical_income_v1",
                        "etf_dividend_v1", "etf_growth_v1", "etf_core_v1"}
 
 

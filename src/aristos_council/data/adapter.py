@@ -220,6 +220,16 @@ class Fundamentals:
     # None d/e. All None when the provider/history can't supply them (honest abstain).
     dividend_streak_years: int | None = None
     last_dividend_reduction_year: int | None = None
+    # CRIT-NOCUT-1: the per-CALENDAR-YEAR dividend totals the two signals above are
+    # derived FROM, carried rather than discarded — ``[[year, total], …]`` oldest-first,
+    # split-adjusted, as a JSON-safe list of pairs (a dict keyed by int would come back
+    # from the day-cache keyed by str). It costs NO extra fetch: the adapter already sums
+    # the payment history to compute the streak and the cut year, and simply threw the
+    # totals away afterwards. ``max_dividend_cuts`` needs the totals rather than the
+    # scalars because the SIZE of a cut is part of its answer, and because the window it
+    # examines is a per-strategy threshold rather than a fixed one. None when the
+    # provider/history cannot supply them (honest abstain).
+    dividend_year_totals: list[list[float]] | None = None
     total_debt: float | None = None
     debt_to_equity: float | None = None          # yfinance percent-ish; may be None
     # Cash & short-term investments (yfinance info 'totalCash'). With total_debt +

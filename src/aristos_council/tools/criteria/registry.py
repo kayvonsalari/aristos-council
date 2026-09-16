@@ -199,7 +199,8 @@ def _min_dividend_growth_streak(ev: Evidence, threshold: float) -> CriterionResu
 def _max_dividend_cuts(ev: Evidence, threshold: float) -> CriterionResult:
     # CRIT-NOCUT-1: "was it ever cut?", not "did it rise?". The threshold is the NUMBER
     # OF YEARS to examine, not a count of permitted cuts — one cut fails.
-    return max_dividend_cuts_criterion(ev.dividends, years=int(threshold))
+    return max_dividend_cuts_criterion(ev.dividends, years=int(threshold),
+                                      fundamentals=ev.fundamentals)
 
 
 # --- Growth / quality criteria (Sprint 4B; hardened post-SK-Hynix) ------- #

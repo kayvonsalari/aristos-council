@@ -1,0 +1,73 @@
+# Cyclical income screen — the COUNCIL LENS for cyclical_income_v1.
+# ============================================================================
+# The same income floors as the defensive screen — real yield, coverage measured
+# against CASH, large-cap scope, a balance sheet that is not the story — with the two
+# rules that encode a STAPLES-ARISTOCRAT assumption removed and one replacement added.
+#
+# WHY, with the numbers (2026-09-16, the 135-name oil dividend cohort under Defensive
+# Income): min_dividend_streak >= 10 failed 126 of 128 names tested. The other five
+# rules were survivable — yield failed 15, payout-vs-FCF 33, size 14, debt 9, momentum
+# 2. One rule written for Procter & Gamble removed an entire sector. On its HOME cohort
+# (defensive_income_16_v1) the same lens ranked 9 of 16 and every exclusion was
+# meaningful, so the lens is right for its purpose and the sector needs a different
+# income test. This is that test.
+#
+# DELIBERATELY ABSENT, both:
+#
+#   min_dividend_streak — a streak asks "did it RISE?". For a cyclical payer the
+#     dividend held FLAT through a downturn is the evidence of durability, and a streak
+#     rule scores that at zero. Chevron (a 9-year streak), Kinder Morgan and Hess
+#     Midstream (8) are not cutters and were excluded as though they were. Replaced by
+#     max_dividend_cuts, which asks "was it ever CUT?" — the question that actually
+#     separates them from BP, which halved in 2020.
+#
+#   min_price_momentum — a trend rule is correct for a defensive holding and wrong
+#     here. A cyclical income name is BOUGHT when its price has fallen; requiring the
+#     trend to be intact would exclude the candidate at the only moment the lens exists
+#     to find it. Defensive Income keeps that rule and says so in its description.
+#
+# Nothing else is loosened: the yield floor, the cash-coverage ceiling, the size floor
+# and the debt ceiling are the defensive screen's, unchanged.
+id: cyclical_income_screen_v1
+name: Cyclical income screen
+version: 1
+
+description: >-
+  Real, cash-covered income from a large company that has not cut its dividend — the
+  screen lens for an income candidate in a cyclical sector, with no trend rule.
+
+criteria:
+  - name: min_dividend_yield        # real income, not a rounding error
+    threshold: 0.015
+  - name: max_payout_ratio_fcf      # coverage measured against CASH (FCF), not GAAP EPS.
+    threshold: 0.80                 # Unchanged from the defensive screen: the ~70-80%
+                                    # cash-coverage prudence band. This is the rule that
+                                    # SHOULD do the excluding here — Enbridge (141%), TC
+                                    # Energy (669%) and Kodiak (226%) fail it on merit.
+  - name: min_market_cap            # large-cap scope, same as the defensive screen
+    threshold: 5000000000
+  - name: max_dividend_cuts         # no cut in the last 5 complete calendar years.
+    threshold: 5                    # The replacement for the streak rule: a dividend
+                                    # HELD flat passes, a dividend CUT fails. BP (halved
+                                    # in 2020) fails; Chevron, Kinder Morgan and Hess
+                                    # Midstream pass, which is the distinction the oil
+                                    # cohort needed and the streak rule could not draw.
+  - name: max_debt_to_market_cap    # balance-sheet risk: total_debt <= market_cap.
+    threshold: 1.0                  # Robust to negative-equity buyback names — uses
+                                    # debt/cap, not debt/equity.
+
+policy:
+  partial_pass_allows_hold: true
+
+veto:
+  min_confidence: 0.6
+
+rationale: >-
+  A cyclical payer earns its place by paying through the cycle, not by raising every
+  year. The income floors are the defensive ones — a real yield, covered out of cash
+  rather than out of accounting profit, from a company large enough to survive a bad
+  year, without a balance sheet that has become the story. What changes is the test of
+  durability: not a decade of increases, which the commodity cycle makes impossible for
+  an honest operator, but no cut in five years, which a company that mismanaged the last
+  downturn cannot claim. And no trend rule at all — the council should judge a name here
+  on whether the income survives, never on whether the price has already recovered.

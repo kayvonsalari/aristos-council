@@ -104,11 +104,12 @@ def test_financials_v1_is_a_visible_rank_strategy():
     ids = [s.id for s in vis]
     assert "financials_v1" in ids
     # ETF-1 ITEM 3 added two visible ETF lenses (5 -> 7); ETFCORE-1 ITEM 1 adds the
-    # core-market ETF lens (7 -> 8); FORENSIC-1 adds forensic_v1 (8 -> 9):
-    # conservative_plus, financials, forensic, growth_garp_v2, magic_formula_momentum,
-    # magic_formula_raw + etf_dividend_v1, etf_growth_v1, etf_core_v1 (growth_garp_v1 /
-    # magic_formula_v1 stay hidden).
-    assert len(vis) == 9
+    # core-market ETF lens (7 -> 8); FORENSIC-1 adds forensic_v1 (8 -> 9);
+    # CYCLICAL-INCOME-1 adds cyclical_income_v1 (9 -> 10):
+    # conservative_plus, cyclical_income, financials, forensic, growth_garp_v2,
+    # magic_formula_momentum, magic_formula_raw + etf_dividend_v1, etf_growth_v1,
+    # etf_core_v1 (growth_garp_v1 / magic_formula_v1 stay hidden).
+    assert len(vis) == 10
     assert {"etf_dividend_v1", "etf_growth_v1"} <= set(ids)
 
 
