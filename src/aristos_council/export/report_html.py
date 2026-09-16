@@ -1041,12 +1041,24 @@ def _band_section(band_table, *, anchor: str = "") -> str:
             + "</section>")
 
 
+# FACTOR-MARK-2 — the coverage marker FACTOR-MARK-1 appends to a ranked cell
+# (MultiStrategyCell.factor_note: " · ranked on 2 of 3 factors"). It lands AFTER the
+# verdict word, so the "ends with · VERDICT" test below stopped matching and every marked
+# cell silently lost BOTH its tint and its coloured verdict word — 37 cells in the
+# Forensic column of the 2026-09-16 oil run (9 BUY, 17 HOLD, 11 SELL), which is exactly
+# the population a reader most needs to see graded. The marker is stripped before the
+# verdict is looked for, and re-rendered afterwards as a muted suffix, so the house rule
+# (colour AND word, never one without the other) holds for a marked cell too.
+_CELL_MARKER = re.compile(r" · ranked on \d+ of \d+ factors$")
+
+
 def verdict_of_cell(text: str) -> str:
     """The VERDICT a verdict-grid cell carries ("BUY"/"HOLD"/"SELL"), or "" for a cell on
     another axis (excluded / no data / fetch failed) — those are not verdicts and must
     never be coloured as though they were."""
+    body = _CELL_MARKER.sub("", text or "")
     for verdict in _VERDICT_HEX:
-        if text.endswith(f"· {verdict}"):
+        if body.endswith(f"· {verdict}"):
             return verdict
     return ""
 
@@ -1057,12 +1069,16 @@ def _verdict_grid_cell(text: str) -> str:
     (excluded / no data / fetch failed) stays plain, because it is not a verdict. The
     verdict WORD is always rendered — colour is never the only carrier of meaning."""
     verdict = verdict_of_cell(text)
-    if verdict:
-        head = text[: -len(verdict)]
-        return (f'<span class="mono">{_esc(head)}</span>'
-                f'<span class="verdict verdict-{verdict.lower()}">{_esc(verdict)}'
-                "</span>")
-    return f'<span class="mono">{_esc(text)}</span>'
+    if not verdict:
+        return f'<span class="mono">{_esc(text)}</span>'
+    marker = ""
+    found = _CELL_MARKER.search(text)
+    if found:
+        marker, text = found.group(0), text[: found.start()]
+    head = text[: -len(verdict)]
+    return (f'<span class="mono">{_esc(head)}</span>'
+            f'<span class="verdict verdict-{verdict.lower()}">{_esc(verdict)}</span>'
+            + (f'<span class="mono muted">{_esc(marker)}</span>' if marker else ""))
 
 
 # --------------------------------------------------------------------------- #
