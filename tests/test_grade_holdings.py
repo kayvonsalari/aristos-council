@@ -157,10 +157,11 @@ def _run(tmp_path, text, **kwargs):
 # --------------------------------------------------------------------------- #
 # Stock / ETF split -> the right lens sets, both grids
 # --------------------------------------------------------------------------- #
-def test_lens_sets_are_the_five_stock_and_three_etf_lenses():
+def test_lens_sets_are_the_six_stock_and_three_etf_lenses():
+    # FORENSIC-1 appended forensic_v1 as the last stock column.
     assert gh.STOCK_LENSES == ["conservative_plus_v1", "magic_formula_momentum_v1",
                                "magic_formula_raw_v1", "growth_garp_v2",
-                               "financials_v1"]
+                               "financials_v1", "forensic_v1"]
     assert gh.ETF_LENSES == ["etf_core_v1", "etf_dividend_v1", "etf_growth_v1"]
 
 

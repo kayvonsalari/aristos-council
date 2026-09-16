@@ -57,6 +57,7 @@ def test_every_live_strategy_gets_exactly_one_kind():
         "growth_garp_v2": "rank",             # 4C-FIX-1: non-gating-momentum GARP
         "magic_formula_raw_v1": "rank",       # RAW-1: canonical no-screen variant
         "financials_v1": "rank",              # FIN-1: financials lens (include_sectors)
+        "forensic_v1": "rank",                # FORENSIC-1: earnings quality & distress
         "dividend_aristocrats_v1": "council",
         "growth_v1": "council",
         "conservative_screen_v1": "lens",
@@ -85,11 +86,12 @@ def test_visible_rank_set_is_the_live_strategies():
     visible = {s.id for s in visible_rank_strategies(STRAT_DIR)}
     # 4C-FIX-1: growth_garp_v2 supersedes growth_garp_v1 (hidden) as the visible growth
     # rank strategy; RAW-1's magic_formula_raw_v1 is visible too; FIN-1 adds the
-    # financials lens -> five.
+    # financials lens -> five. FORENSIC-1 adds the forensic lens -> six stock lenses.
     # ETF-1 ITEM 3: the two exploratory ETF lenses are visible too.
     # ETFCORE-1 ITEM 1: the core-market ETF lens joins them.
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
                        "growth_garp_v2", "magic_formula_raw_v1", "financials_v1",
+                       "forensic_v1",
                        "etf_dividend_v1", "etf_growth_v1", "etf_core_v1"}
 
 

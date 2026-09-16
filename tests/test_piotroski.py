@@ -40,6 +40,7 @@ from aristos_council.tools.criteria.registry import (  # noqa: E402
     Evidence,
     validate_selections,
 )
+from aristos_council.strategy.rank_loader import load_rank_strategy  # noqa: E402
 from aristos_council.tools.screening import piotroski_f_score  # noqa: E402
 
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
@@ -336,11 +337,26 @@ def test_criterion_threshold_bounds_are_validated_up_front():
     assert problems and "out of range" in problems[0]
 
 
-def test_no_strategy_yaml_adopts_the_factor_or_the_criterion_in_this_pr():
+def test_the_screen_criterion_is_still_adopted_by_no_strategy():
+    """``min_f_score`` stays a SCREEN nobody enables. FORENSIC-1 adopted the rankable
+    FACTOR (below), not this floor: the score aggregates nine checks whose availability
+    depends on provider statement coverage, so a threshold on it would fail names for
+    data gaps rather than for accounting quality."""
     for path in sorted(STRAT_DIR.glob("*.yaml")):
-        text = path.read_text(encoding="utf-8")
-        assert "min_f_score" not in text, path.name
-        assert "piotroski" not in text.lower(), path.name
+        assert "min_f_score" not in path.read_text(encoding="utf-8"), path.name
+
+
+def test_the_rank_factor_is_adopted_by_exactly_the_forensic_lens():
+    """PIOTROSKI-1 registered the factor and wired it to nothing, which left a defect in
+    it unnoticeable. FORENSIC-1 gives it a consumer — and exactly one, so the coarse
+    0-9 integer's tied blocks are broken by that lens's two CONTINUOUS legs rather than
+    by a tiebreaker bolted onto the score."""
+    adopters = [path.name for path in sorted(STRAT_DIR.glob("*.yaml"))
+                if "piotroski" in path.read_text(encoding="utf-8").lower()]
+    assert adopters == ["forensic_v1.yaml"]
+
+    forensic = load_rank_strategy(STRAT_DIR / "forensic_v1.yaml")
+    assert "piotroski_f_score" in [f.name for f in forensic.factors]
 
 
 # --------------------------------------------------------------------------- #

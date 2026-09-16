@@ -31,7 +31,13 @@ from .fund_currency import (
     needs_conversion,
     normalize_currency_code,
 )
-from .tools.screening import piotroski_f_score, revenue_cagr, through_cycle_roic
+from .tools.screening import (
+    accrual_ratio,
+    altman_z_score,
+    piotroski_f_score,
+    revenue_cagr,
+    through_cycle_roic,
+)
 from .tools.technical import (
     _TD_6M,
     _TD_12M,
@@ -403,10 +409,54 @@ def _piotroski_f_score(fi: FactorInputs) -> Optional[float]:
     that the rank engine resolves by averaging. That is a real argument for using it
     as a SCREEN rather than a rank leg — it is NOT to be "fixed" with a tiebreaker.
     Deliberately absent from PRICE_DERIVED_FACTORS (not computable point-in-time from
-    closes) and from every strategy YAML's ``factors:`` list.
+    closes).
+
+    SELECTED BY ``forensic_v1`` (FORENSIC-1) — it was registered-and-unused until then.
+    The tied-block property above is why it sits alongside two CONTINUOUS legs (the
+    accrual ratio and the Z-Score) rather than carrying a lens on its own: they break
+    the ties the coarse integer creates, so nothing had to be "fixed" in the score.
     """
     result = piotroski_f_score(fi.fundamentals)
     return None if result.score is None else float(result.score)
+
+
+# --- Forensic legs (FORENSIC-1) — NON-GATING by every strategy that selects them --- #
+def _forensic_source(result) -> str:
+    """The per-name source tag for a forensic leg: ``computed`` (optionally with the
+    path it took, e.g. ``computed: single-year assets``) or ``abstained: <reason>`` —
+    so an abstention is never silent and a fallback is never undisclosed (ITEM 1)."""
+    if result.value is None:
+        return f"{SRC_ABSTAINED}: {result.detail}" if result.detail else SRC_ABSTAINED
+    return f"{SRC_COMPUTED}: {result.detail}" if result.detail else SRC_COMPUTED
+
+
+def _accrual_ratio(fi: FactorInputs) -> Optional[float]:
+    """Sloan accrual ratio — direction LOW (less accrued profit ranks better).
+
+    Delegates ALL arithmetic to ``tools.screening.accrual_ratio``, the SAME function the
+    ``max_accrual_ratio`` screen criterion calls, so the ranked and screened values can
+    never diverge. ABSTAINS (None, never excludes) on a missing input or a non-positive
+    asset base."""
+    return accrual_ratio(fi.fundamentals).value
+
+
+def _accrual_ratio_source(fi: FactorInputs) -> str:
+    return _forensic_source(accrual_ratio(fi.fundamentals))
+
+
+def _altman_z(fi: FactorInputs) -> Optional[float]:
+    """Altman Z-Score — direction HIGH (further from distress ranks better).
+
+    Delegates ALL arithmetic to ``tools.screening.altman_z_score``, shared with the
+    ``min_altman_z`` criterion. ABSTAINS on a missing input, a non-positive denominator,
+    and on the cross-currency case (rule 8): its fourth term mixes a quote-currency
+    market cap with statement-currency liabilities, so an ADR or a non-USD reporter
+    abstains rather than summing two currencies."""
+    return altman_z_score(fi.fundamentals).value
+
+
+def _altman_z_source(fi: FactorInputs) -> str:
+    return _forensic_source(altman_z_score(fi.fundamentals))
 
 
 def _valuation_band_percentile(fi: FactorInputs) -> Optional[float]:
@@ -604,17 +654,45 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
                       "EUR at a dated FX rate (DATA-HYGIENE-1), abstains when the rate "
                       "is unavailable, flagged when the fund's base currency is unknown",
         source_fn=_fund_size_source),
-    # Piotroski F-Score (PIOTROSKI-1) — a rankable QUALITY leg, registered but NOT
-    # selected by any strategy in this PR. Shares its nine checks with the
-    # min_f_score screen criterion (tools/screening.piotroski_f_score).
+    # Forensic lens (FORENSIC-1): earnings quality + distress. Both share their
+    # arithmetic with a screen criterion (max_accrual_ratio / min_altman_z) so a ranked
+    # and a screened value can never diverge, and both are selected by forensic_v1,
+    # which marks NOTHING is_gating — this lens adds a column and an argument, it never
+    # lowers a verdict on its own.
+    "accrual_ratio": FactorDef(
+        "accrual_ratio", _accrual_ratio, "low", "Accrual ratio (low best)",
+        glossary=("The share of last year's reported profit that has not yet arrived "
+                  "as cash. A high figure means the earnings rest on accounting "
+                  "entries rather than money actually collected."),
+        unit="percent",
+        fallback_note="(net income − operating cash flow) / average total assets, "
+                      "period-matched; falls back to single-year assets when the prior "
+                      "year is missing (labelled); abstains on a missing input or a "
+                      "non-positive asset base",
+        source_fn=_accrual_ratio_source),
+    "altman_z": FactorDef(
+        "altman_z", _altman_z, "high", "Altman Z-Score",
+        glossary=("A single number combining five measures of working capital, "
+                  "accumulated profit, earnings, market value and sales into one "
+                  "distress signal. Higher means further from financial trouble."),
+        unit="score",
+        fallback_note="1.2·WC/TA + 1.4·RE/TA + 3.3·EBIT/TA + 0.6·market cap/total "
+                      "liabilities + 1.0·sales/TA, statement lines period-matched; "
+                      "abstains on a missing input, a non-positive denominator, or a "
+                      "cross-currency name (market cap vs statements, rule 8)",
+        source_fn=_altman_z_source),
+    # Piotroski F-Score (PIOTROSKI-1) — a rankable QUALITY leg. Registered-and-unused
+    # until FORENSIC-1 gave it a consumer: it is forensic_v1's third leg. Shares its
+    # nine checks with the min_f_score screen criterion
+    # (tools/screening.piotroski_f_score).
     "piotroski_f_score": FactorDef(
         "piotroski_f_score", _piotroski_f_score, "high",
         "Piotroski F-Score (0-9)",
         glossary=("A nine-point checklist of basic financial health: profitability, "
                   "debt and efficiency each score a point when improving."), unit="score",
         fallback_note="nine annual-statement checks; abstains below 5 computable "
-                      "checks; coarse integer -> large tied blocks on a small universe "
-                      "(screen beats rank leg)"),
+                      "checks; coarse integer -> large tied blocks on a small universe, "
+                      "which is why forensic_v1 pairs it with two continuous legs"),
     # Absolute valuation band (VALBAND-1) — a rankable leg registered but selected by
     # NO strategy in this PR. direction "low": the 15th percentile of its own history is
     # cheap, the 92nd is near its own peak.

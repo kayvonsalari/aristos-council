@@ -27,10 +27,10 @@ from aristos_council.strategy.rank_loader import load_rank_strategy
 
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 
-# The five STOCK lenses the live picker must offer for a stock cohort (the incident list:
-# RAW, flagship, GARP v2, Defensive, Financials).
+# The STOCK lenses the live picker must offer for a stock cohort (the incident list:
+# RAW, flagship, GARP v2, Defensive, Financials — plus Forensic, added by FORENSIC-1).
 _STOCK_LENSES = {"magic_formula_raw_v1", "magic_formula_momentum_v1", "growth_garp_v2",
-                 "conservative_plus_v1", "financials_v1"}
+                 "conservative_plus_v1", "financials_v1", "forensic_v1"}
 _ETF_LENSES = {"etf_core_v1", "etf_dividend_v1", "etf_growth_v1"}
 
 

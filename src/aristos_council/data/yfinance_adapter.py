@@ -171,6 +171,13 @@ class YFinanceAdapter(MarketDataAdapter):
         # Same best-effort contract as every series above — absent -> the band abstains.
         _record_aligned("ebit", income, "EBIT")
         _record_aligned("operating_income", income, "Operating Income")
+        # FORENSIC-1: the Altman Z-Score's X2 and X4 lines. Period-labelled like the
+        # rest, because Z sums five ratios that must all describe the SAME fiscal year —
+        # a positional read could take retained earnings from one year and assets from
+        # another and still produce a plausible-looking score.
+        _record_aligned("retained_earnings", balance, "Retained Earnings")
+        _record_aligned("total_liabilities", balance,
+                        "Total Liabilities Net Minority Interest", "Total Liab")
         _record_aligned("total_debt", balance, "Total Debt")
         _record_aligned("cash", balance, "Cash And Cash Equivalents",
                         "Cash Cash Equivalents And Short Term Investments")
@@ -265,6 +272,13 @@ class YFinanceAdapter(MarketDataAdapter):
             shares_outstanding_annual=_cashflow_series(
                 balance, "Ordinary Shares Number", "Share Issued"),
             gross_profit_annual=_cashflow_series(income, "Gross Profit"),
+            # Forensic-lens series (FORENSIC-1), newest-first, alias-tolerant for the
+            # same reason as the F-Score lines: yfinance renames the total-liabilities
+            # row between versions, and a single label would silently yield an empty
+            # series and make the Z-Score abstain for every name.
+            retained_earnings_annual=_cashflow_series(balance, "Retained Earnings"),
+            total_liabilities_annual=_cashflow_series(
+                balance, "Total Liabilities Net Minority Interest", "Total Liab"),
         )
 
     # ------------------------------------------------------------------ #

@@ -76,15 +76,18 @@ from aristos_council.tools.screening import (  # noqa: E402
 
 STRATEGIES_DIR = ROOT / "strategies"
 
-# The five STOCK lenses and the three ETF lenses — the same sets the scout job and the
-# strategy picker use (scripts/scout_verdicts.STOCK_LENSES, tests/test_strategy_
-# applicability._ETF_LENSES). Order given = column order in the grid.
+# The STOCK lenses and the three ETF lenses — the same sets the strategy picker uses
+# (tests/test_strategy_applicability._STOCK_LENSES / ._ETF_LENSES). Order given = column
+# order in the grid. NOTE: scripts/scout_verdicts.STOCK_LENSES is deliberately NOT kept
+# in step — the scout's lens set is part of its DATED comparability, so a new lens joins
+# it only on an explicit owner decision (FORENSIC-1 left it untouched).
 STOCK_LENSES = [
     "conservative_plus_v1",       # Defensive Income
     "magic_formula_momentum_v1",  # Value + Momentum
     "magic_formula_raw_v1",       # Greenblatt RAW
     "growth_garp_v2",             # GARP
     "financials_v1",              # Financials
+    "forensic_v1",                # Forensic (FORENSIC-1) — non-gating earnings quality
 ]
 ETF_LENSES = ["etf_core_v1", "etf_dividend_v1", "etf_growth_v1"]
 
