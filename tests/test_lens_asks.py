@@ -132,3 +132,17 @@ def test_lens_asks_strips_yaml_folding_whitespace():
         s = _load(sid)
         assert s.asks == s.asks.strip()
         assert "\n" not in s.asks
+
+
+# --------------------------------------------------------------------------- #
+# CAPTION-2 — the definition where the reader CHOOSES, not only after
+# --------------------------------------------------------------------------- #
+def test_the_caption_builder_returns_the_asks_text_or_empty():
+    """CAPTION-1 put this sentence under lenses already chosen, which is the wrong moment:
+    the question a lens asks is what you need in order to pick it."""
+    pytest.importorskip("streamlit")
+    import app
+
+    assert app.lens_caption(_load("forensic_v1")) == EXPECTED["forensic_v1"]
+    assert app.lens_caption(_load("magic_formula_v1")) == ""     # legacy, declares none
+    assert app.lens_caption(None) == ""                          # never raises
