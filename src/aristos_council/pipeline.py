@@ -3800,6 +3800,37 @@ def is_marked(row) -> bool:
                for m in row.marks)
 
 
+
+def agreement_row_for(result, ticker: str) -> dict:
+    """NARR-CONTEXT-1 — one name's agreement row, as the narrator receives it.
+
+    Read off the table the report renders, so the writer and the reader are looking at the
+    same thing. The band's reversion ARITHMETIC is deliberately left out: only the mark
+    text goes to a model, because an implied price comes back as a target however it is
+    labelled. Empty when the run has no agreement table (a single-lens run), which keeps
+    that prompt byte-unchanged."""
+    from .report_language import verdict_word
+
+    ag = getattr(result, "lens_agreement", None)
+    if ag is None or not ag.available:
+        return {}
+    row = next((r for r in ag.rows if r.ticker == ticker), None)
+    if row is None:
+        return {}
+    return {
+        "buy_votes": row.buy_votes,
+        "n_voting": ag.n_voting,
+        "buy_lenses": list(row.buy_lenses),
+        "sell_lenses": list(row.sell_lenses),
+        # Each check's reading in ITS OWN words (CHECK-WORDS-1) — "Forensic: doubted",
+        # never "Forensic: SELL", because the second is the sentence this repo spent a
+        # whole item removing from the report.
+        "checks": [{"lens": label, "reading": verdict_word(v, check=True)}
+                   for label, v in (row.check_verdicts or {}).items()],
+        "marks": list(row.marks),
+    }
+
+
 def narration_plan(result, coverage: str = "buys_only", *,
                    level: str = DEFAULT_NARRATION_LEVEL,
                    cap: int = DEFAULT_NARRATION_CAP,
@@ -3983,7 +4014,10 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
                 boundary_tie_facts(res.ranked).get(ticker, {})),
             static_factor_evidence=_static_factor_evidence(r),
             cross_lens_verdicts=cross_lens_verdicts(result, ticker),
-            cross_lens_reasons=cross_lens_reasons(result, ticker))))
+            cross_lens_reasons=cross_lens_reasons(result, ticker),
+            # NARR-CONTEXT-1 — what the RUN concluded about this name: the votes, each
+            # check's reading in its own words, and the marks. The writer opens on it.
+            agreement_row=agreement_row_for(result, ticker))))
         rep = report_from_state(state)
         # A cross-lens section quotes SEVERAL lenses' rank tables, so each claim is
         # checked against the table of the lens it NAMES — checking them all against the

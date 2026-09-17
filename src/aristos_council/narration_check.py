@@ -853,3 +853,39 @@ def check_narration_by_lens(narrative: str, tables_by_lens: dict,
                 seen.add(claim)
                 flags.append(mark)
     return flags
+
+# --------------------------------------------------------------------------- #
+# NARR-CONTEXT-1 — a mark the pack carries must be addressed
+# --------------------------------------------------------------------------- #
+# A name reaches the narrator carrying "doubted by Forensic" or "priced high: 99th
+# percentile of its own 5-year range". Those are the two facts a reader of the shortlist
+# arrives with, so a narration that does not meet them is answering a question nobody
+# asked — and worse, it reads as an unqualified case for a name the run qualified.
+#
+# The test is deliberately generous about WORDS and strict about SUBSTANCE: the check's
+# name, or the phrase "priced high", anywhere in the prose. A writer who says "Forensic
+# doubts the accruals" has addressed it; one who never types "Forensic" has not.
+_MARK_CHECK = "doubted by "
+_MARK_PRICE = "priced high"
+
+
+def unaddressed_marks(text: str, marks) -> list:
+    """The marks this narration never mentions. Empty when there are none to mention."""
+    lowered = (text or "").lower()
+    missing = []
+    for mark in marks or []:
+        if mark.startswith(_MARK_CHECK):
+            who = mark[len(_MARK_CHECK):].strip()
+            if who and who.lower() not in lowered:
+                missing.append(mark)
+        elif mark.startswith(_MARK_PRICE):
+            if _MARK_PRICE not in lowered and "priced" not in lowered:
+                missing.append(mark)
+    return missing
+
+
+def mark_annotation(missing) -> str:
+    """The stamp an unaddressed mark earns, in the shape every other stamp here uses."""
+    if not missing:
+        return ""
+    return f"[⚠ mark not addressed: {'; '.join(missing)}]"
