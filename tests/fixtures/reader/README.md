@@ -18,6 +18,12 @@ first pack carrying `role` on every test, `unanimous_buy`, and a kept shortlist 
 exact numbers. Re-deriving it from a later run would move those numbers and quietly
 invalidate the example.
 
+READER-5 kept both packs and both pins. What changed is what a failure MEANS: only four
+checks withhold now (numbers, names, roles, unanimous BUYs), and the rest are recorded as
+notes. `test_reader_check.py` reads these packs for both — the four live summaries of
+2026-09-16/17 are checked against them, and only the one that misdescribed the run is
+withheld.
+
 The example is pinned against this pack two ways:
 `test_the_v4_exemplar_PASSES_every_check` runs the validator on it, and
 `test_the_exemplar_in_the_PROMPT_is_the_one_that_was_checked` asserts every sentence of

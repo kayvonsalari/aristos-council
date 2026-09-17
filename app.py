@@ -2797,7 +2797,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # and neither grades anything. Default OFF, and INDEPENDENT of the run mode — ticked
     # on a ranker-only run it makes exactly one model call and nothing else.
     with_reader = st.checkbox(
-        f"Plain-English summary (one short AI note, about {READER_COST_HINT})",
+        "Plain-English summary",
         value=False, key="uni_reader",
         help="Adds a short note at the top of the report saying what the run asked, what "
              "happened, what survived the checks and what to doubt — in language a "

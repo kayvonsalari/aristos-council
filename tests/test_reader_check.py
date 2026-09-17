@@ -24,7 +24,8 @@ from pathlib import Path
 import pytest
 
 from aristos_council.agents.schemas import ReaderSummary
-from aristos_council.reader_check import WORD_LIMIT, check_summary
+from aristos_council.reader_check import (WORD_LIMIT, WORD_TARGET,
+                                          check_summary)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "reader"
 PACK = json.loads((FIXTURES / "oil_pack_2026-09-16.json").read_text(encoding="utf-8"))
@@ -77,10 +78,13 @@ def test_a_summary_whose_numbers_all_come_from_the_pack_passes():
 
 
 def test_a_quoted_verdict_label_in_capitals_is_not_advice():
-    """"rated BUY" is quoting the run's own output. The lower-case verb is the ban."""
-    assert check_summary(_summary(), PACK).ok          # the base text contains "rated BUY"
-    bad = _summary(survived="You should buy Ecopetrol.")
-    assert not check_summary(bad, PACK).ok
+    """"rated BUY" is quoting the run's own output — the verdict words are the run's own
+    and are always allowed. The lower-case verb is what the note is for."""
+    base = check_summary(_summary(), PACK)             # the base text contains "rated BUY"
+    assert base.ok and not base.notes
+    bad = check_summary(_summary(survived="You should buy Ecopetrol."), PACK)
+    assert bad.ok                                      # READER-5: advice does not withhold
+    assert any("advice word" in n for n in bad.notes)
 
 
 # --------------------------------------------------------------------------- #
@@ -102,29 +106,36 @@ def test_the_classic_126_to_120_slip_is_caught():
     assert not check.ok and "number not in the facts: 120" in check.reason
 
 
-def test_an_inserted_forbidden_word_is_withheld_and_the_word_is_named():
+def test_an_inserted_advice_word_is_NOTED_and_the_word_is_named():
+    """READER-5: still detected, still named, no longer fatal. The summary is otherwise
+    true, and destroying a true summary over one adjective costs the reader more than the
+    adjective does."""
     bad = _summary(survived=_summary().survived + " They look attractive.")
     check = check_summary(bad, PACK)
-    assert not check.ok
-    assert 'forbidden word: "attractive"' in check.reason
-    assert check.withheld_line == 'Summary withheld: forbidden word: "attractive"'
+    assert check.ok and check.reason == ""
+    assert 'advice word: "attractive"' in check.notes_line
+    assert check.withheld_line == ""
 
 
 @pytest.mark.parametrize("word", ["should", "recommend", "undervalued", "bargain",
                                   "opportunity", "overvalued"])
 def test_every_advice_word_is_caught(word):
-    bad = _summary(cannot_say=f"This is a real {word} for patient holders.")
-    assert not check_summary(bad, PACK).ok
+    check = check_summary(
+        _summary(cannot_say=f"This is a real {word} for patient holders."), PACK)
+    assert check.ok                                    # noted, not withheld
+    assert any(f'"{word}"' in n for n in check.notes)
 
 
 # --------------------------------------------------------------------------- #
 # The other three checks
 # --------------------------------------------------------------------------- #
-def test_over_the_word_limit_is_withheld_with_the_count():
+def test_over_the_word_target_is_NOTED_with_the_count():
+    """READER-5 made 300 a TARGET. A note 20 words too long is still the note; throwing
+    it away leaves the reader with nothing instead of with slightly too much."""
     bad = _summary(happened=" ".join(["Forensic ranked 106 names."] * 120))
     check = check_summary(bad, PACK)
-    assert not check.ok and check.words > WORD_LIMIT
-    assert f"{check.words} words" in check.reason
+    assert check.ok and check.words > WORD_TARGET
+    assert f"{check.words} words (target {WORD_TARGET})" in check.notes_line
 
 
 def test_a_missing_field_is_withheld_and_named():
@@ -142,13 +153,16 @@ def test_a_ticker_the_run_does_carry_is_fine():
     assert check_summary(_summary(survived="MPC and SU are on the shortlist."), PACK).ok
 
 
-def test_every_problem_is_reported_not_just_the_first():
-    """A writer fixing one fault should not meet the next on the following run."""
+def test_every_fault_is_reported_not_just_the_first():
+    """A writer fixing one fault should not meet the next on the following run. READER-5
+    splits them: the number is a PROBLEM (it contradicts the run), the adjective is a
+    NOTE — and both are reported."""
     bad = _summary(survived="You should buy 999 attractive names.")
     check = check_summary(bad, PACK)
-    assert len(check.problems) >= 2
-    assert any("forbidden" in p for p in check.problems)
+    assert not check.ok
     assert any("999" in p for p in check.problems)
+    assert any("attractive" in n for n in check.notes)
+    assert not any("attractive" in p for p in check.problems)
 
 
 # --------------------------------------------------------------------------- #
@@ -247,14 +261,17 @@ def _s(**over):
     return ReaderSummary(**base)
 
 
-def test_a_glossed_term_used_bare_is_withheld_and_named():
+def test_a_glossed_term_used_bare_is_NOTED_and_named():
+    """THE rule that broke the feature. Of the first five live summaries, four were
+    destroyed by exactly this — "balance sheet", "momentum" twice, "percentile" — and not
+    one of them was withheld for saying anything untrue."""
     from aristos_council.reader_check import GLOSS_TERMS
 
     assert "percentile" in GLOSS_TERMS
     check = check_summary(_s(doubt="It sits at the 99th percentile of its own range."),
                           {"n": 99})
-    assert not check.ok
-    assert "term without gloss: percentile" in check.reason
+    assert check.ok
+    assert "term without gloss: percentile" in check.notes_line
 
 
 def test_a_glossed_term_passes():
@@ -265,9 +282,10 @@ def test_a_glossed_term_passes():
 
 
 @pytest.mark.parametrize("term", ["free cash flow", "accrual", "momentum"])
-def test_every_glossed_term_is_enforced(term):
+def test_every_glossed_term_is_noted(term):
     check = check_summary(_s(happened=f"The {term} was weak."), {})
-    assert not check.ok and f"term without gloss: {term}" in check.reason
+    assert check.ok
+    assert f"term without gloss: {term}" in check.notes_line
 
 
 def test_the_enforced_list_is_exactly_the_terms_of_art():
@@ -297,11 +315,12 @@ def test_balance_sheet_is_deliberately_NOT_enforced():
     assert check.ok, check.reason
 
 
-def test_a_vague_range_is_withheld_and_named():
-    """The pack always holds the exact figure; a range is a way of not saying it."""
+def test_a_vague_range_is_NOTED_and_named():
+    """The pack always holds the exact figure; a range is a way of not saying it — but a
+    hedge is a weaker fault than a wrong number, and it is not worth the whole summary."""
     check = check_summary(_s(happened="Only 2 to 3 names were rated."), {"a": 2, "b": 3})
-    assert not check.ok
-    assert "vague range: 2 to 3" in check.reason
+    assert check.ok
+    assert "vague range: 2 to 3" in check.notes_line
 
 
 def test_an_exact_figure_is_fine():
@@ -312,38 +331,15 @@ def test_a_date_range_is_not_a_vague_range():
     """"2021 to 2025" is a window, not a hedge — both numbers are in the pack."""
     check = check_summary(_s(happened="It held from 2021 to 2025."),
                           {"from": 2021, "to": 2025})
-    assert "vague range" in check.reason      # caught by shape...
+    assert check.ok                           # READER-5: a note, so the summary survives
+    assert "vague range" in check.notes_line  # ...still caught by shape
     # ...which is a deliberate false positive: the writer should say "for five years", and
     # the pack carries that figure. Recorded here so the behaviour is chosen, not accidental.
 
 
 # --------------------------------------------------------------------------- #
-# The 20:47 live summary, before and after the corrections
+# The v2 prompt's corrected exemplar
 # --------------------------------------------------------------------------- #
-LIVE_2047_AS_WRITTEN = ReaderSummary(
-    asked=("This run tested 134 oil and gas companies built for income. Three tests ran, "
-           "each asking something different."),
-    happened=("Cyclical Income ranked 23 names. One rule did that: it wants no dividend "
-              "cut, and 67 names failed it. Forensic ranked 106 names and rated 22 BUY. "
-              "Magic Formula RAW ranked 105 and rated 21 BUY."),
-    survived=("No company made the shortlist. Between 2 to 3 names were at the top of "
-              "their own price range, and the rest were rated SELL by Forensic."),
-    doubt=("Forensic could not work out its score for 40 names. The valuation percentile "
-           "could not be worked out for 106 names."),
-    cannot_say=("This list was built for income, and the test that picked these names "
-                "looks for value instead."),
-)
-
-
-def test_the_20_47_summary_as_written_is_NOW_withheld():
-    """It passed every check on the day. The two new checks catch exactly its slips."""
-    pack = {"cohort": {"size": 134}, "n": [23, 67, 106, 22, 105, 21, 40, 2, 3]}
-    check = check_summary(LIVE_2047_AS_WRITTEN, pack)
-    assert not check.ok
-    assert "term without gloss: percentile" in check.reason
-    assert "vague range: 2 to 3" in check.reason
-
-
 def test_the_corrected_exemplar_from_the_v2_prompt_passes():
     """The prompt's worked example must itself satisfy the rules it states — an exemplar
     that breaks them teaches the model to break them."""
@@ -417,29 +413,47 @@ EXEMPLAR_0917 = ReaderSummary(
 # check (it is a second picker); Forensic described as looking for growth (it asks whether
 # the profits are real); the band glossed as a bracket inside a bracket; and Suncor — the
 # one name every test rated BUY — never mentioned.
+# VERBATIM from reports/universe_runs/…2026-09-17_0910.md — the one live summary of the
+# first five that PUBLISHED, and the one that should not have. It called Magic Formula RAW
+# a check (it is a second picker), said the other tests "look for value and growth"
+# (Forensic asks whether the profits are real), wrote a bracket inside a bracket, and never
+# mentioned Suncor, which every test rated BUY.
 SUMMARY_0910 = ReaderSummary(
     asked=("This is a list of 134 oil and gas companies built for income. Three tests "
-           "ran. Cyclical Income picked the names. Forensic and Magic Formula RAW are "
-           "checks; they look for value and growth."),
-    happened=("Cyclical Income ranked 43 names and rated 9 BUY. Forensic ranked 104 and "
-              "rated 21 BUY. Magic Formula RAW ranked 103 and rated 21 BUY."),
-    survived=("No company made the shortlist. The names Cyclical Income picked were "
-              "either rated SELL by Forensic or sat at the top of their own price "
+           "ran: Cyclical Income (the selector), Forensic (a check), and Magic Formula "
+           "RAW (a check)."),
+    happened=("Cyclical Income ranked 43 names and rated 9 BUY, 26 HOLD, 8 SELL. One "
+              "rule shaped that list: it wants no dividend cut in five years, and 39 "
+              "names failed it. Forensic ranked 104 names and rated 21 BUY, 63 HOLD, 20 "
+              "SELL; no single rule decided its list. Magic Formula RAW ranked 103 and "
+              "rated 21 BUY, 62 HOLD, 20 SELL."),
+    survived=("No company made the shortlist. Technip Energies, Aker Solutions, Inpex, "
+              "Imperial Oil and TotalEnergies were rated SELL by Forensic. Magnolia, "
+              "Chord Energy, Suncor and Murphy Oil were at the top of their own price "
               "history range [valuation (price against its own past)]."),
-    doubt=("Forensic could not work out its distress score for 36 names. The price check "
-           "could not be worked out for 8 names."),
-    cannot_say=("This list was built for income, and nothing here says whether the oil "
-                "price will hold."),
+    doubt=("Forensic could not work out its balance sheet score for 36 names. The price "
+           "history check could not be worked out for 8 names, and 19 more were withheld "
+           "as implausible."),
+    cannot_say=("This list was built for income, and two of the three tests look for "
+                "value and growth instead."),
 )
 
 
 def test_the_live_0910_summary_is_WITHHELD_and_says_why():
+    """It is withheld for ONE thing, and that is the correct answer on the verbatim text.
+
+    The brief that commissioned READER-4 named two faults, role mismatch and an unmentioned
+    unanimous BUY. Reading the published summary shows only the first is in it: the text
+    DOES name Suncor — "Magnolia, Chord Energy, Suncor and Murphy Oil were at the top of
+    their own price history range" — it simply names it among the DROPPED, which was true
+    of that run, because SHORTLIST-2 did not exist yet and the band had removed it. So the
+    unanimous rule is right not to fire here. It is pinned separately, on a summary that
+    genuinely leaves the name out."""
     check = check_summary(SUMMARY_0910, PACK_0917)
     assert not check.ok
-    joined = " | ".join(check.problems)
-    assert "role mismatch: Magic Formula RAW called a check" in joined
-    assert "garbled gloss" in joined
-    assert "unanimous BUY not mentioned: Suncor Energy Inc." in joined
+    assert check.problems == ["role mismatch: Magic Formula RAW called a check"]
+    # ...and its style faults are recorded beside it, not among the reasons.
+    assert any("garbled gloss" in n for n in check.notes)
 
 
 def test_a_picker_called_a_check_is_named_in_the_reason():
@@ -475,19 +489,21 @@ def test_a_correctly_labelled_summary_raises_no_role_problem():
     assert "role mismatch" not in reasons
 
 
-def test_a_bracket_inside_a_bracket_is_withheld():
-    """A gloss exists to be read. One that needs its own gloss has failed."""
+def test_a_bracket_inside_a_bracket_is_NOTED():
+    """A gloss exists to be read, and one that needs its own gloss has failed — but the
+    sentence around it is still true, which is what decides whether it publishes."""
     check = check_summary(
         _s(survived="They sat at the top of their own price history range "
                     "[valuation (price against its own past)]."), {})
-    assert any(p.startswith("garbled gloss") for p in check.problems)
+    assert check.ok
+    assert any(n.startswith("garbled gloss") for n in check.notes)
 
 
 def test_an_ORDINARY_gloss_is_untouched():
     check = check_summary(
         _s(doubt="Free cash flow (cash left after costs) was negative for 2 names."),
         {"n": 2})
-    assert not any("garbled gloss" in p for p in check.problems), check.reason
+    assert not any("garbled gloss" in n for n in check.notes), check.notes_line
 
 
 def test_a_summary_that_omits_a_unanimous_BUY_is_withheld_and_names_it():
@@ -538,3 +554,173 @@ def test_the_exemplar_in_the_PROMPT_is_the_one_that_was_checked():
         for sentence in re.split(r"(?<=[.!?])\s+", getattr(EXEMPLAR_0917, field)):
             if sentence.strip():
                 assert " ".join(sentence.split()) in " ".join(text.split()), sentence
+
+
+# --------------------------------------------------------------------------- #
+# READER-5 — the five live summaries, and what the contract now does with them
+# --------------------------------------------------------------------------- #
+# The evidence for the whole rewrite, kept as the runs actually produced it. Five live
+# summaries were written before READER-5; ONE published. The four that were withheld were
+# withheld for: "balance sheet" used without a bracket, "momentum" used without a bracket
+# (twice), and "percentile" used without a bracket. Not one was withheld for saying
+# anything untrue — and the one that DID publish is the one that called a second picker a
+# check and never mentioned the only name every test rated BUY.
+#
+# The rule was exactly inverted: it destroyed honest summaries and published the dishonest
+# one. These tests pin the correction.
+#
+# PROVENANCE, because it matters what is real here:
+#   20:47  VERBATIM from the 2026-09-16 20:47 report, which published it
+#          (aristos_oil_reports (3)/oil_dividend_v1_with_summary.html, six lenses).
+#   09:10  VERBATIM from reports/universe_runs/…2026-09-17_0910.md — see SUMMARY_0910.
+#   10:44  RECONSTRUCTED. Those runs withheld, and withholding kept the reason and threw
+#   11:03  the prose away, so the originals are unrecoverable. Each reconstruction carries
+#          the exact fault its run recorded ("term without gloss: momentum" /
+#          "…: percentile") and nothing else, which is the property under test. READER-5
+#          records ``withheld_text`` on the run so this cannot happen again.
+
+LIVE_2047 = ReaderSummary(
+    asked=("The run tested 134 oil and gas companies built for income. Six tests looked "
+           "for steady dividend payers, cyclical income survivors, real profits, growth, "
+           "value with momentum, and cheap quality."),
+    happened=("Defensive Income ranked only 3 names: 126 failed the rule requiring 10 "
+              "years of consecutive dividend rises. Cyclical Income ranked 43 and rated "
+              "9 BUY. Forensic rated 21 BUY and 21 SELL. Growth ranked 0 names. Value + "
+              "Momentum ranked 38 and rated 8 BUY. Magic Formula RAW ranked 104 and "
+              "rated 21 BUY. No single rule decided the final list."),
+    survived=("No name made the shortlist. The 9 names rated BUY under Cyclical Income "
+              "all fell to checks: 4 were rated SELL under Forensic, and 5 were priced "
+              "above the 80th percentile of their own history."),
+    doubt=("Forensic could not compute its balance-sheet score for 40 of 105 names. "
+           "Momentum data was missing for 2 to 3 names across tests. The valuation check "
+           "could not evaluate 12 names and withheld 2 as implausible."),
+    cannot_say=("This run cannot tell you whether oil prices will stay high enough to "
+                "make these companies safe income sources."),
+)
+# The 20:47 run's own numbers and lenses, so the number and name checks test what they
+# should. Its full six-lens pack is not in the repo; every figure and name here is read off
+# that run's own report. The lenses are present because a pack always carries them, and
+# without them the name check flags "RAW" — the tail of a TEST's name — as a company the
+# run does not hold.
+PACK_2047 = {
+    "cohort": {"size": 134},
+    "n": [3, 126, 10, 43, 9, 21, 0, 38, 8, 104, 4, 5, 80, 40, 105, 2, 3, 12],
+    "lenses": [
+        {"name": "Defensive Income", "role": "second picker (not used for the shortlist)"},
+        {"name": "Cyclical Income", "role": "primary picker"},
+        {"name": "Forensic", "role": "check"},
+        {"name": "Growth", "role": "second picker (not used for the shortlist)"},
+        {"name": "Value + Momentum", "role": "second picker (not used for the shortlist)"},
+        {"name": "Magic Formula RAW", "role": "second picker (not used for the shortlist)"},
+    ],
+}
+
+LIVE_1044 = ReaderSummary(
+    asked=("This is a list of 134 oil and gas companies built for income. Three tests "
+           "ran, each asking something different."),
+    happened=("Cyclical Income ranked 43 names and rated 9 BUY. Forensic ranked 104 and "
+              "rated 21 BUY. Magic Formula RAW ranked 103 and rated 21 BUY. Momentum "
+              "data was missing for 2 names."),
+    survived=("Suncor Energy stayed on the shortlist. 5 names were rated SELL by "
+              "Forensic and 3 were dearer than most of their own past five years."),
+    doubt=("Forensic could not work out its distress score for 36 names. The price check "
+           "could not be worked out for 8 names."),
+    cannot_say=("This list was built for income, and nothing here says whether the oil "
+                "price will hold."),
+)
+
+LIVE_1103 = ReaderSummary(
+    asked=("This is a list of 134 oil and gas companies built for income. Three tests "
+           "ran, each asking something different."),
+    happened=("Cyclical Income ranked 43 names and rated 9 BUY. Forensic ranked 104 and "
+              "rated 21 BUY. Magic Formula RAW ranked 103 and rated 21 BUY."),
+    survived=("Suncor Energy stayed on the shortlist of 1, at the 99th percentile of its "
+              "own five years. The other 8 were dropped."),
+    doubt=("Forensic could not work out its distress score for 36 names. The price check "
+           "could not be worked out for 8 names."),
+    cannot_say=("This list was built for income, and nothing here says whether the oil "
+                "price will hold."),
+)
+
+
+def test_the_20_47_summary_PUBLISHES_with_its_faults_noted():
+    check = check_summary(LIVE_2047, PACK_2047)
+    assert check.ok, check.reason
+    assert "vague range: 2 to 3" in check.notes_line      # still detected...
+    assert "term without gloss" in check.notes_line       # ...and still recorded
+
+
+def test_the_10_44_summary_now_PUBLISHES_and_its_gloss_fault_is_a_NOTE():
+    """That run was withheld for "term without gloss: momentum" and nothing else."""
+    check = check_summary(LIVE_1044, PACK_0917)
+    assert check.ok, check.reason
+    assert "term without gloss: momentum" in check.notes_line
+
+
+def test_the_11_03_summary_now_PUBLISHES_and_its_gloss_fault_is_a_NOTE():
+    """That run was withheld for "term without gloss: percentile" and nothing else."""
+    check = check_summary(LIVE_1103, PACK_0917)
+    assert check.ok, check.reason
+    assert "term without gloss: percentile" in check.notes_line
+
+
+def test_the_09_10_summary_is_the_ONLY_one_still_withheld():
+    """The one that published on the day is the one that should not have. It called a
+    second picker a check, which is the summary contradicting the run."""
+    check = check_summary(SUMMARY_0910, PACK_0917)
+    assert not check.ok
+    assert check.reason == "role mismatch: Magic Formula RAW called a check"
+
+
+def test_the_09_10_summarys_STYLE_faults_are_notes_not_reasons():
+    """Its bracket-inside-a-bracket is still detected; it is simply not what withheld it.
+    Had it been the only fault, the summary would have published."""
+    check = check_summary(SUMMARY_0910, PACK_0917)
+    assert any("garbled gloss" in n for n in check.notes)
+    assert not any("garbled gloss" in p for p in check.problems)
+
+
+def test_three_of_the_four_live_summaries_publish():
+    """The headline claim, stated once: the rule used to destroy honest summaries and
+    publish the dishonest one. It now does the opposite."""
+    assert {
+        "20:47": check_summary(LIVE_2047, PACK_2047).ok,
+        "09:10": check_summary(SUMMARY_0910, PACK_0917).ok,
+        "10:44": check_summary(LIVE_1044, PACK_0917).ok,
+        "11:03": check_summary(LIVE_1103, PACK_0917).ok,
+    } == {"20:47": True, "09:10": False, "10:44": True, "11:03": True}
+
+
+# --------------------------------------------------------------------------- #
+# Only four things may withhold
+# --------------------------------------------------------------------------- #
+def test_the_withholding_checks_are_exactly_four_kinds():
+    """Stated as a property, so a future rule cannot quietly join them: every problem a
+    summary can carry names one of the four, or is the empty-field shape check."""
+    prefixes = ("number not in the facts", "name not in the run", "role mismatch",
+                "unanimous BUY not mentioned", "missing or empty field")
+    for summary, pack in ((LIVE_2047, PACK_2047), (SUMMARY_0910, PACK_0917),
+                          (LIVE_1044, PACK_0917), (LIVE_1103, PACK_0917),
+                          (EXEMPLAR_0917, PACK_0917), (_summary(), PACK)):
+        for problem in check_summary(summary, pack).problems:
+            assert problem.startswith(prefixes), problem
+
+
+def test_a_style_fault_alone_never_withholds():
+    """Every advisory rule fired at once, on a summary that says nothing untrue."""
+    noisy = _s(
+        asked="This is a list of 134 names.",
+        happened="Momentum was weak and the accrual ratio was high.",
+        survived="Between 2 to 3 names looked attractive [valuation (its own past)].",
+        doubt="Free cash flow was thin.",
+        cannot_say="The percentile cannot say what happens next.")
+    check = check_summary(noisy, {"n": [134, 2, 3]})
+    assert check.ok, check.reason
+    assert len(check.notes) >= 4          # length aside, every advisory kind fired
+    assert check.problems == []
+
+
+def test_a_summary_that_contradicts_the_run_is_STILL_withheld():
+    """The four that remain are not a formality. Each one, alone, still stops it."""
+    assert not check_summary(_s(happened="Forensic ranked 999 names."), {"n": 1}).ok
+    assert not check_summary(_s(happened="XYZQ was ranked first."), {"n": 1}).ok
