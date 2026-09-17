@@ -8,14 +8,14 @@
 
 _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 
-### 3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one — shortlist: 1 of 1 BUY
+### 3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one — shortlist: 1 name BUY on all 3 voting lenses
 
 **Classic Value** — Quality-value screen, 2 rules · **Magic Formula RAW** — no screen (ranking only) · **Value + Momentum** — Quality-value screen, 2 rules  ([details](#rules-applied--by-lens))
 
 
 ## Contents
 
-- Shortlist — 1 of 1 BUY survived the checks
+- Shortlist — agreement across 3 voting lenses
 - What the run could not see
 - Verdict by lens
 - Valuation band (absolute — vs each name's own history)
@@ -30,13 +30,17 @@ _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 - What the terms mean
 
 
-## Shortlist — 1 of 1 BUY survived the checks
+## Shortlist — agreement across 3 voting lenses
 
-_BUY under Classic Value and below the 80th percentile of its own valuation history._
+_Names ordered by how many of the 3 voting lenses rated them BUY. The price check does not vote; its doubts are shown as marks._
 
-| Name | Rank | Valuation percentile |
-|---|---|---|
-| **A** | #1 | not evaluated |
+**Magic Formula RAW and Value + Momentum rank on the same 3 factors; ticking both counts one view twice.**
+
+| Name | BUY votes | SELL votes | Valuation percentile | Marks |
+|---|---|---|---|---|
+| **A** | 3 of 3: Classic Value, Magic Formula RAW, Value + Momentum | — | not evaluated |  |
+
+_2 names had no BUY from any lens, and are not listed here._
 
 ## What the run could not see
 
@@ -125,11 +129,15 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 ## Classic Value (magic_formula_v1) — detail
 
-- Ranked: 2 of 4 names
+**Ranked 2 of 4 names. Excluded 1: by rule below, worst miss first.**
 
-**Excluded — did not pass a rule, so was never ranked**
+**Return on invested capital** `min_roic` · rule: at least 12% · **1 name**
 
-- **C** — return on invested capital 7.7%; the rule requires at least 12%. `min_roic`
+_A business that earns less on the capital it employs than that capital costs destroys value by growing, so its growth is a reason for concern rather than for a premium._
+
+| Name | Measured | Note |
+|---|---|---|
+| **C** | 7.7% |  |
 
 **No usable data — no verdict was formed**
 
@@ -137,14 +145,16 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 **Where the numbers came from**
 
-- Return on invested capital — real data for all 2 names.
-- Earnings yield (EBIT/EV) — from the EBIT / market-cap proxy for all 2 names.
+| Factor | Real data | Abstained |
+|---|---|---|
+| **Return on invested capital** | 2 of 2 | — |
+| **Earnings yield (EBIT/EV)** | 2 of 2 | — |
 
 ## Magic Formula RAW (magic_formula_raw_v1) — detail
 
 _Cheap and good: high profit on the money invested, a low price for that profit, and a rising share._
 
-- Ranked: 3 of 4 names
+**Ranked 3 of 4 names.**
 
 **No usable data — no verdict was formed**
 
@@ -152,19 +162,25 @@ _Cheap and good: high profit on the money invested, a low price for that profit,
 
 **Where the numbers came from**
 
-- Return on invested capital — real data for all 3 names.
-- Earnings yield (EBIT/EV) — from the EBIT / market-cap proxy for all 3 names.
-- 12-month price momentum — no usable data for all 3 names.
+| Factor | Real data | Abstained |
+|---|---|---|
+| **Return on invested capital** | 3 of 3 | — |
+| **Earnings yield (EBIT/EV)** | 3 of 3 | — |
+| **12-month price momentum** | 0 of 3 | 3 — A, B, C |
 
 ## Value + Momentum (magic_formula_momentum_v1) — detail
 
 _The same as Magic Formula RAW, but only for companies earning at least 12% on their capital._
 
-- Ranked: 2 of 4 names
+**Ranked 2 of 4 names. Excluded 1: by rule below, worst miss first.**
 
-**Excluded — did not pass a rule, so was never ranked**
+**Return on invested capital** `min_roic` · rule: at least 12% · **1 name**
 
-- **C** — return on invested capital 7.7%; the rule requires at least 12%. `min_roic`
+_A business that earns less on the capital it employs than that capital costs destroys value by growing, so its growth is a reason for concern rather than for a premium._
+
+| Name | Measured | Note |
+|---|---|---|
+| **C** | 7.7% |  |
 
 **No usable data — no verdict was formed**
 
@@ -172,9 +188,11 @@ _The same as Magic Formula RAW, but only for companies earning at least 12% on t
 
 **Where the numbers came from**
 
-- Return on invested capital — real data for all 2 names.
-- Earnings yield (EBIT/EV) — from the EBIT / market-cap proxy for all 2 names.
-- 12-month price momentum — no usable data for all 2 names.
+| Factor | Real data | Abstained |
+|---|---|---|
+| **Return on invested capital** | 2 of 2 | — |
+| **Earnings yield (EBIT/EV)** | 2 of 2 | — |
+| **12-month price momentum** | 0 of 2 | 2 — A, B |
 
 ## Cohort graded (exact membership)
 

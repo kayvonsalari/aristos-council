@@ -122,7 +122,10 @@ def test_the_model_is_handed_the_prompt_and_the_facts_pack_and_nothing_else():
     _multi(with_reader=True, reader_runner=runner)
     assert runner.system == prompt_text()
     pack = json.loads(runner.user)              # the user turn is the pack, verbatim JSON
-    assert set(pack) >= {"cohort", "lenses", "shortlist", "valuation_band"}
+    # SHORTLIST-3: "shortlist" is now "agreement" — the same section, counted the way it
+    # is now counted. What this test guards is unchanged: the writer is handed the PACK and
+    # nothing else, and the pack carries the run's own facts.
+    assert set(pack) >= {"cohort", "lenses", "agreement", "valuation_band"}
 
 
 def test_the_prompt_is_the_versioned_file_on_disk():

@@ -2049,29 +2049,27 @@ def _reader_markdown(reader) -> list[str]:
     return lines + [f"_{READER_SECTION_NOTE}_"]
 
 
-def _shortlist_markdown(sl, shortlist_table) -> list[str]:
-    """SHORTLIST-1 in the .md — the same cells the HTML renders, from the same builder."""
-    if sl is None:
+def _shortlist_markdown(ag, lens_agreement_table) -> list[str]:
+    """SHORTLIST-3 in the .md — the same cells the HTML renders, from the same builder."""
+    if ag is None:
         return []
-    lines = ["", f"## {sl.title}", ""]
-    if not sl.available:
-        return lines + [f"_{sl.reason}._"]
-    lines += [f"_{sl.rule_sentence}_", ""]
-    cols, rows = shortlist_table(sl)
+    lines = ["", f"## {ag.title}", "", f"_{ag.rule_sentence}_"]
+    if not ag.available:
+        return lines
+    if ag.overlap_note:
+        lines += ["", f"**{ag.overlap_note}**"]
+    lines.append("")
+    cols, rows = lens_agreement_table(ag)
     if rows:
         lines += _md_table(cols, rows)
-        # SHORTLIST-2 — the warning's meaning, once, under the table that carries it.
-        if sl.cautioned:
-            from aristos_council.pipeline import SHORTLIST_CAUTION_NOTE
-            lines += ["", f"_{SHORTLIST_CAUTION_NOTE}_"]
     else:
-        lines.append("_No candidate survived the checks. That is a result, not a gap — "
-                     "every drop and its reason is below._")
-    if sl.dropped:
-        lines += ["", f"**Dropped · {len(sl.dropped)}**", ""]
-        lines += [f"- **{r.display}** — {r.dropped_by}" for r in sl.dropped]
+        lines.append("_No name was rated BUY by any voting lens. That is a result, not a "
+                     "gap._")
+    if ag.no_buy_count:
+        plural = "s" if ag.no_buy_count != 1 else ""
+        lines += ["", f"_{ag.no_buy_count} name{plural} had no BUY from any lens, and "
+                      "are not listed here._"]
     return lines
-
 
 
 # --------------------------------------------------------------------------- #
@@ -2150,7 +2148,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         fetch_guard_line,
         floor_override_line,
         lens_asks,
-        lens_detail, provenance_sentences, report_sections, shortlist_table,
+        lens_agreement_table, lens_detail, provenance_sentences, report_sections,
         union_valuation_band_table,
         valuation_band_table,
     )
@@ -2204,8 +2202,8 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     lines += _reader_markdown(getattr(multi_result, "reader", None))
 
     # 1b (SHORTLIST-1) — the answer, before the evidence for it.
-    lines += _shortlist_markdown(getattr(multi_result, "shortlist", None),
-                                 shortlist_table)
+    lines += _shortlist_markdown(getattr(multi_result, "lens_agreement", None),
+                                 lens_agreement_table)
 
     # 2 (REPORT-4) — what the run could NOT see, BEFORE any prose that rests on what it
     # could. Rendered even when clean: an absent section is indistinguishable from a
@@ -2352,30 +2350,28 @@ def _local_stamp(run_start) -> str:
 
 
 
-def _render_shortlist(sl) -> None:
-    """The derived shortlist on screen — the same builder the two reports render, so the
-    app and the downloaded files cannot show different names."""
-    if sl is None:
+def _render_shortlist(ag) -> None:
+    """The agreement table on screen — the same builder the two reports render, so the app
+    and the downloaded files cannot show different names."""
+    if ag is None:
         return
-    from aristos_council.pipeline import SHORTLIST_CAUTION_NOTE, shortlist_table
+    from aristos_council.pipeline import lens_agreement_table
 
-    st.subheader(sl.title)
-    if not sl.available:
-        st.caption(f"{sl.reason}.")
+    st.subheader(ag.title)
+    st.caption(ag.rule_sentence)
+    if not ag.available:
         return
-    st.caption(sl.rule_sentence)
-    cols, rows = shortlist_table(sl)
+    if ag.overlap_note:
+        st.warning(ag.overlap_note)
+    cols, rows = lens_agreement_table(ag)
     if rows:
         st.dataframe(rows, column_order=cols, hide_index=True, width="stretch")
-        if sl.cautioned:
-            st.warning(SHORTLIST_CAUTION_NOTE)
     else:
-        st.info("No candidate survived the checks. That is a result, not a gap — every "
-                "drop and its reason is below.")
-    if sl.dropped:
-        with st.expander(f"Dropped · {len(sl.dropped)}", expanded=False):
-            for r in sl.dropped:
-                st.markdown(f"- **{r.display}** — {r.dropped_by}")
+        st.info("No name was rated BUY by any voting lens. That is a result, not a gap.")
+    if ag.no_buy_count:
+        plural = "s" if ag.no_buy_count != 1 else ""
+        st.caption(f"{ag.no_buy_count} name{plural} had no BUY from any lens, and are not "
+                   "listed here.")
 
 
 
@@ -2462,7 +2458,7 @@ def _render_multi_strategy_result(multi_result) -> None:
     # have carried this section since SHORTLIST-1; the Run tab carried only the summary
     # line's count, so a reader working in the app could see THAT names survived without
     # seeing WHICH — and, after SHORTLIST-2, without seeing the price warning on one.
-    _render_shortlist(getattr(multi_result, "shortlist", None))
+    _render_shortlist(getattr(multi_result, "lens_agreement", None))
 
     # REPORT-2: the rules EACH lens applied, before the verdicts — a name excluded by one
     # lens and ranked by another is only legible once both rule sets are stated.
