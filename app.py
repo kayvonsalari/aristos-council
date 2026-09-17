@@ -32,6 +32,7 @@ from pydantic import ValidationError
 from aristos_council.data.adapter import (
     DataUnavailable, display_name, normalize_ticker)
 from aristos_council.demo_surface import (
+    ASSET_MODES, DEFAULT_ASSET_MODE, ETFS, asset_mode_filter,
     strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
 from aristos_council.costs import actual_vs_estimate, cost_phrase
@@ -2374,6 +2375,59 @@ def _render_shortlist(sl) -> None:
                 st.markdown(f"- **{r.display}** — {r.dropped_by}")
 
 
+
+# --------------------------------------------------------------------------- #
+# ASSET-MODE-1 — when a pasted list held names for the OTHER side of the switch
+# --------------------------------------------------------------------------- #
+# The asset-kind gate is untouched: it excluded those names before this change and it
+# excludes them now, with the same reason on the same line of the report. What was missing
+# was the ONE sentence that turns "asset kind 'ETF' outside this strategy's scope" from a
+# dead end into a next step — because the reader now has a switch that would grade them.
+#
+# Above the results, never inside them. The report is a record and is unchanged; this is
+# the app telling you what to do next.
+_WRONG_KIND_REASON = "asset kind "
+
+
+def wrong_kind_count(result, *, mode: str) -> int:
+    """How many names this run's asset-kind gate excluded as the OTHER kind.
+
+    Counted from the run's own exclusion reasons — the gate already wrote them — so this
+    can never disagree with the report about which names were gated. Zero when the run
+    gated none, which is the ordinary case and renders nothing.
+
+    The KIND needs no inspecting: the gate fires only for a name the lens does not admit,
+    so in Stocks mode every gated name is a fund and in ETFs mode every one is a company.
+    ``mode`` therefore decides only the wording, not the count."""
+    results = getattr(result, "results", None)
+    runs = list(results.values()) if isinstance(results, dict) else [result]
+    seen: set = set()
+    for run in runs:
+        for ticker, reason in (getattr(run, "excluded", None) or []):
+            if str(reason).startswith(_WRONG_KIND_REASON):
+                seen.add(ticker)
+    return len(seen)
+
+
+def wrong_kind_line(count: int, *, mode: str) -> str:
+    """The sentence, or "". It names the count, what they are, and the way to grade
+    them — a warning that does not say what to do instead is only half a warning."""
+    if not count:
+        return ""
+    if mode == ETFS:
+        return (f"{count} of these names are stocks and were not graded. "
+                "Switch to Stocks to analyse them.")
+    return (f"{count} of these names are ETFs and were not graded. "
+            "Switch to ETFs to analyse them.")
+
+
+def _render_wrong_kind_line(result) -> None:
+    line = wrong_kind_line(wrong_kind_count(result, mode=asset_mode()),
+                           mode=asset_mode())
+    if line:
+        st.info(line)
+
+
 def _render_multi_strategy_result(multi_result) -> None:
     """The combined grid (FUND-RUN-1) — presentation only: every cell is the
     verdict-of-record a single run of that strategy produces."""
@@ -2734,10 +2788,14 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # visible strategy is offered for ANY ticker list: no per-section "relevant strategies"
     # filtering, because a list does not make a strategy unofferable. Asset-class scope
     # stays an honest caption + a confirmed-mismatch warning below, never a hidden option.
+    # ASSET-MODE-1: and then the switch, which decides whether this picker is offering
+    # the stock lenses or the fund ones. Visibility only — every lens still exists, still
+    # loads, and still runs from the CLI and Colab.
     choices = strategy_choices([o[2] for o in list_rank_strategy_options(STRATEGIES_DIR)],
                                show_validation=show_validation)
+    choices = [c for c in choices if _mode_filters()[0](c.strategy)]
     if not choices:
-        st.error(f"No rank strategies found under {STRATEGIES_DIR}")
+        st.error(f"No {asset_mode()} strategies found under {STRATEGIES_DIR}")
         return
     # The picker renders FRIENDLY display names; the technical id lives only in a small
     # caption (ids are the stable record keys — never renamed, never in the label). A label
@@ -2835,6 +2893,8 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # is no separate "universe edit runs" section any more, and no manifest ceremony.
     saved = visible_universes(list_universes(UNIVERSES_DIR),
                               show_validation=show_validation)
+    # ASSET-MODE-1: only the lists that belong to the side of the switch you are on.
+    saved = [u for u in saved if _mode_filters()[1](u)]
     NEW_LIST = "New list"
     list_labels = [NEW_LIST] + saved_list_labels(saved)
     list_choice = st.selectbox("List", list_labels, key="uni_list",
@@ -2917,14 +2977,18 @@ def render_universe_tab(show_validation: bool = False) -> None:
                     path = save_local_universe(
                         UNIVERSES_DIR, id=picked_list.id, tickers=universe,
                         created=created, display_name=name.strip() or picked_list.id,
-                        graded_ids=graded, overwrite=True, thesis=list_thesis)
+                        graded_ids=graded, overwrite=True, thesis=list_thesis,
+                        # ASSET-MODE-1: the list comes back where it was made.
+                        asset_kind=_mode_asset_kind())
                 else:
                     new_id = list_id_from_name(name,
                                                existing_universe_ids(UNIVERSES_DIR))
                     path = save_local_universe(
                         UNIVERSES_DIR, id=new_id, tickers=universe, created=created,
                         display_name=name.strip(), graded_ids=graded,
-                        thesis=list_thesis)
+                        thesis=list_thesis,
+                        # ASSET-MODE-1: the list comes back where it was made.
+                        asset_kind=_mode_asset_kind())
             except (ValueError, ValidationError) as exc:
                 st.error(str(exc))
             else:
@@ -3206,11 +3270,13 @@ def render_universe_tab(show_validation: bool = False) -> None:
     multi_result = st.session_state.get("uni_multi_result")
     if multi_result is not None:
         st.divider()
+        _render_wrong_kind_line(multi_result)
         _render_multi_strategy_result(multi_result)
 
     result = st.session_state.get("uni_result")
     if result is not None:
         st.divider()
+        _render_wrong_kind_line(result)
         _render_universe_result(result)
 
 
@@ -3284,8 +3350,11 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     # is why STRAT-PICKER-1's fix landed on one surface only.
     choices = strategy_choices([o[2] for o in list_rank_strategy_options(STRATEGIES_DIR)],
                                show_validation=show_validation)
+    # ASSET-MODE-1: the same switch, on the same picker — the CHECK itself is untouched,
+    # only which lenses it is offered against.
+    choices = [c for c in choices if _mode_filters()[0](c.strategy)]
     if not choices:
-        st.error(f"No rank strategies found under {STRATEGIES_DIR}")
+        st.error(f"No {asset_mode()} strategies found under {STRATEGIES_DIR}")
         return
 
     ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
@@ -3305,6 +3374,10 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     # fresh universe fetch). A 'None' option runs raw values with no cohort position.
     manifests = visible_universes(list_universes(UNIVERSES_DIR),
                                   show_validation=show_validation)
+    # ASSET-MODE-1: the reference cohort starts new analysis too, so it follows the switch
+    # like every other picker. It also keeps the UNI-1 contract that this selector and the
+    # Run tab's List offer the same set — they would otherwise disagree in Stocks mode.
+    manifests = [u for u in manifests if _mode_filters()[1](u)]
     NONE = "(none — raw values, no cohort context)"
     # UNI-1 ITEM 2: the selected strategy's SUGGESTED universes render first here too
     # (same helper the Run tab used for its manifest dropdown — no drift). This is a
@@ -3496,6 +3569,63 @@ def _cc_num(v) -> str:
 # --------------------------------------------------------------------------- #
 # Page
 # --------------------------------------------------------------------------- #
+
+# --------------------------------------------------------------------------- #
+# ASSET-MODE-1 — the switch, read wherever a picker is built
+# --------------------------------------------------------------------------- #
+def asset_mode() -> str:
+    """The current Stocks / ETFs mode. Stocks whenever nothing has been chosen — on a
+    fresh start, after a refresh, and in every test that never touches the switch."""
+    return st.session_state.get("asset_mode") or DEFAULT_ASSET_MODE
+
+
+@st.cache_data(show_spinner=False)
+def _known_etf_tickers() -> frozenset:
+    """Every ticker this repo already knows to be a fund, for classifying an unmarked
+    list. Two sources, both of which exist for other reasons:
+
+    * the ETF static layer (``data/etf_static.csv``) — human-verified fund rows;
+    * the shipped ETF universes — a list whose thesis is ``funds`` is a list of funds.
+
+    Not a lookup that can fail a run: a ticker missing from both is simply not known to
+    be a fund, and an unmarked list containing one falls to the stocks default."""
+    tickers: set = set()
+    try:
+        from aristos_council.etf_static import default_static_rows
+        tickers.update(t.upper() for t in default_static_rows())
+    except Exception:                                  # a missing/garbled CSV is not fatal
+        pass
+    try:
+        from aristos_council.universe import list_universes
+
+        for manifest in list_universes(UNIVERSES_DIR):
+            if (getattr(manifest, "thesis", "") or "").strip().lower() == "funds":
+                tickers.update(t.upper() for t in (manifest.tickers or []))
+    except Exception:
+        pass
+    return frozenset(tickers)
+
+
+def _mode_asset_kind() -> str:
+    """The current mode as a Universe ``asset_kind`` value — "stocks" or "etfs"."""
+    from aristos_council.demo_surface import ASSET_KINDS
+
+    return "etfs" if asset_mode() == ETFS else ASSET_KINDS[0]
+
+
+def _mode_filters():
+    """``(lens_ok, list_ok)`` for the current mode — the ONE pair every picker applies."""
+    return asset_mode_filter(asset_mode(), etf_tickers=_known_etf_tickers())
+
+
+def visible_for_mode(strategies=None, universes=None):
+    """Filter either collection by the current mode. Returns whichever was passed."""
+    lens_ok, list_ok = _mode_filters()
+    if strategies is not None:
+        return [s for s in strategies if lens_ok(s)]
+    return [u for u in (universes or []) if list_ok(u)]
+
+
 def main() -> None:
     # Load a local .env at APP START (item 4) so ANTHROPIC/FINNHUB keys reach the
     # Streamlit process regardless of the launch shell — the key guards below and
@@ -3534,6 +3664,20 @@ def main() -> None:
     run_clicked = False
 
     with st.sidebar:
+        # ASSET-MODE-1 — the one control that decides what every picker offers. In the
+        # SIDEBAR, not in a tab, because it governs the Run tab, Company Check and every
+        # other surface that starts new analysis, and a switch that lived in one of them
+        # would be invisible from the others.
+        #
+        # SESSION ONLY, and deliberately. Nothing is written to a settings file, a query
+        # param or local storage, so the app opens on Stocks every time — which is what
+        # "a stock-analysis tool by default" means. A persisted ETFs choice would make
+        # the majority job the one you have to remember to switch back to.
+        st.radio("Analyse", list(ASSET_MODES), horizontal=True, index=0,
+                 key="asset_mode")
+        st.caption("ETF lists and lenses are hidden while Stocks is selected.")
+        st.divider()
+
         if show_legacy:
             # --- LEGACY single-ticker council flow (pre-v2) ---
             st.header("Run a council · Legacy")

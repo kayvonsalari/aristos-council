@@ -9,6 +9,10 @@
 id: etf_dividend_ucits_v1
 # THESIS-1 — what this list was built for.
 thesis: funds
+# ASSET-MODE-1 — which side of the UI's Stocks / ETFs switch this list lives on.
+# Stated rather than inferred: the app ships this list, so the app can say what it
+# is.
+asset_kind: etfs
 display_name: Dividend ETFs (UCITS)
 role: euro-investable exploration — observation only
 description: >-
