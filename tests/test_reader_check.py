@@ -373,6 +373,29 @@ def test_the_corrected_exemplar_from_the_v2_prompt_passes():
 PACK_0917 = json.loads((FIXTURES / "oil_pack_2026-09-17.json").read_text(encoding="utf-8"))
 
 
+def _as_the_run_stood(pack, *numbers):
+    """The pack as it stood for the four LIVE summaries below.
+
+    Two differences from today's, both of them about not judging a historical text by a
+    later run's facts:
+
+    * ITS NUMBERS. SHORTLIST-3 re-ran the frozen cohort and the day's figures moved by one
+      or two (103 ranked where the live summary said 104, 35 abstentions where it said
+      36). The verbatim summaries are not edited to fit a later run; the run's own figures
+      are added to the pack instead. Feeding the number check a figure from the wrong run
+      would fail every test here for a reason that has nothing to do with the rule under
+      test.
+    * NO AGREEMENT TABLE. These summaries were written when the section was a shortlist a
+      rule produced, so there were no "top agreement" names to name. Demanding them of a
+      text that predates the concept tests nothing — the rule is pinned on its own, on a
+      SHORTLIST-3 pack, below.
+
+    What these four still test, and what they were written for, is unchanged: which rules
+    WITHHOLD a summary and which merely note it."""
+    return {**pack, "agreement": {**(pack.get("agreement") or {}), "top_agreement": []},
+            "_live_run_numbers": list(numbers)}
+
+
 def _replace_field(summary, **over):
     """One field of a ReaderSummary swapped, the rest kept."""
     fields = {f: getattr(summary, f)
@@ -385,34 +408,36 @@ def _replace_field(summary, **over):
 # it sets.
 EXEMPLAR_0917 = ReaderSummary(
     asked=("This is a list of 134 oil and gas companies built for income. Three tests "
-           "ran. Cyclical Income is the primary picker; it wants a dividend that "
-           "survives the cycle, covered and not cut in five years. Magic Formula RAW is "
-           "a second picker, not used for the shortlist; it wants cheap, good "
-           "businesses. Forensic is a check; it asks whether the profits are real."),
-    happened=("Cyclical Income ranked 43 names and rated 9 BUY. Forensic ranked 104 and "
-              "rated 21 BUY. Magic Formula RAW ranked 103 and rated 21 BUY. No single "
+           "ran. Two of them vote: Cyclical Income wants a dividend that survives the "
+           "cycle, covered and not cut in five years, and Magic Formula RAW wants cheap, "
+           "good businesses. Forensic does not vote; it asks whether the profits are "
+           "real, and its doubts are shown as marks."),
+    happened=("Cyclical Income ranked 43 names and rated 9 BUY. Forensic ranked 103 and "
+              "rated 21 BUY. Magic Formula RAW ranked 102 and rated 21 BUY. No single "
               "rule decided any of the three lists."),
-    survived=("Suncor Energy is the one company all three tests rated BUY, and it is on "
-              "the shortlist of 1. It carries a price warning: it sits at the 99th "
-              "percentile (dearer than almost all of its own past) of its own five "
-              "years, so it costs far more than usual for the profit it makes. All "
-              "three tests read those same recent years, so their agreement is not "
-              "proof the price is right. Of the 9 names Cyclical Income picked, 8 were "
-              "dropped: Technip Energies, Aker Solutions, Inpex, Imperial Oil and "
-              "TotalEnergies were rated SELL by Forensic, and Magnolia Oil & Gas, Chord "
-              "Energy and Murphy Oil cost far more than usual for the profit they make, "
-              "compared with their own last five years."),
-    doubt=("Forensic could not work out its distress score for 36 names, mostly foreign "
+    survived=("Two companies were rated BUY by both voting tests: Aker Solutions and "
+              "Suncor Energy. Each carries one caution. Aker Solutions is doubted by "
+              "Forensic. Suncor Energy is priced high, at the 99th percentile of its own "
+              "five years, so it costs far more than usual for the profit it makes. "
+              "Neither mark removed the company from the list. A further 26 companies "
+              "were rated BUY by one of the two voting tests, and 74 by neither."),
+    doubt=("Forensic could not work out its distress score for 35 names, mostly foreign "
            "listings. The price check could not be worked out for 8 names, and was "
            "withheld for 19 more because the numbers looked wrong."),
     cannot_say=("This list was built for income, and nothing here says whether the oil "
                 "price will hold."),
 )
 
+
 # The 09:10 summary, carrying the four faults the owner named: Magic Formula RAW called a
 # check (it is a second picker); Forensic described as looking for growth (it asks whether
 # the profits are real); the band glossed as a bracket inside a bracket; and Suncor — the
 # one name every test rated BUY — never mentioned.
+# The 09:10 run's own figures, so a VERBATIM summary is checked against the run it was
+# written from rather than against a later re-run of the same cohort.
+PACK_0910 = _as_the_run_stood(PACK_0917, 104, 103, 36, 63, 62, 39, 26, 19, 8, 20)
+
+
 # VERBATIM from reports/universe_runs/…2026-09-17_0910.md — the one live summary of the
 # first five that PUBLISHED, and the one that should not have. It called Magic Formula RAW
 # a check (it is a second picker), said the other tests "look for value and growth"
@@ -449,7 +474,7 @@ def test_the_live_0910_summary_is_WITHHELD_and_says_why():
     of that run, because SHORTLIST-2 did not exist yet and the band had removed it. So the
     unanimous rule is right not to fire here. It is pinned separately, on a summary that
     genuinely leaves the name out."""
-    check = check_summary(SUMMARY_0910, PACK_0917)
+    check = check_summary(SUMMARY_0910, PACK_0910)
     assert not check.ok
     assert check.problems == ["role mismatch: Magic Formula RAW called a check"]
     # ...and its style faults are recorded beside it, not among the reasons.
@@ -459,7 +484,7 @@ def test_the_live_0910_summary_is_WITHHELD_and_says_why():
 def test_a_picker_called_a_check_is_named_in_the_reason():
     """A reader told a picker is a check reads its BUYs as "nothing objectionable found"
     rather than "this test chose it", which inverts what the run said."""
-    check = check_summary(SUMMARY_0910, PACK_0917)
+    check = check_summary(SUMMARY_0910, PACK_0910)
     reason = "; ".join(p for p in check.problems if p.startswith("role mismatch"))
     assert "Magic Formula RAW" in reason
     assert "Forensic" not in reason          # Forensic IS a check; it is not mismatched
@@ -469,7 +494,7 @@ def test_a_check_called_a_picker_is_caught_the_other_way_round():
     summary = _replace_field(SUMMARY_0910, asked=(
         "This is a list of 134 oil and gas companies built for income. Forensic is the "
         "selector."))
-    check = check_summary(summary, PACK_0917)
+    check = check_summary(summary, PACK_0910)
     assert any("Forensic called a picker" in p for p in check.problems)
 
 
@@ -480,7 +505,7 @@ def test_a_role_word_about_an_UNNAMED_test_is_not_a_mismatch():
     summary = _replace_field(SUMMARY_0910, asked=(
         "This is a list of 134 oil and gas companies built for income. One test is a "
         "check: it only raises doubts."))
-    reasons = " ".join(check_summary(summary, PACK_0917).problems)
+    reasons = " ".join(check_summary(summary, PACK_0910).problems)
     assert "role mismatch" not in reasons
 
 
@@ -506,29 +531,32 @@ def test_an_ORDINARY_gloss_is_untouched():
     assert not any("garbled gloss" in n for n in check.notes), check.notes_line
 
 
-def test_a_summary_that_omits_a_unanimous_BUY_is_withheld_and_names_it():
-    """A name every test rated BUY is the strongest single fact a multi-test run
-    produces. The 09:10 summary omitted the only one it had."""
+def test_a_summary_that_omits_a_TOP_AGREEMENT_name_is_withheld_and_names_it():
+    """The names the MOST voting tests agreed on are the strongest single fact a run
+    produces (READER-4 asked this of the UNANIMOUS names; SHORTLIST-3 counts votes instead
+    of requiring all of them, so the question survives on runs where nothing is unanimous —
+    which is most of them)."""
     summary = _replace_field(EXEMPLAR_0917, survived=(
-        "One company stayed on the shortlist. The other 8 were dropped."))
+        "Some companies were rated BUY by one test and some by two."))
     check = check_summary(summary, PACK_0917)
-    assert "unanimous BUY not mentioned: Suncor Energy Inc." in "; ".join(check.problems)
+    joined = "; ".join(check.problems)
+    assert "top agreement not mentioned" in joined
+    assert "Suncor Energy Inc." in joined and "Aker Solutions ASA" in joined
 
 
-def test_the_TICKER_alone_satisfies_the_unanimous_rule():
+def test_the_TICKER_alone_satisfies_the_top_agreement_rule():
     """A summary that says "SU" has named the company; the rule is about mentioning it,
     not about which of its two names is used."""
     summary = _replace_field(EXEMPLAR_0917, survived=(
-        "SU is the one company all three tests rated BUY, and it is on the shortlist "
-        "of 1."))
+        "SU and AKSO.OL are the two companies both voting tests rated BUY."))
     reasons = " ".join(check_summary(summary, PACK_0917).problems)
-    assert "unanimous BUY not mentioned" not in reasons
+    assert "top agreement not mentioned" not in reasons
 
 
-def test_a_run_with_no_unanimous_name_demands_nothing():
-    pack = {**PACK_0917, "unanimous_buy": []}
+def test_a_run_with_no_agreement_table_demands_nothing():
+    pack = {**PACK_0917, "agreement": {"available": False}}
     reasons = " ".join(check_summary(EXEMPLAR_0917, pack).problems)
-    assert "unanimous BUY" not in reasons
+    assert "top agreement" not in reasons
 
 
 # --------------------------------------------------------------------------- #
@@ -652,14 +680,14 @@ def test_the_20_47_summary_PUBLISHES_with_its_faults_noted():
 
 def test_the_10_44_summary_now_PUBLISHES_and_its_gloss_fault_is_a_NOTE():
     """That run was withheld for "term without gloss: momentum" and nothing else."""
-    check = check_summary(LIVE_1044, PACK_0917)
+    check = check_summary(LIVE_1044, PACK_0910)
     assert check.ok, check.reason
     assert "term without gloss: momentum" in check.notes_line
 
 
 def test_the_11_03_summary_now_PUBLISHES_and_its_gloss_fault_is_a_NOTE():
     """That run was withheld for "term without gloss: percentile" and nothing else."""
-    check = check_summary(LIVE_1103, PACK_0917)
+    check = check_summary(LIVE_1103, PACK_0910)
     assert check.ok, check.reason
     assert "term without gloss: percentile" in check.notes_line
 
@@ -667,7 +695,7 @@ def test_the_11_03_summary_now_PUBLISHES_and_its_gloss_fault_is_a_NOTE():
 def test_the_09_10_summary_is_the_ONLY_one_still_withheld():
     """The one that published on the day is the one that should not have. It called a
     second picker a check, which is the summary contradicting the run."""
-    check = check_summary(SUMMARY_0910, PACK_0917)
+    check = check_summary(SUMMARY_0910, PACK_0910)
     assert not check.ok
     assert check.reason == "role mismatch: Magic Formula RAW called a check"
 
@@ -675,7 +703,7 @@ def test_the_09_10_summary_is_the_ONLY_one_still_withheld():
 def test_the_09_10_summarys_STYLE_faults_are_notes_not_reasons():
     """Its bracket-inside-a-bracket is still detected; it is simply not what withheld it.
     Had it been the only fault, the summary would have published."""
-    check = check_summary(SUMMARY_0910, PACK_0917)
+    check = check_summary(SUMMARY_0910, PACK_0910)
     assert any("garbled gloss" in n for n in check.notes)
     assert not any("garbled gloss" in p for p in check.problems)
 
@@ -685,9 +713,9 @@ def test_three_of_the_four_live_summaries_publish():
     publish the dishonest one. It now does the opposite."""
     assert {
         "20:47": check_summary(LIVE_2047, PACK_2047).ok,
-        "09:10": check_summary(SUMMARY_0910, PACK_0917).ok,
-        "10:44": check_summary(LIVE_1044, PACK_0917).ok,
-        "11:03": check_summary(LIVE_1103, PACK_0917).ok,
+        "09:10": check_summary(SUMMARY_0910, PACK_0910).ok,
+        "10:44": check_summary(LIVE_1044, PACK_0910).ok,
+        "11:03": check_summary(LIVE_1103, PACK_0910).ok,
     } == {"20:47": True, "09:10": False, "10:44": True, "11:03": True}
 
 
@@ -698,9 +726,9 @@ def test_the_withholding_checks_are_exactly_four_kinds():
     """Stated as a property, so a future rule cannot quietly join them: every problem a
     summary can carry names one of the four, or is the empty-field shape check."""
     prefixes = ("number not in the facts", "name not in the run", "role mismatch",
-                "unanimous BUY not mentioned", "missing or empty field")
-    for summary, pack in ((LIVE_2047, PACK_2047), (SUMMARY_0910, PACK_0917),
-                          (LIVE_1044, PACK_0917), (LIVE_1103, PACK_0917),
+                "top agreement not mentioned", "missing or empty field")
+    for summary, pack in ((LIVE_2047, PACK_2047), (SUMMARY_0910, PACK_0910),
+                          (LIVE_1044, PACK_0910), (LIVE_1103, PACK_0910),
                           (EXEMPLAR_0917, PACK_0917), (_summary(), PACK)):
         for problem in check_summary(summary, pack).problems:
             assert problem.startswith(prefixes), problem

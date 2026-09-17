@@ -20,8 +20,11 @@ So the two kinds of problem are now separated, and only one of them can withhold
 2. **Names** — every company or ticker named is one the run actually carries.
 3. **Roles** — a test the text NAMES and describes as a check or a picker is described as
    the pack says it is. Calling a picker a check inverts what the run said.
-4. **Unanimous BUYs** — a name every test rated BUY is named. It is the strongest single
-   fact a multi-test run produces.
+4. **Top agreement** — the names the MOST voting tests rated BUY are named. That is the
+   strongest single fact a multi-test run produces. (READER-4 asked for the UNANIMOUS
+   names; SHORTLIST-3 counts votes instead of requiring all of them, so this is the same
+   fact counted the way the table now counts — and it exists on a run where nothing was
+   unanimous, which the old question did not.)
 
 Plus the shape check: all five fields present and non-empty. A summary with an empty field
 is not a summary.
@@ -210,11 +213,16 @@ _NESTED_GLOSS = re.compile(r"[\[(][^\[\]()]*[\[(][^\[\]()]*[\])]")
 # only where a NAME and a role word sit in the same sentence.
 # Singular AND plural: the 09:10 summary said "Forensic and Magic Formula RAW are
 # checks", and a rule that only saw "check" would have let the sentence through.
+# SHORTLIST-3 replaced the three-way role with one question — does it vote — so "primary"
+# and "second picker" no longer describe anything the prompt asks for. They stay in this
+# table anyway: a summary that calls Forensic "the primary picker" is still wrong about
+# Forensic, and catching that is worth more than being tidy about retired vocabulary.
 _ROLE_WORDS = {
     "check": "check", "checks": "check",
     "the selector": "picker", "selector": "picker", "selectors": "picker",
     "primary picker": "picker", "second picker": "picker",
     "picker": "picker", "pickers": "picker", "primary": "picker",
+    "voting test": "picker", "voting lens": "picker",
 }
 
 
@@ -275,13 +283,17 @@ def _role_claim(sentence: str, name: str, others=()):
 
 
 def _pack_roles(pack) -> dict:
-    """``{test name: "check" | "picker"}`` from the pack's stated roles."""
+    """``{test name: "check" | "picker"}`` from the pack's own ``votes`` flag.
+
+    READER-6: the pack states one boolean per test instead of READER-4's three role
+    phrases, because SHORTLIST-3 left only one distinction that means anything — a test
+    either votes or it marks."""
     out = {}
     for lens in (pack or {}).get("lenses") or []:
         name = (lens.get("name") or "").strip()
-        role = (lens.get("role") or "").strip()
-        if name and role:
-            out[name] = "check" if role == "check" else "picker"
+        if not name or "votes" not in lens:
+            continue
+        out[name] = "picker" if lens.get("votes") else "check"
     return out
 
 
@@ -358,18 +370,22 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
         problems.append("role mismatch: "
                         + "; ".join(f"{n} called {w}" for n, w in mismatched))
 
-    # 4. a name EVERY test rated BUY, left out (READER-4).
-    missing_unanimous = []
-    for entry in (pack or {}).get("unanimous_buy") or []:
-        label = (entry.get("name") or "").strip()
+    # 4. a name at the TOP of the agreement table, left out (READER-4, re-aimed by
+    # READER-6). The names the MOST voting tests agreed on are the strongest single fact a
+    # multi-test run produces. Under SHORTLIST-1 that meant "BUY on every test"; it now
+    # means "BUY on the most tests" — the same fact counted the way the table counts, and
+    # one that exists on a run where nothing was unanimous.
+    missing_top = []
+    for label in ((pack or {}).get("agreement") or {}).get("top_agreement") or []:
+        label = (label or "").strip()
         if not label:
             continue
         plain = label.split(" (")[0].strip()
         ticker = label[label.find("(") + 1:label.rfind(")")] if "(" in label else ""
         if plain and not _is_named(plain, ticker, text):
-            missing_unanimous.append(plain)
-    if missing_unanimous:
-        problems.append("unanimous BUY not mentioned: " + ", ".join(missing_unanimous))
+            missing_top.append(plain)
+    if missing_top:
+        problems.append("top agreement not mentioned: " + ", ".join(missing_top))
 
     # ------------------------------------------------------------------ ADVISE
     # Detected exactly as before; recorded, never enforced. Each of these withheld a live

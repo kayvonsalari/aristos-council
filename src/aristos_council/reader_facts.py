@@ -87,29 +87,24 @@ def _factor_abstentions(result) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# READER-4 — every test's ROLE, stated in the pack
+# READER-6 — every test says whether it VOTES
 # --------------------------------------------------------------------------- #
-# The 2026-09-17 09:10 summary called Magic Formula RAW "a check". It is a second
-# SELECTOR: it picks, it just did not pick FOR the shortlist, because only one lens can.
-# The same summary said the other tests "look for value and growth", which is not what
-# Forensic does at all — it asks whether the profits are real.
+# READER-4 gave each test a `role` — primary picker, second picker, check — because the
+# 09:10 summary had inferred one and got it wrong. SHORTLIST-3 removed the hierarchy those
+# three phrases described: there is no primary lens, so "second picker (not used for the
+# shortlist)" describes a thing that no longer exists.
 #
-# Both errors have the same shape: the writer inferred a test's job instead of being told
-# it. So the pack now says it, in the three phrasings the summary is allowed to use, and
-# the checker holds the text to them. A writer that cannot invent a role cannot get one
-# wrong.
-ROLE_PRIMARY = "primary picker"
-ROLE_SECOND = "second picker (not used for the shortlist)"
-ROLE_CHECK = "check"
+# What survives the change is the distinction that was doing the work: a test either VOTES
+# or it MARKS. That is one boolean, it is exactly what the agreement table turns on, and it
+# cannot go stale the way a three-way role could.
 
 
-def lens_role(kind: str, *, is_primary: bool) -> str:
-    """One of the three role phrases. A check is a check whether or not it is primary —
-    a check lens chosen as primary cannot select, which the run says elsewhere."""
-    if (kind or "selector") == "check":
-        return ROLE_CHECK
-    return ROLE_PRIMARY if is_primary else ROLE_SECOND
+def lens_votes(kind: str) -> bool:
+    """True for a lens whose verdicts are VOTES on the shortlist; False for a check.
 
+    A check lens does not pick. Its SELL is a doubt about someone else's pick and its BUY
+    says only that it found nothing to doubt, so neither is a vote."""
+    return (kind or "selector") != "check"
 
 
 def _agreement_facts(ag) -> dict:
@@ -160,7 +155,6 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
     names = getattr(multi_result, "strategy_names", None) or {}
     meta = getattr(multi_result, "meta", None) or {}
 
-    primary_sid = meta.get("shortlist_primary_id", ids[0] if ids else "")
     lenses = []
     for sid in ids:
         res = results[sid]
@@ -171,10 +165,9 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
             "name": names.get(sid, "") or sid,
             "asks": (getattr(strat, "asks", "") or "").strip(),
             "kind": getattr(strat, "kind", "selector"),
-            # READER-4 — stated, never inferred. The prompt may describe a test ONLY by
-            # this phrase and a plain paraphrase of its `asks`.
-            "role": lens_role(getattr(strat, "kind", "selector"),
-                              is_primary=(sid == primary_sid)),
+            # READER-6 — stated, never inferred. The prompt describes a test by its own
+            # `asks` sentence and by whether it votes, and by nothing else.
+            "votes": lens_votes(getattr(strat, "kind", "selector")),
             "ranked": len([r for r in res.ranked if not r.excluded]),
             "excluded": len(res.excluded),
             "no_data": len(res.unrateable),
