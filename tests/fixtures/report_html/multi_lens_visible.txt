@@ -33,10 +33,11 @@ Magic Formula RAW
 Value + Momentum
 What the terms mean
 Shortlist — 1 of 1 BUY survived the checks
-BUY under Classic Value and below the 80th percentile of its own valuation history.
+BUY under Classic Value and below the 80th percentile of its own valuation history, unless every test rated it BUY (then kept with a price warning).
 Name
 Rank
 Valuation percentile
+Note
 A
 #1
 not evaluated
