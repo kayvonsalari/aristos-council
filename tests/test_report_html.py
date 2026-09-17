@@ -310,6 +310,83 @@ def test_html_export_leaves_the_canonical_company_check_text_byte_identical():
 
 
 # --------------------------------------------------------------------------- #
+# 3b — VALBAND-2: the valuation band in the HTML, from the SAME source as the md
+# --------------------------------------------------------------------------- #
+from aristos_council.pipeline import valuation_band_rows   # noqa: E402
+
+_BAND_HEADING = "Valuation band (absolute — vs each name's own history)"
+
+
+def _universe_result_with_bands() -> RankPipelineResult:
+    """The band-ON fixture: the same three-name run, with a valuation band set on each
+    ranked ticker — two computed, one ABSTAINING (a recent-IPO reason that must stay
+    visible, per VALBAND-1's honesty rule)."""
+    result = _universe_result()
+    bands = {
+        "SXR8.DE": "78th percentile of own 5-year EV/EBIT band (band from 55/60 months)",
+        "EUNL.DE": "23rd percentile of own 5-year P/E band (fallback) (band from 41/60 "
+                   "months)",
+        "VWCE.DE": "not evaluated — insufficient history: 1.4y",
+    }
+    for r in result.ranked:
+        r.valuation_band = bands[r.ticker]
+    return result
+
+
+def test_universe_html_renders_the_band_matching_valuation_band_rows_exactly():
+    result = _universe_result_with_bands()
+    doc = universe_report_html(result, run_start=_RUN)
+    visible = _visible(doc)
+
+    assert _squash(_BAND_HEADING) in visible                  # same heading as the md
+    rows = valuation_band_rows(result)
+    assert len(rows) == 3                                     # one row per rateable name
+    # every row present, VERBATIM (name — band, the shared "**name** — band" shape), in the
+    # SAME ORDER as the source.
+    keys = [_squash(f"{name} — {band}") for name, band in rows]
+    for k in keys:
+        assert k in visible
+    positions = [visible.index(k) for k in keys]
+    assert positions == sorted(positions)
+
+
+def test_universe_html_band_and_markdown_cannot_drift():
+    result = _universe_result_with_bands()
+    doc = _visible(universe_report_html(result, run_start=_RUN))
+    md = _squash(_universe_md(result))                        # importorskip streamlit
+    # the SAME rows appear in both surfaces — the anti-drift guarantee of one shared source.
+    for name, band in valuation_band_rows(result):
+        key = _squash(f"{name} — {band}")
+        assert key in doc and key in md
+
+
+def test_universe_html_keeps_an_abstaining_bands_reason_intact():
+    result = _universe_result_with_bands()
+    visible = _visible(universe_report_html(result, run_start=_RUN))
+    assert _squash("VWCE.DE — not evaluated — insufficient history: 1.4y") in visible
+
+
+def test_universe_html_places_the_band_after_the_ranked_table_before_exclusions():
+    doc = universe_report_html(_universe_result_with_bands(), run_start=_RUN)
+    i_ranked = doc.index("Ranked — verdict of record")
+    i_band = doc.index("Valuation band (absolute")
+    i_excluded = doc.index("Excluded — screen")
+    assert i_ranked < i_band < i_excluded                     # mirrors the markdown order
+
+
+def test_universe_html_with_band_off_renders_no_band_section():
+    # the default fixture sets no valuation_band -> valuation_band_rows is empty -> the
+    # HTML must carry NO band heading (a band-off run's HTML is unchanged from before
+    # VALBAND-2). The other universe-HTML tests all run on this same band-off fixture and
+    # must keep passing, which is the byte-stability guard.
+    result = _universe_result()
+    assert valuation_band_rows(result) == []
+    doc = universe_report_html(result, run_start=_RUN)
+    assert _BAND_HEADING not in doc
+    assert "Valuation band" not in doc
+
+
+# --------------------------------------------------------------------------- #
 # 4 — Company Check
 # --------------------------------------------------------------------------- #
 def test_company_check_html_renders_the_whole_diagnostic():
