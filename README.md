@@ -245,8 +245,10 @@ Run tab asks three questions before it spends:
   came for. With two voting lenses "most" and "all" are the same test (more than half of
   two is two), and the caption says so rather than offering a choice that is not one.
 - **Up to N names** (default 10), taken from the top of the agreement table.
-- **Skip names doubted by Forensic or priced high** (default on). Untick it and they are
-  explained too, with the narrator told the mark.
+- **Skip names doubted by Forensic** (default on). Untick it and they are explained too,
+  with the narrator told the doubt. A **priced-high name is always explained** — that it
+  is dear against its own history is the thing most worth explaining, not a reason to
+  leave it unexplained.
 
 Under the explanations, one line says which rule chose them and how many met it — and
 every qualifying name that is NOT there is listed with its votes and its marks. A run that

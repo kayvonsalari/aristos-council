@@ -3160,11 +3160,12 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 help="How many names to explain, at most, in agreement-table order. Each "
                      "one is a model call."))
             narrate_skip = st.checkbox(
-                "Skip names doubted by Forensic or priced high", value=True,
+                "Skip names doubted by Forensic", value=True,
                 key="uni_narr_skip",
-                help="On: a name a check lens doubted, or one the price check put at or "
-                     "above the 80th percentile of its own history, is left out. Off: it "
-                     "is narrated and the narrator is told the mark.")
+                help="On: a name a check lens doubted is left out. Off: it is explained "
+                     "too, with the narrator told the doubt. A PRICED-HIGH name is always "
+                     "explained either way — that it is dear against its own history is "
+                     "the thing most worth explaining, not a reason to skip it.")
         else:
             narrate_level = st.session_state.get("uni_narr_level",
                                                  DEFAULT_NARRATION_LEVEL)

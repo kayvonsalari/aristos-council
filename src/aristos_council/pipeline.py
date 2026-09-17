@@ -3790,14 +3790,19 @@ def qualifies(row, level: str, n_voting: int) -> bool:
 
 
 def is_marked(row) -> bool:
-    """Whether this name carries a mark the skip flag removes: a check lens doubted it, or
-    the band put it at or above the cutoff.
+    """Whether this name carries a mark the skip flag removes: a CHECK lens doubted it.
 
-    NOT every mark. "band not evaluated" is an absence of a reading, not a doubt, and
-    "ranked on 2 of 3 factors" is a disclosure about the vote rather than about the
-    company — skipping on either would drop names for the run's own gaps."""
-    return any(m.startswith("doubted by ") or m.startswith("priced high:")
-               for m in row.marks)
+    ONLY that. A price mark never skips (owner, 2026-09-17): a priced-high name is
+    narrated WITH the mark in the narrator's pack, because "this is dear against its own
+    history" is the thing a reader most wants explained, not a reason to leave it
+    unexplained. On the oil dividend list the two names both lenses agreed on were Aker
+    Solutions (doubted) and Suncor (priced high) — and a skip that removed both left the
+    default run explaining nothing at all.
+
+    Nor do the run's own disclosures skip. "band not evaluated" is an absence of a reading
+    rather than a doubt, and "ranked on 2 of 3 factors" is a statement about the vote
+    rather than about the company; skipping on either would drop names for OUR gaps."""
+    return any(m.startswith("doubted by ") for m in row.marks)
 
 
 
@@ -3885,7 +3890,7 @@ def narration_plan(result, coverage: str = "buys_only", *,
 def narration_basis(level: str, skip_marked: bool) -> str:
     """The rule in words, for the report line and the spend confirmation."""
     phrase = NARRATION_LEVELS.get(level, level)
-    tail = "; doubted or priced-high names skipped" if skip_marked else ""
+    tail = "; names doubted by a check skipped" if skip_marked else ""
     return f"{phrase}{tail}"
 
 

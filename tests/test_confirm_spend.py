@@ -82,7 +82,7 @@ def test_the_confirm_step_shows_an_EXACT_count_not_a_bound():
 
     assert plan["count"] == len(plan["names"])
     assert plan["est_cost"] == estimate_cost(plan["count"])
-    assert plan["basis"] == "all voting lenses agree; doubted or priced-high names skipped"
+    assert plan["basis"] == ("all voting lenses agree; names doubted by a check skipped")
     # ...and it is genuinely smaller than the verdict count, which is the whole point —
     # more so now than before, since agreement is a higher bar than the union was.
     verdicts = sum(1 for row in result.rows for c in row.cells.values()

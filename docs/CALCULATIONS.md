@@ -759,10 +759,17 @@ Then, in order: the marked rows are removed when **skip** is on, and the rest is
 to the **cap**, in the table's own order — the table's order is the answer's order, so a
 cap takes the top of it.
 
-**Which marks skip.** Only `doubted by <check>` and `priced high: …`. NOT `band not
-evaluated` (an absence of a reading is not a doubt) and NOT `ranked on N of M factors` (a
-disclosure about the vote, not about the company). Skipping on either would drop names for
-the run's own gaps.
+**Which marks skip.** ONLY `doubted by <check>`.
+
+A **price mark never skips**. "This is dear against its own history" is the thing a reader
+most wants EXPLAINED, not a reason to leave it unexplained — a priced-high name is narrated
+with the mark in the narrator's pack either way. (Live, 2026-09-17: on the oil dividend
+list the two names both lenses agreed on were Aker Solutions, doubted, and Suncor, priced
+high — so a skip that removed both left the DEFAULT run explaining nothing at all.)
+
+Nor do the run's own disclosures skip: `band not evaluated` is an absence of a reading
+rather than a doubt, and `ranked on N of M factors` is a statement about the vote rather
+than about the company. Skipping on either would drop names for OUR gaps.
 
 Nothing is silently shortened: the run records the level, the cap, the skip flag, what was
 selected, and every name that met the rule without being narrated — each with its votes

@@ -188,36 +188,54 @@ def _marked():
                 _Row("CLEAN", "hold", 3)])
 
 
-def test_skip_ON_leaves_out_the_doubted_and_the_priced_high():
+def test_skip_ON_leaves_out_only_the_DOUBTED_name():
     plan = narration_plan(_marked(), level="all", cap=60, skip_marked=True)
-    assert plan["names"] == ["CLEAN"]
-    assert {n["ticker"] for n in plan["not_narrated"]} == {"DOUBTED", "DEAR"}
+    assert plan["names"] == ["DEAR", "CLEAN"]
+    assert {n["ticker"] for n in plan["not_narrated"]} == {"DOUBTED"}
 
 
-def test_skip_OFF_narrates_them_and_the_narrator_is_told_the_mark():
+def test_a_PRICED_HIGH_name_is_narrated_either_way():
+    """The owner's correction (2026-09-17). "This is dear against its own history" is the
+    thing a reader most wants EXPLAINED, not a reason to leave it unexplained — and a skip
+    that removed it left the oil run's default explaining nothing at all, because both
+    names the lenses agreed on carried a mark of one kind or the other."""
+    for skip in (True, False):
+        plan = narration_plan(_marked(), level="all", cap=60, skip_marked=skip)
+        assert "DEAR" in plan["names"], skip
+
+
+def test_skip_OFF_narrates_the_doubted_one_too():
     plan = narration_plan(_marked(), level="all", cap=60, skip_marked=False)
     assert set(plan["names"]) == {"DOUBTED", "DEAR", "CLEAN"}
     assert plan["not_narrated"] == []
 
 
-def test_the_skipped_names_are_LISTED_with_their_marks_not_silently_dropped():
+def test_the_skipped_name_is_LISTED_with_its_mark_not_silently_dropped():
     plan = narration_plan(_marked(), level="all", cap=60, skip_marked=True)
     by_ticker = {n["ticker"]: n for n in plan["not_narrated"]}
     assert "doubted by Forensic" in by_ticker["DOUBTED"]["marks"]
-    assert any("priced high" in m for m in by_ticker["DEAR"]["marks"])
     assert by_ticker["DOUBTED"]["buy_votes"] == 2
 
 
-def test_NOT_every_mark_skips():
-    """"band not evaluated" is an ABSENCE of a reading, not a doubt, and "ranked on 2 of 3
-    factors" is a disclosure about the vote rather than about the company. Skipping on
-    either would drop names for the run's own gaps."""
+def test_ONLY_a_check_doubt_skips():
+    """A price mark never skips (see above). Nor do the run's own disclosures: "band not
+    evaluated" is an ABSENCE of a reading rather than a doubt, and "ranked on 2 of 3
+    factors" is a statement about the vote rather than about the company — skipping on
+    either would drop names for OUR gaps."""
+    from aristos_council.tools.valuation_band import ValuationBand
+
     from aristos_council.pipeline import LensAgreementRow
 
+    doubted = LensAgreementRow(ticker="D", display="D", buy_lenses=("a",),
+                               check_verdicts={"Forensic": "sell"})
+    dear = LensAgreementRow(ticker="P", display="P", buy_lenses=("a",),
+                            band_percentile=95.0)
     unmeasured = LensAgreementRow(ticker="X", display="X", buy_lenses=("a",),
                                   band_note="insufficient history: 1.1y")
     partial = LensAgreementRow(ticker="Y", display="Y", buy_lenses=("a",),
                                factor_notes=("a: ranked on 2 of 3 factors",))
+    assert is_marked(doubted)
+    assert not is_marked(dear)          # the correction
     assert not is_marked(unmeasured)
     assert not is_marked(partial)
 
@@ -236,15 +254,15 @@ def test_the_plan_is_recorded_on_the_run():
     plan = (narrated.meta or result.meta).get("narration")
     assert plan is not None
     assert plan["level"] == "all" and plan["cap"] == 5 and plan["skip_marked"] is True
-    assert plan["selected"] == ["CLEAN"]
-    assert {n["ticker"] for n in plan["not_narrated"]} == {"DOUBTED", "DEAR"}
+    assert plan["selected"] == ["DEAR", "CLEAN"]
+    assert {n["ticker"] for n in plan["not_narrated"]} == {"DOUBTED"}
 
 
 def test_the_line_states_the_rule_and_the_counts():
     plan = narration_plan(_marked(), level="all", cap=60, skip_marked=True)
     assert narration_line(plan) == (
-        "Narrated 1 of 3 names that met the rule (all voting lenses agree; doubted or "
-        "priced-high names skipped).")
+        "Narrated 2 of 3 names that met the rule (all voting lenses agree; names doubted "
+        "by a check skipped).")
 
 
 def test_a_run_that_narrated_NOTHING_says_which_rule_produced_nothing():
@@ -260,7 +278,7 @@ def test_a_run_that_narrated_NOTHING_says_which_rule_produced_nothing():
 
 def test_the_basis_reads_as_a_rule_in_words():
     assert narration_basis("all", True) == (
-        "all voting lenses agree; doubted or priced-high names skipped")
+        "all voting lenses agree; names doubted by a check skipped")
     assert narration_basis("any", False) == "any voting lens"
 
 
