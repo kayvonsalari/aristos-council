@@ -872,6 +872,7 @@ def multi_strategy_report_html(multi_result, *,
                 inner = _narration_html(text)
             parts.append(f'<details class="name-section" open id="{_esc(anchor)}">'
                          f"<summary>{_esc(display)}</summary>{inner}</details>")
+        parts.append(_narration_line_html(multi_result))
         parts.append("</section>")
 
     # ----- 5: the per-NAME facts, ONCE — they do not vary by lens.
@@ -955,6 +956,30 @@ def _reader_section(reader) -> str:
         body.append(f"<p><strong>{_esc(lead)}</strong> {_esc(text)}</p>")
     body.append(f'<p class="note">{_esc(READER_SECTION_NOTE)}</p></section>')
     return "".join(body)
+
+
+
+def _narration_line_html(result) -> str:
+    """NARR-2 — the one line under the narrations: which rule chose them, how many met it,
+    and which qualified names are not here.
+
+    Never silent. A run that narrated nothing says which rule produced nothing and how to
+    get more, because an absent section is indistinguishable from a feature that was never
+    switched on — the corollary this repo has paid for twice."""
+    from ..pipeline import narration_line
+
+    plan = (getattr(result, "meta", None) or {}).get("narration")
+    if not plan:
+        return ""
+    out = [f'<p class="note">{_esc(narration_line(plan))}</p>']
+    missing = plan.get("not_narrated") or []
+    if missing:
+        out.append('<p class="note">Met the rule and not narrated:</p>' + _bullets(
+            f'<strong>{_esc(m["name"])}</strong> — {m["buy_votes"]} BUY vote'
+            f'{"s" if m["buy_votes"] != 1 else ""}'
+            + (f' · {_esc(" · ".join(m["marks"]))}' if m.get("marks") else "")
+            for m in missing))
+    return "".join(out)
 
 
 def _shortlist_section(ag) -> str:

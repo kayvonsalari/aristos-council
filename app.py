@@ -31,6 +31,8 @@ from pydantic import ValidationError
 
 from aristos_council.data.adapter import (
     DataUnavailable, display_name, normalize_ticker)
+from aristos_council.pipeline import (
+    DEFAULT_NARRATION_CAP, DEFAULT_NARRATION_LEVEL, NARRATION_LEVELS)
 from aristos_council.demo_surface import (
     ASSET_MODES, DEFAULT_ASSET_MODE, ETFS, asset_mode_filter,
     strategy_label, strategy_role, suggested_first,
@@ -1800,6 +1802,34 @@ def _publish_single(result, run_start, universe_display_name) -> None:
     _supersede(run_start, paths)
 
 
+def _narration_levers(pending: dict) -> dict:
+    """The NARR-2 levers off a pending narration, with the defaults a record written
+    before they existed would need. One reader, so the confirmation and the run cannot
+    disagree about what was asked for."""
+    return {"level": pending.get("level", DEFAULT_NARRATION_LEVEL),
+            "cap": int(pending.get("cap", DEFAULT_NARRATION_CAP)),
+            "skip_marked": bool(pending.get("skip_marked", True))}
+
+
+def _render_narration_line(result) -> None:
+    """NARR-2's line on screen — the same builder the two reports render."""
+    from aristos_council.pipeline import narration_line
+
+    plan = (getattr(result, "meta", None) or {}).get("narration")
+    if not plan:
+        return
+    st.caption(narration_line(plan))
+    missing = plan.get("not_narrated") or []
+    if missing:
+        with st.expander(f"Met the rule and not narrated · {len(missing)}",
+                         expanded=False):
+            for m in missing:
+                marks = f" · {' · '.join(m['marks'])}" if m.get("marks") else ""
+                plural = "s" if m["buy_votes"] != 1 else ""
+                st.markdown(f"- **{m['name']}** — {m['buy_votes']} BUY vote"
+                            f"{plural}{marks}")
+
+
 def _render_narration_confirmation() -> None:
     """CONFIRM-SPEND-1 — the confirmation step, between the free ranking and the spend.
 
@@ -1814,7 +1844,8 @@ def _render_narration_confirmation() -> None:
     if not pending:
         return
     result = pending["result"]
-    plan = narration_plan(result, pending.get("coverage", "buys_only"))
+    plan = narration_plan(result, pending.get("coverage", "buys_only"),
+                          **_narration_levers(pending))
     run_start = st.session_state.get("uni_run_start") or datetime.now(timezone.utc)
     display_name = st.session_state.get("uni_universe_display_name", "")
 
@@ -1919,7 +1950,8 @@ def _offer_or_narrate(pending, *, threshold, status, run_start, display_name) ->
     ever spent without an explicit click."""
     from aristos_council.pipeline import narration_plan
 
-    plan = narration_plan(pending["result"], pending.get("coverage", "buys_only"))
+    plan = narration_plan(pending["result"], pending.get("coverage", "buys_only"),
+                          **_narration_levers(pending))
     if not plan["count"]:
         status.update(label="Done.", state="complete")
         st.session_state.pop("uni_pending_narration", None)
@@ -2047,6 +2079,25 @@ def _reader_markdown(reader) -> list[str]:
     for lead, text in reader_paragraphs(reader.summary):
         lines += [f"**{lead}** {text}", ""]
     return lines + [f"_{READER_SECTION_NOTE}_"]
+
+
+
+def _narration_line_markdown(result) -> list[str]:
+    """NARR-2's line in the .md — the same builder the HTML renders."""
+    from aristos_council.pipeline import narration_line
+
+    plan = (getattr(result, "meta", None) or {}).get("narration")
+    if not plan:
+        return []
+    lines = ["", f"_{narration_line(plan)}_"]
+    missing = plan.get("not_narrated") or []
+    if missing:
+        lines += ["", "**Met the rule and not narrated**", ""]
+        for m in missing:
+            marks = f" · {' · '.join(m['marks'])}" if m.get("marks") else ""
+            plural = "s" if m["buy_votes"] != 1 else ""
+            lines.append(f"- **{m['name']}** — {m['buy_votes']} BUY vote{plural}{marks}")
+    return lines
 
 
 def _shortlist_markdown(ag, lens_agreement_table) -> list[str]:
@@ -2332,6 +2383,8 @@ def _multi_narration_markdown(multi_result) -> list[str]:
         display = next((r.display for r in multi_result.rows if r.ticker == ticker),
                        ticker)
         lines += [f"### {display}", "", text, ""]
+    # NARR-2: which rule chose them, and what met it and is not here.
+    lines += _narration_line_markdown(multi_result)
     return lines
 
 
@@ -2459,6 +2512,10 @@ def _render_multi_strategy_result(multi_result) -> None:
     # line's count, so a reader working in the app could see THAT names survived without
     # seeing WHICH — and, after SHORTLIST-2, without seeing the price warning on one.
     _render_shortlist(getattr(multi_result, "lens_agreement", None))
+    # NARR-2: which names the run explained and which met the rule without being explained.
+    # The Run tab does not render the narrations themselves (they travel in the downloaded
+    # report), but the SELECTION is a decision the reader made and should see the result of.
+    _render_narration_line(multi_result)
 
     # REPORT-2: the rules EACH lens applied, before the verdicts — a name excluded by one
     # lens and ranked by another is only legible once both rule sets are stated.
@@ -3073,23 +3130,47 @@ def render_universe_tab(show_validation: bool = False) -> None:
         if n_strategies > 1 and run_mode_narrates(run_mode):
             st.caption(MULTI_LENS_NARRATION_NOTE)
     with col_b:
-        # NARR-2 ITEM 2: which ranked names get narrated. buys_only (default, cheapest)
-        # for stock screens; all for core/ETF cohorts where the HOLDs are live
-        # candidates being compared, not rejects. HIDDEN — not greyed — when nothing
-        # narrates: a greyed control still invites a reading it cannot support.
+        # NARR-2: WHICH names get narrated. The old control offered "BUYs only" or "all
+        # ranked", and "BUYs only" meant the UNION of every lens's BUYs — 28 names on the
+        # oil dividend list, 26 of them one lens's pick. So the expensive half of the run
+        # explained names nothing else agreed with, and the two both lenses chose were
+        # buried among them.
+        #
+        # Three levers now: the level of agreement, a cap, and whether to skip the marked
+        # ones. HIDDEN — not greyed — when nothing narrates: a greyed control still
+        # invites a reading it cannot support.
+        narrate_coverage = "buys_only"          # the pipeline's own inert default
         if run_mode_narrates(run_mode):
-            _cov_label = {"buys_only": "Narrate: BUYs only (cheapest)",
-                          "all": "Narrate: all ranked names"}
-            narrate_coverage = st.selectbox(
-                "Narration coverage", ["buys_only", "all"],
-                key="uni_coverage",
-                format_func=lambda c: _cov_label[c],
-                help="BUYs only: narrate the shortlist (cheapest — good for stock "
-                     "screens). all: narrate every ranked name — for core/ETF cohorts "
-                     "where the HOLDs are live options you're comparing, not rejects.")
+            narrate_level = st.selectbox(
+                "Narrate", list(NARRATION_LEVELS),
+                key="uni_narr_level",
+                format_func=lambda k: NARRATION_LEVELS[k],
+                help="Which names to explain. The lenses that VOTE are the ticked ones "
+                     "that are not checks; a check marks rather than votes.")
+            n_voting = sum(1 for st_ in strategies
+                           if (getattr(st_, "kind", "selector") or "selector") != "check")
+            if n_voting == 2:
+                # With two voting lenses, more than half of two is two — so "most" and
+                # "all" are the same test. Saying so beats offering a choice that is not
+                # one.
+                st.caption("2 voting lenses ticked: most = all.")
+            narrate_cap = int(st.number_input(
+                "Up to", min_value=1, max_value=60, value=DEFAULT_NARRATION_CAP, step=1,
+                key="uni_narr_cap",
+                help="How many names to explain, at most, in agreement-table order. Each "
+                     "one is a model call."))
+            narrate_skip = st.checkbox(
+                "Skip names doubted by Forensic or priced high", value=True,
+                key="uni_narr_skip",
+                help="On: a name a check lens doubted, or one the price check put at or "
+                     "above the 80th percentile of its own history, is left out. Off: it "
+                     "is narrated and the narrator is told the mark.")
         else:
-            # The inert default the pipeline already receives on a ranker-only run.
-            narrate_coverage = st.session_state.get("uni_coverage", "buys_only")
+            narrate_level = st.session_state.get("uni_narr_level",
+                                                 DEFAULT_NARRATION_LEVEL)
+            narrate_cap = int(st.session_state.get("uni_narr_cap",
+                                                  DEFAULT_NARRATION_CAP))
+            narrate_skip = bool(st.session_state.get("uni_narr_skip", True))
 
     # COST-2 — the confirmation becomes PROPORTIONATE. Shown only where it applies:
     # ranker-only spends nothing, so a threshold there would be a control with no effect.
@@ -3215,7 +3296,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
             if run_mode_narrates(run_mode):
                 _offer_or_narrate(
                     {"kind": "multi", "result": multi_result, "mode": mode,
-                     "coverage": narrate_coverage},
+                     "coverage": narrate_coverage,
+                     # NARR-2: the levers travel with the pending narration, so the
+                     # figure the user confirms is the figure the run then spends.
+                     "level": narrate_level, "cap": narrate_cap,
+                     "skip_marked": narrate_skip},
                     threshold=confirm_threshold, status=status,
                     run_start=run_start, display_name=universe_display_name)
             else:
@@ -3257,7 +3342,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
             if run_mode_narrates(run_mode):
                 _offer_or_narrate(
                     {"kind": "single", "result": result, "mode": mode,
-                     "coverage": narrate_coverage},
+                     "coverage": narrate_coverage,
+                     # NARR-2: the levers travel with the pending narration, so the
+                     # figure the user confirms is the figure the run then spends.
+                     "level": narrate_level, "cap": narrate_cap,
+                     "skip_marked": narrate_skip},
                     threshold=confirm_threshold, status=status,
                     run_start=run_start, display_name=universe_display_name)
             else:
