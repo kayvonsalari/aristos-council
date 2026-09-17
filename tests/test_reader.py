@@ -132,10 +132,10 @@ def test_the_prompt_is_the_versioned_file_on_disk():
     assert 'Say "list" for cohort' in text          # the de-jargon rule
     # READER-2 moved the live version to v2 and READER-3b to v3. EVERY earlier version
     # stays on disk, so a run recorded under one is still reproducible.
-    assert PROMPT_VERSION == "reader_v3"
+    assert PROMPT_VERSION == "reader_v4"
     prompts = (FIXTURES.parents[1].parent / "src" / "aristos_council" / "agents"
                / "prompts")
-    for version in ("reader_v1", "reader_v2", "reader_v3"):
+    for version in ("reader_v1", "reader_v2", "reader_v3", "reader_v4"):
         assert (prompts / f"{version}.md").exists(), version
     # the v2 rules the checker now enforces are stated in the prompt itself
     assert "No ranges" in text and "is CHECKED" in text

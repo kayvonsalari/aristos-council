@@ -85,6 +85,72 @@ def _factor_abstentions(result) -> dict:
     return out
 
 
+
+# --------------------------------------------------------------------------- #
+# READER-4 — every test's ROLE, stated in the pack
+# --------------------------------------------------------------------------- #
+# The 2026-09-17 09:10 summary called Magic Formula RAW "a check". It is a second
+# SELECTOR: it picks, it just did not pick FOR the shortlist, because only one lens can.
+# The same summary said the other tests "look for value and growth", which is not what
+# Forensic does at all — it asks whether the profits are real.
+#
+# Both errors have the same shape: the writer inferred a test's job instead of being told
+# it. So the pack now says it, in the three phrasings the summary is allowed to use, and
+# the checker holds the text to them. A writer that cannot invent a role cannot get one
+# wrong.
+ROLE_PRIMARY = "primary picker"
+ROLE_SECOND = "second picker (not used for the shortlist)"
+ROLE_CHECK = "check"
+
+
+def lens_role(kind: str, *, is_primary: bool) -> str:
+    """One of the three role phrases. A check is a check whether or not it is primary —
+    a check lens chosen as primary cannot select, which the run says elsewhere."""
+    if (kind or "selector") == "check":
+        return ROLE_CHECK
+    return ROLE_PRIMARY if is_primary else ROLE_SECOND
+
+
+
+def _unanimous_facts(multi_result, sl) -> list:
+    """``[{name, outcome}]`` for every name EVERY test rated BUY.
+
+    The outcome is read from the shortlist the run already built, never re-derived: a
+    unanimous name is on it, on it with a price warning, or dropped — and if it was
+    dropped, the shortlist's own reason says why. A unanimous name the PRIMARY did not
+    rate BUY is not a shortlist candidate at all, which is its own outcome and is said
+    plainly rather than left out."""
+    from .pipeline import unanimous_buys
+
+    tickers = unanimous_buys(multi_result)
+    if not tickers:
+        return []
+    kept = {r.ticker: r for r in (sl.kept if sl is not None else [])}
+    dropped = {r.ticker: r for r in (sl.dropped if sl is not None else [])}
+    results = getattr(multi_result, "results", None) or {}
+
+    def _display(ticker):
+        for res in results.values():
+            name = (getattr(res, "names", None) or {}).get(ticker)
+            if name:
+                return f"{name} ({ticker})"
+        return ticker
+
+    out = []
+    for ticker in sorted(tickers):
+        row = kept.get(ticker)
+        if row is not None:
+            outcome = ("on the shortlist, with a price warning"
+                       if row.price_caution is not None else "on the shortlist")
+        elif ticker in dropped:
+            outcome = f"dropped from the shortlist — {dropped[ticker].dropped_by}"
+        else:
+            outcome = ("not a shortlist candidate — the primary picker did not rate it "
+                       "BUY")
+        out.append({"name": _display(ticker), "outcome": outcome})
+    return out
+
+
 def build_facts_pack(multi_result, *, cohort_name: str = "",
                      cohort_thesis: str = "") -> dict:
     """The complete, ordered set of facts the summary may draw on (READER-1)."""
@@ -96,6 +162,7 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
     meta = getattr(multi_result, "meta", None) or {}
     sl = getattr(multi_result, "shortlist", None)
 
+    primary_sid = meta.get("shortlist_primary_id", ids[0] if ids else "")
     lenses = []
     for sid in ids:
         res = results[sid]
@@ -106,6 +173,10 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
             "name": names.get(sid, "") or sid,
             "asks": (getattr(strat, "asks", "") or "").strip(),
             "kind": getattr(strat, "kind", "selector"),
+            # READER-4 — stated, never inferred. The prompt may describe a test ONLY by
+            # this phrase and a plain paraphrase of its `asks`.
+            "role": lens_role(getattr(strat, "kind", "selector"),
+                              is_primary=(sid == primary_sid)),
             "ranked": len([r for r in res.ranked if not r.excluded]),
             "excluded": len(res.excluded),
             "no_data": len(res.unrateable),
@@ -154,11 +225,18 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
             # sentence, which is the guard working before a live call was ever made.)
             "kept_count": len(sl.kept),
             "dropped_count": len(sl.dropped),
-            "kept": [{"name": r.display, "rank": r.rank_position} for r in sl.kept],
+            # READER-4 — the price warning's own percentile. Without it the writer cannot
+            # state the number the warning is about, and the number check would rightly
+            # refuse the sentence if it tried. None on every ordinary kept row.
+            "kept": [{"name": r.display, "rank": r.rank_position,
+                      "price_warning_percentile": (round(r.price_caution)
+                                                   if r.price_caution is not None
+                                                   else None)}
+                     for r in sl.kept],
             "dropped": [{"name": r.display, "why": r.dropped_by} for r in sl.dropped],
         }
 
-    primary_id = meta.get("shortlist_primary_id", ids[0] if ids else "")
+    primary_id = primary_sid
     primary = getattr(results.get(primary_id), "rank_strategy", None)
     return {
         "cohort": {
@@ -171,6 +249,12 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
         "fit_note": cohort_fit_line(primary, cohort_thesis),
         "lenses": lenses,
         "shortlist": shortlist_facts,
+        # READER-4 — the names EVERY test rated BUY, and what became of each. The 09:10
+        # summary never mentioned that Suncor was BUY on all three, which was the single
+        # most interesting fact the run produced; the shortlist facts could not carry it,
+        # because a unanimous name may be kept, kept with a warning, or dropped by a rule
+        # the shortlist applies before the band.
+        "unanimous_buy": _unanimous_facts(multi_result, sl),
         "valuation_band": {
             "evaluated": evaluated,
             "not_evaluated": not_evaluated,
