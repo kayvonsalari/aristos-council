@@ -125,11 +125,15 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 ## Classic Value (magic_formula_v1) — detail
 
-- Ranked: 2 of 4 names
+**Ranked 2 of 4 names. Excluded 1: by rule below, worst miss first.**
 
-**Excluded — did not pass a rule, so was never ranked**
+**Return on invested capital** `min_roic` · rule: at least 12% · **1 name**
 
-- **C** — return on invested capital 7.7%; the rule requires at least 12%. `min_roic`
+_A business that earns less on the capital it employs than that capital costs destroys value by growing, so its growth is a reason for concern rather than for a premium._
+
+| Name | Measured | Note |
+|---|---|---|
+| **C** | 7.7% |  |
 
 **No usable data — no verdict was formed**
 
@@ -137,14 +141,16 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 **Where the numbers came from**
 
-- Return on invested capital — real data for all 2 names.
-- Earnings yield (EBIT/EV) — from the EBIT / market-cap proxy for all 2 names.
+| Factor | Real data | Abstained |
+|---|---|---|
+| **Return on invested capital** | 2 of 2 | — |
+| **Earnings yield (EBIT/EV)** | 2 of 2 | — |
 
 ## Magic Formula RAW (magic_formula_raw_v1) — detail
 
 _Cheap and good: high profit on the money invested, a low price for that profit, and a rising share._
 
-- Ranked: 3 of 4 names
+**Ranked 3 of 4 names.**
 
 **No usable data — no verdict was formed**
 
@@ -152,19 +158,25 @@ _Cheap and good: high profit on the money invested, a low price for that profit,
 
 **Where the numbers came from**
 
-- Return on invested capital — real data for all 3 names.
-- Earnings yield (EBIT/EV) — from the EBIT / market-cap proxy for all 3 names.
-- 12-month price momentum — no usable data for all 3 names.
+| Factor | Real data | Abstained |
+|---|---|---|
+| **Return on invested capital** | 3 of 3 | — |
+| **Earnings yield (EBIT/EV)** | 3 of 3 | — |
+| **12-month price momentum** | 0 of 3 | 3 — A, B, C |
 
 ## Value + Momentum (magic_formula_momentum_v1) — detail
 
 _The same as Magic Formula RAW, but only for companies earning at least 12% on their capital._
 
-- Ranked: 2 of 4 names
+**Ranked 2 of 4 names. Excluded 1: by rule below, worst miss first.**
 
-**Excluded — did not pass a rule, so was never ranked**
+**Return on invested capital** `min_roic` · rule: at least 12% · **1 name**
 
-- **C** — return on invested capital 7.7%; the rule requires at least 12%. `min_roic`
+_A business that earns less on the capital it employs than that capital costs destroys value by growing, so its growth is a reason for concern rather than for a premium._
+
+| Name | Measured | Note |
+|---|---|---|
+| **C** | 7.7% |  |
 
 **No usable data — no verdict was formed**
 
@@ -172,9 +184,11 @@ _The same as Magic Formula RAW, but only for companies earning at least 12% on t
 
 **Where the numbers came from**
 
-- Return on invested capital — real data for all 2 names.
-- Earnings yield (EBIT/EV) — from the EBIT / market-cap proxy for all 2 names.
-- 12-month price momentum — no usable data for all 2 names.
+| Factor | Real data | Abstained |
+|---|---|---|
+| **Return on invested capital** | 2 of 2 | — |
+| **Earnings yield (EBIT/EV)** | 2 of 2 | — |
+| **12-month price momentum** | 0 of 2 | 2 — A, B |
 
 ## Cohort graded (exact membership)
 

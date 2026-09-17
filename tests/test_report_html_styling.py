@@ -83,6 +83,34 @@ What is added, isolated by rendering the same document with the shortlist suppre
     glossary working, and it is why the guard reported 10/90/90% alongside the cutoff 80.
 Nothing was removed and no value changed. The shortlist RULE is pinned independently of
 every fixture here by ``tests/test_shortlist.py``, so the guard was not simply relaxed.
+
+BASELINE MOVED AGAIN, DELIBERATELY (2026-09-16, DETAIL-1). The per-lens detail section is
+REBUILT: the flat bullet list of excluded names — one line per name, each repeating the
+rule sentence in full — becomes one group per rule, the rule stated ONCE, a table of the
+names it removed with the value each was measured at, worst miss first; and "Where the
+numbers came from" becomes a three-column table (Factor / Real data / Abstained) instead
+of one sentence per factor. Both goldens move, and so does the markdown golden, because
+this is a change to the RECORD's shape and not only to the HTML's look.
+
+What changes, and it is a REWORDING, not a value move:
+  - the per-name sentence "return on invested capital 7.7%; the rule requires at least
+    12%" is split into its parts — the rule ("· rule: at least 12%") into the group
+    heading, the value ("7.7%") into the name's own row. Both halves are still rendered,
+    which is why the order-independent guard below still passes UNCHANGED against the
+    pre-REPORT-4 snapshot: not one number was lost or invented.
+  - each group gains the criterion's ``why`` — one sentence on what the rule is FOR, a
+    question a grouped list provokes and the old list never answered.
+  - the criterion ID moves from every name's line to the group heading, once. Kept, not
+    dropped: the house rule is that a machine id stays beside its human label.
+  - the provenance sentences become table cells carrying the same counts ("2 of 2"), plus
+    the abstaining names, which the sentence form only counted.
+
+The per-name SENTENCE is unchanged and still built by the same function; the CLI still
+prints it in full, and so does Company Check. ``test_report_language.py::
+test_the_three_surfaces_carry_the_same_values`` was re-expressed rather than relaxed: it
+now asserts every excluded NAME, its MEASURED value and the RULE it missed reach all
+three surfaces, and that every excluded ticker landed in a group — a stricter claim about
+completeness than "the same sentence appears three times" ever made.
 """
 
 from __future__ import annotations

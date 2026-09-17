@@ -1245,9 +1245,18 @@ def exclusion_sentence(result, ticker: str, reason: str) -> str:
     # max_dividend_cuts declares one (a cut SIZE measured against a WINDOW of years);
     # empty everywhere else, so every other sentence is byte-identical.
     observed_unit = getattr(crit, "observed_unit", "") or unit
-    observed = template.format(
-        observed=format_value(o["observed"], observed_unit, currency=currency),
-        signed=format_signed_change(o["observed"], unit))
+    # NOCUT-3: a criterion that wrote its own reason has it printed VERBATIM. Only
+    # max_dividend_cuts declares this, because only it knows something the generated
+    # clause cannot express — the YEAR the cut landed in, and that BOTH the year's total
+    # and its typical payment fell. Empty note (a degraded path that could not say which
+    # year) falls back to the generated clause rather than printing nothing.
+    note = (o.get("note") or "").strip()
+    if getattr(crit, "observation_from_note", False) and note:
+        observed = note
+    else:
+        observed = template.format(
+            observed=format_value(o["observed"], observed_unit, currency=currency),
+            signed=format_signed_change(o["observed"], unit))
     # CRIT-NOCUT-1: a criterion whose threshold is a WINDOW states its own rule phrase —
     # the generated "at most N" would compare this criterion's cut PERCENTAGE against a
     # count of years. Empty for every other criterion, which keeps their sentences
@@ -2589,6 +2598,320 @@ def multi_strategy_grid_rows(result: MultiStrategyResult) -> tuple[list[dict], l
             cells[header] = row.cells[sid].render()
         rows.append(cells)
     return rows, head
+
+
+
+# --------------------------------------------------------------------------- #
+# DETAIL-1 — the per-lens detail section, grouped by the rule that fired
+# --------------------------------------------------------------------------- #
+# The section was a flat bullet list, one line per excluded name, each repeating the rule
+# sentence in full. On the 134-name oil run the Cyclical Income lens produced 91 of them,
+# so the SAME sentence about free cash flow appeared 27 times in a row and the same
+# sentence about dividend cuts 27 more. A reader could learn what happened to one name
+# easily and what the lens actually DID only by counting bullets.
+#
+# Grouped, the same data answers the question a reader has: which rule removed the most
+# names, how far each name missed, and which misses were close. The rule is stated ONCE
+# per group, the names carry their measured value, and the group is ordered worst-miss
+# first so the top of every table is the clearest case.
+#
+# NOTHING IS RE-GRADED HERE. Every name, reason and number is the one the run recorded;
+# this decides only where each is printed. The per-name sentence is built exactly as
+# before and travels with the row, because Company Check renders one name at a time and
+# a group of one is not a table.
+
+# A group that is not a screen RULE: the gates that ran before the screen. Each has its
+# own id so the renderer can treat it differently (the size floor collapses; the sector
+# and asset-kind gates are a line, because a name outside the lens's scope is not a near
+# miss and nobody reads it for the margin).
+DETAIL_GROUP_FLOOR = "_floor"
+DETAIL_GROUP_SECTOR = "_sector"
+DETAIL_GROUP_KIND = "_kind"
+DETAIL_GROUP_OTHER = "_other"
+
+# The heading each pre-screen gate gets. They are gates, not rules, and the difference
+# matters: no other rule was tested on these names at all, so their absence from every
+# other group below is an artefact of the order, not evidence about them.
+_GATE_TITLES = {
+    DETAIL_GROUP_FLOOR: "Company size",
+    DETAIL_GROUP_SECTOR: "Sector",
+    DETAIL_GROUP_KIND: "Asset kind",
+    DETAIL_GROUP_OTHER: "Removed before the screen",
+}
+_GATE_NOTE = "no other rule was tested on these"
+
+# The badge note, stated ONCE per lens above the groups. The badge in a row is an
+# abbreviation ("⚠ +47% 12m") and an abbreviation used without its expansion is a private
+# code — so the full disclosure the flag carries is written out here, once, in the words
+# the flag itself uses, with the threshold read from the code rather than retyped.
+def detail_badge_note() -> str:
+    """"A ⚠ badge is the 12-month price move where it exceeds +30% …" — the flag's own
+    wording, stated once so the rows can be short."""
+    from .factors import _DIVERGENCE_MOMENTUM_THRESHOLD
+
+    return (f"A ⚠ badge is the 12-month price move where it exceeds "
+            f"{_DIVERGENCE_MOMENTUM_THRESHOLD:+.0%} — a price that ran up hard while a "
+            "floor the lens screens on was failing (cyclical inflection or mania; human "
+            "review). It never altered the exclusion.")
+
+
+# A price-divergence flag, shortened to its figure for a table cell. The full sentence is
+# stated once per lens by ``detail_badge_note`` rather than repeated on every row — which
+# is the same reason this section groups at all.
+_FLAG_MOVE = re.compile(r"([+-]\d+% 12m)")
+DETAIL_SOURCES_TITLE = "Where the numbers came from"
+
+
+@dataclass(frozen=True)
+class DetailName:
+    """One excluded name inside its group."""
+
+    ticker: str
+    name: str
+    measured: str = ""          # the value that failed, in its own unit ("669%", "$1.2bn")
+    badges: tuple = ()          # "borderline", "⚠ +80% 12m" — short, and each is a WORD
+    sentence: str = ""          # the full per-name sentence, kept whole (Company Check)
+    criterion: str = ""
+
+
+@dataclass(frozen=True)
+class DetailGroup:
+    """Every name one rule (or one pre-screen gate) removed."""
+
+    key: str                    # the criterion name, or a DETAIL_GROUP_* gate id
+    title: str
+    rule: str = ""              # the rule stated once ("at most 80% of ...")
+    why: str = ""               # Criterion.why — what the rule is FOR
+    names: tuple = ()
+    note: str = ""              # the gate caveat, empty for a real rule
+
+    @property
+    def is_gate(self) -> bool:
+        return self.key.startswith("_")
+
+    @property
+    def keeps_sentences(self) -> bool:
+        """The ungroupable bucket renders as the old per-name bullets.
+
+        A reason this builder could not attribute to a rule or a named gate is one it
+        does not understand, and a group it does not understand must not summarise: it
+        reprints each name's own sentence verbatim. A hand-built or replayed result with
+        no ``screen_outcomes`` lands here, and the sentence is the only thing it has."""
+        return self.key == DETAIL_GROUP_OTHER
+
+    @property
+    def count(self) -> int:
+        return len(self.names)
+
+
+@dataclass(frozen=True)
+class LensDetail:
+    """One lens's detail section, ready to render on any surface."""
+
+    strategy_id: str
+    label: str
+    asks: str = ""
+    headline: str = ""
+    badge_note: str = ""
+    groups: tuple = ()
+    sources: tuple = ()         # [{label, real, abstained}] — the provenance table
+    unrateable: tuple = ()      # (name, why)
+    fetch_errors: tuple = ()
+
+
+def _detail_group_key(criterion: str, reason: str) -> str:
+    """Which group an exclusion belongs to. A screen rule groups under its own criterion;
+    everything else is a pre-screen gate, identified by the reason the pipeline wrote."""
+    if criterion:
+        return criterion
+    low = (reason or "").lower()
+    if low.startswith("below min market cap"):
+        return DETAIL_GROUP_FLOOR
+    if low.startswith("sector "):
+        return DETAIL_GROUP_SECTOR
+    if low.startswith("asset kind"):
+        return DETAIL_GROUP_KIND
+    return DETAIL_GROUP_OTHER
+
+
+def _short_flag(flag: str) -> str:
+    """"⚠ +47% 12m" from the full disclosure sentence, or the sentence when it holds no
+    figure to abbreviate. A badge that cannot be shortened is never truncated — a cut-off
+    warning is worse than a long one."""
+    found = _FLAG_MOVE.search(flag or "")
+    return f"⚠ {found.group(1)}" if found else (flag or "").strip("[]").strip()
+
+
+def _measured_text(outcome, crit) -> str:
+    """The failing value in its own unit. Empty when the run recorded no number — which
+    happens, and an empty cell is the honest rendering of it."""
+    if outcome is None or outcome.get("observed") is None:
+        return ""
+    spec = crit.threshold_param if crit is not None else None
+    unit = getattr(crit, "observed_unit", "") or getattr(spec, "unit", "") or UNIT_RATIO
+    # A criterion whose sentence reads its number as a DIRECTION ("share price fell
+    # 12.0%") is read that way here too. The column and the sentence are the same
+    # measurement, and "-12.0%" beside a rule phrased as "at most a 10% fall" makes a
+    # reader do the translation the criterion already did.
+    if "{signed}" in (getattr(crit, "observation", "") or ""):
+        return format_signed_change(outcome["observed"], unit)
+    return format_value(outcome["observed"], unit,
+                        currency=getattr(spec, "currency", None))
+
+
+def _miss_size(outcome, crit) -> float:
+    """How badly this name missed, as a number that sorts WORST FIRST.
+
+    A cap (``comparison="max"``) is missed by being too high, a floor by being too low, so
+    the floor's sign is flipped. A name with no recorded number sorts last: it is not a
+    bigger miss than a measured one, it is an unmeasured one."""
+    if outcome is None or outcome.get("observed") is None:
+        return float("-inf")
+    observed = outcome["observed"]
+    if not isinstance(observed, (int, float)):
+        return float("-inf")
+    return float(observed) if getattr(crit, "comparison", COMPARISON_MIN) == "max" \
+        else -float(observed)
+
+
+def lens_detail(result, *, strategy_id: str = "", label: str = "") -> LensDetail:
+    """One lens's detail section as DATA — the ONE builder the HTML and the markdown both
+    render, so the two cannot drift and neither can invent a name the other does not show.
+
+    Groups are ordered by size, largest first: the rule that removed the most names is the
+    one that decided what this lens is looking at, and it belongs at the top. Pre-screen
+    GATES come first regardless, because they ran first and their names were never tested
+    on anything below — putting them in the size ordering would imply they competed."""
+    from .tools.criteria.registry import REGISTRY
+
+    meta = getattr(result, "meta", None) or {}
+    outcomes = getattr(result, "screen_outcomes", None) or {}
+
+    # The RAW reason, for the rows that carry no criterion: a pre-screen gate is not
+    # a rule and has no registry entry, so its group is read off the sentence the
+    # pipeline wrote.
+    raw_reason = dict(getattr(result, "excluded", None) or [])
+    buckets: dict = {}
+    for row in exclusion_rows(result):
+        key = _detail_group_key(row["criterion"], raw_reason.get(row["ticker"], ""))
+        crit = REGISTRY.get(row["criterion"]) if row["criterion"] else None
+        outcome = (outcomes.get(row["ticker"]) or {}).get(row["criterion"]) \
+            if row["criterion"] else None
+        badges = []
+        if outcome is not None and outcome.get("borderline"):
+            badges.append("borderline")
+        if row["flag"]:
+            badges.append(_short_flag(row["flag"]))
+        buckets.setdefault(key, []).append(
+            (_miss_size(outcome, crit),
+             DetailName(ticker=row["ticker"], name=row["name"],
+                        measured=_measured_text(outcome, crit),
+                        badges=tuple(badges), sentence=row["sentence"],
+                        criterion=row["criterion"])))
+
+    _applied = rules_applied(result)
+    rules = {r.criterion: r for r in (_applied.rules if _applied else [])}
+    groups = []
+    for key, entries in buckets.items():
+        entries.sort(key=lambda e: (-e[0], e[1].name))
+        crit = REGISTRY.get(key)
+        if key.startswith("_"):
+            title = _GATE_TITLES.get(key, _GATE_TITLES[DETAIL_GROUP_OTHER])
+            rule = _gate_rule_phrase(key, result)
+            note = _GATE_NOTE
+            # The size floor is a registered criterion as well as a pre-screen
+            # gate, and its stated purpose is the same either way. Sector and
+            # asset kind are SCOPE, not judgement — the rule phrase says what
+            # they are and there is nothing further to justify.
+            why = (getattr(REGISTRY.get("min_market_cap"), "why", "")
+                   if key == DETAIL_GROUP_FLOOR else "")
+        else:
+            title = getattr(crit, "label", "") or key
+            applied = rules.get(key)
+            rule = getattr(applied, "threshold_phrase", "") or ""
+            why, note = getattr(crit, "why", ""), ""
+        groups.append(DetailGroup(key=key, title=title, rule=rule, why=why, note=note,
+                                  names=tuple(e[1] for e in entries)))
+
+    gates = [g for g in groups if g.is_gate]
+    rest = sorted((g for g in groups if not g.is_gate),
+                  key=lambda g: (-g.count, g.title))
+
+    return LensDetail(
+        strategy_id=strategy_id or meta.get("rank_strategy_id", "") or "",
+        label=label or meta.get("rank_strategy_name", "") or strategy_id,
+        asks=lens_asks(result),
+        headline=_detail_headline(result),
+        badge_note=detail_badge_note() if any(
+            b.startswith("⚠") for g in groups for n in g.names for b in n.badges) else "",
+        groups=tuple(gates + rest),
+        sources=tuple(_detail_sources(result)),
+        unrateable=tuple((display_name(t, (result.names or {}).get(t)), why)
+                         for t, why in (getattr(result, "unrateable", None) or [])),
+        fetch_errors=tuple((display_name(t, (result.names or {}).get(t)), why)
+                           for t, why in (getattr(result, "fetch_errors", None) or [])),
+    )
+
+
+def _gate_rule_phrase(key: str, result) -> str:
+    """The gate's own limit, read from the strategy that ran — never hardcoded."""
+    rank = getattr(result, "rank_strategy", None)
+    if key == DETAIL_GROUP_FLOOR:
+        floor = getattr(rank, "min_market_cap", None)
+        return (f"at least {format_floor(floor)} (applied before the screen)"
+                if floor else "applied before the screen")
+    if key == DETAIL_GROUP_SECTOR:
+        excluded = list(getattr(rank, "exclude_sectors", None) or [])
+        included = list(getattr(rank, "include_sectors", None) or [])
+        if included:
+            return "this lens ranks only " + ", ".join(included)
+        if excluded:
+            return "this lens does not rank " + ", ".join(excluded)
+    if key == DETAIL_GROUP_KIND:
+        kinds = list(getattr(rank, "asset_kinds", None) or [])
+        if kinds:
+            return "this lens ranks only " + ", ".join(kinds)
+    return "applied before the screen"
+
+
+def _detail_headline(result) -> str:
+    """"Ranked 43 of 134 names. Excluded 91: by rule below, worst miss first." — the one
+    line that tells a reader how to read everything under it."""
+    meta = getattr(result, "meta", None) or {}
+    ranked = meta.get("ranked_count")
+    if ranked is None:
+        ranked = len([r for r in (getattr(result, "ranked", None) or []) if not r.excluded])
+    size = meta.get("universe_size", ranked)
+    excluded = len(getattr(result, "excluded", None) or [])
+    line = f"Ranked {ranked} of {size} names."
+    if excluded:
+        line += f" Excluded {excluded}: by rule below, worst miss first."
+    return line
+
+
+def _detail_sources(result) -> list[dict]:
+    """The provenance block as TABLE rows: ``[{label, real, abstained}]``.
+
+    The same counts ``provenance_sentences`` states in prose. A sentence per factor reads
+    well for three factors and badly for ten, and the thing a reader is actually checking
+    — did this factor abstain, and for whom — is a column."""
+    out = []
+    for e in factor_integrity(result):
+        total, by_source = e["total"], e["by_source"]
+        abstained = by_source.get("abstained") or []
+        real = total - len(abstained)
+        from .factors import FACTOR_REGISTRY
+        label = getattr(FACTOR_REGISTRY.get(e["factor"]), "label", "") or e["factor"]
+        if abstained:
+            shown = ", ".join(_disp(result, t) for t in abstained[:6])
+            if len(abstained) > 6:
+                shown += f", +{len(abstained) - 6} more"
+            note = f"{len(abstained)} — {shown}"
+        else:
+            note = "—"
+        out.append({"factor": e["factor"], "label": label,
+                    "real": f"{real} of {total}", "abstained": note})
+    return out
 
 
 EVIDENCE_GAPS_TITLE = "What the run could not see"

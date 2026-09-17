@@ -39,7 +39,9 @@ from aristos_council.costs import actual_vs_estimate, cost_phrase
 # READER-1 — what one summary costs, for the checkbox label and the Run-button line. One
 # call on the cheapest tier over a facts pack of a few thousand tokens; stated as "about"
 # because it is a hint on a control, not a billed figure (the run records the real one).
-READER_COST_HINT = "1 cent"
+# READER-3: the reader may be asked twice (one retry on a failed check), so the
+# hint covers both calls. A hint that quotes only the best case is not a hint.
+READER_COST_HINT = "1-2 cents"
 from aristos_council.tracing import trace_config
 from aristos_council.persistence.reports import (
     RunReport,
@@ -1641,11 +1643,17 @@ def _universe_markdown(result) -> str:
                          f"{'s' if count != 1 else ''} could not be tested: "
                          + "; ".join(n["rules"]))
 
-    entries = provenance_sentences(result)
-    if entries:
+    # DETAIL-1: the same three-column table the merged report renders, from the same
+    # builder — the counts a reader checks (did this factor abstain, and for whom) are
+    # columns, not the tail of a sentence.
+    from aristos_council.pipeline import lens_detail as _lens_detail
+    _detail = _lens_detail(result)
+    if _detail.sources:
         lines += ["", f"## {PROVENANCE_SECTION_TITLE}", "",
                   f"_{PROVENANCE_SECTION_NOTE}_", ""]
-        lines += [f"- {e['sentence']}" for e in entries]
+        lines += _md_table(["Factor", "Real data", "Abstained"],
+                           [{"Factor": r["label"], "Real data": r["real"],
+                             "Abstained": r["abstained"]} for r in _detail.sources])
     # VALBAND-1 / PRICE-2 / REPORT-1: the absolute counterpart to the ranked table, in
     # the RECORD too — a rank position ages into "it was cheapest of those"; the price
     # and the band age into "it cost $119.85 and sat at the 1st percentile of its own
@@ -1656,12 +1664,26 @@ def _universe_markdown(result) -> str:
     # same names are no longer listed twice in two sections.
     lines += _valuation_band_markdown(valuation_band_table(result))
     if result.excluded:
+        # DETAIL-1: grouped by the rule that fired, worst miss first — the same groups,
+        # in the same order, as the merged report and the HTML.
         lines += ["", "## Excluded — did not pass a rule, so was never ranked", ""]
-        for row in exclusion_rows(result):
-            muted = f" `{row['criterion']}`" if row["criterion"] else ""
-            lines.append(f"- **{row['name']}** — {row['sentence']}{muted}")
-            if row["flag"]:
-                lines.append(f"  - {row['flag']}")
+        for group in _detail.groups:
+            count = f"**{group.count} {'name' if group.count == 1 else 'names'}**"
+            rule = f" · rule: {group.rule}" if group.rule else ""
+            note = f" ({group.note})" if group.note else ""
+            ident = "" if group.is_gate else f" `{group.key}`"
+            lines += ["", f"**{group.title}**{ident}{rule} · {count}{note}", ""]
+            if group.why:
+                lines += [f"_{group.why}_", ""]
+            if group.keeps_sentences:
+                lines += [f"- **{n.name}** — {n.sentence}" for n in group.names]
+                continue
+            if group.is_gate:
+                lines += [", ".join(n.name for n in group.names)]
+                continue
+            lines += _md_table(["Name", "Measured", "Note"],
+                               [{"Name": n.name, "Measured": n.measured or "—",
+                                 "Note": ", ".join(n.badges)} for n in group.names])
     if result.unrateable:
         lines += ["", "## No usable data — no verdict was formed", ""]
         lines += [f"- **{display_name(t, result.names.get(t))}** — {why}"
@@ -2043,6 +2065,61 @@ def _shortlist_markdown(sl, shortlist_table) -> list[str]:
     return lines
 
 
+
+# --------------------------------------------------------------------------- #
+# DETAIL-1 — the per-lens detail section in markdown
+# --------------------------------------------------------------------------- #
+# The mirror of ``report_html._lens_detail_html``: same builder, same groups, same order,
+# same names. Markdown has no <details>, so a collapsed group becomes a one-line summary
+# with its names inline — the information is identical, only the folding is absent.
+def _lens_detail_markdown(detail) -> list[str]:
+    """One lens's grouped detail section as markdown lines."""
+    from aristos_council.pipeline import DETAIL_SOURCES_TITLE
+
+    lines: list[str] = []
+    if detail.asks:                                          # CAPTION-1
+        lines += [f"_{detail.asks}_", ""]
+    headline = detail.headline
+    if detail.badge_note:
+        headline = f"{headline} {detail.badge_note}"
+    lines += [f"**{headline}**"]
+
+    for group in detail.groups:
+        count = f"**{group.count} {'name' if group.count == 1 else 'names'}**"
+        rule = f" · rule: {group.rule}" if group.rule else ""
+        note = f" ({group.note})" if group.note else ""
+        # The criterion id stays beside the label, as the old per-name bullets carried it.
+        ident = "" if group.is_gate else f" `{group.key}`"
+        lines += ["", f"**{group.title}**{ident}{rule} · {count}{note}", ""]
+        if group.why:
+            lines += [f"_{group.why}_", ""]
+        if group.keeps_sentences:
+            lines += [f"- **{n.name}** — {n.sentence}" for n in group.names]
+            continue
+        if group.is_gate:
+            # No <details> in markdown: the names go inline on one line rather than
+            # becoming thirty bullets that the HTML deliberately folds away.
+            lines += [", ".join(n.name for n in group.names)]
+            continue
+        lines += _md_table(
+            ["Name", "Measured", "Note"],
+            [{"Name": n.name, "Measured": n.measured or "—",
+              "Note": ", ".join(n.badges)} for n in group.names])
+
+    if detail.unrateable:
+        lines += ["", "**No usable data — no verdict was formed**", ""]
+        lines += [f"- **{name}** — {why}" for name, why in detail.unrateable]
+    if detail.fetch_errors:
+        lines += ["", "**Data fetch failed — re-run to recover**", ""]
+        lines += [f"- **{name}** — {why}" for name, why in detail.fetch_errors]
+    if detail.sources:
+        lines += ["", f"**{DETAIL_SOURCES_TITLE}**", ""]
+        lines += _md_table(["Factor", "Real data", "Abstained"],
+                           [{"Factor": r["label"], "Real data": r["real"],
+                             "Abstained": r["abstained"]} for r in detail.sources])
+    return lines
+
+
 def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     """ONE merged markdown report for the whole run, however many lenses ran (REPORT-2).
 
@@ -2065,7 +2142,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         fetch_guard_line,
         floor_override_line,
         lens_asks,
-        provenance_sentences, report_sections, shortlist_table,
+        lens_detail, provenance_sentences, report_sections, shortlist_table,
         union_valuation_band_table,
         valuation_band_table,
     )
@@ -2169,33 +2246,14 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         lines += _rules_applied_markdown(multi_result.results[sid],
                                          include_title=False)
 
-    # 7 — what DOES vary per lens.
+    # 7 — what DOES vary per lens. DETAIL-1: the SAME builder the HTML renders, so the
+    # downloaded markdown and the downloaded HTML cannot show different names or a
+    # different order.
     for sid in ids:
         res = multi_result.results[sid]
         lines += ["", f"## {label_with_id(names.get(sid) or sid, sid)} — detail", ""]
-        if lens_asks(res):                                   # CAPTION-1
-            lines += [f"_{lens_asks(res)}_", ""]
-        lines += [f"- Ranked: {res.meta['ranked_count']} of "
-                  f"{res.meta['universe_size']} names"]
-        if res.excluded:
-            lines += ["", "**Excluded — did not pass a rule, so was never ranked**", ""]
-            for row in exclusion_rows(res):
-                muted = f" `{row['criterion']}`" if row["criterion"] else ""
-                lines.append(f"- **{row['name']}** — {row['sentence']}{muted}")
-                if row["flag"]:
-                    lines.append(f"  - {row['flag']}")
-        if res.unrateable:
-            lines += ["", "**No usable data — no verdict was formed**", ""]
-            lines += [f"- **{display_name(t, res.names.get(t))}** — {why}"
-                      for t, why in res.unrateable]
-        if res.fetch_errors:
-            lines += ["", "**Data fetch failed — re-run to recover**", ""]
-            lines += [f"- **{display_name(t, res.names.get(t))}** — {why}"
-                      for t, why in res.fetch_errors]
-        entries = provenance_sentences(res)
-        if entries:
-            lines += ["", "**Where the numbers came from**", ""]
-            lines += [f"- {e['sentence']}" for e in entries]
+        lines += _lens_detail_markdown(
+            lens_detail(res, strategy_id=sid, label=names.get(sid) or sid))
 
     # ONE cohort under N lenses — so ONE membership record covers the whole grid.
     lines += _cohort_membership_lines(m)
@@ -2352,7 +2410,7 @@ def _render_multi_strategy_result(multi_result) -> None:
         union_valuation_band_table(multi_result) if ids else None)
 
     # What DOES vary per lens — exclusion reasons, no-data names, factor sourcing.
-    from aristos_council.pipeline import exclusion_rows, provenance_sentences
+    from aristos_council.pipeline import lens_detail, provenance_sentences
 
     for sid in ids:
         res = multi_result.results[sid]
@@ -2360,13 +2418,28 @@ def _render_multi_strategy_result(multi_result) -> None:
                          f"({res.meta['ranked_count']} ranked, "
                          f"{len(res.excluded)} excluded, "
                          f"{len(res.unrateable)} with no data)"):
-            if res.excluded:
-                st.markdown("**Excluded — did not pass a rule, so was never ranked**")
-                for row in exclusion_rows(res):
-                    muted = f" `{row['criterion']}`" if row["criterion"] else ""
-                    st.markdown(f"- **{row['name']}** — {row['sentence']}{muted}")
-                    if row["flag"]:
-                        st.caption(row["flag"])
+            # DETAIL-1: the same groups, in the same order, as the downloaded report.
+            detail = lens_detail(res, strategy_id=sid, label=lens_labels[sid])
+            if detail.badge_note:
+                st.caption(detail.badge_note)
+            for group in detail.groups:
+                rule = f" · rule: {group.rule}" if group.rule else ""
+                note = f" ({group.note})" if group.note else ""
+                ident = "" if group.is_gate else f" `{group.key}`"
+                st.markdown(f"**{group.title}**{ident}{rule} · **{group.count} "
+                            f"{'name' if group.count == 1 else 'names'}**{note}")
+                if group.why:
+                    st.caption(group.why)
+                if group.keeps_sentences:
+                    for n in group.names:
+                        st.markdown(f"- **{n.name}** — {n.sentence}")
+                    continue
+                if group.is_gate:
+                    st.caption(", ".join(n.name for n in group.names))
+                    continue
+                st.dataframe([{"Name": n.name, "Measured": n.measured or "—",
+                               "Note": ", ".join(n.badges)} for n in group.names],
+                             hide_index=True, width="stretch")
             if res.unrateable:
                 st.markdown("**No usable data — no verdict was formed**")
                 for t, why in res.unrateable:

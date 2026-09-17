@@ -140,6 +140,20 @@ class Criterion:
     # ``{signed}`` (a direction + magnitude, "fell 14.0%"). Empty -> the report falls
     # back to "<label> {observed}", which is correct if plain.
     observation: str = ""
+    # DETAIL-1 — WHY a lens asks this, in one sentence, for a reader who has just been
+    # shown a list of names that failed it.
+    #
+    # ``glossary`` says what the rule REQUIRES and is written for someone meeting the term
+    # for the first time; it answers "what is this?". This answers a different question —
+    # "why would anyone screen on it?" — and that is the question a grouped exclusion list
+    # provokes, because the group heading states the rule ONCE and then shows thirty names
+    # it removed. A reader who accepts the arithmetic can still reasonably ask what the
+    # rule is FOR, and nothing in the report said.
+    #
+    # Every registered criterion carries one (pinned by a test): a criterion with no
+    # stated purpose is one nobody has had to justify, and this is the cheapest place to
+    # make that visible.
+    why: str = ""
     # CRIT-NOCUT-1 — the RULE phrase, for a criterion whose threshold is not a limit on
     # the observed value. The generated phrase ("at most 5") assumes observed and
     # threshold share a unit; ``max_dividend_cuts`` measures a CUT SIZE against a WINDOW
@@ -147,6 +161,15 @@ class Criterion:
     # A ``{threshold}`` template here replaces it at every render site. Empty -> the
     # generated phrase, so every existing criterion is untouched.
     threshold_text: str = ""
+    # NOCUT-3 — the criterion states its OWN reason, and the report prints it verbatim.
+    # The generated clause is assembled from the label and the observed value, which is
+    # all most criteria have to say. ``max_dividend_cuts`` has more: it knows WHICH YEAR
+    # the cut landed in and how far BOTH measures fell, and it writes that sentence while
+    # it computes. The report was throwing it away and rendering the smaller one — "the
+    # dividend was cut — the largest fall was 33% of the prior year's total" tells a
+    # reader nothing they can go and check, where "cut in 2021 ... against 2020" does.
+    # False everywhere else, so every other sentence is byte-identical.
+    observation_from_note: bool = False
     # P5 — the unit of the OBSERVED value, when it differs from the threshold's. For every
     # other criterion the observed IS compared to the threshold, so they share a unit and
     # this stays empty; ``max_dividend_cuts`` measures a FRACTION (how big a cut was)
@@ -452,6 +475,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_dividend_yield", _min_dividend_yield,
         label="Dividend yield",
+        why=("An income lens exists to be paid while it waits; a name paying almost "
+             "nothing is being held for something other than its dividend, which is "
+             "a different question from the one this lens asks."),
         glossary=("The rule requires the dividend to be at least this percentage of "
                   "the share price."),
         comparison="min",
@@ -465,6 +491,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_payout_ratio", _max_payout_ratio,
         label="Dividends vs earnings",
+        why=("A dividend paid out of most of the year's earnings has no room to "
+             "absorb a bad year, so the first downturn forces a choice between "
+             "cutting it and borrowing to keep it."),
         glossary=("The rule caps the share of profit paid out as dividends, so the "
                   "payout has room to survive a bad year."),
         comparison="max",
@@ -478,6 +507,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_payout_ratio_fcf", _max_payout_ratio_fcf,
         label="Dividends vs free cash flow",
+        why=("Earnings can be paid on paper; a dividend is paid in cash. A payout "
+             "larger than the cash the business actually generated is being funded "
+             "from reserves or from debt, and neither lasts."),
         glossary=("The rule caps the share of free cash flow paid out as dividends "
                   "— the cash test rather than the profit test."),
         comparison="max",
@@ -493,6 +525,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_market_cap", _min_market_cap,
         label="Company size",
+        why=("Below a certain size a company's reported figures are thinner, its "
+             "shares are harder to leave, and one contract or one well can move the "
+             "whole business — none of which the factors behind this lens can see."),
         glossary=("The rule requires the company to be worth at least this much in "
                   "total, so names too small to trade sensibly are skipped."),
         comparison="min",
@@ -506,6 +541,10 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_dividend_growth_streak", _min_dividend_growth_streak,
         label="Consecutive years of dividend increases (from payment history)",
+        why=("A dividend raised every year through whatever the period contained is "
+             "evidence the board treats it as a commitment rather than as a "
+             "residual, which is the only evidence available about what they will do "
+             "next."),
         glossary=("The rule requires the dividend to have risen for at least this "
                   "many consecutive years."),
         comparison="min",
@@ -519,6 +558,10 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_dividend_cuts", _max_dividend_cuts,
         label="Dividend cuts in the last N years",
+        why=("For a payer whose profits move with a commodity, a dividend held "
+             "through the last trough is the strongest available evidence that it "
+             "will hold through the next one — and a cut is the strongest evidence "
+             "that it will not."),
         glossary=("The rule requires that no calendar year in the window paid a lower "
                   "total dividend than the year before. It asks whether the dividend "
                   "was ever CUT, which is a different question from whether it ROSE: a "
@@ -528,6 +571,9 @@ _CRITERIA: tuple[Criterion, ...] = (
         comparison="max",
         observation="the dividend was cut — the largest fall was {observed} of the "
                     "prior year's total",
+        # NOCUT-3: ...but the criterion's own note names the YEAR and both falls, so the
+        # report prints that instead. The fallback above still serves the degraded paths.
+        observation_from_note=True,
         threshold_text="no year paid less than the year before, "
                        "across the last {threshold} complete years",
         observed_unit=UNIT_PERCENT0,     # the cut SIZE is a fraction, not a year count
@@ -544,6 +590,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_revenue_cagr", _min_revenue_cagr,
         label="Revenue growth (annual average)",
+        why=("Sales growth is the part of a growth case hardest to manufacture: "
+             "margins can be cut, costs deferred and shares bought back, but revenue "
+             "either arrived or it did not."),
         glossary=("The rule requires average yearly sales growth of at least this "
                   "much over the measured period."),
         comparison="min",
@@ -559,6 +608,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_roic", _min_roic,
         label="Return on invested capital",
+        why=("A business that earns less on the capital it employs than that capital "
+             "costs destroys value by growing, so its growth is a reason for concern "
+             "rather than for a premium."),
         glossary=("The rule requires the company to earn at least this much profit "
                   "on the money tied up in it — it screens out businesses that need "
                   "a lot of capital to make a little profit."),
@@ -574,6 +626,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_peg_ratio", _max_peg_ratio,
         label="Price/earnings against growth (PEG)",
+        why=("A high multiple is not by itself expensive and a low one is not by "
+             "itself cheap; what matters is the price against the growth being "
+             "bought, which is what this puts into one number."),
         glossary=("The rule caps what you pay per unit of growth — the P/E divided "
                   "by the growth rate. Lower means growth is cheaper."),
         comparison="max",
@@ -593,6 +648,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         PRICE_MOMENTUM_CRITERION, _min_price_momentum,
         label="12-month price change",
+        why=("A value lens that ignores price keeps buying names the market is still "
+             "repricing downwards. This does not ask the market to be right — only "
+             "that the fall has stopped."),
         glossary=("The rule requires the share to have returned at least this much "
                   "over the trailing twelve months. The floor catches breakdowns "
                   "rather than flatness, so it may itself be negative."),
@@ -612,6 +670,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_dividend_streak", _min_dividend_streak,
         label="Consecutive years of dividend increases",
+        why=("The same commitment test as the payment-history streak, read from the "
+             "provider's own figure where the payment record is not deep enough to "
+             "count it here."),
         glossary=("The rule requires the dividend to have risen for at least this "
                   "many consecutive years."),
         comparison="min",
@@ -625,6 +686,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_debt_to_market_cap", _max_debt_to_market_cap,
         label="Total debt vs market value",
+        why=("Debt is senior to the shares. A company whose borrowings are large "
+             "against its market value is one where the equity absorbs the first "
+             "loss and the lenders set the terms of any recovery."),
         glossary=("The rule caps borrowings against what the company is worth, so "
                   "heavily indebted names are screened out."),
         comparison="max",
@@ -639,6 +703,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_f_score", _min_f_score,
         label="Accounting quality (Piotroski F-Score, 0-9)",
+        why=("Nine plain accounting checks, each of which a healthy year passes "
+             "almost incidentally. A low score is rarely one bad number; it is the "
+             "same year looking weak from nine directions at once."),
         glossary=("The rule requires at least this many points on a nine-point "
                   "checklist of basic financial health."),
         comparison="min",
@@ -660,6 +727,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "max_accrual_ratio", _max_accrual_ratio,
         label="Profit backed by cash (accrual ratio)",
+        why=("Profit that keeps arriving as something other than cash is the most "
+             "common early sign that the reported number is running ahead of the "
+             "business."),
         glossary=("The rule caps how much of the reported profit may be accounting "
                   "entries rather than cash the business actually collected."),
         comparison="max",
@@ -674,6 +744,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "min_altman_z", _min_altman_z,
         label="Distance from financial distress (Altman Z-Score)",
+        why=("A distress score built to be read before the event rather than after "
+             "it. It does not predict failure; it says whether this balance sheet "
+             "resembles the ones that failed."),
         glossary=("The rule requires a minimum score on a five-part measure of "
                   "financial strength, so companies close to trouble are screened out."),
         comparison="min",
@@ -690,6 +763,9 @@ _CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         "valuation_band_percentile", _valuation_band_percentile,
         label="Valuation against its own 5-year range",
+        why=("Where a name sits against its OWN five-year range, which is the one "
+             "comparison that needs no peer group to be honest — a cyclical at the "
+             "dear end of its own history is dear whatever its sector is doing."),
         glossary=("Where today's valuation multiple sits in the company's own five- "
                   "year history — context only, and it decides nothing."),
         comparison="max",

@@ -358,7 +358,7 @@ def test_an_extreme_reversion_value_is_never_clamped_it_is_withheld(): #  BAND-3
     # The withheld figure is NAMED in the reason, so the case stays auditable — the
     # reader is told what the arithmetic produced and why it is not being stated.
     assert "implied move +900%" in rev.note
-    assert "exceeds the sanity bound (±150%)" in rev.note
+    assert "exceeds the upper sanity bound (+150%)" in rev.note
     assert rev.display.startswith("reversion value not evaluated — ")
     # The band itself is untouched: it still reports where the price sits.
     assert band.available and band.percentile is not None
