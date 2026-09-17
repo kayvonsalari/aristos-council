@@ -130,13 +130,61 @@ def test_the_prompt_is_the_versioned_file_on_disk():
     assert "Under 300 words" in text
     assert "banned: buy, sell, should" in text
     assert 'Say "list" for cohort' in text          # the de-jargon rule
-    # READER-2 moved the live version to v2; v1 stays on disk so a run recorded under it
-    # is still reproducible.
-    assert PROMPT_VERSION == "reader_v2"
-    assert (FIXTURES.parents[1].parent / "src" / "aristos_council" / "agents" / "prompts"
-            / "reader_v1.md").exists()
+    # READER-2 moved the live version to v2 and READER-3b to v3. EVERY earlier version
+    # stays on disk, so a run recorded under one is still reproducible.
+    assert PROMPT_VERSION == "reader_v3"
+    prompts = (FIXTURES.parents[1].parent / "src" / "aristos_council" / "agents"
+               / "prompts")
+    for version in ("reader_v1", "reader_v2", "reader_v3"):
+        assert (prompts / f"{version}.md").exists(), version
     # the v2 rules the checker now enforces are stated in the prompt itself
     assert "No ranges" in text and "is CHECKED" in text
+
+
+# --------------------------------------------------------------------------- #
+# READER-3b — the prompt and the check must ask for the same glosses
+# --------------------------------------------------------------------------- #
+# READER-3 took "balance sheet" off the CHECK, because a summary withheld over a word
+# every reader already knows is a worse outcome than the word left unglossed. The PROMPT
+# went on demanding it — harmless, in that it withheld nothing, but not free: it spends
+# words out of a 300-word budget on a gloss nobody wanted, and a prompt that asks for
+# something the checker does not want is a drift that only grows.
+
+def test_the_prompt_demands_exactly_the_terms_the_CHECK_enforces():
+    """The two lists are one rule stated twice, so they are pinned against each other
+    rather than each against its own copy of the words."""
+    from aristos_council.reader_check import GLOSS_TERMS
+
+    line = next(ln for ln in prompt_text().splitlines()
+                if ln.startswith("percentile, free cash flow"))
+    demanded = [t.strip() for t in line.split("—")[0].split(",")]
+    assert demanded == list(GLOSS_TERMS)
+
+
+def test_the_balance_sheet_gloss_is_gone_from_the_prompt_too():
+    assert "accrual, balance sheet, momentum" not in prompt_text()
+
+
+def test_v3_differs_from_v2_by_that_ONE_line_and_nothing_else():
+    """A prompt version bump is a behavioural change to the only free-form part of the
+    report, so what changed has to be checkable at a glance — not taken on trust."""
+    prompts = (FIXTURES.parents[1].parent / "src" / "aristos_council" / "agents"
+               / "prompts")
+    v2 = (prompts / "reader_v2.md").read_text(encoding="utf-8").splitlines()
+    v3 = (prompts / "reader_v3.md").read_text(encoding="utf-8").splitlines()
+    assert len(v2) == len(v3)
+    differ = [i for i, (a, b) in enumerate(zip(v2, v3)) if a != b]
+    assert len(differ) == 1, [(v2[i], v3[i]) for i in differ]
+    assert "balance sheet" in v2[differ[0]] and "balance sheet" not in v3[differ[0]]
+
+
+def test_v2_is_kept_verbatim_so_a_run_recorded_under_it_still_replays():
+    """Rule 7's discipline applied to prompts: a published version is never edited in
+    place. v3 is a new file; v2 is untouched and still demands its own gloss list."""
+    prompts = (FIXTURES.parents[1].parent / "src" / "aristos_council" / "agents"
+               / "prompts")
+    assert ("accrual, balance sheet, momentum"
+            in (prompts / "reader_v2.md").read_text(encoding="utf-8"))
 
 
 # --------------------------------------------------------------------------- #
