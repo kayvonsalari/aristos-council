@@ -127,18 +127,19 @@ def test_the_model_is_handed_the_prompt_and_the_facts_pack_and_nothing_else():
 
 def test_the_prompt_is_the_versioned_file_on_disk():
     text = prompt_text()
-    assert "Under 300 words" in text
-    assert "banned: buy, sell, should" in text
-    assert 'Say "list" for cohort' in text          # the de-jargon rule
+    assert "About 300 words" in text                # READER-5: a target, not a cliff
+    assert "Do not recommend" in text
+    assert 'Say "list", not cohort' in text         # the de-jargon rule
     # READER-2 moved the live version to v2 and READER-3b to v3. EVERY earlier version
     # stays on disk, so a run recorded under one is still reproducible.
-    assert PROMPT_VERSION == "reader_v4"
+    assert PROMPT_VERSION == "reader_v5"
     prompts = (FIXTURES.parents[1].parent / "src" / "aristos_council" / "agents"
                / "prompts")
-    for version in ("reader_v1", "reader_v2", "reader_v3", "reader_v4"):
+    for version in ("reader_v1", "reader_v2", "reader_v3", "reader_v4", "reader_v5"):
         assert (prompts / f"{version}.md").exists(), version
-    # the v2 rules the checker now enforces are stated in the prompt itself
-    assert "No ranges" in text and "is CHECKED" in text
+    assert "No ranges" in text and "CHECKED" in text
+    # READER-5: the verdict words are the run's own and are never an advice word.
+    assert "BUY, HOLD and SELL are" in text
 
 
 # --------------------------------------------------------------------------- #
@@ -150,15 +151,29 @@ def test_the_prompt_is_the_versioned_file_on_disk():
 # words out of a 300-word budget on a gloss nobody wanted, and a prompt that asks for
 # something the checker does not want is a drift that only grows.
 
-def test_the_prompt_demands_exactly_the_terms_the_CHECK_enforces():
-    """The two lists are one rule stated twice, so they are pinned against each other
-    rather than each against its own copy of the words."""
-    from aristos_council.reader_check import GLOSS_TERMS
+def test_the_prompt_no_longer_lists_terms_that_MUST_be_glossed():
+    """READER-5 replaced the list with a principle. v2-v4 named the terms and the checker
+    enforced the naming, so the two had to be pinned against each other; four of the first
+    five live summaries were destroyed by that enforcement. The prompt now asks for a term
+    to be explained where that reads naturally, the checker records when one was not, and
+    there is no list for the two to disagree about."""
+    text = prompt_text()
+    assert "percentile, free cash flow, accrual, momentum" not in text
+    assert "Explain a finance term the first time you use it" in text
+    assert "Never put a bracket inside a bracket" in text
 
-    line = next(ln for ln in prompt_text().splitlines()
-                if ln.startswith("percentile, free cash flow"))
-    demanded = [t.strip() for t in line.split("—")[0].split(",")]
-    assert demanded == list(GLOSS_TERMS)
+
+def test_the_gloss_rule_is_ADVISORY_on_both_sides():
+    """The prompt asks; the checker records. Neither withholds."""
+    from aristos_council.reader_check import GLOSS_TERMS, check_summary
+
+    assert GLOSS_TERMS                      # still detected, for the record
+    check = check_summary(
+        {"asked": "A list was tested.", "happened": "Some tests ran.",
+         "survived": "Nothing was picked.", "doubt": "The accrual ratio was high.",
+         "cannot_say": "It cannot say what happens next."}, {})
+    assert check.ok, check.reason
+    assert any("accrual" in n for n in check.notes)
 
 
 def test_the_balance_sheet_gloss_is_gone_from_the_prompt_too():
@@ -191,13 +206,15 @@ def test_v2_is_kept_verbatim_so_a_run_recorded_under_it_still_replays():
 # Every failure degrades to one honest line
 # --------------------------------------------------------------------------- #
 def test_a_summary_that_fails_the_check_is_withheld_with_its_reason():
+    """READER-5: what withholds is the summary saying something the run does not. The
+    advice word in this text is recorded as a NOTE beside the reason, not as one."""
     bad = _good(survived="You should buy 9999 names.")
     res = _multi(with_reader=True, reader_runner=_FakeRunner(bad))
     assert not res.reader.available
-    assert res.reader.note.startswith("Summary withheld: ")
-    assert "forbidden word" in res.reader.note and "9999" in res.reader.note
+    assert res.reader.note == "Summary withheld: number not in the facts: 9999"
     assert res.meta["reader"]["written"] is True     # it WAS written, then rejected
     assert res.meta["reader"]["check"] != "ok"
+    assert any("advice word" in n for n in res.meta["reader"]["notes"])
 
 
 def test_a_model_error_is_a_note_not_an_exception():
@@ -251,7 +268,7 @@ def test_a_withheld_summary_still_renders_its_one_line():
     pytest.importorskip("streamlit")
     import app
 
-    bad = _good(survived="You should buy everything.")
+    bad = _good(survived="It ranked 9999 names.")
     res = _multi(with_reader=True, reader_runner=_FakeRunner(bad))
     md = app._multi_strategy_markdown(res, None)
     assert "## Summary" in md and "Summary withheld:" in md
@@ -301,7 +318,7 @@ def test_a_withheld_summary_still_records_its_cost():
             self.meter.record("fake:reader", {"input_tokens": 100, "output_tokens": 10})
             return out
 
-    bad = _good(survived="You should buy everything.")
+    bad = _good(survived="It ranked 9999 names.")
     res = _multi(with_reader=True, reader_runner=_MeteredRunner(bad))
     assert not res.reader.available                     # withheld...
     # ...and still billed, for BOTH attempts. READER-3 asks again when the check fails, so
@@ -346,7 +363,7 @@ def test_a_first_attempt_that_passes_is_not_retried():
 
 
 def test_a_failed_check_is_retried_once_and_can_be_recovered():
-    runner = _ScriptedRunner(_good(survived="You should buy everything."), _good())
+    runner = _ScriptedRunner(_good(survived="It ranked 9999 names."), _good())
     res = _multi(with_reader=True, reader_runner=runner)
     assert res.reader.available                      # the retry was published
     assert len(runner.messages) == 2
@@ -354,7 +371,7 @@ def test_a_failed_check_is_retried_once_and_can_be_recovered():
     # BOTH checks are recorded: a summary that passed on the retry is not the same event
     # as one that passed first time, and the meta is where that shows.
     assert len(res.meta["reader"]["checks"]) == 2
-    assert 'forbidden word: "buy"' in res.meta["reader"]["checks"][0]
+    assert "number not in the facts: 9999" in res.meta["reader"]["checks"][0]
     assert res.meta["reader"]["checks"][1] == "ok"
     assert res.meta["reader"]["check"] == "ok"
 
@@ -363,26 +380,26 @@ def test_the_retry_is_told_exactly_what_the_check_said():
     """A retry at temperature 0 against a byte-identical message returns a byte-identical
     summary and fails the same check. The complaint has to travel, or the retry is only a
     second bill."""
-    runner = _ScriptedRunner(_good(survived="You should buy everything."), _good())
+    runner = _ScriptedRunner(_good(survived="It ranked 9999 names."), _good())
     _multi(with_reader=True, reader_runner=runner)
     first, second = runner.messages
     assert "REJECTED" not in first                   # the first ask is unchanged
     assert "REJECTED by the automatic check" in second
-    assert 'forbidden word: "buy"' in second
+    assert "number not in the facts: 9999" in second
     # The FACTS are unchanged between attempts — the retry may reword, never be given
     # more to say.
     assert second.startswith(first)
 
 
 def test_a_second_failure_withholds_exactly_as_before():
-    bad = _good(survived="You should buy everything.")
+    bad = _good(survived="It ranked 9999 names.")
     runner = _ScriptedRunner(bad, bad)
     res = _multi(with_reader=True, reader_runner=runner)
     assert not res.reader.available
     assert res.reader.note.startswith("Summary withheld: ")
     assert len(runner.messages) == 2                 # and STOPS there
     assert res.meta["reader"]["attempts"] == 2
-    assert all("buy" in c for c in res.meta["reader"]["checks"])
+    assert all("9999" in c for c in res.meta["reader"]["checks"])
 
 
 def test_a_model_error_on_the_retry_still_records_the_first_attempt():
@@ -396,7 +413,7 @@ def test_a_model_error_on_the_retry_still_records_the_first_attempt():
                 raise RuntimeError("provider said no")
             return super().invoke(system, user)
 
-    runner = _ThenRaises(_good(survived="You should buy everything."))
+    runner = _ThenRaises(_good(survived="It ranked 9999 names."))
     res = _multi(with_reader=True, reader_runner=runner)
     assert not res.reader.available
     assert res.reader.note == "Summary not written: RuntimeError"
@@ -416,3 +433,78 @@ def test_the_run_tab_cost_hint_covers_both_calls():
     import app
 
     assert app.READER_COST_HINT == "1-2 cents"
+
+
+# --------------------------------------------------------------------------- #
+# READER-5 — a style fault publishes, and is recorded
+# --------------------------------------------------------------------------- #
+# Of the first five live summaries, ONE published. The four that were withheld were
+# withheld for a term used without a bracket. A feature that fails four times in five, for
+# reasons that have nothing to do with truth, is not abstaining honestly — it is broken and
+# wearing abstention's clothes.
+
+def test_a_style_fault_publishes_and_costs_ONE_call():
+    runner = _ScriptedRunner(_good(survived="You should buy everything."))
+    res = _multi(with_reader=True, reader_runner=runner)
+    assert res.reader.available                      # published...
+    assert len(runner.messages) == 1                 # ...on the FIRST call, no retry
+    assert res.meta["reader"]["attempts"] == 1
+    assert res.meta["reader"]["check"] == "ok"
+
+
+def test_the_style_fault_is_recorded_in_the_run_meta():
+    """``notes`` is the evidence for whether the prompt's style rules work. Before this a
+    style fault either destroyed the summary or vanished; neither taught anyone anything."""
+    res = _multi(with_reader=True,
+                 reader_runner=_FakeRunner(_good(survived="You should buy everything.")))
+    assert any('advice word: "buy"' in n for n in res.meta["reader"]["notes"])
+
+
+def test_a_clean_summary_records_no_notes():
+    res = _multi(with_reader=True, reader_runner=_FakeRunner(_good()))
+    assert res.reader.available and res.meta["reader"]["notes"] == []
+
+
+def test_a_WITHHELD_summarys_text_is_kept_on_the_run():
+    """The evidence that justified READER-5 — what four withheld summaries actually said —
+    was unrecoverable, because withholding kept the reason and threw the prose away. The
+    next such argument will have the text."""
+    bad = _good(survived="It ranked 9999 names.")
+    res = _multi(with_reader=True, reader_runner=_FakeRunner(bad))
+    assert not res.reader.available
+    kept = res.meta["reader"]["withheld_text"]
+    assert kept["survived"] == "It ranked 9999 names."
+    assert set(kept) == {"asked", "happened", "survived", "doubt", "cannot_say"}
+
+
+def test_a_PUBLISHED_summary_records_no_withheld_text():
+    res = _multi(with_reader=True, reader_runner=_FakeRunner(_good()))
+    assert "withheld_text" not in res.meta["reader"]
+
+
+def test_the_reader_runs_on_the_narrator_tier():
+    """READER-1 put it on the cheapest tier, reasoning that nothing is being reasoned
+    about. Five live runs showed what the job actually is — hold a whole run in view,
+    describe each test by its role without inferring one, and say the hard part plainly —
+    and four of the five were unpublishable. It is ONE call per run, so the stronger tier
+    costs a cent or two rather than a multiple of anything."""
+    from aristos_council.agents.runners import _DEFAULTS, _model_for
+
+    assert _DEFAULTS["reader"] == _DEFAULTS["decision"]     # the narrator's tier
+    assert _model_for("reader") == _DEFAULTS["reader"]      # ...and still overridable
+
+
+def test_the_reader_tier_is_still_overridable_by_env(monkeypatch):
+    from aristos_council.agents.runners import _model_for
+
+    monkeypatch.setenv("ARISTOS_MODEL_READER", "anthropic:claude-haiku-4-5")
+    assert _model_for("reader") == "anthropic:claude-haiku-4-5"
+
+
+def test_the_checkbox_says_what_it_is_and_nothing_else():
+    pytest.importorskip("streamlit")
+    import app
+    import inspect
+
+    src = inspect.getsource(app)
+    assert '"Plain-English summary",' in src

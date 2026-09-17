@@ -1,30 +1,40 @@
-"""READER-1 — the deterministic check on a written summary.
+"""READER-1..5 — the deterministic check on a written summary.
 
-The summary is the only part of a report a language model composes freely, so it is the only
-part that can be wrong in a way no rule caught. This module is that rule. It runs on EVERY
-summary, and a summary that fails is WITHHELD — not corrected, not trimmed, not published
-with a caveat.
+The summary is the only part of a report a language model composes freely, so it is the
+only part that can be wrong in a way no rule caught. This module is that rule.
 
-Withholding rather than fixing is the same doctrine the rest of the report follows: an
-abstention states its reason, and the reason is visible. "Summary withheld: 342 words" tells
-a reader the note was attempted and why it is not there, which an empty space does not.
+**READER-5 rewrote the contract, because the rule was eating the feature.** Of the first
+five live summaries, ONE published. The four that were withheld were withheld for:
+"balance sheet" used without a bracket, "momentum" used without a bracket (twice), and
+"percentile" used without a bracket. Not one of them was withheld for saying something
+untrue. A reader who ticked the box got "Summary withheld: term without gloss: momentum"
+four times out of five, which is not honest abstention — it is a feature that does not
+work, wearing abstention's clothes.
 
-Five checks, all mechanical, none of them a judgement about whether the prose is any good:
+So the two kinds of problem are now separated, and only one of them can withhold.
 
-1. **Length** — 300 words or fewer.
-2. **Forbidden words** — the advice vocabulary. A verdict label in CAPITALS is exempt,
-   because quoting the run's own output is reporting, not advising.
-3. **Numbers** — every number in the text must appear in the facts pack. This is the check
+**FOUR checks WITHHOLD.** Each one means the summary says something the run does not:
+
+1. **Numbers** — every number in the text appears in the facts pack. This is the check
    that matters most: it is what makes the prose auditable rather than plausible.
-4. **Names** — every company or ticker named must be one the run actually carries.
-5. **Shape** — all five fields present and non-empty.
-6. **Roles** (READER-4) — a test the text NAMES and describes as a check or a picker must
-   be described as the pack says it is. The 09:10 summary called a second selector "a
-   check"; a reader told that reads its BUYs as "nothing objectionable found" rather than
-   "this test chose it", which inverts what the run said.
-7. **Unanimous BUYs** (READER-4) — a name every test rated BUY is the strongest single
-   fact a multi-test run produces, and it must be named. The 09:10 summary omitted the
-   only one it had.
+2. **Names** — every company or ticker named is one the run actually carries.
+3. **Roles** — a test the text NAMES and describes as a check or a picker is described as
+   the pack says it is. Calling a picker a check inverts what the run said.
+4. **Unanimous BUYs** — a name every test rated BUY is named. It is the strongest single
+   fact a multi-test run produces.
+
+Plus the shape check: all five fields present and non-empty. A summary with an empty field
+is not a summary.
+
+**EVERYTHING ELSE IS ADVISORY.** Length over the target, an advice word, a term used
+without a gloss, a vague range, a bracket inside a bracket: all still detected, all
+recorded on the run as ``notes``, none of them a reason to withhold. They are matters of
+style, and a style rule that destroys a truthful summary costs the reader more than the
+style fault ever did. The prompt still asks for all of them; ``notes`` is the evidence for
+whether the asking works.
+
+The advice-word note keeps its exemption for a verdict label in CAPITALS: quoting the
+run's own output is reporting, not advising, and BUY/HOLD/SELL are the run's own words.
 
 Nothing here reads a model, and nothing here blocks a run.
 """
@@ -35,7 +45,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-WORD_LIMIT = 300
+# READER-5 — a TARGET, not a limit. Over it the summary is noted as long and published;
+# a note that is 20 words too long is still the note, and throwing it away leaves the
+# reader with nothing instead of with slightly too much.
+WORD_TARGET = 300
+WORD_LIMIT = WORD_TARGET          # retained: the prompt and the docs quote this name
 
 # The advice vocabulary. "buy"/"sell" are the two the run's own verdict labels collide with,
 # which is why the capitalised forms are exempted below rather than the words dropped.
@@ -89,10 +103,21 @@ class ReaderCheck:
     # Everything that tripped, not just the first — a writer fixing one problem should not
     # discover the next on the following run.
     problems: list[str] = field(default_factory=list)
+    # READER-5 — style faults. Detected exactly as before and recorded on the run, but
+    # never a reason to withhold. A summary can be published AND imperfect, and keeping
+    # the two lists apart is what lets the prompt be improved from evidence instead of
+    # from memory.
+    notes: list[str] = field(default_factory=list)
 
     @property
     def withheld_line(self) -> str:
         return "" if self.ok else f"Summary withheld: {self.reason}"
+
+    @property
+    def notes_line(self) -> str:
+        """The advisory faults as one line, or "". Never rendered in the report — this is
+        for the run meta and for a person reading it."""
+        return "; ".join(self.notes)
 
 
 def _numbers(text: str) -> list[str]:
@@ -193,16 +218,58 @@ _ROLE_WORDS = {
 }
 
 
-def _role_claim(sentence: str, name: str):
+# The only shapes that COUNT as describing a test: "Forensic (a check)", "Forensic is a
+# check", "Forensic, a check,", "…are checks". Everything else in the sentence is prose
+# about the run.
+_COPULA = r"^[\s,:;(\u2013\u2014-]*(?:is|are|was|were)?[\s]*(?:an?|the)?[\s]*"
+
+
+def _role_claim(sentence: str, name: str, others=()):
     """The role a sentence claims for ``name``, as "check" or "picker", or None.
 
     Read only from the sentence the NAME appears in, because a summary that says "one test
-    is a check" two sentences later is describing the run, not this test."""
-    if name.lower() not in sentence.lower():
-        return None
+    is a check" two sentences later is describing the run, not this test.
+
+    READER-5 — attributed by PROXIMITY, and stopping at the next test named. The live 09:10
+    summary put three tests and three role words in ONE sentence:
+
+        "Three tests ran: Cyclical Income (the selector), Forensic (a check), and Magic
+         Formula RAW (a check)."
+
+    A rule that scanned the whole sentence for any role word gave every name the FIRST one
+    it found — so Forensic was reported as called a picker (it is a check, correctly
+    described), and Magic Formula RAW's genuinely wrong "(a check)" was never seen at all.
+    The check accused the innocent name and missed the guilty one, on the exact sentence it
+    was written for. The window for a name therefore runs FORWARD from that name to the
+    next test named after it, which is where its own description lives.
+
+    Forward only, deliberately. "The selector is Cyclical Income" is missed by this, and
+    that is the right way to be wrong: a missed mismatch publishes a slightly misdescribed
+    summary, while a misattributed one destroys a correct summary — which is the failure
+    READER-5 exists to end."""
     lowered = sentence.lower()
+    at = lowered.find(name.lower())
+    if at < 0:
+        return None
+    start = at + len(name)
+    end = len(sentence)
+    for other in others:
+        if other.lower() == name.lower():
+            continue
+        where = lowered.find(other.lower(), start)
+        if where >= 0:
+            end = min(end, where)
+    window = lowered[start:end]
+
+    # ...and the role word must be DESCRIBING the name, not merely sharing a clause with
+    # it. The 20:47 summary contains "The 9 names rated BUY under Cyclical Income all fell
+    # to checks", where "checks" is the object of a verb and says nothing about what
+    # Cyclical Income is. A rule that read it as a claim would have withheld a true
+    # summary — the exact failure READER-5 exists to end — so the role word has to sit in
+    # the copular position: right after the name, optionally through "is/are/was/were" and
+    # an article, and nothing else.
     for phrase in sorted(_ROLE_WORDS, key=len, reverse=True):
-        if re.search(rf"\b{re.escape(phrase)}\b", lowered):
+        if re.match(_COPULA + re.escape(phrase) + r"\b", window):
             return _ROLE_WORDS[phrase]
     return None
 
@@ -240,7 +307,11 @@ def _is_named(display: str, ticker: str, text: str) -> bool:
 
 
 def check_summary(summary, pack: dict) -> ReaderCheck:
-    """Run every check against ``summary`` (a ReaderSummary or a dict) and ``pack``."""
+    """Check ``summary`` against ``pack``.
+
+    Returns a ``ReaderCheck`` whose ``problems`` are the faults that WITHHOLD it and whose
+    ``notes`` are the faults that do not. ``ok`` follows ``problems`` alone: the summary
+    is published whenever nothing in it contradicts the run."""
     fields = {f: (getattr(summary, f, None) if not isinstance(summary, dict)
                   else summary.get(f)) or "" for f in _FIELDS}
 
@@ -252,50 +323,33 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
     text = " ".join(fields[f] for f in _FIELDS)
     words = len(text.split())
     problems: list[str] = []
+    notes: list[str] = []
 
-    if words > WORD_LIMIT:
-        problems.append(f"{words} words")
-
-    # Forbidden words, on a copy with quoted verdict labels removed.
-    without_labels = _VERDICT_LABEL.sub(" ", text)
-    hits = sorted({w for w in FORBIDDEN
-                   if re.search(rf"\b{re.escape(w)}\b", without_labels, re.I)})
-    if hits:
-        problems.append("forbidden word: " + ", ".join(f'"{w}"' for w in hits))
-
+    # ----------------------------------------------------------------- WITHHOLD
+    # 1. a number the run does not hold.
     known = _pack_numbers(pack)
     strays = sorted({n for n in _numbers(text) if n not in known},
                     key=lambda t: (len(t), t))
     if strays:
         problems.append("number not in the facts: " + ", ".join(strays))
 
-    # READER-2: a term the prompt requires glossed, used bare on FIRST appearance.
-    ungloss = []
-    lowered = text.lower()
-    for term in GLOSS_TERMS:
-        at = lowered.find(term)
-        if at < 0:
-            continue
-        window = text[at:at + len(term) + GLOSS_WINDOW]
-        if "(" not in window:
-            ungloss.append(term)
-    if ungloss:
-        problems.append("term without gloss: " + ", ".join(ungloss))
+    # 2. a company the run does not carry. Only tokens that LOOK like a ticker and are not
+    # ordinary capitalised prose — a check that flagged "It" or "This" would be noise.
+    known_names = _pack_names(pack)
+    candidates = {t for t in _TICKER.findall(text)
+                  if t.upper() == t and len(t) >= 2 and not _VERDICT_LABEL.fullmatch(t)}
+    unknown = sorted({t for t in candidates if t.lower() not in known_names})
+    if unknown:
+        problems.append("name not in the run: " + ", ".join(unknown))
 
-    # READER-2: a vague range where the pack has the figure.
-    ranges = [f"{a} to {b}" for a, b in _VAGUE_RANGE.findall(text)]
-    if ranges:
-        problems.append("vague range: " + ", ".join(ranges))
-
-    # READER-4: a named test described with the wrong role. The 09:10 summary called
-    # Magic Formula RAW "a check"; it is a second picker. A reader who is told a picker is
-    # a check will read its BUYs as "nothing objectionable found" rather than "this test
-    # chose it", which inverts what the run said.
-    roles = _pack_roles(pack)
+    # 3. a named test described with the wrong role (READER-4). The 09:10 summary called
+    # Magic Formula RAW "a check"; it is a second picker, and a reader told otherwise
+    # reads its BUYs as "nothing objectionable found" rather than "this test chose it".
     mismatched = []
+    roles = _pack_roles(pack)
     for sentence in _sentences(text):
         for name, role in roles.items():
-            claimed = _role_claim(sentence, name)
+            claimed = _role_claim(sentence, name, others=roles)
             if claimed is not None and claimed != role:
                 said = "a check" if claimed == "check" else "a picker"
                 if (name, said) not in mismatched:
@@ -304,13 +358,7 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
         problems.append("role mismatch: "
                         + "; ".join(f"{n} called {w}" for n, w in mismatched))
 
-    # READER-4: a bracket inside a bracket. A gloss exists to be read.
-    nested = _NESTED_GLOSS.findall(text)
-    if nested:
-        problems.append("garbled gloss: " + ", ".join(sorted(set(nested))))
-
-    # READER-4: a name EVERY test rated BUY is the strongest single fact a multi-test run
-    # produces, and the 09:10 summary omitted it entirely. Naming it is not optional.
+    # 4. a name EVERY test rated BUY, left out (READER-4).
     missing_unanimous = []
     for entry in (pack or {}).get("unanimous_buy") or []:
         label = (entry.get("name") or "").strip()
@@ -323,14 +371,37 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
     if missing_unanimous:
         problems.append("unanimous BUY not mentioned: " + ", ".join(missing_unanimous))
 
-    known_names = _pack_names(pack)
-    # Only check tokens that look like a ticker AND are not ordinary capitalised prose;
-    # a name check that flagged "It" or "This" would be noise, not a guard.
-    candidates = {t for t in _TICKER.findall(text)
-                  if t.upper() == t and len(t) >= 2 and not _VERDICT_LABEL.fullmatch(t)}
-    unknown = sorted({t for t in candidates if t.lower() not in known_names})
-    if unknown:
-        problems.append("name not in the run: " + ", ".join(unknown))
+    # ------------------------------------------------------------------ ADVISE
+    # Detected exactly as before; recorded, never enforced. Each of these withheld a live
+    # summary that was otherwise true, which is what READER-5 exists to stop.
+    if words > WORD_TARGET:
+        notes.append(f"{words} words (target {WORD_TARGET})")
+
+    without_labels = _VERDICT_LABEL.sub(" ", text)
+    hits = sorted({w for w in FORBIDDEN
+                   if re.search(rf"\b{re.escape(w)}\b", without_labels, re.I)})
+    if hits:
+        notes.append("advice word: " + ", ".join(f'"{w}"' for w in hits))
+
+    ungloss = []
+    lowered = text.lower()
+    for term in GLOSS_TERMS:
+        at = lowered.find(term)
+        if at < 0:
+            continue
+        window = text[at:at + len(term) + GLOSS_WINDOW]
+        if "(" not in window:
+            ungloss.append(term)
+    if ungloss:
+        notes.append("term without gloss: " + ", ".join(ungloss))
+
+    ranges = [f"{a} to {b}" for a, b in _VAGUE_RANGE.findall(text)]
+    if ranges:
+        notes.append("vague range: " + ", ".join(ranges))
+
+    nested = _NESTED_GLOSS.findall(text)
+    if nested:
+        notes.append("garbled gloss: " + ", ".join(sorted(set(nested))))
 
     return ReaderCheck(ok=not problems, reason="; ".join(problems), words=words,
-                       problems=problems)
+                       problems=problems, notes=notes)

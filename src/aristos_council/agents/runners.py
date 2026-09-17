@@ -12,7 +12,7 @@ temperature) never requires a code change:
     ARISTOS_MODEL_SPECIALIST  (default: anthropic:claude-haiku-4-5)
     ARISTOS_MODEL_CRITIC      (default: anthropic:claude-sonnet-4-6)
     ARISTOS_MODEL_DECISION    (default: anthropic:claude-sonnet-4-6)
-    ARISTOS_MODEL_READER      (default: anthropic:claude-haiku-4-5)
+    ARISTOS_MODEL_READER      (default: anthropic:claude-sonnet-4-6)
 
     ARISTOS_TEMP_SPECIALIST   (default: 0.0)
     ARISTOS_TEMP_CRITIC       (default: 0.0)
@@ -52,11 +52,18 @@ _DEFAULTS = {
     "specialist": "anthropic:claude-haiku-4-5",
     "critic": "anthropic:claude-sonnet-4-6",
     "decision": "anthropic:claude-sonnet-4-6",
-    # READER-1 — the cheapest tier already configured. The reader writes ONE short note
-    # per RUN from a facts pack that is already decided, so nothing is being reasoned
-    # about; a stronger model would buy nothing and would cost per run rather than
-    # per name.
-    "reader": "anthropic:claude-haiku-4-5",
+    # READER-5 — the NARRATOR's tier (the same model the decision/narration stage runs
+    # on), overridable as ever by ARISTOS_MODEL_READER.
+    #
+    # READER-1 put the reader on the cheapest tier, reasoning that nothing is being
+    # reasoned about: the facts are already decided and the writer only arranges them.
+    # That was right about the arithmetic and wrong about the job. Five live runs showed
+    # what the job actually is — hold a whole run in view, describe each test by its role
+    # without inferring one, name what every test agreed on, and say the hard part in
+    # plain words for someone who does not work in finance. Four of those five summaries
+    # were unpublishable. It is one call per RUN, not per name, so the stronger tier costs
+    # a cent or two rather than a multiple of anything.
+    "reader": "anthropic:claude-sonnet-4-6",
 }
 
 # Default temperature per tier. 0.0 everywhere — reproducibility first; the

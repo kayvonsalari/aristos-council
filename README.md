@@ -152,10 +152,20 @@ byte-identical to one from before the feature existed.
 
 **The writer never sees the report.** It sees a compact facts pack built from the run's own
 tables — counts, verdicts, rule tallies, the shortlist and its reasons, what could not be
-measured — so it cannot quote a price or a company the run does not hold. Every number it
-writes is then checked back against that pack, and a summary that fails **is withheld with
-its reason** rather than published: *"Summary withheld: number not in the facts: 120"*. It
-explains the results; it never recommends anything.
+measured — so it cannot quote a price or a company the run does not hold.
+
+**Four things can stop it being published**, and every one of them means the prose
+contradicts the run: a number the facts do not hold, a company the run does not carry, a
+test described with the wrong role, or a name every test rated BUY left unnamed. A summary
+that fails is **withheld with its reason** — *"Summary withheld: number not in the facts:
+120"* — never quietly corrected.
+
+Style is asked for, not enforced. Length, plain words, explaining a term on first use: the
+prompt asks for all of them and the run records where the writer missed, but none of it
+withholds a true summary. That is a deliberate reversal: the first five live summaries
+produced ONE publishable note, because four were destroyed by a term used without a
+bracket — and the one that got through was the only one that actually misdescribed the run.
+It explains the results; it never recommends anything.
 
 ### How to read a multi-lens grid
 

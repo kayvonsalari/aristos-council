@@ -8,6 +8,11 @@ decided, the writer only arranges them into sentences, and ``reader_check`` then
 that every number it wrote came from the facts. A summary that fails is WITHHELD with its
 reason — the same honest-abstention rule the rest of the report follows.
 
+READER-5 narrowed what can stop it being published to four things, all of which mean the
+prose contradicts the run: a number the facts do not hold, a company the run does not
+carry, a test described with the wrong role, or a name every test rated BUY left unnamed.
+Style faults are recorded and published anyway — see ``reader_check``.
+
 No key, no runner, or a model that errors -> the section says so in one line. It never
 raises, and it never stops a run: a free ranker-only run whose summary could not be written
 is still a complete run.
@@ -26,8 +31,14 @@ from typing import Optional
 # `asks`; the price check is described in plain words rather than glossed in brackets; and
 # a name every test rated BUY must be named. All three come from the same live summary
 # (2026-09-17 09:10), which called a second picker "a check", said Forensic "looks for
-# growth", wrote a bracket inside a bracket, and never mentioned the one unanimous BUY.
-PROMPT_VERSION = "reader_v4"
+# growth", and wrote a bracket inside a bracket.
+#
+# v5 separates what is CHECKED from what is ASKED. Four things are checked, all of them
+# the summary contradicting the run; everything else — length, advice words, glosses,
+# ranges — is craft the prompt asks for and the run records, and none of it withholds.
+# The evidence: of the first five live summaries, four were destroyed by a missing
+# bracket and the fifth, which published, was the only one that misdescribed the run.
+PROMPT_VERSION = "reader_v5"
 _PROMPT_PATH = (Path(__file__).resolve().parent / "agents" / "prompts"
                 / f"{PROMPT_VERSION}.md")
 
@@ -80,7 +91,11 @@ def write_summary(multi_result, *, runner=None, cohort_name: str = "",
     READER-3: up to ``MAX_ATTEMPTS`` tries. A failed check is fed back to the writer as a
     correction and the summary is rewritten ONCE; a second failure withholds, as before.
     The facts pack is built once and never changes between attempts — the retry is allowed
-    to reword, never to be given more to say."""
+    to reword, never to be given more to say.
+
+    READER-5: only the FOUR withholding checks can fail, so only they can trigger that
+    retry. A summary that is merely long, or that used a term without a gloss, publishes
+    on the first call with the fault recorded in ``meta["notes"]``."""
     from .reader_check import check_summary
     from .reader_facts import build_facts_pack, facts_pack_json
 
@@ -107,6 +122,10 @@ def write_summary(multi_result, *, runner=None, cohort_name: str = "",
                       "checks": list(checks), "error": str(exc)[:200]})
         check = check_summary(summary, pack)
         checks.append("ok" if check.ok else check.reason)
+        # READER-5: ``ok`` now follows the four WITHHOLDING checks alone, so the retry
+        # fires only when the summary says something the run does not. A note about
+        # length or a missing gloss no longer buys a second call — it never bought a
+        # better summary either, and it billed for the attempt.
         if check.ok:
             break
 
@@ -117,11 +136,30 @@ def write_summary(multi_result, *, runner=None, cohort_name: str = "",
     # meter, and the retry goes through the same runner and therefore the same meter.
     meta = {**base_meta, "written": True, "words": check.words,
             "attempts": len(checks), "checks": list(checks),
-            "check": "ok" if check.ok else check.reason}
+            "check": "ok" if check.ok else check.reason,
+            # READER-5 — the advisory faults, recorded on the run and shown nowhere in
+            # the report. This is the evidence for whether the prompt's style rules are
+            # working, which is the only thing they were ever able to tell us: before
+            # this, a style fault either destroyed the summary or vanished.
+            "notes": list(check.notes)}
     if not check.ok:
         # WITHHELD, not corrected: the reader is told it was tried and why it is absent.
-        return ReaderResult(note=check.withheld_line, meta=meta)
+        # READER-5: the rejected TEXT is recorded too. The evidence that justified this
+        # whole change — what four withheld summaries actually said — was unrecoverable,
+        # because withholding kept the reason and discarded the prose. Never again.
+        return ReaderResult(note=check.withheld_line,
+                            meta={**meta, "withheld_text": _as_fields(summary)})
     return ReaderResult(summary=summary, meta=meta)
+
+
+def _as_fields(summary) -> dict:
+    """The five fields as a plain dict, for the record. Empty when there is nothing."""
+    from .reader_check import _FIELDS
+
+    if summary is None:
+        return {}
+    return {f: (getattr(summary, f, None) if not isinstance(summary, dict)
+                else summary.get(f)) or "" for f in _FIELDS}
 
 
 def _user_message(facts: str, checks: list) -> str:
