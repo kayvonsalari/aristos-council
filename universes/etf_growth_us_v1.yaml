@@ -8,6 +8,10 @@
 id: etf_growth_us_v1
 # THESIS-1 — what this list was built for.
 thesis: funds
+# ASSET-MODE-1 — which side of the UI's Stocks / ETFs switch this list lives on.
+# Stated rather than inferred: the app ships this list, so the app can say what it
+# is.
+asset_kind: etfs
 display_name: Growth ETFs (US)
 role: exploratory universe — growth-ETF lens
 description: All-US growth-oriented ETFs for the etf_growth_v1 lens.

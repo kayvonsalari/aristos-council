@@ -50,6 +50,11 @@ class Universe(BaseModel):
     # a rank strategy's `thesis`, validated at load so a typo fails loudly rather than
     # reading as a cohort that fits nothing.
     thesis: str = ""
+    # ASSET-MODE-1 — which side of the UI's Stocks / ETFs switch this list lives on.
+    # Optional: an unmarked list is CLASSIFIED at render time (thesis, then its tickers,
+    # then the stocks default — see ``demo_surface.universe_asset_kind``) and the inferred
+    # value is never written back here. Declaring it is how a person overrules that.
+    asset_kind: str = ""
     tickers: list[str] = Field(min_length=1)
     created: str = ""
     rationale: str = ""
@@ -58,6 +63,19 @@ class Universe(BaseModel):
     # in selectors; local lists are gitignored portfolio-class data, so they never ride a
     # commit by default.
     local: bool = False
+
+    @field_validator("asset_kind")
+    @classmethod
+    def _asset_kind_valid(cls, v: str) -> str:
+        """A closed vocabulary, validated at load. A typo ("etf", "ETFs ", "funds") would
+        otherwise read as "not marked" and file the list under stocks — which is exactly
+        the silent wrong answer this field exists to prevent."""
+        from .demo_surface import ASSET_KINDS
+
+        if v and v.strip().lower() not in ASSET_KINDS:
+            raise ValueError(
+                f"unknown asset_kind {v!r} — expected one of {', '.join(ASSET_KINDS)}")
+        return v.strip().lower()
 
     @field_validator("thesis")
     @classmethod

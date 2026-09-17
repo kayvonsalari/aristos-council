@@ -32,6 +32,7 @@ from pydantic import ValidationError
 from aristos_council.data.adapter import (
     DataUnavailable, display_name, normalize_ticker)
 from aristos_council.demo_surface import (
+    ASSET_MODES, DEFAULT_ASSET_MODE, asset_mode_filter,
     strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
 from aristos_council.costs import actual_vs_estimate, cost_phrase
@@ -3496,6 +3497,56 @@ def _cc_num(v) -> str:
 # --------------------------------------------------------------------------- #
 # Page
 # --------------------------------------------------------------------------- #
+
+# --------------------------------------------------------------------------- #
+# ASSET-MODE-1 — the switch, read wherever a picker is built
+# --------------------------------------------------------------------------- #
+def asset_mode() -> str:
+    """The current Stocks / ETFs mode. Stocks whenever nothing has been chosen — on a
+    fresh start, after a refresh, and in every test that never touches the switch."""
+    return st.session_state.get("asset_mode") or DEFAULT_ASSET_MODE
+
+
+@st.cache_data(show_spinner=False)
+def _known_etf_tickers() -> frozenset:
+    """Every ticker this repo already knows to be a fund, for classifying an unmarked
+    list. Two sources, both of which exist for other reasons:
+
+    * the ETF static layer (``data/etf_static.csv``) — human-verified fund rows;
+    * the shipped ETF universes — a list whose thesis is ``funds`` is a list of funds.
+
+    Not a lookup that can fail a run: a ticker missing from both is simply not known to
+    be a fund, and an unmarked list containing one falls to the stocks default."""
+    tickers: set = set()
+    try:
+        from aristos_council.etf_static import default_static_rows
+        tickers.update(t.upper() for t in default_static_rows())
+    except Exception:                                  # a missing/garbled CSV is not fatal
+        pass
+    try:
+        from aristos_council.universe import list_universes
+
+        for manifest in list_universes(UNIVERSES_DIR):
+            if (getattr(manifest, "thesis", "") or "").strip().lower() == "funds":
+                tickers.update(t.upper() for t in (manifest.tickers or []))
+    except Exception:
+        pass
+    return frozenset(tickers)
+
+
+def _mode_filters():
+    """``(lens_ok, list_ok)`` for the current mode — the ONE pair every picker applies."""
+    return asset_mode_filter(asset_mode(), etf_tickers=_known_etf_tickers())
+
+
+def visible_for_mode(strategies=None, universes=None):
+    """Filter either collection by the current mode. Returns whichever was passed."""
+    lens_ok, list_ok = _mode_filters()
+    if strategies is not None:
+        return [s for s in strategies if lens_ok(s)]
+    return [u for u in (universes or []) if list_ok(u)]
+
+
 def main() -> None:
     # Load a local .env at APP START (item 4) so ANTHROPIC/FINNHUB keys reach the
     # Streamlit process regardless of the launch shell — the key guards below and
@@ -3534,6 +3585,20 @@ def main() -> None:
     run_clicked = False
 
     with st.sidebar:
+        # ASSET-MODE-1 — the one control that decides what every picker offers. In the
+        # SIDEBAR, not in a tab, because it governs the Run tab, Company Check and every
+        # other surface that starts new analysis, and a switch that lived in one of them
+        # would be invisible from the others.
+        #
+        # SESSION ONLY, and deliberately. Nothing is written to a settings file, a query
+        # param or local storage, so the app opens on Stocks every time — which is what
+        # "a stock-analysis tool by default" means. A persisted ETFs choice would make
+        # the majority job the one you have to remember to switch back to.
+        st.radio("Analyse", list(ASSET_MODES), horizontal=True, index=0,
+                 key="asset_mode")
+        st.caption("ETF lists and lenses are hidden while Stocks is selected.")
+        st.divider()
+
         if show_legacy:
             # --- LEGACY single-ticker council flow (pre-v2) ---
             st.header("Run a council · Legacy")

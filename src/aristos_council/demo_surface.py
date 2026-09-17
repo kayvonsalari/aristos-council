@@ -96,3 +96,131 @@ def strategy_label(s) -> str:
 def strategy_role(s) -> str:
     """Optional one-line role caption for a strategy (empty when unset)."""
     return (getattr(s, "role", "") or "").strip()
+
+
+# --------------------------------------------------------------------------- #
+# ASSET-MODE-1 — one Stocks / ETFs switch, and the UI shows stocks by default
+# --------------------------------------------------------------------------- #
+# Council Station is a stock-analysis tool in daily use, and the three ETF lenses plus
+# five ETF lists sat in every picker regardless. They rank on fee, size, trend and payout
+# — published for every fund and genuinely useful — but they are the minority job, and a
+# picker that offers them always makes the majority job slower.
+#
+# HIDDEN, never deleted. Past client ETF work ran on these lenses and a planned ETF-only
+# list of held funds still needs them, so this is a VISIBILITY filter and nothing else:
+# no strategy, universe, criterion, factor, rank, verdict, report, CLI or Colab path
+# changes, and the asset-kind gate that already walls ETFs out of stock lenses is
+# untouched. Flip the switch and everything is back.
+STOCKS, ETFS = "Stocks", "ETFs"
+ASSET_MODES = (STOCKS, ETFS)
+DEFAULT_ASSET_MODE = STOCKS
+
+# The vocabulary a Universe may declare. Deliberately the two the SWITCH offers, not the
+# richer asset-kind vocabulary the gate uses: this field answers "which side of the
+# switch does this list live on", which is a UI question with two answers.
+ASSET_KINDS = ("stocks", "etfs")
+
+# A lens's thesis when it is about funds, and the gate kind an ETF lens admits.
+_FUNDS_THESIS = "funds"
+_ETF_KIND = "etf"
+_EQUITY_KIND = "equity"
+
+
+def _as_list(value) -> list:
+    """A field that may be a scalar, a list, or absent, as a lower-cased list."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value.strip().lower()] if value.strip() else []
+    return [str(v).strip().lower() for v in value if str(v).strip()]
+
+
+def is_etf_lens(strategy) -> bool:
+    """True for a lens that ranks FUNDS.
+
+    TWO tests, because the repo carries both facts and they must agree:
+
+    * ``asset_kinds`` contains ``etf`` and not ``equity`` — the structural test, and the
+      same one the Colab script uses. It is the authoritative one: a lens is an ETF lens
+      because its FACTORS read fund attributes (expense ratio, fund size), which is why
+      the gate admits only funds to it.
+    * ``thesis`` includes ``funds`` — the declared one.
+
+    Either is enough. A lens that declares neither is a stock lens, and so is a lens with
+    NO asset restriction at all: an unrestricted check (Forensic) reads company accounts,
+    so it belongs on the stocks side even though nothing stops it being pointed at a fund.
+    """
+    kinds = _as_list(getattr(strategy, "asset_kinds", None))
+    if _ETF_KIND in kinds and _EQUITY_KIND not in kinds:
+        return True
+    return _FUNDS_THESIS in _as_list(getattr(strategy, "thesis", None))
+
+
+def universe_asset_kind(universe, *, etf_tickers=None) -> str:
+    """``"stocks"`` or ``"etfs"`` for a list, by the first of these that decides it:
+
+    1. the manifest's own ``asset_kind`` field. EXPLICIT ALWAYS WINS — a person who
+       marked a list has answered the question, and no inference may overrule them;
+    2. ``thesis: funds``;
+    3. every ticker in it is a known ETF (``etf_tickers``, from the static layer and the
+       cached quote types);
+    4. otherwise ``stocks``.
+
+    Step 4 is a default, not a finding: it is what an ordinary unmarked stock list gets,
+    and it is also what a list lands on when nothing could decide. ``undecided_list``
+    below is what tells those two apart, so the second can be warned about rather than
+    quietly filed under stocks.
+
+    NOTHING IS EVER WRITTEN BACK. The inferred value lives for the length of a render.
+    """
+    declared = (getattr(universe, "asset_kind", "") or "").strip().lower()
+    if declared in ASSET_KINDS:
+        return declared
+    if _FUNDS_THESIS in _as_list(getattr(universe, "thesis", None)):
+        return "etfs"
+    tickers = [t.strip().upper() for t in (getattr(universe, "tickers", None) or [])
+               if str(t).strip()]
+    known = {t.strip().upper() for t in (etf_tickers or ())}
+    if tickers and known and all(t in known for t in tickers):
+        return "etfs"
+    return "stocks"
+
+
+def undecided_list(universe, *, etf_tickers=None) -> bool:
+    """True when a list fell through to the ``stocks`` DEFAULT without anything deciding
+    it — no explicit field, no thesis, and at least one ticker whose kind is unknown.
+
+    A list of real stocks is not undecided: every one of its tickers is absent from the
+    ETF set, which is a decision. This catches the list nobody can classify, so the app
+    can name it once rather than file it silently."""
+    if (getattr(universe, "asset_kind", "") or "").strip().lower() in ASSET_KINDS:
+        return False
+    if _FUNDS_THESIS in _as_list(getattr(universe, "thesis", None)):
+        return False
+    tickers = [t.strip().upper() for t in (getattr(universe, "tickers", None) or [])
+               if str(t).strip()]
+    if not tickers:
+        return True                      # nothing to go on at all
+    known = {t.strip().upper() for t in (etf_tickers or ())}
+    hit = sum(1 for t in tickers if t in known)
+    # Some funds but not all: the list is mixed, and neither side of the switch is right
+    # for it. Named, and defaulted to stocks, which is where a mixed list is least wrong.
+    return 0 < hit < len(tickers)
+
+
+def asset_mode_filter(mode, *, etf_tickers=None):
+    """``(lens_ok, list_ok)`` — the two predicates every picker that STARTS NEW ANALYSIS
+    applies. ONE helper, so a tab cannot filter on its own idea of what an ETF is.
+
+    Pure, and unaware of Streamlit: the mode is a string the caller read from wherever it
+    keeps it. An unknown mode falls back to Stocks, which is the default everywhere else
+    and the safe answer for a value nobody set."""
+    etfs = str(mode or "").strip().lower() == "etfs"
+
+    def lens_ok(strategy) -> bool:
+        return is_etf_lens(strategy) is etfs
+
+    def list_ok(universe) -> bool:
+        return (universe_asset_kind(universe, etf_tickers=etf_tickers) == "etfs") is etfs
+
+    return lens_ok, list_ok
