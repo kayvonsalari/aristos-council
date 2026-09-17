@@ -38,12 +38,22 @@ def _bucket(percentile: float) -> str:
     return "dearest"
 
 
-def _verdict_counts(result) -> dict:
+def _verdict_counts(result, *, check: bool = False) -> dict:
+    """``{"buy": 21, "hold": 62, "sell": 20}`` — or, for a CHECK lens, the same counts
+    under the words that lens actually uses: ``{"clean": 21, ...}``.
+
+    CHECK-WORDS-1. The writer is handed the pack and nothing else, so a pack that said
+    "buy: 21" for Forensic would produce "Forensic rated 21 BUY" — which is the sentence
+    this item exists to stop. It cannot write a word the pack does not give it."""
+    from .report_language import verdict_word
+
     out = {"buy": 0, "hold": 0, "sell": 0}
     for r in result.ranked:
         if not r.excluded and r.verdict in out:
             out[r.verdict] += 1
-    return out
+    if not check:
+        return out
+    return {verdict_word(k, check=True): v for k, v in out.items()}
 
 
 def _rule_tallies(result) -> list[dict]:
@@ -171,7 +181,8 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
             "ranked": len([r for r in res.ranked if not r.excluded]),
             "excluded": len(res.excluded),
             "no_data": len(res.unrateable),
-            "verdicts": _verdict_counts(res),
+            "verdicts": _verdict_counts(res, check=not lens_votes(
+                getattr(strat, "kind", "selector"))),
             "rules": tallies,
             "dominant_rule": ({"rule": dominant["rule"], "failed": dominant["failed"]}
                               if dominant else None),

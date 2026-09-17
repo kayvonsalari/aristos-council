@@ -309,7 +309,9 @@ def test_the_table_carries_one_column_per_check():
     cols, rows = lens_agreement_table(ag)
     assert cols == ["Name", "BUY votes", "SELL votes", "Forensic",
                     "Valuation percentile", "Marks"]
-    assert rows[0]["Forensic"] == "SELL"
+    # CHECK-WORDS-1: a check speaks its own words. "SELL" here read as a vote against,
+    # which is exactly what a check's verdict is not.
+    assert rows[0]["Forensic"] == "doubted"
     assert rows[0]["Valuation percentile"] == "40th"
     assert rows[0]["Marks"] == "doubted by Forensic"
 
@@ -397,3 +399,142 @@ def test_KNOWN_LIMIT_the_narration_plan_is_unchanged_by_the_agreement_table():
     marks = [m for row in marked.rows for m in row.marks]
     assert any("doubted by Forensic" in m for m in marks)
     assert any("priced high" in m for m in marks)
+
+
+# --------------------------------------------------------------------------- #
+# CHECK-WORDS-1 — a check lens speaks its own words
+# --------------------------------------------------------------------------- #
+# A check does not pick, so its verdicts never meant what they said. Forensic's "BUY"
+# means "I found nothing to doubt" and its "SELL" means "I doubt this" — and a reader
+# scanning a grid of BUY/HOLD/SELL cells has no way to know that one column is answering a
+# different question in the same words. SHORTLIST-3 made the distinction structural; this
+# makes it visible.
+#
+# DISPLAY ONLY. The verdict field is still buy/hold/sell underneath, so the ranker, the
+# quintile cut, the frozen runs under runs/ and every recorded report are untouched.
+
+def test_a_check_lens_renders_its_own_three_words():
+    from aristos_council.report_language import CHECK_WORDS, verdict_word
+
+    assert CHECK_WORDS == {"buy": "clean", "hold": "no concern", "sell": "doubted"}
+    assert [verdict_word(v, check=True) for v in ("buy", "hold", "sell")] == [
+        "clean", "no concern", "doubted"]
+
+
+def test_a_voting_lens_still_renders_BUY_HOLD_SELL():
+    from aristos_council.report_language import verdict_word
+
+    assert [verdict_word(v) for v in ("buy", "hold", "sell")] == ["BUY", "HOLD", "SELL"]
+
+
+def test_the_check_words_are_lower_case_on_purpose():
+    """They are not verdicts and should not wear a verdict's shouting capitals. "doubted"
+    is a reading; "SELL" is a call."""
+    from aristos_council.report_language import CHECK_WORDS
+
+    assert all(w == w.lower() for w in CHECK_WORDS.values())
+
+
+def test_the_underlying_verdict_is_NOT_changed():
+    """The whole safety of this item. A frozen run replays, a verdict log compares, and a
+    scoreboard row keeps its value, because nothing but the DISPLAY moved."""
+    from aristos_council.pipeline import MultiStrategyCell
+
+    cell = MultiStrategyCell(strategy_id="chk_v1", status="ranked", position=3,
+                             cohort_size=10, verdict="sell", is_check=True)
+    assert cell.verdict == "sell"                 # the field is untouched
+    assert cell.render() == "#3 of 10 · doubted"  # only the rendering differs
+
+
+def test_a_selector_cell_renders_exactly_as_before():
+    from aristos_council.pipeline import MultiStrategyCell
+
+    cell = MultiStrategyCell(strategy_id="sel_v1", status="ranked", position=3,
+                             cohort_size=10, verdict="sell")
+    assert cell.render() == "#3 of 10 · SELL"
+
+
+def test_the_grid_keeps_its_COLOUR_for_a_check_cell():
+    """doubted red, clean green, no concern neutral — the same three signals, because a
+    reader scanning for trouble should find it in the same colour whichever column it is
+    in. The WORD is always rendered, so nothing depends on the colour."""
+    from aristos_council.export.report_html import _verdict_grid_cell, verdict_of_cell
+
+    assert verdict_of_cell("#19 of 103 · clean") == "BUY"
+    assert verdict_of_cell("#8 of 103 · doubted") == "SELL"
+    assert verdict_of_cell("#3 of 3 · no concern") == "HOLD"
+    html = _verdict_grid_cell("#8 of 103 · doubted")
+    assert "verdict-sell" in html and ">doubted<" in html
+    assert "SELL" not in html                      # the word is the lens's own
+
+
+def test_a_check_cell_keeps_its_colour_behind_the_factor_marker():
+    from aristos_council.export.report_html import _verdict_grid_cell
+
+    html = _verdict_grid_cell("#3 of 3 · no concern · ranked on 2 of 3 factors")
+    assert "verdict-hold" in html and ">no concern<" in html
+    assert "ranked on 2 of 3 factors" in html
+
+
+def test_the_summary_line_counts_a_check_in_its_own_words():
+    from aristos_council.report_language import format_summary_line
+
+    class _R:
+        def __init__(self, v):
+            self.verdict, self.excluded = v, False
+
+    ranked = [_R("buy"), _R("buy"), _R("hold"), _R("sell")]
+    line = format_summary_line(ranked, universe_size=4, excluded=0, check=True)
+    assert "2 clean" in line and "1 no concern" in line and "1 doubted" in line
+    assert "BUY" not in line and "SELL" not in line
+
+
+def test_the_facts_pack_hands_the_writer_the_check_s_words():
+    """The writer is handed the pack and nothing else, so a pack that said "buy: 21" for
+    Forensic would produce "Forensic rated 21 BUY" — the sentence this item exists to
+    stop. It cannot write a word the pack does not give it."""
+    from aristos_council.reader_facts import _verdict_counts
+
+    class _R:
+        def __init__(self, v):
+            self.verdict, self.excluded = v, False
+
+    class _Res:
+        ranked = [_R("buy"), _R("sell"), _R("sell")]
+
+    assert _verdict_counts(_Res()) == {"buy": 1, "hold": 0, "sell": 2}
+    assert _verdict_counts(_Res(), check=True) == {"clean": 1, "no concern": 0,
+                                                   "doubted": 2}
+
+
+def test_the_ranking_line_explains_the_three_words_where_they_are_first_met():
+    from aristos_council.pipeline import _ranker_filter_lines
+    from aristos_council.report_language import CHECK_QUINTILE_LINE
+
+    class _Rank:
+        kind, cut, factors, min_market_cap = "check", "quintile", [], None
+        missing = "neutral"
+
+    lines = " ".join(_ranker_filter_lines(_Rank()))
+    assert CHECK_QUINTILE_LINE in lines
+    assert "top 20% BUY" not in lines
+
+
+def test_a_SELECTOR_s_ranking_line_is_unchanged():
+    from aristos_council.pipeline import _ranker_filter_lines
+
+    class _Rank:
+        kind, cut, factors, min_market_cap = "selector", "quintile", [], None
+        missing = "neutral"
+
+    assert "top 20% BUY, bottom 20% SELL, middle HOLD" in " ".join(
+        _ranker_filter_lines(_Rank()))
+
+
+def test_the_glossary_defines_the_three_words_together():
+    """The point of them is the CONTRAST with BUY/HOLD/SELL, so they are one entry."""
+    from aristos_council.glossary import _REPORT_TERMS
+
+    entry = next(t for t in _REPORT_TERMS if "doubted" in t[0])
+    assert "clean" in entry[2] and "doubted" in entry[2]
+    assert "not a recommendation" in entry[2] and "not a sell" in entry[2]

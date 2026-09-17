@@ -1208,7 +1208,8 @@ def summary_line(result) -> str:
     reader had to count the table by hand to learn what the run had concluded."""
     m = result.meta or {}
     return format_summary_line(
-        result.ranked, universe_size=m.get("universe_size", len(result.ranked)),
+        result.ranked, check=_is_check_result(result),
+        universe_size=m.get("universe_size", len(result.ranked)),
         excluded=len(getattr(result, "excluded", []) or []),
         unrateable=len(getattr(result, "unrateable", []) or []),
         fetch_errors=len(getattr(result, "fetch_errors", []) or []))
@@ -1596,9 +1597,17 @@ def _ranker_filter_lines(rank) -> list[str]:
         return []
     lines: list[str] = []
     cut = getattr(rank, "cut", "quintile") or "quintile"
-    phrase = _CUT_PHRASE.get(cut, cut).format(
-        k=getattr(rank, "k", ""),
-        p=f"{(getattr(rank, 'percentile', 0.0) or 0.0):.0%}")
+    # CHECK-WORDS-1: a CHECK lens's quintile cut produces clean / no concern / doubted, so
+    # the line that explains the cut says the words the reader will actually see. Any other
+    # cut keeps its own phrase — only the quintile one has three words to name.
+    from .report_language import CHECK_QUINTILE_LINE, is_check_lens
+
+    if cut == "quintile" and is_check_lens(rank):
+        phrase = f"{CHECK_QUINTILE_LINE} (quintile cut)"
+    else:
+        phrase = _CUT_PHRASE.get(cut, cut).format(
+            k=getattr(rank, "k", ""),
+            p=f"{(getattr(rank, 'percentile', 0.0) or 0.0):.0%}")
     lines.append(f"Ranking: {phrase}.")
     labels = [(FACTOR_REGISTRY[f.name].label if f.name in FACTOR_REGISTRY else f.name)
               for f in (getattr(rank, "factors", None) or [])]
@@ -2086,7 +2095,8 @@ def format_cli_report(result: RankPipelineResult) -> str:
         # The boundary mark rides in the VERDICT cell (it qualifies the verdict, not the
         # score). A marked row is intentionally wider than the 5-char verdict column — a
         # tie that decided a verdict should break the eye's scan.
-        verdict = format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""))
+        verdict = format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""),
+                                      check=_is_check_result(result))
         lines.append(f"  {_name_col(disp):<34} {verdict:<5} {cell}")
     factor_lines = format_ranked_factor_lines(result)
     if factor_lines:
@@ -2213,6 +2223,10 @@ class MultiStrategyCell:
     # flow; the rule allows at most 80%"). Computed by ``combine_rank_results``, which
     # has the result the sentence needs; empty when there is no rule to name.
     reason_plain: str = ""
+    # CHECK-WORDS-1 — this cell belongs to a CHECK lens, so its verdict renders in the
+    # check's own words (``doubted``) rather than as a verdict (``SELL``). Display only;
+    # ``verdict`` below is the same "buy"/"hold"/"sell" it has always been.
+    is_check: bool = False
     # FACTOR-MARK-1 — how many of the lens's factors this name was actually MEASURED on.
     # Under an imputing policy (missing: neutral) a name short a factor is scored from the
     # ranks it has, which is the right call and invisible: Forensic ranked 39 of 106 oil
@@ -2233,7 +2247,10 @@ class MultiStrategyCell:
         a bad rank, and no-data is not an exclusion)."""
         if self.status == _RANKED:
             pos = f"#{self.position} of {self.cohort_size}" if self.position else "ranked"
-            return f"{pos} · {self.verdict.upper()}{self.factor_note}"
+            from .report_language import verdict_word
+
+            return (f"{pos} · {verdict_word(self.verdict, check=self.is_check)}"
+                    f"{self.factor_note}")
         if self.status == _EXCLUDED:
             return f"excluded — {self.reason_plain or self.reason}"
         if self.status == _UNRATEABLE:
@@ -2290,6 +2307,16 @@ class MultiStrategyResult:
     reader: "Optional[object]" = None
 
 
+
+def _is_check_result(result) -> bool:
+    """Whether this per-strategy result came from a CHECK lens (CHECK-WORDS-1). Read off
+    the strategy the run actually used, so a lens's own file decides how its verdicts
+    read."""
+    from .report_language import is_check_lens
+
+    return is_check_lens(getattr(result, "rank_strategy", None))
+
+
 def combine_rank_results(results: dict[str, RankPipelineResult],
                          strategy_ids: Optional[list[str]] = None
                          ) -> list[MultiStrategyRow]:
@@ -2315,6 +2342,7 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
             _cell(r.ticker, MultiStrategyCell(
                 strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,
                 verdict=r.verdict, score=r.combined_rank,
+                is_check=_is_check_result(res),
                 # FACTOR-MARK-1: measured = the lens's factors this name actually had a
                 # value for. An imputed factor is not a measurement of the name.
                 factors_total=len(r.factor_ranks or {}),
@@ -3315,7 +3343,11 @@ def band_mark(percentile) -> str:
 def check_mark(label: str, verdict: str) -> str:
     """"doubted by Forensic", or "". A check's SELL is a doubt about someone else's pick;
     its BUY and HOLD say only that it found nothing to doubt, which is not an endorsement
-    and is therefore not a mark."""
+    and is therefore not a mark.
+
+    CHECK-WORDS-1: the mark already spoke the check's own word before that item existed —
+    "doubted by Forensic", never "SELL under Forensic" — which is where the vocabulary
+    came from."""
     return f"doubted by {label}" if (verdict or "").lower() == "sell" else ""
 
 
@@ -3590,6 +3622,7 @@ def lens_agreement_table(ag) -> tuple:
     """``(columns, rows)`` for the table — ONE builder, so the Run tab, the markdown and
     the HTML render the same cells and cannot drift (the valuation_band_table pattern).
     Every cell is already a display string."""
+    from .report_language import verdict_word
     from .tools.valuation_band import ordinal
 
     cols = ["Name", "BUY votes", "SELL votes"] \
@@ -3608,7 +3641,10 @@ def lens_agreement_table(ag) -> tuple:
         }
         for sid in ag.check_ids:
             label = ag.check_labels.get(sid, sid)
-            cells[label] = (r.check_verdicts.get(label, "").upper()
+            # CHECK-WORDS-1: clean / no concern / doubted. This column is the one place a
+            # reader most needs the distinction — it sits beside the BUY-vote counts, and
+            # a "SELL" there reads as a vote against, which it is not.
+            cells[label] = (verdict_word(r.check_verdicts.get(label, ""), check=True)
                             or "not ranked")
         cells["Valuation percentile"] = (
             f"{ordinal(round(r.band_percentile))}" if r.band_percentile is not None

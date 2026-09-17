@@ -1136,14 +1136,40 @@ def _lens_detail_html(detail) -> str:
     return "".join(out)
 
 
+# CHECK-WORDS-1 — a check lens's words, and the verdict each one is coloured as.
+#
+# `doubted` red, `clean` green, `no concern` neutral: the same three signals the palette
+# already carries, because a reader scanning the grid for trouble should find it in the
+# same colour whichever column it is in. The WORD is what says which question was asked,
+# and the word is always rendered — colour is never the only carrier of meaning.
+_CHECK_CELL_WORDS = {"clean": "BUY", "no concern": "HOLD", "doubted": "SELL"}
+
+
 def verdict_of_cell(text: str) -> str:
     """The VERDICT a verdict-grid cell carries ("BUY"/"HOLD"/"SELL"), or "" for a cell on
     another axis (excluded / no data / fetch failed) — those are not verdicts and must
-    never be coloured as though they were."""
+    never be coloured as though they were.
+
+    A CHECK lens's cell reads "clean" / "no concern" / "doubted" (CHECK-WORDS-1); this
+    returns the verdict each is coloured AS, while ``_verdict_grid_cell`` renders the word
+    the cell actually carries."""
     body = _CELL_MARKER.sub("", text or "")
     for verdict in _VERDICT_HEX:
         if body.endswith(f"· {verdict}"):
             return verdict
+    for word, verdict in _CHECK_CELL_WORDS.items():
+        if body.endswith(f"· {word}"):
+            return verdict
+    return ""
+
+
+def _cell_word(text: str) -> str:
+    """The word the cell ends with — "BUY" or "doubted" — so the rendered span carries the
+    lens's own vocabulary rather than the verdict it is coloured as."""
+    body = _CELL_MARKER.sub("", text or "")
+    for word in list(_VERDICT_HEX) + list(_CHECK_CELL_WORDS):
+        if body.endswith(f"· {word}"):
+            return word
     return ""
 
 
@@ -1159,9 +1185,10 @@ def _verdict_grid_cell(text: str) -> str:
     found = _CELL_MARKER.search(text)
     if found:
         marker, text = found.group(0), text[: found.start()]
-    head = text[: -len(verdict)]
+    word = _cell_word(text) or verdict          # CHECK-WORDS-1: the lens's own word
+    head = text[: -len(word)]
     return (f'<span class="mono">{_esc(head)}</span>'
-            f'<span class="verdict verdict-{verdict.lower()}">{_esc(verdict)}</span>'
+            f'<span class="verdict verdict-{verdict.lower()}">{_esc(word)}</span>'
             + (f'<span class="mono muted">{_esc(marker)}</span>' if marker else ""))
 
 

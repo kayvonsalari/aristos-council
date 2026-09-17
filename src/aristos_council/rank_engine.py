@@ -376,12 +376,19 @@ def boundary_tie_notes(ranked: list[RankedTicker]) -> dict[str, str]:
             for t, f in boundary_tie_facts(ranked).items()}
 
 
-def format_verdict_cell(verdict: str, note: str = "") -> str:
+def format_verdict_cell(verdict: str, note: str = "", *, check: bool = False) -> str:
     """The verdict cell every ranked table renders: the bare verdict (``SELL``), or the
     verdict carrying its boundary-tie mark (``SELL ⚑ boundary (tied 10 with EUNL.DE —
     HOLD; tie broken alphabetically)``). Without a note the output is byte-identical to the
-    bare ``verdict.upper()`` the tables printed before."""
-    return f"{verdict.upper()} {note}" if note else verdict.upper()
+    bare ``verdict.upper()`` the tables printed before.
+
+    CHECK-WORDS-1: ``check=True`` renders a check lens's own words instead — ``doubted``
+    rather than ``SELL`` — because a check's verdict answers a different question and
+    saying it in a verdict's words invites exactly the wrong reading."""
+    from .report_language import verdict_word
+
+    shown = verdict_word(verdict, check=check)
+    return f"{shown} {note}" if note else shown
 
 
 def format_score(v: float) -> str:
