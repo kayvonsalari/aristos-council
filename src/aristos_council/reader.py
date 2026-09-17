@@ -19,8 +19,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-# READER-2: v1 is kept on disk, so a run recorded under it stays reproducible.
-PROMPT_VERSION = "reader_v2"
+# READER-2/3b: every earlier version is kept on disk, so a run recorded under one stays
+# reproducible. v3 differs from v2 by one substring — "balance sheet" leaves the
+# must-gloss list — because READER-3 took it off the CHECK, and a prompt that demands a
+# gloss the check no longer wants spends words from a 300-word budget on nothing.
+PROMPT_VERSION = "reader_v3"
 _PROMPT_PATH = (Path(__file__).resolve().parent / "agents" / "prompts"
                 / f"{PROMPT_VERSION}.md")
 
