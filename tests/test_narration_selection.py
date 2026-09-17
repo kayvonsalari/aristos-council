@@ -85,6 +85,31 @@ def _multi(**rows_by_lens):
         lens_agreement=lens_agreement(built))
 
 
+
+class _NeverUsed:
+    """A stand-in ADAPTER, so neither test below can reach the real one.
+
+    ``narrate_multi_strategy`` builds a REAL yfinance adapter when it is handed none, and
+    two tests here did exactly that — green on this machine, ``DataUnavailable: yfinance
+    is not installed`` in CI. Passing a stand-in keeps them on the fabricated result the
+    rest of this file uses: no network, no yfinance, nothing but the plan.
+
+    It is never CALLED. The fabricated result carries no combined-grid ``rows``, so
+    ``narrated_union`` finds no names and the narration stage returns before it touches an
+    adapter, a council or a model. Any attribute access here is therefore a bug in the
+    test rather than in the code, and it says so loudly instead of quietly reaching the
+    network — which is the failure this replaces.
+
+    The RUNNERS are an empty dict rather than one of these, because the cost meter reads
+    them (``_cost_mark`` -> ``cost_meter``) even on a run that narrates nothing, and
+    "no runners carry a meter" is a state it already handles."""
+
+    def __getattr__(self, name):
+        raise AssertionError(
+            f"the narration stage reached the adapter ({name!r}); this test is meant to "
+            "exercise the PLAN, not a narration")
+
+
 def _three_voting():
     """Three voting lenses over four names, one at each level of agreement."""
     return _multi(
@@ -245,17 +270,22 @@ def test_ONLY_a_check_doubt_skips():
 # --------------------------------------------------------------------------- #
 def test_the_plan_is_recorded_on_the_run():
     """"Which rule did this run apply, and what did it leave out" must be answerable from
-    the record rather than by re-deriving it."""
+    the record rather than by re-deriving it.
+
+    Stand-ins for the adapter and runners: the plan is computed and RECORDED before either
+    is touched, and this test is about the record."""
     from aristos_council.pipeline import narrate_multi_strategy
 
     result = _marked()
-    result.meta["council_frame"] = None            # nothing to narrate; the plan still runs
-    narrated = narrate_multi_strategy(result, level="all", cap=5, skip_marked=True)
+    narrated = narrate_multi_strategy(result, adapter=_NeverUsed(),
+                                      runners={}, level="all", cap=5,
+                                      skip_marked=True)
     plan = (narrated.meta or result.meta).get("narration")
     assert plan is not None
     assert plan["level"] == "all" and plan["cap"] == 5 and plan["skip_marked"] is True
     assert plan["selected"] == ["DEAR", "CLEAN"]
     assert {n["ticker"] for n in plan["not_narrated"]} == {"DOUBTED"}
+    assert plan["basis"] == "all voting lenses agree; names doubted by a check skipped"
 
 
 def test_the_line_states_the_rule_and_the_counts():
@@ -299,11 +329,13 @@ def test_narrating_keeps_the_agreement_table_on_the_result():
     from aristos_council.pipeline import narrate_multi_strategy
 
     result = _three_voting()
-    result.meta["council_frame"] = None
-    narrated = narrate_multi_strategy(result)
+    before = [r.ticker for r in result.lens_agreement.rows]
+    narrated = narrate_multi_strategy(result, adapter=_NeverUsed(), runners={})
     assert narrated.lens_agreement is not None
-    assert [r.ticker for r in narrated.lens_agreement.rows] == \
-        [r.ticker for r in result.lens_agreement.rows]
+    assert [r.ticker for r in narrated.lens_agreement.rows] == before
+    # ...and the rest of the result comes through with it
+    assert narrated.strategy_ids == result.strategy_ids
+    assert narrated.results is result.results
 
 
 def test_a_single_lens_result_keeps_its_own_shortlist_plan():

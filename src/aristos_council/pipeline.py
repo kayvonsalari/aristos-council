@@ -3926,7 +3926,14 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
     # NARR-2 — the plan, recorded on the run: what rule was applied, what it selected, and
     # what met the rule and was not narrated. A report that shortened its own list
     # silently is the thing this prevents.
-    (result.meta or {})["narration"] = {
+    #
+    # ``result.meta`` and not ``result.meta or {}``: an EMPTY meta is falsy, so the second
+    # form writes the record into a throwaway dict and loses it. A real run always has a
+    # populated meta, which is why that read correctly and was wrong — a fabricated result
+    # with meta={} is what found it.
+    if result.meta is None:
+        result.meta = {}
+    result.meta["narration"] = {
         "level": plan["level"], "cap": plan["cap"], "skip_marked": plan["skip_marked"],
         "basis": plan["basis"], "selected": list(plan["names"]),
         "qualified": list(plan["qualified"]),
