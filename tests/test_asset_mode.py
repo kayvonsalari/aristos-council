@@ -259,3 +259,219 @@ def test_the_vocabulary_is_the_switch_s_two_sides():
     assert ASSET_KINDS == ("stocks", "etfs")
     assert ASSET_MODES == ("Stocks", "ETFs")
     assert DEFAULT_ASSET_MODE == STOCKS
+
+
+# --------------------------------------------------------------------------- #
+# The app's own wiring
+# --------------------------------------------------------------------------- #
+def _app():
+    pytest.importorskip("streamlit")
+    import app
+
+    return app
+
+
+def test_STOCKS_is_the_default_when_no_session_value_exists():
+    """A fresh start, a browser refresh and a test that never touches the switch all
+    arrive here. Nothing is persisted anywhere, deliberately: a remembered ETFs choice
+    would make the majority job the one you have to switch back to."""
+    app = _app()
+    app.st.session_state.pop("asset_mode", None)
+    assert app.asset_mode() == STOCKS
+    assert app._mode_asset_kind() == "stocks"
+
+
+def test_the_switch_is_read_from_session_state_and_nowhere_else():
+    app = _app()
+    app.st.session_state["asset_mode"] = ETFS
+    try:
+        assert app.asset_mode() == ETFS
+        assert app._mode_asset_kind() == "etfs"
+    finally:
+        app.st.session_state.pop("asset_mode", None)
+
+
+def test_nothing_persists_the_choice_to_disk_or_url():
+    """Session only. Read off the source, because the guarantee is an ABSENCE and an
+    absence is exactly what a later change removes without noticing."""
+    import inspect
+
+    src = inspect.getsource(_app())
+    block = src[src.index("def asset_mode()"):src.index("def _mode_filters()")]
+    for persistent in ("query_params", "write_text", "json.dump", "localStorage"):
+        assert persistent not in block, persistent
+
+
+def test_the_shipped_ETF_lists_are_hidden_in_stocks_mode_through_the_APP():
+    """End to end through the app's own filter pair, not the pure helper alone."""
+    app = _app()
+
+    shipped = _shipped_universes()
+    app.st.session_state.pop("asset_mode", None)
+    _, list_ok = app._mode_filters()
+    assert not any(list_ok(u) for u in shipped)
+
+    app.st.session_state["asset_mode"] = ETFS
+    try:
+        _, list_ok = app._mode_filters()
+        assert all(list_ok(u) for u in shipped)
+    finally:
+        app.st.session_state.pop("asset_mode", None)
+
+
+def test_a_local_stock_list_without_the_field_appears_in_stocks_mode():
+    app = _app()
+    app.st.session_state.pop("asset_mode", None)
+    _, list_ok = app._mode_filters()
+    assert list_ok(_List(tickers=["XOM", "CVX", "MSFT"]))
+
+
+def test_the_app_knows_which_tickers_are_funds():
+    """From the ETF static layer and the shipped funds lists — both of which exist for
+    other reasons, so nothing new has to be maintained for this."""
+    known = _app()._known_etf_tickers()
+    assert known, "no ETF tickers discovered"
+
+
+# --------------------------------------------------------------------------- #
+# The wrong-kind line
+# --------------------------------------------------------------------------- #
+# The asset-kind gate is untouched: it excluded those names before this change and it
+# excludes them now, with the same reason on the same line of the report. What was missing
+# is the ONE sentence that turns a dead end into a next step, now that a switch exists
+# that would grade them.
+
+@dataclass
+class _Run:
+    excluded: list = field(default_factory=list)
+
+
+def test_the_line_appears_only_when_the_gate_excluded_the_other_kind():
+    app = _app()
+    gated = _Run(excluded=[("XLE", "asset kind 'ETF' outside this strategy's scope"),
+                           ("VDE", "asset kind 'ETF' outside this strategy's scope")])
+    assert app.wrong_kind_count(gated, mode=STOCKS) == 2
+    assert app.wrong_kind_line(2, mode=STOCKS) == (
+        "2 of these names are ETFs and were not graded. Switch to ETFs to analyse them.")
+
+
+def test_an_ordinary_exclusion_is_NOT_counted():
+    """A name the SCREEN dropped, or the size floor, has nothing to do with the switch —
+    counting it would send a reader to a mode that would not grade it either."""
+    app = _app()
+    ordinary = _Run(excluded=[("WMT", "screen: min_dividend_yield (observed 0.9 vs 1.5)"),
+                              ("TINY", "below min market cap ($5.0bn)"),
+                              ("ACME", "sector excluded (Utilities)")])
+    assert app.wrong_kind_count(ordinary, mode=STOCKS) == 0
+    assert app.wrong_kind_line(0, mode=STOCKS) == ""
+
+
+def test_the_mirror_line_in_ETFs_mode():
+    app = _app()
+    gated = _Run(excluded=[("XOM", "asset kind 'Equity' outside this strategy's scope")])
+    assert app.wrong_kind_count(gated, mode=ETFS) == 1
+    assert app.wrong_kind_line(1, mode=ETFS) == (
+        "1 of these names are stocks and were not graded. "
+        "Switch to Stocks to analyse them.")
+
+
+def test_a_name_gated_by_SEVERAL_lenses_is_counted_once():
+    """A multi-lens run gates the same fund under every stock lens. The reader has one
+    problem, not three."""
+    app = _app()
+
+    @dataclass
+    class _Multi:
+        results: dict
+
+    gate = "asset kind 'ETF' outside this strategy's scope"
+    multi = _Multi(results={"a": _Run(excluded=[("XLE", gate)]),
+                            "b": _Run(excluded=[("XLE", gate)])})
+    assert app.wrong_kind_count(multi, mode=STOCKS) == 1
+
+
+# --------------------------------------------------------------------------- #
+# What this change must NOT touch
+# --------------------------------------------------------------------------- #
+def test_a_ranker_only_run_is_byte_identical_with_the_switch_untouched():
+    """The whole claim of this branch, in one test: it is a VISIBILITY change. The run,
+    the ranks, the verdicts, the exclusions and the rendered report are the same as
+    before, because nothing in the pipeline has heard of the switch.
+
+    Fixtures and a fake adapter — never a live fetch."""
+    from aristos_council.export.report_html import multi_strategy_report_html
+    from tests.test_merged_multi_report import _RUN, _multi
+    from tests.test_multi_strategy_run import RAW, SCREENED
+
+    app = _app()
+    app.st.session_state.pop("asset_mode", None)
+    before_result = _multi([SCREENED, RAW])
+    before_doc = multi_strategy_report_html(before_result, run_start=_RUN)
+
+    app.st.session_state["asset_mode"] = ETFS       # the switch, flipped
+    try:
+        after_result = _multi([SCREENED, RAW])
+        after_doc = multi_strategy_report_html(after_result, run_start=_RUN)
+    finally:
+        app.st.session_state.pop("asset_mode", None)
+
+    assert after_doc == before_doc
+    for sid in before_result.strategy_ids:
+        b, a = before_result.results[sid], after_result.results[sid]
+        assert [(r.ticker, r.verdict, r.cohort_position) for r in b.ranked] == \
+               [(r.ticker, r.verdict, r.cohort_position) for r in a.ranked]
+        assert b.excluded == a.excluded
+
+
+def test_a_saved_run_is_viewable_in_BOTH_modes():
+    """The switch decides what you can START, never what you can READ. Past work does not
+    move because today's mode changed."""
+    from aristos_council.export.report_html import multi_strategy_report_html
+    from tests.test_merged_multi_report import _multi
+    from tests.test_multi_strategy_run import RAW, SCREENED
+
+    app = _app()
+    saved = _multi([SCREENED, RAW])
+    for mode in (STOCKS, ETFS):
+        app.st.session_state["asset_mode"] = mode
+        try:
+            assert "Verdict by lens" in multi_strategy_report_html(saved)
+        finally:
+            app.st.session_state.pop("asset_mode", None)
+
+
+def test_the_asset_kind_GATE_itself_is_untouched():
+    """The wall between asset classes predates this change and is not part of it: a
+    confirmed ETF is still gated from a stock lens, and a missing quote type is still
+    never gated."""
+    from aristos_council.factors import is_asset_kind_out_of_scope
+
+    assert is_asset_kind_out_of_scope("ETF", ["equity"])
+    assert is_asset_kind_out_of_scope("EQUITY", ["etf"])
+    assert not is_asset_kind_out_of_scope(None, ["equity"])
+    assert not is_asset_kind_out_of_scope("ETF", [])
+
+
+def test_a_saved_list_records_the_current_mode(tmp_path):
+    """A list saved in ETFs mode reappears only in ETFs mode."""
+    from aristos_council.universe import list_universes
+    from aristos_council.universe_editor import save_local_universe
+
+    save_local_universe(tmp_path, id="my_funds_v1", tickers=["SPY", "VOO"],
+                        created="2026-09-17", display_name="My Funds",
+                        asset_kind="etfs")
+    saved = [u for u in list_universes(tmp_path) if u.id == "my_funds_v1"]
+    assert saved and saved[0].asset_kind == "etfs"
+    _, etf_list_ok = asset_mode_filter(ETFS)
+    _, stock_list_ok = asset_mode_filter(STOCKS)
+    assert etf_list_ok(saved[0]) and not stock_list_ok(saved[0])
+
+
+def test_a_list_saved_without_a_mode_round_trips_unchanged(tmp_path):
+    """The field is written only when stated, so an unmarked save is byte-identical to a
+    pre-ASSET-MODE-1 one and keeps classifying itself."""
+    from aristos_council.universe_editor import save_local_universe
+
+    path = save_local_universe(tmp_path, id="plain_v1", tickers=["XOM"],
+                               created="2026-09-17")
+    assert "asset_kind" not in path.read_text(encoding="utf-8")

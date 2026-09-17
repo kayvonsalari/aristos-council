@@ -526,8 +526,26 @@ def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
 
+    # ASSET-MODE-1: the app opens on STOCKS, so the shipped lists — all of which are ETF
+    # lists — are behind the switch. The validation toggle is a SEPARATE axis and both
+    # still apply; this test checks the toggle on each side of the switch in turn.
     uni = _dropdown(at, "List").options
     assert uni[0] == "New list"                                      # FUND-UI-2: start blank
+    assert uni == ["New list"]          # every shipped list is a fund list, so: none here
+
+    rank = _strategy_picker(at).options
+    assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
+    assert "Growth" in rank                                         # growth is live (4C)
+    assert any("RAW" in o for o in rank)                            # canonical raw (RAW-1)
+    assert any("Financials" in o for o in rank)                     # financials lens (FIN-1)
+    assert any("Forensic" in o for o in rank)                       # forensic lens (FORENSIC-1)
+    assert any("Cyclical Income" in o for o in rank)                # CYCLICAL-INCOME-1
+    assert not any("ETF" in o for o in rank)                        # ASSET-MODE-1: hidden
+    assert len(rank) == 7                                           # the 7 stock lenses
+
+    # ...and flipping the switch brings every one of them back. HIDDEN, never deleted.
+    _etfs_mode(at)
+    uni = _dropdown(at, "List").options
     # FUND-UI-2 deleted the shipped stock cohorts — a list is one YOU save now.
     assert not any("Growth 40" in o for o in uni)
     assert not any("Defensive Income 16" in o for o in uni)
@@ -543,23 +561,14 @@ def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
     # [ETFCORE-1]) = 6. The universes are isolated to the SHIPPED set above, so this is now
     # exact. (These app tests skip in CI — streamlit is not in dev.)
     assert len(uni) == 6
-    # Everything shipped is an ETF list (local/ was excluded by the isolation), so every
-    # option is "New list" or an ETF list.
     assert all(o == "New list" or "ETF" in o for o in uni)
 
     rank = _strategy_picker(at).options
-    assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
-    assert "Growth" in rank                                         # growth is live (4C)
-    assert any("RAW" in o for o in rank)                            # canonical raw (RAW-1)
-    assert any("Financials" in o for o in rank)                     # financials lens (FIN-1)
     assert any("Dividend ETFs" in o for o in rank)                  # ETF-1 dividend lens
     assert any("Growth ETFs" in o for o in rank)                    # ETF-1 growth lens
     assert any("ETF Index Tracker" in o for o in rank)              # ETFCORE-1 lens (UI-RENAME-1)
     assert not any("Core Market ETFs" in o for o in rank)           # old label gone
-    assert any("Forensic" in o for o in rank)                       # forensic lens (FORENSIC-1)
-    assert any("Cyclical Income" in o for o in rank)                # CYCLICAL-INCOME-1
-    # 7 stock lenses + 3 visible ETF lenses (dividend, growth, core [ETFCORE-1]).
-    assert len(rank) == 10
+    assert len(rank) == 3                                           # the 3 ETF lenses
 
 
 def test_both_strategy_pickers_list_the_live_strategies():
@@ -578,8 +587,16 @@ def test_both_strategy_pickers_list_the_live_strategies():
         assert not any("_" in o for o in opts)                       # display names, no ids
         assert any("Forensic" in o for o in opts)                    # forensic lens (FORENSIC-1)
         assert any("Cyclical Income" in o for o in opts)             # CYCLICAL-INCOME-1
-        # 7 stock lenses + 3 visible ETF lenses (dividend, growth, core [ETFCORE-1]).
-        assert len(opts) == 10
+        # ASSET-MODE-1: the 7 stock lenses. The app opens on Stocks.
+        assert len(opts) == 7
+    # The contract that matters is that the two pickers AGREE, and they must agree on the
+    # other side of the switch too — a filter applied to one and not the other is exactly
+    # the drift the ONE picker module exists to prevent.
+    _etfs_mode(at)
+    rank = _strategy_picker(at).options
+    cc = _dropdown(at, "Strategy (lens screen + factors)").options
+    assert list(rank) == list(cc)
+    assert len(rank) == 3 and all("ETF" in o for o in rank)
 
 
 def test_the_same_lists_are_offered_in_both_selectors():
@@ -611,6 +628,7 @@ def test_suggested_universe_renders_first_in_the_reference_selector():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
+    _etfs_mode(at)                             # ASSET-MODE-1: the ETF lens is behind it
     cc_dd = _dropdown(at, "Strategy (lens screen + factors)")
     etf = next(o for o in cc_dd.options if "ETF Index Tracker" in o)
     cc_dd.set_value(etf).run()
@@ -946,7 +964,7 @@ def test_editing_a_shipped_list_forks_and_never_writes_back_to_the_manifest():
     before = src.read_bytes()
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    _pick_list(at, "ETF Index Tracker — UCITS")
+    _pick_list(_etfs_mode(at), "ETF Index Tracker — UCITS")   # ASSET-MODE-1
     assert not at.exception
     box = next(t for t in at.text_area if "Tickers" in str(t.label))
     box.set_value(box.value + "\nAAPL").run()               # an edit nobody saved
@@ -1109,11 +1127,21 @@ def _pick_list(at, needle):
     return at
 
 
+def _etfs_mode(at):
+    """Flip the sidebar's Stocks / ETFs switch (ASSET-MODE-1) to ETFs.
+
+    The app opens on Stocks, so a test that needs an ETF list or lens asks for it
+    explicitly — which is the change, not a workaround for it."""
+    radio = next(r for r in at.radio if str(r.label) == "Analyse")
+    radio.set_value("ETFs").run()
+    return at
+
+
 def test_named_etf_cohort_states_its_derived_asset_class():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    _pick_list(at, "ETF Index Tracker — UCITS")
+    _pick_list(_etfs_mode(at), "ETF Index Tracker — UCITS")   # ASSET-MODE-1: behind the switch
     assert not at.exception
     # derived by inversion from the lenses that declare this cohort (applicability.py)
     assert "Cohort asset class: **etf**" in _caption_blob(at)
@@ -1126,7 +1154,10 @@ def test_adhoc_cohort_filters_nothing_and_says_so():
     assert not at.exception
     blob = _caption_blob(at)
     assert "Ad-hoc cohort" in blob and "nothing is filtered out" in blob
-    assert len(_strategy_picker(at).options) == 10     # every live lens (7 stock + 3 ETF)
+    # ASSET-MODE-1: every live lens on THIS side of the switch. The cohort still filters
+    # nothing — the switch is a different axis from cohort relevance, and only the switch
+    # decides which lenses are on offer at all.
+    assert len(_strategy_picker(at).options) == 7      # the 7 stock lenses
 
 
 def test_every_strategy_stays_offered_even_for_a_cohort_of_the_other_kind():
@@ -1136,12 +1167,14 @@ def test_every_strategy_stays_offered_even_for_a_cohort_of_the_other_kind():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
+    # ASSET-MODE-1 does not weaken this: the switch decides which lenses are offered AT
+    # ALL, and within that set picking a cohort still trims nothing. Both facts are
+    # checked, in ETFs mode, where an ETF cohort and its lenses live together.
+    _etfs_mode(at)
     before = list(_strategy_picker(at).options)
     _pick_list(at, "ETF Index Tracker — UCITS")
     assert not at.exception
     assert list(_strategy_picker(at).options) == before      # nothing trimmed
-    warnings = " ".join(str(getattr(w, "value", "")) for w in at.warning)
-    assert "asset-kind gate" in warnings                     # the flagship is equity-only
 
 
 # --------------------------------------------------------------------------- #

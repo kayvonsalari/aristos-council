@@ -158,6 +158,11 @@ def _dump_manifest_yaml(u: Universe, *, created: str) -> str:
     # to a pre-THESIS-1 save.
     if u.thesis:
         data["thesis"] = u.thesis
+    # ASSET-MODE-1: which side of the UI's Stocks / ETFs switch this list lives on. Also
+    # written only when stated — a list saved before this field existed keeps classifying
+    # itself, and one saved in ETFs mode reappears only in ETFs mode.
+    if u.asset_kind:
+        data["asset_kind"] = u.asset_kind
     data["created"] = created
     if u.rationale:
         data["rationale"] = u.rationale
@@ -169,7 +174,8 @@ def save_local_universe(universes_dir: str | Path, *, id: str, tickers: list[str
                         created: str, display_name: str = "", rationale: str = "",
                         description: str = "", role: str = "",
                         graded_ids: set[str] | frozenset[str] | None = None,
-                        overwrite: bool = False, thesis: str = "") -> Path:
+                        overwrite: bool = False, thesis: str = "",
+                        asset_kind: str = "") -> Path:
     """Validate and write a personal list to ``universes/local/<id>.yaml``.
 
     ``overwrite=True`` rewrites one of YOUR OWN lists in place — a list is a plain,
@@ -205,7 +211,11 @@ def save_local_universe(universes_dir: str | Path, *, id: str, tickers: list[str
                  # THESIS-1: what the list was built for. Blank makes no claim, and the
                  # Universe model validates the vocabulary, so a bad value fails here
                  # rather than being written and failing on the next load.
-                 thesis=(thesis or "").strip())
+                 thesis=(thesis or "").strip(),
+                 # ASSET-MODE-1: the mode the list was saved in, so it comes back where it
+                 # was made. The Universe model validates the vocabulary, so a bad value
+                 # fails here rather than being written and failing on the next load.
+                 asset_kind=(asset_kind or "").strip())
 
     if u.id in existing_universe_ids(universes_dir):
         if not overwrite:
