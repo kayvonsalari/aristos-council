@@ -1397,8 +1397,11 @@ def floor_override_from_input(raw, *, file_value: float | None) -> float | None:
 def _company_size_floor_override(rank_strategy, n_strategies: int) -> float | None:
     """The Run tab's ephemeral company-size floor control (FLOOR-1).
 
-    Defaults to the PRIMARY strategy's own floor, so the control opens showing what the
-    run would do untouched; clearing it removes the floor for this run entirely."""
+    Defaults to the FIRST ticked lens's own floor, so the control opens showing what the
+    run would do untouched; clearing it removes the floor for this run entirely. The floor
+    is a COHORT statement — it decides who is in the room — so one value applies to every
+    lens in the run (SHORTLIST-3: no lens is privileged, so there is no "its" floor to
+    prefer, and the first ticked one is simply the one already in hand)."""
     file_value = getattr(rank_strategy, "min_market_cap", None)
     with st.expander("⚙️ Run overrides — this run only", expanded=False):
         st.caption("Applied to THIS run only and stamped on the report. The strategy "
@@ -2764,6 +2767,22 @@ def _render_universe_result(result) -> None:
                "repo — open it in a browser and Print → PDF for paper.")
 
 
+
+def _preselect_default_lens(choices) -> None:
+    """Tick the suggested-first lens ONCE per session (SHORTLIST-3).
+
+    With the primary dropdown gone, nothing would be selected on a fresh start and the Run
+    button would open disabled — which reads as breakage rather than as a choice. So the
+    lens ``default_index`` already nominated is pre-ticked, exactly once: the flag is what
+    makes unticking it stick, instead of the box re-ticking itself on every rerun.
+    """
+    if st.session_state.get("uni_lenses_seeded") or not choices:
+        return
+    st.session_state["uni_lenses_seeded"] = True
+    chosen = choices[default_index(choices)]
+    st.session_state.setdefault(lens_checkbox_key(chosen.id), True)
+
+
 def render_universe_tab(show_validation: bool = False) -> None:
     import os
 
@@ -2801,37 +2820,24 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # caption (ids are the stable record keys — never renamed, never in the label). A label
     # two configs would SHARE carries its id, so a pick can't resolve to the wrong one.
     labels = choice_labels(choices)
-    # The PRIMARY strategy stays a dropdown, and exactly one is always selected: narration is
-    # single-strategy, and the primary is the verdict the narrator explains. Folding it into
-    # the extra-lens control left the narrated strategy implicit (offer order decided it,
-    # which the user can neither see nor choose) — FUND-UI-2 item 5.
-    primary_label = st.selectbox(
-        "Primary strategy — the verdict the narrator explains", labels,
-        index=default_index(choices), key="uni_strategy",
-        help="Runs the full flow: screen → rank → gates issue the verdict, and the LLM "
-             "narrates it. Exactly one, because narration is single-strategy.")
-    primary = resolve(choices, primary_label) or choices[0].strategy
-    # CAPTION-2: what the chosen lens asks of a company, at the point of choosing.
-    if lens_caption(primary):
-        st.caption(lens_caption(primary))
-
-    # Extra lenses are CHECKBOXES, one per lens, so every lens you could add is visible at
-    # once instead of hidden behind a dropdown (FUND-UI-2 item 5). Presentation only: the
-    # offered set is the same ONE picker's, and ticking any box runs FUND-RUN-1's combined
-    # grid exactly as the old "Also grade with" multiselect did — deterministic by
-    # construction (no LLM, no cost), so narration settings grey out below.
-    st.caption("**Also grade with** — optional extra lenses. These re-grade the SAME "
-               "ticker list deterministically and report a single combined grid; they are "
-               "never narrated. Leave them all unticked for a normal narrated run of the "
-               "primary strategy.")
+    # SHORTLIST-3 — ONE control. There is no primary lens: every lens you tick is a vote of
+    # equal weight, and a check lens marks rather than votes. The dropdown that used to
+    # elect one lens above the others is gone, not hidden behind a setting — it encoded a
+    # hierarchy the owner does not want, and leaving it as an option would leave the
+    # hierarchy in the report.
+    #
+    # The suggested-first lens is PRE-TICKED on a fresh session, so the tab opens ready to
+    # run rather than refusing until you pick something.
+    st.markdown("**Lenses**")
+    st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
+    _preselect_default_lens(choices)
     extras: list[tuple[str, bool]] = []
-    extra_choices = [c for c in choices if c.label != primary_label]
-    if extra_choices:
-        n_cols = min(3, len(extra_choices))
-        per_col = -(-len(extra_choices) // n_cols)       # ceil: contiguous, offer-ordered
+    if choices:
+        n_cols = min(3, len(choices))
+        per_col = -(-len(choices) // n_cols)             # ceil: contiguous, offer-ordered
         for i, col in enumerate(st.columns(n_cols)):
             with col:
-                for c in extra_choices[i * per_col:(i + 1) * per_col]:
+                for c in choices[i * per_col:(i + 1) * per_col]:
                     extras.append((c.label,
                                    st.checkbox(c.label, key=lens_checkbox_key(c.id))))
                     # CAPTION-2: a VISIBLE caption, not a hover tooltip — a reader
@@ -2863,12 +2869,12 @@ def render_universe_tab(show_validation: bool = False) -> None:
              "number in it is checked back against them; a summary that fails that check "
              "is withheld with its reason rather than published. It explains the results; "
              "it never recommends anything.")
-    picked_labels = selected_labels(primary_label, extras)
+    picked_labels = selected_labels(extras=extras)
     # OFFER order, not click order (picker.resolve_all), so the combined grid's columns are
-    # reproducible. ``or [primary]`` only covers a stale widget value: with a required
-    # dropdown a zero-strategy run is structurally unreachable here, though run_problems
-    # still refuses one (that guard is the contract, not the only line of defence).
-    strategies = resolve_all(choices, picked_labels) or [primary]
+    # reproducible. SHORTLIST-3: a zero-lens selection IS now reachable (untick everything),
+    # and it is refused by run_problems below rather than silently defaulted — a run with
+    # no lens has nothing to say.
+    strategies = resolve_all(choices, picked_labels)
     multi = len(strategies) > 1
     for s in strategies:
         bits = f"`{s.id}`"                               # the stable record key
@@ -2884,9 +2890,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
             st.caption(_asks)
     if len(strategies) == 1 and getattr(strategies[0], "description", ""):
         st.caption(strategies[0].description.strip())
-    # The cost estimate + the narration settings describe the PRIMARY strategy (the only one
-    # that can narrate); a multi-lens run is deterministic, so neither is in play then.
-    rank_strategy = primary
+    # SHORTLIST-3: with no primary, the cost estimate and the narration settings describe
+    # the FIRST ticked lens — the only one a single-lens run could narrate. A multi-lens
+    # run is deterministic, so neither is in play then, and a zero-lens run is refused
+    # before either is read.
+    rank_strategy = strategies[0] if strategies else None
 
     # 2 — TICKERS. A list is a plain, editable ticker list: pick one of yours (or start a
     # new one), edit it right here, run it. Selecting a list LOADS it into this box — there
@@ -2958,9 +2966,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
             index=_theses.index(_current) if _current in _theses else 0,
             format_func=lambda t: t or "— not stated —",
             key="uni_list_thesis",
-            help="What this list was assembled to find. Used only to caption a run whose "
-                 "primary lens answers a different question; it never filters a lens or "
-                 "blocks a run. Leave blank to make no claim.")
+            help="What this list was assembled to find. Recorded on the list and stated in "
+                 "the run's summary; it never filters a lens or blocks a run. Leave blank "
+                 "to make no claim.")
         col_save, col_saveas = st.columns(2)
         with col_save:
             save_over = st.button("Save changes", key="uni_save_over",
@@ -3007,16 +3015,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
     applicable = applicable_rank_strategies(all_rank_strategies, cohort_kind)
     st.caption(cohort_scope_note(cohort_kind, len(applicable),
                                  adhoc=universe_id is None))
-    # THESIS-1 — one line per RUN (never per name) when the PRIMARY lens answers a
-    # different question than this list was built for, or is a check lens that cannot
-    # select at all. It sits here, beside the asset-kind scope note, because this is the
-    # first point at which BOTH the lens and the cohort are known — and because the two
-    # captions answer the same shape of question: is this lens the right one for this
-    # list. Advisory, like its neighbour: it never filters a lens and never blocks a run.
-    from aristos_council.pipeline import cohort_fit_line
-    _fit = cohort_fit_line(primary, getattr(picked_list, "thesis", "") or "")
-    if _fit:
-        st.info(_fit)
+    # SHORTLIST-3 removed the THESIS-1 fit warning. It asked whether the PRIMARY lens was
+    # the right one for this list, and there is no primary lens any more — every ticked
+    # lens is an equal vote, so "the lens" the warning was about does not exist. The
+    # asset-kind scope note below stays: that one is about whether a lens can read these
+    # names at all, which is a fact about the data rather than a claim about intent.
     for s in strategies:
         scope_warning = out_of_scope_note(s, cohort_kind)
         if scope_warning:
@@ -3144,7 +3147,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # same upper bound the single-lens flow already shows, stated per NAME.
     est = None
     narrated_count = None
-    if not deterministic and universe and len(universe) <= UNIVERSE_CAP:
+    # SHORTLIST-3: with no primary lens, a run with NOTHING ticked is reachable. It is
+    # refused by run_problems above; the estimate simply has nothing to estimate, so it is
+    # skipped rather than asked about a lens that is not there.
+    if (not deterministic and universe and rank_strategy is not None
+            and len(universe) <= UNIVERSE_CAP):
         per_lens = _estimate_shortlist_size(len(universe), rank_strategy,
                                             narrate_coverage=narrate_coverage)
         if multi:
@@ -3191,9 +3198,6 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 freeze_dir=ROOT / "runs", with_valuation_band=with_valuation_band,
                 derived_from=derived_from,
                 min_market_cap_override=min_market_cap_override,
-                # SHORTLIST-1: the lens the reader picked as primary, which is NOT
-                # necessarily the grid's first column (that is offer order).
-                primary_id=primary.id,
                 # READER-1: one call per run, off unless asked for.
                 with_reader=with_reader,
                 cohort_thesis=getattr(picked_list, "thesis", "") or "",

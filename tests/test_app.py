@@ -365,12 +365,31 @@ def test_universe_markdown_has_sections_from_the_result():
     assert "## Narrative" in md and "ranked #1 on ROIC." in md
 
 
+class _LensGrid:
+    """The Run tab's lens control, in the shape the old dropdown had.
+
+    SHORTLIST-3 removed the primary-strategy dropdown: there is no primary lens, so every
+    lens is one checkbox in a grid and each is an equal vote. The tests that ask "what does
+    the picker OFFER" still have a real question, so this stands in for it — ``.options``
+    is every lens offered, in offer order, which is exactly what the dropdown's was."""
+
+    def __init__(self, at):
+        cc = next((s for s in at.selectbox
+                   if str(s.label).startswith("Strategy (lens screen")), None)
+        offered = set(cc.options) if cc is not None else None
+        self._boxes = [c for c in at.checkbox
+                       if offered is None or str(c.label) in offered]
+        self.options = [str(c.label) for c in self._boxes]
+
+    @property
+    def ticked(self):
+        return [str(c.label) for c in self._boxes if c.value]
+
+
 def _strategy_picker(at):
-    """The Run tab's PRIMARY strategy picker (FUND-UI-2 item 5) — a dropdown, because
-    narration is single-strategy and the primary is the verdict the narrator explains.
-    Extra lenses are the checkbox group below it (`_lens_checkbox`), not more dropdown."""
-    return next(s for s in at.selectbox
-                if str(s.label).startswith("Primary strategy"))
+    """The Run tab's lens control (SHORTLIST-3) — a checkbox grid, because every lens is
+    an equal vote and none of them is elected above the others."""
+    return _LensGrid(at)
 
 
 def _lens_checkbox(at, needle):
@@ -382,10 +401,9 @@ def _lens_checkbox(at, needle):
 
 
 def _lens_checkbox_labels(at):
-    """Every extra-lens checkbox label on the Run tab, as rendered — a lens checkbox is
-    labelled with a strategy the picker offers, so the run-mode boxes never leak in."""
-    offered = set(_strategy_picker(at).options)
-    return [str(c.label) for c in at.checkbox if str(c.label) in offered]
+    """Every lens checkbox label on the Run tab, as rendered — a lens checkbox is labelled
+    with a strategy the picker offers, so the run-mode boxes never leak in."""
+    return list(_strategy_picker(at).options)
 
 
 def test_rank_picker_order_baseline_label_and_no_v2_heading():
@@ -433,20 +451,22 @@ def test_run_tab_renders_with_the_one_flow():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    # The "Primary strategy" dropdown only exists inside render_universe_tab, so its
-    # presence proves the tab rendered.
+    # The lens grid only exists inside render_universe_tab, so its presence proves the
+    # tab rendered.
     picker = _strategy_picker(at)
     # Options are the FRIENDLY display names (ITEM 1) — the technical id is demoted to a
     # caption, so it never appears in the label (no ids/underscores/_v1).
     assert any("Value + Momentum" in o for o in picker.options)
     assert not any("_" in o for o in picker.options)
-    assert picker.value                                  # the flagship is pre-selected
-    # Every OTHER lens is a checkbox, visible without opening anything (item 5) — exactly
-    # one box each, and none of them ticked, so the default run is the narrated primary.
+    # SHORTLIST-3: EVERY lens is a checkbox and none is elected above the others — there
+    # is no dropdown and no primary. Exactly one box each.
     boxes = _lens_checkbox_labels(at)
-    assert sorted(boxes) == sorted(o for o in picker.options if o != picker.value)
+    assert sorted(boxes) == sorted(picker.options)
     assert len(boxes) == len(set(boxes))
-    assert not any(_lens_checkbox(at, o).value for o in boxes)
+    assert not any(str(s.label).startswith("Primary strategy") for s in at.selectbox)
+    # ...and exactly ONE is pre-ticked on a fresh session, so the tab opens ready to run
+    # rather than refusing until you pick something.
+    assert len(picker.ticked) == 1
     # ...and the flow is exactly: strategies, a list, its tickers, run.
     assert any(s.label == "List" for s in at.selectbox)
     assert any("Tickers" in str(t.label) for t in at.text_area)
@@ -486,8 +506,8 @@ def test_legacy_hidden_by_default_and_toggle_defaults_off():
     assert "Run a council" not in _header_blob(at)
     assert "Edits council-strategy YAMLs" not in _info_blob(at)
     assert not any("Legacy" in str(t.label) for t in at.tabs)
-    # the v2 product IS the landing (the Run tab's strategy picker renders)
-    assert any(str(s.label).startswith("Primary strategy") for s in at.selectbox)
+    # the v2 product IS the landing (the Run tab's lens grid renders)
+    assert _strategy_picker(at).options
 
 
 def test_legacy_surfaces_appear_when_toggle_on():
@@ -1204,17 +1224,33 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     assert not any("ANTHROPIC_API_KEY" in str(getattr(i, "value", "")) for i in at.info)
 
 
-def test_a_zero_strategy_run_is_structurally_unreachable_and_still_refused():
-    # Was test_deselecting_every_strategy_blocks_the_run: with the multiselect you could
-    # deselect everything and had to be blocked by a guard. The primary is a REQUIRED
-    # dropdown now (item 5), so the empty state cannot be reached at all — a strictly
-    # stronger guarantee. Both halves are asserted: unreachable in the UI, and still
-    # refused by the pure guard if any future surface manages it.
+def test_a_zero_lens_run_is_REACHABLE_and_refused_with_a_reason():
+    # The history of this test is the point of it. With the old multiselect you could
+    # deselect everything, and a guard had to refuse it. FUND-UI-2 made the primary a
+    # REQUIRED dropdown, which made the empty state unreachable — a stronger guarantee.
+    # SHORTLIST-3 removes that dropdown, because there is no primary lens, so the empty
+    # state is reachable again: untick every box.
+    #
+    # That is a deliberate trade, and the guard is what makes it safe. A run with no lens
+    # has nothing to say, so it is REFUSED — visibly, with a sentence, and never quietly
+    # defaulted to some lens the user did not tick.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
     picker = _strategy_picker(at)
-    assert picker.value in picker.options            # always exactly one primary
-    assert "" not in picker.options                  # no "none of them" option to pick
+    assert picker.options                            # lenses are offered
+    assert len(picker.ticked) == 1                   # ...and one is pre-ticked
+
+    for label in picker.ticked:                      # untick the lot
+        _lens_checkbox(at, label).set_value(False).run()
+    assert not at.exception                          # no crash with nothing selected
+    assert not _strategy_picker(at).ticked
+    run = next(b for b in at.button if "▶" in b.label)
+    assert run.disabled                              # the button refuses
+    shown = (_caption_blob(at) + _info_blob(at)
+             + " ".join(str(getattr(w, "value", "")) for w in at.warning))
+    assert "at least one strategy" in shown
+
+    # ...and the pure guard still refuses it wherever else it is asked.
     assert "at least one strategy" in " ".join(
         app.run_problems(["AAPL"], n_strategies=0, deterministic=True, has_key=False))

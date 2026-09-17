@@ -88,20 +88,20 @@ def resolve_all(choices: Sequence[StrategyChoice], labels: Iterable[str]) -> lis
     return [c.strategy for c in choices if c.label in chosen]
 
 
-def selected_labels(primary: Optional[str],
-                    extras: Sequence[tuple[str, bool]] = ()) -> list[str]:
-    """The labels a run grades: the PRIMARY (narrated) one first, then every ticked extra.
+def selected_labels(primary=None, extras=()) -> list[str]:
+    """The labels a run grades: every TICKED lens, in offer order.
 
-    FUND-UI-2 item 5 splits the Run tab's one multiselect into a required primary dropdown
-    (narration is single-strategy, so the narrated strategy must be explicit rather than
-    "whichever selection came first in offer order") plus one checkbox per extra lens. This
-    is the pure join of those two widgets, and it returns exactly what the multiselect's
-    value used to be for the same chosen set — ``resolve_all`` still puts the strategies in
-    offer order, so the combined grid is unchanged. The primary is never double-counted,
-    even if its own (now hidden) box is stale-ticked.
+    SHORTLIST-3 removed the privileged first element. There is no primary lens any more —
+    every lens the user ticks is a vote of equal weight — so this is now the plain join of
+    the tick boxes, and ``resolve_all`` still puts the strategies in offer order, which is
+    what keeps the combined grid's columns reproducible.
+
+    ``primary`` is retained, ignored when None, ONLY so a caller that still passes one
+    (the legacy single-strategy paths) keeps working; it is folded in like any other tick
+    and is never double-counted.
     """
     picked = [primary] if primary else []
-    picked += [label for label, on in extras if on and label != primary]
+    picked += [label for label, ticked in (extras or ()) if ticked and label != primary]
     return picked
 
 

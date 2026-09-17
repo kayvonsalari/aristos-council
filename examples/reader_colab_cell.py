@@ -28,10 +28,9 @@ else:
         universe_id=_c["id"], universes_dir=UNIVERSES_DIR, strategy_ids=LENSES,
         strategies_dir=STRATEGIES_DIR, ranker_only=True, use_cache=True,
         with_valuation_band=True, freeze_dir=Path(ROOT) / "runs",
-        # The lens whose verdicts are the run's answer; the shortlist is drawn from it.
-        primary_id=LENSES[0],
-        # What the list was built for, so the run can say when the lens answers a
-        # different question. Blank is fine - it just means no claim is made.
+        # SHORTLIST-3: no primary lens. Every lens in LENSES is a vote of equal weight and
+        # the shortlist is the agreement between them, so there is nothing to nominate.
+        # What the list was built for, stated in the summary. Blank is fine - no claim.
         cohort_thesis=_c.get("thesis", ""),
         with_reader=True,
         progress=lambda m: print("   ", m))

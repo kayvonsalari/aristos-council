@@ -2380,7 +2380,6 @@ def run_multi_strategy_pipeline(
     ranker_only: bool = True, narrate_coverage: str = "buys_only",
     runners=None, derived_from: str = "",
     min_market_cap_override: float | None = None,
-    primary_id: Optional[str] = None,
     with_reader: bool = False, reader_runner=None, cohort_thesis: str = "",
 ) -> MultiStrategyResult:
     """Grade ONE cohort under N rank strategies and return the combined grid (FUND-RUN-1).
@@ -2494,25 +2493,19 @@ def run_multi_strategy_pipeline(
         meta={"universe_size": meta.get("universe_size", 0)}))
     if _guard:
         meta["fetch_guard"] = _guard
-    # SHORTLIST-1 — the PRIMARY is the lens whose verdicts are the run's answer. It is
-    # NOT simply ids[0]: the grid's column order is the OFFER order (picker.resolve_all),
-    # deliberately, so the columns are reproducible — which means the first column need
-    # not be the lens the reader picked as primary. Callers that know say so; the
-    # fallback is the first SELECTOR in the run, never a check.
-    resolved_primary = primary_id if primary_id in results else next(
+    # SHORTLIST-3 — there is no primary lens. Every lens in the run is a vote of equal
+    # weight, and the answer is the AGREEMENT between them (see ``agreement`` below), so
+    # nothing here elects one lens above the others any more. The first SELECTOR is still
+    # computed, but only as the lens a SINGLE-lens run would narrate.
+    _first_selector = next(
         (sid for sid in ids
          if getattr(getattr(results[sid], "rank_strategy", None), "kind", "selector")
-         != "check"), ids[0])
-    meta["shortlist_primary_id"] = resolved_primary
+         != "check"), ids[0] if ids else "")
     meta["shortlist_band_cutoff"] = SHORTLIST_BAND_CUTOFF
     built = MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
                                 results=results, rows=rows, meta=meta,
                                 narratives=narratives, council=council)
-    built = replace(built, shortlist=shortlist(built, primary_id=resolved_primary))
-    # SHORTLIST-2 — which names the unanimous exception kept, recorded on the run so the
-    # question "did the band ever get overruled, and for whom" is answerable from the
-    # record rather than by re-deriving the rule.
-    meta["shortlist"] = {"unanimous_override": built.shortlist.unanimous_override}
+    built = replace(built, shortlist=shortlist(built, primary_id=_first_selector))
 
     # READER-1 — LAST, so the facts pack can see the shortlist and the band. Opt-in: off,
     # nothing is built and nothing is called, so a ranker-only run stays free and its
