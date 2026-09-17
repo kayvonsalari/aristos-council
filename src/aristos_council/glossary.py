@@ -33,6 +33,30 @@ class GlossaryEntry:
     definition: str
 
 
+# DETAIL-1b — the ⚠ badge explained, in ONE place.
+#
+# The first attempt read "a price that ran up hard while a floor the lens screens on was
+# failing (cyclical inflection or mania; human review)". Every clause of that is true, and
+# none of it tells a reader who has not read the code what the symbol means, what number
+# produced it, or what they are meant to do about it. It also tucked the ambiguity into a
+# parenthetical, when the ambiguity IS the point: the report cannot tell a turning cycle
+# from a mania, and the honest thing is to say so and ask for a human.
+#
+# It lives HERE rather than beside the detail section because this module is the lower
+# layer (pipeline imports it, not the other way round), and because a mark's explanation
+# belongs with the vocabulary. The detail section states it above its groups and the
+# glossary entry below is the same string, so one mark can never acquire two
+# explanations.
+DETAIL_BADGE_NOTE = (
+    "A ⚠ badge such as ⚠ +80% 12m means the share price has risen 80% over the last "
+    "twelve months. The report attaches it whenever the rise is more than +30%, "
+    "because a move that large in a cyclical company means one of two things: the "
+    "cycle has turned and profits are about to catch up, or the price has run ahead of "
+    "anything the business can earn. The numbers cannot tell which, so the badge asks "
+    "for a human look. It is a warning about the price, not part of the rule the "
+    "company failed.")
+
+
 # Terms that belong to the REPORT rather than to a factor or a criterion — the vocabulary
 # the document itself introduces. Each is included only when the rendered text mentions
 # it, matched on ``probe``. Definitions condensed from CALCULATIONS.md; where that file
@@ -74,6 +98,7 @@ _REPORT_TERMS: tuple[tuple[str, str, str], ...] = (
     ("Not assessed", "not assessed",
      "The evidence channel this specialist reads returned nothing, so it offered no "
      "view. A missing channel, not a measured neutral."),
+    ("⚠ (price badge)", "⚠", DETAIL_BADGE_NOTE),
     ("⚑", "⚑",
      "This verdict sits on a boundary: the name tied on score with another that got a "
      "DIFFERENT verdict, and the alphabetical tie-break decided which side each fell."),

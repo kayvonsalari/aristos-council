@@ -2649,14 +2649,14 @@ _GATE_NOTE = "no other rule was tested on these"
 # code — so the full disclosure the flag carries is written out here, once, in the words
 # the flag itself uses, with the threshold read from the code rather than retyped.
 def detail_badge_note() -> str:
-    """"A ⚠ badge is the 12-month price move where it exceeds +30% …" — the flag's own
-    wording, stated once so the rows can be short."""
-    from .factors import _DIVERGENCE_MOMENTUM_THRESHOLD
+    """The ⚠ badge explained, stated once above a lens's groups so the rows can be short.
 
-    return (f"A ⚠ badge is the 12-month price move where it exceeds "
-            f"{_DIVERGENCE_MOMENTUM_THRESHOLD:+.0%} — a price that ran up hard while a "
-            "floor the lens screens on was failing (cyclical inflection or mania; human "
-            "review). It never altered the exclusion.")
+    DETAIL-1b: the text is ``glossary.DETAIL_BADGE_NOTE`` — the same string the glossary
+    gives for the same symbol, so a reader who meets the badge in a detail section and a
+    reader who looks it up in the glossary are told the same thing."""
+    from .glossary import DETAIL_BADGE_NOTE
+
+    return DETAIL_BADGE_NOTE
 
 
 # A price-divergence flag, shortened to its figure for a table cell. The full sentence is

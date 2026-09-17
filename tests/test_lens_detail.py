@@ -313,17 +313,41 @@ def test_a_badge_that_cannot_be_shortened_is_never_truncated():
     assert _short_flag("") == ""
 
 
-def test_the_badge_note_quotes_the_real_threshold_and_the_flags_own_words():
-    """The note is the badge's expansion, so it must not drift from the flag it expands —
-    the threshold is read from the code rather than retyped into prose."""
+def test_the_badge_note_quotes_the_real_threshold():
+    """DETAIL-1b rewrote this note in the owner's words, which state "+30%" as prose
+    rather than reading the constant. That is the right text and the wrong coupling, so
+    the coupling is asserted here instead: move _DIVERGENCE_MOMENTUM_THRESHOLD and this
+    fails, rather than the report quietly explaining a threshold it no longer uses."""
     from aristos_council.factors import _DIVERGENCE_MOMENTUM_THRESHOLD
     from aristos_council.pipeline import detail_badge_note
 
+    assert f"{_DIVERGENCE_MOMENTUM_THRESHOLD:+.0%}" in detail_badge_note()
+
+
+def test_the_badge_note_explains_the_symbol_the_ambiguity_and_the_limit():
+    """The three things the old wording left out: what the mark IS (a price move, with a
+    worked figure), that the numbers cannot tell a turning cycle from a mania, and that it
+    is not part of the rule the company failed."""
+    from aristos_council.pipeline import detail_badge_note
+
     note = detail_badge_note()
-    assert f"{_DIVERGENCE_MOMENTUM_THRESHOLD:+.0%}" in note
-    assert "12-month price move" in note
-    assert "cyclical inflection or mania; human review" in note   # the flag's own words
-    assert "never altered the exclusion" in note                  # ...and what it is not
+    assert "share price has risen 80% over the last twelve months" in note
+    assert "the cycle has turned" in note and "run ahead of anything" in note
+    assert "cannot tell which" in note
+    assert "asks for a human look" in note
+    assert "not part of the rule the company failed" in note
+
+
+def test_the_badge_note_and_the_glossary_entry_are_ONE_string():
+    """A mark with two explanations is a mark a reader cannot trust. The detail section
+    states it above the groups; the glossary defines it at the end; they are the same
+    object, not two copies that happen to agree today."""
+    from aristos_council.glossary import _REPORT_TERMS
+    from aristos_council.pipeline import detail_badge_note
+
+    entries = [t for t in _REPORT_TERMS if t[1] == "⚠"]
+    assert len(entries) == 1
+    assert entries[0][2] == detail_badge_note()
 
 
 def test_the_note_appears_only_when_a_badge_does():
