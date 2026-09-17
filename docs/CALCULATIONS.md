@@ -704,10 +704,55 @@ Given a run's **primary** lens (the one the reader picked; on the CLI, the first
    **A band that ABSTAINED does not drop the name.** It is kept and flagged "not evaluated"
    with the band's own reason. Null is not false (house rule 3): *we could not tell* is not
    *it is expensive*. A band-OFF run therefore drops nobody on valuation.
+   **UNLESS the name is a unanimous BUY (SHORTLIST-2).** See below.
 4. **What remains** is the shortlist, in the primary's rank order.
 
 A check doubt takes precedence over the valuation drop, so each dropped name carries exactly
 ONE reason — the more specific one.
+
+#### The unanimous-BUY exception (SHORTLIST-2)
+
+**The band is a separate check, not one of the lenses, so it does not eliminate a name that
+every lens in the run rated BUY.** Such a name is KEPT, in the primary's rank order, with the
+percentile that would have dropped it carried as a price warning.
+
+*Evidence.* On the 2026-09-17 09:10 run of `oil_dividend_v1`, Suncor (SU) was rated BUY by
+all three lenses — Cyclical Income (the income selector), Magic Formula RAW (a value
+selector) and Forensic (the check) — and was dropped by the band alone, at the 99th
+percentile of its own five years (EV/EBIT 14.2x against its own median 6.7x).
+
+**UNANIMOUS means ranked-and-BUY under EVERY lens in the run**, selectors and checks alike.
+A check's BUY is not an endorsement — it only means the check found nothing to doubt — and
+that is exactly why it counts here: the exception asks whether *anything* in the run
+objected. Three things break unanimity, and each is a deliberate narrowing:
+
+- **any verdict other than BUY**, anywhere. One HOLD and the band drops the name as before;
+- **not being ranked at all** — excluded, no usable data, or a failed fetch. That lens has
+  not agreed; it has left the name unjudged, and an absent opinion is not a favourable one
+  (house rule 3, applied to verdicts rather than to criteria);
+- **a run with fewer than two lenses.** Agreement among one lens is the lens repeating
+  itself, so a one-lens run has no unanimity and does not state the exception at all.
+
+**A check-lens SELL still drops the name.** Step 2 stays ahead of step 3 even though a SELL
+cannot co-occur with unanimity, so the rule reads in the order it is written: a doubt about
+the BUSINESS outranks a doubt about the PRICE, and the exception applies only to the second.
+An **abstained** band is kept and flagged as before — an unmeasured band is not an overruled
+one, and it is not a price warning.
+
+**Kept loudly.** The row carries `⚠ priced high: 99th percentile of its own 5-year range`,
+and under the table, once:
+
+> Kept because every test in this run rated it BUY. The price check would have dropped it:
+> it costs far more than usual for the profit it makes, compared with its own last five
+> years. All the tests read the same recent years, so their agreement is not proof the price
+> is justified.
+
+That last sentence is the point of the warning rather than a caveat on it: the lenses read
+overlapping evidence, so their agreement is not independent confirmation of the price. The
+section title and the run's summary line both count the warnings
+(`Shortlist — 1 of 9 BUYs survived the checks (1 with a price warning)`), because a count
+that hides one is the single thing this exception must not produce, and
+`meta["shortlist"]["unanimous_override"]` records the tickers it fired for.
 
 **Two kinds of nothing, and they read differently.** An empty shortlist *with* drop reasons
 is a RESULT: the checks removed every candidate, and the section says so and lists why. A
