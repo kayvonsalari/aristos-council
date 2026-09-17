@@ -176,8 +176,9 @@ a contradiction — it is two questions answered. Three things make that readabl
   and in both reports: what it wants of a company.
 - **Every lens you tick is an equal vote.** There is no primary lens. A **check** lens
   (Forensic today; quality and earnings-power lenses later) does not vote at all — it
-  MARKS: its SELL is a doubt about someone else's pick, and its BUY says only that it
-  found nothing to doubt.
+  MARKS: a doubt about someone else's pick. A check does not even use the verdict words:
+  its three readings are **clean** (nothing to doubt), **no concern**, and **doubted**,
+  because "Forensic rated this SELL" reads as a call to sell and is not one.
 - **The shortlist is the agreement.** Every name at least one voting lens rated BUY,
   ordered by how many did, with every doubt shown beside it as a mark. It is **derived**
   from the grid — no new judgement, nothing re-graded — and the count is the whole rule.
@@ -233,6 +234,30 @@ could not be made — never a bad reading, and never a fail.
 Nothing in the section is re-graded. Every name, reason and number is the one the run
 recorded; grouping decided only where each is printed. The full per-name sentence is still
 what the CLI and Company Check show, because those look at one name at a time.
+
+### What gets explained, and what it costs
+
+The deterministic run is free. Explaining a name in prose is one model call each, so the
+Run tab asks three questions before it spends:
+
+- **Narrate: all voting lenses agree / most / any.** Default *all* — the names every
+  voting lens chose are the ones the run is most sure about, and they are what a reader
+  came for. With two voting lenses "most" and "all" are the same test (more than half of
+  two is two), and the caption says so rather than offering a choice that is not one.
+- **Up to N names** (default 10), taken from the top of the agreement table.
+- **Skip names doubted by Forensic or priced high** (default on). Untick it and they are
+  explained too, with the narrator told the mark.
+
+Under the explanations, one line says which rule chose them and how many met it — and
+every qualifying name that is NOT there is listed with its votes and its marks. A run that
+explained nothing says which rule produced nothing and how to get more; it is never a
+silent empty section.
+
+**The narrator is shown the agreement row first**: how many voting lenses bought the name,
+which ones, what each check found in its own words, and every mark against it. It is told
+to open on that and to address each mark explicitly — and a narration that leaves one
+unmentioned is flagged. The valuation band's implied-price arithmetic is never shown to
+any model; only the mark text is.
 
 New here? **[How a verdict is reached](docs/COUNCIL_EXPLAINER.md)** — the plain-language
 walkthrough. Want the formulas? **[The Calculations](docs/CALCULATIONS.md)** — every
