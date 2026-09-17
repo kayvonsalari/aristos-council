@@ -235,6 +235,39 @@ factor, criterion, and guard, generated from the code. Meeting a mark you don't 
 on a report? **[Marks on a Report](docs/REPORT_MARKS.md)** — the flags catalog: every
 annotation, what fired it, and what it does *not* mean.
 
+## Stocks and ETFs
+
+One switch in the sidebar, **Analyse: Stocks / ETFs**, decides what every picker offers.
+It opens on **Stocks** every time — this is a stock-analysis tool, and the three ETF
+lenses and five ETF lists were in the way of the majority job.
+
+**Nothing is deleted, and nothing is changed.** The ETF lenses rank on fee, size, trend
+and payout exactly as before; the ETF lists hold the same funds; past client work still
+replays. Flip the switch and they are all back. This is a visibility filter over the
+pickers and nothing else — no strategy, list, rule, factor, rank, verdict or report
+differs by one byte, the CLI and Colab never see the switch at all, and the asset-kind
+gate that keeps funds out of stock lenses is the same code it was.
+
+- **The choice is not remembered.** No settings file, no URL parameter, no browser
+  storage. A refresh or a restart returns to Stocks.
+- **Saved runs are visible in both modes.** The switch decides what you can start, never
+  what you can read.
+- **Check lenses (Forensic) live on the Stocks side**, because their factors read company
+  accounts — pointed at a fund they would abstain on every name.
+- **A list saved in ETFs mode comes back in ETFs mode.**
+
+**How a list's type is decided**, in order: the list's own `asset_kind` field
+(`stocks` / `etfs`) if it has one; then `thesis: funds`; then whether every ticker in it
+is a fund this repo already knows about; then stocks. The explicit field always wins, and
+an inferred answer is never written back to the file. A list that is genuinely *mixed* —
+some funds, some companies — is named in a warning rather than filed silently, and runs
+on the stocks side, where a mixed list is least wrong.
+
+**Pasted tickers are not filtered.** Paste `XLE, VDE, XOM, CVX` in Stocks mode and the two
+funds are excluded by the asset-kind gate exactly as they always were; the run now adds one
+line above the results — *"2 of these names are ETFs and were not graded. Switch to ETFs to
+analyse them."* — so the exclusion is a next step rather than a dead end.
+
 ## How a verdict is reached
 
 <p align="center">
