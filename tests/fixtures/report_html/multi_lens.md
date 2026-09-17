@@ -32,11 +32,11 @@ _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 
 ## Shortlist — 1 of 1 BUY survived the checks
 
-_BUY under Classic Value and below the 80th percentile of its own valuation history._
+_BUY under Classic Value and below the 80th percentile of its own valuation history, unless every test rated it BUY (then kept with a price warning)._
 
-| Name | Rank | Valuation percentile |
-|---|---|---|
-| **A** | #1 | not evaluated |
+| Name | Rank | Valuation percentile | Note |
+|---|---|---|---|
+| **A** | #1 | not evaluated |  |
 
 ## What the run could not see
 

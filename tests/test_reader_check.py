@@ -18,6 +18,7 @@ behaviour under test as much as anything else here.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -263,7 +264,7 @@ def test_a_glossed_term_passes():
     assert check.ok, check.reason
 
 
-@pytest.mark.parametrize("term", ["free cash flow", "accrual", "momentum", "valuation"])
+@pytest.mark.parametrize("term", ["free cash flow", "accrual", "momentum"])
 def test_every_glossed_term_is_enforced(term):
     check = check_summary(_s(happened=f"The {term} was weak."), {})
     assert not check.ok and f"term without gloss: {term}" in check.reason
@@ -273,8 +274,18 @@ def test_the_enforced_list_is_exactly_the_terms_of_art():
     """READER-3. The parametrize above must not drift from the list it claims to cover."""
     from aristos_council.reader_check import GLOSS_TERMS
 
-    assert set(GLOSS_TERMS) == {"percentile", "free cash flow", "accrual", "momentum",
-                                "valuation"}
+    assert set(GLOSS_TERMS) == {"percentile", "free cash flow", "accrual", "momentum"}
+
+
+def test_valuation_is_deliberately_NOT_enforced_either():
+    """READER-4, and for a different reason from "balance sheet". It is not that a reader
+    knows the word: it is that the bracketed gloss this rule extracted for it was the
+    WORST sentence in the 2026-09-17 09:10 summary — "their own price history range
+    [valuation (price against its own past)]", a bracket inside a bracket, less legible
+    than the jargon it was meant to explain. v4 asks for the plain phrase in the sentence
+    instead, and a rule demanding a bracket would work against that."""
+    check = check_summary(_s(happened="The valuation was high."), {})
+    assert check.ok, check.reason
 
 
 def test_balance_sheet_is_deliberately_NOT_enforced():
@@ -354,3 +365,176 @@ def test_the_corrected_exemplar_from_the_v2_prompt_passes():
             "kept": [{"name": "Chord Energy"}, {"name": "Magnolia"}]}
     check = check_summary(corrected, pack)
     assert check.ok, check.reason
+
+
+# --------------------------------------------------------------------------- #
+# READER-4 — roles, plain glosses, and the clean sweep
+# --------------------------------------------------------------------------- #
+# Three faults in ONE live summary (oil_dividend_v1, 2026-09-17 09:10) produced all three
+# checks below. None of them is a matter of taste: each made the summary say something the
+# run did not say.
+
+PACK_0917 = json.loads((FIXTURES / "oil_pack_2026-09-17.json").read_text(encoding="utf-8"))
+
+
+def _replace_field(summary, **over):
+    """One field of a ReaderSummary swapped, the rest kept."""
+    fields = {f: getattr(summary, f)
+              for f in ("asked", "happened", "survived", "doubt", "cannot_say")}
+    return ReaderSummary(**{**fields, **over})
+
+
+# The v4 worked example, verbatim from reader_v4.md. It is written from PACK_0917 above —
+# the same run's facts — which is what lets the prompt ship an example that clears the bar
+# it sets.
+EXEMPLAR_0917 = ReaderSummary(
+    asked=("This is a list of 134 oil and gas companies built for income. Three tests "
+           "ran. Cyclical Income is the primary picker; it wants a dividend that "
+           "survives the cycle, covered and not cut in five years. Magic Formula RAW is "
+           "a second picker, not used for the shortlist; it wants cheap, good "
+           "businesses. Forensic is a check; it asks whether the profits are real."),
+    happened=("Cyclical Income ranked 43 names and rated 9 BUY. Forensic ranked 104 and "
+              "rated 21 BUY. Magic Formula RAW ranked 103 and rated 21 BUY. No single "
+              "rule decided any of the three lists."),
+    survived=("Suncor Energy is the one company all three tests rated BUY, and it is on "
+              "the shortlist of 1. It carries a price warning: it sits at the 99th "
+              "percentile (dearer than almost all of its own past) of its own five "
+              "years, so it costs far more than usual for the profit it makes. All "
+              "three tests read those same recent years, so their agreement is not "
+              "proof the price is right. Of the 9 names Cyclical Income picked, 8 were "
+              "dropped: Technip Energies, Aker Solutions, Inpex, Imperial Oil and "
+              "TotalEnergies were rated SELL by Forensic, and Magnolia Oil & Gas, Chord "
+              "Energy and Murphy Oil cost far more than usual for the profit they make, "
+              "compared with their own last five years."),
+    doubt=("Forensic could not work out its distress score for 36 names, mostly foreign "
+           "listings. The price check could not be worked out for 8 names, and was "
+           "withheld for 19 more because the numbers looked wrong."),
+    cannot_say=("This list was built for income, and nothing here says whether the oil "
+                "price will hold."),
+)
+
+# The 09:10 summary, carrying the four faults the owner named: Magic Formula RAW called a
+# check (it is a second picker); Forensic described as looking for growth (it asks whether
+# the profits are real); the band glossed as a bracket inside a bracket; and Suncor — the
+# one name every test rated BUY — never mentioned.
+SUMMARY_0910 = ReaderSummary(
+    asked=("This is a list of 134 oil and gas companies built for income. Three tests "
+           "ran. Cyclical Income picked the names. Forensic and Magic Formula RAW are "
+           "checks; they look for value and growth."),
+    happened=("Cyclical Income ranked 43 names and rated 9 BUY. Forensic ranked 104 and "
+              "rated 21 BUY. Magic Formula RAW ranked 103 and rated 21 BUY."),
+    survived=("No company made the shortlist. The names Cyclical Income picked were "
+              "either rated SELL by Forensic or sat at the top of their own price "
+              "history range [valuation (price against its own past)]."),
+    doubt=("Forensic could not work out its distress score for 36 names. The price check "
+           "could not be worked out for 8 names."),
+    cannot_say=("This list was built for income, and nothing here says whether the oil "
+                "price will hold."),
+)
+
+
+def test_the_live_0910_summary_is_WITHHELD_and_says_why():
+    check = check_summary(SUMMARY_0910, PACK_0917)
+    assert not check.ok
+    joined = " | ".join(check.problems)
+    assert "role mismatch: Magic Formula RAW called a check" in joined
+    assert "garbled gloss" in joined
+    assert "unanimous BUY not mentioned: Suncor Energy Inc." in joined
+
+
+def test_a_picker_called_a_check_is_named_in_the_reason():
+    """A reader told a picker is a check reads its BUYs as "nothing objectionable found"
+    rather than "this test chose it", which inverts what the run said."""
+    check = check_summary(SUMMARY_0910, PACK_0917)
+    reason = "; ".join(p for p in check.problems if p.startswith("role mismatch"))
+    assert "Magic Formula RAW" in reason
+    assert "Forensic" not in reason          # Forensic IS a check; it is not mismatched
+
+
+def test_a_check_called_a_picker_is_caught_the_other_way_round():
+    summary = _replace_field(SUMMARY_0910, asked=(
+        "This is a list of 134 oil and gas companies built for income. Forensic is the "
+        "selector."))
+    check = check_summary(summary, PACK_0917)
+    assert any("Forensic called a picker" in p for p in check.problems)
+
+
+def test_a_role_word_about_an_UNNAMED_test_is_not_a_mismatch():
+    """The rule fires only where a NAME and a role word share a sentence: a summary
+    explaining that "one test is a check" is describing the run, not mis-labelling a
+    test."""
+    summary = _replace_field(SUMMARY_0910, asked=(
+        "This is a list of 134 oil and gas companies built for income. One test is a "
+        "check: it only raises doubts."))
+    reasons = " ".join(check_summary(summary, PACK_0917).problems)
+    assert "role mismatch" not in reasons
+
+
+def test_a_correctly_labelled_summary_raises_no_role_problem():
+    reasons = " ".join(check_summary(EXEMPLAR_0917, PACK_0917).problems)
+    assert "role mismatch" not in reasons
+
+
+def test_a_bracket_inside_a_bracket_is_withheld():
+    """A gloss exists to be read. One that needs its own gloss has failed."""
+    check = check_summary(
+        _s(survived="They sat at the top of their own price history range "
+                    "[valuation (price against its own past)]."), {})
+    assert any(p.startswith("garbled gloss") for p in check.problems)
+
+
+def test_an_ORDINARY_gloss_is_untouched():
+    check = check_summary(
+        _s(doubt="Free cash flow (cash left after costs) was negative for 2 names."),
+        {"n": 2})
+    assert not any("garbled gloss" in p for p in check.problems), check.reason
+
+
+def test_a_summary_that_omits_a_unanimous_BUY_is_withheld_and_names_it():
+    """A name every test rated BUY is the strongest single fact a multi-test run
+    produces. The 09:10 summary omitted the only one it had."""
+    summary = _replace_field(EXEMPLAR_0917, survived=(
+        "One company stayed on the shortlist. The other 8 were dropped."))
+    check = check_summary(summary, PACK_0917)
+    assert "unanimous BUY not mentioned: Suncor Energy Inc." in "; ".join(check.problems)
+
+
+def test_the_TICKER_alone_satisfies_the_unanimous_rule():
+    """A summary that says "SU" has named the company; the rule is about mentioning it,
+    not about which of its two names is used."""
+    summary = _replace_field(EXEMPLAR_0917, survived=(
+        "SU is the one company all three tests rated BUY, and it is on the shortlist "
+        "of 1."))
+    reasons = " ".join(check_summary(summary, PACK_0917).problems)
+    assert "unanimous BUY not mentioned" not in reasons
+
+
+def test_a_run_with_no_unanimous_name_demands_nothing():
+    pack = {**PACK_0917, "unanimous_buy": []}
+    reasons = " ".join(check_summary(EXEMPLAR_0917, pack).problems)
+    assert "unanimous BUY" not in reasons
+
+
+# --------------------------------------------------------------------------- #
+# The v4 exemplar — written from the pack that ships beside it, and proven
+# --------------------------------------------------------------------------- #
+def test_the_v4_exemplar_PASSES_every_check():
+    """The v1-v3 exemplars were prose about a DIFFERENT run, so the validator rightly
+    refused them and a test had to pin that as a finding rather than a bug. v4's is
+    written from the pack in this repo, so the prompt now ships an example that clears the
+    bar it sets — which is the only kind a writer can safely imitate."""
+    check = check_summary(EXEMPLAR_0917, PACK_0917)
+    assert check.ok, check.reason
+    assert check.words <= WORD_LIMIT
+
+
+def test_the_exemplar_in_the_PROMPT_is_the_one_that_was_checked():
+    """A verified example that then drifts from the file is worse than none. Every
+    sentence of the checked text must appear in reader_v4.md."""
+    from aristos_council.reader import prompt_text
+
+    text = prompt_text().replace("\n> ", " ").replace("\n", " ")
+    for field in ("asked", "happened", "survived", "doubt", "cannot_say"):
+        for sentence in re.split(r"(?<=[.!?])\s+", getattr(EXEMPLAR_0917, field)):
+            if sentence.strip():
+                assert " ".join(sentence.split()) in " ".join(text.split()), sentence

@@ -961,7 +961,7 @@ def _reader_section(reader) -> str:
 def _shortlist_section(sl) -> str:
     """SHORTLIST-1 — the derived section. Placed directly after the summary and BEFORE the
     verdict grid, because it is the answer the grid is evidence for."""
-    from ..pipeline import shortlist_table
+    from ..pipeline import SHORTLIST_CAUTION_NOTE, shortlist_table
 
     if sl is None:
         return ""
@@ -973,8 +973,16 @@ def _shortlist_section(sl) -> str:
     body.append(f'<p class="note">{_esc(sl.rule_sentence)}</p>')
     cols, rows = shortlist_table(sl)
     if rows:
-        body.append(_table(cols, [[_esc(r[c]) for c in cols] for r in rows],
-                           cls="ranked"))
+        # SHORTLIST-2: the price warning is a BADGE on its row, so it reads as an
+        # annotation of that name rather than as another verdict column.
+        body.append(_table(
+            cols,
+            [[f'<span class="badge">{_esc(r[c])}</span>' if c == "Note" and r[c]
+              else _esc(r[c]) for c in cols] for r in rows],
+            cls="ranked"))
+        # ...and what it MEANS, once, under the table it annotates.
+        if sl.cautioned:
+            body.append(f'<p class="note">{_esc(SHORTLIST_CAUTION_NOTE)}</p>')
     else:
         body.append('<p class="note">No candidate survived the checks. That is a '
                     'result, not a gap — every drop and its reason is below.</p>')

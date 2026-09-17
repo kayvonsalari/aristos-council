@@ -2056,6 +2056,10 @@ def _shortlist_markdown(sl, shortlist_table) -> list[str]:
     cols, rows = shortlist_table(sl)
     if rows:
         lines += _md_table(cols, rows)
+        # SHORTLIST-2 — the warning's meaning, once, under the table that carries it.
+        if sl.cautioned:
+            from aristos_council.pipeline import SHORTLIST_CAUTION_NOTE
+            lines += ["", f"_{SHORTLIST_CAUTION_NOTE}_"]
     else:
         lines.append("_No candidate survived the checks. That is a result, not a gap — "
                      "every drop and its reason is below._")
@@ -2343,6 +2347,33 @@ def _local_stamp(run_start) -> str:
     return stamp(run_start)
 
 
+
+def _render_shortlist(sl) -> None:
+    """The derived shortlist on screen — the same builder the two reports render, so the
+    app and the downloaded files cannot show different names."""
+    if sl is None:
+        return
+    from aristos_council.pipeline import SHORTLIST_CAUTION_NOTE, shortlist_table
+
+    st.subheader(sl.title)
+    if not sl.available:
+        st.caption(f"{sl.reason}.")
+        return
+    st.caption(sl.rule_sentence)
+    cols, rows = shortlist_table(sl)
+    if rows:
+        st.dataframe(rows, column_order=cols, hide_index=True, width="stretch")
+        if sl.cautioned:
+            st.warning(SHORTLIST_CAUTION_NOTE)
+    else:
+        st.info("No candidate survived the checks. That is a result, not a gap — every "
+                "drop and its reason is below.")
+    if sl.dropped:
+        with st.expander(f"Dropped · {len(sl.dropped)}", expanded=False):
+            for r in sl.dropped:
+                st.markdown(f"- **{r.display}** — {r.dropped_by}")
+
+
 def _render_multi_strategy_result(multi_result) -> None:
     """The combined grid (FUND-RUN-1) — presentation only: every cell is the
     verdict-of-record a single run of that strategy produces."""
@@ -2369,6 +2400,12 @@ def _render_multi_strategy_result(multi_result) -> None:
     st.caption("Lenses: " + "; ".join(lens_labels.values()))
     st.markdown(f"### {multi_summary_line(multi_result)}")
     st.caption(multi_header_line(multi_result))
+
+    # SHORTLIST-1/2 — the answer, on screen, ahead of the evidence for it. Both reports
+    # have carried this section since SHORTLIST-1; the Run tab carried only the summary
+    # line's count, so a reader working in the app could see THAT names survived without
+    # seeing WHICH — and, after SHORTLIST-2, without seeing the price warning on one.
+    _render_shortlist(getattr(multi_result, "shortlist", None))
 
     # REPORT-2: the rules EACH lens applied, before the verdicts — a name excluded by one
     # lens and ranked by another is only legible once both rule sets are stated.

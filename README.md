@@ -170,7 +170,11 @@ a contradiction — it is two questions answered. Three things make that readabl
   its BUY is not an endorsement.
 - **The shortlist is what survived.** The names the selector rated BUY that no check
   doubted and that are not dear against their own history. It is **derived** from the grid —
-  no new judgement, nothing re-graded — and every dropped name gives its one reason.
+  no new judgement, nothing re-graded — and every dropped name gives its one reason. One
+  exception: a name **every** lens rated BUY is not dropped by the price check, because the
+  price check is a separate check and not one of the lenses — it is kept with a loud price
+  warning naming the percentile that would have removed it, and the warning is counted in
+  the section's title.
 
 A list can also say what it was **built for** (`thesis:` — value, growth, income, quality,
 funds). When the primary lens answers a different question, the run says so in one line and

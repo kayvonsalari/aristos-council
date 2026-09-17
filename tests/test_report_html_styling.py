@@ -111,6 +111,20 @@ test_the_three_surfaces_carry_the_same_values`` was re-expressed rather than rel
 now asserts every excluded NAME, its MEASURED value and the RULE it missed reach all
 three surfaces, and that every excluded ticker landed in a group — a stricter claim about
 completeness than "the same sentence appears three times" ever made.
+
+BASELINE MOVED AGAIN, DELIBERATELY (2026-09-17, SHORTLIST-2). The valuation band no longer
+drops a candidate that EVERY lens in the run rated BUY; such a name is kept with a price
+warning. The delta in this fixture is +2/-1 in the visible text and the matching lines in
+the markdown, and it is entirely the rule DESCRIBING itself — no name moved, because no
+name in this fixture is unanimous:
+  - the rule sentence gains its new clause ("…, unless every test rated it BUY (then kept
+    with a price warning)");
+  - the kept table gains a "Note" column header, blank on every row here.
+The order-independent guards below pass UNCHANGED against the pre-REPORT-4 snapshot — not
+one number was lost or invented, which is the correct reading of a change that added a
+clause and an empty column. The RULE is pinned independently of this fixture by
+``tests/test_shortlist.py`` (a fabricated three-lens run: unanimous keeps with the
+percentile carried, one HOLD drops, not-ranked drops), so the guard was not relaxed.
 """
 
 from __future__ import annotations

@@ -19,11 +19,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-# READER-2/3b: every earlier version is kept on disk, so a run recorded under one stays
-# reproducible. v3 differs from v2 by one substring — "balance sheet" leaves the
-# must-gloss list — because READER-3 took it off the CHECK, and a prompt that demands a
-# gloss the check no longer wants spends words from a 300-word budget on nothing.
-PROMPT_VERSION = "reader_v3"
+# READER-2/3b/4: every earlier version is kept on disk, so a run recorded under one stays
+# reproducible. v3 differed from v2 by one substring — "balance sheet" left the must-gloss
+# list, because READER-3 took it off the CHECK. v4 is the larger change: every test's ROLE
+# is stated in the pack and the prompt may describe a test only by that role and its own
+# `asks`; the price check is described in plain words rather than glossed in brackets; and
+# a name every test rated BUY must be named. All three come from the same live summary
+# (2026-09-17 09:10), which called a second picker "a check", said Forensic "looks for
+# growth", wrote a bracket inside a bracket, and never mentioned the one unanimous BUY.
+PROMPT_VERSION = "reader_v4"
 _PROMPT_PATH = (Path(__file__).resolve().parent / "agents" / "prompts"
                 / f"{PROMPT_VERSION}.md")
 

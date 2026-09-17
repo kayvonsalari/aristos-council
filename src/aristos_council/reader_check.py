@@ -18,6 +18,13 @@ Five checks, all mechanical, none of them a judgement about whether the prose is
    that matters most: it is what makes the prose auditable rather than plausible.
 4. **Names** — every company or ticker named must be one the run actually carries.
 5. **Shape** — all five fields present and non-empty.
+6. **Roles** (READER-4) — a test the text NAMES and describes as a check or a picker must
+   be described as the pack says it is. The 09:10 summary called a second selector "a
+   check"; a reader told that reads its BUYs as "nothing objectionable found" rather than
+   "this test chose it", which inverts what the run said.
+7. **Unanimous BUYs** (READER-4) — a name every test rated BUY is the strongest single
+   fact a multi-test run produces, and it must be named. The 09:10 summary omitted the
+   only one it had.
 
 Nothing here reads a model, and nothing here blocks a run.
 """
@@ -55,7 +62,14 @@ _TICKER = re.compile(r"\b([A-Z]{1,6}(?:[.-][A-Z0-9]{1,4})?)\b")
 # household phrase, and demanding a bracketed gloss for it bought nothing while costing
 # real summaries — a summary WITHHELD over a word every reader already knows is a worse
 # outcome than the word left unglossed.
-GLOSS_TERMS = ("percentile", "free cash flow", "accrual", "momentum", "valuation")
+# READER-4 — "valuation" is off this list too, for a different reason from "balance
+# sheet". It is not that a reader knows the word: it is that the bracketed gloss the rule
+# extracted for it was the WORST sentence in the 09:10 summary — "their own price history
+# range [valuation (price against its own past)]", a bracket inside a bracket, which is
+# less legible than the jargon it was meant to explain. v4 asks for the plain phrase in
+# the sentence instead ("cost far more than usual for the profit they make, compared with
+# their own last five years"), and a rule demanding a bracket would work against that.
+GLOSS_TERMS = ("percentile", "free cash flow", "accrual", "momentum")
 GLOSS_WINDOW = 60
 
 # READER-2 — "2 to 3 names" when the pack holds the exact figure. A range is a way of not
@@ -159,6 +173,72 @@ def _pack_names(pack) -> set[str]:
     return out
 
 
+
+# READER-4 — a nested gloss. "[valuation (price against its own past)]" is what the
+# bracket rule produced when the writer tried to gloss a word inside an aside it was
+# already making. A gloss exists to be read; one that needs its own gloss has failed.
+_NESTED_GLOSS = re.compile(r"[\[(][^\[\]()]*[\[(][^\[\]()]*[\])]")
+
+# READER-4 — the role words a summary may apply to a named test, and the pack role each
+# one asserts. "Picker" and "primary" both claim the test SELECTS; "check" claims it does
+# not. A summary may still use the words freely about tests it does not name — this fires
+# only where a NAME and a role word sit in the same sentence.
+# Singular AND plural: the 09:10 summary said "Forensic and Magic Formula RAW are
+# checks", and a rule that only saw "check" would have let the sentence through.
+_ROLE_WORDS = {
+    "check": "check", "checks": "check",
+    "the selector": "picker", "selector": "picker", "selectors": "picker",
+    "primary picker": "picker", "second picker": "picker",
+    "picker": "picker", "pickers": "picker", "primary": "picker",
+}
+
+
+def _role_claim(sentence: str, name: str):
+    """The role a sentence claims for ``name``, as "check" or "picker", or None.
+
+    Read only from the sentence the NAME appears in, because a summary that says "one test
+    is a check" two sentences later is describing the run, not this test."""
+    if name.lower() not in sentence.lower():
+        return None
+    lowered = sentence.lower()
+    for phrase in sorted(_ROLE_WORDS, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(phrase)}\b", lowered):
+            return _ROLE_WORDS[phrase]
+    return None
+
+
+def _pack_roles(pack) -> dict:
+    """``{test name: "check" | "picker"}`` from the pack's stated roles."""
+    out = {}
+    for lens in (pack or {}).get("lenses") or []:
+        name = (lens.get("name") or "").strip()
+        role = (lens.get("role") or "").strip()
+        if name and role:
+            out[name] = "check" if role == "check" else "picker"
+    return out
+
+
+def _sentences(text: str) -> list:
+    return [s for s in re.split(r"(?<=[.!?])\s+", text or "") if s.strip()]
+
+
+def _is_named(display: str, ticker: str, text: str) -> bool:
+    """Whether ``text`` mentions this company, the way a plain-English summary would.
+
+    Not by its full legal name: the prompt asks for plain words, so "Suncor Energy" is the
+    right way to write "Suncor Energy Inc." and demanding the "Inc." would punish the
+    writer for obeying. The distinctive FIRST word of the name is enough, and so is the
+    ticker — as a whole TOKEN, never a substring, because "SU" sits inside "survives" and
+    a rule that accepted that would call a name mentioned on the strength of a verb."""
+    lowered = text.lower()
+    if display.lower() in lowered:
+        return True
+    first = re.split(r"[\s,]+", display.strip())[0]
+    if first and re.search(rf"\b{re.escape(first)}\b", text, re.I):
+        return True
+    return bool(ticker) and bool(re.search(rf"\b{re.escape(ticker)}\b", text))
+
+
 def check_summary(summary, pack: dict) -> ReaderCheck:
     """Run every check against ``summary`` (a ReaderSummary or a dict) and ``pack``."""
     fields = {f: (getattr(summary, f, None) if not isinstance(summary, dict)
@@ -206,6 +286,42 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
     ranges = [f"{a} to {b}" for a, b in _VAGUE_RANGE.findall(text)]
     if ranges:
         problems.append("vague range: " + ", ".join(ranges))
+
+    # READER-4: a named test described with the wrong role. The 09:10 summary called
+    # Magic Formula RAW "a check"; it is a second picker. A reader who is told a picker is
+    # a check will read its BUYs as "nothing objectionable found" rather than "this test
+    # chose it", which inverts what the run said.
+    roles = _pack_roles(pack)
+    mismatched = []
+    for sentence in _sentences(text):
+        for name, role in roles.items():
+            claimed = _role_claim(sentence, name)
+            if claimed is not None and claimed != role:
+                said = "a check" if claimed == "check" else "a picker"
+                if (name, said) not in mismatched:
+                    mismatched.append((name, said))
+    if mismatched:
+        problems.append("role mismatch: "
+                        + "; ".join(f"{n} called {w}" for n, w in mismatched))
+
+    # READER-4: a bracket inside a bracket. A gloss exists to be read.
+    nested = _NESTED_GLOSS.findall(text)
+    if nested:
+        problems.append("garbled gloss: " + ", ".join(sorted(set(nested))))
+
+    # READER-4: a name EVERY test rated BUY is the strongest single fact a multi-test run
+    # produces, and the 09:10 summary omitted it entirely. Naming it is not optional.
+    missing_unanimous = []
+    for entry in (pack or {}).get("unanimous_buy") or []:
+        label = (entry.get("name") or "").strip()
+        if not label:
+            continue
+        plain = label.split(" (")[0].strip()
+        ticker = label[label.find("(") + 1:label.rfind(")")] if "(" in label else ""
+        if plain and not _is_named(plain, ticker, text):
+            missing_unanimous.append(plain)
+    if missing_unanimous:
+        problems.append("unanimous BUY not mentioned: " + ", ".join(missing_unanimous))
 
     known_names = _pack_names(pack)
     # Only check tokens that look like a ticker AND are not ordinary capitalised prose;

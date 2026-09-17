@@ -2509,6 +2509,10 @@ def run_multi_strategy_pipeline(
                                 results=results, rows=rows, meta=meta,
                                 narratives=narratives, council=council)
     built = replace(built, shortlist=shortlist(built, primary_id=resolved_primary))
+    # SHORTLIST-2 — which names the unanimous exception kept, recorded on the run so the
+    # question "did the band ever get overruled, and for whom" is answerable from the
+    # record rather than by re-deriving the rule.
+    meta["shortlist"] = {"unanimous_override": built.shortlist.unanimous_override}
 
     # READER-1 — LAST, so the facts pack can see the shortlist and the band. Opt-in: off,
     # nothing is built and nothing is called, so a ranker-only run stays free and its
@@ -2645,14 +2649,14 @@ _GATE_NOTE = "no other rule was tested on these"
 # code — so the full disclosure the flag carries is written out here, once, in the words
 # the flag itself uses, with the threshold read from the code rather than retyped.
 def detail_badge_note() -> str:
-    """"A ⚠ badge is the 12-month price move where it exceeds +30% …" — the flag's own
-    wording, stated once so the rows can be short."""
-    from .factors import _DIVERGENCE_MOMENTUM_THRESHOLD
+    """The ⚠ badge explained, stated once above a lens's groups so the rows can be short.
 
-    return (f"A ⚠ badge is the 12-month price move where it exceeds "
-            f"{_DIVERGENCE_MOMENTUM_THRESHOLD:+.0%} — a price that ran up hard while a "
-            "floor the lens screens on was failing (cyclical inflection or mania; human "
-            "review). It never altered the exclusion.")
+    DETAIL-1b: the text is ``glossary.DETAIL_BADGE_NOTE`` — the same string the glossary
+    gives for the same symbol, so a reader who meets the badge in a detail section and a
+    reader who looks it up in the glossary are told the same thing."""
+    from .glossary import DETAIL_BADGE_NOTE
+
+    return DETAIL_BADGE_NOTE
 
 
 # A price-divergence flag, shortened to its figure for a table cell. The full sentence is
@@ -3307,7 +3311,8 @@ def multi_summary_line(result: MultiStrategyResult) -> str:
     sl = getattr(result, "shortlist", None)
     if sl is not None and sl.available and sl.kept:
         line += (f" — shortlist: {len(sl.kept)} of {sl.candidates} "
-                 f"BUY{'s' if sl.candidates != 1 else ''}")
+                 f"BUY{'s' if sl.candidates != 1 else ''}"
+                 + sl.caution_clause)          # SHORTLIST-2: never count without it
     return line
 
 
@@ -3327,6 +3332,40 @@ def multi_summary_line(result: MultiStrategyResult) -> str:
 SHORTLIST_BAND_CUTOFF = 80.0     # a percentile at or above this is "dear against its own
                                  # history"; recorded in meta, not a UI control in v1.
 
+# --------------------------------------------------------------------------- #
+# SHORTLIST-2 — the unanimous-BUY exception
+# --------------------------------------------------------------------------- #
+# Evidence: the 2026-09-17 09:10 run of oil_dividend_v1. Suncor was rated BUY by ALL THREE
+# lenses — the income selector, the value selector and the forensic check — and the
+# shortlist dropped it anyway, on the valuation band alone (99th percentile of its own five
+# years: EV/EBIT 14.2x against its own median 6.7x).
+#
+# The owner's ruling, made structural here: the band is a SEPARATE check, not one of the
+# lenses, so it must not eliminate a name that every lens in the run rated BUY. The band's
+# rule is unchanged everywhere else — this exception needs unanimity, which is the
+# strongest agreement the run can produce, and it is narrow by construction: a single HOLD,
+# or one lens that never ranked the name at all, and the band drops it as before.
+#
+# The name is KEPT, and kept LOUDLY. A price warning rides on the row and the section says
+# once what it means — including the part that makes it a warning rather than a footnote:
+# every lens read the same recent years, so their agreement is not independent evidence
+# that the price is justified.
+SHORTLIST_CAUTION_NOTE = (
+    "Kept because every test in this run rated it BUY. The price check would have dropped "
+    "it: it costs far more than usual for the profit it makes, compared with its own last "
+    "five years. All the tests read the same recent years, so their agreement is not proof "
+    "the price is justified.")
+
+
+def shortlist_caution_badge(percentile: float) -> str:
+    """"⚠ priced high: 99th percentile of its own 5-year range" — the badge on a kept
+    row. It names the percentile, so the warning carries the number that would otherwise
+    have removed the name."""
+    from .tools.valuation_band import ordinal
+
+    return (f"⚠ priced high: {ordinal(round(percentile))} percentile of its own "
+            "5-year range")
+
 
 @dataclass(frozen=True)
 class ShortlistRow:
@@ -3339,6 +3378,10 @@ class ShortlistRow:
     band_percentile: Optional[float]      # None when the band abstained or was off
     band_note: str = ""                   # the abstention's own reason, when there is one
     dropped_by: str = ""                  # "" when kept; else the ONE reason
+    # SHORTLIST-2 — set on a row the band WOULD have dropped and unanimity kept. It is the
+    # percentile the band measured, carried so the warning can state the number that would
+    # have removed the name rather than a bare "expensive".
+    price_caution: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -3355,6 +3398,10 @@ class Shortlist:
     dropped: list[ShortlistRow]
     band_cutoff: float = SHORTLIST_BAND_CUTOFF
     reason: str = ""                      # why there is no shortlist at all
+    # SHORTLIST-2 — how many lenses ran. The unanimous exception needs at least two:
+    # agreement among one lens is the lens repeating itself, so a one-lens run must not
+    # advertise a rule that cannot fire for it.
+    lens_count: int = 0
 
     @property
     def available(self) -> bool:
@@ -3365,11 +3412,33 @@ class Shortlist:
         return len(self.kept) + len(self.dropped)
 
     @property
+    def cautioned(self) -> list:
+        """SHORTLIST-2 — the kept rows the band would have dropped. A count, not a
+        separate list: they are ON the shortlist, and the warning travels with them."""
+        return [r for r in self.kept if r.price_caution is not None]
+
+    @property
+    def unanimous_override(self) -> list:
+        """Their tickers, for the run meta."""
+        return [r.ticker for r in self.cautioned]
+
+    @property
+    def caution_clause(self) -> str:
+        """" (1 with a price warning)", or "". Appended wherever the shortlist is
+        counted, because a count that hides the warning is the one thing this exception
+        must not produce."""
+        n = len(self.cautioned)
+        if not n:
+            return ""
+        return f" ({n} with a price warning)" if n == 1 else f" ({n} with price warnings)"
+
+    @property
     def title(self) -> str:
         if not self.available:
             return "Shortlist"
         return (f"Shortlist — {len(self.kept)} of {self.candidates} "
-                f"BUY{'s' if self.candidates != 1 else ''} survived the checks")
+                f"BUY{'s' if self.candidates != 1 else ''} survived the checks"
+                + self.caution_clause)
 
     @property
     def rule_sentence(self) -> str:
@@ -3381,6 +3450,8 @@ class Shortlist:
             parts.append(f"not SELL under {self.check_labels.get(sid, sid)}")
         tail = (f"and below the {ordinal(int(self.band_cutoff))} percentile of its own "
                 "valuation history")
+        if self.lens_count > 1:
+            tail += (", unless every test rated it BUY (then kept with a price warning)")
         if len(parts) == 1:                       # no checks ran
             return f"{parts[0]} {tail}."
         return ", ".join(parts) + f", {tail}."
@@ -3392,7 +3463,7 @@ def shortlist_table(sl) -> tuple[list[str], list[dict]]:
     pattern). Every cell is already a display string."""
     from .tools.valuation_band import ordinal
     cols = ["Name", "Rank"] + [sl.check_labels.get(sid, sid) for sid in sl.check_ids] \
-        + ["Valuation percentile"]
+        + ["Valuation percentile", "Note"]
     rows = []
     for r in sl.kept:
         cells = {"Name": r.display,
@@ -3404,6 +3475,10 @@ def shortlist_table(sl) -> tuple[list[str], list[dict]]:
         cells["Valuation percentile"] = (
             f"{ordinal(round(r.band_percentile))}" if r.band_percentile is not None
             else ("not evaluated" + (f" — {r.band_note}" if r.band_note else "")))
+        # SHORTLIST-2 — the warning rides on the row it belongs to. Empty for every
+        # ordinary kept name, so the column is blank unless the exception fired.
+        cells["Note"] = (shortlist_caution_badge(r.price_caution)
+                         if r.price_caution is not None else "")
         rows.append(cells)
     return cols, rows
 
@@ -3418,9 +3493,15 @@ def shortlist(multi_result, *, primary_id: str,
     2. drop one if ANY lens with ``kind: check`` in this run rated it SELL (the check is
        named in the reason);
     3. drop one whose valuation-band percentile is >= ``band_cutoff`` (the percentile is
-       named). A band that ABSTAINED does NOT drop the name — it is kept and flagged.
-       Null is not false, house rule 3: "we could not tell" is not "it is expensive";
+       named) — UNLESS every lens in the run rated it BUY, in which case it is KEPT with a
+       price warning carrying that same percentile (SHORTLIST-2). A band that ABSTAINED
+       does NOT drop the name — it is kept and flagged. Null is not false, house rule 3:
+       "we could not tell" is not "it is expensive";
     4. what remains is the shortlist, in the PRIMARY's rank order.
+
+    Step 2 stays ahead of step 3 although a check-lens SELL cannot co-occur with unanimity,
+    so the rule reads in the order it is written: a doubt about the BUSINESS outranks a
+    doubt about the PRICE, and the exception applies only to the second.
 
     Returns a ``Shortlist`` whose ``reason`` is set, and whose tables are empty, when no
     list could be formed at all: the primary is a check lens (it doubts, it cannot select)
@@ -3443,7 +3524,10 @@ def shortlist(multi_result, *, primary_id: str,
                  if sid in results and sid != primary_id and _kind(sid) == "check"]
     check_labels = {sid: _label(sid) for sid in check_ids}
     empty = dict(primary_id=primary_id, primary_label=label, check_ids=check_ids,
-                 check_labels=check_labels, kept=[], dropped=[], band_cutoff=band_cutoff)
+                 check_labels=check_labels, kept=[], dropped=[], band_cutoff=band_cutoff,
+                 lens_count=len([sid for sid in
+                                 (getattr(multi_result, "strategy_ids", None) or [])
+                                 if sid in results]))
 
     if primary is None:
         return Shortlist(**empty, reason="the primary lens did not run")
@@ -3475,6 +3559,8 @@ def shortlist(multi_result, *, primary_id: str,
             pct[r.ticker] = ((band.percentile, "") if band.available
                              else (None, band.note or ""))
 
+    unanimous = unanimous_buys(multi_result)
+
     kept: list[ShortlistRow] = []
     dropped: list[ShortlistRow] = []
     for r in buys:                                   # already in the primary's rank order
@@ -3490,12 +3576,49 @@ def shortlist(multi_result, *, primary_id: str,
             named = ", ".join(check_labels.get(sid, sid) for sid in doubting)
             dropped.append(replace(row, dropped_by=f"SELL under {named}"))
         elif percentile is not None and percentile >= band_cutoff:
-            dropped.append(replace(row, dropped_by=(
-                f"valuation at the {ordinal(round(percentile))} percentile of its own "
-                f"history (the rule drops {int(band_cutoff)}th and above)")))
+            # SHORTLIST-2: the band is a separate check, not one of the lenses, so it does
+            # not eliminate a name every lens in the run rated BUY. Kept, with the
+            # percentile that would have dropped it carried as a warning.
+            if r.ticker in unanimous:
+                kept.append(replace(row, price_caution=percentile))
+            else:
+                dropped.append(replace(row, dropped_by=(
+                    f"valuation at the {ordinal(round(percentile))} percentile of its own "
+                    f"history (the rule drops {int(band_cutoff)}th and above)")))
         else:
             kept.append(row)
     return Shortlist(**{**empty, "kept": kept, "dropped": dropped})
+
+
+def unanimous_buys(multi_result) -> set:
+    """Tickers that EVERY lens in this run ranked and rated BUY (SHORTLIST-2).
+
+    Every lens — selectors and checks alike. A check's BUY is not an endorsement (it only
+    means the check found nothing to doubt), which is precisely why it belongs here: the
+    exception asks whether ANYTHING in the run objected, and a check that did not object
+    is part of that answer.
+
+    NOT RANKED BREAKS UNANIMITY. A name one lens excluded, could not rate for want of data,
+    or failed to fetch has not been agreed on by that lens — it has been left unjudged, and
+    an absent opinion is not a favourable one (house rule 3, applied to verdicts). So
+    "unanimous" means ranked-and-BUY everywhere, which is the strongest agreement the run
+    can produce and the only one this exception is worth granting.
+
+    Empty for a run with fewer than two lenses: unanimity among one is not agreement, it is
+    the lens repeating itself."""
+    results = getattr(multi_result, "results", None) or {}
+    ids = [sid for sid in (getattr(multi_result, "strategy_ids", None) or [])
+           if sid in results]
+    if len(ids) < 2:
+        return set()
+    agreed = None
+    for sid in ids:
+        buys = {r.ticker for r in results[sid].ranked
+                if not r.excluded and r.verdict == "buy"}
+        agreed = buys if agreed is None else (agreed & buys)
+        if not agreed:
+            return set()
+    return agreed or set()
 
 
 # --------------------------------------------------------------------------- #
