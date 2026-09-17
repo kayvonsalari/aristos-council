@@ -747,7 +747,6 @@ def multi_strategy_report_html(multi_result, *,
         lens_asks,
         lens_detail,
         rules_applied,
-        shortlist_table,
         union_valuation_band_table,
     )
     from ..data.adapter import display_name
@@ -797,7 +796,7 @@ def multi_strategy_report_html(multi_result, *,
 
     # ----- 1b (SHORTLIST-1): the answer, before the evidence for it. Derived from the
     # grid below; the grid itself is untouched.
-    parts.append(_shortlist_section(getattr(multi_result, "shortlist", None)))
+    parts.append(_shortlist_section(getattr(multi_result, "lens_agreement", None)))
 
     # ----- 2 (REPORT-4): what the run could NOT see, BEFORE any prose resting on what it
     # could. Rendered even when empty — an absent section is indistinguishable from a
@@ -958,38 +957,39 @@ def _reader_section(reader) -> str:
     return "".join(body)
 
 
-def _shortlist_section(sl) -> str:
-    """SHORTLIST-1 — the derived section. Placed directly after the summary and BEFORE the
-    verdict grid, because it is the answer the grid is evidence for."""
-    from ..pipeline import SHORTLIST_CAUTION_NOTE, shortlist_table
+def _shortlist_section(ag) -> str:
+    """SHORTLIST-3 — the agreement table. Placed directly after the summary and BEFORE the
+    verdict grid, because it is the answer the grid is evidence for.
 
-    if sl is None:
+    ONE builder (``pipeline.agreement_table``) feeds this, the markdown and the Run tab, so
+    the three cannot show different names or a different order."""
+    from ..pipeline import lens_agreement_table
+
+    if ag is None:
         return ""
     body = [f'<section class="section" id="shortlist">'
-            f"<h2>{_esc(sl.title)}</h2>"]
-    if not sl.available:
-        body.append(f'<p class="note">{_esc(sl.reason)}.</p></section>')
-        return "".join(body)
-    body.append(f'<p class="note">{_esc(sl.rule_sentence)}</p>')
-    cols, rows = shortlist_table(sl)
+            f"<h2>{_esc(ag.title)}</h2>"]
+    body.append(f'<p class="note">{_esc(ag.rule_sentence)}</p>')
+    if not ag.available:
+        return "".join(body) + "</section>"
+    # The overlap note goes ABOVE the table, because it changes how every row in it should
+    # be read: two lenses ranking on the same factors make one view look like two votes.
+    if ag.overlap_note:
+        body.append(f'<p class="flag">{_esc(ag.overlap_note)}</p>')
+    cols, rows = lens_agreement_table(ag)
     if rows:
-        # SHORTLIST-2: the price warning is a BADGE on its row, so it reads as an
-        # annotation of that name rather than as another verdict column.
         body.append(_table(
             cols,
-            [[f'<span class="badge">{_esc(r[c])}</span>' if c == "Note" and r[c]
+            [[f'<span class="badge">{_esc(r[c])}</span>' if c == "Marks" and r[c]
               else _esc(r[c]) for c in cols] for r in rows],
             cls="ranked"))
-        # ...and what it MEANS, once, under the table it annotates.
-        if sl.cautioned:
-            body.append(f'<p class="note">{_esc(SHORTLIST_CAUTION_NOTE)}</p>')
     else:
-        body.append('<p class="note">No candidate survived the checks. That is a '
-                    'result, not a gap — every drop and its reason is below.</p>')
-    if sl.dropped:
-        body.append(f"<h3>Dropped · {len(sl.dropped)}</h3>" + _bullets(
-            f'<strong>{_esc(r.display)}</strong> — {_esc(r.dropped_by)}'
-            for r in sl.dropped))
+        body.append('<p class="note">No name was rated BUY by any voting lens. That is a '
+                    'result, not a gap.</p>')
+    if ag.no_buy_count:
+        body.append(f'<p class="note">{ag.no_buy_count} name'
+                    f'{"s" if ag.no_buy_count != 1 else ""} had no BUY from any lens, and '
+                    "are not listed here.</p>")
     body.append("</section>")
     return "".join(body)
 
@@ -1037,7 +1037,6 @@ def _band_section(band_table, *, anchor: str = "") -> str:
 # verdict is looked for, and re-rendered afterwards as a muted suffix, so the house rule
 # (colour AND word, never one without the other) holds for a marked cell too.
 _CELL_MARKER = re.compile(r" · ranked on \d+ of \d+ factors$")
-
 
 
 # --------------------------------------------------------------------------- #

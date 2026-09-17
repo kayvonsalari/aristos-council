@@ -87,82 +87,74 @@ def _factor_abstentions(result) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# READER-4 — every test's ROLE, stated in the pack
+# READER-6 — every test says whether it VOTES
 # --------------------------------------------------------------------------- #
-# The 2026-09-17 09:10 summary called Magic Formula RAW "a check". It is a second
-# SELECTOR: it picks, it just did not pick FOR the shortlist, because only one lens can.
-# The same summary said the other tests "look for value and growth", which is not what
-# Forensic does at all — it asks whether the profits are real.
+# READER-4 gave each test a `role` — primary picker, second picker, check — because the
+# 09:10 summary had inferred one and got it wrong. SHORTLIST-3 removed the hierarchy those
+# three phrases described: there is no primary lens, so "second picker (not used for the
+# shortlist)" describes a thing that no longer exists.
 #
-# Both errors have the same shape: the writer inferred a test's job instead of being told
-# it. So the pack now says it, in the three phrasings the summary is allowed to use, and
-# the checker holds the text to them. A writer that cannot invent a role cannot get one
-# wrong.
-ROLE_PRIMARY = "primary picker"
-ROLE_SECOND = "second picker (not used for the shortlist)"
-ROLE_CHECK = "check"
+# What survives the change is the distinction that was doing the work: a test either VOTES
+# or it MARKS. That is one boolean, it is exactly what the agreement table turns on, and it
+# cannot go stale the way a three-way role could.
 
 
-def lens_role(kind: str, *, is_primary: bool) -> str:
-    """One of the three role phrases. A check is a check whether or not it is primary —
-    a check lens chosen as primary cannot select, which the run says elsewhere."""
-    if (kind or "selector") == "check":
-        return ROLE_CHECK
-    return ROLE_PRIMARY if is_primary else ROLE_SECOND
+def lens_votes(kind: str) -> bool:
+    """True for a lens whose verdicts are VOTES on the shortlist; False for a check.
+
+    A check lens does not pick. Its SELL is a doubt about someone else's pick and its BUY
+    says only that it found nothing to doubt, so neither is a vote."""
+    return (kind or "selector") != "check"
 
 
+def _agreement_facts(ag) -> dict:
+    """The agreement table, as the writer may read it (SHORTLIST-3).
 
-def _unanimous_facts(multi_result, sl) -> list:
-    """``[{name, outcome}]`` for every name EVERY test rated BUY.
-
-    The outcome is read from the shortlist the run already built, never re-derived: a
-    unanimous name is on it, on it with a price warning, or dropped — and if it was
-    dropped, the shortlist's own reason says why. A unanimous name the PRIMARY did not
-    rate BUY is not a shortlist candidate at all, which is its own outcome and is said
-    plainly rather than left out."""
-    from .pipeline import unanimous_buys
-
-    tickers = unanimous_buys(multi_result)
-    if not tickers:
-        return []
-    kept = {r.ticker: r for r in (sl.kept if sl is not None else [])}
-    dropped = {r.ticker: r for r in (sl.dropped if sl is not None else [])}
-    results = getattr(multi_result, "results", None) or {}
-
-    def _display(ticker):
-        for res in results.values():
-            name = (getattr(res, "names", None) or {}).get(ticker)
-            if name:
-                return f"{name} ({ticker})"
-        return ticker
-
-    out = []
-    for ticker in sorted(tickers):
-        row = kept.get(ticker)
-        if row is not None:
-            outcome = ("on the shortlist, with a price warning"
-                       if row.price_caution is not None else "on the shortlist")
-        elif ticker in dropped:
-            outcome = f"dropped from the shortlist — {dropped[ticker].dropped_by}"
-        else:
-            outcome = ("not a shortlist candidate — the primary picker did not rate it "
-                       "BUY")
-        out.append({"name": _display(ticker), "outcome": outcome})
-    return out
+    Replaces the shortlist facts and the ``unanimous_buy`` list, which together said the
+    same thing in two shapes: how many lenses agreed on a name, and what the rule then did
+    to it. There is no rule to do anything now — the count IS the answer — so the pack
+    carries the count, the buckets, and the top of the table.
+    """
+    if ag is None:
+        return {"available": False, "reason": "not computed"}
+    if not ag.available:
+        return {"available": False, "reason": ag.rule_sentence}
+    top = max((r.buy_votes for r in ag.rows), default=0)
+    return {
+        "available": True,
+        "voting_lenses": [ag.voting_labels.get(s, s) for s in ag.voting_ids],
+        "check_lenses": [ag.check_labels.get(s, s) for s in ag.check_ids],
+        "rule": ag.rule_sentence,
+        # How many names each vote count holds: {3: 1, 2: 4} reads "one name on all
+        # three, four on two of three".
+        "buckets": ag.buckets(),
+        "no_buy_count": ag.no_buy_count,
+        # The names with the MAXIMUM vote count, which is the strongest agreement the run
+        # produced and the thing a summary must not leave out.
+        "top_agreement": [r.display for r in ag.rows if r.buy_votes == top and top],
+        # The top of the table — up to ten, because a summary that lists forty names is
+        # not a summary. Each carries WHO voted for it and every mark against it.
+        "rows": [{"name": r.display,
+                  "buy_votes": r.buy_votes,
+                  "buy_lenses": list(r.buy_lenses),
+                  "sell_lenses": list(r.sell_lenses),
+                  "not_ranked": [f"{label} ({why})" for label, why in r.not_ranked],
+                  "marks": r.marks}
+                 for r in ag.rows[:10]],
+        "overlap_note": ag.overlap_note,
+    }
 
 
 def build_facts_pack(multi_result, *, cohort_name: str = "",
                      cohort_thesis: str = "") -> dict:
     """The complete, ordered set of facts the summary may draw on (READER-1)."""
-    from .pipeline import cohort_fit_line, evidence_gaps
+    from .pipeline import evidence_gaps
 
     results = getattr(multi_result, "results", None) or {}
     ids = list(getattr(multi_result, "strategy_ids", None) or [])
     names = getattr(multi_result, "strategy_names", None) or {}
     meta = getattr(multi_result, "meta", None) or {}
-    sl = getattr(multi_result, "shortlist", None)
 
-    primary_sid = meta.get("shortlist_primary_id", ids[0] if ids else "")
     lenses = []
     for sid in ids:
         res = results[sid]
@@ -173,10 +165,9 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
             "name": names.get(sid, "") or sid,
             "asks": (getattr(strat, "asks", "") or "").strip(),
             "kind": getattr(strat, "kind", "selector"),
-            # READER-4 — stated, never inferred. The prompt may describe a test ONLY by
-            # this phrase and a plain paraphrase of its `asks`.
-            "role": lens_role(getattr(strat, "kind", "selector"),
-                              is_primary=(sid == primary_sid)),
+            # READER-6 — stated, never inferred. The prompt describes a test by its own
+            # `asks` sentence and by whether it votes, and by nothing else.
+            "votes": lens_votes(getattr(strat, "kind", "selector")),
             "ranked": len([r for r in res.ranked if not r.excluded]),
             "excluded": len(res.excluded),
             "no_data": len(res.unrateable),
@@ -211,33 +202,6 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
             if rev is not None and not rev.available and "sanity bound" in (rev.note or ""):
                 withheld += 1
 
-    shortlist_facts: dict = {"available": False, "reason": "not computed"}
-    if sl is not None:
-        shortlist_facts = {
-            "available": sl.available,
-            "reason": sl.reason,
-            "rule": sl.rule_sentence if sl.available else "",
-            "candidates": sl.candidates,
-            # The COUNTS as well as the lists. The prompt forbids computing a number the
-            # pack does not contain, and "19 of 21 survived" is the most natural sentence
-            # a summary of a shortlist can write — so the 19 has to be here, not left for
-            # the writer to count. (Found by the validator rejecting exactly that
-            # sentence, which is the guard working before a live call was ever made.)
-            "kept_count": len(sl.kept),
-            "dropped_count": len(sl.dropped),
-            # READER-4 — the price warning's own percentile. Without it the writer cannot
-            # state the number the warning is about, and the number check would rightly
-            # refuse the sentence if it tried. None on every ordinary kept row.
-            "kept": [{"name": r.display, "rank": r.rank_position,
-                      "price_warning_percentile": (round(r.price_caution)
-                                                   if r.price_caution is not None
-                                                   else None)}
-                     for r in sl.kept],
-            "dropped": [{"name": r.display, "why": r.dropped_by} for r in sl.dropped],
-        }
-
-    primary_id = primary_sid
-    primary = getattr(results.get(primary_id), "rank_strategy", None)
     return {
         "cohort": {
             "name": cohort_name or meta.get("universe_name", "") or
@@ -245,16 +209,12 @@ def build_facts_pack(multi_result, *, cohort_name: str = "",
             "size": meta.get("universe_size", 0),
             "built_for": cohort_thesis or "not stated",
         },
-        "primary_lens": names.get(primary_id, "") or primary_id,
-        "fit_note": cohort_fit_line(primary, cohort_thesis),
         "lenses": lenses,
-        "shortlist": shortlist_facts,
-        # READER-4 — the names EVERY test rated BUY, and what became of each. The 09:10
-        # summary never mentioned that Suncor was BUY on all three, which was the single
-        # most interesting fact the run produced; the shortlist facts could not carry it,
-        # because a unanimous name may be kept, kept with a warning, or dropped by a rule
-        # the shortlist applies before the band.
-        "unanimous_buy": _unanimous_facts(multi_result, sl),
+        # SHORTLIST-3 — the agreement table. It replaces both the shortlist facts and the
+        # separate ``unanimous_buy`` list: those said the same thing in two shapes, and
+        # the second existed only because the first could not carry it. ``top_agreement``
+        # is what the old list was for, and it is now simply the top of this table.
+        "agreement": _agreement_facts(getattr(multi_result, "lens_agreement", None)),
         "valuation_band": {
             "evaluated": evaluated,
             "not_evaluated": not_evaluated,

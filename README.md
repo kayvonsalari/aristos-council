@@ -174,34 +174,39 @@ a contradiction — it is two questions answered. Three things make that readabl
 
 - **Every lens says what it asks.** One plain-English line under its name, in the Run tab
   and in both reports: what it wants of a company.
-- **A lens is a selector or a check.** ONE **selector** per run — chosen to match what the
-  list was built for — decides *worth owning*. A **check** (Forensic today; quality and
-  earnings-power lenses later) only says *reason to doubt that yes*: its SELL subtracts, and
-  its BUY is not an endorsement.
-- **The shortlist is what survived.** The names the selector rated BUY that no check
-  doubted and that are not dear against their own history. It is **derived** from the grid —
-  no new judgement, nothing re-graded — and every dropped name gives its one reason. One
-  exception: a name **every** lens rated BUY is not dropped by the price check, because the
-  price check is a separate check and not one of the lenses — it is kept with a loud price
-  warning naming the percentile that would have removed it, and the warning is counted in
-  the section's title.
+- **Every lens you tick is an equal vote.** There is no primary lens. A **check** lens
+  (Forensic today; quality and earnings-power lenses later) does not vote at all — it
+  MARKS: its SELL is a doubt about someone else's pick, and its BUY says only that it
+  found nothing to doubt.
+- **The shortlist is the agreement.** Every name at least one voting lens rated BUY,
+  ordered by how many did, with every doubt shown beside it as a mark. It is **derived**
+  from the grid — no new judgement, nothing re-graded — and the count is the whole rule.
+
+**A mark is a caution, never a rejection.** A row may read *doubted by Forensic*, *priced
+high: 99th percentile of its own 5-year range*, *band not evaluated*, or *ranked on 2 of 3
+factors*. None of them removed the name from the table. What to do about a mark is the
+reader's call; earlier versions made that call for you, and the owner's decision is that
+they should not have.
+
+**Two lenses ranking on the same factors are one view counted twice.** When that happens
+the section says so once, above the table — on a list whose whole meaning is "how many
+lenses agreed", double-counting inflates the answer.
 
 A list can also say what it was **built for** (`thesis:` — value, growth, income, quality,
-funds). When the primary lens answers a different question, the run says so in one line and
-carries on: it never hides a lens or blocks a run.
+funds), which reaches the run's summary.
 
-| Lens | Kind | Asks |
+| Lens | Votes? | Asks |
 |---|---|---|
-| **Defensive Income** (`conservative_plus_v1`) | selector · income | Steady income with the trend intact: a calm share, a covered dividend raised for 10 years, and no recent fall. |
-| **Cyclical Income** (`cyclical_income_v1`) | selector · income | Income that survives the cycle: a covered dividend not cut in five years, with manageable debt. |
-| **Value + Momentum** (`magic_formula_momentum_v1`) | selector · value | The same as Magic Formula RAW, but only for companies earning at least 12% on their capital. |
-| **Magic Formula RAW** (`magic_formula_raw_v1`) | selector · value | Cheap and good: high profit on the money invested, a low price for that profit, and a rising share. |
-| **Growth** (`growth_garp_v2`) | selector · growth | Growing fast at a fair price: sales up at least 10% a year, and not overpaying for that growth. |
-| **Financials** (`financials_v1`) | selector · value | Banks and insurers on their own terms: return on equity against price-to-book. |
-| **Forensic** (`forensic_v1`) | **check** | Are the profits real: cash behind the earnings, a safe balance sheet, and improving health checks. |
-| **Dividend ETFs** (`etf_dividend_v1`) | selector · funds | Distributing funds: payout, fee, size and trend. |
-| **Growth ETFs** (`etf_growth_v1`) | selector · funds | Growth funds: fee, trend and scale, no yield. |
-| **ETF Index Tracker** (`etf_core_v1`) | selector · funds | Index trackers: fee, size and trend. |
+| **Defensive Income** (`conservative_plus_v1`) | votes · income | Steady income with the trend intact: a calm share, a covered dividend raised for 10 years, and no recent fall. |
+| **Cyclical Income** (`cyclical_income_v1`) | votes · income | Income that survives the cycle: a covered dividend not cut in five years, with manageable debt. |
+| **Value + Momentum** (`magic_formula_momentum_v1`) | votes · value | The same as Magic Formula RAW, but only for companies earning at least 12% on their capital. |
+| **Magic Formula RAW** (`magic_formula_raw_v1`) | votes · value | Cheap and good: high profit on the money invested, a low price for that profit, and a rising share. |
+| **Growth** (`growth_garp_v2`) | votes · growth | Growing fast at a fair price: sales up at least 10% a year, and not overpaying for that growth. |
+| **Financials** (`financials_v1`) | votes · value | Banks and insurers on their own terms: return on equity against price-to-book. |
+| **Forensic** (`forensic_v1`) | **check — marks, does not vote** | Are the profits real: cash behind the earnings, a safe balance sheet, and improving health checks. |
+| **Dividend ETFs** (`etf_dividend_v1`) | votes · funds | Distributing funds: payout, fee, size and trend. |
+| **Growth ETFs** (`etf_growth_v1`) | votes · funds | Growth funds: fee, trend and scale, no yield. |
+| **ETF Index Tracker** (`etf_core_v1`) | votes · funds | Index trackers: fee, size and trend. |
 
 
 ### How to read a lens's detail section

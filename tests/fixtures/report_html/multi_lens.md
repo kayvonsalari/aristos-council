@@ -8,14 +8,14 @@
 
 _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 
-### 3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one — shortlist: 1 of 1 BUY
+### 3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one — shortlist: 1 name BUY on all 3 voting lenses
 
 **Classic Value** — Quality-value screen, 2 rules · **Magic Formula RAW** — no screen (ranking only) · **Value + Momentum** — Quality-value screen, 2 rules  ([details](#rules-applied--by-lens))
 
 
 ## Contents
 
-- Shortlist — 1 of 1 BUY survived the checks
+- Shortlist — agreement across 3 voting lenses
 - What the run could not see
 - Verdict by lens
 - Valuation band (absolute — vs each name's own history)
@@ -30,13 +30,17 @@ _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 - What the terms mean
 
 
-## Shortlist — 1 of 1 BUY survived the checks
+## Shortlist — agreement across 3 voting lenses
 
-_BUY under Classic Value and below the 80th percentile of its own valuation history, unless every test rated it BUY (then kept with a price warning)._
+_Names ordered by how many of the 3 voting lenses rated them BUY. The price check does not vote; its doubts are shown as marks._
 
-| Name | Rank | Valuation percentile | Note |
-|---|---|---|---|
-| **A** | #1 | not evaluated |  |
+**Magic Formula RAW and Value + Momentum rank on the same 3 factors; ticking both counts one view twice.**
+
+| Name | BUY votes | SELL votes | Valuation percentile | Marks |
+|---|---|---|---|---|
+| **A** | 3 of 3: Classic Value, Magic Formula RAW, Value + Momentum | — | not evaluated |  |
+
+_2 names had no BUY from any lens, and are not listed here._
 
 ## What the run could not see
 

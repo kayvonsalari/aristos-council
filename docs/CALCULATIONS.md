@@ -684,84 +684,58 @@ to hold, and a payout that is designed to move with the commodity is not that. S
 excluded with an accurate sentence naming the year and both falls; it is the *interpretation*
 that differs, not the arithmetic.
 
-### 4.3 The shortlist (SHORTLIST-1) — derived, not decided
+### 4.3 The shortlist (SHORTLIST-3) — an agreement table, derived not decided
 
 Nothing here is calculated: every input is a verdict or a percentile the run already
-produced. The rule is stated in full because a derived section that a reader cannot
-re-derive is just another opinion.
+produced, and the ordering is a count. The rule is stated in full because a derived section
+a reader cannot re-derive is just another opinion.
 
-Given a run's **primary** lens (the one the reader picked; on the CLI, the first lens whose
-`kind` is `selector`):
+**There is no primary lens.** Every lens the user ticks is a vote of equal weight. A lens
+whose `kind` is `check` does not vote; it MARKS. The valuation band does not veto; it
+MARKS.
 
-1. **Candidates** are the names the primary rated **BUY**. Nothing else is a candidate — a
-   name only a check or a non-primary lens liked never enters.
-2. **Drop** a candidate if ANY lens with `kind: check` in this run rated it **SELL**. Every
-   doubting check is named in the reason, not just the first. A check's BUY or HOLD does
-   nothing: a check only ever subtracts.
-3. **Drop** a candidate whose valuation-band percentile is **≥ 80** (`SHORTLIST_BAND_CUTOFF`,
-   recorded in `meta["shortlist_band_cutoff"]`; a constant in v1, not a UI control). The
-   percentile is named in the reason.
-   **A band that ABSTAINED does not drop the name.** It is kept and flagged "not evaluated"
-   with the band's own reason. Null is not false (house rule 3): *we could not tell* is not
-   *it is expensive*. A band-OFF run therefore drops nobody on valuation.
-   **UNLESS the name is a unanimous BUY (SHORTLIST-2).** See below.
-4. **What remains** is the shortlist, in the primary's rank order.
+1. **Voting lenses** are the ticked lenses whose `kind` is not `check`. **Check lenses**
+   are the rest.
+2. For every name **at least one voting lens ranked**, record: which voting lenses rated it
+   BUY, which rated SELL, which rated HOLD, which did not rank it and why, what each check
+   lens said, and its valuation-band percentile.
+3. **Order**: BUY votes descending; then SELL votes ascending; then the mean rank
+   percentile ascending; then ticker. The last three are TIE-BREAKERS — they never decide
+   which names appear, only the order of names the lenses agreed on equally. The mean rank
+   percentile is the name's position as a fraction of each voting lens's ranked count,
+   averaged over the lenses that ranked it.
+4. **List** every name with at least one BUY vote. Count the rest in one line: a table of
+   everything no lens picked is not a shortlist.
 
-A check doubt takes precedence over the valuation drop, so each dropped name carries exactly
-ONE reason — the more specific one.
+**A lens that did not rank a name has not voted on it.** An exclusion is not a NO — the
+lens left the name unjudged, and counting that as a rejection would invent an opinion
+(house rule 3, applied to verdicts as it is to criteria). The lens and its reason are
+recorded, and the votes count over the lenses that did rank it.
 
-#### The unanimous-BUY exception (SHORTLIST-2)
+**The marks**, each a statement the run already made and none of which removed a name:
 
-**The band is a separate check, not one of the lenses, so it does not eliminate a name that
-every lens in the run rated BUY.** Such a name is KEPT, in the primary's rank order, with the
-percentile that would have dropped it carried as a price warning.
+| Mark | When |
+|---|---|
+| `doubted by <check>` | a check lens rated it SELL. Its BUY and HOLD are not marks — they say only that it found nothing to doubt, which is not an endorsement |
+| `priced high: Nth percentile of its own 5-year range` | the band percentile is ≥ **80** (`SHORTLIST_BAND_CUTOFF`) |
+| `band not evaluated — <reason>` | the band abstained. Null is not false: *we could not tell* is not *it is expensive* |
+| `<lens>: ranked on 2 of 3 factors` | FACTOR-MARK-1, carried onto this table — a vote cast on fewer factors than the lens has is still a vote, and the reader should know which |
 
-*Evidence.* On the 2026-09-17 09:10 run of `oil_dividend_v1`, Suncor (SU) was rated BUY by
-all three lenses — Cyclical Income (the income selector), Magic Formula RAW (a value
-selector) and Forensic (the check) — and was dropped by the band alone, at the 99th
-percentile of its own five years (EV/EBIT 14.2x against its own median 6.7x).
+**The overlap note.** Two VOTING lenses whose `factors` lists are identical are not two
+opinions; they are one opinion counted twice, and on a table whose whole meaning is "how
+many lenses agreed" that inflates the answer. Detected from the loaded strategies' own
+factor lists — never a hardcoded pair — so a lens added tomorrow is caught with no code
+change. A check lens sharing factors is NOT an overlap: the note is about double-counting
+VOTES, and a check casts none. Live: Magic Formula RAW and Value + Momentum both rank on
+roic, earnings yield and 12-month momentum.
 
-**UNANIMOUS means ranked-and-BUY under EVERY lens in the run**, selectors and checks alike.
-A check's BUY is not an endorsement — it only means the check found nothing to doubt — and
-that is exactly why it counts here: the exception asks whether *anything* in the run
-objected. Three things break unanimity, and each is a deliberate narrowing:
-
-- **any verdict other than BUY**, anywhere. One HOLD and the band drops the name as before;
-- **not being ranked at all** — excluded, no usable data, or a failed fetch. That lens has
-  not agreed; it has left the name unjudged, and an absent opinion is not a favourable one
-  (house rule 3, applied to verdicts rather than to criteria);
-- **a run with fewer than two lenses.** Agreement among one lens is the lens repeating
-  itself, so a one-lens run has no unanimity and does not state the exception at all.
-
-**A check-lens SELL still drops the name.** Step 2 stays ahead of step 3 even though a SELL
-cannot co-occur with unanimity, so the rule reads in the order it is written: a doubt about
-the BUSINESS outranks a doubt about the PRICE, and the exception applies only to the second.
-An **abstained** band is kept and flagged as before — an unmeasured band is not an overruled
-one, and it is not a price warning.
-
-**Kept loudly.** The row carries `⚠ priced high: 99th percentile of its own 5-year range`,
-and under the table, once:
-
-> Kept because every test in this run rated it BUY. The price check would have dropped it:
-> it costs far more than usual for the profit it makes, compared with its own last five
-> years. All the tests read the same recent years, so their agreement is not proof the price
-> is justified.
-
-That last sentence is the point of the warning rather than a caveat on it: the lenses read
-overlapping evidence, so their agreement is not independent confirmation of the price. The
-section title and the run's summary line both count the warnings
-(`Shortlist — 1 of 9 BUYs survived the checks (1 with a price warning)`), because a count
-that hides one is the single thing this exception must not produce, and
-`meta["shortlist"]["unanimous_override"]` records the tickers it fired for.
-
-**Two kinds of nothing, and they read differently.** An empty shortlist *with* drop reasons
-is a RESULT: the checks removed every candidate, and the section says so and lists why. A
-`reason` is set instead — and the tables are empty — only when no list could be formed at
-all: the primary is a check lens (it doubts, it cannot select), or it rated nothing BUY.
+**Two kinds of nothing.** A run whose voting lenses picked nobody renders the table empty
+and says so — a result, not a gap. A run with NO voting lens at all (every ticked lens is a
+check) says instead that nothing in it votes: a check marks rather than picks, so there was
+never a pick to report.
 
 The section is placed directly after the summary line and before the verdict grid, because
-it is the answer and the grid is the evidence for it. The grid itself is untouched; drop a
-lens from the run and the same names come back with fewer checks applied.
+it is the answer the grid is evidence for.
 
 ### 4.4 The Altman Z-Score — what it is built for, and what it is not (ALTMAN-DOC-1)
 

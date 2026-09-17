@@ -4,14 +4,12 @@
     "size": 134,
     "built_for": "income"
   },
-  "primary_lens": "Cyclical Income",
-  "fit_note": "",
   "lenses": [
     {
       "name": "Cyclical Income",
       "asks": "Income that survives the cycle: a covered dividend not cut in five years, with manageable debt.",
       "kind": "selector",
-      "role": "primary picker",
+      "votes": true,
       "ranked": 43,
       "excluded": 91,
       "no_data": 0,
@@ -25,13 +23,13 @@
           "rule": "Dividend yield",
           "limit": "at least 1.5%",
           "passed": 96,
-          "failed": 7,
+          "failed": 6,
           "not_tested": 1
         },
         {
           "rule": "Dividends vs free cash flow",
           "limit": "at most 80%",
-          "passed": 71,
+          "passed": 70,
           "failed": 27,
           "not_tested": 6
         },
@@ -40,19 +38,19 @@
           "limit": "at least $5.0bn",
           "passed": 58,
           "failed": 0,
-          "not_tested": 46
+          "not_tested": 45
         },
         {
           "rule": "Dividend cuts in the last N years",
           "limit": "no year paid less than the year before, across the last 5 complete years",
-          "passed": 50,
+          "passed": 49,
           "failed": 39,
           "not_tested": 15
         },
         {
           "rule": "Total debt vs market value",
           "limit": "at most 1.0x",
-          "passed": 96,
+          "passed": 95,
           "failed": 7,
           "not_tested": 1
         }
@@ -60,35 +58,15 @@
       "dominant_rule": null,
       "factor_abstentions": {
         "net_payout_yield": 1,
-        "net_debt_to_operating_income": 1,
-        "payout_coverage_fcf": 2
+        "payout_coverage_fcf": 2,
+        "net_debt_to_operating_income": 1
       }
     },
     {
       "name": "Forensic",
       "asks": "Are the profits real: cash behind the earnings, a safe balance sheet, and improving health checks.",
       "kind": "check",
-      "role": "check",
-      "ranked": 104,
-      "excluded": 30,
-      "no_data": 0,
-      "verdicts": {
-        "buy": 21,
-        "hold": 63,
-        "sell": 20
-      },
-      "rules": [],
-      "dominant_rule": null,
-      "factor_abstentions": {
-        "altman_z": 36,
-        "accrual_ratio": 3
-      }
-    },
-    {
-      "name": "Magic Formula RAW",
-      "asks": "Cheap and good: high profit on the money invested, a low price for that profit, and a rising share.",
-      "kind": "selector",
-      "role": "second picker (not used for the shortlist)",
+      "votes": false,
       "ranked": 103,
       "excluded": 31,
       "no_data": 0,
@@ -100,68 +78,194 @@
       "rules": [],
       "dominant_rule": null,
       "factor_abstentions": {
+        "altman_z": 35,
+        "accrual_ratio": 3
+      }
+    },
+    {
+      "name": "Magic Formula RAW",
+      "asks": "Cheap and good: high profit on the money invested, a low price for that profit, and a rising share.",
+      "kind": "selector",
+      "votes": true,
+      "ranked": 102,
+      "excluded": 32,
+      "no_data": 0,
+      "verdicts": {
+        "buy": 21,
+        "hold": 61,
+        "sell": 20
+      },
+      "rules": [],
+      "dominant_rule": null,
+      "factor_abstentions": {
         "roic": 8,
         "momentum_12m": 2
       }
     }
   ],
-  "shortlist": {
+  "agreement": {
     "available": true,
-    "reason": "",
-    "rule": "BUY under Cyclical Income, not SELL under Forensic, and below the 80th percentile of its own valuation history, unless every test rated it BUY (then kept with a price warning).",
-    "candidates": 9,
-    "kept_count": 1,
-    "dropped_count": 8,
-    "kept": [
-      {
-        "name": "Suncor Energy Inc. (SU)",
-        "rank": 7,
-        "price_warning_percentile": 99
-      }
+    "voting_lenses": [
+      "Cyclical Income",
+      "Magic Formula RAW"
     ],
-    "dropped": [
-      {
-        "name": "Technip Energies N.V. (TE.PA)",
-        "why": "SELL under Forensic"
-      },
+    "check_lenses": [
+      "Forensic"
+    ],
+    "rule": "Names ordered by how many of the 2 voting lenses rated them BUY. Forensic and the price check do not vote; their doubts are shown as marks.",
+    "buckets": {
+      "2": 2,
+      "1": 26
+    },
+    "no_buy_count": 74,
+    "top_agreement": [
+      "Aker Solutions ASA (AKSO.OL)",
+      "Suncor Energy Inc. (SU)"
+    ],
+    "rows": [
       {
         "name": "Aker Solutions ASA (AKSO.OL)",
-        "why": "SELL under Forensic"
+        "buy_votes": 2,
+        "buy_lenses": [
+          "Cyclical Income",
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [],
+        "marks": [
+          "doubted by Forensic"
+        ]
       },
       {
-        "name": "Magnolia Oil & Gas Corporation (MGY)",
-        "why": "valuation at the 90th percentile of its own history (the rule drops 80th and above)"
+        "name": "Suncor Energy Inc. (SU)",
+        "buy_votes": 2,
+        "buy_lenses": [
+          "Cyclical Income",
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [],
+        "marks": [
+          "priced high: 99th percentile of its own 5-year range"
+        ]
       },
       {
-        "name": "Chord Energy Corporation (CHRD)",
-        "why": "valuation at the 96th percentile of its own history (the rule drops 80th and above)"
+        "name": "Ecopetrol S.A. (EC)",
+        "buy_votes": 1,
+        "buy_lenses": [
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [
+          "Cyclical Income (screen: max_payout_ratio_fcf (observed 1.002 vs threshold 0.8) [FCF (4y mean)] [⚠ price diverging: +99% 12m — cyclical inflection or mania; human review])"
+        ],
+        "marks": [
+          "priced high: 96th percentile of its own 5-year range"
+        ]
       },
       {
-        "name": "Inpex Corporation (1605.T)",
-        "why": "SELL under Forensic"
+        "name": "Türkiye Petrol Rafinerileri A.S. (TUPRS.IS)",
+        "buy_votes": 1,
+        "buy_lenses": [
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [
+          "Cyclical Income (screen: max_dividend_cuts (observed 0.3186 vs threshold 5.0) [⚠ price diverging: +129% 12m — cyclical inflection or mania; human review])"
+        ],
+        "marks": [
+          "priced high: 99th percentile of its own 5-year range"
+        ]
       },
       {
-        "name": "Imperial Oil Limited (IMO)",
-        "why": "SELL under Forensic"
+        "name": "Marathon Petroleum Corporation (MPC)",
+        "buy_votes": 1,
+        "buy_lenses": [
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [
+          "Cyclical Income (screen: min_dividend_yield (observed 0.009664 vs threshold 0.015) [⚠ price diverging: +134% 12m — cyclical inflection or mania; human review])"
+        ],
+        "marks": [
+          "priced high: 99th percentile of its own 5-year range"
+        ]
       },
       {
-        "name": "Murphy Oil Corporation (MUR)",
-        "why": "valuation at the 92nd percentile of its own history (the rule drops 80th and above)"
+        "name": "MOL Magyar Olaj- és Gázipari Nyilvánosan Muködo Részvénytársaság (MOL.BD)",
+        "buy_votes": 1,
+        "buy_lenses": [
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [
+          "Cyclical Income (screen: max_dividend_cuts (observed 0.3332 vs threshold 5.0) [⚠ price diverging: +90% 12m — cyclical inflection or mania; human review])"
+        ],
+        "marks": [
+          "priced high: 99th percentile of its own 5-year range"
+        ]
       },
       {
-        "name": "TotalEnergies SE (TTE)",
-        "why": "SELL under Forensic"
+        "name": "CNOOC Limited (0883.HK)",
+        "buy_votes": 1,
+        "buy_lenses": [
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [
+          "Cyclical Income (screen: max_dividend_cuts (observed 0.2872 vs threshold 5.0) [⚠ price diverging: +34% 12m — cyclical inflection or mania; human review])"
+        ],
+        "marks": [
+          "priced high: 90th percentile of its own 5-year range"
+        ]
+      },
+      {
+        "name": "Galp Energia, SGPS, S.A. (GALP.LS)",
+        "buy_votes": 1,
+        "buy_lenses": [
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [
+          "Cyclical Income (screen: max_dividend_cuts (observed 0.15 vs threshold 5.0) [⚠ price diverging: +43% 12m — cyclical inflection or mania; human review])"
+        ],
+        "marks": [
+          "priced high: 99th percentile of its own 5-year range"
+        ]
+      },
+      {
+        "name": "Repsol, S.A. (REP.MC)",
+        "buy_votes": 1,
+        "buy_lenses": [
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [
+          "Cyclical Income (screen: max_dividend_cuts (observed 0.6154 vs threshold 5.0) [⚠ price diverging: +114% 12m — cyclical inflection or mania; human review])"
+        ],
+        "marks": [
+          "priced high: 99th percentile of its own 5-year range"
+        ]
+      },
+      {
+        "name": "Tenaris S.A. (TS)",
+        "buy_votes": 1,
+        "buy_lenses": [
+          "Magic Formula RAW"
+        ],
+        "sell_lenses": [],
+        "not_ranked": [
+          "Cyclical Income (screen: max_dividend_cuts (observed 0.1642 vs threshold 5.0) [⚠ price diverging: +60% 12m — cyclical inflection or mania; human review])"
+        ],
+        "marks": [
+          "priced high: 90th percentile of its own 5-year range"
+        ]
       }
-    ]
+    ],
+    "overlap_note": ""
   },
-  "unanimous_buy": [
-    {
-      "name": "Suncor Energy Inc. (SU)",
-      "outcome": "on the shortlist, with a price warning"
-    }
-  ],
   "valuation_band": {
-    "evaluated": 96,
+    "evaluated": 95,
     "not_evaluated": 8,
     "withheld_as_implausible": 19,
     "buckets": {
@@ -169,7 +273,7 @@
       "cheap": 8,
       "mid": 5,
       "dear": 16,
-      "dearest": 61
+      "dearest": 60
     }
   },
   "could_not_see": [],

@@ -122,7 +122,10 @@ def test_the_model_is_handed_the_prompt_and_the_facts_pack_and_nothing_else():
     _multi(with_reader=True, reader_runner=runner)
     assert runner.system == prompt_text()
     pack = json.loads(runner.user)              # the user turn is the pack, verbatim JSON
-    assert set(pack) >= {"cohort", "lenses", "shortlist", "valuation_band"}
+    # SHORTLIST-3: "shortlist" is now "agreement" — the same section, counted the way it
+    # is now counted. What this test guards is unchanged: the writer is handed the PACK and
+    # nothing else, and the pack carries the run's own facts.
+    assert set(pack) >= {"cohort", "lenses", "agreement", "valuation_band"}
 
 
 def test_the_prompt_is_the_versioned_file_on_disk():
@@ -132,14 +135,19 @@ def test_the_prompt_is_the_versioned_file_on_disk():
     assert 'Say "list", not cohort' in text         # the de-jargon rule
     # READER-2 moved the live version to v2 and READER-3b to v3. EVERY earlier version
     # stays on disk, so a run recorded under one is still reproducible.
-    assert PROMPT_VERSION == "reader_v5"
+    assert PROMPT_VERSION == "reader_v6"
     prompts = (FIXTURES.parents[1].parent / "src" / "aristos_council" / "agents"
                / "prompts")
-    for version in ("reader_v1", "reader_v2", "reader_v3", "reader_v4", "reader_v5"):
+    for version in ("reader_v1", "reader_v2", "reader_v3", "reader_v4", "reader_v5",
+                    "reader_v6"):
         assert (prompts / f"{version}.md").exists(), version
     assert "No ranges" in text and "CHECKED" in text
     # READER-5: the verdict words are the run's own and are never an advice word.
     assert "BUY, HOLD and SELL are" in text
+    # READER-6: a test is described by what it ASKS and by whether it VOTES — there is no
+    # primary test to be described as one.
+    assert "Every test that votes is a vote of equal weight" in text
+    assert "primary picker" not in text
 
 
 # --------------------------------------------------------------------------- #

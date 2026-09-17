@@ -38,7 +38,14 @@ from typing import Optional
 # ranges — is craft the prompt asks for and the run records, and none of it withholds.
 # The evidence: of the first five live summaries, four were destroyed by a missing
 # bracket and the fifth, which published, was the only one that misdescribed the run.
-PROMPT_VERSION = "reader_v5"
+#
+# v6 follows SHORTLIST-3: there is no primary test, so a test is described by its own
+# `asks` and by whether it VOTES, and the summary describes the AGREEMENT table rather
+# than a shortlist a rule produced. The fourth withholding check moves with it — from
+# "name every unanimous BUY" to "name every company at the top of the agreement", which is
+# the same fact counted the way the table now counts, and which exists on a run where
+# nothing was unanimous.
+PROMPT_VERSION = "reader_v6"
 _PROMPT_PATH = (Path(__file__).resolve().parent / "agents" / "prompts"
                 / f"{PROMPT_VERSION}.md")
 

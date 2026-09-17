@@ -125,6 +125,28 @@ one number was lost or invented, which is the correct reading of a change that a
 clause and an empty column. The RULE is pinned independently of this fixture by
 ``tests/test_shortlist.py`` (a fabricated three-lens run: unanimous keeps with the
 percentile carried, one HOLD drops, not-ranked drops), so the guard was not relaxed.
+
+BASELINE MOVED AGAIN, AND THE SNAPSHOT RE-TAKEN (2026-09-17, SHORTLIST-3). The shortlist
+section is REPLACED. There is no primary lens: every lens is an equal vote, a check marks
+rather than votes, the band marks rather than vetoes, and the section is now the names
+ordered by how many voting lenses rated them BUY. That removes rendered values, which the
+"nothing lost" guard is built to catch — correctly — so the snapshot is re-taken here and
+what goes is recorded rather than exempted in the helper:
+
+  - the old rule sentence, and with it the "80th percentile" CUTOFF it quoted. The band no
+    longer drops anything, so the shortlist rule has no cutoff to state. The number still
+    governs the "priced high" MARK and is still stated wherever a percentile is rendered;
+    it is absent from these fixtures only because every band in them abstains.
+  - the "Rank" column and its "#1" cells, replaced by the vote counts. A name's position
+    in one lens's cohort is not what this table is about any more, and the position itself
+    is untouched in the verdict grid above it.
+  - the "1 of 1 BUY survived the checks" counts, replaced by "1 name BUY on all 3 voting
+    lenses" — the same fact, counted the way the section now counts.
+
+Everything ADDED is the new section saying what it is: the title, the rule sentence, the
+BUY/SELL vote columns naming the lenses, the Marks column, the overlap note, and the
+"N names had no BUY from any lens" line. The RULE is pinned independently of every fixture
+here by ``tests/test_agreement.py``, so the guard was not simply relaxed.
 """
 
 from __future__ import annotations

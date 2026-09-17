@@ -1397,8 +1397,11 @@ def floor_override_from_input(raw, *, file_value: float | None) -> float | None:
 def _company_size_floor_override(rank_strategy, n_strategies: int) -> float | None:
     """The Run tab's ephemeral company-size floor control (FLOOR-1).
 
-    Defaults to the PRIMARY strategy's own floor, so the control opens showing what the
-    run would do untouched; clearing it removes the floor for this run entirely."""
+    Defaults to the FIRST ticked lens's own floor, so the control opens showing what the
+    run would do untouched; clearing it removes the floor for this run entirely. The floor
+    is a COHORT statement — it decides who is in the room — so one value applies to every
+    lens in the run (SHORTLIST-3: no lens is privileged, so there is no "its" floor to
+    prefer, and the first ticked one is simply the one already in hand)."""
     file_value = getattr(rank_strategy, "min_market_cap", None)
     with st.expander("⚙️ Run overrides — this run only", expanded=False):
         st.caption("Applied to THIS run only and stamped on the report. The strategy "
@@ -2046,29 +2049,27 @@ def _reader_markdown(reader) -> list[str]:
     return lines + [f"_{READER_SECTION_NOTE}_"]
 
 
-def _shortlist_markdown(sl, shortlist_table) -> list[str]:
-    """SHORTLIST-1 in the .md — the same cells the HTML renders, from the same builder."""
-    if sl is None:
+def _shortlist_markdown(ag, lens_agreement_table) -> list[str]:
+    """SHORTLIST-3 in the .md — the same cells the HTML renders, from the same builder."""
+    if ag is None:
         return []
-    lines = ["", f"## {sl.title}", ""]
-    if not sl.available:
-        return lines + [f"_{sl.reason}._"]
-    lines += [f"_{sl.rule_sentence}_", ""]
-    cols, rows = shortlist_table(sl)
+    lines = ["", f"## {ag.title}", "", f"_{ag.rule_sentence}_"]
+    if not ag.available:
+        return lines
+    if ag.overlap_note:
+        lines += ["", f"**{ag.overlap_note}**"]
+    lines.append("")
+    cols, rows = lens_agreement_table(ag)
     if rows:
         lines += _md_table(cols, rows)
-        # SHORTLIST-2 — the warning's meaning, once, under the table that carries it.
-        if sl.cautioned:
-            from aristos_council.pipeline import SHORTLIST_CAUTION_NOTE
-            lines += ["", f"_{SHORTLIST_CAUTION_NOTE}_"]
     else:
-        lines.append("_No candidate survived the checks. That is a result, not a gap — "
-                     "every drop and its reason is below._")
-    if sl.dropped:
-        lines += ["", f"**Dropped · {len(sl.dropped)}**", ""]
-        lines += [f"- **{r.display}** — {r.dropped_by}" for r in sl.dropped]
+        lines.append("_No name was rated BUY by any voting lens. That is a result, not a "
+                     "gap._")
+    if ag.no_buy_count:
+        plural = "s" if ag.no_buy_count != 1 else ""
+        lines += ["", f"_{ag.no_buy_count} name{plural} had no BUY from any lens, and "
+                      "are not listed here._"]
     return lines
-
 
 
 # --------------------------------------------------------------------------- #
@@ -2147,7 +2148,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         fetch_guard_line,
         floor_override_line,
         lens_asks,
-        lens_detail, provenance_sentences, report_sections, shortlist_table,
+        lens_agreement_table, lens_detail, provenance_sentences, report_sections,
         union_valuation_band_table,
         valuation_band_table,
     )
@@ -2201,8 +2202,8 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     lines += _reader_markdown(getattr(multi_result, "reader", None))
 
     # 1b (SHORTLIST-1) — the answer, before the evidence for it.
-    lines += _shortlist_markdown(getattr(multi_result, "shortlist", None),
-                                 shortlist_table)
+    lines += _shortlist_markdown(getattr(multi_result, "lens_agreement", None),
+                                 lens_agreement_table)
 
     # 2 (REPORT-4) — what the run could NOT see, BEFORE any prose that rests on what it
     # could. Rendered even when clean: an absent section is indistinguishable from a
@@ -2349,30 +2350,28 @@ def _local_stamp(run_start) -> str:
 
 
 
-def _render_shortlist(sl) -> None:
-    """The derived shortlist on screen — the same builder the two reports render, so the
-    app and the downloaded files cannot show different names."""
-    if sl is None:
+def _render_shortlist(ag) -> None:
+    """The agreement table on screen — the same builder the two reports render, so the app
+    and the downloaded files cannot show different names."""
+    if ag is None:
         return
-    from aristos_council.pipeline import SHORTLIST_CAUTION_NOTE, shortlist_table
+    from aristos_council.pipeline import lens_agreement_table
 
-    st.subheader(sl.title)
-    if not sl.available:
-        st.caption(f"{sl.reason}.")
+    st.subheader(ag.title)
+    st.caption(ag.rule_sentence)
+    if not ag.available:
         return
-    st.caption(sl.rule_sentence)
-    cols, rows = shortlist_table(sl)
+    if ag.overlap_note:
+        st.warning(ag.overlap_note)
+    cols, rows = lens_agreement_table(ag)
     if rows:
         st.dataframe(rows, column_order=cols, hide_index=True, width="stretch")
-        if sl.cautioned:
-            st.warning(SHORTLIST_CAUTION_NOTE)
     else:
-        st.info("No candidate survived the checks. That is a result, not a gap — every "
-                "drop and its reason is below.")
-    if sl.dropped:
-        with st.expander(f"Dropped · {len(sl.dropped)}", expanded=False):
-            for r in sl.dropped:
-                st.markdown(f"- **{r.display}** — {r.dropped_by}")
+        st.info("No name was rated BUY by any voting lens. That is a result, not a gap.")
+    if ag.no_buy_count:
+        plural = "s" if ag.no_buy_count != 1 else ""
+        st.caption(f"{ag.no_buy_count} name{plural} had no BUY from any lens, and are not "
+                   "listed here.")
 
 
 
@@ -2459,7 +2458,7 @@ def _render_multi_strategy_result(multi_result) -> None:
     # have carried this section since SHORTLIST-1; the Run tab carried only the summary
     # line's count, so a reader working in the app could see THAT names survived without
     # seeing WHICH — and, after SHORTLIST-2, without seeing the price warning on one.
-    _render_shortlist(getattr(multi_result, "shortlist", None))
+    _render_shortlist(getattr(multi_result, "lens_agreement", None))
 
     # REPORT-2: the rules EACH lens applied, before the verdicts — a name excluded by one
     # lens and ranked by another is only legible once both rule sets are stated.
@@ -2764,6 +2763,22 @@ def _render_universe_result(result) -> None:
                "repo — open it in a browser and Print → PDF for paper.")
 
 
+
+def _preselect_default_lens(choices) -> None:
+    """Tick the suggested-first lens ONCE per session (SHORTLIST-3).
+
+    With the primary dropdown gone, nothing would be selected on a fresh start and the Run
+    button would open disabled — which reads as breakage rather than as a choice. So the
+    lens ``default_index`` already nominated is pre-ticked, exactly once: the flag is what
+    makes unticking it stick, instead of the box re-ticking itself on every rerun.
+    """
+    if st.session_state.get("uni_lenses_seeded") or not choices:
+        return
+    st.session_state["uni_lenses_seeded"] = True
+    chosen = choices[default_index(choices)]
+    st.session_state.setdefault(lens_checkbox_key(chosen.id), True)
+
+
 def render_universe_tab(show_validation: bool = False) -> None:
     import os
 
@@ -2801,37 +2816,24 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # caption (ids are the stable record keys — never renamed, never in the label). A label
     # two configs would SHARE carries its id, so a pick can't resolve to the wrong one.
     labels = choice_labels(choices)
-    # The PRIMARY strategy stays a dropdown, and exactly one is always selected: narration is
-    # single-strategy, and the primary is the verdict the narrator explains. Folding it into
-    # the extra-lens control left the narrated strategy implicit (offer order decided it,
-    # which the user can neither see nor choose) — FUND-UI-2 item 5.
-    primary_label = st.selectbox(
-        "Primary strategy — the verdict the narrator explains", labels,
-        index=default_index(choices), key="uni_strategy",
-        help="Runs the full flow: screen → rank → gates issue the verdict, and the LLM "
-             "narrates it. Exactly one, because narration is single-strategy.")
-    primary = resolve(choices, primary_label) or choices[0].strategy
-    # CAPTION-2: what the chosen lens asks of a company, at the point of choosing.
-    if lens_caption(primary):
-        st.caption(lens_caption(primary))
-
-    # Extra lenses are CHECKBOXES, one per lens, so every lens you could add is visible at
-    # once instead of hidden behind a dropdown (FUND-UI-2 item 5). Presentation only: the
-    # offered set is the same ONE picker's, and ticking any box runs FUND-RUN-1's combined
-    # grid exactly as the old "Also grade with" multiselect did — deterministic by
-    # construction (no LLM, no cost), so narration settings grey out below.
-    st.caption("**Also grade with** — optional extra lenses. These re-grade the SAME "
-               "ticker list deterministically and report a single combined grid; they are "
-               "never narrated. Leave them all unticked for a normal narrated run of the "
-               "primary strategy.")
+    # SHORTLIST-3 — ONE control. There is no primary lens: every lens you tick is a vote of
+    # equal weight, and a check lens marks rather than votes. The dropdown that used to
+    # elect one lens above the others is gone, not hidden behind a setting — it encoded a
+    # hierarchy the owner does not want, and leaving it as an option would leave the
+    # hierarchy in the report.
+    #
+    # The suggested-first lens is PRE-TICKED on a fresh session, so the tab opens ready to
+    # run rather than refusing until you pick something.
+    st.markdown("**Lenses**")
+    st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
+    _preselect_default_lens(choices)
     extras: list[tuple[str, bool]] = []
-    extra_choices = [c for c in choices if c.label != primary_label]
-    if extra_choices:
-        n_cols = min(3, len(extra_choices))
-        per_col = -(-len(extra_choices) // n_cols)       # ceil: contiguous, offer-ordered
+    if choices:
+        n_cols = min(3, len(choices))
+        per_col = -(-len(choices) // n_cols)             # ceil: contiguous, offer-ordered
         for i, col in enumerate(st.columns(n_cols)):
             with col:
-                for c in extra_choices[i * per_col:(i + 1) * per_col]:
+                for c in choices[i * per_col:(i + 1) * per_col]:
                     extras.append((c.label,
                                    st.checkbox(c.label, key=lens_checkbox_key(c.id))))
                     # CAPTION-2: a VISIBLE caption, not a hover tooltip — a reader
@@ -2863,12 +2865,12 @@ def render_universe_tab(show_validation: bool = False) -> None:
              "number in it is checked back against them; a summary that fails that check "
              "is withheld with its reason rather than published. It explains the results; "
              "it never recommends anything.")
-    picked_labels = selected_labels(primary_label, extras)
+    picked_labels = selected_labels(extras=extras)
     # OFFER order, not click order (picker.resolve_all), so the combined grid's columns are
-    # reproducible. ``or [primary]`` only covers a stale widget value: with a required
-    # dropdown a zero-strategy run is structurally unreachable here, though run_problems
-    # still refuses one (that guard is the contract, not the only line of defence).
-    strategies = resolve_all(choices, picked_labels) or [primary]
+    # reproducible. SHORTLIST-3: a zero-lens selection IS now reachable (untick everything),
+    # and it is refused by run_problems below rather than silently defaulted — a run with
+    # no lens has nothing to say.
+    strategies = resolve_all(choices, picked_labels)
     multi = len(strategies) > 1
     for s in strategies:
         bits = f"`{s.id}`"                               # the stable record key
@@ -2884,9 +2886,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
             st.caption(_asks)
     if len(strategies) == 1 and getattr(strategies[0], "description", ""):
         st.caption(strategies[0].description.strip())
-    # The cost estimate + the narration settings describe the PRIMARY strategy (the only one
-    # that can narrate); a multi-lens run is deterministic, so neither is in play then.
-    rank_strategy = primary
+    # SHORTLIST-3: with no primary, the cost estimate and the narration settings describe
+    # the FIRST ticked lens — the only one a single-lens run could narrate. A multi-lens
+    # run is deterministic, so neither is in play then, and a zero-lens run is refused
+    # before either is read.
+    rank_strategy = strategies[0] if strategies else None
 
     # 2 — TICKERS. A list is a plain, editable ticker list: pick one of yours (or start a
     # new one), edit it right here, run it. Selecting a list LOADS it into this box — there
@@ -2958,9 +2962,9 @@ def render_universe_tab(show_validation: bool = False) -> None:
             index=_theses.index(_current) if _current in _theses else 0,
             format_func=lambda t: t or "— not stated —",
             key="uni_list_thesis",
-            help="What this list was assembled to find. Used only to caption a run whose "
-                 "primary lens answers a different question; it never filters a lens or "
-                 "blocks a run. Leave blank to make no claim.")
+            help="What this list was assembled to find. Recorded on the list and stated in "
+                 "the run's summary; it never filters a lens or blocks a run. Leave blank "
+                 "to make no claim.")
         col_save, col_saveas = st.columns(2)
         with col_save:
             save_over = st.button("Save changes", key="uni_save_over",
@@ -3007,16 +3011,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
     applicable = applicable_rank_strategies(all_rank_strategies, cohort_kind)
     st.caption(cohort_scope_note(cohort_kind, len(applicable),
                                  adhoc=universe_id is None))
-    # THESIS-1 — one line per RUN (never per name) when the PRIMARY lens answers a
-    # different question than this list was built for, or is a check lens that cannot
-    # select at all. It sits here, beside the asset-kind scope note, because this is the
-    # first point at which BOTH the lens and the cohort are known — and because the two
-    # captions answer the same shape of question: is this lens the right one for this
-    # list. Advisory, like its neighbour: it never filters a lens and never blocks a run.
-    from aristos_council.pipeline import cohort_fit_line
-    _fit = cohort_fit_line(primary, getattr(picked_list, "thesis", "") or "")
-    if _fit:
-        st.info(_fit)
+    # SHORTLIST-3 removed the THESIS-1 fit warning. It asked whether the PRIMARY lens was
+    # the right one for this list, and there is no primary lens any more — every ticked
+    # lens is an equal vote, so "the lens" the warning was about does not exist. The
+    # asset-kind scope note below stays: that one is about whether a lens can read these
+    # names at all, which is a fact about the data rather than a claim about intent.
     for s in strategies:
         scope_warning = out_of_scope_note(s, cohort_kind)
         if scope_warning:
@@ -3144,7 +3143,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # same upper bound the single-lens flow already shows, stated per NAME.
     est = None
     narrated_count = None
-    if not deterministic and universe and len(universe) <= UNIVERSE_CAP:
+    # SHORTLIST-3: with no primary lens, a run with NOTHING ticked is reachable. It is
+    # refused by run_problems above; the estimate simply has nothing to estimate, so it is
+    # skipped rather than asked about a lens that is not there.
+    if (not deterministic and universe and rank_strategy is not None
+            and len(universe) <= UNIVERSE_CAP):
         per_lens = _estimate_shortlist_size(len(universe), rank_strategy,
                                             narrate_coverage=narrate_coverage)
         if multi:
@@ -3191,9 +3194,6 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 freeze_dir=ROOT / "runs", with_valuation_band=with_valuation_band,
                 derived_from=derived_from,
                 min_market_cap_override=min_market_cap_override,
-                # SHORTLIST-1: the lens the reader picked as primary, which is NOT
-                # necessarily the grid's first column (that is offer order).
-                primary_id=primary.id,
                 # READER-1: one call per run, off unless asked for.
                 with_reader=with_reader,
                 cohort_thesis=getattr(picked_list, "thesis", "") or "",

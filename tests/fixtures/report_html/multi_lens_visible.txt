@@ -10,7 +10,7 @@ Value + Momentum (magic_formula_momentum_v1)
 Run
 24.08.2026 13:49 CEST — ranker only, no AI commentary
 Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran).
-3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one — shortlist: 1 of 1 BUY
+3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one — shortlist: 1 name BUY on all 3 voting lenses
 Classic Value
 — Quality-value screen, 2 rules ·
 Magic Formula RAW
@@ -19,7 +19,7 @@ Value + Momentum
 — Quality-value screen, 2 rules
 [details]
 Contents
-Shortlist — 1 of 1 BUY survived the checks
+Shortlist — agreement across 3 voting lenses
 What the run could not see
 Verdict by lens
 Valuation band (absolute — vs each name's own history)
@@ -32,15 +32,19 @@ Classic Value
 Magic Formula RAW
 Value + Momentum
 What the terms mean
-Shortlist — 1 of 1 BUY survived the checks
-BUY under Classic Value and below the 80th percentile of its own valuation history, unless every test rated it BUY (then kept with a price warning).
+Shortlist — agreement across 3 voting lenses
+Names ordered by how many of the 3 voting lenses rated them BUY. The price check does not vote; its doubts are shown as marks.
+Magic Formula RAW and Value + Momentum rank on the same 3 factors; ticking both counts one view twice.
 Name
-Rank
+BUY votes
+SELL votes
 Valuation percentile
-Note
+Marks
 A
-#1
+3 of 3: Classic Value, Magic Formula RAW, Value + Momentum
+—
 not evaluated
+2 names had no BUY from any lens, and are not listed here.
 What the run could not see
 Evidence channels that returned nothing, stated BEFORE the prose that rests on the channels that did. A dark channel is not a neutral reading — nothing was measured, so nothing below is informed by it.
 Channel

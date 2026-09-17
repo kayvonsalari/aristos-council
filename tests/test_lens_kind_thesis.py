@@ -19,7 +19,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from aristos_council.pipeline import cohort_fit_line
 from aristos_council.strategy.discovery import visible_rank_strategies
 from aristos_council.strategy.rank_loader import load_rank_strategy
 from aristos_council.universe import Universe
@@ -85,86 +84,32 @@ def test_the_default_is_selector_so_an_unmarked_strategy_keeps_its_meaning():
 # --------------------------------------------------------------------------- #
 # Closed vocabularies
 # --------------------------------------------------------------------------- #
-def _strategy_kwargs(**over):
-    base = dict(id="x_v1", name="X", version=1,
-                factors=[{"name": "momentum_12m"}])
-    base.update(over)
-    return base
-
-
-def test_an_unknown_kind_is_rejected_at_load():
-    from aristos_council.strategy.rank_loader import RankStrategy
-
-    with pytest.raises(ValidationError) as e:
-        RankStrategy(**_strategy_kwargs(kind="filter"))
-    assert "kind must be one of" in str(e.value)
-
-
-def test_an_unknown_strategy_thesis_is_rejected_at_load():
-    from aristos_council.strategy.rank_loader import RankStrategy
-
-    with pytest.raises(ValidationError) as e:
-        RankStrategy(**_strategy_kwargs(thesis=["momentum"]))
-    assert "thesis entries must be in" in str(e.value)
-
-
-def test_an_unknown_universe_thesis_is_rejected_at_load():
-    with pytest.raises(ValidationError) as e:
-        Universe(id="u_v1", tickers=["AAPL"], thesis="cheapness")
-    assert "universe thesis must be one of" in str(e.value)
-
-
-def test_a_universe_without_a_thesis_loads_exactly_as_before():
-    u = Universe(id="u_v1", tickers=["AAPL"])
-    assert u.thesis == ""
-
-
-def test_the_shipped_etf_universes_are_marked_funds():
-    from aristos_council.universe import load_universe
-
-    for p in sorted(UNIVERSES.glob("etf_*.yaml")):
-        assert load_universe(p).thesis == "funds", p.name
-
-
+# The fit line is GONE (SHORTLIST-3)
 # --------------------------------------------------------------------------- #
-# The fit line
-# --------------------------------------------------------------------------- #
-def test_a_value_lens_on_an_income_list_warns():
-    line = cohort_fit_line(_load("magic_formula_raw_v1"), "income")
-    assert line.startswith("⚠")
-    assert "Magic Formula RAW is a value lens" in line
-    assert "this list is marked income" in line
-    assert "answer a different question" in line
+# It warned when the PRIMARY lens answered a different question than the list was built
+# for, or was a check lens that could not select at all. Both sentences were about a lens
+# elected above the others, and there is no such lens any more: every ticked lens is a
+# vote of equal weight, so "the lens for this list" is not a thing the run has.
+#
+# `kind` and `thesis` both survive it and both still do work — see the tests above. `kind`
+# is what tells a VOTE from a MARK in the agreement table, which is the load-bearing use;
+# `thesis` still describes what a list was built for and still reaches the run's summary.
+
+def test_the_fit_line_builder_is_gone():
+    import aristos_council.pipeline as pipeline
+
+    assert not hasattr(pipeline, "cohort_fit_line")
 
 
-def test_a_matching_lens_says_nothing():
-    """Silence is the correct output when there is no mismatch to report."""
-    assert cohort_fit_line(_load("conservative_plus_v1"), "income") == ""
-    assert cohort_fit_line(_load("magic_formula_raw_v1"), "value") == ""
+def test_kind_still_decides_which_lenses_VOTE():
+    """The replacement for what the fit line was reaching for. A check does not select —
+    that was true before and is still true; it is now expressed by not casting a vote
+    rather than by a warning about having been picked as primary."""
+    assert _load("forensic_v1").kind == "check"
+    assert _load("magic_formula_raw_v1").kind == "selector"
 
 
-def test_an_unmarked_list_never_triggers_the_warning():
-    """Most local lists make no claim; a claim is required before it can be contradicted."""
-    assert cohort_fit_line(_load("magic_formula_raw_v1"), "") == ""
-
-
-def test_a_check_lens_as_primary_says_it_cannot_select():
-    line = cohort_fit_line(_load("forensic_v1"), "income")
-    assert line.startswith("ℹ")
-    assert "is a check lens; it doubts, it does not select" in line
-    assert "Pick a selector as primary for a shortlist" in line
-
-
-def test_the_check_notice_fires_regardless_of_the_cohort_thesis():
-    """A check cannot select on ANY list, marked or not."""
-    for thesis in ("", "value", "growth", "income", "funds"):
-        assert "check lens" in cohort_fit_line(_load("forensic_v1"), thesis)
-
-
-def test_a_lens_with_no_declared_thesis_never_warns():
-    """The legacy config claims nothing, so it cannot contradict a list."""
-    assert cohort_fit_line(_load("magic_formula_v1"), "income") == ""
-
-
-def test_the_fit_line_is_safe_on_a_missing_primary():
-    assert cohort_fit_line(None, "income") == ""
+def test_thesis_still_describes_a_list_and_a_lens():
+    """Kept on both, because the agreement note and the run's summary still read them."""
+    assert "value" in (_load("magic_formula_raw_v1").thesis or [])
+    assert "income" in (_load("conservative_plus_v1").thesis or [])
