@@ -366,3 +366,292 @@ def test_the_absolute_readings_section_is_silent_when_there_is_nothing_to_show()
         debt_and_cash = None
         growth_record = None
     app._render_absolute_readings(_Bare())
+
+# =========================================================================== #
+# 9. MARKET-INDEX-2 - the first build's two bugs
+# =========================================================================== #
+# A first US build fetched 526 rows. ALL 526 had market_cap None, and 337 of them were
+# OTC / pink-sheet listings. Both were bugs in the build: the cap was requested from the
+# wrong block, and nothing filtered the venue.
+from aristos_council.market_index import (BUILD_LOG, CHARGE_FUNDAMENTALS, CHARGE_LISTING,
+                                          DEFAULT_VENUES, MarketIndexError, build,
+                                          build_log_path, read_market_cap, venue_allowed)
+
+
+class _FakeSource:
+    """A source with no socket. Counts requests and charged units exactly as the real one."""
+
+    def __init__(self, listings=None, docs=None, raise_on=None):
+        self._listings = listings if listings is not None else []
+        self._docs = docs or {}
+        self._raise_on = raise_on
+        self.requests = 0
+        self.charged = 0
+        self.indexes = ()
+        self.fetched: list[str] = []
+
+    def common_stocks(self, exchange):
+        self.requests += 1
+        self.charged += CHARGE_LISTING
+        return [dict(r) for r in self._listings]
+
+    def general(self, symbol):
+        self.requests += 1
+        self.charged += CHARGE_FUNDAMENTALS
+        self.fetched.append(symbol)
+        if self._raise_on and symbol == self._raise_on:
+            raise RuntimeError("payload exploded")
+        return dict(self._docs.get(symbol, _doc()))
+
+
+def _listing(code, venue="NYSE"):
+    return {"Code": code, "Name": code, "Exchange": venue, "Type": "Common Stock"}
+
+
+def _doc(cap=10e9, venue="NYSE", name="A Co"):
+    """The COMBINED-filter response shape, as probed from the live API on 2026-09-18."""
+    doc = {"General": {"Code": "X", "Name": name, "Exchange": venue,
+                       "CurrencyCode": "USD", "Sector": "Technology",
+                       "Industry": "Semiconductors", "GicSubIndustry": "Semiconductors"}}
+    if cap is not None:
+        doc["Highlights::MarketCapitalization"] = cap
+    return doc
+
+
+def _build(tmp_path, **kw):
+    kw.setdefault("exchanges", ["US"])
+    kw.setdefault("venues", dict(DEFAULT_VENUES))
+    kw.setdefault("usd", _NoFx())
+    kw.setdefault("today", date(2026, 9, 18))
+    return build(store=IndexStore(tmp_path), **kw)
+
+
+class _NoFx:
+    """The USD converter, switched off: these tests are about the build, not about FX."""
+
+    def apply(self, row):
+        return row
+
+
+# -- the cap, from the right block ----------------------------------------- #
+def test_the_cap_is_read_from_HIGHLIGHTS_not_general():
+    """THE bug: 526 of 526 rows had no cap because the request asked for General."""
+    assert read_market_cap(_doc(cap=4_918_238_773_248)) == 4_918_238_773_248
+    assert read_market_cap({"Highlights": {"MarketCapitalization": 123.0}}) == 123.0
+    assert read_market_cap({"MarketCapitalization": 7.0}) == 7.0
+
+
+def test_a_missing_or_zero_cap_is_a_real_abstention():
+    assert read_market_cap(_doc(cap=None)) is None
+    assert read_market_cap({"Highlights::MarketCapitalization": 0}) is None
+    assert read_market_cap({"Highlights::MarketCapitalization": "lots"}) is None
+
+
+def test_the_string_NA_is_not_a_market_cap():
+    """EODHD sends the literal string 'NA', observed live on AACPR.US (a RIGHTS instrument
+    that the provider types as "Common Stock"). A float() of it would raise; a truthiness
+    test would pass it through as a number. It is an absence, and it is counted as one."""
+    assert read_market_cap({"Highlights::MarketCapitalization": "NA"}) is None
+    assert read_market_cap({"Highlights::MarketCapitalization": ""}) is None
+    assert read_market_cap({"Highlights::MarketCapitalization": True}) is None
+
+
+def test_the_general_block_is_read_in_both_layouts():
+    """``filter=General`` flattens; the combined filter nests. Rows already on disk were
+    fetched the first way, so both must parse."""
+    combined = _row_from_doc(_doc(name="Nested Co"))
+    flat = _row_from_doc({"Code": "X", "Name": "Flat Co", "Exchange": "NYSE"})
+    assert combined.name == "Nested Co" and combined.market_cap is not None
+    assert flat.name == "Flat Co" and flat.market_cap is None
+
+
+def _row_from_doc(doc):
+    from aristos_council.market_index import _row_from_general
+    return _row_from_general("X.US", "US", doc, today=date(2026, 9, 18))
+
+
+def test_a_row_knows_whether_it_is_complete():
+    assert _row_from_doc(_doc()).complete
+    assert not _row_from_doc(_doc(cap=None)).complete
+
+
+# -- the venue filter ------------------------------------------------------- #
+@pytest.mark.parametrize("venue", ["NYSE", "NASDAQ", "NYSE ARCA", "AMEX"])
+def test_the_allowed_us_venues_are_kept(venue):
+    assert venue_allowed(venue, DEFAULT_VENUES["US"])
+
+
+@pytest.mark.parametrize("venue", ["PINK", "OTCQB", "OTCQX", "OTCGREY", "OTCMKTS",
+                                   "BATS", "NYSE MKT", "US"])
+def test_otc_and_unlisted_venues_are_dropped(venue):
+    assert not venue_allowed(venue, DEFAULT_VENUES["US"])
+
+
+def test_an_exchange_with_no_venue_list_is_unrestricted():
+    assert venue_allowed("ANYTHING", [])
+
+
+def test_otc_listings_cost_NOTHING_because_they_are_filtered_before_the_call(tmp_path):
+    """Filtered on the LISTING row. 11,508 of 17,829 US common stocks were OTC; fetching
+    them would be ~118,000 charged units, more than a whole day's budget."""
+    listings = ([_listing(f"GOOD{i}", "NYSE") for i in range(3)]
+                + [_listing(f"PINK{i}", "PINK") for i in range(20)]
+                + [_listing("QB", "OTCQB")])
+    source = _FakeSource(listings)
+
+    outcome = _build(tmp_path, source=source)
+
+    assert outcome.listed == 24 and outcome.eligible == 3
+    assert sorted(source.fetched) == ["GOOD0.US", "GOOD1.US", "GOOD2.US"]
+    assert not any(t.startswith("PINK") or t.startswith("QB") for t in source.fetched)
+
+
+def test_every_venue_seen_is_counted_including_the_dropped_ones(tmp_path):
+    listings = [_listing("A", "NYSE"), _listing("B", "PINK"), _listing("C", "PINK")]
+    outcome = _build(tmp_path, source=_FakeSource(listings))
+    assert outcome.venues_seen == {"NYSE": 1, "PINK": 2}
+    text = "\n".join(outcome.venue_lines())
+    assert "PINK" in text and "2" in text
+
+
+# -- invalidation ----------------------------------------------------------- #
+def test_a_capless_row_is_refetched_however_fresh_it_is(tmp_path):
+    """All 526 rows on disk are capless and dated today. Age must not protect them: the
+    freshness skip is for COMPLETE rows, and a capless row was never usable."""
+    store = IndexStore(tmp_path)
+    store.save([IndexRow(ticker="A.US", exchange="NYSE", market="US", market_cap=None,
+                         fetched_at="2026-09-18", source="eodhd")])
+    source = _FakeSource([_listing("A", "NYSE")])
+
+    outcome = build(store=store, source=source, exchanges=["US"],
+                    venues=dict(DEFAULT_VENUES), usd=_NoFx(), today=date(2026, 9, 18))
+
+    assert source.fetched == ["A.US"]
+    assert outcome.refetched_incomplete == 1 and outcome.skipped_fresh == 0
+    assert store.load()[0].market_cap is not None
+
+
+def test_a_COMPLETE_fresh_row_is_still_skipped_without_a_call(tmp_path):
+    store = IndexStore(tmp_path)
+    store.save([IndexRow(ticker="A.US", exchange="NYSE", market="US", market_cap=5e9,
+                         fetched_at="2026-09-18", source="eodhd")])
+    source = _FakeSource([_listing("A", "NYSE")])
+
+    outcome = build(store=store, source=source, exchanges=["US"],
+                    venues=dict(DEFAULT_VENUES), usd=_NoFx(), today=date(2026, 9, 18))
+
+    assert source.fetched == [] and outcome.skipped_fresh == 1
+
+
+def test_rows_on_a_disallowed_venue_are_dropped_from_the_store(tmp_path):
+    """337 of the 526 were OTC. They are removed, not left to rot in the table."""
+    store = IndexStore(tmp_path)
+    store.save([
+        IndexRow(ticker="GOOD.US", exchange="NYSE", market="US", market_cap=5e9,
+                 fetched_at="2026-09-18", source="eodhd"),
+        IndexRow(ticker="PINKY.US", exchange="PINK", market="US", market_cap=1e9,
+                 fetched_at="2026-09-18", source="eodhd"),
+        IndexRow(ticker="QB.US", exchange="OTCQB", market="US", market_cap=1e9,
+                 fetched_at="2026-09-18", source="eodhd"),
+    ])
+    outcome = build(store=store, source=_FakeSource([_listing("GOOD", "NYSE")]),
+                    exchanges=["US"], venues=dict(DEFAULT_VENUES), usd=_NoFx(),
+                    today=date(2026, 9, 18))
+
+    assert outcome.dropped_venue == 2
+    assert [r.ticker for r in store.load()] == ["GOOD.US"]
+
+
+def test_a_row_on_another_exchange_is_not_dropped_by_a_US_venue_rule(tmp_path):
+    store = IndexStore(tmp_path)
+    store.save([IndexRow(ticker="SHEL.LSE", exchange="LSE", market="LSE",
+                         market_cap=5e9, fetched_at="2026-09-18", source="eodhd")])
+    build(store=store, source=_FakeSource([]), exchanges=["US"],
+          venues=dict(DEFAULT_VENUES), usd=_NoFx(), today=date(2026, 9, 18))
+    assert [r.ticker for r in store.load()] == ["SHEL.LSE"]
+
+
+# -- accounting and budget -------------------------------------------------- #
+def test_charged_units_are_ten_per_fundamentals_and_one_per_listing(tmp_path):
+    source = _FakeSource([_listing("A"), _listing("B")])
+    outcome = _build(tmp_path, source=source)
+    assert outcome.requests == 3                      # 1 listing + 2 fundamentals
+    assert outcome.charged == CHARGE_LISTING + 2 * CHARGE_FUNDAMENTALS == 21
+    assert "3 request(s) = 21 charged" in outcome.summary()
+
+
+def test_the_build_stops_before_the_request_that_would_exceed_the_budget(tmp_path):
+    source = _FakeSource([_listing(f"T{i}") for i in range(10)])
+    # 1 listing + 2 fundamentals = 21; a third would be 31.
+    outcome = _build(tmp_path, source=source, budget=25)
+
+    assert outcome.fetched == 2
+    assert outcome.charged <= 25
+    assert "budget reached" in outcome.stopped
+    assert str(CHARGE_FUNDAMENTALS) in outcome.stopped
+
+
+def test_the_budget_stop_still_flushes_what_it_had(tmp_path):
+    store = IndexStore(tmp_path)
+    build(store=store, source=_FakeSource([_listing(f"T{i}") for i in range(10)]),
+          exchanges=["US"], venues=dict(DEFAULT_VENUES), usd=_NoFx(),
+          today=date(2026, 9, 18), budget=25)
+    assert len(store.load()) == 2
+
+
+# -- no silent exits -------------------------------------------------------- #
+def test_ANY_exception_flushes_the_store_and_writes_the_reason(tmp_path):
+    """A build that dies quietly after 4,000 fetches loses 40,000 charged units and tells
+    nobody why."""
+    store = IndexStore(tmp_path)
+    source = _FakeSource([_listing("A"), _listing("BOOM"), _listing("C")],
+                         raise_on="BOOM.US")
+
+    outcome = build(store=store, source=source, exchanges=["US"],
+                    venues=dict(DEFAULT_VENUES), usd=_NoFx(), today=date(2026, 9, 18))
+
+    assert outcome.stopped.startswith("RuntimeError: payload exploded")
+    assert [r.ticker for r in store.load()] == ["A.US"]        # flushed, not lost
+    log = build_log_path(store).read_text(encoding="utf-8")
+    assert "STOPPED: RuntimeError: payload exploded" in log
+    assert "Traceback" in log
+    assert "request(s)" in log                                  # the summary went in too
+
+
+def test_the_log_carries_the_progress_lines_too(tmp_path):
+    store = IndexStore(tmp_path)
+    build(store=store, source=_FakeSource([_listing("A")]), exchanges=["US"],
+          venues=dict(DEFAULT_VENUES), usd=_NoFx(), today=date(2026, 9, 18))
+    log = build_log_path(store).read_text(encoding="utf-8")
+    assert "listing common stocks" in log
+    assert build_log_path(store).name == BUILD_LOG
+
+
+def test_the_log_is_appended_not_rewritten(tmp_path):
+    store = IndexStore(tmp_path)
+    for _ in range(2):
+        build(store=store, source=_FakeSource([_listing("A")]), exchanges=["US"],
+              venues=dict(DEFAULT_VENUES), usd=_NoFx(), today=date(2026, 9, 18))
+    lines = build_log_path(store).read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) >= 4
+
+
+def test_a_limit_stop_is_not_an_error_but_a_budget_stop_is(tmp_path):
+    limited = _build(tmp_path, source=_FakeSource([_listing("A"), _listing("B")]),
+                     limit=1)
+    assert "limit" in limited.stopped
+    budgeted = _build(tmp_path, source=_FakeSource([_listing(f"T{i}") for i in range(9)]),
+                      budget=15)
+    assert "limit" not in budgeted.stopped
+
+
+def test_status_says_how_many_rows_cannot_be_peers(tmp_path):
+    store = IndexStore(tmp_path)
+    store.save([IndexRow(ticker="A.US", exchange="NYSE", market="US", market_cap=None,
+                         fetched_at="2026-09-18"),
+                IndexRow(ticker="B.US", exchange="NYSE", market="US", market_cap=5e9,
+                         fetched_at="2026-09-18")])
+    text = "\n".join(status(store).lines())
+    assert "no market cap:              1" in text
+    assert "complete (usable as peers): 1" in text
+    assert "cannot be peers" in text
