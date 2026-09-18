@@ -3308,9 +3308,23 @@ def multi_header_line(result: MultiStrategyResult) -> str:
     # no bearing on the record of what happened. Keeping it here stacked two parentheticals
     # and three numbers into a line describing a run that had already finished.
     spend = final_cost_phrase(result.meta.get("actual_cost"), n)
-    return (f"{_pipeline_header(result.meta.get('council_mode') or 'narrator')}  "
-            f"One pass over the union of every lens's BUYs — {n} "
-            f"name{'s' if n != 1 else ''} narrated — {spend}.")
+    # NARR-LEVER-1 - the header states the rule that was APPLIED, read from the same
+    # record the section sentence and the cost read. It used to assert "the union of
+    # every lens's BUYs" unconditionally, which on the 18:34 run sat above a section
+    # saying "1 name narrated - all voting lenses agree" over nine sections. One set,
+    # one count, one rule, or the report argues with itself.
+    # A run carrying narratives is NOT a ranker-only run, whatever council_mode was left
+    # on it. The old line took the mode at face value and could print "no LLM ran" above
+    # two narration sections; the assertion meant to catch that was case-broken, so it
+    # never did (see tests/test_narration_union.py).
+    mode = result.meta.get("council_mode") or "narrator"
+    if mode == "ranker-only":
+        mode = "narrator"
+    record = result.meta.get("narration") or {}
+    rule = str(record.get("rule") or record.get("basis") or "").strip()
+    basis = f"{rule} - " if rule else "One pass over the union of every lens's BUYs - "
+    return (f"{_pipeline_header(mode)}  "
+            f"{basis}{n} name{'s' if n != 1 else ''} narrated - {spend}.")
 
 
 def floor_override_line(meta: dict) -> str:
@@ -4487,8 +4501,13 @@ def narrated_union(result: MultiStrategyResult,
     if coverage == "all":
         keep = lambda cells: any(c.status == _RANKED for c in cells.values())   # noqa: E731
     else:
+        # NARR-LEVER-1 - a CHECK lens's "buy" is not a vote. Forensic's top quintile
+        # carries verdict=="buy" internally (CHECK-WORDS-1 renders it "clean"), so before
+        # this guard four names entered the narration set on Forensic's say-so alone and
+        # roughly $1.40 of a $1.60 run went on names the lever had excluded.
         keep = lambda cells: any(                                               # noqa: E731
-            c.status == _RANKED and c.verdict == "buy" for c in cells.values())
+            c.status == _RANKED and c.verdict == "buy" and not c.is_check
+            for c in cells.values())
     return [row.ticker for row in result.rows if keep(row.cells)]
 
 

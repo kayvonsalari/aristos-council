@@ -24,6 +24,8 @@ import html as _html
 import re
 from typing import Iterable, Optional
 
+from .report_language import scrub_check_cell
+
 # A specialist that could not assess renders with NO stance word and NO confidence
 # number. "abstain, confidence 0.00" reads as a measured neutral; the truth is that the
 # channel was dark. House rule 3 in presentation form: null is NOT EVALUATED, not zero.
@@ -340,7 +342,7 @@ def narration_markdown(narration, *, level: int = 4,
                 "| Lens | Verdict | Position | Note |", "| --- | --- | --- | --- |"]
         for v in narration.lens_verdicts:
             note = (v.excluded_reason or "").strip() or "—"
-            out.append(f"| {v.lens} | {v.verdict.upper()} | "
+            out.append(f"| {v.lens} | {scrub_check_cell(v.verdict.upper())} | "
                        f"{_position(v) or '—'} | {note} |")
         out.append("")
 
@@ -457,7 +459,7 @@ def narration_html(narration, *, anchor_prefix: str = "",
                    "</section>")
 
     if narration.lens_verdicts:
-        rows = [[v.lens, v.verdict.upper(), _position(v) or "—",
+        rows = [[v.lens, scrub_check_cell(v.verdict.upper()), _position(v) or "—",
                  (v.excluded_reason or "").strip() or "—"]
                 for v in narration.lens_verdicts]
         out.append(f'<section class="narr-block"{_id("lens_verdicts")}>'
