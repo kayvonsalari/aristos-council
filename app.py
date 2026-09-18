@@ -2657,8 +2657,12 @@ def _render_universe_result(result) -> None:
     # 1 — REPORT-1: the human names lead; every id stays beside them as the record key.
     head = header_lines(result)
     st.markdown(f"#### {head[0]}")
+    # PRICE-STALE-1 — the same line the report carries, but LOUD here: a caption among
+    # captions is exactly how a stale cache went unnoticed in the first place.
+    from aristos_council.pipeline import price_stale_line
+    _stale = price_stale_line(result)
     for line in head[1:]:
-        st.caption(line)
+        (st.warning if line == _stale else st.caption)(line)
     st.markdown(f"### {summary_line(result)}")
     st.caption(result.header)
     meta_bits = (f"Screen: {label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id'])} · "

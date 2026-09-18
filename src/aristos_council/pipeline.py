@@ -21,7 +21,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -886,6 +886,11 @@ def run_rank_pipeline(
                   else {})}}}
            if override_record is not None else {}),
         "universe_size": len(universe),
+        # PRICE-STALE-1 — recorded whether or not it is old enough to warn about, so a
+        # later reader of the record can ask the question the report answered.
+        "price_age_days": price_age_days(
+            RankPipelineResult(ranked=live, excluded=[], unrateable=[], narratives={},
+                               header="", meta={}), today=today),
         "ranked_count": len(live),
         "shortlist": [r.ticker for r in shortlist],
         "est_cost": est,
@@ -1178,6 +1183,79 @@ def format_screen_basis(result: RankPipelineResult) -> list[str]:
 # --------------------------------------------------------------------------- #
 # REPORT-1 — the report's own header, summary and exclusion sentences
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# PRICE-STALE-1 — say when the price is old
+# --------------------------------------------------------------------------- #
+# The band already printed "the last close on <date>" and nothing ever said whether that
+# date was yesterday or a fortnight ago, so a stale cache read exactly like current data.
+#
+# FOUR days, not one, and deliberately CALENDAR days: a Friday close read on the following
+# Tuesday is three days old and completely normal. Modelling exchange calendars to shave
+# that down would be a lot of machinery to make a warning fire slightly sooner, and every
+# holiday it got wrong would be a false alarm about the one thing this line exists to make
+# credible. Nothing is blocked either way — the run is fine, the reader is just told.
+PRICE_STALE_DAYS = 4
+
+
+def _priced_rows(result):
+    """Every ranked row of a run, single-lens or multi-lens."""
+    rows = list(getattr(result, "ranked", None) or [])
+    if rows:
+        return rows
+    for per_lens in (getattr(result, "results", None) or {}).values():
+        rows.extend(getattr(per_lens, "ranked", None) or [])
+    return rows
+
+
+def newest_close_date(result):
+    """The NEWEST close any name in this run was priced on, or None.
+
+    Newest rather than oldest: the question is "how current is this run at best", and one
+    name with a deep gap in its history should not make the whole run look stale.
+    """
+    stamps = []
+    for row in _priced_rows(result):
+        price = getattr(row, "price", None)
+        as_of = getattr(price, "as_of", None) if price is not None else None
+        if as_of is not None:
+            stamps.append(as_of)
+    return max(stamps) if stamps else None
+
+
+def price_age_days(result, *, today: Optional[date] = None) -> Optional[int]:
+    """Calendar days between the newest close and today, or None when nothing is priced."""
+    newest = newest_close_date(result)
+    if newest is None:
+        return None
+    return max((today or date.today()) - newest, timedelta(0)).days
+
+
+def price_stale_line(result, *, today: Optional[date] = None) -> str:
+    """The one line every surface shows when the prices are old, or ``""``.
+
+    The age is the one RECORDED ON THE RUN (``meta["price_age_days"]``), not one computed
+    against today. A report is a record of a moment: re-rendering a March run in September
+    must not have it announce that its prices are six months stale, and a rendered
+    document whose text depends on the day it is read cannot be pinned by anything. The
+    golden files caught this the first time it was written the other way round.
+
+    ``today`` is honoured only when the run recorded no age — for a caller holding a
+    freshly built result that has not been through the meta assembly yet.
+    """
+    newest = newest_close_date(result)
+    if newest is None:
+        return ""
+    recorded = (getattr(result, "meta", None) or {}).get("price_age_days")
+    if recorded is None:
+        if today is None:
+            return ""                    # no record and no reference point: say nothing
+        recorded = price_age_days(result, today=today)
+    if recorded is None or recorded <= PRICE_STALE_DAYS:
+        return ""
+    return (f"Prices are from {newest.isoformat()}, {recorded} days old; the cache may "
+            f"be stale.")
+
+
 def header_lines(result) -> list[str]:
     """The header block, human names first and ids second (REPORT-1).
 
@@ -1199,6 +1277,9 @@ def header_lines(result) -> list[str]:
                    else f"{mode} commentary" if mode else "")
     if mode_phrase:
         lines.append(f"Run: {mode_phrase}")
+    stale = price_stale_line(result)
+    if stale:
+        lines.append(stale)              # PRICE-STALE-1 — at the top, where the run is read
     return lines
 
 
@@ -1874,7 +1955,11 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
     return ValuationBandTable(
         columns=columns, rows=rows, has_band=has_band,
         intro=VALUATION_BAND_INTRO if has_band else PRICE_SECTION_NOTE,
-        footnotes=_band_footnotes(live, uniform, coverage, has_band=has_band))
+        footnotes=_band_footnotes(
+            live, uniform, coverage, has_band=has_band,
+            # PRICE-STALE-1 — the age the RUN recorded, so the note is a fact about the
+            # run rather than about the day someone re-opened it.
+            age_days=(getattr(result, "meta", None) or {}).get("price_age_days")))
 
 
 class _UnionBandView:
@@ -1941,7 +2026,7 @@ def union_valuation_band_table(multi_result) -> Optional[ValuationBandTable]:
 
 
 def _band_footnotes(live, uniform: bool, coverage: set, *,
-                    has_band: bool = True) -> list[str]:
+                    has_band: bool = True, age_days: Optional[int] = None) -> list[str]:
     """The notes that belong BELOW the table: the shared month coverage, the net-debt
     disclosure, then the doctrine in full. Nothing here is a caveat the reader has to get
     past to reach a number."""
@@ -1953,6 +2038,13 @@ def _band_footnotes(live, uniform: bool, coverage: set, *,
         when = stamps[0] if len(stamps) == 1 else f"{stamps[0]} to {stamps[-1]}"
         notes.append(f"Prices are the last close on {when}, each in the name's own "
                      "quoted currency, never converted. A stale cache shows up here.")
+        # PRICE-STALE-1 — "shows up here" was only true for a reader who knew today's
+        # date and did the subtraction. Now it is stated — from the age the RUN recorded,
+        # so the note does not drift every day the report is re-opened.
+        if age_days is not None and age_days > PRICE_STALE_DAYS:
+            newest = max(date.fromisoformat(x) for x in stamps)
+            notes.append(f"Prices are from {newest.isoformat()}, {age_days} days old; "
+                         f"the cache may be stale.")
     if not has_band:
         return notes                    # band off: no coverage, no doctrine to state
     if uniform and coverage:
@@ -2506,6 +2598,9 @@ def run_multi_strategy_pipeline(
         "universe_members": list(first.meta.get("universe_members") or []),
         "universe_member_hash": first.meta.get("universe_member_hash", ""),
         "universe_size": first.meta.get("universe_size", 0),
+        # PRICE-STALE-1 — across EVERY lens's rows, so the figure is the run's, not the
+        # first column's.
+        "price_age_days": price_age_days(provisional),
         "council_mode": "ranker-only" if ranker_only else "narrator",
         "ranker_only": ranker_only,
         "graded_by_all": sum(1 for row in rows if row.comparable),
