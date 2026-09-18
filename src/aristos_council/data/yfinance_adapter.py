@@ -176,6 +176,11 @@ class YFinanceAdapter(MarketDataAdapter):
         # ABS-READINGS-1 — interest cover and the per-share growth record. ADDITIVE: no
         # factor, criterion or strategy reads either series, so no ranking can move; they
         # exist for the absolute readings on the company page, which do not vote.
+        # FACTS-ORDER-1 — the DATED free-cash-flow series. The positional
+        # free_cash_flow_annual carries no years, which is why the narrator had to guess
+        # its order and guessed wrong (TechnipFMC, 2026-09-18 18:34). Additive: no factor
+        # or criterion reads the aligned key, so no ranking moves.
+        _record_aligned("free_cash_flow", cashflow, "Free Cash Flow")
         _record_aligned("interest_expense", income,
                         "Interest Expense", "Interest Expense Non Operating")
         _record_aligned("diluted_eps", income, "Diluted EPS", "Basic EPS")

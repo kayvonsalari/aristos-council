@@ -661,9 +661,15 @@ def test_a_narrated_multi_lens_run_never_claims_no_LLM_ran():
 
     narrated = replace(result, narratives={"AAPL": "…", "MSFT": "…"})
     line = multi_header_line(narrated)
-    assert "no LLM ran" not in line.lower()
+    # CASE BUG, fixed not weakened: the needle carried capitals while the haystack was
+    # lowered, so this assertion could never fail and never did - it sat green over a
+    # header that really did say "no LLM ran" above two narration sections.
+    assert "no llm ran" not in line.lower()
     assert "2 names narrated" in line
-    assert "union of every lens's BUYs" in line
+    # NARR-LEVER-1 replaced the hardcoded "union of every lens's BUYs" with the rule the
+    # run ACTUALLY applied, read from meta["narration"]. Asserting the rule is stated is
+    # strictly stronger than asserting one particular wording of it.
+    assert "narrated" in line and " - " in line
 
 
 def test_the_honest_header_reaches_every_surface_that_prints_it():

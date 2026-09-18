@@ -2643,6 +2643,12 @@ def run_multi_strategy_pipeline(
     }
     if narration_stage:
         meta["narration"].update(narration_stage)
+    # FINNHUB-SKIP-1 - lifted out of the narration record onto its own key, because it is
+    # a fact about the SENTIMENT channel rather than about which names were narrated.
+    _skipped = (meta.get("narration") or {}).pop("sentiment_skipped_non_us", None)
+    if _skipped is not None:
+        meta["sentiment"] = {**(meta.get("sentiment") or {}),
+                             "skipped_non_us": list(_skipped)}
     built = MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
                                 results=results, rows=rows, meta=meta,
                                 narratives=narratives, council=council)
@@ -3308,9 +3314,23 @@ def multi_header_line(result: MultiStrategyResult) -> str:
     # no bearing on the record of what happened. Keeping it here stacked two parentheticals
     # and three numbers into a line describing a run that had already finished.
     spend = final_cost_phrase(result.meta.get("actual_cost"), n)
-    return (f"{_pipeline_header(result.meta.get('council_mode') or 'narrator')}  "
-            f"One pass over the union of every lens's BUYs — {n} "
-            f"name{'s' if n != 1 else ''} narrated — {spend}.")
+    # NARR-LEVER-1 - the header states the rule that was APPLIED, read from the same
+    # record the section sentence and the cost read. It used to assert "the union of
+    # every lens's BUYs" unconditionally, which on the 18:34 run sat above a section
+    # saying "1 name narrated - all voting lenses agree" over nine sections. One set,
+    # one count, one rule, or the report argues with itself.
+    # A run carrying narratives is NOT a ranker-only run, whatever council_mode was left
+    # on it. The old line took the mode at face value and could print "no LLM ran" above
+    # two narration sections; the assertion meant to catch that was case-broken, so it
+    # never did (see tests/test_narration_union.py).
+    mode = result.meta.get("council_mode") or "narrator"
+    if mode == "ranker-only":
+        mode = "narrator"
+    record = result.meta.get("narration") or {}
+    rule = str(record.get("rule") or record.get("basis") or "").strip()
+    basis = f"{rule} - " if rule else "One pass over the union of every lens's BUYs - "
+    return (f"{_pipeline_header(mode)}  "
+            f"{basis}{n} name{'s' if n != 1 else ''} narrated - {spend}.")
 
 
 def floor_override_line(meta: dict) -> str:
@@ -4242,6 +4262,12 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
     # NARR-PARSE-1 — merged INTO the NARR-2 plan record rather than over it: the plan says
     # which names were chosen, this says what happened when they were written.
     meta["narration"] = {**(meta.get("narration") or {}), **narration_stage}
+    # FINNHUB-SKIP-1 - lifted out of the narration record onto its own key, because it is
+    # a fact about the SENTIMENT channel rather than about which names were narrated.
+    _skipped = (meta.get("narration") or {}).pop("sentiment_skipped_non_us", None)
+    if _skipped is not None:
+        meta["sentiment"] = {**(meta.get("sentiment") or {}),
+                             "skipped_non_us": list(_skipped)}
     # ``replace`` rather than a hand-built copy: this function listed the fields it
     # carried over, so every field ADDED to MultiStrategyResult since was silently
     # dropped by narrating. SHORTLIST-3's ``lens_agreement`` was — a narrated run came
@@ -4318,7 +4344,11 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
         outcomes.append(outcome)
         narratives[ticker] = _narrative_text(outcome)
     from .agents.runners import repaired_count
+    from .data.sentiment import skipped_non_us
     stage_meta = {
+        # FINNHUB-SKIP-1 - the names Finnhub was never asked about, so "why is sentiment
+        # dark for half this cohort?" is answerable from the record.
+        "sentiment_skipped_non_us": skipped_non_us(names),
         "attempted": total,
         "repaired": repaired_count(runners),
         "failed": [{"ticker": t, "reason": why} for t, why in failures],
@@ -4487,8 +4517,13 @@ def narrated_union(result: MultiStrategyResult,
     if coverage == "all":
         keep = lambda cells: any(c.status == _RANKED for c in cells.values())   # noqa: E731
     else:
+        # NARR-LEVER-1 - a CHECK lens's "buy" is not a vote. Forensic's top quintile
+        # carries verdict=="buy" internally (CHECK-WORDS-1 renders it "clean"), so before
+        # this guard four names entered the narration set on Forensic's say-so alone and
+        # roughly $1.40 of a $1.60 run went on names the lever had excluded.
         keep = lambda cells: any(                                               # noqa: E731
-            c.status == _RANKED and c.verdict == "buy" for c in cells.values())
+            c.status == _RANKED and c.verdict == "buy" and not c.is_check
+            for c in cells.values())
     return [row.ticker for row in result.rows if keep(row.cells)]
 
 

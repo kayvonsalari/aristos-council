@@ -29,6 +29,8 @@ verdict, a rank, a threshold or an abstention — this module only chooses words
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -227,6 +229,34 @@ CHECK_WORDS = {"buy": "clean", "hold": "no concern", "sell": "doubted"}
 # The rules line a check lens gets in place of the quintile sentence, so the words are
 # explained where they are first met rather than only in the glossary.
 CHECK_QUINTILE_LINE = "top 20% clean, bottom 20% doubted, middle no concern"
+
+
+# NARR-LEVER-1 - the three patterns the check-cell scrub uses, compiled once.
+_VERDICT_TOKEN = re.compile(r"\b(buy|hold|sell)\b", re.IGNORECASE)
+_CELL_EDGE = re.compile("^[\\s—–:,.\\-]+|[\\s—–:,.\\-]+$")
+_MULTI_SPACE = re.compile(r"\s{2,}")
+
+
+def scrub_check_cell(text: str) -> str:
+    """A CHECK lens's cell never carries BUY, HOLD or SELL. NARR-LEVER-1.
+
+    Live, 2026-09-18 18:34: the narrator's own per-name lens table rendered Forensic
+    as "BUY — CLEAN". The verdict words are the RUN's, and a check does not
+    issue them — it MARKS. "Forensic rated this BUY" reads as a call to buy
+    and is not one, which is the whole reason CHECK-WORDS-1 exists.
+
+    Detected by CONTENT, not by lens name: a cell carrying one of the check words is
+    a check's cell, and no voting lens ever emits those words. That keeps this right
+    for a check lens added later under a name nobody here has heard of.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return raw
+    if not any(word in raw.lower() for word in CHECK_WORDS.values()):
+        return raw
+    cleaned = _VERDICT_TOKEN.sub("", raw)
+    cleaned = _CELL_EDGE.sub("", cleaned).strip()
+    return _MULTI_SPACE.sub(" ", cleaned) or raw
 
 
 def is_check_lens(strategy) -> bool:
