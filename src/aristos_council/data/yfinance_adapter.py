@@ -173,6 +173,12 @@ class YFinanceAdapter(MarketDataAdapter):
         # Same best-effort contract as every series above — absent -> the band abstains.
         _record_aligned("ebit", income, "EBIT")
         _record_aligned("operating_income", income, "Operating Income")
+        # ABS-READINGS-1 — interest cover and the per-share growth record. ADDITIVE: no
+        # factor, criterion or strategy reads either series, so no ranking can move; they
+        # exist for the absolute readings on the company page, which do not vote.
+        _record_aligned("interest_expense", income,
+                        "Interest Expense", "Interest Expense Non Operating")
+        _record_aligned("diluted_eps", income, "Diluted EPS", "Basic EPS")
         # FORENSIC-1: the Altman Z-Score's X2 and X4 lines. Period-labelled like the
         # rest, because Z sums five ratios that must all describe the SAME fiscal year —
         # a positional read could take retained earnings from one year and assets from

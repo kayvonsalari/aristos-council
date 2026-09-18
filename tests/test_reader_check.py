@@ -281,7 +281,13 @@ def test_a_glossed_term_passes():
     assert check.ok, check.reason
 
 
-@pytest.mark.parametrize("term", ["free cash flow", "accrual", "momentum"])
+@pytest.mark.parametrize("term", ["free cash flow", "accrual", "momentum",
+                                 # ABS-READINGS-1 — the company-page terms. Advisory like
+                                 # every other one (READER-5): a missing gloss is a NOTE,
+                                 # never a reason to withhold, which is why widening the
+                                 # list cannot start suppressing summaries.
+                                 "net debt", "interest cover", "compound annual",
+                                 "peer group"])
 def test_every_glossed_term_is_noted(term):
     check = check_summary(_s(happened=f"The {term} was weak."), {})
     assert check.ok
@@ -289,10 +295,25 @@ def test_every_glossed_term_is_noted(term):
 
 
 def test_the_enforced_list_is_exactly_the_terms_of_art():
-    """READER-3. The parametrize above must not drift from the list it claims to cover."""
+    """READER-3. The parametrize above must not drift from the list it claims to cover.
+
+    Asserted as a SET IDENTITY against the parametrize's own cases rather than against a
+    hand-copied literal, so adding a term to the module without adding a case for it fails
+    here — which is the drift this test was written to catch, and which a second literal
+    would only have re-introduced.
+    """
     from aristos_council.reader_check import GLOSS_TERMS
 
-    assert set(GLOSS_TERMS) == {"percentile", "free cash flow", "accrual", "momentum"}
+    covered = {"percentile"}                      # its own test, just above
+    covered |= set(_parametrized_gloss_terms())
+    assert set(GLOSS_TERMS) == covered
+
+
+def _parametrized_gloss_terms() -> list[str]:
+    """The terms ``test_every_glossed_term_is_noted`` is actually parametrized over."""
+    marks = [m for m in test_every_glossed_term_is_noted.pytestmark
+             if m.name == "parametrize"]
+    return list(marks[0].args[1])
 
 
 def test_valuation_is_deliberately_NOT_enforced_either():

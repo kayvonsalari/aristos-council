@@ -84,6 +84,13 @@ primary left blank for a name it had already found. It can never discover a name
 second source that adds members is a second rule nobody wrote down. Every filled value is
 tagged on the member, counted in the report's source summary, and visible in `members.csv`.
 
+## One bulk job per day
+
+The cohort build, the MARKET-INDEX-1 build (`docs/MARKET_INDEX.md`) and any scheduled
+watcher all draw on the same EODHD daily quota, and a job that trips the quota stops
+half-finished. Run one of them per day. Each reports where it got to, and each resumes
+rather than starting again.
+
 ## The four cleanup rules
 
 Applied **in this order**, which is part of the contract (`cleanup.RULES`, pinned by a
