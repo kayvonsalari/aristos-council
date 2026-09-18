@@ -323,6 +323,32 @@ def _is_named(display: str, ticker: str, text: str) -> bool:
     return bool(ticker) and bool(re.search(rf"\b{re.escape(ticker)}\b", text))
 
 
+def _pack_series(pack: dict) -> list[dict]:
+    """Every packed series in a facts pack, wherever it was put.
+
+    Tolerant about shape on purpose: the reader's pack and the narrator's pack put series
+    in different places, and a check that only looked in one of them would silently stop
+    checking the other — which is the class of failure this whole item is about.
+    """
+    out: list[dict] = []
+
+    def _walk(node, depth: int = 0) -> None:
+        if depth > 4 or not isinstance(node, (dict, list)):
+            return
+        if isinstance(node, dict):
+            if "values" in node and "years" in node and "label" in node:
+                out.append(node)
+                return
+            for value in node.values():
+                _walk(value, depth + 1)
+        else:
+            for value in node:
+                _walk(value, depth + 1)
+
+    _walk(pack or {})
+    return out
+
+
 def check_summary(summary, pack: dict) -> ReaderCheck:
     """Check ``summary`` against ``pack``.
 
@@ -358,6 +384,16 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
     unknown = sorted({t for t in candidates if t.lower() not in known_names})
     if unknown:
         problems.append("name not in the run: " + ", ".join(unknown))
+
+    # 2b. FACTS-ORDER-1 — a direction claimed about a series, checked against the series.
+    # A FACTUAL check, not a style rule: it does not care how the prose reads, only that
+    # "decline" is not asserted about a series that rose. It WITHHOLDS because the 18:34
+    # run put exactly that on the page, with confident prose around it and four of the
+    # five open questions resting on it.
+    from .series_pack import direction_contradictions, direction_problem
+    wrong_way = direction_contradictions(text, _pack_series(pack))
+    if wrong_way:
+        problems.append(direction_problem(wrong_way))
 
     # 3. a named test described with the wrong role (READER-4). The 09:10 summary called
     # Magic Formula RAW "a check"; it is a second picker, and a reader told otherwise

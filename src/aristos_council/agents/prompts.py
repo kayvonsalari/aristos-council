@@ -56,6 +56,12 @@ PROMPT_VERSION = "v7"
 
 HARD_RULES = (
     "HARD RULES — these override everything else:\n"
+    "0. SERIES ORDER. Every multi-year series is given with its YEARS attached to "
+    "its values and its order stated. NEVER re-order a series, and never describe "
+    "its direction from anything but the years shown. A series whose years are "
+    "absent is given as 'not stated' — do not reconstruct it. (FACTS-ORDER-1: a "
+    "RISING free cash flow series was re-ordered and reported as 'a sustained "
+    "decline', and a specialist built its main risk on that.)\n"
     "1. NO ARITHMETIC. You may not add, multiply, divide, annualise, or "
     "otherwise compute. All math was done by deterministic tools; you reason "
     "about their outputs only.\n"

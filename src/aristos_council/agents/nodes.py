@@ -390,6 +390,18 @@ def _scoped_fundamentals(output: object, allowed: set[str]) -> dict:
     # series — the narrator built a value-trap argument on it. Withhold the value so
     # narration cannot cite it, and point to the annual series (the sustainability basis
     # the screens use). Display-only: the ledger keeps the full object; screens unchanged.
+    # FACTS-ORDER-1 — the annual series goes out with its YEARS attached and its order
+    # stated, never as a bare list. A bare list is what the narrator had to guess the
+    # order of, and it guessed wrong: it read a rising series as "a sustained decline"
+    # and the risk specialist built its main risk on that. A series whose periods cannot
+    # be labelled is withheld rather than sent out unlabelled.
+    if "free_cash_flow_annual" in d:
+        from ..series_pack import pack_series, packed_ok
+        packed = pack_series(output, "free_cash_flow_annual",
+                             label="Free cash flow, annual")
+        d.pop("free_cash_flow_annual")
+        d["free_cash_flow_annual"] = packed if packed_ok(packed) else {
+            "label": packed["label"], "note": packed["note"]}
     if "free_cash_flow" in d:
         d.pop("free_cash_flow")
         d["free_cash_flow_note"] = ("ttm_incl_one_offs — do not use for sustainability "
