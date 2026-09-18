@@ -1,0 +1,282 @@
+[
+ {
+  "Code": "APD",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "Air Products and Chemicals Inc",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "PPG",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "PPG Industries Inc",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "IFF",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "International Flavors & Fragrances Inc",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "SHW",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "Sherwin-Williams Co",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "LYB",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "LyondellBasell Industries NV",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "ALB",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "Albemarle Corp",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "ECL",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "Ecolab Inc",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "DD",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "Dupont De Nemours Inc",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "DOW",
+  "Exchange": "US",
+  "Industry": "Chemicals",
+  "Name": "Dow Inc",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "LIN",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "Linde plc Ordinary Shares",
+  "Sector": "Basic Materials",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "AI",
+  "Exchange": "PA",
+  "Industry": "Specialty Chemicals",
+  "Name": "Air Liquide SA",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "VCT",
+  "Exchange": "LSE",
+  "Industry": "Specialty Chemicals",
+  "Name": "Victrex plc",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "CRBN",
+  "Exchange": "AS",
+  "Industry": "Specialty Chemicals",
+  "Name": "Corbion NV",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "AKE",
+  "Exchange": "PA",
+  "Industry": "Specialty Chemicals",
+  "Name": "Arkema SA",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "AKZA",
+  "Exchange": "AS",
+  "Industry": "Specialty Chemicals",
+  "Name": "Akzo Nobel NV",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "SOLB",
+  "Exchange": "BR",
+  "Industry": "Chemicals",
+  "Name": "Solvay SA",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "SY1",
+  "Exchange": "XETRA",
+  "Industry": "Specialty Chemicals",
+  "Name": "Symrise AG",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "BNR",
+  "Exchange": "XETRA",
+  "Industry": "Specialty Chemicals",
+  "Name": "Brenntag SE",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "JMAT",
+  "Exchange": "LSE",
+  "Industry": "Specialty Chemicals",
+  "Name": "Johnson Matthey PLC",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "BAS",
+  "Exchange": "XETRA",
+  "Industry": "Chemicals",
+  "Name": "BASF SE",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "EVK",
+  "Exchange": "XETRA",
+  "Industry": "Specialty Chemicals",
+  "Name": "Evonik Industries AG",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "LXS",
+  "Exchange": "XETRA",
+  "Industry": "Specialty Chemicals",
+  "Name": "LANXESS Aktiengesellschaft",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "CRDA",
+  "Exchange": "LSE",
+  "Industry": "Specialty Chemicals",
+  "Name": "Croda International PLC",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "NSIS-B",
+  "Exchange": "CO",
+  "Industry": "Specialty Chemicals",
+  "Name": "Novonesis (Novozymes) A/S",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "FPE3",
+  "Exchange": "XETRA",
+  "Industry": "Specialty Chemicals",
+  "Name": "Fuchs Petrolub SE Preference Shares",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "HPOL-B",
+  "Exchange": "ST",
+  "Industry": "Specialty Chemicals",
+  "Name": "HEXPOL AB (publ)",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "EMSN",
+  "Exchange": "SW",
+  "Industry": "Specialty Chemicals",
+  "Name": "EMS-CHEMIE HOLDING AG",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "IMCD",
+  "Exchange": "AS",
+  "Industry": "Specialty Chemicals",
+  "Name": "IMCD NV",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "CLN",
+  "Exchange": "SW",
+  "Industry": "Specialty Chemicals",
+  "Name": "Clariant AG",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "GIVN",
+  "Exchange": "SW",
+  "Industry": "Specialty Chemicals",
+  "Name": "Givaudan SA",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "1COV",
+  "Exchange": "F",
+  "Industry": "Specialty Chemicals",
+  "Name": "Covestro AG",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "SIKA",
+  "Exchange": "SW",
+  "Industry": "Specialty Chemicals",
+  "Name": "Sika AG",
+  "Sector": "Basic Materials",
+  "_index": "STOXX.INDX"
+ },
+ {
+  "Code": "AIZ",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "Assurant, Inc.",
+  "Sector": "Financial Services",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "REG",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "Regency Centers Corporation",
+  "Sector": "Real Estate",
+  "_index": "GSPC.INDX"
+ },
+ {
+  "Code": "JPM",
+  "Exchange": "US",
+  "Industry": "Specialty Chemicals",
+  "Name": "JPMorgan Chase & Co",
+  "Sector": "Financial Services",
+  "_index": "GSPC.INDX"
+ }
+]

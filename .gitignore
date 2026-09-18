@@ -32,3 +32,12 @@ reports/universe_runs/
 # a stray copy must not ride along in a 'git add -A'.
 holdings*.csv
 holdings*.txt
+
+# COHORT-1 — built cohorts are machine-generated local data, rebuilt from the rule.
+# definitions.yaml IS source and stays tracked (the negation below). See docs/COHORTS.md.
+data/local/cohorts/*/
+!data/local/cohorts/definitions.yaml
+
+# COHORT-1 — cohort lists registered for the UI, one per build. The frozen members.csv
+# is the record; this is a copy for the sidebar.
+universes/local/cohort_*.yaml
