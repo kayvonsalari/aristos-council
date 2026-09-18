@@ -1802,6 +1802,26 @@ def _publish_single(result, run_start, universe_display_name) -> None:
     _supersede(run_start, paths)
 
 
+def _thin_lens_hint(level: str) -> str:
+    """The NARR-ZERO-1 pre-run hint, from the last ranked result for this cohort.
+
+    Pure apart from the session lookup, so the judgement itself
+    (``pipeline.thin_voting_lens_note``) is unit-tested without Streamlit.
+    """
+    from aristos_council.pipeline import thin_voting_lens_note
+
+    pending = st.session_state.get("uni_pending_narration") or {}
+    result = (pending.get("result")
+              or st.session_state.get("uni_multi_result")
+              or st.session_state.get("uni_result"))
+    if result is None:
+        return ""
+    try:
+        return thin_voting_lens_note(result, level)
+    except Exception:                    # a hint must never be able to break the tab
+        return ""
+
+
 def _narration_levers(pending: dict) -> dict:
     """The NARR-2 levers off a pending narration, with the defaults a record written
     before they existed would need. One reader, so the confirmation and the run cannot
@@ -1838,7 +1858,8 @@ def _render_narration_confirmation() -> None:
     ever spent from the button that carries that figure. "Keep the free ranking" reports
     the run exactly as a ranker-only run: the work is done and is never discarded."""
     from aristos_council.pipeline import (
-        narrate_multi_strategy, narrate_rank_result, narration_plan)
+        narrate_multi_strategy, narrate_rank_result, narration_plan, narration_record,
+        narration_zero_line)
 
     pending = st.session_state.get("uni_pending_narration")
     if not pending:
@@ -1851,10 +1872,22 @@ def _render_narration_confirmation() -> None:
 
     if not plan["count"]:
         # Nothing to narrate — there is no spend to confirm, so do not ask.
+        #
+        # NARR-ZERO-1: but the RECORD must still say the narrator was asked for. This path
+        # never calls narrate_multi_strategy, so before this fix the published report was
+        # the rank stage's, headed "ranker only, no AI commentary" — contradicting the
+        # mode the owner had chosen, with nothing anywhere saying the rule matched zero
+        # names. A correct run was indistinguishable from a narrator that had crashed.
+        if getattr(result, "meta", None) is None:
+            result.meta = {}
+        result.meta["narration"] = narration_record(plan, mode="narrator")
+        result.meta["council_mode"] = "narrator"
+        result.meta["ranker_only"] = False
         st.session_state.pop("uni_pending_narration", None)
         (_publish_multi if pending["kind"] == "multi" else _publish_single)(
             result, run_start, display_name)
-        st.info("The ranking produced no name to narrate, so the run is complete and "
+        st.info(narration_zero_line(result) or
+                "The ranking produced no name to narrate, so the run is complete and "
                 "nothing was charged.")
         return
 
@@ -2374,9 +2407,15 @@ def _contents_markdown(sections) -> list[str]:
 
 def _multi_narration_markdown(multi_result) -> list[str]:
     """The narration sections of a multi-lens run (NARR-UNION-1) — ONE per NAME, headed by
-    the name, in the verdict table's own order. ``[]`` on a ranker-only run."""
+    the name, in the verdict table's own order. ``[]`` on a ranker-only run.
+
+    NARR-ZERO-1: a run that ASKED to narrate and matched nothing gets the section anyway,
+    carrying the reason. An absent section is indistinguishable from a feature that was
+    never switched on — which is exactly how this defect read."""
     if not multi_result.narratives:
-        return []
+        from aristos_council.pipeline import narration_zero_line
+        zero = narration_zero_line(multi_result)
+        return ["", "## Narration", "", f"_{zero}_"] if zero else []
     m = multi_result.meta
     basis = m.get("narration_basis", "")
     count = m.get("narrated_count", len(multi_result.narratives))
@@ -2801,6 +2840,10 @@ def _render_universe_result(result) -> None:
         _failed = narration_failure_line(result)
         if _failed:
             st.warning(_failed)                 # NARR-PARSE-1 — never a silent gap
+        from aristos_council.pipeline import narration_zero_line
+        _zero = narration_zero_line(result)     # NARR-ZERO-1 — say WHY there is nothing
+        if _zero:
+            st.info(_zero)
         if result.narratives:
             verdict_of = {r.ticker: r.verdict.upper() for r in result.ranked}
             for ticker, text in result.narratives.items():
@@ -2808,7 +2851,7 @@ def _render_universe_result(result) -> None:
                 disp = display_name(ticker, result.names.get(ticker))
                 with st.expander(f"{disp}{(' · ' + v) if v else ''} — narration"):
                     st.markdown(_md(text) or "_(no narrative produced)_")
-        else:
+        elif not _zero:
             st.caption("No names reached the council.")
 
     # 6 — download the run (a convenience copy; UI-FIX-1 already auto-persisted the same
@@ -3177,6 +3220,17 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 # "all" are the same test. Saying so beats offering a choice that is not
                 # one.
                 st.caption("2 voting lenses ticked: most = all.")
+            # NARR-ZERO-1 — the condition that bit the 18:09 run: Cyclical Income ranked
+            # 1 of 21 names, so "all voting lenses agree" could only ever match that one.
+            # Said BEFORE the run, under the lever that is hostage to it.
+            #
+            # It needs per-lens ranked counts, which exist only once this cohort HAS been
+            # ranked — so it reads the last result in the session and is silent before the
+            # first run. Silent is the right failure: a hint that guessed would be worse
+            # than no hint.
+            _thin = _thin_lens_hint(narrate_level)
+            if _thin:
+                st.caption(_thin)
             narrate_cap = int(st.number_input(
                 "Up to", min_value=1, max_value=60, value=DEFAULT_NARRATION_CAP, step=1,
                 key="uni_narr_cap",
