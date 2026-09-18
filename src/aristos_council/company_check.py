@@ -137,6 +137,11 @@ class CompanyCheckResult:
     # evaluated — insufficient history: 1.4y") is information, not something to hide.
     # Strictly display: it feeds no screen, no gate and no verdict in this PR.
     valuation_band: str = "—"
+    # ABS-READINGS-1 — two readings that depend on NO comparison group, beside the band
+    # and the Forensic marks. They do not vote, no strategy selects them, and nothing on
+    # this page is ranked by them; they are facts about one company's own accounts.
+    debt_and_cash: object = None
+    growth_record: object = None
 
     @property
     def display(self) -> str:
@@ -277,6 +282,12 @@ def run_company_check(
     fi = gather_factor_inputs(adapter, ticker, today=today, with_valuation_band=True)
     f = fi.fundamentals
     company_name = getattr(f, "company_name", None) if f is not None else None
+    # ABS-READINGS-1 — pure functions over the fundamentals already fetched. No extra
+    # call, and they abstain rather than raise, so an unrateable name still reaches the
+    # UNRATEABLE branch below unchanged.
+    from .abs_readings import debt_and_cash as _debt_and_cash
+    from .abs_readings import growth_record as _growth_record
+    readings = {"debt_and_cash": _debt_and_cash(f), "growth_record": _growth_record(f)}
 
     di = DataIntegrity(
         fundamentals_ok=f is not None,
@@ -404,7 +415,8 @@ def run_company_check(
         reference_run_id=ref_run_id, reference_run_date=ref_run_date,
         reference_cohort_n=cohort_n, data_integrity=di, pointer=pointer,
         verdict_of_record=verdict_of_record, valuation_band=valuation_band_display(fi),
-        market_cap_in_gates=market_cap_in_gates, screen_less=screen_less)
+        market_cap_in_gates=market_cap_in_gates, screen_less=screen_less,
+        **readings)
 
 
 def _universe_tickers(universe_id: str, universes_dir: Path) -> list[str]:

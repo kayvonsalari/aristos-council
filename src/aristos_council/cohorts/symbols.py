@@ -19,6 +19,19 @@ EODHD_TO_YAHOO_SUFFIX: dict[str, str] = {
     "SW": ".SW", "VX": ".SW",
     "ST": ".ST", "CO": ".CO", "OL": ".OL", "HE": ".HE",
     "MI": ".MI", "MC": ".MC", "VI": ".VI", "WAR": ".WA",
+    # MARKET-INDEX-1 — the venues the market index tracks beyond Europe. Same table,
+    # extended rather than a second one: a symbol translated two different ways in two
+    # places is how a cohort and a peer group end up disagreeing about the same company.
+    "TO": ".TO", "V": ".V", "NEO": ".NE",          # Canada
+    "HK": ".HK", "SHG": ".SS", "SHE": ".SZ",       # Hong Kong / mainland China
+    "T": ".T",                                      # Tokyo
+    "KO": ".KS", "KS": ".KS", "KQ": ".KQ",         # Korea
+    "AU": ".AX", "ASX": ".AX", "NZ": ".NZ",        # Australia / New Zealand
+    "TW": ".TW", "TWO": ".TWO",                    # Taiwan
+    "SA": ".SA",                                    # Brazil
+    "NSE": ".NS", "BSE": ".BO",                    # India
+    "JSE": ".JO", "TA": ".TA", "IS": ".IS",        # South Africa / Israel / Turkey
+    "SR": ".SR", "MX": ".MX",                      # Saudi / Mexico
 }
 
 

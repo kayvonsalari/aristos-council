@@ -1,0 +1,45 @@
+# MARKET-INDEX-1 — which venues the local market index tracks.
+#
+# The index is a table of every listed COMMON STOCK with its classification and size,
+# built once from EODHD and queried locally. It exists because no per-report peers
+# endpoint works on this plan: Finnhub /stock/peers is 403 for every non-US symbol and
+# caps at 12 names where it answers, EODHD's /screener is 403, and S&P 500 + STOXX 600
+# together hold a median of six companies per industry. See docs/MARKET_INDEX.md.
+#
+# Editing this file changes what a BUILD fetches. It does not change a table already
+# built: rows are keyed by ticker and only removed by deleting the index.
+#
+# Cost: roughly one call per listed common stock, plus one per exchange for the listing.
+# Rows younger than max_age_days are skipped without a call, so a re-run is cheap.
+
+exchanges:
+  # North America
+  - US            # NYSE + NASDAQ + AMEX, the deepest single pool of comparables
+  - TO            # Toronto
+  # Europe
+  - XETRA
+  - LSE
+  - PA            # Euronext Paris
+  - AS            # Euronext Amsterdam
+  - MC            # Madrid
+  - MI            # Milan
+  - SW            # SIX Swiss
+  - ST            # Stockholm
+  - CO            # Copenhagen
+  - OL            # Oslo
+  - HE            # Helsinki
+  # Asia-Pacific and Latin America — where the comparables for a chip maker, a miner or
+  # a shipping line are actually listed. Peers follow the industry, not the listing.
+  - HK
+  - T             # Tokyo
+  - KS            # Korea
+  - AU            # Australia
+  - TW            # Taiwan
+  - SA            # Brazil
+
+# A row older than this is refetched by `refresh`. Classification and venue change on the
+# order of years; market cap moves daily, but the peer ladder compares in BANDS (a quarter
+# to four times), which a month of drift does not cross.
+max_age_days: 30
+
+root: data/local/market_index

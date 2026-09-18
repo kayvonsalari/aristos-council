@@ -812,6 +812,40 @@ the same position are not equally well supported if one of them was measured on
 everything and the other on two thirds of it, and the marker is there so that difference
 is never invisible.
 
+### 4.6 Absolute readings — no comparison group (ABS-READINGS-1)
+
+Every lens in this repo is RELATIVE: a BUY means "near the top of the list this ran on".
+That is the right answer to "which of these forty" and no answer at all to "what is this
+company like" — which is why a portfolio run that ranks a chip maker against a utility
+says nothing about either. These two readings say something about one company on its own.
+
+**They are not lenses.** They do not vote, no strategy selects them, they are absent from
+the factor registry, and nothing on any page is ranked by them (pinned by
+`tests/test_abs_readings.py`). They are facts about a set of accounts.
+
+**Debt and cash.** Net debt is total debt minus cash; a MISSING cash balance is disclosed
+("cash not reported, so this is gross debt") rather than treated as zero, which is house
+rule 3 applied to the balance sheet. Net debt over operating cash flow is stated in years
+("would take 5.0 years of operating cash flow to repay its debt"), and abstains when cash
+flow is not positive, because there is then no number of years that would repay it.
+Interest cover is operating income over the interest bill; a company that reports **no**
+interest expense **abstains** rather than reporting infinity — it does not have infinite
+cover, it has no ratio, and a huge number would read as a strength measured on the same
+scale as a real one. Years to repay from free cash flow abstains the same way when free
+cash flow is not positive, saying that the debt is not being repaid out of it at all.
+
+**Growth record.** Revenue and earnings per share as compound annual rates over 5 and 10
+years, plus "grew in N of the M years reported". It uses the years that exist and SAYS how
+many ("only 3 of 10 years available"); below three years it abstains, because two points
+are a line and not a trend. A compound rate is never taken across a non-positive start —
+a rate off a negative base is not a growth rate, the same discipline `max_peg_ratio` and
+`min_revenue_cagr` already apply. Holes in the series are dropped and the span is reported
+honestly: a company with 2018 and 2024 and nothing between has a two-year span on three
+points, and the label says so rather than calling it a ten-year rate. Earnings per share
+prefers the reported line and falls back to net income over the share count, period-matched
+through the dated series and **disclosed in the label** as derived — the same fallback
+discipline `earnings_yield` uses when EV is unavailable.
+
 ## 5. Guards
 
 - **UNRATEABLE** — a ticker with failed fundamentals *and* no usable price history (a

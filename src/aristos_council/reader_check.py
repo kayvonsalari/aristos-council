@@ -86,7 +86,12 @@ _TICKER = re.compile(r"\b([A-Z]{1,6}(?:[.-][A-Z0-9]{1,4})?)\b")
 # less legible than the jargon it was meant to explain. v4 asks for the plain phrase in
 # the sentence instead ("cost far more than usual for the profit they make, compared with
 # their own last five years"), and a rule demanding a bracket would work against that.
-GLOSS_TERMS = ("percentile", "free cash flow", "accrual", "momentum")
+# ABS-READINGS-1 adds the company-page terms. These are ADVISORY (READER-5): a missing
+# gloss is recorded in meta["notes"] and is never a reason to withhold a summary, so
+# widening the list cannot start suppressing output — it only asks a future company note
+# to explain itself the first time it says "net debt".
+GLOSS_TERMS = ("percentile", "free cash flow", "accrual", "momentum",
+               "net debt", "interest cover", "compound annual", "peer group")
 GLOSS_WINDOW = 60
 
 # READER-2 — "2 to 3 names" when the pack holds the exact figure. A range is a way of not

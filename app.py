@@ -3594,6 +3594,60 @@ def render_company_check_tab(show_validation: bool = False) -> None:
         _render_company_check(result)
 
 
+def _render_absolute_readings(result) -> None:
+    """ABS-READINGS-1 — what the accounts say, with no comparison group involved.
+
+    Beside the valuation band and the Forensic marks because they answer the same kind of
+    question: not "how does this rank" but "what is this company like". They do not vote.
+    """
+    debt, growth = result.debt_and_cash, result.growth_record
+    if debt is None and growth is None:
+        return
+    st.subheader("Absolute readings")
+    st.caption("No comparison group. These are facts about this company's own accounts — "
+               "they are not lenses, they do not vote, and nothing here is ranked.")
+    if debt is not None:
+        st.markdown("**Debt and cash**")
+        for line in debt.lines():
+            st.markdown(f"- {line}")
+    if growth is not None:
+        st.markdown("**Growth record**")
+        for line in growth.lines():
+            st.markdown(f"- {line}")
+
+
+def _render_peers(result) -> None:
+    """MARKET-INDEX-1 — who this company would be measured against. No verdicts yet."""
+    from aristos_council.market_index import IndexStore, load_config, peers
+
+    st.subheader("Peers")
+    try:
+        store = IndexStore(load_config()["root"])
+        group = peers(result.ticker, store=store)
+    except Exception as exc:                 # a missing table must not take the tab down
+        st.info("The market index is not available — "
+                "`python -m aristos_council.market_index build`")
+        st.caption(f"({type(exc).__name__}: {exc})")
+        return
+
+    if not group.available:
+        st.info("No peer group for this name.")
+        for reason in group.reasons:
+            st.caption(f"· {reason}")
+        return
+
+    st.caption(group.sentence())
+    import pandas as pd
+    st.dataframe(pd.DataFrame([{
+        "Ticker": r.ticker, "Name": r.name, "Exchange": r.exchange,
+        "Market cap": ("—" if r.market_cap is None
+                       else f"{r.market_cap:,.0f} {r.currency}"),
+        "Sub-industry": r.classification,
+    } for r in group.members]), hide_index=True, width="stretch")
+    for reason in group.reasons:
+        st.caption(f"· {reason}")
+
+
 def _render_company_check(result) -> None:
     from aristos_council.company_check import format_company_check
 
@@ -3670,6 +3724,9 @@ def _render_company_check(result) -> None:
         st.markdown(f"- **{fc.label}** (`{fc.factor}`): "
                     f"{format_factor_value(fc.factor, fc.value)} "
                     f"_[{fc.source}]_ — {fc.context}")
+
+    _render_absolute_readings(result)
+    _render_peers(result)
 
     # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen reference run when the
     # checked name had a recorded outcome; Company Check never issues one itself.

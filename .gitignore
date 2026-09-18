@@ -41,3 +41,7 @@ data/local/cohorts/*/
 # COHORT-1 — cohort lists registered for the UI, one per build. The frozen members.csv
 # is the record; this is a copy for the sidebar.
 universes/local/cohort_*.yaml
+
+# MARKET-INDEX-1 — the local market table is machine-built and rebuildable from
+# EODHD; market_index.yaml (the rule) IS tracked. See docs/MARKET_INDEX.md.
+data/local/market_index/
