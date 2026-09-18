@@ -311,6 +311,7 @@ def test_a_multi_lens_RANKER_ONLY_run_never_reaches_the_narration_entry_point(mo
     narration stage EXPLODE if it is ever entered."""
     from datetime import date
 
+    import aristos_council.agents.runners as runners_mod
     from aristos_council import pipeline
     from tests.test_multi_strategy_run import (
         RAW, SCREENED, STRAT_DIR, TODAY, UNIVERSE, _Adapter,
@@ -320,7 +321,20 @@ def test_a_multi_lens_RANKER_ONLY_run_never_reaches_the_narration_entry_point(mo
         raise AssertionError("a multi-lens run reached the council/narration stage")
 
     monkeypatch.setattr(pipeline, "_council_stage", _boom)
-    monkeypatch.setattr(pipeline, "production_runners", _boom, raising=False)
+    # The second barrier goes on runners_mod, not on pipeline. ``pipeline`` imports
+    # production_runners INSIDE the function body (``from .agents.runners import
+    # production_runners``), so the name it uses is looked up on that module at call time
+    # and ``pipeline.production_runners`` is never read — it does not even exist, which is
+    # why patching it there needed ``raising=False`` to avoid an error. The barrier was
+    # decorative: it invented an attribute nobody looks at. test_narration_schema and
+    # test_confirm_spend patch runners_mod, and that is the module the lookup resolves
+    # through.
+    monkeypatch.setattr(runners_mod, "production_runners", _boom)
+    # ...and prove the barrier still reaches, by making the SAME import the pipeline makes.
+    # If production_runners is ever imported eagerly at the top of pipeline.py, or moved to
+    # another module, this fails loudly instead of the guard going quiet again.
+    from aristos_council.agents.runners import production_runners as _as_pipeline_sees_it
+    assert _as_pipeline_sees_it is _boom,         "the barrier no longer reaches the lookup pipeline.py makes"
 
     multi = pipeline.run_multi_strategy_pipeline(
         UNIVERSE, [SCREENED, RAW], strategies_dir=STRAT_DIR, adapter=_Adapter(),
