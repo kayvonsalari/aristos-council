@@ -124,6 +124,10 @@ LangGraph orchestration, Anthropic models, pydantic state.
    - **Run the full pytest suite before EVERY commit. A commit with a red suite
      is forbidden, including docs-only commits (imports break through refactors
      — this repo has the scar).**
+   - **No test may reach the real data adapter** (TEST-ISOLATION-1). Inject a
+     fake, or mark the test `@pytest.mark.real_adapter` if it is genuinely about
+     the provider. The suite reads no `.env` and no API keys. Full rule and the
+     reasoning: `docs/TESTING.md`.
 7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
    a new `<id>_v<n+1>.yaml` and refuses to overwrite — recorded verdicts and
    run reports reference their `strategy_id` and must stay reproducible
