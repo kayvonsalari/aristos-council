@@ -316,6 +316,47 @@ def _statement_note(f, earnings) -> str:
             f"{month_note}; the band needs {BAND_YEARS} years)")
 
 
+# BAND-STMT-2 — how close the first statement and the first price have to be before we
+# call a company young rather than a feed short.
+_LISTING_MATCH_DAYS = 365
+# ...and how far inside the requested window the price history must genuinely BEGIN.
+_WINDOW_EDGE_DAYS = 90
+
+
+def _young_company_reason(earnings, bars, *, asof: date, years: int) -> str:
+    """"only 3 years of statements exist for this company; the band needs 5, so it is not
+    stated" — when the statements are short because the COMPANY is, or ``""``.
+
+    BAND-STMT-2. BAND-STMT-1 made the abstention name what it saw ("4 annual statements
+    seen, fiscal year ends June"), which sends a reader to check the FEED — right for
+    Procter & Gamble, wrong for Secure Waste, where the same sentence reads like a data
+    fault about a company that has simply not existed very long.
+
+    The test is that the statements and the price history START TOGETHER. And it needs a
+    second condition, which is the whole difficulty: we ask for ``years`` of bars, so for
+    any company older than the window the earliest bar we HOLD is the window edge, and
+    P&G's four statements would sit within a year of it and read as a young company. So
+    the price history must also genuinely begin INSIDE the window rather than at its edge.
+    A company older than the window therefore always falls through to BAND-STMT-1's
+    wording, which is the safe direction: naming what the feed returned is never wrong,
+    it is only less kind.
+    """
+    dates = sorted(d for d in (earnings[0] if earnings else []) if d is not None)
+    days = sorted(getattr(b, "day", None) for b in (bars or [])
+                  if getattr(b, "day", None) is not None)
+    if not dates or not days:
+        return ""
+    window_start = date(asof.year - years, asof.month, asof.day)         if asof.day != 29 or asof.month != 2 else date(asof.year - years, 3, 1)
+    first_price, first_statement = days[0], dates[0]
+    if (first_price - window_start).days < _WINDOW_EDGE_DAYS:
+        return ""                     # the series is window-clipped; it says nothing
+    if abs((first_statement - first_price).days) > _LISTING_MATCH_DAYS:
+        return ""                     # statements start well away from the listing: a gap
+    n = len(dates)
+    return (f"only {n} year{'s' if n != 1 else ''} of statements exist for this company; "
+            f"the band needs {BAND_YEARS}, so it is not stated")
+
+
 def valuation_band(bars: Sequence, fundamentals, *, asof: date,
                    years: int = BAND_YEARS,
                    min_years: float = MIN_YEARS,
@@ -389,16 +430,19 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
         series.append((day, value))
 
     covered = len(series)
+    # BAND-STMT-2 — a genuinely young company gets its own sentence INSTEAD of BAND-STMT-1's
+    # "what the feed returned", because for it the feed returned everything there is.
+    young = _young_company_reason(earnings, bars, asof=asof, years=years)
     stmt = _statement_note(f, earnings)          # BAND-STMT-1
     if covered < 2:
         return _abstain(
-            f"insufficient history: band from {covered} of {total} months{stmt}",
+            young or f"insufficient history: band from {covered} of {total} months{stmt}",
             covered=covered, total=total)
 
     span = (series[-1][0] - series[0][0]).days / 365.25
     if span < min_years:
-        return _abstain(f"insufficient history: {span:.1f}y{stmt}", covered=covered,
-                        total=total, years=span)
+        return _abstain(young or f"insufficient history: {span:.1f}y{stmt}",
+                        covered=covered, total=total, years=span)
     months_in_span = sum(1 for d, _ in points if series[0][0] <= d <= series[-1][0])
     if months_in_span and covered / months_in_span < MIN_COVERAGE:
         return _abstain(f"insufficient coverage: band from {covered} of "
