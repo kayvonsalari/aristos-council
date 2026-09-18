@@ -1,0 +1,125 @@
+# COHORT-1 — the ten rules. A cohort is defined HERE and built mechanically from it.
+#
+# Nothing in this file is a list of companies. Editing a rule does not change any cohort
+# that has already been built: membership is frozen per version under
+# data/local/cohorts/<slug>/vN/members.csv, and that is what the rest of Aristos reads.
+#
+# INDUSTRY CODES are EODHD's `General::Industry` strings, filled in after probing the live
+# API on 2026-09-18 (GSPC.INDX + STOXX.INDX constituents, 132 distinct values). A GICS
+# sub-industry name is also accepted and mapped — see cohorts/definitions.py,
+# GICS_TO_EODHD. An industry string in neither table is an error at load, never a cohort
+# that silently builds to nothing.
+#
+# MIN_MARKET_CAP is in EACH NAME'S OWN CURRENCY and is deliberately NOT converted. This
+# follows CLAUDE.md rule 8: the repo refuses FX conversion for absolute money thresholds
+# and prefers an honest, stated approximation to forty fake-precise ones. A 1bn floor is a
+# "not a micro-cap" filter, not a precise size test, and it does that job in EUR, USD, CHF
+# and GBP alike. See docs/COHORTS.md.
+#
+# EXCLUDE defaults to [financials, reits] for every cohort; it is written out here so the
+# default is visible rather than implied.
+#
+# ANCHORS are the one place a ticker may be named, and an anchor is included ONLY if it
+# passes the same rules as everything else — it is a name to LOOK AT in the report, never
+# a way to hand-pick membership. They ship empty: naming them is the owner's call, and a
+# builder that invented them would be doing the one thing this design exists to prevent.
+#
+# The count after each industry code is how many names it matched in the probe, BEFORE
+# cleanup. Cleanup only ever removes, so a code at 24 can still land under the 20 floor.
+
+cohorts:
+  # 11 matched. Known to be thin — "integrated" is a genuinely small set, and the builder
+  # will say so and suggest a fix rather than pad it. Left honest on purpose.
+  - name: "Integrated Oil & Gas"
+    industry: ["Oil & Gas Integrated"]                      # 11
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
+
+  - name: "Electric Utilities"
+    industry: ["Utilities - Regulated Electric"]            # 28
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
+
+  - name: "Pharma EU-US"
+    industry:                                               # 19 + 7
+      - "Drug Manufacturers - General"
+      - "Drug Manufacturers - Specialty & Generic"
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
+
+  - name: "Food & Beverage"
+    industry:                                               # 13 + 7 + 5 + 5 + 4
+      - "Packaged Foods"
+      - "Beverages - Brewers"
+      - "Beverages - Non-Alcoholic"
+      - "Beverages - Wineries & Distilleries"
+      - "Confectioners"
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
+
+  # 42 on its own — the one cohort likely to come back TOO WIDE. Left as the honest
+  # single code so the builder's "narrow the industry" path is exercised by a real case.
+  - name: "Industrial Machinery"
+    industry: ["Specialty Industrial Machinery"]            # 42
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
+
+  - name: "Semiconductors"
+    industry:                                               # 18 + 8
+      - "Semiconductors"
+      - "Semiconductor Equipment & Materials"
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
+
+  - name: "Application Software"
+    industry: ["Software - Application", "Software"]        # 21 + 1
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
+
+  - name: "Telecoms"
+    industry: ["Telecom Services"]                          # 22
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
+
+  - name: "Chemicals"
+    industry: ["Specialty Chemicals", "Chemicals"]          # 29 + 3
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
+
+  - name: "Consumer Staples Retail"
+    industry:                                               # 11 + 6 + 3
+      - "Grocery Stores"
+      - "Discount Stores"
+      - "Food Distribution"
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX]
+    min_market_cap: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    anchors: []
