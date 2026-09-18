@@ -2631,8 +2631,18 @@ def run_multi_strategy_pipeline(
     # NARR-PARSE-1 — what the narration stage had to repair, and what it could not.
     # ``setdefault`` then ``update``: this path writes no NARR-2 plan, the confirm-spend
     # path writes one FIRST, and neither may clobber the other's keys.
+    # NARR-ZERO-1 — always a record, even when the stage never ran. ``narrated_union`` is
+    # this path's rule, so its coverage is the "rule" and the union is what was eligible.
+    meta["narration"] = {
+        **narration_record(
+            {"basis": NARRATION_BASIS.get(narrate_coverage, narrate_coverage),
+             "qualified": list(union), "names": list(narratives),
+             "count": len(narratives), "not_narrated": []},
+            mode=("ranker" if ranker_only else "narrator")),
+        **(meta.get("narration") or {}),
+    }
     if narration_stage:
-        meta.setdefault("narration", {}).update(narration_stage)
+        meta["narration"].update(narration_stage)
     built = MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
                                 results=results, rows=rows, meta=meta,
                                 narratives=narratives, council=council)
@@ -3285,6 +3295,12 @@ def multi_header_line(result: MultiStrategyResult) -> str:
     carried three narration sections under a header swearing no model had been called.
     Reading ``narratives`` means the line cannot outlive the behaviour it describes."""
     if not result.narratives:
+        # NARR-ZERO-1 — a narrator run that matched nothing is NOT a ranker-only run, and
+        # saying so was the defect. Neither header fits, so the line says what actually
+        # happened: the verdict clause, then the reason there is no narrative.
+        zero = narration_zero_line(result)
+        if zero:
+            return f"Verdict: deterministic ranker.  {zero}"
         return _pipeline_header("ranker-only")
     n = len(result.narratives)
     # COST-4: ONE cost figure in the record — the FINAL one. The estimate is a decision
@@ -4056,6 +4072,96 @@ def narration_plan(result, coverage: str = "buys_only", *,
     }
 
 
+# --------------------------------------------------------------------------- #
+# NARR-ZERO-1 — a run that narrates nothing must say WHY
+# --------------------------------------------------------------------------- #
+# Live, 2026-09-18 18:09: narrator mode, four lenses, lever "all voting lenses agree". No
+# name was rated BUY by all three voting lenses, so the narration stage was skipped — and
+# the saved report was the one the RANK stage writes, headed "ranker only, no AI
+# commentary". The mode the owner chose was contradicted by the report, nothing anywhere
+# said the rule had matched zero names, and a CORRECT run was indistinguishable from a
+# narrator that had crashed.
+#
+# Reporting only. No logic moves, no cost moves, no verdict moves.
+NARRATION_MODES = ("narrator", "ranker", "second_opinion")
+
+
+def narration_record(plan: dict, *, mode: str, narrated: Optional[int] = None) -> dict:
+    """The record that goes on ``meta["narration"]`` — written ALWAYS, zero included.
+
+    A skipped stage used to leave the plan behind and nothing else, so "why is there no
+    narration?" could not be answered from the record at all. It now carries the mode that
+    was REQUESTED, the rule that was applied, how many names met it, how many were written
+    and how many a check's doubt removed. The plan's own keys are kept alongside, so every
+    existing reader is unaffected.
+    """
+    not_narrated = [dict(n) for n in (plan.get("not_narrated") or ())]
+    skipped_doubted = sum(
+        1 for n in not_narrated
+        if any(str(m).startswith("doubted by ") for m in (n.get("marks") or ())))
+    written = plan.get("count", 0) if narrated is None else narrated
+    return {
+        "mode": mode,
+        "rule": plan.get("basis", ""),
+        "eligible": len(plan.get("qualified") or ()),
+        "narrated": int(written or 0),
+        "skipped_doubted": skipped_doubted,
+        # the plan as it was already recorded, unchanged
+        "level": plan.get("level"), "cap": plan.get("cap"),
+        "skip_marked": plan.get("skip_marked"), "basis": plan.get("basis", ""),
+        "selected": list(plan.get("names") or ()),
+        "qualified": list(plan.get("qualified") or ()),
+        "not_narrated": not_narrated,
+    }
+
+
+def narration_zero_line(result) -> str:
+    """"Narrator requested. No name met the narration rule (…)" — or ``""``.
+
+    Only for a run that ASKED for narration and got none. A ranker-only run narrating
+    nothing is not news; a narrator run narrating nothing is the whole story.
+    """
+    record = (getattr(result, "meta", None) or {}).get("narration") or {}
+    if record.get("mode") != "narrator" or record.get("narrated"):
+        return ""
+    rule = record.get("rule") or record.get("basis") or "the narration rule"
+    return (f"Narrator requested. No name met the narration rule ({rule}), so nothing "
+            f"was narrated and nothing was charged.")
+
+
+def thin_voting_lens_note(result, level: str, *, share: float = 0.25) -> str:
+    """The pre-run hint: a lens that ranks almost nothing makes unanimity impossible.
+
+    Cyclical Income ranked 1 of 21 names on the portfolio, so "all voting lenses agree"
+    could only ever have matched that one name. That is not a bug and not worth blocking a
+    run over — it is worth SAYING, before the run rather than after it, because the owner
+    picked a lever whose answer was already determined.
+
+    Only for the unanimity lever: "most" and "any" are not hostage to the narrowest lens.
+    """
+    if level != "all":
+        return ""
+    ag = getattr(result, "lens_agreement", None)
+    if ag is None or not getattr(ag, "available", False):
+        return ""
+    total = len(getattr(result, "rows", None) or ())
+    if not total:
+        return ""
+    thin = []
+    for sid in (ag.voting_ids or ()):
+        per_lens = (getattr(result, "results", None) or {}).get(sid)
+        ranked = len([r for r in (getattr(per_lens, "ranked", None) or ())
+                      if not r.excluded]) if per_lens is not None else 0
+        if ranked < total * share:
+            thin.append(ag.voting_labels.get(sid, sid))
+    if not thin:
+        return ""
+    names = ", ".join(thin)
+    verb = "ranks" if len(thin) == 1 else "rank"
+    return (f"{names} {verb} few names on this list, so unanimous agreement may match "
+            f"nothing.")
+
+
 def narration_basis(level: str, skip_marked: bool) -> str:
     """The rule in words, for the report line and the spend confirmation."""
     phrase = NARRATION_LEVELS.get(level, level)
@@ -4102,13 +4208,16 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
     # with meta={} is what found it.
     if result.meta is None:
         result.meta = {}
-    result.meta["narration"] = {
-        "level": plan["level"], "cap": plan["cap"], "skip_marked": plan["skip_marked"],
-        "basis": plan["basis"], "selected": list(plan["names"]),
-        "qualified": list(plan["qualified"]),
-        "not_narrated": [dict(n) for n in plan["not_narrated"]],
-    }
+    # NARR-ZERO-1 — the mode that was REQUESTED, the rule, and the counts, recorded
+    # whether or not anything was written. A skipped stage used to leave no trace of the
+    # mode at all, so the report fell back to the rank stage's "ranker only" header and
+    # contradicted the owner's own choice.
+    result.meta["narration"] = narration_record(plan, mode="narrator")
     if not plan["count"]:
+        # ...and the run is stamped NARRATOR, because that is what it was. The header
+        # sentence says what happened; the mode says what was asked for.
+        result.meta["council_mode"] = "narrator"
+        result.meta["ranker_only"] = False
         return result
     if adapter is None:
         adapter = _build_adapter(today=today or date.today(), use_cache=use_cache)
