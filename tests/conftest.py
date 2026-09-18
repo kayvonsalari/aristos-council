@@ -10,6 +10,13 @@ replaced for the whole session by one that raises, naming the test that called i
 that needs data injects a fake; a test that genuinely exercises the provider says so out
 loud with ``@pytest.mark.real_adapter`` and gets the real factory back.
 
+There are two ways in, and this file closes both. The first is a factory: production code
+handed no adapter builds one. The second is a CREDENTIAL: ``tests/test_app.py`` drives the
+Streamlit app through ``AppTest``, the app's ``main()`` calls ``load_dotenv(ROOT/".env")``
+as it must, and from that moment the owner's real Finnhub, EODHD and Anthropic keys sit in
+``os.environ`` for every test that follows. Nothing announced it; the suite simply behaved
+differently on the owner's machine than in CI, where there is no ``.env``.
+
 This is a TEST-SIDE guard: no production module imports it and no production behaviour
 changes. It cannot be defeated by a new entry point either — the guard is on the
 factories themselves, not on their callers, so a future ``run_whatever`` that builds its
@@ -113,6 +120,27 @@ def _install() -> None:
         real = getattr(module, attr)
         _INSTALLED.append((module, attr, real))
         setattr(module, attr, wrap(real))
+    _silence_dotenv()
+
+
+def _silence_dotenv() -> None:
+    """``load_dotenv`` reads nothing for the duration of the suite.
+
+    Scrubbing the environment around each test is not enough on its own: three tests drive
+    the whole app through ``AppTest``, so ``main()`` loads the ``.env`` DURING the test and
+    the pipeline reaches a live Finnhub client before any teardown can run. The fix has to
+    be at the source — the suite does not read the developer's ``.env``, full stop.
+
+    app.py is untouched and still loads it when actually run: the import is inside the
+    function body, so it resolves this module attribute at call time. python-dotenv is a
+    ``ui`` extra and legitimately absent on a ``.[dev]`` box, hence the guarded import.
+    """
+    try:
+        import dotenv
+    except ImportError:
+        return
+    _INSTALLED.append((dotenv, "load_dotenv", dotenv.load_dotenv))
+    dotenv.load_dotenv = lambda *args, **kwargs: False
 
 
 def _restore() -> None:
@@ -132,6 +160,7 @@ def pytest_configure(config):
     """
     del config
     _install()
+    _drop_credentials()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -146,6 +175,44 @@ def no_real_adapter():
         yield
     finally:
         _restore()
+
+
+# --------------------------------------------------------------------------- #
+# the second way in: credentials the suite never asked for
+# --------------------------------------------------------------------------- #
+# Not a hardening exercise — a fix for 27 observed failures. ``AppTest`` runs app.py,
+# app.py loads the owner's ``.env``, and every later test that asks for a sentiment
+# provider was handed a LIVE Finnhub client instead of the honest "no key" absence CI
+# gets. ``test_sentiment_provider_status_is_logged`` asserts the no-key wording and was
+# taking the other branch entirely.
+#
+# ANTHROPIC_API_KEY is on the list for a second reason: CLAUDE.md forbids it in this
+# environment, and the suite was setting it anyway, half an hour into a test run.
+_CREDENTIALS = ("ANTHROPIC_API_KEY", "FINNHUB_API_KEY", "EODHD_API_KEY")
+
+
+def _drop_credentials() -> None:
+    for name in _CREDENTIALS:
+        os.environ.pop(name, None)
+
+
+@pytest.fixture(autouse=True)
+def no_ambient_credentials():
+    """No test reads the developer's keys — before it runs, or after it leaks them.
+
+    Both ends matter. BEFORE, because a shell that exports a key would otherwise change
+    what the suite tests; AFTER, because the test that loaded the ``.env`` is not the test
+    that then goes to the network, and leaving the keys in place would make the result
+    depend on which tests ran first.
+
+    A test that wants a key present sets one with ``monkeypatch.setenv`` and gets exactly
+    the value it chose — monkeypatch unwinds before this fixture does.
+    """
+    _drop_credentials()
+    try:
+        yield
+    finally:
+        _drop_credentials()
 
 
 @pytest.fixture(autouse=True)
