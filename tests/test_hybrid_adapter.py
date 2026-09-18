@@ -111,6 +111,8 @@ def test_provider_for_is_per_source_not_flattened():
     assert h.provider_for("prices") == "yfinance"
 
 
+# TEST-ISOLATION-1: about the factory itself (see test_eodhd_adapter.py).
+@pytest.mark.real_adapter
 def test_select_market_adapter_hybrid(monkeypatch):
     pytest.importorskip("yfinance")
     monkeypatch.setenv("ARISTOS_MARKET_PROVIDER", "hybrid")

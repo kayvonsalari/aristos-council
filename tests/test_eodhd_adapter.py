@@ -379,22 +379,32 @@ def test_get_fundamentals_empty_payload_is_data_unavailable():
 from aristos_council.data.provider import select_market_adapter        # noqa: E402
 
 
+# TEST-ISOLATION-1. These five are the only tests in the suite that are ABOUT the
+# provider factory: each one asks select_market_adapter which adapter it returns, which
+# is the question. So they carry the written opt-out rather than a fake. The two that
+# reach yfinance already importorskip it (the repo's convention, 49 uses for streamlit);
+# the EODHD and unknown-name cases need no provider installed and deliberately do not
+# skip on a box without one.
+@pytest.mark.real_adapter
 def test_provider_selection_eodhd(monkeypatch):
     monkeypatch.setenv("ARISTOS_MARKET_PROVIDER", "eodhd")
     assert select_market_adapter().name == "eodhd"
 
 
+@pytest.mark.real_adapter
 def test_provider_selection_default_is_yfinance(monkeypatch):
     pytest.importorskip("yfinance")
     monkeypatch.delenv("ARISTOS_MARKET_PROVIDER", raising=False)
     assert select_market_adapter().name == "yfinance"
 
 
+@pytest.mark.real_adapter
 def test_provider_selection_explicit_arg_overrides_env(monkeypatch):
     monkeypatch.setenv("ARISTOS_MARKET_PROVIDER", "yfinance")
     assert select_market_adapter("eodhd").name == "eodhd"   # arg wins
 
 
+@pytest.mark.real_adapter
 def test_provider_selection_unknown_raises(monkeypatch):
     monkeypatch.setenv("ARISTOS_MARKET_PROVIDER", "bloomberg")
     with pytest.raises(ValueError, match="unknown ARISTOS_MARKET_PROVIDER"):

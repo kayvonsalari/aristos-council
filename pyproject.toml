@@ -57,4 +57,13 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-addopts = "-q"
+# ``--strict-markers``: a typo'd ``@pytest.mark.real_adaptor`` is a silent no-op by
+# default, and a silent no-op here means the test reaches the network after all.
+addopts = "-q --strict-markers"
+# TEST-ISOLATION-1. The suite refuses to build a real data adapter (tests/conftest.py);
+# this marker is the written opt-out, for the handful of tests that are ABOUT the
+# provider. It also makes them skip without yfinance, per the repo's importorskip
+# convention. Declared here so an unknown-marker typo is an error, not a silent no-op.
+markers = [
+    "real_adapter: this test exercises the real provider factory on purpose",
+]
