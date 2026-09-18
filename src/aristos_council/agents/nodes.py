@@ -683,7 +683,7 @@ def _ranker_block(state: ResearchState) -> str:
                   f"rank table.")
     return (f"\nRANKER VERDICT (the deterministic verdict-of-record for this name): "
             f"{state.ranker_verdict.value.upper()}{expl}{legend}"
-            f"{_boundary_tie_block(state)}{_cross_lens_block(state)}\n")
+            f"{_boundary_tie_block(state)}{_agreement_block(state) + _cross_lens_block(state)}\n")
 
 
 def _cross_lens_block(state: ResearchState) -> str:
@@ -715,6 +715,47 @@ def _cross_lens_block(state: ResearchState) -> str:
     return ("\nEVERY SELECTED LENS'S VERDICT FOR THIS NAME (state ALL of these before any "
             "prose — the lenses that did NOT buy it are part of the record):\n"
             + "\n".join(lines) + why)
+
+
+
+def _agreement_block(state) -> str:
+    """NARR-CONTEXT-1 — what the RUN concluded about this name, stated FIRST.
+
+    The cross-lens block gives every lens's verdict; this gives the reading the report
+    puts on them: how many voting lenses bought it, which, what each check found in its
+    own words, and every mark against it. Those are the two facts a reader of the
+    shortlist arrives with, so a narration that does not open on them is answering a
+    question nobody asked.
+
+    The marks are the load-bearing part. A name is on the list carrying "doubted by
+    Forensic" or "priced high: 99th percentile of its own 5-year range", and the prose has
+    to meet that — ``narration_check`` refuses a narration that leaves a mark unaddressed.
+    Only the mark TEXT is here: the band's reversion arithmetic never reaches a model,
+    because an implied price is quoted back as a target however it is labelled."""
+    row = getattr(state, "agreement_row", None) or {}
+    if not row:
+        return ""
+    votes = row.get("buy_votes", 0)
+    n = row.get("n_voting", 0)
+    who = ", ".join(row.get("buy_lenses") or [])
+    lines = [f"  - BUY votes: {votes} of {n}" + (f" ({who})" if who else "")]
+    if row.get("sell_lenses"):
+        lines.append(f"  - SELL votes: {len(row['sell_lenses'])} of {n} "
+                     f"({', '.join(row['sell_lenses'])})")
+    for check in row.get("checks") or []:
+        lines.append(f"  - {check.get('lens', '')}: {check.get('reading', '')}")
+    marks = row.get("marks") or []
+    for mark in marks:
+        lines.append(f"  - MARK: {mark}")
+    tail = ""
+    if marks:
+        tail = ("\nADDRESS EVERY MARK ABOVE, explicitly and by name, using the figures "
+                "already in this pack — say WHY the check doubts it (the accrual ratio, "
+                "the distress score, the accounting checks) or what the price mark rests "
+                "on. A mark left unmentioned is a narration that answers a different "
+                "question from the one the reader has, and it is refused.")
+    return ("\nWHAT THE RUN CONCLUDED ABOUT THIS NAME (open with this — it is why the "
+            "name is on the list, and what sits beside it):\n" + "\n".join(lines) + tail)
 
 
 def _boundary_tie_block(state: ResearchState) -> str:

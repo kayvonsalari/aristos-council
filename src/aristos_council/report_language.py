@@ -206,8 +206,49 @@ def verdict_counts(ranked) -> dict[str, int]:
     return counts
 
 
+
+
+# --------------------------------------------------------------------------- #
+# CHECK-WORDS-1 — a check lens speaks its own words
+# --------------------------------------------------------------------------- #
+# A check lens does not pick, so its verdicts never meant what they said. Forensic's "BUY"
+# means "I found nothing to doubt here" and its "SELL" means "I doubt this" — and a reader
+# scanning a grid of BUY/HOLD/SELL cells has no way to know that one column is answering a
+# different question in the same words. SHORTLIST-3 made the distinction structural (a
+# check marks, it does not vote); this makes it VISIBLE.
+#
+# DISPLAY ONLY. The verdict field is still "buy" / "hold" / "sell" everywhere underneath —
+# the ranker, the quintile cut, the frozen runs under runs/, the verdict log and every
+# recorded report keep the values they have always had, so nothing replays differently and
+# no scoreboard row moves. This is a mapping applied where a verdict is SHOWN, keyed on
+# the strategy's own ``kind``.
+CHECK_WORDS = {"buy": "clean", "hold": "no concern", "sell": "doubted"}
+
+# The rules line a check lens gets in place of the quintile sentence, so the words are
+# explained where they are first met rather than only in the glossary.
+CHECK_QUINTILE_LINE = "top 20% clean, bottom 20% doubted, middle no concern"
+
+
+def is_check_lens(strategy) -> bool:
+    """True for a lens whose verdicts are MARKS rather than picks."""
+    return (getattr(strategy, "kind", "selector") or "selector") == "check"
+
+
+def verdict_word(verdict: str, *, check: bool = False) -> str:
+    """The verdict as a reader should see it: ``BUY`` for a voting lens, ``clean`` for a
+    check.
+
+    Lower case for a check's words on purpose. They are not verdicts and should not wear a
+    verdict's shouting capitals — "doubted" is a reading, "SELL" is a call."""
+    raw = (verdict or "").strip().lower()
+    if not raw:
+        return ""
+    return CHECK_WORDS.get(raw, raw) if check else raw.upper()
+
+
 def format_summary_line(ranked, *, universe_size: int, excluded: int,
-                        unrateable: int = 0, fetch_errors: int = 0) -> str:
+                        unrateable: int = 0, fetch_errors: int = 0,
+                        check: bool = False) -> str:
     """``"2 BUY · 6 HOLD · 2 SELL — 10 of 16 names ranked, 6 excluded by the screen"``.
 
     Derived from the result, never hardcoded. A category with ZERO names is omitted
@@ -215,7 +256,10 @@ def format_summary_line(ranked, *, universe_size: int, excluded: int,
     non-verdict axes (unrateable, fetch failures) are named only when non-empty, and
     each keeps its own distinct wording: they are not exclusions."""
     counts = verdict_counts(ranked)
-    verdicts = " · ".join(f"{n} {v.upper()}" for v, n in counts.items() if n)
+    # CHECK-WORDS-1: "21 clean · 62 no concern · 21 doubted" for a check lens. The counts
+    # are the same counts; only the words change.
+    verdicts = " · ".join(f"{n} {verdict_word(v, check=check)}"
+                          for v, n in counts.items() if n)
     ranked_n = sum(counts.values())
     tail = [f"{ranked_n} of {universe_size} names ranked"]
     if excluded:

@@ -222,7 +222,12 @@ def test_choosing_narrator_on_a_multi_lens_run_brings_coverage_back():
     at = _run_tab(extra_lens=raw)
     _run_mode_widget(at).set_value(app.RUN_MODE_NARRATOR).run()
     assert _run_mode_widget(at).value == app.RUN_MODE_NARRATOR     # honoured, not forced
-    assert any(str(s.label) == "Narration coverage" for s in at.selectbox)
+    # NARR-2 replaced the single "Narration coverage" dropdown with three levers: the
+    # level of agreement, a cap, and whether to skip the marked names. What this test
+    # guards is unchanged — the controls come back the moment the mode does.
+    assert any(str(s.label) == "Narrate" for s in at.selectbox)
+    assert any(str(n.label) == "Up to" for n in at.number_input)
+    assert any("Skip names doubted" in str(c.label) for c in at.checkbox)
     captions = " ".join(str(getattr(c, "value", "")) for c in at.caption)
     assert "ONE section per NAME" in captions or "narrated once" in captions
 
@@ -269,7 +274,7 @@ def test_a_single_lens_narrated_run_is_unchanged():
     widget = _run_mode_widget(at)
     assert widget.value == app.RUN_MODE_NARRATOR         # the default, as before
     assert widget.disabled is False
-    assert any(str(s.label) == "Narration coverage" for s in at.selectbox)
+    assert any(str(s.label) == "Narrate" for s in at.selectbox)   # NARR-2's level lever
     assert _run_button(at).label.startswith(
         "▶ Run — free · then choose whether to narrate")
     assert app.run_mode_arguments(widget.value) == (False, "narrator")

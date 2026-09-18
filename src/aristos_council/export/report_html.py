@@ -872,6 +872,7 @@ def multi_strategy_report_html(multi_result, *,
                 inner = _narration_html(text)
             parts.append(f'<details class="name-section" open id="{_esc(anchor)}">'
                          f"<summary>{_esc(display)}</summary>{inner}</details>")
+        parts.append(_narration_line_html(multi_result))
         parts.append("</section>")
 
     # ----- 5: the per-NAME facts, ONCE — they do not vary by lens.
@@ -955,6 +956,30 @@ def _reader_section(reader) -> str:
         body.append(f"<p><strong>{_esc(lead)}</strong> {_esc(text)}</p>")
     body.append(f'<p class="note">{_esc(READER_SECTION_NOTE)}</p></section>')
     return "".join(body)
+
+
+
+def _narration_line_html(result) -> str:
+    """NARR-2 — the one line under the narrations: which rule chose them, how many met it,
+    and which qualified names are not here.
+
+    Never silent. A run that narrated nothing says which rule produced nothing and how to
+    get more, because an absent section is indistinguishable from a feature that was never
+    switched on — the corollary this repo has paid for twice."""
+    from ..pipeline import narration_line
+
+    plan = (getattr(result, "meta", None) or {}).get("narration")
+    if not plan:
+        return ""
+    out = [f'<p class="note">{_esc(narration_line(plan))}</p>']
+    missing = plan.get("not_narrated") or []
+    if missing:
+        out.append('<p class="note">Met the rule and not narrated:</p>' + _bullets(
+            f'<strong>{_esc(m["name"])}</strong> — {m["buy_votes"]} BUY vote'
+            f'{"s" if m["buy_votes"] != 1 else ""}'
+            + (f' · {_esc(" · ".join(m["marks"]))}' if m.get("marks") else "")
+            for m in missing))
+    return "".join(out)
 
 
 def _shortlist_section(ag) -> str:
@@ -1136,14 +1161,40 @@ def _lens_detail_html(detail) -> str:
     return "".join(out)
 
 
+# CHECK-WORDS-1 — a check lens's words, and the verdict each one is coloured as.
+#
+# `doubted` red, `clean` green, `no concern` neutral: the same three signals the palette
+# already carries, because a reader scanning the grid for trouble should find it in the
+# same colour whichever column it is in. The WORD is what says which question was asked,
+# and the word is always rendered — colour is never the only carrier of meaning.
+_CHECK_CELL_WORDS = {"clean": "BUY", "no concern": "HOLD", "doubted": "SELL"}
+
+
 def verdict_of_cell(text: str) -> str:
     """The VERDICT a verdict-grid cell carries ("BUY"/"HOLD"/"SELL"), or "" for a cell on
     another axis (excluded / no data / fetch failed) — those are not verdicts and must
-    never be coloured as though they were."""
+    never be coloured as though they were.
+
+    A CHECK lens's cell reads "clean" / "no concern" / "doubted" (CHECK-WORDS-1); this
+    returns the verdict each is coloured AS, while ``_verdict_grid_cell`` renders the word
+    the cell actually carries."""
     body = _CELL_MARKER.sub("", text or "")
     for verdict in _VERDICT_HEX:
         if body.endswith(f"· {verdict}"):
             return verdict
+    for word, verdict in _CHECK_CELL_WORDS.items():
+        if body.endswith(f"· {word}"):
+            return verdict
+    return ""
+
+
+def _cell_word(text: str) -> str:
+    """The word the cell ends with — "BUY" or "doubted" — so the rendered span carries the
+    lens's own vocabulary rather than the verdict it is coloured as."""
+    body = _CELL_MARKER.sub("", text or "")
+    for word in list(_VERDICT_HEX) + list(_CHECK_CELL_WORDS):
+        if body.endswith(f"· {word}"):
+            return word
     return ""
 
 
@@ -1159,9 +1210,10 @@ def _verdict_grid_cell(text: str) -> str:
     found = _CELL_MARKER.search(text)
     if found:
         marker, text = found.group(0), text[: found.start()]
-    head = text[: -len(verdict)]
+    word = _cell_word(text) or verdict          # CHECK-WORDS-1: the lens's own word
+    head = text[: -len(word)]
     return (f'<span class="mono">{_esc(head)}</span>'
-            f'<span class="verdict verdict-{verdict.lower()}">{_esc(verdict)}</span>'
+            f'<span class="verdict verdict-{verdict.lower()}">{_esc(word)}</span>'
             + (f'<span class="mono muted">{_esc(marker)}</span>' if marker else ""))
 
 

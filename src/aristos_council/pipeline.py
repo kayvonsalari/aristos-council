@@ -1208,7 +1208,8 @@ def summary_line(result) -> str:
     reader had to count the table by hand to learn what the run had concluded."""
     m = result.meta or {}
     return format_summary_line(
-        result.ranked, universe_size=m.get("universe_size", len(result.ranked)),
+        result.ranked, check=_is_check_result(result),
+        universe_size=m.get("universe_size", len(result.ranked)),
         excluded=len(getattr(result, "excluded", []) or []),
         unrateable=len(getattr(result, "unrateable", []) or []),
         fetch_errors=len(getattr(result, "fetch_errors", []) or []))
@@ -1596,9 +1597,17 @@ def _ranker_filter_lines(rank) -> list[str]:
         return []
     lines: list[str] = []
     cut = getattr(rank, "cut", "quintile") or "quintile"
-    phrase = _CUT_PHRASE.get(cut, cut).format(
-        k=getattr(rank, "k", ""),
-        p=f"{(getattr(rank, 'percentile', 0.0) or 0.0):.0%}")
+    # CHECK-WORDS-1: a CHECK lens's quintile cut produces clean / no concern / doubted, so
+    # the line that explains the cut says the words the reader will actually see. Any other
+    # cut keeps its own phrase — only the quintile one has three words to name.
+    from .report_language import CHECK_QUINTILE_LINE, is_check_lens
+
+    if cut == "quintile" and is_check_lens(rank):
+        phrase = f"{CHECK_QUINTILE_LINE} (quintile cut)"
+    else:
+        phrase = _CUT_PHRASE.get(cut, cut).format(
+            k=getattr(rank, "k", ""),
+            p=f"{(getattr(rank, 'percentile', 0.0) or 0.0):.0%}")
     lines.append(f"Ranking: {phrase}.")
     labels = [(FACTOR_REGISTRY[f.name].label if f.name in FACTOR_REGISTRY else f.name)
               for f in (getattr(rank, "factors", None) or [])]
@@ -2086,7 +2095,8 @@ def format_cli_report(result: RankPipelineResult) -> str:
         # The boundary mark rides in the VERDICT cell (it qualifies the verdict, not the
         # score). A marked row is intentionally wider than the 5-char verdict column — a
         # tie that decided a verdict should break the eye's scan.
-        verdict = format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""))
+        verdict = format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""),
+                                      check=_is_check_result(result))
         lines.append(f"  {_name_col(disp):<34} {verdict:<5} {cell}")
     factor_lines = format_ranked_factor_lines(result)
     if factor_lines:
@@ -2213,6 +2223,10 @@ class MultiStrategyCell:
     # flow; the rule allows at most 80%"). Computed by ``combine_rank_results``, which
     # has the result the sentence needs; empty when there is no rule to name.
     reason_plain: str = ""
+    # CHECK-WORDS-1 — this cell belongs to a CHECK lens, so its verdict renders in the
+    # check's own words (``doubted``) rather than as a verdict (``SELL``). Display only;
+    # ``verdict`` below is the same "buy"/"hold"/"sell" it has always been.
+    is_check: bool = False
     # FACTOR-MARK-1 — how many of the lens's factors this name was actually MEASURED on.
     # Under an imputing policy (missing: neutral) a name short a factor is scored from the
     # ranks it has, which is the right call and invisible: Forensic ranked 39 of 106 oil
@@ -2233,7 +2247,10 @@ class MultiStrategyCell:
         a bad rank, and no-data is not an exclusion)."""
         if self.status == _RANKED:
             pos = f"#{self.position} of {self.cohort_size}" if self.position else "ranked"
-            return f"{pos} · {self.verdict.upper()}{self.factor_note}"
+            from .report_language import verdict_word
+
+            return (f"{pos} · {verdict_word(self.verdict, check=self.is_check)}"
+                    f"{self.factor_note}")
         if self.status == _EXCLUDED:
             return f"excluded — {self.reason_plain or self.reason}"
         if self.status == _UNRATEABLE:
@@ -2290,6 +2307,16 @@ class MultiStrategyResult:
     reader: "Optional[object]" = None
 
 
+
+def _is_check_result(result) -> bool:
+    """Whether this per-strategy result came from a CHECK lens (CHECK-WORDS-1). Read off
+    the strategy the run actually used, so a lens's own file decides how its verdicts
+    read."""
+    from .report_language import is_check_lens
+
+    return is_check_lens(getattr(result, "rank_strategy", None))
+
+
 def combine_rank_results(results: dict[str, RankPipelineResult],
                          strategy_ids: Optional[list[str]] = None
                          ) -> list[MultiStrategyRow]:
@@ -2315,6 +2342,7 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
             _cell(r.ticker, MultiStrategyCell(
                 strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,
                 verdict=r.verdict, score=r.combined_rank,
+                is_check=_is_check_result(res),
                 # FACTOR-MARK-1: measured = the lens's factors this name actually had a
                 # value for. An imputed factor is not a measurement of the name.
                 factors_total=len(r.factor_ranks or {}),
@@ -3315,7 +3343,11 @@ def band_mark(percentile) -> str:
 def check_mark(label: str, verdict: str) -> str:
     """"doubted by Forensic", or "". A check's SELL is a doubt about someone else's pick;
     its BUY and HOLD say only that it found nothing to doubt, which is not an endorsement
-    and is therefore not a mark."""
+    and is therefore not a mark.
+
+    CHECK-WORDS-1: the mark already spoke the check's own word before that item existed —
+    "doubted by Forensic", never "SELL under Forensic" — which is where the vocabulary
+    came from."""
     return f"doubted by {label}" if (verdict or "").lower() == "sell" else ""
 
 
@@ -3590,6 +3622,7 @@ def lens_agreement_table(ag) -> tuple:
     """``(columns, rows)`` for the table — ONE builder, so the Run tab, the markdown and
     the HTML render the same cells and cannot drift (the valuation_band_table pattern).
     Every cell is already a display string."""
+    from .report_language import verdict_word
     from .tools.valuation_band import ordinal
 
     cols = ["Name", "BUY votes", "SELL votes"] \
@@ -3608,7 +3641,10 @@ def lens_agreement_table(ag) -> tuple:
         }
         for sid in ag.check_ids:
             label = ag.check_labels.get(sid, sid)
-            cells[label] = (r.check_verdicts.get(label, "").upper()
+            # CHECK-WORDS-1: clean / no concern / doubted. This column is the one place a
+            # reader most needs the distinction — it sits beside the BUY-vote counts, and
+            # a "SELL" there reads as a vote against, which it is not.
+            cells[label] = (verdict_word(r.check_verdicts.get(label, ""), check=True)
                             or "not ranked")
         cells["Valuation percentile"] = (
             f"{ordinal(round(r.band_percentile))}" if r.band_percentile is not None
@@ -3715,27 +3751,167 @@ def _cost_meta(meter, mark: int) -> dict:
             "actual_output_tokens": total.output_tokens}
 
 
-def narration_plan(result, coverage: str = "buys_only") -> dict:
+# --------------------------------------------------------------------------- #
+# NARR-2 — narrate the names the lenses AGREE on
+# --------------------------------------------------------------------------- #
+# NARR-UNION-1 narrated the UNION of every lens's BUYs. On the 134-name oil dividend list
+# that is 28 names, 26 of them one lens's pick — so the expensive half of the run was
+# spent explaining names nothing else agreed with, and the two names both lenses chose
+# were buried among them.
+#
+# The owner's rule (2026-09-17): narrate the names the VOTING lenses agree on, choose that
+# level, cap the count, and skip the marked ones unless asked otherwise. The agreement
+# table already computes the votes and the marks, so this is a filter over it — nothing
+# here re-grades, re-ranks or re-counts anything.
+NARRATION_LEVELS = {
+    # level id -> (how a candidate qualifies, the phrase the report uses)
+    "all": "all voting lenses agree",
+    "most": "most voting lenses agree",
+    "any": "any voting lens",
+}
+DEFAULT_NARRATION_LEVEL = "all"
+DEFAULT_NARRATION_CAP = 10
+
+
+def qualifies(row, level: str, n_voting: int) -> bool:
+    """Whether one agreement row meets ``level``.
+
+    ``all``  — every voting lens rated it BUY.
+    ``most`` — more than half of them did. With TWO voting lenses "most" and "all" are the
+               same test, because more than half of two is two; the UI says so rather than
+               offering a choice that is not one.
+    ``any``  — at least one did, which is every row on the table.
+    """
+    if level == "all":
+        return row.buy_votes >= n_voting and n_voting > 0
+    if level == "most":
+        return row.buy_votes * 2 > n_voting
+    return row.buy_votes >= 1
+
+
+def is_marked(row) -> bool:
+    """Whether this name carries a mark the skip flag removes: a CHECK lens doubted it.
+
+    ONLY that. A price mark never skips (owner, 2026-09-17): a priced-high name is
+    narrated WITH the mark in the narrator's pack, because "this is dear against its own
+    history" is the thing a reader most wants explained, not a reason to leave it
+    unexplained. On the oil dividend list the two names both lenses agreed on were Aker
+    Solutions (doubted) and Suncor (priced high) — and a skip that removed both left the
+    default run explaining nothing at all.
+
+    Nor do the run's own disclosures skip. "band not evaluated" is an absence of a reading
+    rather than a doubt, and "ranked on 2 of 3 factors" is a statement about the vote
+    rather than about the company; skipping on either would drop names for OUR gaps."""
+    return any(m.startswith("doubted by ") for m in row.marks)
+
+
+
+def agreement_row_for(result, ticker: str) -> dict:
+    """NARR-CONTEXT-1 — one name's agreement row, as the narrator receives it.
+
+    Read off the table the report renders, so the writer and the reader are looking at the
+    same thing. The band's reversion ARITHMETIC is deliberately left out: only the mark
+    text goes to a model, because an implied price comes back as a target however it is
+    labelled. Empty when the run has no agreement table (a single-lens run), which keeps
+    that prompt byte-unchanged."""
+    from .report_language import verdict_word
+
+    ag = getattr(result, "lens_agreement", None)
+    if ag is None or not ag.available:
+        return {}
+    row = next((r for r in ag.rows if r.ticker == ticker), None)
+    if row is None:
+        return {}
+    return {
+        "buy_votes": row.buy_votes,
+        "n_voting": ag.n_voting,
+        "buy_lenses": list(row.buy_lenses),
+        "sell_lenses": list(row.sell_lenses),
+        # Each check's reading in ITS OWN words (CHECK-WORDS-1) — "Forensic: doubted",
+        # never "Forensic: SELL", because the second is the sentence this repo spent a
+        # whole item removing from the report.
+        "checks": [{"lens": label, "reading": verdict_word(v, check=True)}
+                   for label, v in (row.check_verdicts or {}).items()],
+        "marks": list(row.marks),
+    }
+
+
+def narration_plan(result, coverage: str = "buys_only", *,
+                   level: str = DEFAULT_NARRATION_LEVEL,
+                   cap: int = DEFAULT_NARRATION_CAP,
+                   skip_marked: bool = True) -> dict:
     """What a narration of ``result`` WOULD cost, exactly — computed from a completed
     ranking, so there is no bound and no guess.
 
-    Accepts either a ``MultiStrategyResult`` (the names are the UNION of every lens's
-    BUYs) or a single-lens ``RankPipelineResult`` (its own shortlist). Returns
-    ``{"names", "count", "est_cost", "basis"}``; ``count`` is 0 when there is nothing to
-    narrate, which is the caller's cue to skip the confirmation entirely."""
-    if isinstance(result, MultiStrategyResult):
-        names = narrated_union(result, coverage)
-        basis = NARRATION_BASIS.get(coverage, coverage)
-    else:
+    NARR-2: for a multi-lens run the names are the AGREEMENT rows meeting ``level``, minus
+    the marked ones when ``skip_marked``, truncated to ``cap``, in the table's own order.
+    A single-lens ``RankPipelineResult`` keeps its own shortlist — one lens is still a
+    vote, and "all", "most" and "any" are the same set when there is one of them.
+
+    Returns ``{"names", "count", "est_cost", "basis", "level", "cap", "skip_marked",
+    "qualified", "not_narrated"}``. ``count`` is 0 when there is nothing to narrate, which
+    is the caller's cue to skip the confirmation entirely; ``not_narrated`` is what
+    qualified and did not fit, so the report can say so rather than quietly shortening the
+    list."""
+    if not isinstance(result, MultiStrategyResult):
         names = list((result.meta or {}).get("shortlist") or [])
         basis = ("every name the ranker rated BUY" if coverage == "buys_only"
                  else "every ranked name")
-    return {"names": names, "count": len(names),
-            "est_cost": estimate_cost(len(names)), "basis": basis}
+        return {"names": names, "count": len(names),
+                "est_cost": estimate_cost(len(names)), "basis": basis,
+                "level": level, "cap": cap, "skip_marked": skip_marked,
+                "qualified": list(names), "not_narrated": []}
+
+    ag = getattr(result, "lens_agreement", None)
+    if ag is None or not ag.available:
+        return {"names": [], "count": 0, "est_cost": estimate_cost(0),
+                "basis": narration_basis(level, skip_marked), "level": level,
+                "cap": cap, "skip_marked": skip_marked,
+                "qualified": [], "not_narrated": []}
+
+    qualified = [r for r in ag.rows if qualifies(r, level, ag.n_voting)]
+    kept = [r for r in qualified if not (skip_marked and is_marked(r))]
+    chosen = kept[:max(int(cap), 0)]
+    names = [r.ticker for r in chosen]
+    return {
+        "names": names, "count": len(names), "est_cost": estimate_cost(len(names)),
+        "basis": narration_basis(level, skip_marked),
+        "level": level, "cap": cap, "skip_marked": skip_marked,
+        "qualified": [r.ticker for r in qualified],
+        # What met the rule and is NOT being narrated, with why — the marked ones and the
+        # ones past the cap. A list that quietly shortens itself is the thing this exists
+        # to prevent.
+        "not_narrated": [{"ticker": r.ticker, "name": r.display,
+                          "buy_votes": r.buy_votes, "marks": r.marks}
+                         for r in qualified if r.ticker not in set(names)],
+    }
+
+
+def narration_basis(level: str, skip_marked: bool) -> str:
+    """The rule in words, for the report line and the spend confirmation."""
+    phrase = NARRATION_LEVELS.get(level, level)
+    tail = "; names doubted by a check skipped" if skip_marked else ""
+    return f"{phrase}{tail}"
+
+
+def narration_line(plan: dict) -> str:
+    """The one line under the narrations. Never silent: a run that narrated nothing says
+    which rule produced nothing and how to get more, because an absent section is
+    indistinguishable from a feature that was never switched on."""
+    n, qualified = plan.get("count", 0), len(plan.get("qualified") or [])
+    basis = plan.get("basis", "")
+    if not qualified:
+        phrase = NARRATION_LEVELS.get(plan.get("level", ""), plan.get("level", ""))
+        return (f"No company met the rule ({phrase}); nothing narrated. "
+                "Change the rule to narrate more.")
+    return f"Narrated {n} of {qualified} names that met the rule ({basis})."
 
 
 def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners=None,
                            coverage: str = "buys_only",
+                           level: str = DEFAULT_NARRATION_LEVEL,
+                           cap: int = DEFAULT_NARRATION_CAP,
+                           skip_marked: bool = True,
                            progress: Optional[Callable[[str], None]] = None,
                            today: Optional[date] = None, use_cache: bool = True,
                            ) -> MultiStrategyResult:
@@ -3745,7 +3921,24 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
     is re-fetched. Returns a NEW result carrying the narratives; the ranked rows,
     verdicts and per-strategy records are the same objects, so nothing about the grading
     can shift between the figure the user confirmed and the run they paid for."""
-    plan = narration_plan(result, coverage)
+    plan = narration_plan(result, coverage, level=level, cap=cap,
+                          skip_marked=skip_marked)
+    # NARR-2 — the plan, recorded on the run: what rule was applied, what it selected, and
+    # what met the rule and was not narrated. A report that shortened its own list
+    # silently is the thing this prevents.
+    #
+    # ``result.meta`` and not ``result.meta or {}``: an EMPTY meta is falsy, so the second
+    # form writes the record into a throwaway dict and loses it. A real run always has a
+    # populated meta, which is why that read correctly and was wrong — a fabricated result
+    # with meta={} is what found it.
+    if result.meta is None:
+        result.meta = {}
+    result.meta["narration"] = {
+        "level": plan["level"], "cap": plan["cap"], "skip_marked": plan["skip_marked"],
+        "basis": plan["basis"], "selected": list(plan["names"]),
+        "qualified": list(plan["qualified"]),
+        "not_narrated": [dict(n) for n in plan["not_narrated"]],
+    }
     if not plan["count"]:
         return result
     if adapter is None:
@@ -3768,17 +3961,16 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
                  "narrate_coverage": coverage, "narration_basis": plan["basis"],
                  "est_cost": plan["est_cost"]})
     meta.update(_cost_meta(meter, mark))
-    provisional = MultiStrategyResult(
-        strategy_ids=result.strategy_ids, strategy_names=result.strategy_names,
-        results=result.results, rows=result.rows, meta=meta,
-        narratives=narratives, council=council)
+    # ``replace`` rather than a hand-built copy: this function listed the fields it
+    # carried over, so every field ADDED to MultiStrategyResult since was silently
+    # dropped by narrating. SHORTLIST-3's ``lens_agreement`` was — a narrated run came
+    # back with no agreement table, which the NARR-2 plan then read as "nothing
+    # qualifies". Naming the two fields that change is the version that cannot rot.
+    provisional = replace(result, meta=meta, narratives=narratives, council=council)
     # NARR-SCHEMA-1 — the structural failures, recorded MACHINE-READABLY on the run so a
     # later pass can find them without re-parsing a report.
     meta["narration_structure"] = narration_issues(provisional)
-    return MultiStrategyResult(
-        strategy_ids=result.strategy_ids, strategy_names=result.strategy_names,
-        results=result.results, rows=result.rows, meta=meta,
-        narratives=narratives, council=council)
+    return replace(result, meta=meta, narratives=narratives, council=council)
 
 
 # --------------------------------------------------------------------------- #
@@ -3834,7 +4026,10 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
                 boundary_tie_facts(res.ranked).get(ticker, {})),
             static_factor_evidence=_static_factor_evidence(r),
             cross_lens_verdicts=cross_lens_verdicts(result, ticker),
-            cross_lens_reasons=cross_lens_reasons(result, ticker))))
+            cross_lens_reasons=cross_lens_reasons(result, ticker),
+            # NARR-CONTEXT-1 — what the RUN concluded about this name: the votes, each
+            # check's reading in its own words, and the marks. The writer opens on it.
+            agreement_row=agreement_row_for(result, ticker))))
         rep = report_from_state(state)
         # A cross-lens section quotes SEVERAL lenses' rank tables, so each claim is
         # checked against the table of the lens it NAMES — checking them all against the

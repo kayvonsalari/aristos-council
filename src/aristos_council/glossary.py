@@ -92,6 +92,15 @@ _REPORT_TERMS: tuple[tuple[str, str, str], ...] = (
      "Average yearly revenue growth over the period."),
     ("Annualized volatility", "volatilit",
      "How violently the share price swings in a typical year."),
+    # CHECK-WORDS-1 — a check lens's three words. Defined together, because the point of
+    # them is the contrast with BUY/HOLD/SELL: a check answers a different question, and
+    # saying its answer in a verdict's words invites exactly the wrong reading.
+    ("clean · no concern · doubted", "no concern",
+     "A CHECK lens's three readings, in place of BUY / HOLD / SELL. A check does not pick "
+     "companies — it looks for reasons to doubt the ones other tests picked. "
+     "**clean** = it found nothing to doubt (its top fifth); **doubted** = it found "
+     "something (its bottom fifth); **no concern** = everything in between. "
+     "\"clean\" is not a recommendation and \"doubted\" is not a sell."),
     ("Not tested / not evaluated", "not evaluated",
      "The data this check needed was missing, so the check was skipped honestly rather "
      "than guessed at. It is not a pass and it is not a fail."),

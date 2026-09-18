@@ -737,7 +737,45 @@ never a pick to report.
 The section is placed directly after the summary line and before the verdict grid, because
 it is the answer the grid is evidence for.
 
-### 4.4 The Altman Z-Score — what it is built for, and what it is not (ALTMAN-DOC-1)
+### 4.4 What gets narrated (NARR-2)
+
+The ranking is free; each explained name is one model call. So the names are CHOSEN, by a
+rule stated here and recorded on the run.
+
+Candidates are the rows of the agreement table (§4.3). A row qualifies at:
+
+| Level | A row qualifies when |
+|---|---|
+| `all` (default) | `buy_votes == n_voting` — every voting lens rated it BUY |
+| `most` | `buy_votes * 2 > n_voting` — more than half did |
+| `any` | `buy_votes >= 1` — which is every row on the table |
+
+With **two** voting lenses `most` and `all` are the same test, because more than half of
+two is two. With **one**, all three levels are that lens's BUYs. A CHECK lens never counts
+towards `n_voting`: it does not vote, so "all voting lenses agree" cannot mean "and
+Forensic too".
+
+Then, in order: the marked rows are removed when **skip** is on, and the rest is truncated
+to the **cap**, in the table's own order — the table's order is the answer's order, so a
+cap takes the top of it.
+
+**Which marks skip.** ONLY `doubted by <check>`.
+
+A **price mark never skips**. "This is dear against its own history" is the thing a reader
+most wants EXPLAINED, not a reason to leave it unexplained — a priced-high name is narrated
+with the mark in the narrator's pack either way. (Live, 2026-09-17: on the oil dividend
+list the two names both lenses agreed on were Aker Solutions, doubted, and Suncor, priced
+high — so a skip that removed both left the DEFAULT run explaining nothing at all.)
+
+Nor do the run's own disclosures skip: `band not evaluated` is an absence of a reading
+rather than a doubt, and `ranked on N of M factors` is a statement about the vote rather
+than about the company. Skipping on either would drop names for OUR gaps.
+
+Nothing is silently shortened: the run records the level, the cap, the skip flag, what was
+selected, and every name that met the rule without being narrated — each with its votes
+and marks — and all three surfaces print it.
+
+### 4.5 The Altman Z-Score — what it is built for, and what it is not (ALTMAN-DOC-1)
 
 The forensic lens's distress leg is the **Altman Z-Score**: five balance-sheet and earnings
 ratios combined into one distance-from-distress number, higher being safer. It is the

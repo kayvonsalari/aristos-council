@@ -384,6 +384,19 @@ class ResearchState(BaseModel):
     # is then byte-identical to before.
     cross_lens_verdicts: list[dict] = Field(default_factory=list)
     cross_lens_reasons: list[dict] = Field(default_factory=list)
+    # NARR-CONTEXT-1 — the AGREEMENT ROW for this name, handed to the writer FIRST.
+    #
+    # The cross-lens block above gives every lens's verdict; this gives what the run
+    # CONCLUDED from them — how many voting lenses bought it, which ones, what each check
+    # read in its own words, and the marks against it. Without it the narrator could not
+    # address the very thing that put the name on the shortlist, or the doubt that sits
+    # beside it, because neither is derivable from a column of verdicts.
+    #
+    # ``{"buy_votes", "n_voting", "buy_lenses", "sell_lenses", "checks", "marks"}``. The
+    # valuation band's reversion ARITHMETIC is deliberately absent — only the mark text
+    # goes in, because a model shown an implied price will quote it as a target. Empty on
+    # a single-lens run, which keeps that prompt byte-unchanged.
+    agreement_row: dict = Field(default_factory=dict)
     # Ephemeral per-run disposition overrides applied on top of the base strategy
     # (e.g. {"partial_pass_allows_hold": false,
     #        "criteria.min_dividend_growth_streak.is_gating": true}). Empty for a

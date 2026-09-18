@@ -69,20 +69,33 @@ def test_the_ranking_pass_makes_zero_llm_calls():
     assert multi.narratives == {} and single.narratives == {}
 
 
-def test_the_confirm_step_shows_a_count_equal_to_the_TRUE_union():
-    """Exact, because the ranking has already happened — no bound, no coefficient."""
+def test_the_confirm_step_shows_an_EXACT_count_not_a_bound():
+    """The property that matters here, and the one that survives NARR-2.
+
+    NARR-UNION-1's plan was the UNION of every lens's BUYs and this test pinned it as
+    such. NARR-2 narrates the names the voting lenses AGREE on instead — a deliberate
+    change, so the union assertion is retired rather than weakened, and what it was
+    really guarding is asserted directly: the count is EXACT, because the ranking has
+    already happened. No bound, no coefficient, and the cost follows the count."""
     result = _ranked_multi()
     plan = narration_plan(result)
-    union = narrated_union(result)
 
-    assert plan["count"] == len(union)
-    assert plan["names"] == union
-    assert plan["est_cost"] == estimate_cost(len(union))
-    assert plan["basis"] == "every name rated BUY by at least one lens"
-    # ...and it is genuinely smaller than the verdict count, which is the whole point
+    assert plan["count"] == len(plan["names"])
+    assert plan["est_cost"] == estimate_cost(plan["count"])
+    assert plan["basis"] == ("all voting lenses agree; names doubted by a check skipped")
+    # ...and it is genuinely smaller than the verdict count, which is the whole point —
+    # more so now than before, since agreement is a higher bar than the union was.
     verdicts = sum(1 for row in result.rows for c in row.cells.values()
                    if c.status == "ranked" and c.verdict == "buy")
     assert plan["count"] < verdicts
+    assert plan["count"] <= len(narrated_union(result))
+
+
+def test_the_plan_is_a_SUBSET_of_what_the_union_would_have_narrated():
+    """NARR-2 narrows; it never reaches for a name no lens bought."""
+    result = _ranked_multi()
+    assert set(narration_plan(result, level="any", cap=60)["names"]) \
+        <= set(narrated_union(result))
 
 
 def test_the_single_lens_plan_is_that_lenses_own_shortlist():
