@@ -49,18 +49,52 @@ from .cohorts.symbols import SymbolError, yahoo_symbol
 DEFAULT_CONFIG = Path("market_index.yaml")
 DEFAULT_ROOT = Path("data/local/market_index")
 INDEX_FILE = "index.parquet"
+# MARKET-INDEX-2 - every progress line and every stop, appended and timestamped.
+BUILD_LOG = "build.log"
 
 BASE_URL = "https://eodhd.com/api"
 COMMON_STOCK = "Common Stock"
 
-# One `/fundamentals` call per symbol, filtered to the General block. Everything the peer
-# ladder needs is in it; pulling a whole fundamentals document would be megabytes a name.
-GENERAL_FILTER = "General"
+# One `/fundamentals` call per symbol. MARKET-INDEX-2: the market cap is NOT in General -
+# it lives under Highlights - so the first build returned 526 rows with a cap of None.
+#
+# PROBED against the live API on 2026-09-18 before this parser was written, because the
+# filter changes the response SHAPE and not only its contents:
+#
+#   filter=General
+#     -> {"Code": ..., "Name": ..., "Exchange": ...}        General is FLATTENED to the top
+#
+#   filter=General,Highlights::MarketCapitalization
+#     -> {"General": {...37 keys...},
+#         "Highlights::MarketCapitalization": 4918238773248}
+#        General becomes a NESTED dict and the cap arrives at the TOP level under that
+#        literal dotted key.
+#
+# So the parser reads both layouts: a row fetched either way is understood, which also
+# means the 526 rows already on disk stay readable.
+FUNDAMENTALS_FILTER = "General,Highlights::MarketCapitalization"
+CAP_KEY = "Highlights::MarketCapitalization"
 
 # A row older than this is refetched by ``refresh``. A company's industry and venue change
 # on the order of years; its market cap moves daily but the peer ladder uses BANDS (a
 # quarter to four times), which a month of drift does not cross.
 DEFAULT_MAX_AGE_DAYS = 30
+
+# MARKET-INDEX-2 - EODHD does not charge one unit per request. A /fundamentals call costs
+# TEN and a listing costs one, so a build that reports "6,000 calls" has really spent
+# 60,000 of the daily allowance. Every summary reports both numbers, because only one of
+# them is the one you run out of.
+CHARGE_FUNDAMENTALS = 10
+CHARGE_LISTING = 1
+DEFAULT_BUDGET = 90_000                 # charged units, not requests
+
+# The venues a US listing may sit on. 17,829 US common stocks came back on 2026-09-18, of
+# which 11,508 were OTC (PINK 8,644, OTCQB 1,252, OTCQX 498, OTCGREY 486, OTCCE 475,
+# OTCMKTS 144, OTC 6, OTCBB 3). Fetching those cost 337 of the first build's 526 rows and
+# would cost ~118,000 charged units - more than a whole day's budget - for names no lens
+# should rank. Filtered on the LISTING row, before any fundamentals call, so they are free
+# to exclude. An exchange absent from this map is unrestricted.
+DEFAULT_VENUES = {"US": ["NYSE", "NASDAQ", "NYSE ARCA", "AMEX"]}
 
 # Rewrite the table every this many new rows. A full rewrite of ~10k rows is well under a
 # second, and a build that dies at symbol 4,000 must not lose 4,000 calls.
@@ -84,7 +118,7 @@ class QuotaExhausted(MarketIndexError):
 # --------------------------------------------------------------------------- #
 # the row
 # --------------------------------------------------------------------------- #
-COLUMNS = ("ticker", "yahoo_ticker", "name", "exchange", "country", "currency",
+COLUMNS = ("ticker", "yahoo_ticker", "name", "exchange", "market", "country", "currency",
            "sector", "industry", "gics_sector", "gics_industry", "gics_subindustry",
            "market_cap", "market_cap_usd", "market_cap_usd_source", "fetched_at",
            "source")
@@ -97,7 +131,12 @@ class IndexRow:
     ticker: str                       # EODHD form, e.g. "XOM.US"
     yahoo_ticker: str = ""            # what the ranker resolves, e.g. "XOM"
     name: str = ""
-    exchange: str = ""
+    exchange: str = ""                # the VENUE, as EODHD reports it: NYSE, NASDAQ, ...
+    # MARKET-INDEX-2 - the exchange CODE the build requested ("US"), kept apart from the
+    # venue above so the venue filter has something to filter on and `status` can still
+    # group by market. They were one field, which is why an OTC listing looked like a US
+    # listing to every consumer.
+    market: str = ""
     country: str = ""
     currency: str = ""
     sector: str = ""
@@ -119,6 +158,16 @@ class IndexRow:
     def classification(self) -> str:
         """The finest classification this row actually carries."""
         return self.gics_subindustry or self.gics_industry or self.industry or ""
+
+    @property
+    def complete(self) -> bool:
+        """Does this row carry everything a peer ladder needs?
+
+        MARKET-INDEX-2: a row with no market cap cannot be banded and cannot be a peer, so
+        it is NOT a row worth keeping fresh - it is a row worth refetching. The freshness
+        skip therefore applies to complete rows only.
+        """
+        return self.market_cap is not None
 
     def age_days(self, today: Optional[date] = None) -> Optional[int]:
         try:
@@ -154,11 +203,31 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
     exchanges = doc.get("exchanges") or list(DEFAULT_EXCHANGES)
     if not isinstance(exchanges, list) or not all(isinstance(x, str) for x in exchanges):
         raise MarketIndexError(f"{path}: 'exchanges' must be a list of exchange codes")
+    venues = doc.get("venues")
+    if venues is None:
+        venues = dict(DEFAULT_VENUES)
+    elif not isinstance(venues, dict):
+        raise MarketIndexError(f"{path}: 'venues' must be a mapping of exchange -> list")
     return {
         "exchanges": [x.strip().upper() for x in exchanges if x.strip()],
         "max_age_days": int(doc.get("max_age_days", DEFAULT_MAX_AGE_DAYS)),
         "root": str(doc.get("root", DEFAULT_ROOT)),
+        # MARKET-INDEX-2 - per exchange, and an exchange that is absent is unrestricted.
+        "venues": {str(k).strip().upper(): [str(v).strip().upper() for v in (vals or [])]
+                   for k, vals in venues.items()},
     }
+
+
+def allowed_venues(config: dict, exchange: str) -> list[str]:
+    """The venues this exchange admits, or ``[]`` meaning no restriction."""
+    return list((config.get("venues") or {}).get((exchange or "").upper()) or [])
+
+
+def venue_allowed(venue: str, allowed) -> bool:
+    """An empty allow-list admits everything; otherwise the venue must be named."""
+    if not allowed:
+        return True
+    return (venue or "").strip().upper() in {v.upper() for v in allowed}
 
 
 # --------------------------------------------------------------------------- #
@@ -237,9 +306,12 @@ class EODHDIndexSource:
         self._key = (raw or "").strip()
         self._timeout = timeout
         self._sleep = sleep
-        self.calls = 0
+        # MARKET-INDEX-2 - REQUESTS and CHARGED units are different numbers and only one
+        # of them is the one the daily allowance runs out of.
+        self.requests = 0
+        self.charged = 0
 
-    def _get(self, path: str, **params) -> object:
+    def _get(self, path: str, charge: int = CHARGE_LISTING, **params) -> object:
         if not self._key:
             raise MarketIndexError("EODHD_API_KEY is not set — the index cannot be built")
         params.setdefault("api_token", self._key)
@@ -248,7 +320,8 @@ class EODHDIndexSource:
         # Back off on 429 rather than giving up: a rate limit is a "wait", a quota is a
         # "stop", and conflating them either wastes a half-built table or hammers the API.
         for attempt in range(5):
-            self.calls += 1
+            self.requests += 1
+            self.charged += charge
             try:
                 with urllib.request.urlopen(url, timeout=self._timeout) as resp:
                     return json.loads(resp.read().decode("utf-8"))
@@ -278,15 +351,47 @@ class EODHDIndexSource:
 
     def general(self, symbol: str) -> dict:
         doc = self._get(f"/fundamentals/{urllib.parse.quote(symbol)}",
-                        filter=GENERAL_FILTER)
+                        charge=CHARGE_FUNDAMENTALS, filter=FUNDAMENTALS_FILTER)
         return doc if isinstance(doc, dict) else {}
 
 
 # --------------------------------------------------------------------------- #
 # building
 # --------------------------------------------------------------------------- #
+def read_market_cap(doc: dict) -> Optional[float]:
+    """The cap, from wherever it actually arrived.
+
+    Three layouts are possible and all three are read, because rows already on disk were
+    fetched under the old filter:
+      * top level ``Highlights::MarketCapitalization`` (the combined filter - see the
+        module docstring for the probed response);
+      * nested ``Highlights.MarketCapitalization`` (filter=Highlights);
+      * top level ``MarketCapitalization`` (filter=Highlights flattened).
+    A cap that is absent, zero or not a number is None - a real abstention, counted by
+    ``status`` as "no market cap" rather than quietly stored as a figure.
+    """
+    highlights = doc.get("Highlights")
+    for candidate in (doc.get(CAP_KEY),
+                      highlights.get("MarketCapitalization") if isinstance(highlights, dict) else None,
+                      doc.get("MarketCapitalization")):
+        if isinstance(candidate, (int, float)) and not isinstance(candidate, bool) and candidate:
+            return float(candidate)
+    return None
+
+
+def _general_block(doc: dict) -> dict:
+    """The General fields, whichever layout they arrived in.
+
+    ``filter=General`` flattens them to the top level; ``filter=General,<nested>`` puts
+    them under a "General" key. Probed, not assumed.
+    """
+    nested = doc.get("General")
+    return nested if isinstance(nested, dict) else doc
+
+
 def _row_from_general(symbol: str, exchange: str, doc: dict, *, today: date) -> IndexRow:
-    cap = doc.get("MarketCapitalization")
+    cap = read_market_cap(doc)
+    doc = _general_block(doc)
     try:
         yahoo = yahoo_symbol(symbol)
     except SymbolError:
@@ -295,6 +400,7 @@ def _row_from_general(symbol: str, exchange: str, doc: dict, *, today: date) -> 
         ticker=symbol, yahoo_ticker=yahoo,
         name=str(doc.get("Name") or ""),
         exchange=str(doc.get("Exchange") or exchange),
+        market=exchange,
         country=str(doc.get("CountryISO") or doc.get("CountryName") or ""),
         currency=str(doc.get("CurrencyCode") or ""),
         sector=str(doc.get("Sector") or ""),
@@ -302,7 +408,7 @@ def _row_from_general(symbol: str, exchange: str, doc: dict, *, today: date) -> 
         gics_sector=str(doc.get("GicSector") or ""),
         gics_industry=str(doc.get("GicIndustry") or ""),
         gics_subindustry=str(doc.get("GicSubIndustry") or ""),
-        market_cap=float(cap) if isinstance(cap, (int, float)) and cap else None,
+        market_cap=cap,
         fetched_at=today.isoformat(), source=SOURCE_EODHD)
 
 
@@ -353,54 +459,136 @@ class _UsdConverter:
 @dataclass
 class BuildOutcome:
     exchanges: list[str] = field(default_factory=list)
-    listed: int = 0
+    listed: int = 0                  # common stocks the listing returned
+    eligible: int = 0                # ...after the venue filter
     fetched: int = 0
     skipped_fresh: int = 0
+    refetched_incomplete: int = 0    # capless rows refetched regardless of age
+    dropped_venue: int = 0           # rows removed from the store: venue not allowed
     failed: int = 0
-    calls: int = 0
+    requests: int = 0
+    charged: int = 0
+    budget: int = DEFAULT_BUDGET
+    venues_seen: dict = field(default_factory=dict)
     stopped: str = ""
 
     def summary(self) -> str:
-        head = (f"{self.fetched} row(s) fetched, {self.skipped_fresh} still fresh, "
-                f"{self.failed} failed, {self.calls} API call(s)")
-        return head + (f" — STOPPED: {self.stopped}" if self.stopped else ".")
+        head = (f"{self.fetched} row(s) fetched ({self.refetched_incomplete} refetched "
+                f"for a missing cap), {self.skipped_fresh} still fresh, "
+                f"{self.dropped_venue} dropped on venue, {self.failed} failed; "
+                f"{self.requests} request(s) = {self.charged:,} charged of "
+                f"{self.budget:,}")
+        return head + (f" - STOPPED: {self.stopped}" if self.stopped else ".")
+
+    def venue_lines(self) -> list[str]:
+        """Every venue string seen, with a count - once per build, so a venue nobody
+        allowed for is visible rather than silently dropped."""
+        if not self.venues_seen:
+            return []
+        out = ["Venues seen in the listings (kept and dropped):"]
+        for venue, n in sorted(self.venues_seen.items(), key=lambda kv: -kv[1]):
+            out.append(f"    {venue or '(blank)':16s} {n:6d}")
+        return out
+
+
+def build_log_path(store: "IndexStore") -> "Path":
+    return store.root / BUILD_LOG
+
+
+def log_line(store: "IndexStore", message: str) -> None:
+    """One timestamped line, appended. Never raises - a logger that can break a build is
+    worse than no logger."""
+    try:
+        store.root.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with build_log_path(store).open("a", encoding="utf-8") as fh:
+            fh.write(f"{stamp} {message}\n")
+    except Exception:
+        pass
 
 
 def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] = None,
           source: Optional[EODHDIndexSource] = None, max_age_days: int = DEFAULT_MAX_AGE_DAYS,
           usd: Optional[_UsdConverter] = None, today: Optional[date] = None,
-          limit: Optional[int] = None, progress=None) -> BuildOutcome:
-    """Fill or top up the index. Resumable, and safe to interrupt.
+          limit: Optional[int] = None, budget: int = DEFAULT_BUDGET,
+          venues: Optional[dict] = None, progress=None) -> BuildOutcome:
+    """Fill or top up the index. Resumable, budgeted, and it never exits silently.
 
-    Rows already present and younger than ``max_age_days`` are skipped without a call, so
-    a build that died at symbol 4,000 resumes at symbol 4,000 rather than at zero.
+    Three reasons a symbol is not fetched, and they are counted separately because they
+    mean different things: it is already COMPLETE and fresh; its venue is not allowed; or
+    the budget ran out. A row that is present but has NO MARKET CAP is refetched whatever
+    its age - it was never usable, so keeping it fresh is keeping a hole fresh.
     """
     store = store or IndexStore()
     source = source or EODHDIndexSource()
     today = today or date.today()
     usd = usd if usd is not None else _UsdConverter(today=today)
-    say = progress or (lambda _m: None)
+    venues = venues if venues is not None else dict(DEFAULT_VENUES)
+
+    def say(message: str) -> None:
+        if progress is not None:
+            progress(message)
+        log_line(store, message)
 
     existing = {r.ticker: r for r in store.load()}
-    outcome = BuildOutcome(exchanges=list(exchanges or DEFAULT_EXCHANGES))
+    outcome = BuildOutcome(exchanges=list(exchanges or DEFAULT_EXCHANGES), budget=budget)
     since_flush = 0
 
     try:
         for exchange in outcome.exchanges:
-            say(f"{exchange}: listing common stocks…")
+            allowed = [str(v).upper() for v in (venues.get(exchange.upper()) or [])]
+            say(f"{exchange}: listing common stocks...")
             listings = source.common_stocks(exchange)
             outcome.listed += len(listings)
-            say(f"{exchange}: {len(listings)} common stock(s)")
-            for i, listing in enumerate(listings, 1):
+
+            # Every venue string seen, counted - including the ones about to be dropped,
+            # so a venue nobody thought to allow is visible instead of silently missing.
+            for listing in listings:
+                venue = str(listing.get("Exchange") or "").strip()
+                outcome.venues_seen[venue] = outcome.venues_seen.get(venue, 0) + 1
+
+            eligible = [l for l in listings
+                        if venue_allowed(str(l.get("Exchange") or ""), allowed)]
+            outcome.eligible += len(eligible)
+            if allowed:
+                say(f"{exchange}: {len(listings)} common stock(s) listed, "
+                    f"{len(eligible)} on {', '.join(allowed)} - "
+                    f"{len(listings) - len(eligible)} other venues skipped before any "
+                    f"fundamentals call")
+            else:
+                say(f"{exchange}: {len(listings)} common stock(s) listed, no venue "
+                    f"restriction")
+
+            # Rows already in the store whose venue is NOT allowed are removed. They were
+            # fetched before the filter existed and no peer ladder should ever see them.
+            if allowed:
+                for ticker, row in list(existing.items()):
+                    if row.market != exchange and not ticker.endswith(f".{exchange}"):
+                        continue
+                    if row.exchange and not venue_allowed(row.exchange, allowed):
+                        del existing[ticker]
+                        outcome.dropped_venue += 1
+
+            for i, listing in enumerate(eligible, 1):
                 code = str(listing.get("Code") or "").strip()
                 if not code:
                     continue
                 symbol = f"{code}.{exchange}"
                 known = existing.get(symbol)
                 age = known.age_days(today) if known else None
-                if known is not None and age is not None and age < max_age_days:
+                if known is not None and known.complete and age is not None \
+                        and age < max_age_days:
                     outcome.skipped_fresh += 1
                     continue
+                if known is not None and not known.complete:
+                    outcome.refetched_incomplete += 1
+
+                if source.charged + CHARGE_FUNDAMENTALS > budget:
+                    outcome.stopped = (
+                        f"budget reached: {source.charged:,} of {budget:,} charged units "
+                        f"used; the next request would cost {CHARGE_FUNDAMENTALS}")
+                    raise _BudgetReached
+
                 try:
                     doc = source.general(symbol)
                 except QuotaExhausted:
@@ -415,21 +603,38 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
                 if since_flush >= FLUSH_EVERY:
                     store.save(list(existing.values()))
                     since_flush = 0
-                    say(f"{exchange}: {i}/{len(listings)} — "
-                        f"{outcome.fetched} fetched, {source.calls} calls")
+                    say(f"{exchange}: {i}/{len(eligible)} - {outcome.fetched} fetched, "
+                        f"{source.requests} requests / {source.charged:,} charged")
                 if limit is not None and outcome.fetched >= limit:
                     outcome.stopped = f"--limit {limit} reached"
                     raise _BuildLimit
     except _BuildLimit:
         pass
+    except _BudgetReached:
+        pass
     except QuotaExhausted as exc:
         outcome.stopped = str(exc)
     except KeyboardInterrupt:
         outcome.stopped = "interrupted"
+    except BaseException as exc:
+        # NO SILENT EXITS. Anything at all - a bad payload, a disk error, an import that
+        # fails halfway - ends with the store flushed and the reason written down. A build
+        # that dies quietly after 4,000 fetches loses 40,000 charged units and tells
+        # nobody why.
+        import traceback
+        outcome.stopped = f"{type(exc).__name__}: {exc}"
+        log_line(store, f"STOPPED: {outcome.stopped}")
+        log_line(store, traceback.format_exc())
 
     store.save(list(existing.values()))
-    outcome.calls = source.calls
+    outcome.requests = source.requests
+    outcome.charged = source.charged
+    log_line(store, outcome.summary())
     return outcome
+
+
+class _BudgetReached(Exception):
+    """Internal: the --budget stop, so the flush-and-report path is shared."""
 
 
 class _BuildLimit(Exception):
@@ -458,11 +663,19 @@ class IndexStatus:
         if not self.rows:
             return [f"Market index: EMPTY ({self.path} does not exist yet).",
                     "Build it with:  python -m aristos_council.market_index build"]
+        complete = self.rows - self.missing_cap
         out = [f"Market index: {self.rows} row(s) in {self.path}",
+               f"  complete (usable as peers): {complete}",
+               f"  no market cap:              {self.missing_cap}",
+               f"  missing classification:     {self.missing_classification}",
                f"  oldest row: {self.oldest or 'unknown'}",
-               f"  missing classification: {self.missing_classification}",
-               f"  missing market cap:     {self.missing_cap}",
                "  per exchange:"]
+        if self.missing_cap:
+            # MARKET-INDEX-2 - the first build produced 526 rows and every one of them had
+            # no cap, because the request asked for General and the cap lives under
+            # Highlights. A capless row is refetched by the next build whatever its age.
+            out.insert(1, f"  {self.missing_cap} row(s) carry NO MARKET CAP and cannot be "
+                          f"peers; the next build refetches them.")
         for exchange, n in sorted(self.per_exchange.items(), key=lambda kv: -kv[1]):
             out.append(f"    {exchange:8s} {n:6d}")
         return out
@@ -700,12 +913,16 @@ def build_parser():
     p_build.add_argument("--exchanges", default="", help="comma-separated, overrides config")
     p_build.add_argument("--limit", type=int, default=None,
                          help="stop after N fetched rows (for a trial run)")
+    p_build.add_argument("--budget", type=int, default=DEFAULT_BUDGET,
+                         help=f"CHARGED units, not requests (default {DEFAULT_BUDGET:,}; "
+                              f"a /fundamentals call costs {CHARGE_FUNDAMENTALS})")
     p_build.set_defaults(func=_cmd_build, refresh_only=False)
 
     p_refresh = sub.add_parser("refresh", help="refetch only rows older than N days")
     p_refresh.add_argument("--older-than", type=int, default=DEFAULT_MAX_AGE_DAYS)
     p_refresh.add_argument("--exchanges", default="")
     p_refresh.add_argument("--limit", type=int, default=None)
+    p_refresh.add_argument("--budget", type=int, default=DEFAULT_BUDGET)
     p_refresh.set_defaults(func=_cmd_build, refresh_only=True)
 
     p_peers = sub.add_parser("peers", help="the peer group for one ticker")
@@ -736,10 +953,22 @@ def _cmd_build(args) -> int:
         adapter = select_market_adapter("yfinance")
     except Exception:
         adapter = None                       # the USD column abstains; the build goes on
-    outcome = build(exchanges=exchanges, store=_store_for(args), max_age_days=max_age,
-                    usd=_UsdConverter(adapter), limit=args.limit, progress=_say)
+    store = _store_for(args)
+    outcome = build(exchanges=exchanges, store=store, max_age_days=max_age,
+                    usd=_UsdConverter(adapter), limit=args.limit,
+                    budget=args.budget, venues=config.get("venues"), progress=_say)
+    for line in outcome.venue_lines():
+        _say("  " + line if not line.endswith(":") else line)
     _say(outcome.summary())
-    return 1 if outcome.stopped and "limit" not in outcome.stopped else 0
+    if outcome.stopped and "limit" not in outcome.stopped:
+        # The exact command that picks up where this one stopped - a resume instruction a
+        # reader has to reconstruct is one they will get wrong at 4,000 rows in.
+        _say("Resume with:")
+        _say(f"  python -m aristos_council.market_index build "
+             f"--exchanges {','.join(exchanges)} --budget {args.budget}")
+        _say(f"Log: {build_log_path(store)}")
+        return 1
+    return 0
 
 
 def _cmd_peers(args) -> int:

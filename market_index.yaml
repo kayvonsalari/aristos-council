@@ -40,6 +40,22 @@ exchanges:
 # A row older than this is refetched by `refresh`. Classification and venue change on the
 # order of years; market cap moves daily, but the peer ladder compares in BANDS (a quarter
 # to four times), which a month of drift does not cross.
+# MARKET-INDEX-2 - which VENUES a listing may sit on, per exchange. An exchange absent
+# from this map is unrestricted.
+#
+# The US listing returned 17,829 common stocks on 2026-09-18, of which 11,508 were OTC
+# (PINK 8,644, OTCQB 1,252, OTCQX 498, OTCGREY 486, OTCCE 475, OTCMKTS 144, OTC 6,
+# OTCBB 3). Fetching those is ~118,000 charged units - more than a whole day's budget -
+# for names no lens should rank. The filter is applied to the LISTING row, before any
+# fundamentals call, so an excluded venue costs nothing at all.
+#
+# Every venue string seen is printed with a count once per build, including the ones
+# dropped, so a venue worth adding here is visible rather than silently missing. BATS (39)
+# NYSE MKT (19) and a bare "US" (227) were seen and are NOT admitted by default - say so
+# here if you want them.
+venues:
+  US: [NYSE, NASDAQ, NYSE ARCA, AMEX]
+
 max_age_days: 30
 
 root: data/local/market_index
