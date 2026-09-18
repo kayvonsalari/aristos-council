@@ -28,10 +28,15 @@ so a verdict that still wobbles at 0.0 is genuinely borderline, which is signal.
 
 from __future__ import annotations
 
+import json
+import logging
+
 import os
 from typing import Protocol, TypeVar
 
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -87,6 +92,72 @@ def _temp_for(tier: str) -> float:
     return float(os.environ.get(f"ARISTOS_TEMP_{tier.upper()}", _DEFAULT_TEMPS[tier]))
 
 
+# --------------------------------------------------------------------------- #
+# NARR-PARSE-1 — a nested object the model sent as a STRING
+# --------------------------------------------------------------------------- #
+# Live, 2026-09-18 (universe_my-portfolio_4lenses_ranker_2026-09-18_1619): the decision
+# tier returned `narration` as a JSON STRING rather than as an object. The CONTENT was
+# well formed; only the shape was wrong. Structured output rejected it, this runner
+# re-raised, and one name took the whole narration stage down — the run produced no
+# narration at all.
+#
+# The schema is right and stays right. This repairs the envelope ONCE, and only ever in
+# the direction of "a string that is plainly JSON becomes the object it spells". A model
+# that returns genuine nonsense still fails, exactly as today.
+_MAX_REPAIR_DEPTH = 4
+
+
+def repair_stringified(value, depth: int = 0) -> tuple[object, int]:
+    """``(value, n_repaired)`` — nested objects sent as JSON strings, parsed in place.
+
+    Walks dicts and lists so a stringified object nested one level down is reached too,
+    but only ever converts a string that BEGINS as JSON punctuation and parses to a dict
+    or list. A string field that happens to hold prose is left alone; so is a string
+    holding a bare number, which would otherwise silently change a type.
+    """
+    if depth > _MAX_REPAIR_DEPTH:
+        return value, 0
+    if isinstance(value, str):
+        text = value.strip()
+        if text[:1] in ("{", "["):
+            try:
+                parsed = json.loads(text)
+            except ValueError:
+                return value, 0
+            if isinstance(parsed, (dict, list)):
+                deeper, extra = repair_stringified(parsed, depth + 1)
+                return deeper, 1 + extra
+        return value, 0
+    if isinstance(value, dict):
+        out, n = {}, 0
+        for key, item in value.items():
+            out[key], k = repair_stringified(item, depth + 1)
+            n += k
+        return out, n
+    if isinstance(value, list):
+        out_list, n = [], 0
+        for item in value:
+            fixed, k = repair_stringified(item, depth + 1)
+            out_list.append(fixed)
+            n += k
+        return out_list, n
+    return value, 0
+
+
+def tool_call_args(raw) -> dict | None:
+    """The dict the model actually produced, out of the raw AIMessage.
+
+    ``with_structured_output(include_raw=True)`` keeps the message beside the parse
+    failure, which is the only reason a repair is possible at all: the parsed value is
+    None precisely when we need to look at what was sent.
+    """
+    for call in (getattr(raw, "tool_calls", None) or []):
+        args = call.get("args") if isinstance(call, dict) else getattr(call, "args", None)
+        if isinstance(args, dict):
+            return args
+    return None
+
+
 class LangChainRunner:
     """Wraps init_chat_model(..., temperature=t).with_structured_output(schema).
 
@@ -100,8 +171,13 @@ class LangChainRunner:
         from langchain.chat_models import init_chat_model  # lazy
 
         self.tier = tier
+        self.schema = schema
         self.model_id = _model_for(tier)
         self.temperature = _temp_for(tier)
+        # NARR-PARSE-1: how many stringified nested objects this runner has had to repair.
+        # Counted rather than merely logged, because "it happens sometimes" is not a thing
+        # anyone can act on and "it happened 4 times in this run" is.
+        self.repaired = 0
         # COST-3: ONE meter shared across the tiers, because the bill for narrating a
         # name is the whole council pass for it, not the narrator's call alone.
         self.meter = meter
@@ -122,12 +198,39 @@ class LangChainRunner:
         out = self._llm.invoke([("system", system), ("user", user)])
         if not isinstance(out, dict):           # a provider that ignored include_raw
             return out
+        parsed = out.get("parsed")
         if out.get("parsing_error"):
-            raise out["parsing_error"]
+            # NARR-PARSE-1 — one repair attempt, then the original error. A model that
+            # spelled a nested object as a JSON string said the right thing in the wrong
+            # envelope; a model that said the wrong thing still fails here.
+            parsed = self._repaired_parse(out.get("raw"))
+            if parsed is None:
+                raise out["parsing_error"]
         if self.meter is not None:
             raw = out.get("raw")
             self.meter.record(self.model_id, getattr(raw, "usage_metadata", None))
-        return out.get("parsed")
+        return parsed
+
+    def _repaired_parse(self, raw):
+        """The answer with stringified nested objects parsed, or None to give up.
+
+        Deliberately single-shot: repair, revalidate, done. A loop here would be a way to
+        keep bending an answer until it fits, which is how a schema stops meaning anything.
+        """
+        args = tool_call_args(raw)
+        if not isinstance(args, dict):
+            return None
+        fixed, n = repair_stringified(args)
+        if not n:
+            return None                          # nothing was stringified; a real failure
+        try:
+            validated = self.schema.model_validate(fixed)
+        except Exception:
+            return None                          # genuinely malformed — raise the original
+        self.repaired += n
+        logger.debug("%s: repaired %d stringified nested object(s) in the model's answer",
+                     self.tier, n)
+        return validated
 
 
 def runner_metadata(runners: dict) -> dict:
@@ -143,6 +246,15 @@ def runner_metadata(runners: dict) -> dict:
         if model is not None or temp is not None:
             out[tier] = {"model": model, "temperature": temp}
     return out
+
+
+def repaired_count(runners: dict) -> int:
+    """How many stringified nested objects a runner set repaired (NARR-PARSE-1).
+
+    Zero for test fakes, which have no counter — the same shape as ``cost_meter``, and for
+    the same reason: a fake-runner run must report "nothing happened", not crash.
+    """
+    return sum(int(getattr(r, "repaired", 0) or 0) for r in runners.values())
 
 
 def cost_meter(runners: dict):

@@ -2470,6 +2470,7 @@ def run_multi_strategy_pipeline(
     # LLM calls, so a deterministic comparison stays byte-identical to before.
     narratives: dict[str, str] = {}
     council: list[CouncilOutcome] = []
+    narration_stage: dict = {}
     provisional = MultiStrategyResult(
         strategy_ids=list(ids), strategy_names=names, results=results, rows=rows,
         meta={"strategy_ids": list(ids)})
@@ -2482,7 +2483,7 @@ def run_multi_strategy_pipeline(
         if runners is None:
             from .agents.runners import production_runners
             runners = production_runners()
-        council, narratives = _multi_narration_stage(
+        council, narratives, narration_stage = _multi_narration_stage(
             provisional, adapter, runners, coverage=narrate_coverage,
             progress=progress)
     meta = {
@@ -2525,6 +2526,11 @@ def run_multi_strategy_pipeline(
     # SHORTLIST-3 — there is no primary lens. Every lens in the run is a vote of equal
     # weight, and the answer is the AGREEMENT between them.
     meta["shortlist_band_cutoff"] = SHORTLIST_BAND_CUTOFF
+    # NARR-PARSE-1 — what the narration stage had to repair, and what it could not.
+    # ``setdefault`` then ``update``: this path writes no NARR-2 plan, the confirm-spend
+    # path writes one FIRST, and neither may clobber the other's keys.
+    if narration_stage:
+        meta.setdefault("narration", {}).update(narration_stage)
     built = MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
                                 results=results, rows=rows, meta=meta,
                                 narratives=narratives, council=council)
@@ -3953,7 +3959,7 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
     # COST-3: price THIS PHASE only. The mark/since pair means the figure covers the
     # narration that was just confirmed, not anything the runner set did earlier.
     meter, mark = _cost_mark(runners)
-    council, narratives = _multi_narration_stage(
+    council, narratives, narration_stage = _multi_narration_stage(
         result, adapter, runners, coverage=coverage, progress=progress)
     meta = dict(result.meta)
     meta.update({"council_mode": "narrator", "ranker_only": False,
@@ -3961,6 +3967,9 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
                  "narrate_coverage": coverage, "narration_basis": plan["basis"],
                  "est_cost": plan["est_cost"]})
     meta.update(_cost_meta(meter, mark))
+    # NARR-PARSE-1 — merged INTO the NARR-2 plan record rather than over it: the plan says
+    # which names were chosen, this says what happened when they were written.
+    meta["narration"] = {**(meta.get("narration") or {}), **narration_stage}
     # ``replace`` rather than a hand-built copy: this function listed the fields it
     # carried over, so every field ADDED to MultiStrategyResult since was silently
     # dropped by narrating. SHORTLIST-3's ``lens_agreement`` was — a narrated run came
@@ -3995,7 +4004,7 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
 
     names = narrated_union(result, coverage)
     if not names:
-        return [], {}
+        return [], {}, {"attempted": 0, "repaired": 0, "failed": [], "failed_count": 0}
 
     frame = _multi_lens_frame(result)
     sentiment_adapter, sentiment_missing_key, sentiment_error = _sentiment_wiring()
@@ -4005,6 +4014,8 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
                         sentiment_error=sentiment_error,
                         run_matrix=False)
     outcomes: list[CouncilOutcome] = []
+    failures: list[tuple[str, str]] = []
+    narratives: dict[str, str] = {}
     total = len(names)
     for i, ticker in enumerate(names, 1):
         if progress is not None:
@@ -4016,34 +4027,85 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
         res = result.results[sid]
         imputed = (len(r.imputed_factors) / len(r.factor_ranks)
                    if r.factor_ranks else 0.0)
-        state = ResearchState.model_validate(app.invoke(ResearchState(
-            ticker=ticker, strategy_id=frame.id,
-            ranker_verdict=Recommendation(r.verdict),
-            ranker_explanation=r.explain(),
-            ranker_cohort_size=r.universe_size,
-            ranker_imputed_fraction=imputed,
-            ranker_boundary_tie=dict(
-                boundary_tie_facts(res.ranked).get(ticker, {})),
-            static_factor_evidence=_static_factor_evidence(r),
-            cross_lens_verdicts=cross_lens_verdicts(result, ticker),
-            cross_lens_reasons=cross_lens_reasons(result, ticker),
-            # NARR-CONTEXT-1 — what the RUN concluded about this name: the votes, each
-            # check's reading in its own words, and the marks. The writer opens on it.
-            agreement_row=agreement_row_for(result, ticker))))
-        rep = report_from_state(state)
-        # A cross-lens section quotes SEVERAL lenses' rank tables, so each claim is
-        # checked against the table of the lens it NAMES — checking them all against the
-        # lead lens's cohort stamped true statements as contradictions on the first live
-        # run (ADBE's correct "#1 of 6" under Magic Formula RAW, judged against Classic
-        # Value's 5-name cohort).
-        _annotate_narration_by_lens(rep, result, ticker, lead=(sid, r))
-        _annotate_cross_lens(rep, cross_lens_verdicts(result, ticker))
-        outcomes.append(CouncilOutcome(
-            ticker=ticker, ranker_verdict=r.verdict,
-            council_verdict=rep.council_verdict,
-            agreement=rep.ranker_council_agreement,
-            dissent_notes=list(rep.dissent_notes or []), report=rep))
-    return outcomes, {o.ticker: _narrative_text(o) for o in outcomes}
+        try:
+            outcome = _narrate_one(app, result, ticker, sid, r, res, frame, imputed)
+        except Exception as exc:                 # NARR-PARSE-1 — this NAME, not the run
+            # One writer's bad answer used to end the stage, and the run then produced no
+            # narration at all (live, 2026-09-18). A failure is now this name's failure:
+            # it is recorded IN ITS OWN SLOT, counted, and the loop goes on. Broad on
+            # purpose — anything a model seam can raise (validation, transport, rate
+            # limit) has the same blast radius, and the point is that the blast radius is
+            # one name.
+            first_line = str(exc).strip().splitlines()[0] if str(exc).strip() else ""
+            message = (f"narration failed for this name: {type(exc).__name__}"
+                       + (f": {first_line}" if first_line else ""))
+            failures.append((ticker, message))
+            narratives[ticker] = message
+            _log.warning("narration failed for %s: %s", ticker, message)
+            continue
+        outcomes.append(outcome)
+        narratives[ticker] = _narrative_text(outcome)
+    from .agents.runners import repaired_count
+    stage_meta = {
+        "attempted": total,
+        "repaired": repaired_count(runners),
+        "failed": [{"ticker": t, "reason": why} for t, why in failures],
+        "failed_count": len(failures),
+    }
+    return outcomes, narratives, stage_meta
+
+
+def _narrate_one(app, result, ticker, sid, r, res, frame, imputed) -> CouncilOutcome:
+    """One name's narration. Extracted so the loop above can guard exactly this."""
+    state = ResearchState.model_validate(app.invoke(ResearchState(
+        ticker=ticker, strategy_id=frame.id,
+        ranker_verdict=Recommendation(r.verdict),
+        ranker_explanation=r.explain(),
+        ranker_cohort_size=r.universe_size,
+        ranker_imputed_fraction=imputed,
+        ranker_boundary_tie=dict(
+            boundary_tie_facts(res.ranked).get(ticker, {})),
+        static_factor_evidence=_static_factor_evidence(r),
+        cross_lens_verdicts=cross_lens_verdicts(result, ticker),
+        cross_lens_reasons=cross_lens_reasons(result, ticker),
+        # NARR-CONTEXT-1 — what the RUN concluded about this name: the votes, each
+        # check's reading in its own words, and the marks. The writer opens on it.
+        agreement_row=agreement_row_for(result, ticker))))
+    rep = report_from_state(state)
+    # A cross-lens section quotes SEVERAL lenses' rank tables, so each claim is
+    # checked against the table of the lens it NAMES — checking them all against the
+    # lead lens's cohort stamped true statements as contradictions on the first live
+    # run (ADBE's correct "#1 of 6" under Magic Formula RAW, judged against Classic
+    # Value's 5-name cohort).
+    _annotate_narration_by_lens(rep, result, ticker, lead=(sid, r))
+    _annotate_cross_lens(rep, cross_lens_verdicts(result, ticker))
+    return CouncilOutcome(
+        ticker=ticker, ranker_verdict=r.verdict,
+        council_verdict=rep.council_verdict,
+        agreement=rep.ranker_council_agreement,
+        dissent_notes=list(rep.dissent_notes or []), report=rep)
+
+
+def narration_failures(result) -> list[dict]:
+    """``[{"ticker": ..., "reason": ...}]`` — names whose narration failed, off the run."""
+    record = (getattr(result, "meta", None) or {}).get("narration") or {}
+    return list(record.get("failed") or [])
+
+
+def narration_failure_line(result) -> str:
+    """The one line that goes above the narrated sections, or ``""``.
+
+    A failure that is visible only inside the failed name's own section is a failure a
+    reader scanning the shortlist will miss — and "some of these sections are missing"
+    is exactly the thing they need to know before they start reading.
+    """
+    failed = narration_failures(result)
+    if not failed:
+        return ""
+    record = (getattr(result, "meta", None) or {}).get("narration") or {}
+    attempted = record.get("attempted") or len(getattr(result, "narratives", {}) or {})
+    return (f"Narration failed for {len(failed)} of {attempted} names; their sections "
+            f"say so.")
 
 
 def _lead_row(result: MultiStrategyResult, ticker: str):

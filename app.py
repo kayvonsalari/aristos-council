@@ -2379,6 +2379,12 @@ def _multi_narration_markdown(multi_result) -> list[str]:
              "per NAME: a name several lenses bought is narrated once, with each lens's "
              "verdict attributed. The narrator explains the ranker's verdicts; it never "
              "weighs the lenses against each other._", ""]
+    # NARR-PARSE-1 — above the sections, because a reader scanning the shortlist would
+    # otherwise only find out by opening the one section that says nothing.
+    from aristos_council.pipeline import narration_failure_line
+    failure_line = narration_failure_line(multi_result)
+    if failure_line:
+        lines += [f"**{failure_line}**", ""]
     for ticker, text in multi_result.narratives.items():
         display = next((r.display for r in multi_result.rows if r.ticker == ticker),
                        ticker)
@@ -2778,6 +2784,10 @@ def _render_universe_result(result) -> None:
     # 5 — NARRATIVE: one expander per shortlisted (BUY) name — the narrator's job.
     if not m["ranker_only"]:
         st.subheader("Narrative")
+        from aristos_council.pipeline import narration_failure_line
+        _failed = narration_failure_line(result)
+        if _failed:
+            st.warning(_failed)                 # NARR-PARSE-1 — never a silent gap
         if result.narratives:
             verdict_of = {r.ticker: r.verdict.upper() for r in result.ranked}
             for ticker, text in result.narratives.items():
