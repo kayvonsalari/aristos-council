@@ -66,6 +66,18 @@ class SentimentAdapter(abc.ABC):
 # --------------------------------------------------------------------------- #
 # SENT-WIRE-1 — ONE construction, used by every entry point
 # --------------------------------------------------------------------------- #
+def skipped_non_us(tickers) -> list[str]:
+    """The names Finnhub was not asked about, because the plan cannot serve them.
+
+    FINNHUB-SKIP-1. Recorded on the run so "why is sentiment dark for half this cohort?"
+    is answerable from the record rather than by rereading a table of 403s. Empty when the
+    ``FINNHUB_NON_US`` switch is on, because then nothing was skipped.
+    """
+    from .finnhub_adapter import skip_non_us
+
+    return sorted({t for t in (tickers or ()) if t and skip_non_us(str(t))})
+
+
 def build_sentiment_adapter(*, provider: str = "finnhub"):
     """``(adapter, missing_key, error)`` — the sentiment provider, or an honest absence.
 

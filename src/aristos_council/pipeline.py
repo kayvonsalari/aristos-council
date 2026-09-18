@@ -2643,6 +2643,12 @@ def run_multi_strategy_pipeline(
     }
     if narration_stage:
         meta["narration"].update(narration_stage)
+    # FINNHUB-SKIP-1 - lifted out of the narration record onto its own key, because it is
+    # a fact about the SENTIMENT channel rather than about which names were narrated.
+    _skipped = (meta.get("narration") or {}).pop("sentiment_skipped_non_us", None)
+    if _skipped is not None:
+        meta["sentiment"] = {**(meta.get("sentiment") or {}),
+                             "skipped_non_us": list(_skipped)}
     built = MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
                                 results=results, rows=rows, meta=meta,
                                 narratives=narratives, council=council)
@@ -4256,6 +4262,12 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
     # NARR-PARSE-1 — merged INTO the NARR-2 plan record rather than over it: the plan says
     # which names were chosen, this says what happened when they were written.
     meta["narration"] = {**(meta.get("narration") or {}), **narration_stage}
+    # FINNHUB-SKIP-1 - lifted out of the narration record onto its own key, because it is
+    # a fact about the SENTIMENT channel rather than about which names were narrated.
+    _skipped = (meta.get("narration") or {}).pop("sentiment_skipped_non_us", None)
+    if _skipped is not None:
+        meta["sentiment"] = {**(meta.get("sentiment") or {}),
+                             "skipped_non_us": list(_skipped)}
     # ``replace`` rather than a hand-built copy: this function listed the fields it
     # carried over, so every field ADDED to MultiStrategyResult since was silently
     # dropped by narrating. SHORTLIST-3's ``lens_agreement`` was — a narrated run came
@@ -4332,7 +4344,11 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
         outcomes.append(outcome)
         narratives[ticker] = _narrative_text(outcome)
     from .agents.runners import repaired_count
+    from .data.sentiment import skipped_non_us
     stage_meta = {
+        # FINNHUB-SKIP-1 - the names Finnhub was never asked about, so "why is sentiment
+        # dark for half this cohort?" is answerable from the record.
+        "sentiment_skipped_non_us": skipped_non_us(names),
         "attempted": total,
         "repaired": repaired_count(runners),
         "failed": [{"ticker": t, "reason": why} for t, why in failures],

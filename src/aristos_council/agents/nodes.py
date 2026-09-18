@@ -138,9 +138,18 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                 state.errors.append(f"{tool_name}: {exc}")
                 # The adapter RAISED — an actual fetch/API failure, not honest
                 # absence. Tag it FETCH_ERROR so the run is marked degraded.
+                #
+                # FINNHUB-SKIP-1 is the exception: a symbol the PLAN cannot serve was
+                # never requested, so nothing FAILED. It is DATA_ABSENT - the datum
+                # genuinely does not exist for us - which by design does not degrade the
+                # run. Tagging it FETCH_ERROR made a subscription boundary read as an
+                # outage, which is what put "HTTP 403" in the dark-channel table.
+                from ..data.finnhub_adapter import non_us_reason as _non_us_reason
+                planned = _non_us_reason("").split(";")[0]
+                kind = (FailureKind.DATA_ABSENT if planned and planned in str(exc)
+                        else FailureKind.FETCH_ERROR)
                 state.run_issues.append(RunIssue(
-                    source=source, reason=FailureKind.FETCH_ERROR,
-                    detail=str(exc)))
+                    source=source, reason=kind, detail=str(exc)))
                 return None
 
         # An optional source with no API key is a MISSING_KEY tool gap, not honest
