@@ -23,6 +23,14 @@ to the wording the single-lens header already used; the replacement is pinned by
 ``tests/test_narration_union.py::test_a_narrated_multi_lens_run_never_claims_no_LLM_ran``
 so the guard did not simply get relaxed.
 
+GOLDEN REGENERATED, DELIBERATELY (2026-09-18, FACTOR-MARK-3). An imputed factor cell
+reads "2 · imputed" instead of "2*", and the legend entry that explains it is keyed by
+that word instead of by the symbol. THREE visible lines moved in single_lens and none in
+multi_lens; the line COUNT is unchanged, which is the check that caught a real bug on the
+way here — keying the cell by a word while the legend selector still looked for "*" made
+the legend silently stop explaining imputation at all, and the count dropped by two. The
+guarantee is unchanged: no number, name, verdict or reason moved.
+
 GOLDENS REGENERATED AGAIN, DELIBERATELY (2026-08-25, REPORT-4). That change REORDERS the
 document, adds a contents list, adds a "what the run could not see" section and renders
 the narration from the narrator's structured fields — so "the visible text is identical"

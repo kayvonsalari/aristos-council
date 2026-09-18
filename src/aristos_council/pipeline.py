@@ -88,6 +88,7 @@ from .rank_engine import (
     format_position_cell,
     format_verdict_cell,
     rank_universe,
+    factor_measurement,
     ranked_table_rows,
 )
 from .report_language import (
@@ -2026,10 +2027,14 @@ def used_symbol_notes(result) -> list[tuple[str, str]]:
     All three used to share a single dense run-on line, which is why none of them was
     read. Explaining a symbol that never appears is noise of a different kind, so the
     legend is filtered to what is on the page."""
-    from .report_language import SYMBOL_NOTES
+    from .report_language import IMPUTED_NOTE_KEY, SYMBOL_NOTES
     used = set()
     if any(r.imputed_factors for r in result.ranked):
-        used.add("*")
+        # FACTOR-MARK-3 renamed this key when the cell stopped being "2*" and started
+        # being "2 · imputed". The key and the cell have to move together: they did not,
+        # for one commit, and the legend simply stopped explaining the thing it exists to
+        # explain — a section vanishing is indistinguishable from a feature switched off.
+        used.add(IMPUTED_NOTE_KEY)
     if any(r.screen_abstentions for r in result.ranked):
         used.add("†")
     if boundary_tie_notes(result.ranked):
@@ -2343,10 +2348,12 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
                 strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,
                 verdict=r.verdict, score=r.combined_rank,
                 is_check=_is_check_result(res),
-                # FACTOR-MARK-1: measured = the lens's factors this name actually had a
-                # value for. An imputed factor is not a measurement of the name.
-                factors_total=len(r.factor_ranks or {}),
-                factors_measured=len(r.factor_ranks or {}) - len(r.imputed_factors or [])))
+                # FACTOR-MARK-1/3: measured = the lens's factors this name actually had a
+                # value for. An imputed factor is not a measurement of the name. Counted
+                # by ``factor_measurement`` and nowhere else, so this marker and the
+                # factor table can no longer disagree about the same row.
+                **dict(zip(("factors_measured", "factors_total"),
+                           factor_measurement(r)))))
         for status, pairs in ((_EXCLUDED, res.excluded),
                               (_UNRATEABLE, res.unrateable),
                               (_FETCH_ERROR, res.fetch_errors)):
@@ -3524,10 +3531,16 @@ def lens_agreement(multi_result) -> LensAgreement:
             if sid in voting:
                 position_of.setdefault(r.ticker, {})[sid] = getattr(
                     r, "cohort_position", None)
-                note = _factor_note_for(r)
-                if note:
-                    factor_note_of.setdefault(r.ticker, []).append(
-                        f"{_label(sid)}: {note}")
+            # FACTOR-MARK-3 — the note is collected for EVERY lens, check lenses included.
+            # It used to be gathered inside the `voting` branch above, so a name measured
+            # on fewer factors by the CHECK lens carried the marker in its grid cell and
+            # nothing in the agreement table: Suncor, on the oil runs, where Forensic
+            # ranked it without an Altman Z. A check's reading standing on fewer factors
+            # is exactly the kind of doubt the agreement table exists to show.
+            note = _factor_note_for(r)
+            if note:
+                factor_note_of.setdefault(r.ticker, []).append(
+                    f"{_label(sid)}: {note}")
 
     excluded_reason: dict = {}
     for sid in voting:
@@ -3580,13 +3593,16 @@ def lens_agreement(multi_result) -> LensAgreement:
 
 
 def _factor_note_for(ranked) -> str:
-    """FACTOR-MARK-1's marker for one ranked row, or "". Recomputed from the row rather
-    than read off the grid cell, so the two cannot disagree."""
-    total = len(getattr(ranked, "factor_ranks", None) or {})
-    imputed = len(getattr(ranked, "imputed_factors", None) or ())
-    if not total or not imputed:
+    """FACTOR-MARK-1's marker for one ranked row, or "".
+
+    FACTOR-MARK-3: the count comes from ``rank_engine.factor_measurement`` — the same
+    function the grid cell and the per-lens factor table use — rather than being worked
+    out a third time here.
+    """
+    measured, total = factor_measurement(ranked)
+    if not total or measured >= total:
         return ""
-    return f"ranked on {total - imputed} of {total} factors"
+    return f"ranked on {measured} of {total} factors"
 
 
 def _overlap_note(results, voting, label) -> str:
