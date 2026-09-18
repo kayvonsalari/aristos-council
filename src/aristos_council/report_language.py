@@ -291,10 +291,16 @@ def format_score_gloss(n_factors: int, cohort_size: int) -> str:
 
 # The three table symbols, one full sentence each. They used to share a single dense
 # run-on line, which is why none of them was read.
+# FACTOR-MARK-3: the imputed note is keyed by a WORD now, not by "*". Named rather than
+# spelled at both ends, so the legend selector and the legend itself cannot drift apart.
+IMPUTED_NOTE_KEY = "imputed"
+
 SYMBOL_NOTES: tuple[tuple[str, str], ...] = (
-    ("*", "A rank marked * was IMPUTED: that factor had no value for this name, so it "
-          "was given the average of the name's other factor ranks rather than the worst "
-          "rank — the name is judged on what it has, not punished for the gap."),
+    (IMPUTED_NOTE_KEY, "A factor cell reading · imputed had NO value for this name, so the "
+                "rank shown is the average of the name's other factor ranks rather than "
+                "the worst rank — the name is judged on what it has, not punished for "
+                "the gap. The count beside the verdict (“ranked on 2 of 3 "
+                "factors”) counts these out, so the two always agree."),
     ("†", "A name marked † PASSED the screen while one of the screen's rules could not "
           "be tested at all for it; the rule and the reason are named under the verdict."),
     ("⚑", "A verdict marked ⚑ sits on a boundary: this name tied on score with another "

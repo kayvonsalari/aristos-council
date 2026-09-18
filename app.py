@@ -2116,6 +2116,12 @@ def _shortlist_markdown(ag, lens_agreement_table) -> list[str]:
     else:
         lines.append("_No name was rated BUY by any voting lens. That is a result, not a "
                      "gap._")
+    # COHORT-BAND-1 — directly under the table: the one thing a reader scanning the
+    # shortlist could read every row and still miss.
+    from aristos_council.pipeline import cohort_band_line
+    band_line = cohort_band_line(ag)
+    if band_line:
+        lines += ["", f"**{band_line}**"]
     if ag.no_buy_count:
         plural = "s" if ag.no_buy_count != 1 else ""
         lines += ["", f"_{ag.no_buy_count} name{plural} had no BUY from any lens, and "
@@ -2379,6 +2385,12 @@ def _multi_narration_markdown(multi_result) -> list[str]:
              "per NAME: a name several lenses bought is narrated once, with each lens's "
              "verdict attributed. The narrator explains the ranker's verdicts; it never "
              "weighs the lenses against each other._", ""]
+    # NARR-PARSE-1 — above the sections, because a reader scanning the shortlist would
+    # otherwise only find out by opening the one section that says nothing.
+    from aristos_council.pipeline import narration_failure_line
+    failure_line = narration_failure_line(multi_result)
+    if failure_line:
+        lines += [f"**{failure_line}**", ""]
     for ticker, text in multi_result.narratives.items():
         display = next((r.display for r in multi_result.rows if r.ticker == ticker),
                        ticker)
@@ -2408,7 +2420,7 @@ def _render_shortlist(ag) -> None:
     and the downloaded files cannot show different names."""
     if ag is None:
         return
-    from aristos_council.pipeline import lens_agreement_table
+    from aristos_council.pipeline import cohort_band_line, lens_agreement_table
 
     st.subheader(ag.title)
     st.caption(ag.rule_sentence)
@@ -2421,6 +2433,9 @@ def _render_shortlist(ag) -> None:
         st.dataframe(rows, column_order=cols, hide_index=True, width="stretch")
     else:
         st.info("No name was rated BUY by any voting lens. That is a result, not a gap.")
+    band_line = cohort_band_line(ag)            # COHORT-BAND-1
+    if band_line:
+        st.markdown(f"**{band_line}**")
     if ag.no_buy_count:
         plural = "s" if ag.no_buy_count != 1 else ""
         st.caption(f"{ag.no_buy_count} name{plural} had no BUY from any lens, and are not "
@@ -2651,8 +2666,12 @@ def _render_universe_result(result) -> None:
     # 1 — REPORT-1: the human names lead; every id stays beside them as the record key.
     head = header_lines(result)
     st.markdown(f"#### {head[0]}")
+    # PRICE-STALE-1 — the same line the report carries, but LOUD here: a caption among
+    # captions is exactly how a stale cache went unnoticed in the first place.
+    from aristos_council.pipeline import price_stale_line
+    _stale = price_stale_line(result)
     for line in head[1:]:
-        st.caption(line)
+        (st.warning if line == _stale else st.caption)(line)
     st.markdown(f"### {summary_line(result)}")
     st.caption(result.header)
     meta_bits = (f"Screen: {label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id'])} · "
@@ -2778,6 +2797,10 @@ def _render_universe_result(result) -> None:
     # 5 — NARRATIVE: one expander per shortlisted (BUY) name — the narrator's job.
     if not m["ranker_only"]:
         st.subheader("Narrative")
+        from aristos_council.pipeline import narration_failure_line
+        _failed = narration_failure_line(result)
+        if _failed:
+            st.warning(_failed)                 # NARR-PARSE-1 — never a silent gap
         if result.narratives:
             verdict_of = {r.ticker: r.verdict.upper() for r in result.ranked}
             for ticker, text in result.narratives.items():

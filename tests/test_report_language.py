@@ -539,12 +539,19 @@ def test_each_factor_cell_shows_the_value_beside_the_rank(result):
     assert factor_ids == ["low_volatility", "net_payout_yield", "momentum_12m"]
 
 
-def test_an_imputed_rank_keeps_its_star_and_shows_no_value():
+def test_an_imputed_rank_SAYS_imputed_and_shows_no_value():
+    """FACTOR-MARK-3: the word, not a footnote symbol.
+
+    This cell sits beside a marker that says "ranked on 2 of 3 factors". "2*" is a plain
+    number to a reader who has not found the legend, so the two readings looked like they
+    disagreed. There is still no value to print — an imputed rank exists precisely
+    because the factor had none.
+    """
     r = RankedTicker(ticker="X", factor_ranks={"net_payout_yield": 2.0},
                      factor_values={"net_payout_yield": None}, combined_rank=2.0,
                      universe_size=1, imputed_factors=["net_payout_yield"])
     row = ranked_table_rows([r])[0][0]
-    assert row[factor_column_label("net_payout_yield")] == "2*"
+    assert row[factor_column_label("net_payout_yield")] == "2 · imputed"
 
 
 def test_the_score_gloss_is_stated_once_and_carries_both_bounds():

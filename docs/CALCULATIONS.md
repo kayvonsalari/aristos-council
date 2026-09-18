@@ -797,6 +797,21 @@ abstained for 40 of 106 ranked names, most of them foreign listings — which is
 names carry the "ranked on 2 of 3 factors" marker (FACTOR-MARK-1) and why the lens's other
 two legs are doing the work there.
 
+#### What "imputed" means on a factor cell (ALTMAN-DOC-2)
+
+A lens ranks a name on several factors at once, and sometimes one of them has no value —
+the Altman Z needs balance-sheet lines that a given filing does not publish, for instance.
+When that happens the name is **not dropped and not sent to the bottom**. The missing
+factor is treated as *neutral*: the name is given its own average rank from the factors it
+does have, so it keeps its place on the strength of what was actually measured rather than
+being punished for a gap in the data. The cell for that factor reads `12 · imputed`, and
+the name's verdict carries `ranked on 2 of 3 factors` so the two always agree
+(FACTOR-MARK-3). What this means for a reader is simple and worth saying plainly: **a rank
+standing on fewer factors is weaker evidence than a full one.** Two names side by side at
+the same position are not equally well supported if one of them was measured on
+everything and the other on two thirds of it, and the marker is there so that difference
+is never invisible.
+
 ## 5. Guards
 
 - **UNRATEABLE** — a ticker with failed fundamentals *and* no usable price history (a

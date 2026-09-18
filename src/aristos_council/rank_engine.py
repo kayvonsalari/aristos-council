@@ -411,6 +411,36 @@ def factor_column_label(factor: str) -> str:
     return f"{label} ({RANK_COLUMN_NOTE})"
 
 
+# --------------------------------------------------------------------------- #
+# FACTOR-MARK-3 — ONE answer to "what was this name actually measured on?"
+# --------------------------------------------------------------------------- #
+# Three surfaces asked that question and each worked it out for itself: the grid cell's
+# "ranked on 2 of 3 factors" marker, the agreement table's note, and the per-lens factor
+# table's per-cell mark. Same arithmetic in three places is the shape of a contradiction
+# waiting to be reported, and one was (2026-09-18). These two functions are now the only
+# place it is computed; all three read from them.
+def factor_is_imputed(ranked, factor: str) -> bool:
+    """Was this factor's RANK imputed for this name, rather than measured?
+
+    ``imputed_factors`` is the run's own record, written by ``rank_universe`` under the
+    'neutral' missing-mode. It is the authority — not ``factor_values[f] is None``, which
+    is also true of a name sent to the WORST rank under a different policy, and which
+    would therefore mark a deliberate penalty as an imputation.
+    """
+    return factor in (getattr(ranked, "imputed_factors", None) or ())
+
+
+def factor_measurement(ranked) -> tuple[int, int]:
+    """``(measured, total)`` — how many of this lens's factors this name had a value for.
+
+    An imputed factor is not a measurement OF THE NAME: it is the name's own other ranks,
+    averaged. So it counts towards ``total`` and not towards ``measured``.
+    """
+    total = len(getattr(ranked, "factor_ranks", None) or {})
+    imputed = len(getattr(ranked, "imputed_factors", None) or ())
+    return max(total - imputed, 0), total
+
+
 def format_factor_cell(rank: float, value, factor: str, imputed: bool) -> str:
     """One factor cell: the RANK, then the VALUE it was ranked on — ``"1 · 14.2%"``.
 
@@ -421,10 +451,16 @@ def format_factor_cell(rank: float, value, factor: str, imputed: bool) -> str:
     from .factors import FACTOR_REGISTRY
     from .report_language import format_value
     fdef = FACTOR_REGISTRY.get(factor)
-    cell = f"{rank:.0f}" + ("*" if imputed else "")
-    if imputed or value is None or fdef is None:
-        return cell
-    return f"{cell} · {format_value(value, fdef.unit, currency=fdef.currency)}"
+    if imputed:
+        # FACTOR-MARK-3: the WORD, not a footnote symbol. A cell reading "12*" is a plain
+        # number to anyone who has not found the legend, and this table sits beside a
+        # marker that says "ranked on 2 of 3 factors" — the two have to agree in language,
+        # not only in arithmetic. There is no value to print: an imputed rank exists
+        # precisely because the factor had none.
+        return f"{rank:.0f} · imputed"
+    if value is None or fdef is None:
+        return f"{rank:.0f}"
+    return f"{rank:.0f} · {format_value(value, fdef.unit, currency=fdef.currency)}"
 
 
 def ranked_table_rows(ranked: list["RankedTicker"],
@@ -474,7 +510,7 @@ def ranked_table_rows(ranked: list["RankedTicker"],
             if f in r.factor_ranks:
                 row[columns[f]] = format_factor_cell(
                     r.factor_ranks[f], r.factor_values.get(f), f,
-                    f in r.imputed_factors)
+                    factor_is_imputed(r, f))
             else:
                 row[columns[f]] = "—"
         rows.append(row)

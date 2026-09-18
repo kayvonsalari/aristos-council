@@ -311,7 +311,7 @@ def test_estimate_shortlist_size_tracks_the_cut():
     assert app._estimate_shortlist_size(2, magic) == 1     # never below 1 for n>0
 
 
-def test_ranked_rows_marks_imputed_factors_with_a_star():
+def test_ranked_rows_says_imputed_on_a_factor_the_name_had_no_value_for():
     from aristos_council.rank_engine import RankedTicker
     rt = RankedTicker(
         ticker="A", factor_ranks={"earnings_yield": 1.0, "net_payout_yield": 2.0},
@@ -330,9 +330,12 @@ def test_ranked_rows_marks_imputed_factors_with_a_star():
     from aristos_council.rank_engine import factor_column_label
     ey = factor_column_label("earnings_yield")
     assert ey.startswith("Earnings yield (EBIT/EV)") and "rank, 1 = best" in ey
-    assert row[ey].startswith("1")                     # present, no star
-    # an IMPUTED rank keeps its star and shows NO value — there was none to show.
-    assert row[factor_column_label("net_payout_yield")] == "2*"
+    assert row[ey].startswith("1")                     # present, not imputed
+    assert "imputed" not in row[ey]
+    # FACTOR-MARK-3: an IMPUTED rank says so in words and shows NO value — there was none
+    # to show. The word matters because this cell sits beside a "ranked on 1 of 2 factors"
+    # marker, and a bare "2*" read as a contradiction of it.
+    assert row[factor_column_label("net_payout_yield")] == "2 · imputed"
 
 
 def test_universe_markdown_has_sections_from_the_result():

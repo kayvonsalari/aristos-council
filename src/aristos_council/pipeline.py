@@ -21,7 +21,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -88,6 +88,7 @@ from .rank_engine import (
     format_position_cell,
     format_verdict_cell,
     rank_universe,
+    factor_measurement,
     ranked_table_rows,
 )
 from .report_language import (
@@ -885,6 +886,11 @@ def run_rank_pipeline(
                   else {})}}}
            if override_record is not None else {}),
         "universe_size": len(universe),
+        # PRICE-STALE-1 — recorded whether or not it is old enough to warn about, so a
+        # later reader of the record can ask the question the report answered.
+        "price_age_days": price_age_days(
+            RankPipelineResult(ranked=live, excluded=[], unrateable=[], narratives={},
+                               header="", meta={}), today=today),
         "ranked_count": len(live),
         "shortlist": [r.ticker for r in shortlist],
         "est_cost": est,
@@ -1177,6 +1183,79 @@ def format_screen_basis(result: RankPipelineResult) -> list[str]:
 # --------------------------------------------------------------------------- #
 # REPORT-1 — the report's own header, summary and exclusion sentences
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# PRICE-STALE-1 — say when the price is old
+# --------------------------------------------------------------------------- #
+# The band already printed "the last close on <date>" and nothing ever said whether that
+# date was yesterday or a fortnight ago, so a stale cache read exactly like current data.
+#
+# FOUR days, not one, and deliberately CALENDAR days: a Friday close read on the following
+# Tuesday is three days old and completely normal. Modelling exchange calendars to shave
+# that down would be a lot of machinery to make a warning fire slightly sooner, and every
+# holiday it got wrong would be a false alarm about the one thing this line exists to make
+# credible. Nothing is blocked either way — the run is fine, the reader is just told.
+PRICE_STALE_DAYS = 4
+
+
+def _priced_rows(result):
+    """Every ranked row of a run, single-lens or multi-lens."""
+    rows = list(getattr(result, "ranked", None) or [])
+    if rows:
+        return rows
+    for per_lens in (getattr(result, "results", None) or {}).values():
+        rows.extend(getattr(per_lens, "ranked", None) or [])
+    return rows
+
+
+def newest_close_date(result):
+    """The NEWEST close any name in this run was priced on, or None.
+
+    Newest rather than oldest: the question is "how current is this run at best", and one
+    name with a deep gap in its history should not make the whole run look stale.
+    """
+    stamps = []
+    for row in _priced_rows(result):
+        price = getattr(row, "price", None)
+        as_of = getattr(price, "as_of", None) if price is not None else None
+        if as_of is not None:
+            stamps.append(as_of)
+    return max(stamps) if stamps else None
+
+
+def price_age_days(result, *, today: Optional[date] = None) -> Optional[int]:
+    """Calendar days between the newest close and today, or None when nothing is priced."""
+    newest = newest_close_date(result)
+    if newest is None:
+        return None
+    return max((today or date.today()) - newest, timedelta(0)).days
+
+
+def price_stale_line(result, *, today: Optional[date] = None) -> str:
+    """The one line every surface shows when the prices are old, or ``""``.
+
+    The age is the one RECORDED ON THE RUN (``meta["price_age_days"]``), not one computed
+    against today. A report is a record of a moment: re-rendering a March run in September
+    must not have it announce that its prices are six months stale, and a rendered
+    document whose text depends on the day it is read cannot be pinned by anything. The
+    golden files caught this the first time it was written the other way round.
+
+    ``today`` is honoured only when the run recorded no age — for a caller holding a
+    freshly built result that has not been through the meta assembly yet.
+    """
+    newest = newest_close_date(result)
+    if newest is None:
+        return ""
+    recorded = (getattr(result, "meta", None) or {}).get("price_age_days")
+    if recorded is None:
+        if today is None:
+            return ""                    # no record and no reference point: say nothing
+        recorded = price_age_days(result, today=today)
+    if recorded is None or recorded <= PRICE_STALE_DAYS:
+        return ""
+    return (f"Prices are from {newest.isoformat()}, {recorded} days old; the cache may "
+            f"be stale.")
+
+
 def header_lines(result) -> list[str]:
     """The header block, human names first and ids second (REPORT-1).
 
@@ -1198,6 +1277,9 @@ def header_lines(result) -> list[str]:
                    else f"{mode} commentary" if mode else "")
     if mode_phrase:
         lines.append(f"Run: {mode_phrase}")
+    stale = price_stale_line(result)
+    if stale:
+        lines.append(stale)              # PRICE-STALE-1 — at the top, where the run is read
     return lines
 
 
@@ -1873,7 +1955,11 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
     return ValuationBandTable(
         columns=columns, rows=rows, has_band=has_band,
         intro=VALUATION_BAND_INTRO if has_band else PRICE_SECTION_NOTE,
-        footnotes=_band_footnotes(live, uniform, coverage, has_band=has_band))
+        footnotes=_band_footnotes(
+            live, uniform, coverage, has_band=has_band,
+            # PRICE-STALE-1 — the age the RUN recorded, so the note is a fact about the
+            # run rather than about the day someone re-opened it.
+            age_days=(getattr(result, "meta", None) or {}).get("price_age_days")))
 
 
 class _UnionBandView:
@@ -1940,7 +2026,7 @@ def union_valuation_band_table(multi_result) -> Optional[ValuationBandTable]:
 
 
 def _band_footnotes(live, uniform: bool, coverage: set, *,
-                    has_band: bool = True) -> list[str]:
+                    has_band: bool = True, age_days: Optional[int] = None) -> list[str]:
     """The notes that belong BELOW the table: the shared month coverage, the net-debt
     disclosure, then the doctrine in full. Nothing here is a caveat the reader has to get
     past to reach a number."""
@@ -1952,6 +2038,13 @@ def _band_footnotes(live, uniform: bool, coverage: set, *,
         when = stamps[0] if len(stamps) == 1 else f"{stamps[0]} to {stamps[-1]}"
         notes.append(f"Prices are the last close on {when}, each in the name's own "
                      "quoted currency, never converted. A stale cache shows up here.")
+        # PRICE-STALE-1 — "shows up here" was only true for a reader who knew today's
+        # date and did the subtraction. Now it is stated — from the age the RUN recorded,
+        # so the note does not drift every day the report is re-opened.
+        if age_days is not None and age_days > PRICE_STALE_DAYS:
+            newest = max(date.fromisoformat(x) for x in stamps)
+            notes.append(f"Prices are from {newest.isoformat()}, {age_days} days old; "
+                         f"the cache may be stale.")
     if not has_band:
         return notes                    # band off: no coverage, no doctrine to state
     if uniform and coverage:
@@ -2026,10 +2119,14 @@ def used_symbol_notes(result) -> list[tuple[str, str]]:
     All three used to share a single dense run-on line, which is why none of them was
     read. Explaining a symbol that never appears is noise of a different kind, so the
     legend is filtered to what is on the page."""
-    from .report_language import SYMBOL_NOTES
+    from .report_language import IMPUTED_NOTE_KEY, SYMBOL_NOTES
     used = set()
     if any(r.imputed_factors for r in result.ranked):
-        used.add("*")
+        # FACTOR-MARK-3 renamed this key when the cell stopped being "2*" and started
+        # being "2 · imputed". The key and the cell have to move together: they did not,
+        # for one commit, and the legend simply stopped explaining the thing it exists to
+        # explain — a section vanishing is indistinguishable from a feature switched off.
+        used.add(IMPUTED_NOTE_KEY)
     if any(r.screen_abstentions for r in result.ranked):
         used.add("†")
     if boundary_tie_notes(result.ranked):
@@ -2343,10 +2440,12 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
                 strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,
                 verdict=r.verdict, score=r.combined_rank,
                 is_check=_is_check_result(res),
-                # FACTOR-MARK-1: measured = the lens's factors this name actually had a
-                # value for. An imputed factor is not a measurement of the name.
-                factors_total=len(r.factor_ranks or {}),
-                factors_measured=len(r.factor_ranks or {}) - len(r.imputed_factors or [])))
+                # FACTOR-MARK-1/3: measured = the lens's factors this name actually had a
+                # value for. An imputed factor is not a measurement of the name. Counted
+                # by ``factor_measurement`` and nowhere else, so this marker and the
+                # factor table can no longer disagree about the same row.
+                **dict(zip(("factors_measured", "factors_total"),
+                           factor_measurement(r)))))
         for status, pairs in ((_EXCLUDED, res.excluded),
                               (_UNRATEABLE, res.unrateable),
                               (_FETCH_ERROR, res.fetch_errors)):
@@ -2470,6 +2569,7 @@ def run_multi_strategy_pipeline(
     # LLM calls, so a deterministic comparison stays byte-identical to before.
     narratives: dict[str, str] = {}
     council: list[CouncilOutcome] = []
+    narration_stage: dict = {}
     provisional = MultiStrategyResult(
         strategy_ids=list(ids), strategy_names=names, results=results, rows=rows,
         meta={"strategy_ids": list(ids)})
@@ -2482,7 +2582,7 @@ def run_multi_strategy_pipeline(
         if runners is None:
             from .agents.runners import production_runners
             runners = production_runners()
-        council, narratives = _multi_narration_stage(
+        council, narratives, narration_stage = _multi_narration_stage(
             provisional, adapter, runners, coverage=narrate_coverage,
             progress=progress)
     meta = {
@@ -2498,6 +2598,9 @@ def run_multi_strategy_pipeline(
         "universe_members": list(first.meta.get("universe_members") or []),
         "universe_member_hash": first.meta.get("universe_member_hash", ""),
         "universe_size": first.meta.get("universe_size", 0),
+        # PRICE-STALE-1 — across EVERY lens's rows, so the figure is the run's, not the
+        # first column's.
+        "price_age_days": price_age_days(provisional),
         "council_mode": "ranker-only" if ranker_only else "narrator",
         "ranker_only": ranker_only,
         "graded_by_all": sum(1 for row in rows if row.comparable),
@@ -2525,6 +2628,11 @@ def run_multi_strategy_pipeline(
     # SHORTLIST-3 — there is no primary lens. Every lens in the run is a vote of equal
     # weight, and the answer is the AGREEMENT between them.
     meta["shortlist_band_cutoff"] = SHORTLIST_BAND_CUTOFF
+    # NARR-PARSE-1 — what the narration stage had to repair, and what it could not.
+    # ``setdefault`` then ``update``: this path writes no NARR-2 plan, the confirm-spend
+    # path writes one FIRST, and neither may clobber the other's keys.
+    if narration_stage:
+        meta.setdefault("narration", {}).update(narration_stage)
     built = MultiStrategyResult(strategy_ids=list(ids), strategy_names=names,
                                 results=results, rows=rows, meta=meta,
                                 narratives=narratives, council=council)
@@ -3518,10 +3626,16 @@ def lens_agreement(multi_result) -> LensAgreement:
             if sid in voting:
                 position_of.setdefault(r.ticker, {})[sid] = getattr(
                     r, "cohort_position", None)
-                note = _factor_note_for(r)
-                if note:
-                    factor_note_of.setdefault(r.ticker, []).append(
-                        f"{_label(sid)}: {note}")
+            # FACTOR-MARK-3 — the note is collected for EVERY lens, check lenses included.
+            # It used to be gathered inside the `voting` branch above, so a name measured
+            # on fewer factors by the CHECK lens carried the marker in its grid cell and
+            # nothing in the agreement table: Suncor, on the oil runs, where Forensic
+            # ranked it without an Altman Z. A check's reading standing on fewer factors
+            # is exactly the kind of doubt the agreement table exists to show.
+            note = _factor_note_for(r)
+            if note:
+                factor_note_of.setdefault(r.ticker, []).append(
+                    f"{_label(sid)}: {note}")
 
     excluded_reason: dict = {}
     for sid in voting:
@@ -3574,13 +3688,16 @@ def lens_agreement(multi_result) -> LensAgreement:
 
 
 def _factor_note_for(ranked) -> str:
-    """FACTOR-MARK-1's marker for one ranked row, or "". Recomputed from the row rather
-    than read off the grid cell, so the two cannot disagree."""
-    total = len(getattr(ranked, "factor_ranks", None) or {})
-    imputed = len(getattr(ranked, "imputed_factors", None) or ())
-    if not total or not imputed:
+    """FACTOR-MARK-1's marker for one ranked row, or "".
+
+    FACTOR-MARK-3: the count comes from ``rank_engine.factor_measurement`` — the same
+    function the grid cell and the per-lens factor table use — rather than being worked
+    out a third time here.
+    """
+    measured, total = factor_measurement(ranked)
+    if not total or measured >= total:
         return ""
-    return f"ranked on {total - imputed} of {total} factors"
+    return f"ranked on {measured} of {total} factors"
 
 
 def _overlap_note(results, voting, label) -> str:
@@ -3616,6 +3733,58 @@ def _overlap_note(results, voting, label) -> str:
                     f"factor{'s' if len(key) != 1 else ''}; ticking both counts one view "
                     "twice.")
     return ""
+
+
+# --------------------------------------------------------------------------- #
+# COHORT-BAND-1 — a cohort that is expensive says so ONCE
+# --------------------------------------------------------------------------- #
+# On the oil runs every shortlisted name sat near the top of its own five-year range, and
+# that was the single most useful thing those runs said. The report only ever said it per
+# name, in a column, so a reader scanning the shortlist could read every row and still
+# miss that the whole list was expensive.
+#
+# This is arithmetic on figures ALREADY in the report. It is not ranked, not screened, and
+# touches no verdict.
+COHORT_BAND_EXPENSIVE = 70.0     # median at or above this: the cohort is dear
+COHORT_BAND_CHEAP = 30.0         # at or below this: cheap
+COHORT_BAND_MIN_NAMES = 3        # under this, a "median" is a rounding of one opinion
+
+
+def _median(values: list[float]) -> float:
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def cohort_band_line(ag) -> str:
+    """One line under the shortlist, or ``""``.
+
+    Names whose band ABSTAINED are excluded from the median and DISCLOSED — a median that
+    quietly skipped two of seven names would be the same kind of silent shortening the
+    rest of this report refuses. Under three stated bands the line is omitted entirely
+    rather than computed: a "median" of one or two names is a rounding of one opinion, and
+    printing it would lend it an authority it has not got.
+    """
+    rows = list(getattr(ag, "rows", None) or ())
+    if not rows:
+        return ""
+    stated = [r.band_percentile for r in rows if r.band_percentile is not None]
+    missing = len(rows) - len(stated)
+    if len(stated) < COHORT_BAND_MIN_NAMES:
+        return ""
+    median = _median(stated)
+    from .tools.valuation_band import ordinal
+    line = (f"The {len(stated)} shortlisted name{'s' if len(stated) != 1 else ''} sit at "
+            f"a median {ordinal(round(median))} percentile of their own five-year range.")
+    if median >= COHORT_BAND_EXPENSIVE:
+        line = line[:-1] + " — this cohort is expensive against its own history."
+    elif median <= COHORT_BAND_CHEAP:
+        line = line[:-1] + " — this cohort is cheap against its own history."
+    if missing:
+        line += f" ({missing} of {len(rows)} not stated.)"
+    return line
 
 
 def lens_agreement_table(ag) -> tuple:
@@ -3953,7 +4122,7 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
     # COST-3: price THIS PHASE only. The mark/since pair means the figure covers the
     # narration that was just confirmed, not anything the runner set did earlier.
     meter, mark = _cost_mark(runners)
-    council, narratives = _multi_narration_stage(
+    council, narratives, narration_stage = _multi_narration_stage(
         result, adapter, runners, coverage=coverage, progress=progress)
     meta = dict(result.meta)
     meta.update({"council_mode": "narrator", "ranker_only": False,
@@ -3961,6 +4130,9 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
                  "narrate_coverage": coverage, "narration_basis": plan["basis"],
                  "est_cost": plan["est_cost"]})
     meta.update(_cost_meta(meter, mark))
+    # NARR-PARSE-1 — merged INTO the NARR-2 plan record rather than over it: the plan says
+    # which names were chosen, this says what happened when they were written.
+    meta["narration"] = {**(meta.get("narration") or {}), **narration_stage}
     # ``replace`` rather than a hand-built copy: this function listed the fields it
     # carried over, so every field ADDED to MultiStrategyResult since was silently
     # dropped by narrating. SHORTLIST-3's ``lens_agreement`` was — a narrated run came
@@ -3995,7 +4167,7 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
 
     names = narrated_union(result, coverage)
     if not names:
-        return [], {}
+        return [], {}, {"attempted": 0, "repaired": 0, "failed": [], "failed_count": 0}
 
     frame = _multi_lens_frame(result)
     sentiment_adapter, sentiment_missing_key, sentiment_error = _sentiment_wiring()
@@ -4005,6 +4177,8 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
                         sentiment_error=sentiment_error,
                         run_matrix=False)
     outcomes: list[CouncilOutcome] = []
+    failures: list[tuple[str, str]] = []
+    narratives: dict[str, str] = {}
     total = len(names)
     for i, ticker in enumerate(names, 1):
         if progress is not None:
@@ -4016,34 +4190,85 @@ def _multi_narration_stage(result: MultiStrategyResult, adapter, runners, *,
         res = result.results[sid]
         imputed = (len(r.imputed_factors) / len(r.factor_ranks)
                    if r.factor_ranks else 0.0)
-        state = ResearchState.model_validate(app.invoke(ResearchState(
-            ticker=ticker, strategy_id=frame.id,
-            ranker_verdict=Recommendation(r.verdict),
-            ranker_explanation=r.explain(),
-            ranker_cohort_size=r.universe_size,
-            ranker_imputed_fraction=imputed,
-            ranker_boundary_tie=dict(
-                boundary_tie_facts(res.ranked).get(ticker, {})),
-            static_factor_evidence=_static_factor_evidence(r),
-            cross_lens_verdicts=cross_lens_verdicts(result, ticker),
-            cross_lens_reasons=cross_lens_reasons(result, ticker),
-            # NARR-CONTEXT-1 — what the RUN concluded about this name: the votes, each
-            # check's reading in its own words, and the marks. The writer opens on it.
-            agreement_row=agreement_row_for(result, ticker))))
-        rep = report_from_state(state)
-        # A cross-lens section quotes SEVERAL lenses' rank tables, so each claim is
-        # checked against the table of the lens it NAMES — checking them all against the
-        # lead lens's cohort stamped true statements as contradictions on the first live
-        # run (ADBE's correct "#1 of 6" under Magic Formula RAW, judged against Classic
-        # Value's 5-name cohort).
-        _annotate_narration_by_lens(rep, result, ticker, lead=(sid, r))
-        _annotate_cross_lens(rep, cross_lens_verdicts(result, ticker))
-        outcomes.append(CouncilOutcome(
-            ticker=ticker, ranker_verdict=r.verdict,
-            council_verdict=rep.council_verdict,
-            agreement=rep.ranker_council_agreement,
-            dissent_notes=list(rep.dissent_notes or []), report=rep))
-    return outcomes, {o.ticker: _narrative_text(o) for o in outcomes}
+        try:
+            outcome = _narrate_one(app, result, ticker, sid, r, res, frame, imputed)
+        except Exception as exc:                 # NARR-PARSE-1 — this NAME, not the run
+            # One writer's bad answer used to end the stage, and the run then produced no
+            # narration at all (live, 2026-09-18). A failure is now this name's failure:
+            # it is recorded IN ITS OWN SLOT, counted, and the loop goes on. Broad on
+            # purpose — anything a model seam can raise (validation, transport, rate
+            # limit) has the same blast radius, and the point is that the blast radius is
+            # one name.
+            first_line = str(exc).strip().splitlines()[0] if str(exc).strip() else ""
+            message = (f"narration failed for this name: {type(exc).__name__}"
+                       + (f": {first_line}" if first_line else ""))
+            failures.append((ticker, message))
+            narratives[ticker] = message
+            _log.warning("narration failed for %s: %s", ticker, message)
+            continue
+        outcomes.append(outcome)
+        narratives[ticker] = _narrative_text(outcome)
+    from .agents.runners import repaired_count
+    stage_meta = {
+        "attempted": total,
+        "repaired": repaired_count(runners),
+        "failed": [{"ticker": t, "reason": why} for t, why in failures],
+        "failed_count": len(failures),
+    }
+    return outcomes, narratives, stage_meta
+
+
+def _narrate_one(app, result, ticker, sid, r, res, frame, imputed) -> CouncilOutcome:
+    """One name's narration. Extracted so the loop above can guard exactly this."""
+    state = ResearchState.model_validate(app.invoke(ResearchState(
+        ticker=ticker, strategy_id=frame.id,
+        ranker_verdict=Recommendation(r.verdict),
+        ranker_explanation=r.explain(),
+        ranker_cohort_size=r.universe_size,
+        ranker_imputed_fraction=imputed,
+        ranker_boundary_tie=dict(
+            boundary_tie_facts(res.ranked).get(ticker, {})),
+        static_factor_evidence=_static_factor_evidence(r),
+        cross_lens_verdicts=cross_lens_verdicts(result, ticker),
+        cross_lens_reasons=cross_lens_reasons(result, ticker),
+        # NARR-CONTEXT-1 — what the RUN concluded about this name: the votes, each
+        # check's reading in its own words, and the marks. The writer opens on it.
+        agreement_row=agreement_row_for(result, ticker))))
+    rep = report_from_state(state)
+    # A cross-lens section quotes SEVERAL lenses' rank tables, so each claim is
+    # checked against the table of the lens it NAMES — checking them all against the
+    # lead lens's cohort stamped true statements as contradictions on the first live
+    # run (ADBE's correct "#1 of 6" under Magic Formula RAW, judged against Classic
+    # Value's 5-name cohort).
+    _annotate_narration_by_lens(rep, result, ticker, lead=(sid, r))
+    _annotate_cross_lens(rep, cross_lens_verdicts(result, ticker))
+    return CouncilOutcome(
+        ticker=ticker, ranker_verdict=r.verdict,
+        council_verdict=rep.council_verdict,
+        agreement=rep.ranker_council_agreement,
+        dissent_notes=list(rep.dissent_notes or []), report=rep)
+
+
+def narration_failures(result) -> list[dict]:
+    """``[{"ticker": ..., "reason": ...}]`` — names whose narration failed, off the run."""
+    record = (getattr(result, "meta", None) or {}).get("narration") or {}
+    return list(record.get("failed") or [])
+
+
+def narration_failure_line(result) -> str:
+    """The one line that goes above the narrated sections, or ``""``.
+
+    A failure that is visible only inside the failed name's own section is a failure a
+    reader scanning the shortlist will miss — and "some of these sections are missing"
+    is exactly the thing they need to know before they start reading.
+    """
+    failed = narration_failures(result)
+    if not failed:
+        return ""
+    record = (getattr(result, "meta", None) or {}).get("narration") or {}
+    attempted = record.get("attempted") or len(getattr(result, "narratives", {}) or {})
+    return (f"Narration failed for {len(failed)} of {attempted} names; their sections "
+            f"say so.")
 
 
 def _lead_row(result: MultiStrategyResult, ticker: str):

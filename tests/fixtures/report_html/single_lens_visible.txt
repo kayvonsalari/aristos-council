@@ -52,14 +52,14 @@ VWCE.DE†
 SELL
 ⚑ boundary (tied 5 with EUNL.DE — HOLD; tie broken alphabetically)
 3 · 0.22
-2*
+2 · imputed
 Factor ids, in column order:
 expense_ratio
 ,
 fund_size
 .
-*
-— A rank marked * was IMPUTED: that factor had no value for this name, so it was given the average of the name's other factor ranks rather than the worst rank — the name is judged on what it has, not punished for the gap.
+imputed
+— A factor cell reading · imputed had NO value for this name, so the rank shown is the average of the name's other factor ranks rather than the worst rank — the name is judged on what it has, not punished for the gap. The count beside the verdict (“ranked on 2 of 3 factors”) counts these out, so the two always agree.
 †
 — A name marked † PASSED the screen while one of the screen's rules could not be tested at all for it; the rule and the reason are named under the verdict.
 ⚑
