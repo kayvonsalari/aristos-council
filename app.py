@@ -2116,6 +2116,12 @@ def _shortlist_markdown(ag, lens_agreement_table) -> list[str]:
     else:
         lines.append("_No name was rated BUY by any voting lens. That is a result, not a "
                      "gap._")
+    # COHORT-BAND-1 — directly under the table: the one thing a reader scanning the
+    # shortlist could read every row and still miss.
+    from aristos_council.pipeline import cohort_band_line
+    band_line = cohort_band_line(ag)
+    if band_line:
+        lines += ["", f"**{band_line}**"]
     if ag.no_buy_count:
         plural = "s" if ag.no_buy_count != 1 else ""
         lines += ["", f"_{ag.no_buy_count} name{plural} had no BUY from any lens, and "
@@ -2414,7 +2420,7 @@ def _render_shortlist(ag) -> None:
     and the downloaded files cannot show different names."""
     if ag is None:
         return
-    from aristos_council.pipeline import lens_agreement_table
+    from aristos_council.pipeline import cohort_band_line, lens_agreement_table
 
     st.subheader(ag.title)
     st.caption(ag.rule_sentence)
@@ -2427,6 +2433,9 @@ def _render_shortlist(ag) -> None:
         st.dataframe(rows, column_order=cols, hide_index=True, width="stretch")
     else:
         st.info("No name was rated BUY by any voting lens. That is a result, not a gap.")
+    band_line = cohort_band_line(ag)            # COHORT-BAND-1
+    if band_line:
+        st.markdown(f"**{band_line}**")
     if ag.no_buy_count:
         plural = "s" if ag.no_buy_count != 1 else ""
         st.caption(f"{ag.no_buy_count} name{plural} had no BUY from any lens, and are not "

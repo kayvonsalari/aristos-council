@@ -3735,6 +3735,58 @@ def _overlap_note(results, voting, label) -> str:
     return ""
 
 
+# --------------------------------------------------------------------------- #
+# COHORT-BAND-1 — a cohort that is expensive says so ONCE
+# --------------------------------------------------------------------------- #
+# On the oil runs every shortlisted name sat near the top of its own five-year range, and
+# that was the single most useful thing those runs said. The report only ever said it per
+# name, in a column, so a reader scanning the shortlist could read every row and still
+# miss that the whole list was expensive.
+#
+# This is arithmetic on figures ALREADY in the report. It is not ranked, not screened, and
+# touches no verdict.
+COHORT_BAND_EXPENSIVE = 70.0     # median at or above this: the cohort is dear
+COHORT_BAND_CHEAP = 30.0         # at or below this: cheap
+COHORT_BAND_MIN_NAMES = 3        # under this, a "median" is a rounding of one opinion
+
+
+def _median(values: list[float]) -> float:
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def cohort_band_line(ag) -> str:
+    """One line under the shortlist, or ``""``.
+
+    Names whose band ABSTAINED are excluded from the median and DISCLOSED — a median that
+    quietly skipped two of seven names would be the same kind of silent shortening the
+    rest of this report refuses. Under three stated bands the line is omitted entirely
+    rather than computed: a "median" of one or two names is a rounding of one opinion, and
+    printing it would lend it an authority it has not got.
+    """
+    rows = list(getattr(ag, "rows", None) or ())
+    if not rows:
+        return ""
+    stated = [r.band_percentile for r in rows if r.band_percentile is not None]
+    missing = len(rows) - len(stated)
+    if len(stated) < COHORT_BAND_MIN_NAMES:
+        return ""
+    median = _median(stated)
+    from .tools.valuation_band import ordinal
+    line = (f"The {len(stated)} shortlisted name{'s' if len(stated) != 1 else ''} sit at "
+            f"a median {ordinal(round(median))} percentile of their own five-year range.")
+    if median >= COHORT_BAND_EXPENSIVE:
+        line = line[:-1] + " — this cohort is expensive against its own history."
+    elif median <= COHORT_BAND_CHEAP:
+        line = line[:-1] + " — this cohort is cheap against its own history."
+    if missing:
+        line += f" ({missing} of {len(rows)} not stated.)"
+    return line
+
+
 def lens_agreement_table(ag) -> tuple:
     """``(columns, rows)`` for the table — ONE builder, so the Run tab, the markdown and
     the HTML render the same cells and cannot drift (the valuation_band_table pattern).
