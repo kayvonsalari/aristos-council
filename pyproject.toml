@@ -13,6 +13,14 @@ dependencies = [
     # runner imports lazily and tests inject FakeRunners), so this costs the
     # test suite nothing but the install footprint.
     "langchain-anthropic>=0.3",
+    # MARKET-INDEX-1/2 — the local market index is a parquet table, and the peer ladder
+    # behind Company Check reads it. RUNTIME, not an extra: the index is not an optional
+    # feature of an installed Aristos, it is where peers come from, and a `status` or a
+    # Company Check that raised "pandas is required" would be a broken install rather
+    # than a missing add-on. (CI proved the point: 14 tests failed on `.[dev]` because
+    # neither was declared anywhere.)
+    "pandas>=2.0",
+    "pyarrow>=14",
 ]
 
 [project.optional-dependencies]
