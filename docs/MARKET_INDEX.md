@@ -219,7 +219,7 @@ reader see who the company was measured against.
 | a | same GICS sub-industry | ¼× – 4× market cap |
 | b | same GICS sub-industry | ⅒× – 10× |
 | c | same GICS industry | ⅒× – 10× |
-| — | abstain: "only N comparable companies found" | |
+| — | abstain, naming the **widest rung tried** and its count | |
 
 It widens the **band** before the **classification**, because keeping the industry is the
 cheaper concession. Where GICS fields are missing it falls back to the EODHD industry

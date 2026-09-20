@@ -237,3 +237,157 @@ def test_neither_reading_is_in_the_factor_registry():
 def test_a_reading_never_carries_both_a_value_and_an_abstention():
     for reading in (Reading(value=1.0, label="x"), Reading(note="why")):
         assert bool(reading.available) != bool(reading.note)
+
+# =========================================================================== #
+# ABS-READINGS-2 - five defects found by reading the page for KO, T, NVDA,
+# LHA.DE and NFLX
+# =========================================================================== #
+from aristos_council.abs_readings import INTEREST_IMMATERIAL_ABOVE
+
+
+def _years(n, start, step):
+    """``n`` annual figures, NEWEST FIRST, compounding backwards from ``start``."""
+    return [start * (step ** i) for i in range(n)]
+
+
+# -- item 3: one line per distinct span ------------------------------------- #
+def test_four_periods_print_ONE_growth_line_not_two_identical_ones():
+    """With four annual periods both windows fall back to a 3-year span, and the page
+    printed the identical sentence twice - once for the 5-year window and once for the
+    10-year."""
+    out = growth_record(_f(aligned={"total_revenue": [47e9, 45.8e9, 43e9, 38.7e9]}))
+    lines = out.revenue.lines()
+    cagr_lines = [l for l in lines if "compounded" in l]
+    assert len(cagr_lines) == 1, cagr_lines
+
+
+def test_that_one_line_states_the_span_used_and_BOTH_windows_it_could_not_fill():
+    out = growth_record(_f(aligned={"total_revenue": [47e9, 45.8e9, 43e9, 38.7e9]}))
+    line = next(l for l in out.revenue.lines() if "compounded" in l)
+    assert "over 3 years" in line
+    assert "only 3 years of accounts are available" in line
+    assert "neither the 5- nor the 10-year window could be filled" in line
+
+
+def test_two_DIFFERENT_spans_still_print_two_lines():
+    """Seven periods fills the 5-year window and not the 10-year: two real answers, two
+    lines. The collapse is only for the duplicate case."""
+    out = growth_record(_f(aligned={"total_revenue": _years(7, 100.0, 0.9)}))
+    cagr_lines = [l for l in out.revenue.lines() if "compounded" in l]
+    assert len(cagr_lines) == 2
+
+
+def test_the_READINGS_keep_their_own_detail_even_when_the_lines_collapse():
+    """The collapse is a RENDERING decision. Anything reading the figures
+    programmatically still gets one Reading per window, each with its span."""
+    out = growth_record(_f(aligned={"total_revenue": [47e9, 45.8e9, 43e9, 38.7e9]}))
+    assert set(out.revenue.cagr) == set(GROWTH_WINDOWS)
+    assert all(out.revenue.cagr[w].span == 3 for w in GROWTH_WINDOWS)
+    assert "only 3 of 10 years available" in out.revenue.cagr[10].label
+
+
+def test_twelve_years_of_history_are_USED_not_truncated_to_three():
+    """The defect this item exists for: Coca-Cola, a company with a century of accounts,
+    read "compounded over 3 years" because yfinance returns four annual periods."""
+    revenue = _years(12, 50e9, 0.95)          # newest 50bn, falling 5% a year backwards
+    eps = _years(12, 3.0, 0.92)
+    out = growth_record(_f(aligned={"total_revenue": revenue, "diluted_eps": eps}))
+
+    assert out.revenue.cagr[5].span == 5
+    assert out.revenue.cagr[10].span == 10
+    assert out.eps.cagr[10].span == 10
+    assert out.revenue.years_available == 12
+    # ...and the growth count uses ten years, not three
+    assert "grew in 10 of the 10 years reported" in out.revenue.grew_in.label
+
+
+def test_the_grew_in_count_is_capped_at_ten_even_with_twelve_years_on_file():
+    out = growth_record(_f(aligned={"total_revenue": _years(12, 50e9, 0.95)}))
+    assert out.revenue.grew_in.value == 10.0
+
+
+# -- item 4: interest cover above 50x --------------------------------------- #
+def test_interest_cover_of_503_reads_as_immaterial():
+    """NVIDIA. "Earns 503.4 times its interest bill" invites a comparison with a company
+    at 60x as though that were a ranking. Both simply have no interest problem."""
+    out = debt_and_cash(_f(operating_income=100e9,
+                           aligned={"interest_expense": [198_649_000]}))
+    assert out.interest_cover.label == (
+        "interest is immaterial (covered more than 50 times over)")
+    assert "503" not in out.interest_cover.label
+
+
+def test_the_exact_cover_is_KEPT_on_the_reading():
+    out = debt_and_cash(_f(operating_income=100e9,
+                           aligned={"interest_expense": [198_649_000]}))
+    assert out.interest_cover.value == pytest.approx(503.4, abs=0.1)
+    assert out.interest_cover.available
+
+
+@pytest.mark.parametrize("times", [10.0, 25.0, 50.0])
+def test_cover_at_or_below_the_line_still_gives_the_number(times):
+    out = debt_and_cash(_f(operating_income=times * 1e9,
+                           aligned={"interest_expense": [1e9]}))
+    assert f"{times:.1f} times its interest bill" in out.interest_cover.label
+    assert INTEREST_IMMATERIAL_ABOVE == 50.0
+
+
+def test_just_above_the_line_switches_wording():
+    out = debt_and_cash(_f(operating_income=50.1e9, aligned={"interest_expense": [1e9]}))
+    assert "immaterial" in out.interest_cover.label
+
+
+# -- item 2: free cash flow larger than operating cash flow ----------------- #
+def test_free_cash_flow_larger_than_operating_cash_flow_ABSTAINS():
+    """Netflix, 2026-09-20: 0.7 years to repay from operating cash flow and 0.3 from free
+    cash flow, on the same page. Free cash flow is operating cash flow minus capital
+    spending, so it is never larger and the period from it is never shorter."""
+    out = debt_and_cash(_f(total_debt=16_654_660_608, total_cash=9_127_910_400,
+                           operating_cash_flow=10_149_273_000,
+                           free_cash_flow=25_387_552_768))
+    assert not out.years_to_repay.available
+    assert out.years_to_repay.note == (
+        "the reported free cash flow is larger than operating cash flow, so the two "
+        "figures disagree and neither is used here")
+
+
+def test_the_operating_cash_flow_reading_is_UNAFFECTED_by_the_disagreement():
+    """Only the figure that cannot be trusted abstains. The other one is still reported."""
+    out = debt_and_cash(_f(total_debt=16_654_660_608, total_cash=9_127_910_400,
+                           operating_cash_flow=10_149_273_000,
+                           free_cash_flow=25_387_552_768))
+    assert out.net_debt_to_ocf.available
+    assert "0.7 years of operating cash flow" in out.net_debt_to_ocf.label
+
+
+def test_a_consistent_pair_is_still_reported():
+    out = debt_and_cash(_f(total_debt=50e9, total_cash=10e9,
+                           operating_cash_flow=10e9, free_cash_flow=8e9))
+    assert out.years_to_repay.available
+    assert "5.0 years of free cash flow" in out.years_to_repay.label
+
+
+def test_equal_figures_are_not_a_disagreement():
+    """A company with no capital spending reports the two as equal. That is consistent."""
+    out = debt_and_cash(_f(total_debt=20e9, total_cash=0.0,
+                           operating_cash_flow=10e9, free_cash_flow=10e9))
+    assert out.years_to_repay.available
+
+
+def test_the_guard_holds_when_operating_cash_flow_is_unknown():
+    """Nothing to compare against, so the guard cannot fire and the reading stands."""
+    out = debt_and_cash(_f(total_debt=20e9, total_cash=0.0, free_cash_flow=10e9))
+    assert out.years_to_repay.available
+
+
+def test_the_adapter_prefers_the_statement_figure_over_the_headline():
+    """item 2(a), at the source. NFLX's cash-flow statement says 9,461,053,000 - which is
+    operating cash flow 10,149,273,000 minus capital spending 688,220,000, exactly. The
+    info blob's 25,387,552,768 is a TTM figure on another basis."""
+    from aristos_council.data.yfinance_adapter import _first_present
+
+    assert _first_present([9_461_053_000, 6_921_826_000], 25_387_552_768) == 9_461_053_000
+    assert _first_present([None, 6_921_826_000], 25_387_552_768) == 6_921_826_000
+    # ...and the headline is still the fallback when there is no statement at all
+    assert _first_present([], 25_387_552_768) == 25_387_552_768
+    assert _first_present(None, 25_387_552_768) == 25_387_552_768
