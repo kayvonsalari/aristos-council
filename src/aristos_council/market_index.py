@@ -967,10 +967,10 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             group.reasons.append(f"{subject.ticker} has no market cap in the index, so no "
                                  "size band can be applied")
         else:
+            where = subject.currency or "its own currency"
             group.reasons.append(
-                f"{subject.ticker} has a market cap in {subject.currency or 'its own '
-                'currency'} but no USD conversion, so it cannot be size-banded against "
-                f"the rest of the index")
+                f"{subject.ticker} has a market cap in {where} but no USD conversion, "
+                f"so it cannot be size-banded against the rest of the index")
         return group
     if not subject.classification:
         group.reasons.append(f"{subject.ticker} has no industry classification in the "
