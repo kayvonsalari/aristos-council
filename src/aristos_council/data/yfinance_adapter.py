@@ -211,7 +211,26 @@ class YFinanceAdapter(MarketDataAdapter):
             payout_ratio=_payout_ratio(info, dps),
             eps=_as_float(info.get("trailingEps")),
             pe_ratio=_as_float(info.get("trailingPE")),
-            free_cash_flow=_as_float(info.get("freeCashflow")),
+            # ABS-READINGS-2 — the STATEMENT figure, not the info blob's.
+            #
+            # Netflix, 2026-09-20: info['freeCashflow'] = 25,387,552,768 against an
+            # operating cash flow of 10,149,273,000. Free cash flow is operating cash flow
+            # minus capital spending, so it can never be larger — the two numbers are on
+            # different bases (Yahoo's headline is a TTM figure computed its own way). The
+            # cash-flow statement's own row is 9,461,053,000, which is 10,149,273,000 -
+            # 688,220,000 exactly.
+            #
+            # This is the same judgement VERIFY-2 ITEM 3 already made for narration ("the
+            # annual FCF SERIES is the citable core field, NOT the headline TTM"), applied
+            # one level lower so every reader gets the consistent figure. The info value
+            # remains the fallback for a name with no cash-flow statement.
+            #
+            # Cannot move a ranking: no criterion or factor computes with this scalar. It
+            # is read once as a presence test in `factors.is_unrateable` and listed in a
+            # criterion's `fundamentals_fields` for DISPLAY scoping; the screens read
+            # `free_cash_flow_annual` (screening.py) instead.
+            free_cash_flow=_first_present(_cashflow_series(cashflow, "Free Cash Flow"),
+                                          _as_float(info.get("freeCashflow"))),
             # yfinance does not expose consecutive-growth-years. Left None on
             # purpose; the screen estimates it from dividend history and flags.
             years_dividend_growth=None,
@@ -561,6 +580,14 @@ def _latest_cashflow(df: object, *labels: str) -> float | None:
 
 def _abs_or_none(v: float | None) -> float | None:
     return None if v is None else abs(v)
+
+
+def _first_present(series, fallback):
+    """The newest reported value of ``series``, else ``fallback``. ABS-READINGS-2."""
+    for value in series or ():
+        if value is not None:
+            return value
+    return fallback
 
 
 def _cashflow_series(df: object, *labels: str) -> list[float]:

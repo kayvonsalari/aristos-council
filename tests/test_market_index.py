@@ -910,3 +910,22 @@ def test_status_counts_cross_listings_and_refetches(tmp_path):
     text = "\n".join(status(store).lines())
     assert "1 cross-listing(s), excluded from peer groups" in text
     assert "1 row(s) will be REFETCHED" in text
+
+def test_the_peer_abstention_names_the_WIDEST_rung_it_tried_and_its_count():
+    """NFLX read "only 6451 comparable companies found in the index for Movies &
+    Entertainment" - 6,451 being the size of the whole eligible pool - directly under
+    three rungs that had correctly reported 3, 5 and 9. The number a reader needs is how
+    close the last and most generous attempt came."""
+    subject = _listed("NFLX.US", isin="US64110L1061", sub="Movies & Entertainment")
+    two_peers = [_listed(f"PEER{i}.US", isin=f"US555555550{i}",
+                         sub="Movies & Entertainment") for i in range(2)]
+    crowd = [_listed(f"OTHER{i}.US", isin=f"US666666{i:04d}", sub="Semiconductors")
+             for i in range(40)]
+
+    group = peers("NFLX.US", rows=[subject] + two_peers + crowd)
+
+    assert not group.available
+    final = group.reasons[-1]
+    assert RUNG_INDUSTRY_WIDE in final, final
+    assert "only 2 comparable companies" in final, final
+    assert "42" not in final and "40" not in final      # not the size of the pool

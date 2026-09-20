@@ -25,6 +25,12 @@ from typing import Optional, Sequence
 MIN_GROWTH_YEARS = 3
 GROWTH_WINDOWS = (5, 10)
 
+# ABS-READINGS-2 — above this, interest cover stops being information. The difference
+# between 60x and 500x is not a difference a reader can act on; both mean the interest
+# bill does not matter. The exact value stays on the Reading for anything reading it
+# programmatically — only the SENTENCE changes.
+INTEREST_IMMATERIAL_ABOVE = 50.0
+
 
 @dataclass(frozen=True)
 class Reading:
@@ -39,6 +45,10 @@ class Reading:
     note: str = ""
     label: str = ""
     unit: str = ""
+    # ABS-READINGS-2 — how many years this figure actually spanned. Carried so the
+    # renderer can tell that the 5-year and 10-year windows collapsed onto the same
+    # history and print ONE line instead of two identical ones.
+    span: Optional[int] = None
 
     @property
     def available(self) -> bool:
@@ -170,8 +180,15 @@ def debt_and_cash(f) -> DebtAndCash:
         cover = _abstain("it reports no interest expense, so there is no ratio to state")
     else:
         times = operating / interest
-        cover = Reading(value=times, unit="x",
-                        label=f"earns {times:.1f} times its interest bill")
+        if times > INTEREST_IMMATERIAL_ABOVE:
+            # NVIDIA reads 503.4x. "Earns 503.4 times its interest bill" invites a reader
+            # to compare it with a company at 60x as though that were a ranking; it is
+            # not. Both have no interest problem. The value is kept.
+            label = (f"interest is immaterial (covered more than "
+                     f"{INTEREST_IMMATERIAL_ABOVE:.0f} times over)")
+        else:
+            label = f"earns {times:.1f} times its interest bill"
+        cover = Reading(value=times, unit="x", label=label)
 
     # -- years to repay from free cash flow --------------------------------- #
     fcf = _num(getattr(f, "free_cash_flow", None))
@@ -184,6 +201,15 @@ def debt_and_cash(f) -> DebtAndCash:
         repay = Reading(value=0.0, unit="years", label="has no net debt to repay")
     elif fcf is None:
         repay = _abstain("free cash flow is not reported")
+    elif ocf is not None and fcf > ocf:
+        # ABS-READINGS-2. Free cash flow is operating cash flow minus capital spending, so
+        # it is never larger and the repayment period from it is never shorter. Netflix
+        # printed 0.7 years from operating cash flow and 0.3 from free cash flow on the
+        # same page. The adapter now takes the statement figure, which fixes the cause —
+        # this guard is here because an impossible number must never be printed whatever
+        # the cause, including a provider we have not met yet.
+        repay = _abstain("the reported free cash flow is larger than operating cash "
+                         "flow, so the two figures disagree and neither is used here")
     elif fcf <= 0:
         repay = _abstain("free cash flow is not positive, so debt is not being repaid "
                          "out of it at all")
@@ -210,7 +236,32 @@ class GrowthLeg:
     years_available: int = 0
 
     def lines(self) -> list[str]:
-        out = [self.cagr[w].text() for w in sorted(self.cagr)]
+        """One line per DISTINCT span, then the growth count.
+
+        ABS-READINGS-2: with four annual periods on file, the 5-year and 10-year windows
+        both fall back to a 3-year span and printed the identical sentence twice. Saying
+        it once, and naming both windows that could not be filled, is the same information
+        without the stutter.
+        """
+        out: list[str] = []
+        windows = sorted(self.cagr)
+        available = [self.cagr[w] for w in windows if self.cagr[w].available]
+        spans = {r.span for r in available}
+        if len(available) == len(windows) and len(spans) == 1 and len(windows) > 1:
+            reading = available[0]
+            span = reading.span
+            # "5- nor the 10-" + "year" -> "5- nor the 10-year". The rstrip that was
+            # here ate the second hyphen and printed "10year".
+            asked = " nor the ".join(f"{w}-" for w in windows)
+            head = reading.label.split(" (only ")[0]
+            if span in windows:
+                out.append(head)                     # a window was genuinely filled
+            else:
+                out.append(f"{head} — only {span} years of accounts are "
+                           f"available, so neither the {asked}year window could be "
+                           f"filled")
+        else:
+            out.extend(self.cagr[w].text() for w in windows)
         out.append(self.grew_in.text())
         return out
 
@@ -245,7 +296,7 @@ def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading
                         f"is not defined")
     rate = (end / start) ** (1.0 / span) - 1.0
     used = "" if span == window else f" (only {span} of {window} years available)"
-    return Reading(value=rate, unit="/yr",
+    return Reading(value=rate, unit="/yr", span=span,
                    label=f"{label} compounded {rate:+.1%} a year over {span} years{used}")
 
 
