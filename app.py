@@ -3640,8 +3640,13 @@ def _render_peers(result) -> None:
     import pandas as pd
     st.dataframe(pd.DataFrame([{
         "Ticker": r.ticker, "Name": r.name, "Exchange": r.exchange,
-        "Market cap": ("—" if r.market_cap is None
-                       else f"{r.market_cap:,.0f} {r.currency}"),
+        # MARKET-INDEX-3 - both figures. The bands compare USD; the local number is what
+        # the company actually reports, and a reader comparing a yen cap with a dollar one
+        # needs to see which is which.
+        "Market cap (local)": ("—" if r.market_cap is None
+                               else f"{r.market_cap:,.0f} {r.currency}"),
+        "Market cap (USD)": ("—" if r.market_cap_usd is None
+                             else f"{r.market_cap_usd:,.0f}"),
         "Sub-industry": r.classification,
     } for r in group.members]), hide_index=True, width="stretch")
     for reason in group.reasons:

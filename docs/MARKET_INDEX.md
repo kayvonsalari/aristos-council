@@ -32,8 +32,10 @@ names for exactly this reason), so it pays for itself twice.
 
 `ticker` (EODHD form) and `yahoo_ticker` (what the ranker resolves), `name`, `exchange`
 (the **venue** — NYSE, NASDAQ, PINK), `market` (the exchange **code** the build requested,
-`US`), `country`, `currency`, `sector`, `industry`, the three GICS levels, `market_cap`,
-`market_cap_usd` with a `market_cap_usd_source` tag, `fetched_at` and `source`.
+`US`), `country`, `currency`, **`primary_ticker`** and **`isin`** (which listing this is —
+see below), `sector`, `industry`, the three GICS levels, `market_cap`, `market_cap_usd`
+with a `market_cap_usd_source` tag, `fetched_at` and `source` (which carries the parser
+**generation**, so "never asked" can be told from "asked and got nothing").
 
 Venue and market were one field until MARKET-INDEX-2, which is why an OTC listing looked
 like a plain US listing to every consumer.
@@ -135,6 +137,78 @@ Any exception at all ends with the store flushed, the summary printed, and
 `data/local/market_index/build.log`, timestamped. Every progress line goes to the same
 log. The exit code is non-zero for any stop that is not `--limit`. A build that dies
 quietly after 4,000 fetches has lost 40,000 charged units and told nobody why.
+
+## One row per company, and one currency
+
+Two defects showed up the first time the ladder ran over a real 9,018-row index.
+
+### Home listings
+
+TSMC's peer group contained **AMD.US, AMD.TO and AMD.XETRA**, and NVDA.US beside
+NVD.XETRA. Those are one company each. A peer group that counts a company three times is
+not a comparison, it is a weighted average nobody asked for.
+
+`PrimaryTicker` and `ISIN` are now stored on every row. Probed on 2026-09-20, one real
+response each:
+
+| symbol | PrimaryTicker | ISIN | |
+|---|---|---|---|
+| `AAPL.US` | `AAPL.US` | `US0378331005` | home listing — ticker equals primary |
+| `AMD.XETRA` | `AMD.US` | `US0079031078` | cross-listing — names its home, shares its ISIN |
+
+So the peer pool is **deduplicated by company**, and the home listing is *preferred*
+rather than required. One row per company always survives; which one is decided, in
+order, by: it is the home listing; its country matches the issuer country in the ISIN;
+then the ticker, so the answer never depends on the order rows came back in.
+
+**Preferred, not required, on purpose.** A strict "home listings only" filter loses
+companies, which is the same defect wearing a different hat. Of ten German blue chips
+probed the same day, **four name a primary this index does not track** — SAP → `SAP.F`,
+Mercedes-Benz → `MBG.F`, Rheinmetall → `RHM.F`, and VOW3 → `VOW.XETRA` (a different share
+class). Dropping every non-home row would delete SAP from every software peer group.
+
+Cross-listings **stay in the table** — a reader may look a company up by one — and
+`peers()` resolves them: asking for `NVO.US` answers for `NOVO-B.CO` and says so. When
+the home listing is not in the index, the row is used as it stands and that is said too.
+
+> Known gap: `AMD.TO` is a Canadian Depositary Receipt for which EODHD publishes **neither**
+> PrimaryTicker nor ISIN, so nothing links it to `AMD.US` and it survives as its own row.
+> `status` counts these under "unresolved". Nothing is wrong with the row; there is simply
+> no data to join on.
+
+### Size in one currency
+
+The bands compare **`market_cap_usd`, never the local figure**. Tokyo and Korea are next
+in the build order, and a 900bn JPY company is about 6bn USD: banded in local units
+against a 9bn USD subject it would look a hundred times too large.
+
+A row with a local cap but **no USD conversion** is excluded from the pool and counted
+*separately* from a row with no cap at all — folding the two together would hide a broken
+FX rate behind what looks like missing data. The peers table shows both figures, local
+with its currency and USD beside it.
+
+### Refetching for the new fields
+
+A row is complete only if it has a market cap **and** was fetched by a parser that asked
+for the listing fields (`source: eodhd+listing`). The 9,018 rows of the first build were
+not, so they are refetched regardless of age — about 90,000 charged units, one day's
+budget. The build prints the count before it starts.
+
+The generation tag exists so that "never asked" can be told from "asked and got nothing".
+Without it AMD.TO would be refetched on every build forever, for an answer that will not
+change.
+
+## Whose classification is this?
+
+**EODHD's.** The index stores the sector and industry the provider reports and does not
+second-guess them. U-Haul comes back under *Passenger Airlines*; that is their label, not
+a judgement of ours, and correcting it by hand would mean maintaining a private taxonomy
+that silently disagrees with the source every report cites.
+
+This is exactly why **the peer list is shown by name** on the Company Check page and in
+the CLI. A group assembled from someone else's classification can be wrong in ways no
+amount of internal consistency will reveal, and the only honest defence is to let the
+reader see who the company was measured against.
 
 ## The peer ladder
 

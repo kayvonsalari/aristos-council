@@ -100,7 +100,13 @@ DEFAULT_VENUES = {"US": ["NYSE", "NASDAQ", "NYSE ARCA", "AMEX"]}
 # second, and a build that dies at symbol 4,000 must not lose 4,000 calls.
 FLUSH_EVERY = 200
 
-SOURCE_EODHD = "eodhd"
+SOURCE_EODHD = "eodhd"                    # LEGACY: fetched before the listing fields
+# MARKET-INDEX-3 - the parser GENERATION, not just the provider. A row tagged this way was
+# fetched by a parser that ASKED for PrimaryTicker and ISIN; if it carries neither, the
+# provider genuinely has neither (AMD.TO, a CDR) and refetching it every build would be a
+# permanent 10-unit loop. Without the tag there is no way to tell "never asked" from
+# "asked and got nothing", and the 9,018 legacy rows would look complete.
+SOURCE_EODHD_LISTING = "eodhd+listing"
 # Provenance for the USD column, in the repo's own ``factors`` vocabulary: a converted
 # figure carries its receipt, an unconvertible one abstains rather than guessing.
 USD_COMPUTED = "computed"
@@ -119,6 +125,7 @@ class QuotaExhausted(MarketIndexError):
 # the row
 # --------------------------------------------------------------------------- #
 COLUMNS = ("ticker", "yahoo_ticker", "name", "exchange", "market", "country", "currency",
+           "primary_ticker", "isin",
            "sector", "industry", "gics_sector", "gics_industry", "gics_subindustry",
            "market_cap", "market_cap_usd", "market_cap_usd_source", "fetched_at",
            "source")
@@ -139,6 +146,13 @@ class IndexRow:
     market: str = ""
     country: str = ""
     currency: str = ""
+    # MARKET-INDEX-3 - what makes a row a HOME listing rather than a cross-listing.
+    # PROBED on 2026-09-20, one real response each:
+    #   AAPL.US   -> PrimaryTicker "AAPL.US",  ISIN US0378331005   ticker == primary
+    #   AMD.XETRA -> PrimaryTicker "AMD.US",   ISIN US0079031078   the SAME isin as AMD.US
+    # so a cross-listing names its home in PrimaryTicker and shares the home's ISIN.
+    primary_ticker: str = ""
+    isin: str = ""
     sector: str = ""
     industry: str = ""
     gics_sector: str = ""
@@ -167,7 +181,22 @@ class IndexRow:
         it is NOT a row worth keeping fresh - it is a row worth refetching. The freshness
         skip therefore applies to complete rows only.
         """
-        return self.market_cap is not None
+        # MARKET-INDEX-3 adds the two listing fields: a row fetched before they existed
+        # cannot be placed as a home listing, so it is refetched like a capless one.
+        return (self.market_cap is not None
+                and self.source == SOURCE_EODHD_LISTING)
+
+    @property
+    def unresolvable_listing(self) -> bool:
+        """Fetched under the new parser and the provider simply has neither field.
+
+        AMD.TO is the real example: a Canadian Depositary Receipt for which EODHD
+        publishes no PrimaryTicker and no ISIN. Refetching it forever would be a loop, so
+        a row that has been ASKED (it carries a name) and got nothing is left alone and
+        counted as unresolved.
+        """
+        return (self.source == SOURCE_EODHD_LISTING
+                and not self.primary_ticker and not self.isin)
 
     def age_days(self, today: Optional[date] = None) -> Optional[int]:
         try:
@@ -403,13 +432,15 @@ def _row_from_general(symbol: str, exchange: str, doc: dict, *, today: date) -> 
         market=exchange,
         country=str(doc.get("CountryISO") or doc.get("CountryName") or ""),
         currency=str(doc.get("CurrencyCode") or ""),
+        primary_ticker=str(doc.get("PrimaryTicker") or ""),
+        isin=str(doc.get("ISIN") or ""),
         sector=str(doc.get("Sector") or ""),
         industry=str(doc.get("Industry") or ""),
         gics_sector=str(doc.get("GicSector") or ""),
         gics_industry=str(doc.get("GicIndustry") or ""),
         gics_subindustry=str(doc.get("GicSubIndustry") or ""),
         market_cap=cap,
-        fetched_at=today.isoformat(), source=SOURCE_EODHD)
+        fetched_at=today.isoformat(), source=SOURCE_EODHD_LISTING)
 
 
 class _UsdConverter:
@@ -534,6 +565,16 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
     outcome = BuildOutcome(exchanges=list(exchanges or DEFAULT_EXCHANGES), budget=budget)
     since_flush = 0
 
+    # MARKET-INDEX-3 - say up front what this build owes. Rows fetched before
+    # PrimaryTicker and ISIN existed cannot be placed as home listings, so they are
+    # refetched like capless ones, and on a 9,018-row index that is most of a day's
+    # budget. Better known before the build than discovered during it.
+    stale = [r for r in existing.values() if not r.complete]
+    if stale:
+        say(f"{len(stale)} existing row(s) are incomplete (no market cap, or fetched "
+            f"before PrimaryTicker/ISIN were stored) and will be refetched regardless of "
+            f"age - about {len(stale) * CHARGE_FUNDAMENTALS:,} charged units")
+
     try:
         for exchange in outcome.exchanges:
             allowed = [str(v).upper() for v in (venues.get(exchange.upper()) or [])]
@@ -657,17 +698,26 @@ class IndexStatus:
     oldest: str = ""
     missing_classification: int = 0
     missing_cap: int = 0
+    missing_usd: int = 0
+    cross_listings: int = 0
+    unresolved: int = 0
+    needs_refetch: int = 0
+    complete: int = 0
     path: str = ""
 
     def lines(self) -> list[str]:
         if not self.rows:
             return [f"Market index: EMPTY ({self.path} does not exist yet).",
                     "Build it with:  python -m aristos_council.market_index build"]
-        complete = self.rows - self.missing_cap
         out = [f"Market index: {self.rows} row(s) in {self.path}",
-               f"  complete (usable as peers): {complete}",
+               f"  complete (usable as peers): {self.complete}",
                f"  no market cap:              {self.missing_cap}",
                f"  missing classification:     {self.missing_classification}",
+               f"  no USD conversion:          {self.missing_usd}",
+               f"  {self.cross_listings} cross-listing(s), excluded from peer groups",
+               f"  {self.unresolved} row(s) with neither PrimaryTicker nor ISIN "
+               f"(unresolved; treated as home listings)",
+               f"  {self.needs_refetch} row(s) will be REFETCHED by the next build",
                f"  oldest row: {self.oldest or 'unknown'}",
                "  per exchange:"]
         if self.missing_cap:
@@ -693,9 +743,99 @@ def status(store: Optional[IndexStore] = None) -> IndexStatus:
             out.missing_classification += 1
         if row.market_cap is None:
             out.missing_cap += 1
+        if row.market_cap is not None and row.market_cap_usd is None:
+            out.missing_usd += 1
+        if not is_home_listing(row):
+            out.cross_listings += 1
+        if row.unresolvable_listing:
+            out.unresolved += 1
+        if row.complete:
+            out.complete += 1
+        else:
+            out.needs_refetch += 1
     stamps = sorted(r.fetched_at for r in rows if r.fetched_at)
     out.oldest = stamps[0] if stamps else ""
     return out
+
+
+# --------------------------------------------------------------------------- #
+# MARKET-INDEX-3 - one row per COMPANY in a peer group
+# --------------------------------------------------------------------------- #
+# The 9,018-row build put AMD.US, AMD.TO and AMD.XETRA in one peer group, and NVDA.US
+# beside NVD.XETRA. They are one company each. A peer group that counts a company three
+# times is not a comparison, it is a weighted average nobody asked for.
+#
+# PROBED, 2026-09-20 - PrimaryTicker names the home listing and a cross-listing shares the
+# home's ISIN:
+#     AAPL.US    PrimaryTicker "AAPL.US"    ISIN US0378331005     home
+#     AMD.XETRA  PrimaryTicker "AMD.US"     ISIN US0079031078     cross-listing of AMD.US
+#
+# But a STRICT "ticker == PrimaryTicker" pool filter loses companies, which is the same
+# defect wearing a different hat. Of ten German blue chips probed the same day, FOUR name
+# a primary this index does not track: SAP -> SAP.F, Mercedes-Benz -> MBG.F,
+# Rheinmetall -> RHM.F, and VOW3 -> VOW.XETRA (a different share class). Dropping every
+# non-home row would delete SAP from every software peer group.
+#
+# So the pool is DEDUPLICATED BY COMPANY and the home listing is merely PREFERRED. One row
+# per company always survives; which one is decided, in order, by: it is the home listing;
+# its country matches the company's; then the ticker, so the result never depends on the
+# order rows came back in.
+def normalise_symbol(symbol: str) -> str:
+    return (symbol or "").strip().upper()
+
+
+def is_home_listing(row: "IndexRow") -> bool:
+    """Is this row the company's own primary line?
+
+    ``PrimaryTicker`` decides it when present. When it is absent the ISIN fallback runs
+    in ``company_rows``, which can see the other rows sharing that ISIN; a row judged
+    alone and carrying neither field is treated as a home listing and counted as
+    unresolved, because refusing to place it would silently drop the company.
+    """
+    primary = normalise_symbol(row.primary_ticker)
+    if not primary:
+        return True                     # nothing to contradict it; see `unresolved`
+    return normalise_symbol(row.ticker) == primary
+
+
+def company_key(row: "IndexRow") -> str:
+    """What makes two rows the same company.
+
+    ISIN first: AMD.US and AMD.XETRA share US0079031078, which is the fact that makes them
+    one company. Then the primary ticker, which links a cross-listing to its home even
+    when the ISIN is absent. Then the ticker itself, so an unlinkable row is its own
+    company rather than being merged with a stranger.
+    """
+    if row.isin:
+        return f"isin:{row.isin.strip().upper()}"
+    if row.primary_ticker:
+        return f"primary:{normalise_symbol(row.primary_ticker)}"
+    return f"ticker:{normalise_symbol(row.ticker)}"
+
+
+def _listing_rank(row: "IndexRow") -> tuple:
+    """Which row of a company is the one to keep. Lower is better."""
+    home = 0 if is_home_listing(row) else 1
+    # The ISIN fallback: the home listing is the one whose venue country matches the
+    # company's own country. ISINs carry the issuer country in their first two letters.
+    country_match = 1
+    if row.country and row.isin and len(row.isin) >= 2:
+        country_match = 0 if row.isin[:2].upper() == row.country.strip().upper() else 1
+    return (home, country_match, normalise_symbol(row.ticker))
+
+
+def one_row_per_company(rows) -> tuple[list, int]:
+    """``(kept, dropped)`` - the pool, deduplicated by company."""
+    groups: dict = {}
+    for row in rows:
+        groups.setdefault(company_key(row), []).append(row)
+    kept = []
+    dropped = 0
+    for group in groups.values():
+        group.sort(key=_listing_rank)
+        kept.append(group[0])
+        dropped += len(group) - 1
+    return sorted(kept, key=lambda r: r.ticker), dropped
 
 
 # --------------------------------------------------------------------------- #
@@ -799,13 +939,38 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         group.reasons.append(f"{ticker} is not in the market index")
         return group
 
+    # MARKET-INDEX-3 - a cross-listing or an ADR is looked up by the symbol the reader
+    # has, and answered for the company. NVO.US is a US line of NOVO-B.CO; its peers are
+    # Novo Nordisk's peers, in Novo Nordisk's own size.
+    if not is_home_listing(subject):
+        home = by_ticker.get(normalise_symbol(subject.primary_ticker))
+        if home is not None:
+            group.reasons.append(
+                f"{subject.ticker} is a {subject.exchange or subject.market} listing of "
+                f"{home.ticker}; peers computed for the home listing")
+            subject = home
+        else:
+            group.reasons.append(
+                f"{subject.ticker} is a listing of {subject.primary_ticker}, which is not "
+                f"in the index; peers computed for {subject.ticker} as it stands")
+
     group.subject = subject
     stamps = sorted(r.fetched_at for r in universe if r.fetched_at)
     group.snapshot = stamps[-1] if stamps else ""
 
-    if subject.market_cap is None:
-        group.reasons.append(f"{subject.ticker} has no market cap in the index, so no "
-                             "size band can be applied")
+    # MARKET-INDEX-3 - the bands compare USD, never the local figure. Tokyo and Korea
+    # join the index next, and a 900bn JPY company is about 6bn USD: banded against a 9bn
+    # USD subject in local units it would look a hundred times too big and be excluded,
+    # or worse, included for the wrong reason.
+    if subject.market_cap_usd is None:
+        if subject.market_cap is None:
+            group.reasons.append(f"{subject.ticker} has no market cap in the index, so no "
+                                 "size band can be applied")
+        else:
+            group.reasons.append(
+                f"{subject.ticker} has a market cap in {subject.currency or 'its own '
+                'currency'} but no USD conversion, so it cannot be size-banded against "
+                f"the rest of the index")
         return group
     if not subject.classification:
         group.reasons.append(f"{subject.ticker} has no industry classification in the "
@@ -818,7 +983,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                              "industry field")
 
     # Everything that is eligible to be a peer at all, before any rung.
-    pool, no_cap = [], 0
+    candidates, no_cap, no_usd = [], 0, 0
     for row in universe:
         if row.ticker.upper() == subject.ticker.upper():
             continue                                   # never its own peer
@@ -827,25 +992,42 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         if row.market_cap is None:
             no_cap += 1
             continue
-        pool.append(row)
+        if row.market_cap_usd is None:
+            # Counted SEPARATELY from "no cap": this one has a figure, we just cannot
+            # compare it. Folding the two together would hide a broken FX rate behind
+            # what looks like missing data.
+            no_usd += 1
+            continue
+        candidates.append(row)
+
+    # ONE ROW PER COMPANY. AMD.US, AMD.TO and AMD.XETRA were three peers in the 9,018-row
+    # build; they are one company.
+    pool, cross_listings = one_row_per_company(candidates)
+
     if no_cap:
         group.reasons.append(f"{no_cap} candidate(s) skipped: no market cap in the index")
+    if no_usd:
+        group.reasons.append(f"{no_usd} candidate(s) skipped: a local market cap with no "
+                             f"USD conversion, so not comparable in size")
+    if cross_listings:
+        group.reasons.append(f"{cross_listings} cross-listing(s) collapsed into their "
+                             f"home listing")
 
     ladder = (
         (RUNG_SUBINDUSTRY_TIGHT, "subindustry", 0.25, 4.0),
         (RUNG_SUBINDUSTRY_WIDE, "subindustry", 0.10, 10.0),
         (RUNG_INDUSTRY_WIDE, "industry", 0.10, 10.0),
     )
-    subject_cap = subject.market_cap
+    subject_cap = subject.market_cap_usd
     for rung, level, low, high in ladder:
         key = _classification(subject, level)
         if not key:
             continue
         matched = [r for r in pool
                    if _classification(r, level) == key
-                   and _within(r.market_cap, subject_cap, low, high)]
+                   and _within(r.market_cap_usd, subject_cap, low, high)]
         if len(matched) >= floor:
-            matched.sort(key=lambda r: (_log_distance(r.market_cap, subject_cap),
+            matched.sort(key=lambda r: (_log_distance(r.market_cap_usd, subject_cap),
                                         r.ticker))
             trimmed = matched[:max(int(cap), 0)]
             if len(matched) > len(trimmed):
@@ -853,7 +1035,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                     f"{len(matched)} matched at this rung; trimmed to {len(trimmed)} "
                     f"nearest in size")
             group.members = sorted(trimmed, key=lambda r: r.ticker)
-            group.rung, group.band = rung, f"{low:g}x–{high:g}x market cap"
+            group.rung, group.band = rung, f"{low:g}x-{high:g}x market cap (USD)"
             return group
         group.reasons.append(f"{rung}: only {len(matched)} comparable companies found")
 
@@ -979,11 +1161,14 @@ def _cmd_peers(args) -> int:
             _say(f"  - {reason}")
         return 1
     _say(group.sentence())
-    _say(f"{'ticker':16s} {'name':32s} {'exch':6s} {'market cap':>18s}  sub-industry")
+    _say(f"{'ticker':16s} {'name':28s} {'exch':6s} {'local cap':>20s} "
+         f"{'USD cap':>16s}  sub-industry")
     for row in group.members:
-        cap = "—" if row.market_cap is None else f"{row.market_cap:,.0f} {row.currency}"
-        _say(f"{row.ticker:16s} {row.name[:32]:32s} {row.exchange:6s} {cap:>18s}  "
-             f"{row.classification}")
+        local = ("-" if row.market_cap is None
+                 else f"{row.market_cap:,.0f} {row.currency}")
+        usd = "-" if row.market_cap_usd is None else f"{row.market_cap_usd:,.0f}"
+        _say(f"{row.ticker:16s} {row.name[:28]:28s} {row.exchange:6s} {local:>20s} "
+             f"{usd:>16s}  {row.classification}")
     for reason in group.reasons:
         _say(f"  note: {reason}")
     return 0

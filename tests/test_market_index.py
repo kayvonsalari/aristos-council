@@ -18,18 +18,38 @@ import pytest
 
 from aristos_council.market_index import (DEFAULT_CAP, DEFAULT_FLOOR, RUNG_INDUSTRY_WIDE,
                                           RUNG_NONE, RUNG_SUBINDUSTRY_TIGHT,
-                                          RUNG_SUBINDUSTRY_WIDE, IndexRow, IndexStore,
-                                          is_financial, peer_snapshot, peers, status)
+                                          RUNG_SUBINDUSTRY_WIDE, SOURCE_EODHD_LISTING,
+                                          IndexRow, IndexStore, company_key,
+                                          is_financial, is_home_listing,
+                                          one_row_per_company, peer_snapshot, peers,
+                                          status)
 
 SNAPSHOT = date(2026, 9, 18).isoformat()
 
 
 def _row(ticker, *, cap=10e9, sub="Semiconductors", industry="Semiconductors",
-         sector="Technology", currency="USD", exchange="US", name=None):
+         sector="Technology", currency="USD", exchange="US", name=None,
+         usd=..., primary=None, isin=None):
+    """A fabricated index row.
+
+    MARKET-INDEX-3 changed the contract these rows have to meet, and the fixture moves
+    with it rather than the assertions being relaxed:
+      * the ladder bands on ``market_cap_usd``, so a row without one is not comparable
+        and is excluded by design - ``usd`` defaults to the local figure because these
+        fixtures are USD-quoted;
+      * a row is a HOME listing when its ticker equals its PrimaryTicker, so the default
+        is its own ticker; pass ``primary`` to make it a cross-listing.
+    """
     return IndexRow(ticker=ticker, yahoo_ticker=ticker.split(".")[0], name=name or ticker,
                     exchange=exchange, currency=currency, sector=sector,
                     industry=industry, gics_industry=industry, gics_subindustry=sub,
-                    market_cap=cap, fetched_at=SNAPSHOT)
+                    market_cap=cap,
+                    market_cap_usd=(cap if usd is ... else usd),
+                    market_cap_usd_source=("computed" if (cap if usd is ... else usd)
+                                           is not None else "abstained"),
+                    primary_ticker=(primary if primary is not None else ticker),
+                    isin=(isin if isin is not None else f"XX{abs(hash(ticker)) % 10**10:010d}"),
+                    fetched_at=SNAPSHOT, source=SOURCE_EODHD_LISTING)
 
 
 def _index() -> list[IndexRow]:
@@ -67,8 +87,13 @@ def _index() -> list[IndexRow]:
     # 6. Rows with holes — a missing cap and a missing classification.
     for i in range(6):
         rows.append(_row(f"NOCAP{i:02d}.US", cap=None))
+    # Deliberately classification-less, but otherwise COMPLETE: it must get past the
+    # size checks so that the thing it is testing - the classification abstention - is
+    # what it actually hits. MARKET-INDEX-3 added a USD check before that one.
     rows.append(IndexRow(ticker="BLANK.US", yahoo_ticker="BLANK", market_cap=3e9,
-                         fetched_at=SNAPSHOT))
+                         market_cap_usd=3e9, market_cap_usd_source="computed",
+                         primary_ticker="BLANK.US", isin="XX0000000009",
+                         fetched_at=SNAPSHOT, source=SOURCE_EODHD_LISTING))
     return rows
 
 
@@ -85,7 +110,8 @@ def _peers(ticker, **kw):
 def test_a_deep_tightly_sized_sub_industry_stops_at_the_first_rung():
     group = _peers("SEMI20.US")
     assert group.rung == RUNG_SUBINDUSTRY_TIGHT
-    assert group.band == "0.25x–4x market cap"
+    # MARKET-INDEX-3: the bands compare USD, and the label says so.
+    assert group.band == "0.25x-4x market cap (USD)"
     assert len(group.members) >= DEFAULT_FLOOR
 
 
@@ -533,8 +559,12 @@ def test_a_capless_row_is_refetched_however_fresh_it_is(tmp_path):
 
 def test_a_COMPLETE_fresh_row_is_still_skipped_without_a_call(tmp_path):
     store = IndexStore(tmp_path)
+    # MARKET-INDEX-3: "complete" now also means "fetched by a parser that ASKED for
+    # PrimaryTicker and ISIN", so the fixture carries that generation tag. What is under
+    # test is unchanged - a complete, fresh row costs no call.
     store.save([IndexRow(ticker="A.US", exchange="NYSE", market="US", market_cap=5e9,
-                         fetched_at="2026-09-18", source="eodhd")])
+                         primary_ticker="A.US", isin="US0000000001",
+                         fetched_at="2026-09-18", source=SOURCE_EODHD_LISTING)])
     source = _FakeSource([_listing("A", "NYSE")])
 
     outcome = build(store=store, source=source, exchanges=["US"],
@@ -548,7 +578,8 @@ def test_rows_on_a_disallowed_venue_are_dropped_from_the_store(tmp_path):
     store = IndexStore(tmp_path)
     store.save([
         IndexRow(ticker="GOOD.US", exchange="NYSE", market="US", market_cap=5e9,
-                 fetched_at="2026-09-18", source="eodhd"),
+                 primary_ticker="GOOD.US", fetched_at="2026-09-18",
+                 source=SOURCE_EODHD_LISTING),
         IndexRow(ticker="PINKY.US", exchange="PINK", market="US", market_cap=1e9,
                  fetched_at="2026-09-18", source="eodhd"),
         IndexRow(ticker="QB.US", exchange="OTCQB", market="US", market_cap=1e9,
@@ -648,10 +679,234 @@ def test_a_limit_stop_is_not_an_error_but_a_budget_stop_is(tmp_path):
 def test_status_says_how_many_rows_cannot_be_peers(tmp_path):
     store = IndexStore(tmp_path)
     store.save([IndexRow(ticker="A.US", exchange="NYSE", market="US", market_cap=None,
-                         fetched_at="2026-09-18"),
+                         fetched_at="2026-09-18", source=SOURCE_EODHD_LISTING),
                 IndexRow(ticker="B.US", exchange="NYSE", market="US", market_cap=5e9,
-                         fetched_at="2026-09-18")])
+                         primary_ticker="B.US", isin="US0000000002",
+                         fetched_at="2026-09-18", source=SOURCE_EODHD_LISTING)])
     text = "\n".join(status(store).lines())
     assert "no market cap:              1" in text
     assert "complete (usable as peers): 1" in text
     assert "cannot be peers" in text
+
+# =========================================================================== #
+# 10. MARKET-INDEX-3 - one row per company, and one currency
+# =========================================================================== #
+# The 9,018-row build put AMD.US, AMD.TO and AMD.XETRA in one peer group and NVDA.US
+# beside NVD.XETRA. And the bands compared local currency, so Tokyo and Korea - next in
+# the build order - would have been compared in yen and won against dollars.
+#
+# The shapes below are PROBED, 2026-09-20:
+#   AAPL.US    PrimaryTicker "AAPL.US"   ISIN US0378331005   home listing
+#   AMD.XETRA  PrimaryTicker "AMD.US"    ISIN US0079031078   cross-listing, home's ISIN
+#   NVO.US     PrimaryTicker "NOVO-B.CO" ISIN US6701002056   ADR of a Danish company
+#   SAP.XETRA  PrimaryTicker "SAP.F"     ISIN DE0007164600   home venue NOT tracked here
+
+
+def _listed(ticker, *, primary=None, isin=None, cap_usd=10e9, cap=None, currency="USD",
+            sub="Semiconductors", country="US", name=None):
+    return IndexRow(
+        ticker=ticker, yahoo_ticker=ticker.split(".")[0], name=name or ticker,
+        exchange=ticker.split(".")[-1], market=ticker.split(".")[-1], country=country,
+        currency=currency, primary_ticker=(primary if primary is not None else ticker),
+        isin=isin or "", sector="Technology", industry=sub, gics_industry=sub,
+        gics_subindustry=sub, market_cap=(cap if cap is not None else cap_usd),
+        market_cap_usd=cap_usd,
+        market_cap_usd_source=("computed" if cap_usd is not None else "abstained"),
+        fetched_at=SNAPSHOT, source=SOURCE_EODHD_LISTING)
+
+
+# -- home-listing detection ------------------------------------------------- #
+def test_a_row_whose_ticker_equals_its_primary_ticker_is_the_home_listing():
+    assert is_home_listing(_listed("AAPL.US", primary="AAPL.US"))
+
+
+def test_a_cross_listing_names_its_home_and_is_not_one():
+    assert not is_home_listing(_listed("AMD.XETRA", primary="AMD.US"))
+    assert not is_home_listing(_listed("NVD.XETRA", primary="NVDA.US"))
+
+
+def test_the_comparison_ignores_case():
+    assert is_home_listing(_listed("AAPL.US", primary="aapl.us"))
+
+
+def test_a_row_with_no_primary_ticker_is_treated_as_a_home_listing():
+    """Refusing to place it would silently drop the company. It is counted as unresolved
+    instead - AMD.TO is the real case: EODHD publishes neither field for a CDR."""
+    row = _listed("AMD.TO", primary="", isin="")
+    assert is_home_listing(row) and row.unresolvable_listing
+
+
+# -- the ISIN fallback ------------------------------------------------------ #
+def test_rows_sharing_an_ISIN_are_one_company():
+    us = _listed("AMD.US", primary="AMD.US", isin="US0079031078")
+    de = _listed("AMD.XETRA", primary="AMD.US", isin="US0079031078")
+    assert company_key(us) == company_key(de)
+
+
+def test_the_isin_fallback_prefers_the_row_whose_country_matches_the_issuer():
+    """No PrimaryTicker on either row, so the ISIN's issuer country decides: a US ISIN
+    belongs to the US line."""
+    us = _listed("ACME.US", primary="", isin="US1111111111", country="US")
+    de = _listed("ACME.XETRA", primary="", isin="US1111111111", country="DE")
+    kept, dropped = one_row_per_company([de, us])
+    assert [r.ticker for r in kept] == ["ACME.US"] and dropped == 1
+
+
+def test_when_no_country_matches_the_choice_is_still_deterministic():
+    a = _listed("ACME.XETRA", primary="", isin="GB2222222222", country="DE")
+    b = _listed("ACME.TO", primary="", isin="GB2222222222", country="CA")
+    first = one_row_per_company([a, b])[0]
+    second = one_row_per_company([b, a])[0]
+    assert [r.ticker for r in first] == [r.ticker for r in second]
+
+
+# -- the pool: one row per company ------------------------------------------ #
+def test_three_listings_of_one_company_become_one_peer():
+    """The acceptance case: AMD.US, AMD.TO and AMD.XETRA return AMD once."""
+    rows = [_listed("AMD.US", primary="AMD.US", isin="US0079031078"),
+            _listed("AMD.XETRA", primary="AMD.US", isin="US0079031078", country="DE"),
+            _listed("AMD.TO", primary="AMD.US", isin="US0079031078", country="CA")]
+    kept, dropped = one_row_per_company(rows)
+    assert [r.ticker for r in kept] == ["AMD.US"] and dropped == 2
+
+
+def test_the_home_listing_is_the_one_kept_whatever_order_they_arrive_in():
+    rows = [_listed("AMD.XETRA", primary="AMD.US", isin="US0079031078", country="DE"),
+            _listed("AMD.US", primary="AMD.US", isin="US0079031078")]
+    assert one_row_per_company(rows)[0][0].ticker == "AMD.US"
+    assert one_row_per_company(list(reversed(rows)))[0][0].ticker == "AMD.US"
+
+
+def test_a_company_is_NEVER_lost_when_its_home_venue_is_not_tracked():
+    """SAP names SAP.F as its primary and this index does not track Frankfurt. Four of
+    ten German blue chips probed on 2026-09-20 were like this (SAP, MBG, RHM, VOW3), so a
+    strict home-listings-only pool would delete them from every peer group - the same
+    defect as duplicating a company, wearing a different hat."""
+    kept, dropped = one_row_per_company(
+        [_listed("SAP.XETRA", primary="SAP.F", isin="DE0007164600", country="DE")])
+    assert [r.ticker for r in kept] == ["SAP.XETRA"] and dropped == 0
+
+
+def test_a_cross_listing_is_excluded_from_a_real_peer_group_but_still_resolvable():
+    subject = _listed("TSM.US", primary="TSM.US", isin="US8740391003")
+    rows = [subject]
+    rows += [_listed("AMD.US", primary="AMD.US", isin="US0079031078"),
+             _listed("AMD.XETRA", primary="AMD.US", isin="US0079031078", country="DE"),
+             _listed("AMD.TO", primary="AMD.US", isin="US0079031078", country="CA")]
+    rows += [_listed(f"SEMI{i}.US", isin=f"US99999999{i:02d}") for i in range(11)]
+
+    group = peers("TSM.US", rows=rows)
+
+    assert group.available
+    tickers = [r.ticker for r in group.members]
+    assert tickers.count("AMD.US") == 1
+    assert "AMD.XETRA" not in tickers and "AMD.TO" not in tickers
+    assert any("cross-listing(s) collapsed" in r for r in group.reasons)
+    # ...and the cross-listing is still IN the table, findable as a subject
+    assert peers("AMD.XETRA", rows=rows).subject is not None
+
+
+# -- subject resolution ----------------------------------------------------- #
+def test_an_ADR_resolves_to_its_home_listing_and_says_so():
+    home = _listed("NOVO-B.CO", primary="NOVO-B.CO", isin="DK0062498333",
+                   country="DK", currency="DKK", cap=600e9, cap_usd=90e9,
+                   sub="Pharmaceuticals")
+    adr = _listed("NVO.US", primary="NOVO-B.CO", isin="US6701002056",
+                  sub="Pharmaceuticals")
+    group = peers("NVO.US", rows=[home, adr])
+    assert group.subject.ticker == "NOVO-B.CO"
+    assert any("NVO.US is a" in r and "listing of NOVO-B.CO" in r
+               and "peers computed for the home listing" in r for r in group.reasons)
+
+
+def test_when_the_home_listing_is_not_in_the_index_the_row_is_used_as_it_stands():
+    adr = _listed("NVO.US", primary="NOVO-B.CO", isin="US6701002056")
+    group = peers("NVO.US", rows=[adr])
+    assert group.subject.ticker == "NVO.US"
+    assert any("not in the index" in r and "as it stands" in r for r in group.reasons)
+
+
+def test_a_home_listing_subject_gets_no_resolution_noise():
+    group = peers("AAPL.US", rows=[_listed("AAPL.US", primary="AAPL.US")])
+    assert not any("listing of" in r for r in group.reasons)
+
+
+# -- size in one currency --------------------------------------------------- #
+def test_a_yen_company_is_banded_on_its_USD_value_not_its_local_one():
+    """900bn JPY is about 6bn USD. Banded in local units against a 9bn USD subject it
+    would look a hundred times too large; in USD it is a peer."""
+    subject = _listed("SUBJ.US", cap_usd=9e9)
+    tokyo = _listed("7203.T", cap=900e9, cap_usd=6e9, currency="JPY", country="JP")
+    rows = [subject, tokyo] + [_listed(f"F{i}.US", cap_usd=9e9) for i in range(11)]
+    group = peers("SUBJ.US", rows=rows)
+    assert "7203.T" in [r.ticker for r in group.members]
+    assert "(USD)" in group.band
+
+
+def test_a_row_that_is_900bn_in_LOCAL_units_and_huge_in_usd_is_NOT_a_peer():
+    subject = _listed("SUBJ.US", cap_usd=9e9)
+    giant = _listed("HUGE.T", cap=900e9, cap_usd=900e9, currency="JPY", country="JP")
+    rows = [subject, giant] + [_listed(f"F{i}.US", cap_usd=9e9) for i in range(11)]
+    assert "HUGE.T" not in [r.ticker for r in peers("SUBJ.US", rows=rows).members]
+
+
+def test_a_row_with_no_USD_conversion_is_excluded_and_counted_SEPARATELY():
+    """Counted apart from "no cap": this row HAS a figure, we simply cannot compare it.
+    Folding the two together would hide a broken FX rate behind missing data."""
+    subject = _listed("SUBJ.US", cap_usd=9e9)
+    no_usd = _listed("ODD.T", cap=900e9, cap_usd=None, currency="JPY", country="JP")
+    no_cap = IndexRow(ticker="NIL.US", market_cap=None, gics_subindustry="Semiconductors",
+                      fetched_at=SNAPSHOT, source=SOURCE_EODHD_LISTING)
+    rows = [subject, no_usd, no_cap] + [_listed(f"F{i}.US", cap_usd=9e9) for i in range(11)]
+
+    group = peers("SUBJ.US", rows=rows)
+
+    assert "ODD.T" not in [r.ticker for r in group.members]
+    assert any("no USD conversion" in r for r in group.reasons)
+    assert any("no market cap in the index" in r for r in group.reasons)
+
+
+def test_a_subject_with_no_USD_conversion_abstains_and_says_which_is_missing():
+    subject = _listed("SUBJ.T", cap=900e9, cap_usd=None, currency="JPY", country="JP")
+    group = peers("SUBJ.T", rows=[subject] + [_listed(f"F{i}.US") for i in range(11)])
+    assert not group.available
+    assert any("no USD conversion" in r for r in group.reasons)
+
+
+# -- refetch for the new fields --------------------------------------------- #
+def test_a_row_fetched_before_the_listing_fields_existed_is_incomplete():
+    """All 9,018 rows of the first build are like this: they carry a cap but were never
+    ASKED for PrimaryTicker or ISIN."""
+    legacy = IndexRow(ticker="A.US", market_cap=5e9, fetched_at="2026-09-18",
+                      source="eodhd")
+    assert not legacy.complete
+
+
+def test_a_row_the_provider_has_no_listing_fields_for_is_COMPLETE_not_a_refetch_loop():
+    """AMD.TO. Asking again every build would be a permanent 10-unit loop for an answer
+    that will not change."""
+    asked = IndexRow(ticker="AMD.TO", name="AMD CDR", market_cap=5e9,
+                     fetched_at="2026-09-18", source=SOURCE_EODHD_LISTING)
+    assert asked.complete and asked.unresolvable_listing
+
+
+def test_rows_lacking_the_new_fields_are_refetched_whatever_their_age(tmp_path):
+    store = IndexStore(tmp_path)
+    store.save([IndexRow(ticker="A.US", exchange="NYSE", market="US", market_cap=5e9,
+                         fetched_at="2026-09-18", source="eodhd")])
+    source = _FakeSource([_listing("A", "NYSE")])
+    outcome = build(store=store, source=source, exchanges=["US"],
+                    venues=dict(DEFAULT_VENUES), usd=_NoFx(), today=date(2026, 9, 18))
+    assert source.fetched == ["A.US"] and outcome.refetched_incomplete == 1
+
+
+def test_status_counts_cross_listings_and_refetches(tmp_path):
+    store = IndexStore(tmp_path)
+    store.save([
+        _listed("AMD.US", primary="AMD.US", isin="US0079031078"),
+        _listed("AMD.XETRA", primary="AMD.US", isin="US0079031078", country="DE"),
+        IndexRow(ticker="OLD.US", market_cap=1e9, fetched_at=SNAPSHOT, source="eodhd"),
+    ])
+    text = "\n".join(status(store).lines())
+    assert "1 cross-listing(s), excluded from peer groups" in text
+    assert "1 row(s) will be REFETCHED" in text
