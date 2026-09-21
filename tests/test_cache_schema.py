@@ -114,3 +114,57 @@ def test_same_version_still_hits(tmp_path):
     cad.get_fundamentals("AAPL")             # writes under current version marker
     cad.get_fundamentals("AAPL")             # same version -> HIT, no refetch
     assert inner.calls == 1
+
+
+# --- ABS-READINGS-3 item 3: the bump that was MISSED -------------------------- #
+def test_a_v4_entry_holding_the_TTM_free_cash_flow_is_not_served(tmp_path):
+    """The reason ADAPTER_SCHEMA_VERSION went 4 -> 5.
+
+    ABS-READINGS-2 changed what ``free_cash_flow`` MEANS — from the provider's headline
+    TTM blob to the cash-flow statement's own row — without changing its name, so the
+    field-name half of the marker still matched. NFLX's cached entry kept serving
+    25,387,552,768 against an operating cash flow of 10,149,273,000, the guard kept
+    firing on the merged build, and the adapter fix looked like it had not worked. The
+    version token exists for exactly this: a semantics change that leaves the field set
+    unchanged.
+    """
+    class _Fixed(MarketDataAdapter):
+        name = "fake"
+
+        def __init__(self):
+            self.calls = 0
+
+        def get_fundamentals(self, ticker):
+            self.calls += 1
+            return Fundamentals(ticker=ticker, operating_cash_flow=10_149_273_000.0,
+                                free_cash_flow=9_461_053_000.0)   # the statement row
+
+        def get_price_history(self, ticker, *, start, end):
+            return PriceHistory(ticker=ticker)
+
+        def get_dividend_history(self, ticker, *, start, end):
+            return []
+
+    inner = _Fixed()
+    cad = CachingAdapter(inner, cache_dir=tmp_path, today=TODAY)
+    fields_part = _current_marker().split(":", 1)[1]
+    _write(cad, "NFLX", json.dumps({"_schema": f"v4:{fields_part}", "data": {
+        "ticker": "NFLX", "operating_cash_flow": 10_149_273_000.0,
+        "free_cash_flow": 25_387_552_768.0}}))                    # the TTM blob
+
+    f = cad.get_fundamentals("NFLX")
+    assert inner.calls == 1, "the stale entry was served instead of being refetched"
+    assert f.free_cash_flow == 9_461_053_000.0
+    assert f.free_cash_flow < f.operating_cash_flow
+
+    # ...and the reading that abstained on the merged build now prints a figure, longer
+    # than the operating-cash-flow one because capital spending has been taken out.
+    from aristos_council.abs_readings import debt_and_cash
+
+    out = debt_and_cash(Fundamentals(ticker="NFLX", currency="USD",
+                                     total_debt=16_654_660_608.0,
+                                     total_cash=9_127_910_400.0,
+                                     operating_cash_flow=f.operating_cash_flow,
+                                     free_cash_flow=f.free_cash_flow))
+    assert out.years_to_repay.available
+    assert out.years_to_repay.value > out.net_debt_to_ocf.value
