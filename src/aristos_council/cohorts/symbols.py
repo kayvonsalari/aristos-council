@@ -60,6 +60,33 @@ def yahoo_symbol(eodhd_symbol: str) -> str:
     return code.upper().replace(".", "-") + EODHD_TO_YAHOO_SUFFIX[exchange]
 
 
+# ABS-READINGS-3 - the other direction. A Yahoo symbol is what the rest of Aristos holds;
+# EODHD needs its own. Built from the same table so the two can never disagree: the first
+# EODHD code that maps to a suffix wins, which is the canonical one for that venue.
+_YAHOO_TO_EODHD: dict[str, str] = {}
+for _code, _suffix in EODHD_TO_YAHOO_SUFFIX.items():
+    _YAHOO_TO_EODHD.setdefault(_suffix, _code)
+
+
+def eodhd_symbol(yahoo_ticker: str) -> str:
+    """``"KO"`` -> ``"KO.US"``; ``"SHEL.L"`` -> ``"SHEL.LSE"``.
+
+    A bare symbol is a US listing, which is the convention EODHD itself uses. A suffix it
+    does not know raises, rather than a guess being sent to the provider.
+    """
+    raw = (yahoo_ticker or "").strip().upper()
+    if not raw:
+        raise SymbolError("empty symbol")
+    if "." not in raw:
+        return f"{raw}.US"
+    code, _, suffix = raw.rpartition(".")
+    key = f".{suffix}"
+    if key not in _YAHOO_TO_EODHD:
+        raise SymbolError(
+            f"no EODHD translation for the Yahoo suffix {key!r} (symbol {raw!r})")
+    return f"{code}.{_YAHOO_TO_EODHD[key]}"
+
+
 def yahoo_symbols(eodhd_symbols) -> list[str]:
     """Translate many, keeping order and dropping nothing silently."""
     return [yahoo_symbol(s) for s in eodhd_symbols]
