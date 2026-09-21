@@ -862,7 +862,11 @@ while operating cash flow came from the annual statement (10,149,273,000). The s
 own free-cash-flow row reads 9,461,053,000 — which is 10,149,273,000 − 688,220,000
 exactly. The adapter now takes the statement figure, with the headline as fallback for a
 name that has no cash-flow statement; this is the same judgement VERIFY-2 ITEM 3 already
-made for narration, applied one level lower. **And regardless of cause**, the reading
+made for narration, applied one level lower. **That was not the whole cause, and this
+section originally claimed it was — see 4.10:** the adapter fix was verified uncached,
+while the page reads through `CachingAdapter`, which went on serving the pre-fix entry
+because `free_cash_flow` changed meaning without changing its name. The fix is complete
+only with the `ADAPTER_SCHEMA_VERSION` bump in 4.10. **And regardless of cause**, the reading
 abstains whenever free cash flow exceeds operating cash flow: *"the reported free cash
 flow is larger than operating cash flow, so the two figures disagree and neither is used
 here"*. A future provider we have not met yet gets the same treatment.
@@ -880,6 +884,18 @@ compounded +6.7% a year over 3 years — only 3 years of accounts are available,
 the 5- nor the 10-year window could be filled"*. Two genuinely different spans still print
 two lines, and each window keeps its own `Reading`: the collapse is a rendering decision,
 not a loss of data.
+
+> **Resolved by ABS-READINGS-3 — see 4.8 below.** This section shipped with a note that
+> the growth record could only see three years: yfinance returns four annual periods, so
+> Coca-Cola — a company with a century of accounts — reported a 3-year compound rate.
+> EODHD's `Financials::Income_Statement::yearly` block carries a longer history and that
+> plan is paid for, but the parser was not written, because the response shape had to be
+> verified against one real call first and the day's API quota was exhausted (99,995 of
+> 100,000 requests used; a `/fundamentals` call costs 10). Writing a parser against an
+> unverified shape is precisely the mistake MARKET-INDEX-2 was created to fix, where the
+> market cap was read from the wrong block for 526 rows. The call was made on 2026-09-21
+> and the shape is recorded in **4.8**; the growth record now reads 41 annual periods for
+> Coca-Cola.
 
 ### 4.8 The growth record reads EODHD's long history (ABS-READINGS-3)
 
