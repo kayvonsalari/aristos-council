@@ -1019,6 +1019,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         (RUNG_INDUSTRY_WIDE, "industry", 0.10, 10.0),
     )
     subject_cap = subject.market_cap_usd
+    tried: list = []
     for rung, level, low, high in ladder:
         key = _classification(subject, level)
         if not key:
@@ -1037,11 +1038,24 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             group.members = sorted(trimmed, key=lambda r: r.ticker)
             group.rung, group.band = rung, f"{low:g}x-{high:g}x market cap (USD)"
             return group
+        tried.append((rung, len(matched)))
         group.reasons.append(f"{rung}: only {len(matched)} comparable companies found")
 
-    group.reasons.append(
-        f"only {len(pool)} comparable companies found in the index for "
-        f"{subject.classification or 'this classification'} — no peer group")
+    # ABS-READINGS-2 — the count at the WIDEST rung actually tried, and its name.
+    # This line used to report len(pool), the size of the whole eligible pool: for NFLX it
+    # said "only 6451 comparable companies found" directly under three rungs that had
+    # correctly reported 3, 5 and 9. The number a reader needs is how close the LAST and
+    # most generous attempt came.
+    if tried:
+        widest_rung, widest_count = tried[-1]
+        group.reasons.append(
+            f"no peer group: the widest rung tried ({widest_rung}) found only "
+            f"{widest_count} comparable companies for "
+            f"{subject.classification or 'this classification'}")
+    else:
+        group.reasons.append(
+            f"no peer group: no rung could be tried for "
+            f"{subject.classification or 'this classification'}")
     return group
 
 

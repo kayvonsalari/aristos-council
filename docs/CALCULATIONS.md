@@ -846,6 +846,50 @@ prefers the reported line and falls back to net income over the share count, per
 through the dated series and **disclosed in the label** as derived — the same fallback
 discipline `earnings_yield` uses when EV is unavailable.
 
+### 4.7 What the readings refuse to print (ABS-READINGS-2)
+
+The two absolute readings were checked by eye against KO, T, NVDA, LHA.DE and NFLX. The
+arithmetic and the abstentions held — net cash stated as net cash, negative free cash flow
+refused, a compound rate off a negative base refused, currency kept local — and four
+presentation defects came out of it.
+
+**An impossible number is never printed.** Free cash flow is operating cash flow minus
+capital spending, so it is never larger and the repayment period from it is never shorter.
+Netflix's page said 0.7 years from operating cash flow and **0.3 from free cash flow**.
+The cause was a basis mismatch at the source: the adapter took the scalar from the
+provider's headline `freeCashflow`, a TTM figure computed its own way (25,387,552,768),
+while operating cash flow came from the annual statement (10,149,273,000). The statement's
+own free-cash-flow row reads 9,461,053,000 — which is 10,149,273,000 − 688,220,000
+exactly. The adapter now takes the statement figure, with the headline as fallback for a
+name that has no cash-flow statement; this is the same judgement VERIFY-2 ITEM 3 already
+made for narration, applied one level lower. **And regardless of cause**, the reading
+abstains whenever free cash flow exceeds operating cash flow: *"the reported free cash
+flow is larger than operating cash flow, so the two figures disagree and neither is used
+here"*. A future provider we have not met yet gets the same treatment.
+
+**Interest cover above 50× is not information.** NVIDIA reads 503×. Printing that invites
+a comparison with a company at 60× as though it were a ranking; both simply have no
+interest problem. The page now says *"interest is immaterial (covered more than 50 times
+over)"*. The exact value stays on the `Reading` for anything reading it programmatically —
+only the sentence changes.
+
+**One line per distinct span.** With four annual periods on file, the 5-year and the
+10-year window both fall back to a 3-year span, and the page printed the identical
+sentence twice. It now says it once and names both windows it could not fill: *"revenue
+compounded +6.7% a year over 3 years — only 3 years of accounts are available, so neither
+the 5- nor the 10-year window could be filled"*. Two genuinely different spans still print
+two lines, and each window keeps its own `Reading`: the collapse is a rendering decision,
+not a loss of data.
+
+> **Still outstanding: the growth record can only see three years.** yfinance returns four
+> annual periods, so Coca-Cola — a company with a century of accounts — reports a 3-year
+> compound rate. EODHD's `Financials::Income_Statement::yearly` block carries a longer
+> history and that plan is paid for, but the parser has not been written: the response
+> shape must be verified against one real call first, and the day's API quota was
+> exhausted (99,995 of 100,000 requests used; a `/fundamentals` call costs 10). Writing a
+> parser against an unverified shape is precisely the mistake MARKET-INDEX-2 was created
+> to fix, where the market cap was read from the wrong block for 526 rows.
+
 ## 5. Guards
 
 - **UNRATEABLE** — a ticker with failed fundamentals *and* no usable price history (a
