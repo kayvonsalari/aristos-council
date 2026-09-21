@@ -58,6 +58,28 @@ class Reading:
         return self.label if self.available else f"not stated — {self.note}"
 
 
+def dedupe_lines(lines) -> list[str]:
+    """The same sentence, said once. ABS-READINGS-3 item 2.
+
+    Two real cases: AT&T's "earnings per share was not positive 3 years ago" appeared for
+    both the 5- and the 10-year window, and NVIDIA's "has no net debt to repay" appeared
+    for both the operating-cash-flow and the free-cash-flow line. Repeating a sentence
+    does not make it truer; it makes the page look like it is padding.
+
+    Order is preserved and every Reading underneath is untouched - this is a rendering
+    decision, exactly like the span collapse.
+    """
+    seen: set = set()
+    out: list[str] = []
+    for line in lines:
+        key = " ".join(str(line).split()).casefold()
+        if key and key in seen:
+            continue
+        seen.add(key)
+        out.append(line)
+    return out
+
+
 def _abstain(note: str) -> Reading:
     return Reading(value=None, note=note)
 
@@ -98,8 +120,11 @@ class DebtAndCash:
     currency: str = ""
 
     def lines(self) -> list[str]:
-        return [r.text() for r in (self.net_debt, self.net_debt_to_ocf,
-                                   self.interest_cover, self.years_to_repay)]
+        # ABS-READINGS-3 - NVIDIA printed "has no net debt to repay" twice, once for the
+        # operating-cash-flow reading and once for the free-cash-flow one.
+        return dedupe_lines([r.text() for r in (self.net_debt, self.net_debt_to_ocf,
+                                                self.interest_cover,
+                                                self.years_to_repay)])
 
 
 def _money(value: float, currency: str) -> str:
@@ -267,7 +292,8 @@ class GrowthLeg:
         else:
             out.extend(self.cagr[w].text() for w in windows)
         out.append(self.grew_in.text())
-        return out
+        # ...and AT&T's identical EPS abstention for both windows.
+        return dedupe_lines(out)
 
 
 @dataclass(frozen=True)
@@ -277,7 +303,7 @@ class GrowthRecord:
     source_tag: str = ""
 
     def lines(self) -> list[str]:
-        out = self.revenue.lines() + self.eps.lines()
+        out = dedupe_lines(self.revenue.lines() + self.eps.lines())
         return out + ([self.source_tag] if self.source_tag else [])
 
 
