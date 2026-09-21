@@ -287,7 +287,13 @@ def run_company_check(
     # UNRATEABLE branch below unchanged.
     from .abs_readings import debt_and_cash as _debt_and_cash
     from .abs_readings import growth_record as _growth_record
-    readings = {"debt_and_cash": _debt_and_cash(f), "growth_record": _growth_record(f)}
+    # ABS-READINGS-3 - EODHD's long annual history when a key is configured, cached for
+    # the day, and the yfinance series as the fallback. Never raises: no history is a
+    # worse growth record, not a broken page.
+    from .growth_history import fetch_growth_history
+    _history = fetch_growth_history(ticker, today=today)
+    readings = {"debt_and_cash": _debt_and_cash(f),
+                "growth_record": _growth_record(f, _history)}
 
     di = DataIntegrity(
         fundamentals_ok=f is not None,

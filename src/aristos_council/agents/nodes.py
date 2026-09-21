@@ -413,8 +413,15 @@ def _scoped_fundamentals(output: object, allowed: set[str]) -> dict:
             "label": packed["label"], "note": packed["note"]}
     if "free_cash_flow" in d:
         d.pop("free_cash_flow")
-        d["free_cash_flow_note"] = ("ttm_incl_one_offs — do not use for sustainability "
-                                    "claims; cite free_cash_flow_annual instead")
+        # ABS-READINGS-3: the REASON, corrected. This scalar is no longer the provider's
+        # TTM headline - since ABS-READINGS-2 it is the newest row of the cash-flow
+        # statement - so "ttm_incl_one_offs" asserted something untrue. The quarantine
+        # itself stands: a single year's figure can still carry a one-off (NVO's -12.04B
+        # Catalent charge sat beside a positive annual series), and the SERIES is what a
+        # sustainability claim should cite.
+        d["free_cash_flow_note"] = ("single-period figure - do not use for "
+                                    "sustainability claims; cite free_cash_flow_annual "
+                                    "instead")
     # VERIFY-2 ITEM 4: withhold implausible vendor values from narration (NVO's 23.9%
     # dividend_yield). They still surface, flagged, in Company Check's data integrity.
     from ..data.adapter import implausible_fields

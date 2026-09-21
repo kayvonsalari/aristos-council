@@ -58,6 +58,28 @@ class Reading:
         return self.label if self.available else f"not stated — {self.note}"
 
 
+def dedupe_lines(lines) -> list[str]:
+    """The same sentence, said once. ABS-READINGS-3 item 2.
+
+    Two real cases: AT&T's "earnings per share was not positive 3 years ago" appeared for
+    both the 5- and the 10-year window, and NVIDIA's "has no net debt to repay" appeared
+    for both the operating-cash-flow and the free-cash-flow line. Repeating a sentence
+    does not make it truer; it makes the page look like it is padding.
+
+    Order is preserved and every Reading underneath is untouched - this is a rendering
+    decision, exactly like the span collapse.
+    """
+    seen: set = set()
+    out: list[str] = []
+    for line in lines:
+        key = " ".join(str(line).split()).casefold()
+        if key and key in seen:
+            continue
+        seen.add(key)
+        out.append(line)
+    return out
+
+
 def _abstain(note: str) -> Reading:
     return Reading(value=None, note=note)
 
@@ -98,8 +120,11 @@ class DebtAndCash:
     currency: str = ""
 
     def lines(self) -> list[str]:
-        return [r.text() for r in (self.net_debt, self.net_debt_to_ocf,
-                                   self.interest_cover, self.years_to_repay)]
+        # ABS-READINGS-3 - NVIDIA printed "has no net debt to repay" twice, once for the
+        # operating-cash-flow reading and once for the free-cash-flow one.
+        return dedupe_lines([r.text() for r in (self.net_debt, self.net_debt_to_ocf,
+                                                self.interest_cover,
+                                                self.years_to_repay)])
 
 
 def _money(value: float, currency: str) -> str:
@@ -231,6 +256,10 @@ class GrowthLeg:
     """One measure's record: compound rates over the windows, and how often it rose."""
 
     name: str = ""
+    # ABS-READINGS-3 - which feed supplied the series. yfinance returns four annual
+    # periods; EODHD returned 41 for Coca-Cola. A reader comparing a 10-year rate with a
+    # 3-year one needs to know which they are looking at.
+    source_tag: str = ""
     cagr: dict = field(default_factory=dict)        # window -> Reading
     grew_in: Reading = field(default_factory=Reading)
     years_available: int = 0
@@ -263,16 +292,19 @@ class GrowthLeg:
         else:
             out.extend(self.cagr[w].text() for w in windows)
         out.append(self.grew_in.text())
-        return out
+        # ...and AT&T's identical EPS abstention for both windows.
+        return dedupe_lines(out)
 
 
 @dataclass(frozen=True)
 class GrowthRecord:
     revenue: GrowthLeg = field(default_factory=GrowthLeg)
     eps: GrowthLeg = field(default_factory=GrowthLeg)
+    source_tag: str = ""
 
     def lines(self) -> list[str]:
-        return self.revenue.lines() + self.eps.lines()
+        out = dedupe_lines(self.revenue.lines() + self.eps.lines())
+        return out + ([self.source_tag] if self.source_tag else [])
 
 
 def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading:
@@ -331,19 +363,35 @@ def _eps_series(f) -> tuple[list[Optional[float]], str]:
     return out, "derived from net income and share count"
 
 
-def growth_record(f) -> GrowthRecord:
-    """Revenue and earnings per share over 5 and 10 years, plus how often each rose."""
+def growth_record(f, history=None) -> GrowthRecord:
+    """Revenue and earnings per share over 5 and 10 years, plus how often each rose.
+
+    ABS-READINGS-3: ``history`` is a ``growth_history.GrowthHistory`` - EODHD's long
+    annual record - and is PREFERRED when it carries one. yfinance returns four annual
+    periods, which made Coca-Cola report a three-year compound rate; EODHD returned 41.
+    Without a history (no key, no coverage, a refused call) the yfinance series on
+    ``Fundamentals`` is used exactly as before, and the tag says which it was.
+    """
     if f is None:
         empty = GrowthLeg(cagr={w: _abstain("no fundamentals") for w in GROWTH_WINDOWS},
                           grew_in=_abstain("no fundamentals"))
-        return GrowthRecord(revenue=empty, eps=empty)
+        return GrowthRecord(revenue=empty, eps=empty)  # no source to name
 
-    revenue = _series(f, "total_revenue")
-    eps, eps_source = _eps_series(f)
+    if history is not None and getattr(history, "available", False):
+        revenue = list(history.revenue)
+        eps, eps_source = list(history.eps), "derived from net income and share count"
+        tag = history.tag()
+    else:
+        revenue = _series(f, "total_revenue")
+        eps, eps_source = _eps_series(f)
+        reports = len([v for v in revenue if v is not None])
+        tag = (f"source: yfinance, {reports} annual report"
+               f"{'s' if reports != 1 else ''}") if reports else ""
     eps_label = "earnings per share" + ("" if eps_source in ("reported", "unavailable")
                                         else f" ({eps_source})")
 
     return GrowthRecord(
+        source_tag=tag,
         revenue=GrowthLeg(
             name="revenue",
             cagr={w: _cagr(revenue, w, "revenue") for w in GROWTH_WINDOWS},

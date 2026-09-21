@@ -862,7 +862,11 @@ while operating cash flow came from the annual statement (10,149,273,000). The s
 own free-cash-flow row reads 9,461,053,000 — which is 10,149,273,000 − 688,220,000
 exactly. The adapter now takes the statement figure, with the headline as fallback for a
 name that has no cash-flow statement; this is the same judgement VERIFY-2 ITEM 3 already
-made for narration, applied one level lower. **And regardless of cause**, the reading
+made for narration, applied one level lower. **That was not the whole cause, and this
+section originally claimed it was — see 4.10:** the adapter fix was verified uncached,
+while the page reads through `CachingAdapter`, which went on serving the pre-fix entry
+because `free_cash_flow` changed meaning without changing its name. The fix is complete
+only with the `ADAPTER_SCHEMA_VERSION` bump in 4.10. **And regardless of cause**, the reading
 abstains whenever free cash flow exceeds operating cash flow: *"the reported free cash
 flow is larger than operating cash flow, so the two figures disagree and neither is used
 here"*. A future provider we have not met yet gets the same treatment.
@@ -881,14 +885,99 @@ the 5- nor the 10-year window could be filled"*. Two genuinely different spans s
 two lines, and each window keeps its own `Reading`: the collapse is a rendering decision,
 not a loss of data.
 
-> **Still outstanding: the growth record can only see three years.** yfinance returns four
-> annual periods, so Coca-Cola — a company with a century of accounts — reports a 3-year
-> compound rate. EODHD's `Financials::Income_Statement::yearly` block carries a longer
-> history and that plan is paid for, but the parser has not been written: the response
-> shape must be verified against one real call first, and the day's API quota was
-> exhausted (99,995 of 100,000 requests used; a `/fundamentals` call costs 10). Writing a
-> parser against an unverified shape is precisely the mistake MARKET-INDEX-2 was created
-> to fix, where the market cap was read from the wrong block for 526 rows.
+> **Resolved by ABS-READINGS-3 — see 4.8 below.** This section shipped with a note that
+> the growth record could only see three years: yfinance returns four annual periods, so
+> Coca-Cola — a company with a century of accounts — reported a 3-year compound rate.
+> EODHD's `Financials::Income_Statement::yearly` block carries a longer history and that
+> plan is paid for, but the parser was not written, because the response shape had to be
+> verified against one real call first and the day's API quota was exhausted (99,995 of
+> 100,000 requests used; a `/fundamentals` call costs 10). Writing a parser against an
+> unverified shape is precisely the mistake MARKET-INDEX-2 was created to fix, where the
+> market cap was read from the wrong block for 526 rows. The call was made on 2026-09-21
+> and the shape is recorded in **4.8**; the growth record now reads 41 annual periods for
+> Coca-Cola.
+
+### 4.8 The growth record reads EODHD's long history (ABS-READINGS-3)
+
+ABS-READINGS-2 left the growth record seeing three years and said why: the EODHD response
+shape had not been verified against a real call, and writing a parser against an unverified
+shape is the mistake MARKET-INDEX-2 existed to fix. One `/fundamentals` call for KO.US was
+made on 2026-09-21 and the shape is now recorded in `growth_history.py`'s docstring:
+
+| block | what came back |
+|---|---|
+| `Financials::Income_Statement::yearly` | a dict keyed by period-end date, **41 annual periods, 1985-12-31 to 2025-12-31**, 34 fields each |
+| `— totalRevenue` | `'47941000000.00'` — a **string**, not a number |
+| `— netIncome` | `'13107000000.00'` — likewise |
+| `— diluted EPS` | **absent.** No `weightedAverageShsOutDil`, no `weightedAverageShsOut`, no `commonStockSharesOutstanding` either |
+| `outstandingShares::annual` | a **separate block**, 42 entries keyed `"0"`, `"1"`, … covering 1985-2026, each `{"date": "2025", "dateFormatted": "2025-12-31", "shares": 4313000000}` |
+
+So revenue is read straight off the statement and **EPS is derived** as net income ÷
+shares, matched by fiscal year — the same derivation, and the same disclosure, the
+yfinance path already uses when the reported EPS line is missing. Every figure is coerced
+from a string.
+
+EODHD is PREFERRED when a key is configured and the call succeeds; the yfinance series is
+the fallback, and **the page says which it read**: `source: EODHD, 41 annual reports` or
+`source: yfinance, 4 annual reports`. That line is not decoration — a reader comparing a
+10-year compound rate against a 3-year one needs to know which is which. Coca-Cola now
+reads:
+
+```
+revenue compounded +7.7% a year over 5 years
+revenue compounded +0.8% a year over 10 years
+revenue grew in 6 of the 10 years reported
+earnings per share (derived from net income and share count) compounded +11.2% a year over 5 years
+earnings per share (derived from net income and share count) compounded +6.1% a year over 10 years
+earnings per share (derived from net income and share count) grew in 5 of the 10 years reported
+source: EODHD, 41 annual reports
+```
+
+The call is cached for the day under `eodhd_<SYMBOL>_<YYYY_MM_DD>_growth.json`, and
+`fetch_growth_history` **never raises**: no key, an unknown exchange suffix, a quota refusal
+and an unparseable payload all return an empty history, which leaves the yfinance fallback
+standing. A worse growth record is not a broken page.
+
+### 4.9 The same sentence is said once (ABS-READINGS-3)
+
+Two readings that resolve to identical text print one line. AT&T's earnings per share was
+negative three years ago, so neither the 5- nor the 10-year window has a compound rate and
+both produced the same abstention; NVIDIA holds net cash, so both the operating-cash-flow
+and the free-cash-flow repayment lines read *"has no net debt to repay"*. Repeating a
+sentence does not make it truer.
+
+The collapse is by TEXT, insensitive to spacing and case because the two sentences are
+assembled by different code paths. It is a rendering decision like the span collapse in 4.7:
+every `Reading` underneath is intact, with its own value, note and span, for anything reading
+the figures programmatically.
+
+### 4.10 Why the Netflix guard was still firing (ABS-READINGS-3)
+
+ABS-READINGS-2's commit said the adapter fix removed the cause. On the merged build the
+guard still fired for NFLX, and two things were wrong with that claim:
+
+1. **The branch was not merged.** PR #115 was still open, so main had neither the adapter
+   fix nor the guard.
+2. **The real miss: I verified through the wrong path.** The adapter fix was checked
+   uncached, but the page reads through `CachingAdapter`, which was still holding the
+   pre-fix entry. `free_cash_flow` changed MEANING — the provider's headline TTM blob
+   became the cash-flow statement's own row — without changing its NAME, so the
+   field-name half of the cache marker still matched and the stale 25,387,552,768 was served
+   all day against an operating cash flow of 10,149,273,000.
+
+`ADAPTER_SCHEMA_VERSION` is bumped **4 → 5**. That token exists for precisely this case:
+a semantics change to an existing field that leaves the field set unchanged. Through the
+cached path NFLX now reads `free_cash_flow 9,461,053,000` — which is operating cash flow
+10,149,273,000 minus capital spending 688,220,000, exactly — and the page prints **0.7
+years of operating cash flow and 0.8 years of free cash flow**: the free-cash-flow figure is
+the LONGER one, as it must be. No other consumer read the wrong field: the factor legs, the
+EPV lens and the valuation band take operating income, EBIT and price series, not
+`free_cash_flow`; narration's single-period citation is now labelled as such
+(`agents/nodes.py`), since the scalar is no longer a TTM figure.
+
+**The guard stays regardless.** It is not a workaround for this provider's blob — it is
+the statement that an impossible number is never printed, and the next provider gets the
+same treatment.
 
 ## 5. Guards
 

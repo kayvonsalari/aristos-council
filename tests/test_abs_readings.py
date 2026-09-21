@@ -391,3 +391,66 @@ def test_the_adapter_prefers_the_statement_figure_over_the_headline():
     # ...and the headline is still the fallback when there is no statement at all
     assert _first_present([], 25_387_552_768) == 25_387_552_768
     assert _first_present(None, 25_387_552_768) == 25_387_552_768
+
+
+# =========================================================================== #
+# ABS-READINGS-3 item 2 - the same sentence, said once
+# =========================================================================== #
+from aristos_council.abs_readings import dedupe_lines
+
+
+def test_ATT_prints_its_EPS_abstention_ONCE_not_once_per_window():
+    """T, 2026-09-20. Earnings per share was negative three years ago, so NEITHER window
+    has a compound rate, and both windows produced the identical sentence - the page said
+    it twice in a row."""
+    out = growth_record(_f(aligned={"diluted_eps": [2.1, 1.8, 1.4, -0.7]}))
+    lines = out.eps.lines()
+    assert sum(1 for l in lines if "not positive" in l) == 1, lines
+    assert len(lines) == len(set(lines))
+
+
+def test_NVIDIA_says_it_has_no_net_debt_to_repay_ONCE_not_twice():
+    """NVDA, 2026-09-20. Net cash, so both cash-flow lines - the operating one and the
+    free one - resolved to the same sentence."""
+    out = debt_and_cash(_f(total_debt=10e9, total_cash=34e9,
+                           operating_cash_flow=60e9, free_cash_flow=55e9))
+    lines = out.lines()
+    assert sum(1 for l in lines if "no net debt to repay" in l) == 1, lines
+    assert len(lines) == len(set(lines))
+
+
+def test_the_READINGS_underneath_are_untouched_by_the_collapse():
+    """A rendering decision, exactly like the span collapse. Both readings still exist,
+    both still abstain, and each keeps its own note - only the printing is deduplicated."""
+    out = debt_and_cash(_f(total_debt=10e9, total_cash=34e9,
+                           operating_cash_flow=60e9, free_cash_flow=55e9))
+    # Net cash is not an abstention: both readings are available, each with its own
+    # zero, and they collapse only because the SENTENCE is the same one twice.
+    assert out.net_debt_to_ocf.available and out.years_to_repay.available
+    assert out.net_debt_to_ocf.value == 0.0 and out.years_to_repay.value == 0.0
+    assert out.net_debt_to_ocf.text() == out.years_to_repay.text()   # why they collapsed
+
+    record = growth_record(_f(aligned={"diluted_eps": [2.1, 1.8, 1.4, -0.7]}))
+    assert set(record.eps.cagr) == set(GROWTH_WINDOWS)
+    assert all(not record.eps.cagr[w].available for w in GROWTH_WINDOWS)
+
+
+def test_two_DIFFERENT_sentences_both_survive():
+    """The collapse must not swallow a second, genuinely different statement."""
+    out = debt_and_cash(_f(total_debt=50e9, total_cash=10e9,
+                           operating_cash_flow=10e9, free_cash_flow=8e9))
+    lines = out.lines()
+    assert any("operating cash flow" in l for l in lines)
+    assert any("free cash flow" in l for l in lines)
+
+
+def test_the_collapse_keeps_the_FIRST_occurrence_and_the_original_order():
+    assert dedupe_lines(["a", "b", "a", "c"]) == ["a", "b", "c"]
+
+
+def test_spacing_and_capitalisation_do_not_smuggle_a_duplicate_through():
+    """The two identical sentences were assembled by different code paths; a stray double
+    space would have defeated a naive equality check."""
+    assert dedupe_lines(["has no net debt to repay",
+                         "has  no net debt  to repay",
+                         "Has no net debt to repay"]) == ["has no net debt to repay"]

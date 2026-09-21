@@ -133,7 +133,14 @@ def _window_key(start, end) -> str:
 #       400-day series (every name abstained "insufficient history: 1.1y"). New windowed
 #       keys write to new filenames, so pre-v4 window-less files are simply never read
 #       again; this bump additionally rejects any that are, rather than misreading one.
-ADAPTER_SCHEMA_VERSION = 4
+# v5 (ABS-READINGS-3): Fundamentals.free_cash_flow changed MEANING without changing its
+# name - it now comes from the cash-flow statement rather than the provider's headline
+# TTM figure (ABS-READINGS-2). That is precisely the case the version token exists for,
+# and it was NOT bumped when the adapter changed: a cached Netflix entry kept serving
+# 25,387,552,768 beside an operating cash flow of 10,149,273,000, so the page went on
+# printing an impossible pair and the new guard fired on a build that was supposed to be
+# fixed. The field set is unchanged, so only this token can catch it.
+ADAPTER_SCHEMA_VERSION = 5
 
 
 def _schema_marker(cls) -> str:
