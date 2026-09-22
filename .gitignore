@@ -45,3 +45,8 @@ universes/local/cohort_*.yaml
 # MARKET-INDEX-1 — the local market table is machine-built and rebuildable from
 # EODHD; market_index.yaml (the rule) IS tracked. See docs/MARKET_INDEX.md.
 data/local/market_index/
+
+# GAP-LEDGER-1 — the pre-market screener's local record: one CSV per trading day plus
+# its daily-bar cache. Machine-written local data, rebuildable by re-running the screen,
+# and a log of what was looked at on which morning. See docs/GAP_LEDGER.md.
+data/local/gap_ledger/
