@@ -93,16 +93,20 @@ def test_a_malformed_payload_is_no_headlines_rather_than_an_exception():
     assert headlines_from_rows([{"link": "https://a.com"}], since=since, until=until) == []
 
 
-def test_news_off_answers_an_empty_list_for_every_name_without_calling_anything():
-    assert gather_news(["AAA", "BBB"], source=None, run_at=RUN_AT) == {"AAA": [], "BBB": []}
+def test_news_off_answers_nothing_for_every_name_without_calling_anything():
+    out = gather_news(["AAA", "BBB"], source=None, run_at=RUN_AT)
+    assert set(out) == {"AAA", "BBB"}
+    assert all(not n.matched and not n.related for n in out.values())
 
 
 def test_news_is_asked_for_the_configured_window_per_name():
-    source = FakeNews(by_ticker={"AAA": [Headline(title="t", link="https://a.com")]})
+    source = FakeNews(by_ticker={"AAA": [Headline(title="AAA rises", link="https://a.com",
+                                                 symbols=("AAA.US",))]})
     out = gather_news(["AAA", "BBB"], source=source, run_at=RUN_AT)
     assert [t for t, _, _ in source.asked] == ["AAA", "BBB"]
     assert all(until - since == timedelta(hours=18) for _, since, until in source.asked)
-    assert out["BBB"] == []
+    assert out["BBB"].found == "no news found"
+    assert out["AAA"].found == "news found"
 
 
 # --------------------------------------------------------------------------- #
@@ -118,9 +122,12 @@ class _Answer:
         self.lines = [type("L", (), {"ticker": t, "line": v})() for t, v in pairs]
 
 
-def test_no_runner_means_every_name_gets_the_no_reason_marker_and_no_call():
+def test_no_runner_means_no_reason_line_at_all(monkeypatch):
+    """GAP-NEWS-MATCH-1: with --explain off there is no per-row line. ``NO_REASON`` is
+    reserved for a run that ASKED and came back empty — printing it on an off run implied a
+    search that never happened."""
     out = explanations(["AAA"], {"AAA": [_headline()]}, runner=None)
-    assert out.lines == {"AAA": NO_REASON}
+    assert out.lines == {}
     assert out.called is False
 
 

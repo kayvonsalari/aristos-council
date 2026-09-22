@@ -40,7 +40,7 @@ from .config import (DEFAULT_CONFIG, DEFAULT_RUN_TIME, DEFAULT_ROOT, GapConfig, 
 from .explain import NO_REASON, ExplainOutcome, explanations
 from .ledger import (GROUP_BASELINE, GROUP_CANDIDATE, LedgerRow, et_stamp,
                      sample_baseline, write_day)
-from .news import Headline, NewsSource, gather_news
+from .news import Headline, MatchedNews, NewsSource, gather_news
 from .screen import SPREAD_HISTORICAL, SPREAD_UNKNOWN, ScreenRow, screen_one
 from .todoist import DeliveryOutcome, TodoistClient, deliver
 from .universe import (NO_DAILY_BARS, PreFilterResult, PreFilterRow, pre_filter,
@@ -104,7 +104,7 @@ class RunResult:
     baseline: list[str] = field(default_factory=list)
     baseline_pool: int = 0
     rows: list[LedgerRow] = field(default_factory=list)
-    news: dict[str, list[Headline]] = field(default_factory=dict)
+    news: dict[str, MatchedNews] = field(default_factory=dict)
     news_enabled: bool = True
     explain: ExplainOutcome = field(default_factory=lambda: ExplainOutcome({}))
     delivery: DeliveryOutcome = field(default_factory=DeliveryOutcome)
@@ -137,20 +137,31 @@ class RunResult:
 # --------------------------------------------------------------------------- #
 # assembling a ledger row
 # --------------------------------------------------------------------------- #
-def _headline_fields(items: Sequence[Headline], *, enabled: bool) -> dict:
-    """The newest headline, flattened into the row. ``news_found`` is a MARK, never a drop."""
+def _headline_fields(news: Optional[MatchedNews], *, enabled: bool) -> dict:
+    """The newest MATCHED headline, flattened into the row.
+
+    GAP-NEWS-MATCH-1: only a story attributed to this name reaches the headline columns.
+    Stories the provider returned but that are about someone else are counted and kept in
+    the ``related_*`` columns — evidence about the tagging, never printed as this name's
+    news. ``news_found`` is a MARK, never a drop.
+    """
     if not enabled:
         return {"news_found": "news not fetched", "headline_count": None}
-    if not items:
-        return {"news_found": "no news found", "headline_count": 0}
-    top = items[0]
-    return {"news_found": "news found", "headline_count": len(items),
-            "headline": top.title, "news_source": top.source,
-            "news_published_et": top.published_ny, "news_link": top.link}
+    news = news or MatchedNews()
+    fields = {"news_found": news.found, "news_match": news.how,
+              "headline_count": len(news.matched), "related_count": len(news.related)}
+    if news.matched:
+        top = news.matched[0]
+        fields.update(headline=top.title, news_source=top.source,
+                      news_published_et=top.published_ny, news_link=top.link)
+    if news.related:
+        fields.update(related_headline=news.related[0].title,
+                      related_link=news.related[0].link)
+    return fields
 
 
 def build_row(*, day: date, run_at: datetime, group: str, pre: Optional[PreFilterRow],
-              screen: Optional[ScreenRow], headlines: Sequence[Headline],
+              screen: Optional[ScreenRow], headlines: Optional[MatchedNews],
               news_enabled: bool, reason: str, config: GapConfig) -> LedgerRow:
     """One CSV row out of the readings. Computes nothing — every number is copied."""
     row = LedgerRow(date=day.isoformat(), group=group, run_at_et=et_stamp(run_at),
@@ -191,6 +202,7 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                intraday: IntradaySource, day: Optional[date] = None,
                run_at: Optional[datetime] = None, config: GapConfig = DEFAULT_CONFIG,
                root: str | Path = DEFAULT_ROOT, news_source: Optional[NewsSource] = None,
+               company_names: Optional[dict] = None,
                explain_runner=None, todoist: Optional[TodoistClient] = None,
                write: bool = True, refresh: bool = False, live: Optional[bool] = None,
                progress: Progress = _noop) -> RunResult:
@@ -279,10 +291,15 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
     picks = [row.ticker for row in result.candidates]
     if picks and news_source is not None:
         progress(f"fetching {config.news_lookback_hours}h of news for {len(picks)} names")
-    result.news = gather_news(picks, source=news_source, run_at=run_at, config=config)
+    result.news = gather_news(picks, source=news_source, run_at=run_at, config=config,
+                              company_names=company_names)
     if picks and explain_runner is not None:
         progress("asking for one line per name")
-    result.explain = explanations(picks, result.news, runner=explain_runner)
+    # Only MATCHED stories reach the model: a wrong reason beside a real gap is worse than
+    # no reason, because it gets believed (GAP-NEWS-MATCH-1).
+    result.explain = explanations(
+        picks, {t: list(news.matched) for t, news in result.news.items()},
+        runner=explain_runner)
 
     # -- step 4, the control group ----------------------------------------- #
     # Step-1 survivors that did not become candidates AND whose gap could be read — see
@@ -296,14 +313,14 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
     result.rows = [
         build_row(day=day, run_at=run_at, group=GROUP_CANDIDATE,
                   pre=pre_by_ticker.get(row.ticker), screen=row,
-                  headlines=result.news.get(row.ticker, []),
+                  headlines=result.news.get(row.ticker),
                   news_enabled=result.news_enabled,
-                  reason=result.explain.lines.get(row.ticker, NO_REASON), config=config)
+                  reason=result.explain.lines.get(row.ticker, ""), config=config)
         for row in result.candidates
     ] + [
         build_row(day=day, run_at=run_at, group=GROUP_BASELINE,
                   pre=pre_by_ticker.get(ticker), screen=result.screened.get(ticker),
-                  headlines=[], news_enabled=False, reason="", config=config)
+                  headlines=None, news_enabled=False, reason="", config=config)
         for ticker in result.baseline
     ]
     return _finish(result, root=root, write=write, todoist=todoist, progress=progress)
@@ -375,14 +392,17 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
     if result.candidates:
         lines.append("CANDIDATES")
         for row in result.candidates:
-            headlines = result.news.get(row.ticker, [])
-            mark = ("news found" if headlines else
-                    ("no news found" if result.news_enabled else "news not fetched"))
+            news = result.news.get(row.ticker) or MatchedNews()
+            headlines = list(news.matched)
+            mark = "news not fetched" if not result.news_enabled else news.found
+            if news.related and not news.matched:
+                mark += f" ({len(news.related)} related)"
             volume = (_times(row.relative_volume) if row.relative_volume is not None
                       else "unavailable")
             lines.append(f"  {row.ticker:<8} gap {_pct(row.gap):>9}  "
                          f"rel.vol {volume:>11}  "
                          f"{row.spread_note}  {mark}")
+            # With --explain off there is no per-row line at all; the header says so once.
             reason = result.explain.lines.get(row.ticker, "")
             if reason:
                 lines.append(f"           {reason}")

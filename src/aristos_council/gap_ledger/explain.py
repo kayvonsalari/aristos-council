@@ -103,9 +103,12 @@ def explanations(candidates: Sequence[str], news: dict[str, Sequence[Headline]],
     convenience. Silence would be the one unacceptable outcome — an absent line is
     indistinguishable from a line that was never asked for.
     """
-    out = {ticker: NO_REASON for ticker in candidates}
+    # GAP-NEWS-MATCH-1: with --explain OFF there is no reason line at all, and the header
+    # says so once. ``NO_REASON`` is reserved for a run that ASKED and came back empty —
+    # printing it per row on an off run implied a search that never happened.
     if runner is None:
-        return ExplainOutcome(out, called=False, note="")
+        return ExplainOutcome({}, called=False, note="")
+    out = {ticker: NO_REASON for ticker in candidates}
     with_news = {t: list(news.get(t) or []) for t in candidates}
     with_news = {t: items for t, items in with_news.items() if items}
     if not with_news:

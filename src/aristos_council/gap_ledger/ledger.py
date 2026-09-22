@@ -72,12 +72,22 @@ class LedgerRow:
     screen_note: str = ""                # why it did not pass, for a baseline row
 
     # -- step 3 ------------------------------------------------------------ #
-    news_found: str = ""                 # "news found" / "no news found"
+    # "news found" / "no news found" / "related, not matched" / "news not fetched"
+    news_found: str = ""
+    # GAP-NEWS-MATCH-1 — HOW the printed story was attributed to this name, so the
+    # attribution is auditable rather than asserted. Empty when nothing matched.
+    news_match: str = ""
     headline_count: Optional[int] = None
     headline: str = ""
     news_source: str = ""
     news_published_et: str = ""
     news_link: str = ""
+    # Stories the provider returned for this ticker that are NOT about it. Kept in the
+    # record — they are evidence about the provider's tagging — but never printed as the
+    # name's news.
+    related_count: Optional[int] = None
+    related_headline: str = ""
+    related_link: str = ""
     reason: str = ""                     # the --explain line, or the no-reason marker
 
     # -- step 4, filled after the close by ``outcomes`` -------------------- #
@@ -114,7 +124,7 @@ _FLOATS = {"previous_close", "average_volume", "premarket_price", "gap_pct",
            "cfg_min_avg_volume", "cfg_min_abs_gap", "cfg_min_relative_volume",
            "cfg_wide_spread"}
 _INTS = {"history_days", "premarket_volume", "baseline_sessions", "headline_count",
-         "cfg_min_history_days", "cfg_news_lookback_hours"}
+         "related_count", "cfg_min_history_days", "cfg_news_lookback_hours"}
 
 
 # --------------------------------------------------------------------------- #

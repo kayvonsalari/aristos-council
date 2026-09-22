@@ -208,6 +208,22 @@ def pool_from_index(*, config_path: str | Path = market_index.DEFAULT_CONFIG,
     return sorted({(row.yahoo_ticker or row.ticker).strip().upper() for row in kept})
 
 
+def names_from_index(*, config_path: str | Path = market_index.DEFAULT_CONFIG,
+                     venues: Sequence[str] = US_VENUES) -> dict[str, str]:
+    """``{ticker: company name}`` from the index, for the news matcher (GAP-NEWS-MATCH-1).
+
+    A separate read from ``pool_from_index`` so the pool stays a plain list of tickers and
+    nothing has to change shape. A missing index is NOT an error here: the caller has
+    already failed on it, or is screening a ``--tickers`` file, and the matcher degrades to
+    ticker-and-primary-symbol matching when it has no name.
+    """
+    store = market_index.IndexStore(index_root(config_path))
+    if not store.path.exists():
+        return {}
+    return {(row.yahoo_ticker or row.ticker).strip().upper(): row.name
+            for row in common_stock_rows(store.load(), venues=venues) if row.name}
+
+
 def read_ticker_file(path: str | Path) -> list[str]:
     """One ticker per line. Blank lines and ``#`` comments are ignored.
 

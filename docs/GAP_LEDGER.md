@@ -173,6 +173,18 @@ finding. A fortnight of mornings is a mood, not evidence.
 ## News and the optional reason line
 
 For each candidate, EODHD News over the last 18 hours: headline, publisher, timestamp, link.
+**A story counts as this name's news only on positive evidence (GAP-NEWS-MATCH-1)** — the
+provider's own primary symbol, or the ticker in the headline (3+ characters), or the company's
+name as the index spells it, short forms included ("Alnylam reports…", "Ford recalls…") but
+never an ordinary leading word on its own ("American", "Capital"). EODHD's `symbols` is a
+loose tag list, so without this one AXT Inc. headline arrived as news for AXTI, CPRI and DK at
+once, ONON got a Quest/Labcorp article and JAZZ got an Iambic story. Everything unattributed
+is kept in the CSV as **"related, not matched"** (`related_count`/`related_headline`/
+`related_link`) and never printed as the name's news, never shown to the model; `news_match`
+records *how* the printed story was attributed. With `--explain` off the header says "Reason
+line: off" once and no row carries a reason — `no clear reason found` is reserved for an
+`--explain` run that asked and came back empty.
+
 "no news found" is a **mark, never a drop** — a stock up 9% with no headline in the feed is
 the case where the reason is not public yet, which is exactly the one worth seeing. The
 publisher is **derived from the link's host**; EODHD's news rows carry no publisher field,

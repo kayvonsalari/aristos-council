@@ -33,7 +33,8 @@ from .outcomes import SessionNotClosed, fill_day, is_complete
 from .run import format_report, run_screen
 from .score import score
 from .todoist import RestTodoist
-from .universe import UniverseUnavailable, pool_from_index, read_ticker_file
+from .universe import (UniverseUnavailable, names_from_index, pool_from_index,
+                       read_ticker_file)
 
 
 def _say(message: str) -> None:
@@ -94,6 +95,11 @@ def cmd_run(args) -> int:
         pool = pool[:args.limit]
         pool_source += f", first {len(pool)} by ticker (--limit)"
 
+    # The index's company names, for the news matcher (GAP-NEWS-MATCH-1). Read even for a
+    # --tickers run: if a listed name happens to be in the index, its name helps; if the
+    # index is absent this is empty and the matcher falls back to ticker + primary symbol.
+    company_names = names_from_index(config_path=args.index_config)
+
     bars = YFinanceBars(config)
     news_source = None if args.no_news else EODHDNews()
     runner = build_runner() if args.explain else None
@@ -101,7 +107,8 @@ def cmd_run(args) -> int:
 
     result = run_screen(pool=pool, pool_source=pool_source, daily=bars, intraday=bars,
                         day=day, run_at=run_at, config=config, root=args.root,
-                        news_source=news_source, explain_runner=runner, todoist=client,
+                        news_source=news_source, company_names=company_names,
+                        explain_runner=runner, todoist=client,
                         write=not args.dry_run, refresh=args.refresh, progress=_say)
     _say("")
     _say(format_report(result))
