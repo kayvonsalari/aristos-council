@@ -7,12 +7,18 @@ fails for a reason nobody chose — the market moved, a provider rate-limited, a
 was not in someone's shell — and a suite like that reports the weather rather than the
 code. So `tests/conftest.py` replaces, for the whole session, every factory that could put
 a live provider in a test's hands (`data.provider.select_market_adapter`,
-`pipeline._build_adapter`, `data.sentiment.build_sentiment_adapter`) with one that raises
+`pipeline._build_adapter`, `data.sentiment.build_sentiment_adapter`,
+`gap_ledger.bars.YFinanceBars`) with one that raises
 `test reached the real data adapter; inject a fake`, naming the factory and the test that
 tripped it. A test that needs data **injects a fake adapter**; a test that genuinely
 exercises the provider **says so in writing** with `@pytest.mark.real_adapter`; and
 nothing else is an acceptable way past the guard — loosening an assertion, or marking a
 test that is not actually about the adapter, converts a real finding into a hidden one.
+
+The last of those four is not a `MarketDataAdapter` at all: Gap Ledger needs 5-minute
+pre/post-market bars, which that contract does not carry, so it reaches yfinance by its own
+route and needs its own guard (GAP-LEDGER-1). The lesson generalises — the guard belongs on
+every factory that can open a connection, not only on the ones behind the adapter interface.
 
 ## Opting out
 
