@@ -45,6 +45,15 @@ excluded by asset kind — the index admits `Type == "Common Stock"` only, and
 `universe.looks_like_fund` re-states the boundary for a `--tickers` file, which has no index
 row behind it.
 
+**Warrants, units, rights and preferreds are dropped here (GAP-UNIVERSE-1)** — the market
+index classifies on EODHD's `Type` field, which calls all of them "Common Stock" (196 of
+5,972 US rows), so the filter is on the ticker shape (`-WS`/`-WT`/`-W`, `-U`/`-UN`, `-R`/`-RI`,
+`-P`/`-PR`/`-Px`, and `TFINP`-style five-letter preferreds whose four-letter root is listed
+beside them). The index is **not** changed and **Aristos reads the same index**, so those rows
+are still there for every other consumer; a genuine share class (`BF-B`, `AKO-A`, `CIG-C`,
+`MKC-V`) is never dropped. The count and its breakdown by kind appear in the run summary, and
+yfinance's per-ticker error lines are suppressed in favour of one "N names returned no data".
+
 Then three thresholds on yesterday's daily bars: previous close ≥ $10, 20-session average
 volume ≥ 1M shares, ≥ 250 trading days of history. The daily bars are cached per market day.
 

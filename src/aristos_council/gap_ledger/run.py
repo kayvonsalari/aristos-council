@@ -43,7 +43,8 @@ from .ledger import (GROUP_BASELINE, GROUP_CANDIDATE, LedgerRow, et_stamp,
 from .news import Headline, NewsSource, gather_news
 from .screen import SPREAD_HISTORICAL, SPREAD_UNKNOWN, ScreenRow, screen_one
 from .todoist import DeliveryOutcome, TodoistClient, deliver
-from .universe import PreFilterResult, PreFilterRow, pre_filter
+from .universe import (NO_DAILY_BARS, PreFilterResult, PreFilterRow, pre_filter,
+                       split_common_stock)
 
 _log = logging.getLogger(__name__)
 
@@ -89,6 +90,13 @@ class RunResult:
     config: GapConfig = DEFAULT_CONFIG
     pool_size: int = 0
     pool_source: str = ""
+    # GAP-UNIVERSE-1 — warrants, units, rights and preferreds the index calls "Common
+    # Stock". Dropped before any fetch, and COUNTED so the drop is visible rather than a
+    # pool that quietly shrank.
+    not_common_stock: list[tuple[str, str]] = field(default_factory=list)
+    # How many names the provider served nothing for. Its own per-ticker ERROR lines are
+    # suppressed (``bars.quiet_yfinance``), so this is where that information lives.
+    no_provider_data: int = 0
     pre_filtered: PreFilterResult = field(default_factory=PreFilterResult)
     gapped: int = 0
     screened: dict[str, ScreenRow] = field(default_factory=dict)
@@ -198,9 +206,16 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
     run_at = run_at or at_ny(day, DEFAULT_RUN_TIME)
     live = (day == now_ny().date()) if live is None else live
     spread_note = SPREAD_UNKNOWN if live else SPREAD_HISTORICAL
-    names = sorted({t.strip().upper() for t in pool if t and t.strip()})
-    result = RunResult(day=day, run_at=run_at, config=config, pool_size=len(names),
-                       pool_source=pool_source, news_enabled=news_source is not None)
+    offered = sorted({t.strip().upper() for t in pool if t and t.strip()})
+    # GAP-UNIVERSE-1 — before any fetch, because the point is not to ask the provider
+    # about a warrant at all.
+    names, not_common = split_common_stock(offered)
+    result = RunResult(day=day, run_at=run_at, config=config, pool_size=len(offered),
+                       pool_source=pool_source, news_enabled=news_source is not None,
+                       not_common_stock=not_common)
+    if not_common:
+        progress(f"{len(not_common)} of {len(offered)} are not common stock "
+                 f"(warrants, units, rights, preferreds) — not screened")
 
     # -- step 1 ------------------------------------------------------------- #
     progress(f"pre-filtering {len(names)} names on yesterday's bars")
@@ -210,6 +225,11 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                                   as_of=day, refresh=refresh)
     result.pre_filtered = pre_filter(names, daily_bars, as_of=day, config=config)
     survivors = result.pre_filtered.tickers
+    result.no_provider_data = sum(1 for row in result.pre_filtered.excluded
+                                  if row.reason == NO_DAILY_BARS)
+    if result.no_provider_data:
+        # ONE line, in place of the provider's per-ticker ERROR storm (GAP-UNIVERSE-1).
+        progress(f"{result.no_provider_data} names returned no data")
     pre_by_ticker = result.pre_filtered.by_ticker()
     progress(f"{len(survivors)} of {len(names)} cleared price, volume and history")
     if not survivors:
@@ -310,6 +330,18 @@ def _times(value: Optional[float]) -> str:
     return "—" if value is None else f"{value:.2f}x"
 
 
+def _kinds(dropped: Sequence[tuple[str, str]]) -> str:
+    """``"73 warrant, 57 unit, …"`` — what the not-common-stock drop actually consisted of.
+
+    The count alone would be a number nobody can check; the breakdown is what makes an
+    over-eager pattern visible (GAP-UNIVERSE-1).
+    """
+    counts: dict[str, int] = {}
+    for _ticker, kind in dropped:
+        counts[kind] = counts.get(kind, 0) + 1
+    return ", ".join(f"{n} {kind}" for kind, n in sorted(counts.items()))
+
+
 def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
     """The run, in plain text. What the CLI prints and what the done-report pastes."""
     cfg = result.config
@@ -319,12 +351,17 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
         f"Verdict: deterministic screen. Reason line: "
         + ("LLM (non-judging)" if result.explain.called else "off"),
         "",
-        f"Pool: {result.pool_size} names from {result.pool_source}.",
+        f"Pool: {result.pool_size} names from {result.pool_source}."
+        + (f" {len(result.not_common_stock)} not common stock "
+           f"({_kinds(result.not_common_stock)}) — not screened."
+           if result.not_common_stock else ""),
         f"Step 1 — price >= ${cfg.min_price:,.0f}, "
         f"{cfg.avg_volume_days}-session volume >= {cfg.min_avg_volume:,.0f}, "
         f">= {cfg.min_history_days} trading days: "
         f"{len(result.pre_filtered.passed)} passed, "
-        f"{len(result.pre_filtered.excluded)} excluded.",
+        f"{len(result.pre_filtered.excluded)} excluded"
+        + (f" ({result.no_provider_data} of them returned no data)."
+           if result.no_provider_data else "."),
         f"Step 2 — |gap| >= {cfg.min_abs_gap * 100:.1f}% and relative pre-market volume "
         f">= {cfg.min_relative_volume:.1f}x: {result.gapped} gapped, "
         f"{len(result.candidates)} candidate(s).",
