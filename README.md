@@ -534,6 +534,7 @@ tools" toggle. The ETF universes are front-stage.)
 ```
 aristos-council/
 ├── app.py                        # Council Station — local Streamlit UI (Sprint 3)
+├── gap_ledger_app.py             # Gap Ledger — separate read-only viewer (GAP-LEDGER-1)
 ├── src/aristos_council/
 │   ├── state.py                  # ResearchState + Figure/Provenance/veto types — the schema contract
 │   ├── rank_engine.py            # the decision core: rank-sum, verdict cuts, cohort-position display
@@ -560,6 +561,15 @@ aristos-council/
 │   ├── persistence/              # IO-at-the-edge sinks (Sprint 2–3)
 │   │   ├── verdicts.py           # append-only verdict log feeding the vetoes (Sprint 2)
 │   │   └── reports.py            # full per-run deliberation for the UI (Sprint 3)
+│   ├── gap_ledger/               # the pre-market movers screener — its own tool (GAP-LEDGER-1)
+│   │   ├── universe.py           # the pool (market index, read-only) + liquidity pre-filter
+│   │   ├── screen.py             # gap, relative pre-market volume, spread — ALL the arithmetic
+│   │   ├── news.py               # EODHD headlines for the candidates, 18h back
+│   │   ├── explain.py            # the optional one-line reason, and the fence around the model
+│   │   ├── ledger.py             # the day's CSV + the date-seeded control group
+│   │   ├── outcomes.py           # the four after-the-close readings
+│   │   ├── score.py              # candidates vs control group per checkpoint, with a day floor
+│   │   └── run.py                # the one run entry the CLI and the tests share
 │   ├── strategy/                 # strategy config
 │   │   ├── loader.py             # validated strategy YAML loader
 │   │   ├── picker.py             # THE strategy picker — one implementation, every surface
@@ -641,6 +651,41 @@ Selection got **strategy-aware**: both universe selectors now discover manifests
 English glosses, the *Which lens for which company* section, and the new
 [Marks on a Report](docs/REPORT_MARKS.md) flags catalog.
 
+## Gap Ledger — a separate tool in the same repo
+
+**[Gap Ledger](docs/GAP_LEDGER.md)** is a pre-market news-movers screener that keeps score of
+itself: a daily shortlist of US stocks moving before the open, with every pick logged and
+graded after the close. It answers a different question from the council — *what moved this
+morning?* rather than *is this a good business at this price?* — so it is a separate package
+with its own entry point. Nothing in Council Station imports or links to it, no council is
+convened, no strategy is loaded and no verdict is written.
+
+**Maths picks the names.** An LLM may write one optional line of prose about headlines it was
+handed, and nothing else: it never selects a name, never produces a number, and every line
+cites the link it rests on. No trading, no recommendations.
+
+```bash
+python -m aristos_council.gap_ledger run        # the pre-market screen (09:00 New York)
+python -m aristos_council.gap_ledger outcomes   # after the close, fill open/10:00/11:30/close
+python -m aristos_council.gap_ledger score      # candidates vs control group, over all days
+streamlit run gap_ledger_app.py                 # the read-only viewer — never starts a screen
+```
+
+Names come from the local market index (read-only), thinned by price, liquidity and history,
+then screened on the gap and on relative pre-market volume. Every day's picks are logged with
+an **equal-size control group** drawn from names that passed the liquidity filter but not the
+screen — because "gapping names carried on 58% of the time" is a fact about the market that
+week, and only the *difference* against comparable non-qualifiers is a fact about the screen.
+Below 40 scored days the scorecard says "not enough days" and presents no rate as a finding.
+
+One honesty note that shapes the whole tool: **yfinance publishes pre-market prices but not
+pre-market volume** (probed 2026-09-22 — every extended-hours bar carries `Volume == 0`). The
+relative-volume leg is therefore a NOT-EVALUATED reading on this provider, so a name is kept
+and **marked** rather than failed — a missing number may never act as a confirmed failure —
+while a ratio that *can* be computed and falls short still drops the name. The absence is
+stated on every surface: the report, the CSV, the Todoist task and the viewer. Details and the
+setting that restores the literal filter: **[docs/GAP_LEDGER.md](docs/GAP_LEDGER.md)**.
+
 ## A note on honesty
 
 The measured limitations of the deterministic core — GAAP payout noise, knife-edge absolute floors, small-universe quintile artifacts, the trailing-data blind spot, and the EBIT/market-cap proxy — are documented, not hidden. See **[The Calculations §6 — Known limitations](docs/CALCULATIONS.md#6-known-limitations-measured-not-hypothetical)**.
@@ -673,6 +718,17 @@ Or run a single council from the CLI:
 ```bash
 python examples/run_council.py JNJ
 ```
+
+**[Gap Ledger](docs/GAP_LEDGER.md)** is launched separately, and its viewer is read-only —
+the screen is a deliberate command, because it makes news calls and posts a Todoist task:
+
+```bash
+python -m aristos_council.gap_ledger run
+streamlit run gap_ledger_app.py
+```
+
+Add `--no-news --no-todoist` for a free, side-effect-free run; `--explain` (off by default)
+adds one cheap LLM call. The day's record lands in `data/local/gap_ledger/` (gitignored).
 
 ---
 

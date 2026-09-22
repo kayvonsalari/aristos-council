@@ -85,6 +85,22 @@ LangGraph orchestration, Anthropic models, pydantic state.
   Scoreboard, then the legacy single-ticker Report / History / Strategy behind the
   "Show validation & legacy tools" toggle. Loads `.env` at app start so keys reach the
   process.
+- `src/aristos_council/gap_ledger/` + `gap_ledger_app.py` — **Gap Ledger (GAP-LEDGER-1), a
+  SEPARATE TOOL that happens to live here.** A pre-market news-movers screener: a daily
+  shortlist of US stocks moving before the open, logged with a control group and graded after
+  the close. `docs/GAP_LEDGER.md`. It answers "what moved this morning?", not "is this a good
+  business at this price?", so it is NOT part of the council and the boundary is enforced, not
+  merely intended: **no Aristos surface imports or links to it, and it imports nothing from
+  `app.py`** (both asserted by tests). No council is convened, no strategy is loaded, no
+  verdict is written. It reuses the adapters, the market index (READ-ONLY, its location read
+  from `market_index.yaml` — never assumed) and the `.env`, and nothing else. Its own
+  read-only Streamlit entry point (`streamlit run gap_ledger_app.py`), launched separately;
+  the screen itself is CLI-only (`python -m aristos_council.gap_ledger run|outcomes|score`)
+  because it makes charged news calls and posts a Todoist task — not things a browser button
+  should fire on a stray click. All arithmetic is in `screen.py` and `score.py`; the one LLM
+  call (`--explain`, off by default) may only write one line of prose about headlines it was
+  handed — it cannot select a name or produce a number, enforced structurally.
+  Times are **New York**, not Berlin: a session has one clock.
 
 ## Hard project rules (learned the expensive way — do not relax)
 
@@ -105,6 +121,24 @@ LangGraph orchestration, Anthropic models, pydantic state.
    when `payoutRatio` is None, and the criteria NOT-EVAL a true gap (null dps, or
    non-positive EPS) while still FAILing a genuine zero — e.g. INTC's suspended
    `trailingAnnualDividendRate == 0`.)
+   - **The same rule, the same provider, again (GAP-LEDGER-1, 2026-09-22):
+     yfinance publishes pre-market PRICES but never pre-market VOLUME.** Every
+     extended-hours 5m/1m bar comes back `Volume == 0` — probed on AMD and TSLA,
+     through BOTH `yf.download` and `Ticker.history`. The prices are real (AMD's
+     last pre-market print on 2026-09-21 was 583.89 and the 09:30 open was
+     583.94). So Gap Ledger's relative-pre-market-volume filter is a NOT-EVAL
+     reading on this provider: the name is KEPT and MARKED, never failed, because
+     dropping a name for a number the vendor does not publish is precisely the
+     null-as-false bug. A ratio that CAN be computed and falls short still FAILS.
+     `GapConfig.require_relative_volume=True` restores the literal filter, at the
+     cost of an empty list every day — off by default, owner-approved.
+     **Found only by RUNNING it** (50 liquid names → 7 gappers → zero
+     candidates, all on one identical message), which is the shipping duty below
+     earning its keep: the suite was green throughout. A provider that serves
+     extended-hours volume is what would restore the leg; EODHD intraday is not
+     on the plan. Same session, same cause: a backfill was reading a LIVE order
+     book (a 2026-09-21 run marked RIOT "wide spread 52.42%" off a pre-dawn
+     2026-09-22 book) — a book is a snapshot of NOW, so a past date abstains.
 4. Prompt-side summarization of ledger objects requires an entry in
    `_PROMPT_VIEW_ALIASES` (audit/provenance.py), or honest citations get
    flagged as unresolvable.

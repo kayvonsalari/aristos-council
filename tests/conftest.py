@@ -31,6 +31,7 @@ import pytest
 from aristos_council import pipeline as _pipeline
 from aristos_council.data import provider as _provider
 from aristos_council.data import sentiment as _sentiment
+from aristos_council.gap_ledger import bars as _gap_bars
 
 # --------------------------------------------------------------------------- #
 # the message the brief asks for, plus the node id of whoever tripped it
@@ -100,12 +101,20 @@ def _sentiment_guard(real):
 #     ``data.adapter._build_adapter``; ``data/adapter.py`` holds the schema and the
 #     ``MarketDataAdapter`` ABC, not a factory.)
 #   * ``data.sentiment.build_sentiment_adapter`` — the Finnhub half, key-gated as above.
+#   * ``gap_ledger.bars.YFinanceBars``         — GAP-LEDGER-1. The pre-market screener does
+#     not go through ``MarketDataAdapter`` (it needs 5-minute pre/post bars, which that
+#     contract does not carry), so it is a SECOND way to a live provider and needs its own
+#     guard. Constructing it is what is refused, exactly as for the adapters above: the
+#     constructor is where the import of yfinance happens, and guarding construction is the
+#     only place that catches a test that should not be constructing one at all.
 _TARGETS = (
     (_pipeline, "_build_adapter",
      lambda real: _guard("pipeline._build_adapter", real)),
     (_provider, "select_market_adapter",
      lambda real: _guard("data.provider.select_market_adapter", real)),
     (_sentiment, "build_sentiment_adapter", _sentiment_guard),
+    (_gap_bars, "YFinanceBars",
+     lambda real: _guard("gap_ledger.bars.YFinanceBars", real)),
 )
 
 
