@@ -196,7 +196,10 @@ request:
 
 One Todoist task per run with candidates, in the project **Gap Ledger**, from
 `TODOIST_API_TOKEN` in the local `.env`. Names, gap, relative volume, flags and headline
-links. **Nothing on an empty day** — a daily "no candidates" task trains you to ignore the
+links. It speaks the unified **API v1** (`https://api.todoist.com/api/v1`) — `/rest/v2` is
+retired and answered the first live run with HTTP 410 (GAP-TODOIST-1); list endpoints there
+are paginated (`{"results": …, "next_cursor": …}`) and the project lookup follows the cursor,
+because a "Gap Ledger" on page two would read as absent and create a second one every morning. **Nothing on an empty day** — a daily "no candidates" task trains you to ignore the
 project. The project is created when it does not exist, and the outcome says so. A delivery
 failure is reported and never fatal: the CSV is the record, Todoist is a convenience.
 

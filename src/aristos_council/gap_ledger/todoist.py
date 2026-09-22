@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import date
@@ -32,7 +33,26 @@ from .ledger import GROUP_CANDIDATE, LedgerRow
 
 _log = logging.getLogger(__name__)
 
-BASE_URL = "https://api.todoist.com/rest/v2"
+# GAP-TODOIST-1 — the unified API v1. The first live run died on
+# "Todoist refused GET /projects: HTTP 410": /rest/v2 is RETIRED, not merely deprecated.
+#
+# Confirmed against Doist's own Python client (todoist-api-python,
+# ``_core/endpoints.py`` + ``api.py``) rather than from memory, because three things
+# changed at once and each of them breaks quietly:
+#
+#   * the base URL is ``/api/v1``;
+#   * LIST endpoints are PAGINATED — ``GET /projects`` answers
+#     ``{"results": [...], "next_cursor": ...}``, not a bare array. Reading the old shape
+#     yields an empty iteration, which would look exactly like "the project does not
+#     exist" and would silently create a SECOND "Gap Ledger" every morning;
+#   * ids are opaque STRINGS now, not numbers — so nothing here coerces them to int.
+#
+# CREATE endpoints still answer a bare object (``POST /projects`` -> a project,
+# ``POST /tasks`` -> a task), which is why only the list path needs unwrapping.
+BASE_URL = "https://api.todoist.com/api/v1"
+# Page size for the project listing. The API caps it at 200; the cursor loop below means
+# the cap is a pacing choice and not a correctness one.
+PAGE_LIMIT = 200
 PROJECT_NAME = "Gap Ledger"
 
 
@@ -89,6 +109,23 @@ def task_body(candidates: Sequence[LedgerRow]) -> str:
 # --------------------------------------------------------------------------- #
 # the client
 # --------------------------------------------------------------------------- #
+def _results(page) -> tuple[list, Optional[str]]:
+    """``(rows, next_cursor)`` out of a v1 list response, tolerating the older bare array.
+
+    GAP-TODOIST-1. The tolerance is not politeness: if Todoist ever serves a bare list
+    again, or a proxy unwraps it, reading ``.get("results")`` off a list would raise and a
+    working delivery would become a crash. A shape we do not recognise yields NO rows and
+    NO cursor, which ends the loop rather than looping forever.
+    """
+    if isinstance(page, dict):
+        rows = page.get("results")
+        cursor = page.get("next_cursor")
+        return (list(rows) if isinstance(rows, list) else []),               (str(cursor) if cursor else None)
+    if isinstance(page, list):
+        return list(page), None
+    return [], None
+
+
 class TodoistClient(Protocol):
     def find_project(self, name: str) -> Optional[str]:
         """The project id, or None when no project has that name."""
@@ -101,7 +138,11 @@ class TodoistClient(Protocol):
 
 
 class RestTodoist:
-    """Todoist REST v2 over ``urllib``, matching the repo's other outbound calls."""
+    """Todoist API **v1** over ``urllib``, matching the repo's other outbound calls.
+
+    The class name is kept so the CLI and any saved habit still work; what changed is the
+    wire protocol, not the seam. The ``TodoistClient`` Protocol above is untouched.
+    """
 
     def __init__(self, token: Optional[str] = None, *, timeout: float = 15.0) -> None:
         self._token = token
@@ -115,9 +156,11 @@ class RestTodoist:
                 "`--no-todoist`.")
         return token.strip()
 
-    def _call(self, path: str, *, payload: Optional[dict] = None):
+    def _call(self, path: str, *, payload: Optional[dict] = None,
+              params: Optional[dict] = None):
+        query = f"?{urllib.parse.urlencode(params)}" if params else ""
         request = urllib.request.Request(
-            f"{BASE_URL}/{path}",
+            f"{BASE_URL}/{path}{query}",
             data=None if payload is None else json.dumps(payload).encode("utf-8"),
             headers={"Authorization": f"Bearer {self._require_token()}",
                      "Content-Type": "application/json"},
@@ -132,20 +175,51 @@ class RestTodoist:
             raise TodoistUnavailable(f"Todoist unreachable: {exc}") from exc
         return json.loads(body) if body.strip() else {}
 
+    def _projects(self):
+        """Every project, following ``next_cursor`` to the end.
+
+        Paging matters for correctness, not tidiness: a "Gap Ledger" project sitting on
+        page two would read as absent, and ``deliver`` would helpfully create a second one
+        every single morning.
+        """
+        cursor: Optional[str] = None
+        seen = 0
+        while True:
+            params = {"limit": PAGE_LIMIT}
+            if cursor:
+                params["cursor"] = cursor
+            page = self._call("projects", params=params)
+            rows, cursor = _results(page)
+            yield from rows
+            seen += len(rows)
+            if not cursor or not rows or seen > 10_000:   # a cursor that never ends
+                return
+
     def find_project(self, name: str) -> Optional[str]:
+        """The project id, matched on NAME, case- and whitespace-insensitively.
+
+        Name matching is the contract because the id is not something the owner knows or
+        can put in a config — the project already exists in their account, made by hand.
+        """
         wanted = name.strip().lower()
-        for project in self._call("projects") or []:
-            if isinstance(project, dict) and str(project.get("name", "")).strip().lower() == wanted:
-                return str(project.get("id"))
+        for project in self._projects():
+            if not isinstance(project, dict):
+                continue
+            if str(project.get("name", "")).strip().lower() == wanted:
+                identifier = project.get("id")
+                if identifier is not None:
+                    return str(identifier)               # opaque string in v1, never int
         return None
 
     def create_project(self, name: str) -> str:
-        return str((self._call("projects", payload={"name": name}) or {}).get("id"))
+        created = self._call("projects", payload={"name": name})
+        return str((created or {}).get("id"))
 
     def create_task(self, *, content: str, description: str, project_id: str) -> str:
         payload = {"content": content, "description": description,
                    "project_id": project_id}
-        return str((self._call("tasks", payload=payload) or {}).get("id"))
+        created = self._call("tasks", payload=payload)
+        return str((created or {}).get("id"))
 
 
 # --------------------------------------------------------------------------- #
