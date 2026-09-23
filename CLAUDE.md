@@ -101,6 +101,12 @@ LangGraph orchestration, Anthropic models, pydantic state.
   call (`--explain`, off by default) may only write one line of prose about headlines it was
   handed — it cannot select a name or produce a number, enforced structurally.
   Times are **New York**, not Berlin: a session has one clock.
+  **GAP-IBKR-1 licence boundary:** `gap_ledger/ibkr.py` reads the owner's local IB Gateway
+  (read-only) for the real pre-market VOLUME yfinance does not publish. That data is licensed
+  for the owner's PERSONAL, NON-PROFESSIONAL use, so it stays inside `gap_ledger/` — **nothing
+  in Aristos may import `gap_ledger.ibkr`**, and a test asserts it. A lens that ranked on it
+  would be redistributing it. IB volume is also a PARTIAL tape (measured 0.34-0.67x
+  consolidated, varying daily), so it is only ever compared against another IB figure.
 
 ## Hard project rules (learned the expensive way — do not relax)
 

@@ -87,6 +87,9 @@ def candidate_table(rows: list[LedgerRow]) -> list[dict]:
     one click from the story it rests on."""
     return [{
         "Ticker": row.ticker,
+        # Who verified it. The single most useful column, because it says whether the
+        # relative-volume leg ran at all for this name.
+        "Source": (row.source or "yfinance").upper(),
         "Gap": pct(row.gap_pct),
         "Rel. pre-market volume": relative_volume_cell(row),
         "Prev. close": money(row.previous_close),
@@ -138,6 +141,13 @@ def render_day(day: date, rows: list[LedgerRow], *, key_ns: str) -> None:
     stamp = rows[0].run_at_et if rows else ""
     st.caption(f"Screened {day.isoformat()}"
                + (f", run at {stamp} (New York)" if stamp else ""))
+
+    # GAP-IBKR-1 item 3 — said once, above everything, because a yfinance-only day is a
+    # different product from a verified one.
+    banner = next((r.ibkr_note for r in rows if r.ibkr_note), "")
+    if banner:
+        st.error(f"{banner} — relative volume was not measured on this run; the names below "
+                 f"come from yfinance prices with the tape-density trust tests.")
 
     unavailable = [r for r in candidates if r.relative_volume is None]
     if unavailable:

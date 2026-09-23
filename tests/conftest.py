@@ -32,6 +32,7 @@ from aristos_council import pipeline as _pipeline
 from aristos_council.data import provider as _provider
 from aristos_council.data import sentiment as _sentiment
 from aristos_council.gap_ledger import bars as _gap_bars
+from aristos_council.gap_ledger import ibkr as _gap_ibkr
 
 # --------------------------------------------------------------------------- #
 # the message the brief asks for, plus the node id of whoever tripped it
@@ -107,6 +108,8 @@ def _sentiment_guard(real):
 #     guard. Constructing it is what is refused, exactly as for the adapters above: the
 #     constructor is where the import of yfinance happens, and guarding construction is the
 #     only place that catches a test that should not be constructing one at all.
+#   * ``gap_ledger.ibkr.IBKRBars``          — GAP-IBKR-1, a socket to the owner's live IB
+#     Gateway. Guarded for the same reason and more urgently.
 _TARGETS = (
     (_pipeline, "_build_adapter",
      lambda real: _guard("pipeline._build_adapter", real)),
@@ -115,6 +118,11 @@ _TARGETS = (
     (_sentiment, "build_sentiment_adapter", _sentiment_guard),
     (_gap_bars, "YFinanceBars",
      lambda real: _guard("gap_ledger.bars.YFinanceBars", real)),
+    # GAP-IBKR-1. A THIRD route to live market data, and the one with a socket to the
+    # owner's own broker on the other end. Read-only or not, no test may open it: the
+    # guard is on construction, which is where the connection would be arranged.
+    (_gap_ibkr, "IBKRBars",
+     lambda real: _guard("gap_ledger.ibkr.IBKRBars", real)),
 )
 
 

@@ -25,6 +25,7 @@ from typing import Optional
 
 from .. import market_index
 from .bars import YFinanceBars
+from .ibkr import IBKRBars, IBKRUnavailable
 from .config import DEFAULT_CONFIG, DEFAULT_ROOT, DEFAULT_RUN_TIME, GapConfig, at_ny, now_ny
 from .explain import build_runner
 from .ledger import ledger_days, read_all, read_day
@@ -101,15 +102,25 @@ def cmd_run(args) -> int:
     company_names = names_from_index(config_path=args.index_config)
 
     bars = YFinanceBars(config)
+    # GAP-IBKR-1 — built here and handed in, so the run entry stays factory-free. An
+    # unreachable gateway is NOT fatal: the adapter connects lazily, so construction cannot
+    # fail on a missing gateway, and the run reports the banner when a request does.
+    ibkr = None if args.no_ibkr else IBKRBars()
     news_source = None if args.no_news else EODHDNews()
     runner = build_runner() if args.explain else None
     client = None if args.no_todoist else RestTodoist()
 
-    result = run_screen(pool=pool, pool_source=pool_source, daily=bars, intraday=bars,
-                        day=day, run_at=run_at, config=config, root=args.root,
-                        news_source=news_source, company_names=company_names,
-                        explain_runner=runner, todoist=client,
-                        write=not args.dry_run, refresh=args.refresh, progress=_say)
+    try:
+        result = run_screen(pool=pool, pool_source=pool_source, daily=bars, intraday=bars,
+                            day=day, run_at=run_at, config=config, root=args.root,
+                            news_source=news_source, company_names=company_names,
+                            ibkr=ibkr, explain_runner=runner, todoist=client,
+                            write=not args.dry_run, refresh=args.refresh, progress=_say)
+    finally:
+        # Hang up whatever happened. A gateway session left open blocks the client id for
+        # the next run, and ``disconnect`` never raises.
+        if ibkr is not None:
+            ibkr.disconnect()
     _say("")
     _say(format_report(result))
     return 0
@@ -195,6 +206,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="skip EODHD news; every name is marked 'news not fetched'")
     p_run.add_argument("--no-todoist", action="store_true",
                        help="do not create a Todoist task")
+    p_run.add_argument("--no-ibkr", action="store_true",
+                       help="skip Interactive Brokers verification; screen on yfinance "
+                            "prices with the tape-density trust tests (the report says so)")
     p_run.add_argument("--refresh", action="store_true",
                        help="ignore the cached daily bars and refetch them")
     p_run.add_argument("--dry-run", action="store_true",
