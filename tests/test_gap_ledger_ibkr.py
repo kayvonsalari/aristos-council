@@ -25,6 +25,13 @@ import pytest
 from aristos_council.gap_ledger import ibkr
 from aristos_council.gap_ledger.config import NY, at_ny
 
+# The adapter reaches for ``ib_async`` at call time — ``_contract`` imports ``Stock`` — so an
+# injected IB handle is not enough to run these without the module. It is an OPTIONAL extra
+# (``pip install -e ".[ibkr]"``), so a clean checkout skips this file rather than failing it;
+# CI installs the extra, so there these run. Declared the way the rest of the repo declares an
+# optional dependency (docs/TESTING.md).
+pytest.importorskip("ib_async")
+
 pytestmark = pytest.mark.real_adapter
 
 DAY = date(2026, 9, 22)

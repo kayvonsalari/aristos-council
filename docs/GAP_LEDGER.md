@@ -134,6 +134,10 @@ column still load (an absent value reads as missing, never as 0).
 
 ## Interactive Brokers verifies the gap (GAP-IBKR-1)
 
+```bash
+pip install -e ".[ibkr]"      # ib_async — optional, and only Gap Ledger uses it
+```
+
 yfinance publishes no pre-market volume, so everything above is inference. A local **IB Gateway**
 (read-only, port 4001) serves 5-minute TRADES bars *with* volume, and every name yfinance says
 gapped is checked against it — **including the ones the trust tests abstained on**, because those
@@ -324,9 +328,14 @@ threshold change can never silently reinterpret yesterday's record.
 
 ## Testing
 
-No test reaches a live provider: `gap_ledger.bars.YFinanceBars` is registered with the
-TEST-ISOLATION-1 guard in `tests/conftest.py` alongside the market-data factories, so
-constructing one inside the suite raises. Tests inject `tests/gap_ledger_fakes.py`, whose
+`tests/test_gap_ledger_ibkr.py` needs the optional extra — the adapter imports `ib_async` at
+call time (`_contract` reaches for `Stock`), so an injected IB handle is not enough to run it
+without the module. It therefore opens with `pytest.importorskip("ib_async")`: a clean checkout
+**skips** that file rather than failing it, and CI installs `.[dev,ibkr]` so there it runs.
+
+No test reaches a live provider: `gap_ledger.bars.YFinanceBars` and `gap_ledger.ibkr.IBKRBars`
+are both registered with the TEST-ISOLATION-1 guard in `tests/conftest.py` alongside the
+market-data factories, so constructing one inside the suite raises. Tests inject `tests/gap_ledger_fakes.py`, whose
 fakes also **record what they were asked for** — which is how the two-pass fetch and the
 day-cache window rule are tested at all.
 
