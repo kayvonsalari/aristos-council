@@ -501,6 +501,12 @@ class BuildOutcome:
     charged: int = 0
     budget: int = DEFAULT_BUDGET
     venues_seen: dict = field(default_factory=dict)
+    # MARKET-INDEX-SKIP-1 - exchanges whose LISTING could not be fetched, with the reason.
+    # One unlistable exchange used to end the whole build: on 2026-09-22 the European run
+    # died at Milan (EODHD /exchange-symbol-list/MI answered HTTP 404) and never attempted
+    # the exchanges after it. A listing that fails is a fact about one venue, not about the
+    # build.
+    skipped_exchanges: list = field(default_factory=list)
     stopped: str = ""
 
     def summary(self) -> str:
@@ -509,7 +515,18 @@ class BuildOutcome:
                 f"{self.dropped_venue} dropped on venue, {self.failed} failed; "
                 f"{self.requests} request(s) = {self.charged:,} charged of "
                 f"{self.budget:,}")
+        if self.skipped_exchanges:
+            head += f". {self.skipped_sentence()}"
         return head + (f" - STOPPED: {self.stopped}" if self.stopped else ".")
+
+    def skipped_sentence(self) -> str:
+        """``1 exchange skipped: MI, HTTP 404`` - named, so a missing market is never
+        inferred from a short table."""
+        if not self.skipped_exchanges:
+            return ""
+        word = "exchange" if len(self.skipped_exchanges) == 1 else "exchanges"
+        detail = "; ".join(f"{code}, {reason}" for code, reason in self.skipped_exchanges)
+        return f"{len(self.skipped_exchanges)} {word} skipped: {detail}"
 
     def venue_lines(self) -> list[str]:
         """Every venue string seen, with a count - once per build, so a venue nobody
@@ -579,7 +596,21 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
         for exchange in outcome.exchanges:
             allowed = [str(v).upper() for v in (venues.get(exchange.upper()) or [])]
             say(f"{exchange}: listing common stocks...")
-            listings = source.common_stocks(exchange)
+            try:
+                listings = source.common_stocks(exchange)
+            except QuotaExhausted:
+                # A quota is a STOP, not a skip: continuing would burn the remaining
+                # exchanges against an allowance that is already gone.
+                raise
+            except MarketIndexError as exc:
+                # MARKET-INDEX-SKIP-1 - this ONE venue could not be listed. Record it,
+                # name it, and carry on with the rest: the alternative cost an entire
+                # European build on 2026-09-22 because Milan answered 404.
+                reason = str(exc).split(": ", 1)[-1] or type(exc).__name__
+                outcome.skipped_exchanges.append((exchange, reason))
+                say(f"{exchange}: SKIPPED - listing failed ({reason}); continuing with "
+                    f"the remaining exchanges")
+                continue
             outcome.listed += len(listings)
 
             # Every venue string seen, counted - including the ones about to be dropped,
@@ -1156,6 +1187,11 @@ def _cmd_build(args) -> int:
     for line in outcome.venue_lines():
         _say("  " + line if not line.endswith(":") else line)
     _say(outcome.summary())
+    if outcome.skipped_exchanges:
+        # Said again, on its own line: the summary is one line at the end of a log that can
+        # run to thousands, and a market silently missing from the table is the kind of
+        # thing that gets noticed months later.
+        _say(f"NOTE: {outcome.skipped_sentence()}")
     if outcome.stopped and "limit" not in outcome.stopped:
         # The exact command that picks up where this one stopped - a resume instruction a
         # reader has to reconstruct is one they will get wrong at 4,000 rows in.

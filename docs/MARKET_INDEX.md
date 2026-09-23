@@ -56,6 +56,17 @@ so an interruption can never leave a truncated table where a readable one was. I
 off on HTTP 429 (a rate limit is "wait") and stops cleanly on 402/403 (a quota is "stop"),
 reporting how far it got and how many calls it used.
 
+**An exchange whose listing fails is skipped, not fatal (MARKET-INDEX-SKIP-1).** One
+unlistable venue used to end the whole run — on 2026-09-22 the European build died at Milan
+(`/exchange-symbol-list/MI` → HTTP 404) and never attempted the exchanges after it. Such an
+exchange is now skipped, named in the build log and counted in the summary ("4 exchanges
+skipped: MI, HTTP 404; …"), and the rest of the build proceeds; a *quota* refusal still stops
+everything. Probing `/exchanges-list` on 2026-09-23 (70 exchanges) showed **MI, HK, T and KS
+are all absent on this plan** — there is no Italian exchange in the list at all, so `MI` is not
+a mis-spelled code. All four stay in `market_index.yaml` on purpose, because that file records
+which venues the index is *meant* to track and deleting them would shrink the peer universe
+silently; the cost is four listing requests per build, reported every time.
+
 `market_index.yaml` is tracked and lists the venues. The built table is **not** tracked —
 it is machine-generated and rebuildable, like the cohorts under `data/local/cohorts/`.
 
