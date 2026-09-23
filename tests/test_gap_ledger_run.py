@@ -98,8 +98,11 @@ def test_history_is_not_fetched_at_all_when_nothing_gapped(tmp_path):
 
 
 def test_quotes_are_only_asked_for_the_gappers(tmp_path):
+    """``live=True`` explicitly: a book is only read for a run screening THIS morning, so
+    without it this test would pass or fail depending on what today's date happens to be.
+    (It did exactly that once the clock rolled past the fixture's DAY.)"""
     bars = _world()
-    _run(bars, tmp_path)
+    _run(bars, tmp_path, live=True)
     assert bars.quote_calls == [("MOVE",)]
 
 

@@ -88,6 +88,50 @@ read the book at all — a book is a snapshot of now, so the mark is "spread unk
 historical run". (Live, 2026-09-22: a backfill of 2026-09-21 marked RIOT "wide spread 52.42%"
 from a pre-dawn book that had nothing to do with the morning being screened.)
 
+**A gap is only evaluated when the price behind it is trustworthy (GAP-PRICE-TRUST-1).** The
+first full run gave 98 candidates and roughly 80 were junk — XEL +11%, LNT +12% on no news,
+dozens of spreads at 40-57% — because with no pre-market volume one odd print reads as a gap
+and nothing contradicts it. The spread turned out *not* to be the test (ALNY: 1.99% spread and
+junk, opening 21% away; VKTX: 7.28% and the day's most genuine mover), so it is a loose
+configurable backstop at `max_trusted_spread` = 10%.
+
+**What separates a real move from a stray print is tape density**, measured against the live
+2026-09-22 tape for the twelve names above. yfinance *omits* a five-minute slot in which nothing
+traded rather than forward-filling it, so the number of bars in a window **is** the number of
+printed intervals:
+
+| | bars in the final 30 min | bars in the 5h window |
+|---|---|---|
+| junk (7 names) | 1, 1, 1, 1, 1, 2, 3 | 2 – 13 |
+| genuine (5 names) | 6, 6, 6, 6, 6 | 55 – 60 |
+
+Six is the ceiling for a 30-minute window, so every genuine mover printed in *every* slot of the
+final half hour. This is effectively a **volume proxy** — it partially restores the leg the
+provider will not serve. So a price is trusted when it has at least `min_premarket_prints` = 2
+prints, at least `min_confirm_prints` = 4 of the final six slots filled, and a last print within
+`max_confirm_drift` = 5% of their average. Each failure abstains with its own reason — `single
+pre-market print`, `last print not confirmed`, `spread above limit` — so the CSV says which test
+fired. All are NOT-EVALUATED **markings**, never rejections, and an untrusted name never enters
+the control group: an unbelievable price is a missing reading about a name, not a finding about it.
+
+> Two thresholds are **deliberately not** what the brief sketched, because the live tape
+> contradicted it. Counting *distinct prices* rather than prints does not catch a sparse tape at
+> all (XEL's five bars carried five different prices), and a **1%** drift limit rejects genuine
+> movers while passing strays — five of the seven junk names scored 0.000% drift, since a
+> one-bar window agrees with itself perfectly, whereas VKTX scored 2.797% and ONON 1.128%. On
+> the twelve cited names the shipped gate keeps all five genuine movers and abstains on all
+> seven junk ones.
+
+`outcomes` fills a `premarket_vs_open` column — the pre-market price against the 09:30 open, as
+a signed fraction. That is how these thresholds get tuned, and old CSVs written before the
+column still load (an absent value reads as missing, never as 0).
+
+> **Open question — pre-market coverage.** On 2026-09-22, **234** step-1 survivors had no
+> pre-market print at all, including **AIG, AMT and AFL**. That is suspicious for companies of
+> that size and it is not yet explained; it may be a genuine absence of extended-hours trade,
+> or a gap in what yfinance serves. The run summary states the count every day so the question
+> stays visible instead of being inferred from a short list.
+
 **Two fetch passes.** The relative volume needs twenty sessions of 5-minute bars per name;
 fetching that for every liquid US stock, to produce a list of a handful, is about two orders
 of magnitude more data than the run needs. So pass A reads today's bars for every step-1

@@ -177,14 +177,20 @@ def test_wide_spread_is_marked_and_tight_is_marked_too():
     assert spread_flag(0.0005) == "spread ok"
 
 
-def test_a_missing_or_wide_spread_never_drops_the_name():
-    """Both readings are marks. The gap and the volume decide; the spread only describes."""
+def test_a_missing_or_merely_wide_spread_never_drops_the_name():
+    """A missing spread, and a spread over the 0.1% MARK but under the trust limit, are both
+    only marks: the gap and the volume decide. GAP-PRICE-TRUST-1 later added a loose
+    backstop above ``max_trusted_spread`` (10%) that DOES abstain — see
+    ``test_gap_ledger_price_trust.py``; it is deliberately far above "wide"."""
     bars = (intraday_window(DAY, end=time(9, 0), price=55.0, volume_per_bar=10_000)
             + prior_sessions(before=DAY, count=20, premarket_volume_per_bar=1_000))
-    for quote in (None, Quote(bid=50.0, ask=60.0)):
+    for quote in (None, Quote(bid=54.9, ask=55.1)):          # 0.36% — wide, not untrusted
         row = screen_one("AAA", bars=bars, previous_close=50.0, as_of=DAY, run_at=RUN_AT,
                          quote=quote)
         assert row.passed is True, row.reason
+    marked = screen_one("AAA", bars=bars, previous_close=50.0, as_of=DAY, run_at=RUN_AT,
+                        quote=Quote(bid=54.9, ask=55.1))
+    assert "wide spread" in marked.spread_note
 
 
 # --------------------------------------------------------------------------- #

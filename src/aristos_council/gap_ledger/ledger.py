@@ -60,6 +60,12 @@ class LedgerRow:
     premarket_price: Optional[float] = None
     gap_pct: Optional[float] = None
     premarket_volume: Optional[int] = None
+    # GAP-PRICE-TRUST-1 — how many DISTINCT prices the window held, and whether the last
+    # print was confirmed by the final half hour. The two readings that decide whether the
+    # gap is believable at all.
+    premarket_prints: Optional[int] = None
+    confirm_prints: Optional[int] = None
+    confirm_average: Optional[float] = None
     baseline_median_volume: Optional[float] = None
     baseline_sessions: Optional[int] = None
     relative_volume: Optional[float] = None
@@ -95,6 +101,10 @@ class LedgerRow:
     price_1000: Optional[float] = None
     price_1130: Optional[float] = None
     close_price: Optional[float] = None
+    # GAP-PRICE-TRUST-1 diagnostic: the pre-market price against the 09:30 open, as a
+    # fraction. This is how the trust thresholds get tuned — it measures directly how often
+    # the pre-market print was junk. Blank on rows written before the column existed.
+    premarket_vs_open: Optional[float] = None
     outcome_note: str = ""
     outcomes_filled_at_et: str = ""
 
@@ -106,6 +116,10 @@ class LedgerRow:
     cfg_min_relative_volume: Optional[float] = None
     cfg_require_relative_volume: str = ""
     cfg_wide_spread: Optional[float] = None
+    cfg_max_trusted_spread: Optional[float] = None
+    cfg_min_premarket_prints: Optional[int] = None
+    cfg_min_confirm_prints: Optional[int] = None
+    cfg_max_confirm_drift: Optional[float] = None
     cfg_news_lookback_hours: Optional[int] = None
 
     @property
@@ -120,11 +134,13 @@ FIELDS: tuple[str, ...] = tuple(f.name for f in fields(LedgerRow))
 
 _FLOATS = {"previous_close", "average_volume", "premarket_price", "gap_pct",
            "baseline_median_volume", "relative_volume", "spread_pct", "open_price",
-           "price_1000", "price_1130", "close_price", "cfg_min_price",
-           "cfg_min_avg_volume", "cfg_min_abs_gap", "cfg_min_relative_volume",
-           "cfg_wide_spread"}
+           "price_1000", "price_1130", "close_price", "premarket_vs_open",
+           "confirm_average", "cfg_min_price", "cfg_min_avg_volume", "cfg_min_abs_gap",
+           "cfg_min_relative_volume", "cfg_wide_spread", "cfg_max_trusted_spread",
+           "cfg_max_confirm_drift"}
 _INTS = {"history_days", "premarket_volume", "baseline_sessions", "headline_count",
-         "related_count", "cfg_min_history_days", "cfg_news_lookback_hours"}
+         "related_count", "premarket_prints", "confirm_prints", "cfg_min_history_days",
+         "cfg_min_premarket_prints", "cfg_min_confirm_prints", "cfg_news_lookback_hours"}
 
 
 # --------------------------------------------------------------------------- #

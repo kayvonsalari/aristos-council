@@ -41,7 +41,8 @@ from .explain import NO_REASON, ExplainOutcome, explanations
 from .ledger import (GROUP_BASELINE, GROUP_CANDIDATE, LedgerRow, et_stamp,
                      sample_baseline, write_day)
 from .news import Headline, MatchedNews, NewsSource, gather_news
-from .screen import SPREAD_HISTORICAL, SPREAD_UNKNOWN, ScreenRow, screen_one
+from .screen import (NO_PREMARKET_PRICE_REASONS, SPREAD_HISTORICAL,
+                     SPREAD_UNKNOWN, ScreenRow, is_price_untrusted, screen_one)
 from .todoist import DeliveryOutcome, TodoistClient, deliver
 from .universe import (NO_DAILY_BARS, PreFilterResult, PreFilterRow, pre_filter,
                        split_common_stock)
@@ -97,6 +98,12 @@ class RunResult:
     # How many names the provider served nothing for. Its own per-ticker ERROR lines are
     # suppressed (``bars.quiet_yfinance``), so this is where that information lives.
     no_provider_data: int = 0
+    # GAP-PRICE-TRUST-1 — how many step-1 survivors had NO pre-market print at all, whether
+    # the provider served no bars or served bars outside the window. 234 of them on
+    # 2026-09-22, including AIG, AMT and AFL, which is suspicious for names that size;
+    # recorded so the question stays visible rather than being inferred from a gap in the
+    # list. See docs/GAP_LEDGER.md.
+    no_premarket_trade: int = 0
     pre_filtered: PreFilterResult = field(default_factory=PreFilterResult)
     gapped: int = 0
     screened: dict[str, ScreenRow] = field(default_factory=dict)
@@ -184,6 +191,9 @@ def build_row(*, day: date, run_at: datetime, group: str, pre: Optional[PreFilte
         row.baseline_sessions = screen.baseline_sessions
         row.relative_volume = screen.relative_volume
         row.relative_volume_note = screen.relative_volume_note
+        row.premarket_prints = screen.premarket_prints
+        row.confirm_prints = screen.confirm_prints
+        row.confirm_average = screen.confirm_average
         row.spread_pct = screen.spread
         row.spread_note = screen.spread_note
         row.screen_passed = "" if screen.passed is None else str(screen.passed).lower()
@@ -257,8 +267,19 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                            config=config)
         for ticker in survivors
     }
+    result.no_premarket_trade = sum(1 for row in first_pass.values()
+                                    if row.reason in NO_PREMARKET_PRICE_REASONS)
+    if result.no_premarket_trade:
+        progress(f"{result.no_premarket_trade} of {len(survivors)} had no pre-market print "
+                 f"in the window")
+    # A gapper must have a gap AND a price worth believing (GAP-PRICE-TRUST-1) — an
+    # untrustworthy price makes the twenty-session volume fetch pointless as well as the
+    # thresholds. The test is the TRUST reason specifically, not ``passed is None``: this
+    # pass has only today's bars, so it abstains on relative volume by construction, and
+    # reading that as untrustworthy would stop every name reaching the second pass.
     gappers = [t for t, row in first_pass.items()
-               if row.gap is not None and abs(row.gap) >= config.min_abs_gap]
+               if row.gap is not None and abs(row.gap) >= config.min_abs_gap
+               and not is_price_untrusted(row)]
     result.gapped = len(gappers)
     progress(f"{len(gappers)} gapped at least {config.min_abs_gap * 100:.1f}%")
 
@@ -302,11 +323,14 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
         runner=explain_runner)
 
     # -- step 4, the control group ----------------------------------------- #
-    # Step-1 survivors that did not become candidates AND whose gap could be read — see
-    # the module docstring for why an unreadable gap is not a usable control.
+    # Step-1 survivors that were EVALUATED and rejected — ``passed is False``, never None.
+    # That one word carries two rules at once: a name whose gap could not be read has no
+    # direction and can never be scored (GAP-LEDGER-1), and a name whose pre-market price
+    # was not trustworthy is a missing reading rather than a finding, so it must not be
+    # compared against as though it were one (GAP-PRICE-TRUST-1).
     pool_for_baseline = [t for t in survivors
                          if t not in set(picks)
-                         and result.screened[t].gap is not None]
+                         and result.screened[t].passed is False]
     result.baseline_pool = len(pool_for_baseline)
     result.baseline = sample_baseline(pool_for_baseline, len(picks), day)
 
@@ -382,6 +406,12 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
         f"Step 2 — |gap| >= {cfg.min_abs_gap * 100:.1f}% and relative pre-market volume "
         f">= {cfg.min_relative_volume:.1f}x: {result.gapped} gapped, "
         f"{len(result.candidates)} candidate(s).",
+        f"        price trust — >= {cfg.min_premarket_prints} pre-market print(s), "
+        f">= {cfg.min_confirm_prints} of them in the final {cfg.confirm_window_minutes}min "
+        f"and the last within {cfg.max_confirm_drift * 100:.0f}% of their average, "
+        f"spread <= {cfg.max_trusted_spread * 100:.0f}%.",
+        f"        {result.no_premarket_trade} of "
+        f"{len(result.pre_filtered.passed)} had no pre-market print at all.",
     ]
     if result.volume_note:
         # Said ONCE, at the top, where it cannot be missed: an absent section or a repeated

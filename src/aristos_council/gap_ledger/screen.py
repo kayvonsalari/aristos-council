@@ -31,7 +31,7 @@ not computable is excluded with that as its stated reason — it is never quietl
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from statistics import median
 from typing import Iterable, Optional, Sequence
 
@@ -178,6 +178,159 @@ SPREAD_UNKNOWN = "spread unknown"
 SPREAD_HISTORICAL = "spread unknown — historical run, a book cannot be read retroactively"
 
 
+# --------------------------------------------------------------------------- #
+# GAP-PRICE-TRUST-1 — is the pre-market price worth believing at all?
+# --------------------------------------------------------------------------- #
+# The first full run produced 98 candidates and roughly 80 were junk: XEL +11%, LNT +12% on
+# no news, dozens of spreads at 40-57%. With no pre-market volume published, ONE odd print
+# reads as a gap and nothing contradicts it.
+#
+# The spread turned out NOT to be the test. Measured on 2026-09-22: ALNY showed a 1.99%
+# spread and was junk (it opened 21% away from its pre-market price), while VKTX showed 7.28%
+# and was the day's most genuine mover. So the spread is a loose backstop and these two are
+# the decisive readings:
+#
+# What separates them, MEASURED on the twelve named names against the live 2026-09-22
+# tape, is TAPE DENSITY. yfinance omits a five-minute slot in which nothing traded — it
+# does not forward-fill — so the number of bars in a window IS the number of printed
+# intervals:
+#
+#             bars in the final 30 min      bars in the 5h window
+#   junk      1, 1, 1, 1, 1, 2, 3           2 - 13
+#   genuine   6, 6, 6, 6, 6                 55 - 60
+#
+# Six is the most a 30-minute window can hold, so every genuine mover printed in EVERY
+# slot of the final half hour. This is effectively a volume proxy — the leg the provider
+# will not serve.
+#
+#   (a) more than one print in the window at all.
+#   (b) the last print CONFIRMED: enough prints around it to confirm anything, and
+#       agreement with them. The density half is the decisive one — drift alone does not
+#       discriminate, because a one-bar window agrees with itself perfectly (five of the
+#       seven junk names scored 0.000% drift).
+#
+# Each failure gets its OWN reason, so the CSV says which test fired. And every one of them
+# is a NOT-EVALUATED marking, never a rejection: an untrustworthy price is a missing reading
+# about the name, not a finding about it, so it may not enter the control group either.
+# The two spellings of "we have no pre-market print for this name": the provider served no
+# bars for today at all, or it served bars but none inside the window. Constants because
+# ``run`` counts them for the summary, and counting by matching prose is how a message edit
+# silently turns a count into a zero.
+#
+# They are counted TOGETHER. From the owner's side they are one phenomenon — 234 names on
+# 2026-09-22, including AIG, AMT and AFL, which is suspicious for companies that size — and
+# the open question is about the provider's extended-hours coverage, not about which of two
+# ways it declined. Separating them in the summary would hide the number behind a detail.
+NO_INTRADAY_BARS = "no intraday bars from the provider"
+NO_PREMARKET_TRADE = "no pre-market trade in the window"
+NO_PREMARKET_PRICE_REASONS = frozenset({NO_INTRADAY_BARS, NO_PREMARKET_TRADE})
+
+PRICE_SINGLE_PRINT = "single pre-market print"
+PRICE_NOT_CONFIRMED = "last print not confirmed"
+PRICE_WIDE_SPREAD = "spread above limit"
+
+# The trust abstentions, as a set, because a caller needs to distinguish THEM from the other
+# reasons a row can carry ``passed is None``. Specifically: the first fetch pass has only
+# today's bars, so it cannot judge relative volume and abstains on it by construction —
+# treating that as "untrustworthy" would stop every name reaching the second pass.
+PRICE_TRUST_REASONS = frozenset({PRICE_SINGLE_PRINT, PRICE_NOT_CONFIRMED,
+                                 PRICE_WIDE_SPREAD})
+
+
+def is_price_untrusted(row) -> bool:
+    """Did the TRUST gate abstain on this row (as opposed to anything else abstaining)?"""
+    return getattr(row, "reason", "") in PRICE_TRUST_REASONS
+
+
+def premarket_prints(bars: Iterable[IntradayBar], start: datetime, end: datetime) -> int:
+    """How many five-minute intervals actually PRINTED in the window.
+
+    Bars, not distinct prices. The first cut of this counted distinct prices, on the theory
+    that a quiet tape is forward-filled into many bars carrying one number — which is not
+    what this provider does. It OMITS a slot in which nothing traded, so XEL's stray +11%
+    arrived as five bars over five hours with five different prices, and counting prices
+    called that five prints and trusted it.
+    """
+    return len(bars_in(bars, start, end))
+
+
+def confirm_prints(bars: Iterable[IntradayBar], end: datetime, *,
+                   minutes: int = DEFAULT_CONFIG.confirm_window_minutes) -> int:
+    """How many intervals printed in the final ``minutes`` of the window.
+
+    The decisive reading: six is the ceiling for a 30-minute window, every genuine mover in
+    the sample hit six, and no junk name exceeded three.
+    """
+    return len(bars_in(bars, end - timedelta(minutes=minutes), end))
+
+
+def confirmation_average(bars: Sequence[IntradayBar], end: datetime, *,
+                         minutes: int = DEFAULT_CONFIG.confirm_window_minutes
+                         ) -> Optional[float]:
+    """The average price over the last ``minutes`` of the window, or None when it is empty.
+
+    Volume-weighted where the provider serves volume, and a simple mean where it does not —
+    which on yfinance is always, since extended-hours volume comes back as zero. The
+    fallback is explicit rather than incidental: a VWAP with a zero denominator is not a
+    small number, it is not a number.
+    """
+    inside = bars_in(bars, end - timedelta(minutes=minutes), end)
+    if not inside:
+        return None
+    volume = sum(int(b.volume) for b in inside)
+    if volume > 0:
+        return sum(float(b.close) * int(b.volume) for b in inside) / volume
+    return sum(float(b.close) for b in inside) / len(inside)
+
+
+def confirmed(price: Optional[float], average: Optional[float], *,
+              tolerance: float = DEFAULT_CONFIG.max_confirm_drift) -> Optional[bool]:
+    """Does the last print agree with the average around it? None when it cannot be asked."""
+    if price is None or average is None or average <= 0:
+        return None
+    return abs(price / average - 1.0) <= tolerance
+
+
+@dataclass(frozen=True)
+class PriceTrust:
+    """Whether the pre-market price is worth believing, and the readings behind the answer."""
+
+    reason: str = ""                     # "" when trusted
+    prints: Optional[int] = None
+    confirming: Optional[int] = None
+    average: Optional[float] = None
+
+    @property
+    def trusted(self) -> bool:
+        return not self.reason
+
+
+def price_trust(bars: Sequence[IntradayBar], *, price: Optional[float], start: datetime,
+                end: datetime, spread: Optional[float],
+                config: GapConfig = DEFAULT_CONFIG) -> PriceTrust:
+    """Is this pre-market price believable? Each failure carries its OWN reason, so the
+    record says which test fired.
+
+    A spread the provider did not give is NOT a failure (the same never-drop-on-unknown
+    discipline as everywhere else); only a spread that is present and over the limit is.
+    """
+    prints = premarket_prints(bars, start, end)
+    confirming = confirm_prints(bars, end, minutes=config.confirm_window_minutes)
+    average = confirmation_average(bars, end, minutes=config.confirm_window_minutes)
+    readings = dict(prints=prints, confirming=confirming, average=average)
+    if prints < config.min_premarket_prints:
+        return PriceTrust(PRICE_SINGLE_PRINT, **readings)
+    # Too few prints around the last one to confirm it. This is the junk signature, and the
+    # reason a drift test on its own is worthless: one bar agrees with itself perfectly.
+    if confirming < config.min_confirm_prints:
+        return PriceTrust(PRICE_NOT_CONFIRMED, **readings)
+    if confirmed(price, average, tolerance=config.max_confirm_drift) is False:
+        return PriceTrust(PRICE_NOT_CONFIRMED, **readings)
+    if spread is not None and spread > config.max_trusted_spread:
+        return PriceTrust(PRICE_WIDE_SPREAD, **readings)
+    return PriceTrust("", **readings)
+
+
 def spread_flag(spread: Optional[float], config: GapConfig = DEFAULT_CONFIG, *,
                 unknown_note: str = SPREAD_UNKNOWN) -> str:
     """The mark that goes in the record: unknown, wide, or tight. Never a drop."""
@@ -210,6 +363,10 @@ class ScreenRow:
     # computed — so a candidate carrying this mark was selected on its GAP ALONE, and the
     # mark is what stops that being mistaken for a gap-and-volume selection.
     relative_volume_note: str = ""
+    # GAP-PRICE-TRUST-1 — the readings that decide whether the gap is believable.
+    premarket_prints: Optional[int] = None
+    confirm_prints: Optional[int] = None
+    confirm_average: Optional[float] = None
     spread: Optional[float] = None
     spread_note: str = ""
     window_start: Optional[datetime] = None
@@ -229,11 +386,16 @@ def screen_one(ticker: str, *, bars: Sequence[IntradayBar], previous_close: Opti
                config: GapConfig = DEFAULT_CONFIG) -> ScreenRow:
     """The whole of step 2 for one name.
 
-    Order matters: the gap is checked first because it is the cheaper and more decisive
-    reading, and a name that did not gap needs no volume baseline at all. The spread is
-    read LAST and never gates — it is recorded on every row that got that far, including
-    rejected ones, because "it gapped 8% on 1.2x volume with a 4% spread" is exactly the
-    sort of thing worth being able to look back at.
+    Order matters. The pre-market price is established first, then TRUSTED or not
+    (GAP-PRICE-TRUST-1) — an untrustworthy price makes every threshold below it moot, so it
+    abstains there and the twenty-session volume history is never fetched for it. Then the
+    gap, which is the cheaper and more decisive threshold: a name that did not gap needs no
+    volume baseline at all.
+
+    The spread is read early because the trust gate uses it as a loose backstop, but it
+    still never rejects on its own account: it is recorded on every row that got that far,
+    including rejected ones, because "it gapped 8% on 1.2x volume with a 4% spread" is
+    exactly the sort of thing worth being able to look back at.
     """
     start, end = premarket_window(as_of, run_at)
     spread = spread_percent(quote)
@@ -245,15 +407,27 @@ def screen_one(ticker: str, *, bars: Sequence[IntradayBar], previous_close: Opti
         return ScreenRow(ticker, None, "run time is before the 04:00 ET pre-market open",
                          **common)
     if not bars:
-        return ScreenRow(ticker, None, "no intraday bars from the provider", **common)
+        return ScreenRow(ticker, None, NO_INTRADAY_BARS, **common)
 
     price = last_price(bars, start, end)
     if price is None:
-        return ScreenRow(ticker, None, "no pre-market trade in the window", **common)
+        return ScreenRow(ticker, None, NO_PREMARKET_TRADE, **common)
     gap = gap_fraction(price, previous_close)
     if gap is None:
         return ScreenRow(ticker, None, "no usable previous close", premarket_price=price,
                          **common)
+
+    # GAP-PRICE-TRUST-1 — a gap is EVALUATED only when the price behind it is worth
+    # believing. This runs before the thresholds, and before the twenty-session volume
+    # history is ever fetched, because an untrustworthy price makes both moot. The gap is
+    # still RECORDED on the row: it is what the outcomes diagnostic measures against.
+    verdict = price_trust(bars, price=price, start=start, end=end, spread=spread,
+                          config=config)
+    trust = dict(premarket_prints=verdict.prints, confirm_prints=verdict.confirming,
+                 confirm_average=verdict.average)
+    if not verdict.trusted:
+        return ScreenRow(ticker, None, verdict.reason, premarket_price=price, gap=gap,
+                         **trust, **common)
 
     volume = window_volume(bars, start, end)
     baseline = baseline_volumes(bars, as_of=as_of, window_end=end.time(),
@@ -262,7 +436,7 @@ def screen_one(ticker: str, *, bars: Sequence[IntradayBar], previous_close: Opti
     mid = float(median(baseline)) if baseline else None
     measured = dict(premarket_price=price, gap=gap, premarket_volume=volume,
                     baseline_median_volume=mid, baseline_sessions=len(baseline),
-                    relative_volume=ratio, **common)
+                    relative_volume=ratio, **trust, **common)
 
     if abs(gap) < config.min_abs_gap:
         return ScreenRow(ticker, False,
