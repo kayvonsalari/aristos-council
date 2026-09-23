@@ -39,16 +39,36 @@ def daily_series(*, end: date, sessions: int, close: float = 50.0,
 
 
 def intraday_window(day: date, *, start: time = time(4, 0), end: time = time(9, 0),
-                    price: float = 50.0, volume_per_bar: int = 1_000) -> list[IntradayBar]:
-    """5-minute bars across [start, end) on ``day``, all at ``price``."""
+                    price: float = 50.0, volume_per_bar: int = 1_000,
+                    every_minutes: int = 5) -> list[IntradayBar]:
+    """A DENSE 5-minute tape across [start, end) on ``day``, all at ``price``.
+
+    Dense is what makes it trustworthy: GAP-PRICE-TRUST-1 counts PRINTED INTERVALS, because
+    the provider omits a five-minute slot in which nothing traded rather than forward-filling
+    it. Use ``sparse_window`` for the untrustworthy shape.
+    """
     out: list[IntradayBar] = []
     when = at_ny(day, start)
     stop = at_ny(day, end)
     while when < stop:
         out.append(IntradayBar(start=when, open=price, high=price, low=price,
                                close=price, volume=volume_per_bar))
-        when += timedelta(minutes=5)
+        when += timedelta(minutes=every_minutes)
     return out
+
+
+def sparse_window(day: date, *, price: float = 50.0, at: tuple = (time(4, 0), time(6, 30),
+                                                                 time(8, 40)),
+                  volume_per_bar: int = 0) -> list[IntradayBar]:
+    """A few scattered prints and nothing else — the shape of a stray pre-market move.
+
+    Measured on the live 2026-09-22 tape: XEL's +11% arrived as FIVE bars across five hours
+    and LKQ's +26% as two, while every genuine mover printed 55-60 bars with all six slots of
+    the final half hour filled. The prices differ from each other, which is exactly why
+    counting distinct prices did not catch them.
+    """
+    return [IntradayBar(start=at_ny(day, moment), open=price, high=price, low=price,
+                        close=price, volume=volume_per_bar) for moment in at]
 
 
 def regular_session(day: date, *, price: float = 50.0,

@@ -24,6 +24,7 @@ and ``--tickers`` input (which bypasses the index entirely) is screened the same
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -45,6 +46,55 @@ US_MARKET = "US"
 # row behind it at all.
 _FUND_WORDS = ("etf", "fund", "trust - ", "index tracker")
 
+# GAP-UNIVERSE-1 — ticker SHAPES that are not common stock, whatever the index says.
+#
+# The market index classifies on EODHD's ``Type`` field, and EODHD calls all of these
+# "Common Stock": warrants, units, rights, when-issued lines and preferreds. They are not.
+# They have no pre-market tape worth screening, yfinance has no data for most of them, and
+# each one used to cost a line of provider error noise on every run. 196 of 5,972 US rows
+# on the 2026-09-22 index.
+#
+# The index is NOT changed — Aristos reads the same table, and reclassifying rows under it
+# is a separate decision with its own blast radius (see docs/GAP_LEDGER.md). This is a
+# Gap-Ledger-side filter on the TICKER, which is where the security type is legible.
+#
+# Derived from the actual suffix census of the index, not from memory. The danger in a
+# filter like this is the false positive, so note what is deliberately NOT here: a bare
+# trailing ``-A``/``-B``/``-C``/``-V``/``-H``/``-I`` is a genuine SHARE CLASS of common
+# stock (BF-B, AKO-A, AKO-B, CIG-C, MKC-V) and must survive. Only the preferred marker
+# ``P``/``PR`` before the class letter makes it a preferred (BA-P-A, PNFP-PR-A, FITB-PA).
+_NOT_COMMON_STOCK: tuple[tuple[str, str], ...] = (
+    # warrants: ACHR-WS, ACHR-WT, FDXF-W, NE-WTA, MBGL-WI (when-issued)
+    (r"-W(S|T|I)?[A-Z]?$", "warrant"),
+    # units: AIIA-U, BEBE-UN
+    (r"-UN?$", "unit"),
+    # preferreds, hyphenated and not: DCOM-P, BA-P-A, PNFP-PR-A, FITB-PA, AHL-PF.
+    # BEFORE the rights pattern: a preferred series R (C-P-R, Citigroup's) ends in "-R"
+    # and would otherwise be labelled a right. It is dropped either way, but the report
+    # prints the breakdown by kind, so a wrong label is a wrong number on the page.
+    (r"-P(R)?(-?[A-Z])?$", "preferred"),
+    # rights: AIIA-R, MPTI-R-W, CELG-RI
+    (r"-R(I|-W)?$", "right"),
+)
+
+# The NASDAQ five-letter form of a preferred: TFINP is TFIN-P, and the index carries both.
+# Kept SEPARATE from the patterns above because it is the one rule that can bite a real
+# company — "CHEAP" is five letters ending in P — so it is not applied on shape alone. It
+# fires only when the four-letter ROOT is itself in the same pool, which is what makes
+# TFINP a preferred of TFIN rather than a word. With no pool to corroborate against the
+# rule does not fire at all: screening a preferred costs one wasted lookup, and dropping a
+# real company costs a name nobody ever sees again.
+_FIVE_LETTER_PREFERRED = re.compile(r"^([A-Z]{4})P$")
+
+NOT_COMMON_STOCK = tuple((re.compile(pattern), label)
+                         for pattern, label in _NOT_COMMON_STOCK)
+
+
+# The one spelling of "the provider served nothing for this name". A constant because
+# ``run`` counts it for the summary line, and counting by matching prose is how a message
+# edit silently turns a count into a zero.
+NO_DAILY_BARS = "no daily bars from the provider"
+
 
 class UniverseUnavailable(RuntimeError):
     """The pool could not be established. Carries what the owner should do about it."""
@@ -60,6 +110,46 @@ def index_root(config_path: str | Path = market_index.DEFAULT_CONFIG) -> Path:
     malformed one as an error; this keeps that contract and only reaches for ``root``.
     """
     return Path(market_index.load_config(config_path)["root"])
+
+
+def not_common_stock_reason(ticker: str, *, known_roots: Optional[set] = None) -> str:
+    """``"warrant"`` / ``"unit"`` / ``"right"`` / ``"preferred"``, or ``""`` for a real stock.
+
+    GAP-UNIVERSE-1. Matched on the TICKER because that is where the US market spells the
+    security type; the index's own ``Type`` field calls all of these "Common Stock".
+
+    ``known_roots`` is the rest of the pool, and it gates the five-letter preferred rule
+    ONLY (see ``_FIVE_LETTER_PREFERRED``): TFINP is a preferred because TFIN is listed
+    beside it, where a five-letter word ending in P is just a ticker. Omit it and that one
+    rule stands down.
+    """
+    clean = (ticker or "").strip().upper()
+    for pattern, label in NOT_COMMON_STOCK:
+        if pattern.search(clean):
+            return label
+    match = _FIVE_LETTER_PREFERRED.match(clean)
+    if match and known_roots and match.group(1) in known_roots:
+        return "preferred"
+    return ""
+
+
+def split_common_stock(tickers) -> tuple[list[str], list[tuple[str, str]]]:
+    """``(kept, [(ticker, reason), ...])``. Order is preserved so a run stays reproducible.
+
+    Applied to EVERY pool, the index's and a ``--tickers`` file's alike. A hand-written
+    list naming a warrant gets told so rather than silently screened — the drop is counted
+    in the run summary, which is the opposite of silent.
+    """
+    roots = {(t or "").strip().upper() for t in tickers}
+    kept: list[str] = []
+    dropped: list[tuple[str, str]] = []
+    for ticker in tickers:
+        reason = not_common_stock_reason(ticker, known_roots=roots)
+        if reason:
+            dropped.append((ticker, reason))
+        else:
+            kept.append(ticker)
+    return kept, dropped
 
 
 def looks_like_fund(name: str, classification: str = "") -> bool:
@@ -116,6 +206,22 @@ def pool_from_index(*, config_path: str | Path = market_index.DEFAULT_CONFIG,
             f"the market index at {store.path} holds {len(rows)} rows but none is a US "
             f"common stock on {', '.join(venues)} — rebuild it, or pass `--tickers <file>`")
     return sorted({(row.yahoo_ticker or row.ticker).strip().upper() for row in kept})
+
+
+def names_from_index(*, config_path: str | Path = market_index.DEFAULT_CONFIG,
+                     venues: Sequence[str] = US_VENUES) -> dict[str, str]:
+    """``{ticker: company name}`` from the index, for the news matcher (GAP-NEWS-MATCH-1).
+
+    A separate read from ``pool_from_index`` so the pool stays a plain list of tickers and
+    nothing has to change shape. A missing index is NOT an error here: the caller has
+    already failed on it, or is screening a ``--tickers`` file, and the matcher degrades to
+    ticker-and-primary-symbol matching when it has no name.
+    """
+    store = market_index.IndexStore(index_root(config_path))
+    if not store.path.exists():
+        return {}
+    return {(row.yahoo_ticker or row.ticker).strip().upper(): row.name
+            for row in common_stock_rows(store.load(), venues=venues) if row.name}
 
 
 def read_ticker_file(path: str | Path) -> list[str]:
@@ -225,7 +331,7 @@ def pre_filter(tickers: Sequence[str], bars_by_ticker: dict[str, Sequence[PriceB
     result = PreFilterResult()
     for ticker in tickers:
         bars = bars_by_ticker.get(ticker)
-        row = (PreFilterRow(ticker, False, "no daily bars from the provider")
+        row = (PreFilterRow(ticker, False, NO_DAILY_BARS)
                if not bars else pre_filter_one(ticker, bars, as_of=as_of, config=config))
         (result.passed if row.passed else result.excluded).append(row)
     return result

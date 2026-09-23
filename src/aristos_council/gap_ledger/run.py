@@ -40,10 +40,12 @@ from .config import (DEFAULT_CONFIG, DEFAULT_RUN_TIME, DEFAULT_ROOT, GapConfig, 
 from .explain import NO_REASON, ExplainOutcome, explanations
 from .ledger import (GROUP_BASELINE, GROUP_CANDIDATE, LedgerRow, et_stamp,
                      sample_baseline, write_day)
-from .news import Headline, NewsSource, gather_news
-from .screen import SPREAD_HISTORICAL, SPREAD_UNKNOWN, ScreenRow, screen_one
+from .news import Headline, MatchedNews, NewsSource, gather_news
+from .screen import (NO_PREMARKET_PRICE_REASONS, SPREAD_HISTORICAL,
+                     SPREAD_UNKNOWN, ScreenRow, is_price_untrusted, screen_one)
 from .todoist import DeliveryOutcome, TodoistClient, deliver
-from .universe import PreFilterResult, PreFilterRow, pre_filter
+from .universe import (NO_DAILY_BARS, PreFilterResult, PreFilterRow, pre_filter,
+                       split_common_stock)
 
 _log = logging.getLogger(__name__)
 
@@ -89,6 +91,19 @@ class RunResult:
     config: GapConfig = DEFAULT_CONFIG
     pool_size: int = 0
     pool_source: str = ""
+    # GAP-UNIVERSE-1 — warrants, units, rights and preferreds the index calls "Common
+    # Stock". Dropped before any fetch, and COUNTED so the drop is visible rather than a
+    # pool that quietly shrank.
+    not_common_stock: list[tuple[str, str]] = field(default_factory=list)
+    # How many names the provider served nothing for. Its own per-ticker ERROR lines are
+    # suppressed (``bars.quiet_yfinance``), so this is where that information lives.
+    no_provider_data: int = 0
+    # GAP-PRICE-TRUST-1 — how many step-1 survivors had NO pre-market print at all, whether
+    # the provider served no bars or served bars outside the window. 234 of them on
+    # 2026-09-22, including AIG, AMT and AFL, which is suspicious for names that size;
+    # recorded so the question stays visible rather than being inferred from a gap in the
+    # list. See docs/GAP_LEDGER.md.
+    no_premarket_trade: int = 0
     pre_filtered: PreFilterResult = field(default_factory=PreFilterResult)
     gapped: int = 0
     screened: dict[str, ScreenRow] = field(default_factory=dict)
@@ -96,7 +111,7 @@ class RunResult:
     baseline: list[str] = field(default_factory=list)
     baseline_pool: int = 0
     rows: list[LedgerRow] = field(default_factory=list)
-    news: dict[str, list[Headline]] = field(default_factory=dict)
+    news: dict[str, MatchedNews] = field(default_factory=dict)
     news_enabled: bool = True
     explain: ExplainOutcome = field(default_factory=lambda: ExplainOutcome({}))
     delivery: DeliveryOutcome = field(default_factory=DeliveryOutcome)
@@ -129,20 +144,31 @@ class RunResult:
 # --------------------------------------------------------------------------- #
 # assembling a ledger row
 # --------------------------------------------------------------------------- #
-def _headline_fields(items: Sequence[Headline], *, enabled: bool) -> dict:
-    """The newest headline, flattened into the row. ``news_found`` is a MARK, never a drop."""
+def _headline_fields(news: Optional[MatchedNews], *, enabled: bool) -> dict:
+    """The newest MATCHED headline, flattened into the row.
+
+    GAP-NEWS-MATCH-1: only a story attributed to this name reaches the headline columns.
+    Stories the provider returned but that are about someone else are counted and kept in
+    the ``related_*`` columns — evidence about the tagging, never printed as this name's
+    news. ``news_found`` is a MARK, never a drop.
+    """
     if not enabled:
         return {"news_found": "news not fetched", "headline_count": None}
-    if not items:
-        return {"news_found": "no news found", "headline_count": 0}
-    top = items[0]
-    return {"news_found": "news found", "headline_count": len(items),
-            "headline": top.title, "news_source": top.source,
-            "news_published_et": top.published_ny, "news_link": top.link}
+    news = news or MatchedNews()
+    fields = {"news_found": news.found, "news_match": news.how,
+              "headline_count": len(news.matched), "related_count": len(news.related)}
+    if news.matched:
+        top = news.matched[0]
+        fields.update(headline=top.title, news_source=top.source,
+                      news_published_et=top.published_ny, news_link=top.link)
+    if news.related:
+        fields.update(related_headline=news.related[0].title,
+                      related_link=news.related[0].link)
+    return fields
 
 
 def build_row(*, day: date, run_at: datetime, group: str, pre: Optional[PreFilterRow],
-              screen: Optional[ScreenRow], headlines: Sequence[Headline],
+              screen: Optional[ScreenRow], headlines: Optional[MatchedNews],
               news_enabled: bool, reason: str, config: GapConfig) -> LedgerRow:
     """One CSV row out of the readings. Computes nothing — every number is copied."""
     row = LedgerRow(date=day.isoformat(), group=group, run_at_et=et_stamp(run_at),
@@ -165,6 +191,9 @@ def build_row(*, day: date, run_at: datetime, group: str, pre: Optional[PreFilte
         row.baseline_sessions = screen.baseline_sessions
         row.relative_volume = screen.relative_volume
         row.relative_volume_note = screen.relative_volume_note
+        row.premarket_prints = screen.premarket_prints
+        row.confirm_prints = screen.confirm_prints
+        row.confirm_average = screen.confirm_average
         row.spread_pct = screen.spread
         row.spread_note = screen.spread_note
         row.screen_passed = "" if screen.passed is None else str(screen.passed).lower()
@@ -183,6 +212,7 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                intraday: IntradaySource, day: Optional[date] = None,
                run_at: Optional[datetime] = None, config: GapConfig = DEFAULT_CONFIG,
                root: str | Path = DEFAULT_ROOT, news_source: Optional[NewsSource] = None,
+               company_names: Optional[dict] = None,
                explain_runner=None, todoist: Optional[TodoistClient] = None,
                write: bool = True, refresh: bool = False, live: Optional[bool] = None,
                progress: Progress = _noop) -> RunResult:
@@ -198,9 +228,16 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
     run_at = run_at or at_ny(day, DEFAULT_RUN_TIME)
     live = (day == now_ny().date()) if live is None else live
     spread_note = SPREAD_UNKNOWN if live else SPREAD_HISTORICAL
-    names = sorted({t.strip().upper() for t in pool if t and t.strip()})
-    result = RunResult(day=day, run_at=run_at, config=config, pool_size=len(names),
-                       pool_source=pool_source, news_enabled=news_source is not None)
+    offered = sorted({t.strip().upper() for t in pool if t and t.strip()})
+    # GAP-UNIVERSE-1 — before any fetch, because the point is not to ask the provider
+    # about a warrant at all.
+    names, not_common = split_common_stock(offered)
+    result = RunResult(day=day, run_at=run_at, config=config, pool_size=len(offered),
+                       pool_source=pool_source, news_enabled=news_source is not None,
+                       not_common_stock=not_common)
+    if not_common:
+        progress(f"{len(not_common)} of {len(offered)} are not common stock "
+                 f"(warrants, units, rights, preferreds) — not screened")
 
     # -- step 1 ------------------------------------------------------------- #
     progress(f"pre-filtering {len(names)} names on yesterday's bars")
@@ -210,6 +247,11 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                                   as_of=day, refresh=refresh)
     result.pre_filtered = pre_filter(names, daily_bars, as_of=day, config=config)
     survivors = result.pre_filtered.tickers
+    result.no_provider_data = sum(1 for row in result.pre_filtered.excluded
+                                  if row.reason == NO_DAILY_BARS)
+    if result.no_provider_data:
+        # ONE line, in place of the provider's per-ticker ERROR storm (GAP-UNIVERSE-1).
+        progress(f"{result.no_provider_data} names returned no data")
     pre_by_ticker = result.pre_filtered.by_ticker()
     progress(f"{len(survivors)} of {len(names)} cleared price, volume and history")
     if not survivors:
@@ -225,8 +267,19 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                            config=config)
         for ticker in survivors
     }
+    result.no_premarket_trade = sum(1 for row in first_pass.values()
+                                    if row.reason in NO_PREMARKET_PRICE_REASONS)
+    if result.no_premarket_trade:
+        progress(f"{result.no_premarket_trade} of {len(survivors)} had no pre-market print "
+                 f"in the window")
+    # A gapper must have a gap AND a price worth believing (GAP-PRICE-TRUST-1) — an
+    # untrustworthy price makes the twenty-session volume fetch pointless as well as the
+    # thresholds. The test is the TRUST reason specifically, not ``passed is None``: this
+    # pass has only today's bars, so it abstains on relative volume by construction, and
+    # reading that as untrustworthy would stop every name reaching the second pass.
     gappers = [t for t, row in first_pass.items()
-               if row.gap is not None and abs(row.gap) >= config.min_abs_gap]
+               if row.gap is not None and abs(row.gap) >= config.min_abs_gap
+               and not is_price_untrusted(row)]
     result.gapped = len(gappers)
     progress(f"{len(gappers)} gapped at least {config.min_abs_gap * 100:.1f}%")
 
@@ -259,31 +312,39 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
     picks = [row.ticker for row in result.candidates]
     if picks and news_source is not None:
         progress(f"fetching {config.news_lookback_hours}h of news for {len(picks)} names")
-    result.news = gather_news(picks, source=news_source, run_at=run_at, config=config)
+    result.news = gather_news(picks, source=news_source, run_at=run_at, config=config,
+                              company_names=company_names)
     if picks and explain_runner is not None:
         progress("asking for one line per name")
-    result.explain = explanations(picks, result.news, runner=explain_runner)
+    # Only MATCHED stories reach the model: a wrong reason beside a real gap is worse than
+    # no reason, because it gets believed (GAP-NEWS-MATCH-1).
+    result.explain = explanations(
+        picks, {t: list(news.matched) for t, news in result.news.items()},
+        runner=explain_runner)
 
     # -- step 4, the control group ----------------------------------------- #
-    # Step-1 survivors that did not become candidates AND whose gap could be read — see
-    # the module docstring for why an unreadable gap is not a usable control.
+    # Step-1 survivors that were EVALUATED and rejected — ``passed is False``, never None.
+    # That one word carries two rules at once: a name whose gap could not be read has no
+    # direction and can never be scored (GAP-LEDGER-1), and a name whose pre-market price
+    # was not trustworthy is a missing reading rather than a finding, so it must not be
+    # compared against as though it were one (GAP-PRICE-TRUST-1).
     pool_for_baseline = [t for t in survivors
                          if t not in set(picks)
-                         and result.screened[t].gap is not None]
+                         and result.screened[t].passed is False]
     result.baseline_pool = len(pool_for_baseline)
     result.baseline = sample_baseline(pool_for_baseline, len(picks), day)
 
     result.rows = [
         build_row(day=day, run_at=run_at, group=GROUP_CANDIDATE,
                   pre=pre_by_ticker.get(row.ticker), screen=row,
-                  headlines=result.news.get(row.ticker, []),
+                  headlines=result.news.get(row.ticker),
                   news_enabled=result.news_enabled,
-                  reason=result.explain.lines.get(row.ticker, NO_REASON), config=config)
+                  reason=result.explain.lines.get(row.ticker, ""), config=config)
         for row in result.candidates
     ] + [
         build_row(day=day, run_at=run_at, group=GROUP_BASELINE,
                   pre=pre_by_ticker.get(ticker), screen=result.screened.get(ticker),
-                  headlines=[], news_enabled=False, reason="", config=config)
+                  headlines=None, news_enabled=False, reason="", config=config)
         for ticker in result.baseline
     ]
     return _finish(result, root=root, write=write, todoist=todoist, progress=progress)
@@ -310,6 +371,18 @@ def _times(value: Optional[float]) -> str:
     return "—" if value is None else f"{value:.2f}x"
 
 
+def _kinds(dropped: Sequence[tuple[str, str]]) -> str:
+    """``"73 warrant, 57 unit, …"`` — what the not-common-stock drop actually consisted of.
+
+    The count alone would be a number nobody can check; the breakdown is what makes an
+    over-eager pattern visible (GAP-UNIVERSE-1).
+    """
+    counts: dict[str, int] = {}
+    for _ticker, kind in dropped:
+        counts[kind] = counts.get(kind, 0) + 1
+    return ", ".join(f"{n} {kind}" for kind, n in sorted(counts.items()))
+
+
 def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
     """The run, in plain text. What the CLI prints and what the done-report pastes."""
     cfg = result.config
@@ -319,15 +392,26 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
         f"Verdict: deterministic screen. Reason line: "
         + ("LLM (non-judging)" if result.explain.called else "off"),
         "",
-        f"Pool: {result.pool_size} names from {result.pool_source}.",
+        f"Pool: {result.pool_size} names from {result.pool_source}."
+        + (f" {len(result.not_common_stock)} not common stock "
+           f"({_kinds(result.not_common_stock)}) — not screened."
+           if result.not_common_stock else ""),
         f"Step 1 — price >= ${cfg.min_price:,.0f}, "
         f"{cfg.avg_volume_days}-session volume >= {cfg.min_avg_volume:,.0f}, "
         f">= {cfg.min_history_days} trading days: "
         f"{len(result.pre_filtered.passed)} passed, "
-        f"{len(result.pre_filtered.excluded)} excluded.",
+        f"{len(result.pre_filtered.excluded)} excluded"
+        + (f" ({result.no_provider_data} of them returned no data)."
+           if result.no_provider_data else "."),
         f"Step 2 — |gap| >= {cfg.min_abs_gap * 100:.1f}% and relative pre-market volume "
         f">= {cfg.min_relative_volume:.1f}x: {result.gapped} gapped, "
         f"{len(result.candidates)} candidate(s).",
+        f"        price trust — >= {cfg.min_premarket_prints} pre-market print(s), "
+        f">= {cfg.min_confirm_prints} of them in the final {cfg.confirm_window_minutes}min "
+        f"and the last within {cfg.max_confirm_drift * 100:.0f}% of their average, "
+        f"spread <= {cfg.max_trusted_spread * 100:.0f}%.",
+        f"        {result.no_premarket_trade} of "
+        f"{len(result.pre_filtered.passed)} had no pre-market print at all.",
     ]
     if result.volume_note:
         # Said ONCE, at the top, where it cannot be missed: an absent section or a repeated
@@ -338,14 +422,17 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
     if result.candidates:
         lines.append("CANDIDATES")
         for row in result.candidates:
-            headlines = result.news.get(row.ticker, [])
-            mark = ("news found" if headlines else
-                    ("no news found" if result.news_enabled else "news not fetched"))
+            news = result.news.get(row.ticker) or MatchedNews()
+            headlines = list(news.matched)
+            mark = "news not fetched" if not result.news_enabled else news.found
+            if news.related and not news.matched:
+                mark += f" ({len(news.related)} related)"
             volume = (_times(row.relative_volume) if row.relative_volume is not None
                       else "unavailable")
             lines.append(f"  {row.ticker:<8} gap {_pct(row.gap):>9}  "
                          f"rel.vol {volume:>11}  "
                          f"{row.spread_note}  {mark}")
+            # With --explain off there is no per-row line at all; the header says so once.
             reason = result.explain.lines.get(row.ticker, "")
             if reason:
                 lines.append(f"           {reason}")

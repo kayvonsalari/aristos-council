@@ -22,6 +22,7 @@ the window is part of what is CHECKED, not just part of what is stored.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import time as _time
@@ -98,6 +99,37 @@ def chunks(items: Sequence[str], size: int) -> list[list[str]]:
 
 
 # --------------------------------------------------------------------------- #
+# provider noise
+# --------------------------------------------------------------------------- #
+YFINANCE_LOGGER = "yfinance"
+
+
+@contextlib.contextmanager
+def quiet_yfinance():
+    """Silence yfinance's own per-ticker ERROR lines for the duration of a fetch.
+
+    GAP-UNIVERSE-1. Screening five thousand names means asking about every one of them, and
+    some fraction will always be delisted, renamed or simply absent — yfinance logs a
+    multi-line ERROR for each, and a screen that prints two hundred of those has buried its
+    own report. The information is NOT lost: a name the provider served nothing for is
+    reported as excluded WITH THAT AS ITS REASON, and the run prints one summary line.
+
+    Only the level is changed, and only inside the ``with``: a caller who has configured
+    yfinance logging on purpose gets it back. Suppressing our own logger would be a
+    different and much worse thing — the module's own warnings still go out.
+    """
+    logger = logging.getLogger(YFINANCE_LOGGER)
+    previous, previous_propagate = logger.level, logger.propagate
+    logger.setLevel(logging.CRITICAL)
+    logger.propagate = False
+    try:
+        yield
+    finally:
+        logger.setLevel(previous)
+        logger.propagate = previous_propagate
+
+
+# --------------------------------------------------------------------------- #
 # the yfinance implementation
 # --------------------------------------------------------------------------- #
 class YFinanceBars:
@@ -169,7 +201,8 @@ class YFinanceBars:
         for piece in chunks(list(tickers), self.config.chunk_size):
             for ticker in piece:
                 try:
-                    info = yf.Ticker(ticker).info or {}
+                    with quiet_yfinance():
+                        info = yf.Ticker(ticker).info or {}
                 except Exception as exc:                 # yfinance throws many types
                     _log.debug("gap_ledger: no quote for %s: %s", ticker, exc)
                     continue
@@ -194,10 +227,11 @@ class YFinanceBars:
         pieces = chunks([t for t in tickers if t], self.config.chunk_size)
         for n, piece in enumerate(pieces):
             try:
-                raw = yf.download(piece, start=start.isoformat(), end=end.isoformat(),
-                                  interval=interval, prepost=prepost, auto_adjust=False,
-                                  actions=False, progress=False, threads=False,
-                                  group_by="ticker")
+                with quiet_yfinance():
+                    raw = yf.download(piece, start=start.isoformat(), end=end.isoformat(),
+                                      interval=interval, prepost=prepost,
+                                      auto_adjust=False, actions=False, progress=False,
+                                      threads=False, group_by="ticker")
             except Exception as exc:                     # yfinance throws many types
                 _log.warning("gap_ledger: %s download failed for %d names: %s",
                              interval, len(piece), exc)

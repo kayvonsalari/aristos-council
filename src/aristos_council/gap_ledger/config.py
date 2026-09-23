@@ -64,6 +64,50 @@ class GapConfig:
     min_relative_volume: float = 3.0        # today's pre-market vs its 20-session median
     relative_volume_days: int = 20
     wide_spread: float = 0.001              # 0.1% — MARKED, never a reason to drop
+
+    # -- GAP-PRICE-TRUST-1: is the pre-market price worth believing? -------- #
+    #
+    # The first full run produced 98 candidates and roughly 80 were junk: XEL +11%, LNT
+    # +12% on no news, dozens of spreads at 40-57%. With no pre-market volume published
+    # (see ``require_relative_volume``), ONE odd print reads as a gap and nothing
+    # contradicts it.
+    #
+    # The spread is NOT the test. Measured on 2026-09-22: ALNY showed a 1.99% spread and
+    # was junk — it opened 21% away from its pre-market price — while VKTX showed 7.28% and
+    # was the day's most genuine mover. So the spread stays a configurable backstop at a
+    # deliberately loose 10%, and the decisive tests are the two below.
+    max_trusted_spread: float = 0.10
+    #
+    # MEASURED, on the twelve names the amendment named, against the live 2026-09-22 tape.
+    # yfinance OMITS five-minute slots in which nothing traded (it does not forward-fill),
+    # so the number of bars in a window IS the number of printed intervals, and tape
+    # DENSITY is what separates a real pre-market move from a stray print:
+    #
+    #             bars in the final 30 min      bars in the 5h window
+    #   junk      1, 1, 1, 1, 1, 2, 3           2 – 13
+    #   genuine   6, 6, 6, 6, 6                 55 – 60
+    #
+    # A 30-minute window holds at most six five-minute bars, so a genuine mover printed in
+    # EVERY slot of the final half hour and the junk printed in one to three. That is a
+    # clean split with margin on both sides, and it is effectively a VOLUME PROXY — it
+    # partially restores the leg this provider will not serve.
+    #
+    # (a) One print is not a price: BGC -23%, IRDM -25%, LKQ +26%, XEL +11%, LNT +12% were
+    # all sparse tapes.
+    min_premarket_prints: int = 2
+    # (b) The last print must be CONFIRMED, which needs two things — enough prints around
+    # it to confirm anything, and agreement with them.
+    confirm_window_minutes: int = 30
+    # The decisive one. Four of six slots, which clears the junk's worst (3) and sits below
+    # every genuine name (6).
+    min_confirm_prints: int = 4
+    # NOTE, and a deliberate departure from the amendment's 1%: drift does NOT discriminate,
+    # because a one-bar window agrees with itself perfectly. Five of the seven junk names
+    # scored 0.000% drift and one scored 20.6%, while genuine VKTX scored 2.797% and ONON
+    # 1.128% — so a 1% limit would have rejected two real movers and kept five stray prints.
+    # It stays as a LOOSE backstop for an extreme last print inside an otherwise dense tape,
+    # at a level no genuine name in the sample came near.
+    max_confirm_drift: float = 0.05
     # Does a relative volume that CANNOT BE COMPUTED drop the name?
     #
     # False, and the reason is a fact about the data, probed on 2026-09-22: yfinance serves
@@ -106,6 +150,10 @@ class GapConfig:
             "cfg_min_relative_volume": self.min_relative_volume,
             "cfg_require_relative_volume": str(self.require_relative_volume).lower(),
             "cfg_wide_spread": self.wide_spread,
+            "cfg_max_trusted_spread": self.max_trusted_spread,
+            "cfg_min_premarket_prints": self.min_premarket_prints,
+            "cfg_min_confirm_prints": self.min_confirm_prints,
+            "cfg_max_confirm_drift": self.max_confirm_drift,
             "cfg_news_lookback_hours": self.news_lookback_hours,
         }
 

@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -54,12 +55,21 @@ class Headline:
     link: str
     published_at: Optional[datetime] = None
     source: str = ""
+    # GAP-NEWS-MATCH-1 — every symbol the provider tagged, first one first. EODHD tags an
+    # article with every ticker it thinks is involved, which is why one AXT Inc. story
+    # arrived as "news" for AXTI, CPRI and DK at once.
+    symbols: tuple[str, ...] = ()
 
     @property
     def published_ny(self) -> str:
         if self.published_at is None:
             return ""
         return self.published_at.astimezone(NY).isoformat(timespec="minutes")
+
+    @property
+    def primary_symbol(self) -> str:
+        """The symbol the provider put first — its notion of what the story is ABOUT."""
+        return base_symbol(self.symbols[0]) if self.symbols else ""
 
 
 class NewsSource(Protocol):
@@ -75,6 +85,175 @@ def eodhd_symbol(ticker: str) -> str:
     """``AAPL`` -> ``AAPL.US``. A ticker that already carries an exchange is left alone."""
     clean = (ticker or "").strip().upper()
     return clean if "." in clean else f"{clean}.US"
+
+
+def base_symbol(symbol: str) -> str:
+    """``AAPL.US`` -> ``AAPL``. The exchange suffix is not part of the identity here."""
+    return (symbol or "").strip().upper().split(".", 1)[0]
+
+
+# --------------------------------------------------------------------------- #
+# GAP-NEWS-MATCH-1 — does this story belong to this name?
+# --------------------------------------------------------------------------- #
+# Live, 2026-09-22: one AXT Inc. headline was attached to AXTI, CPRI and DK; ONON got a
+# Quest/Labcorp article; JAZZ got an Iambic story; BMRN got Travere; VCYT got DGX; and ALNY,
+# up 28%, showed no news at all. The cause is that EODHD's ``symbols`` is a LOOSE tag list,
+# and a windowed query on one ticker returns anything tagged with it.
+#
+# So a story counts as this name's news only on positive evidence: the provider itself says
+# the story is primarily about this symbol, or the name is legible in the headline. Anything
+# else is kept in the record as RELATED and never printed as the name's news — a wrong
+# reason beside a real gap is worse than no reason, because it gets believed.
+MATCH_PRIMARY = "primary symbol"
+MATCH_TICKER = "ticker in headline"
+MATCH_NAME = "company name in headline"
+RELATED = "related, not matched"
+
+# A one- or two-letter ticker (T, F, KO) matches almost any sentence, so the
+# ticker-in-headline test needs a floor. Those names are not left out: they still match on
+# the provider's primary symbol and on their company name, which is the stronger signal
+# anyway ("Ford recalls..." for F).
+MIN_TICKER_IN_HEADLINE = 3
+
+# Legal furniture that is never what a headline calls a company. Stripped from the index
+# name before looking for it, so "AXT Inc." is sought as "axt" and Deutsche Bank AG as
+# "deutsche bank".
+_NAME_NOISE = (
+    "incorporated", "inc", "corporation", "corp", "company", "co", "limited", "ltd",
+    "plc", "holdings", "holding", "group", "the", "class", "common", "stock", "shares",
+    "ag", "nv", "sa", "se", "ab", "as", "oyj", "spa", "p l c", "l p", "lp", "llc",
+    "trust", "reit", "n v", "s a",
+)
+# A core shorter than this is too generic to look for in prose.
+MIN_NAME_CORE = 3
+
+# A headline calls a company by its SHORT name: "Alnylam reports...", "Ford recalls...",
+# never "Alnylam Pharmaceuticals, Inc. reports...". So the full core is not enough to match
+# on — the leading words are tried too (see ``name_forms``).
+#
+# A one-word form is where a false positive would come from, so it needs two guards: length,
+# and this list of leading words that are ordinary English before they are company names. A
+# name whose first word is here still matches on its two-word form ("capital one" for Capital
+# One), which is the point — the guard narrows the test, it does not switch it off.
+_GENERIC_FIRST_WORDS = frozenset({
+    "american", "general", "national", "international", "united", "first", "global",
+    "new", "world", "pacific", "atlantic", "northern", "southern", "eastern", "western",
+    "central", "standard", "premier", "capital", "federal", "allied", "great", "prime",
+    "core", "next", "open", "main", "summit", "union", "public", "peoples", "community",
+    "liberty", "independence", "enterprise", "advance", "advanced", "select", "value",
+    "quality", "service", "services", "industries", "international", "business",
+})
+# A single-word form shorter than this is not distinctive enough to risk.
+MIN_SINGLE_WORD_FORM = 4
+
+
+def name_core(name: str) -> str:
+    """The part of a company name a headline would actually use, lowercased.
+
+    ``"AXT Inc."`` -> ``"axt"``; ``"Alnylam Pharmaceuticals, Inc."`` -> ``"alnylam
+    pharmaceuticals"``. Returns ``""`` when nothing usable is left, which switches the
+    company-name test off rather than matching on a fragment.
+    """
+    cleaned = re.sub(r"[^a-z0-9 ]+", " ", (name or "").lower())
+    words = [w for w in cleaned.split() if w and w not in _NAME_NOISE]
+    core = " ".join(words).strip()
+    return core if len(core) >= MIN_NAME_CORE else ""
+
+
+def name_forms(name: str) -> tuple[str, ...]:
+    """The spellings of this company a headline might use, longest first.
+
+    ``"Alnylam Pharmaceuticals, Inc."`` -> ``("alnylam pharmaceuticals", "alnylam")``;
+    ``"Ford Motor Company"`` -> ``("ford motor", "ford")``. This is what the live run needed
+    and the full core alone did not give: "Alnylam reports positive Phase 3 data" contains
+    neither "Alnylam Pharmaceuticals" nor the ticker, and it is unmistakably an ALNY story.
+
+    The one-word form is dropped when it is short or ordinary (``_GENERIC_FIRST_WORDS``), so
+    "Capital One" is sought as "capital one" and never as "capital".
+    """
+    core = name_core(name)
+    if not core:
+        return ()
+    words = core.split()
+    forms = [core]
+    for count in range(len(words) - 1, 0, -1):
+        form = " ".join(words[:count])
+        if count == 1 and (len(form) < MIN_SINGLE_WORD_FORM
+                           or form in _GENERIC_FIRST_WORDS):
+            continue
+        if form not in forms:
+            forms.append(form)
+    return tuple(forms)
+
+
+def _mentions(haystack: str, needle: str) -> bool:
+    """Is ``needle`` in ``haystack`` as a whole word (or phrase)?
+
+    Word-bounded so "AXT" does not match inside "AXTI", and "ON" does not match "Monday".
+    """
+    if not needle:
+        return False
+    return re.search(rf"(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])",
+                     haystack, re.IGNORECASE) is not None
+
+
+def match_reason(headline: Headline, ticker: str, company_name: str = "") -> str:
+    """How this story belongs to this ticker, or ``""`` when it does not.
+
+    Three ways in, in order of how much they prove:
+
+    1. the provider's own PRIMARY symbol is this ticker;
+    2. the ticker appears in the headline (three characters or more);
+    3. the company's name, as the index spells it, appears in the headline.
+    """
+    clean = base_symbol(ticker)
+    if not clean:
+        return ""
+    if headline.primary_symbol and headline.primary_symbol == clean:
+        return MATCH_PRIMARY
+    title = headline.title or ""
+    if len(clean) >= MIN_TICKER_IN_HEADLINE and _mentions(title, clean):
+        return MATCH_TICKER
+    for form in name_forms(company_name):
+        if _mentions(title, form):
+            return MATCH_NAME
+    return ""
+
+
+@dataclass(frozen=True)
+class MatchedNews:
+    """One name's news, split into what is about it and what merely mentions it."""
+
+    matched: tuple[Headline, ...] = ()
+    related: tuple[Headline, ...] = ()
+    how: str = ""                        # how ``matched[0]`` matched; "" when none did
+
+    @property
+    def found(self) -> str:
+        """The mark for the record. Three-valued in the same spirit as the screens: a story
+        that could not be attributed is NOT "no news" and NOT "news found"."""
+        if self.matched:
+            return "news found"
+        if self.related:
+            return RELATED
+        return "no news found"
+
+
+def match_news(headlines: Sequence[Headline], ticker: str,
+               company_name: str = "") -> MatchedNews:
+    """Split one name's returned stories into matched and merely-related, newest first."""
+    matched: list[Headline] = []
+    related: list[Headline] = []
+    how = ""
+    for headline in headlines:
+        reason = match_reason(headline, ticker, company_name)
+        if reason:
+            if not matched:
+                how = reason
+            matched.append(headline)
+        else:
+            related.append(headline)
+    return MatchedNews(matched=tuple(matched), related=tuple(related), how=how)
 
 
 def publisher_from_link(link: str) -> str:
@@ -121,8 +300,11 @@ def headlines_from_rows(rows: object, *, since: datetime,
         when = parse_timestamp(row.get("date"))
         if when is not None and not (since <= when <= until):
             continue
+        raw_symbols = row.get("symbols")
+        symbols = tuple(str(x) for x in raw_symbols
+                        if isinstance(x, (str, int))) if isinstance(raw_symbols, list) else ()
         out.append(Headline(title=title, link=link, published_at=when,
-                            source=publisher_from_link(link)))
+                            source=publisher_from_link(link), symbols=symbols))
     out.sort(key=lambda h: h.published_at or datetime.min.replace(tzinfo=timezone.utc),
              reverse=True)
     return out
@@ -190,13 +372,22 @@ class EODHDNews:
 # the step
 # --------------------------------------------------------------------------- #
 def gather_news(tickers: Sequence[str], *, source: Optional[NewsSource], run_at: datetime,
-                config: GapConfig = DEFAULT_CONFIG) -> dict[str, list[Headline]]:
-    """Headlines per candidate. ``source=None`` means news was switched off, and every
-    name comes back with an empty list — the same shape "the provider had nothing" takes,
-    because the record distinguishes them by the run's own ``news`` flag rather than by
-    guessing from an empty list."""
+                config: GapConfig = DEFAULT_CONFIG,
+                company_names: Optional[dict] = None) -> dict[str, MatchedNews]:
+    """Per candidate, the stories that are ABOUT it and the ones that merely mention it.
+
+    ``source=None`` means news was switched off, and every name comes back empty — the
+    record distinguishes that from "the provider had nothing" by the run's own ``news``
+    flag rather than by guessing from an empty result.
+
+    ``company_names`` maps ticker -> the index's name for it, which is what makes the
+    company-name test possible. Absent (a ``--tickers`` file has no index behind it) the
+    match falls back to the provider's primary symbol and the ticker in the headline.
+    """
     if source is None:
-        return {ticker: [] for ticker in tickers}
+        return {ticker: MatchedNews() for ticker in tickers}
     since, until = news_window(run_at, config)
-    return {ticker: source.headlines(ticker, since=since, until=until)
+    names = company_names or {}
+    return {ticker: match_news(source.headlines(ticker, since=since, until=until),
+                               ticker, names.get(ticker, ""))
             for ticker in tickers}

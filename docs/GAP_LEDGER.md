@@ -45,6 +45,15 @@ excluded by asset kind — the index admits `Type == "Common Stock"` only, and
 `universe.looks_like_fund` re-states the boundary for a `--tickers` file, which has no index
 row behind it.
 
+**Warrants, units, rights and preferreds are dropped here (GAP-UNIVERSE-1)** — the market
+index classifies on EODHD's `Type` field, which calls all of them "Common Stock" (196 of
+5,972 US rows), so the filter is on the ticker shape (`-WS`/`-WT`/`-W`, `-U`/`-UN`, `-R`/`-RI`,
+`-P`/`-PR`/`-Px`, and `TFINP`-style five-letter preferreds whose four-letter root is listed
+beside them). The index is **not** changed and **Aristos reads the same index**, so those rows
+are still there for every other consumer; a genuine share class (`BF-B`, `AKO-A`, `CIG-C`,
+`MKC-V`) is never dropped. The count and its breakdown by kind appear in the run summary, and
+yfinance's per-ticker error lines are suppressed in favour of one "N names returned no data".
+
 Then three thresholds on yesterday's daily bars: previous close ≥ $10, 20-session average
 volume ≥ 1M shares, ≥ 250 trading days of history. The daily bars are cached per market day.
 
@@ -78,6 +87,50 @@ spread: it is a stale quote, not a free round trip. And a run for a **past** dat
 read the book at all — a book is a snapshot of now, so the mark is "spread unknown —
 historical run". (Live, 2026-09-22: a backfill of 2026-09-21 marked RIOT "wide spread 52.42%"
 from a pre-dawn book that had nothing to do with the morning being screened.)
+
+**A gap is only evaluated when the price behind it is trustworthy (GAP-PRICE-TRUST-1).** The
+first full run gave 98 candidates and roughly 80 were junk — XEL +11%, LNT +12% on no news,
+dozens of spreads at 40-57% — because with no pre-market volume one odd print reads as a gap
+and nothing contradicts it. The spread turned out *not* to be the test (ALNY: 1.99% spread and
+junk, opening 21% away; VKTX: 7.28% and the day's most genuine mover), so it is a loose
+configurable backstop at `max_trusted_spread` = 10%.
+
+**What separates a real move from a stray print is tape density**, measured against the live
+2026-09-22 tape for the twelve names above. yfinance *omits* a five-minute slot in which nothing
+traded rather than forward-filling it, so the number of bars in a window **is** the number of
+printed intervals:
+
+| | bars in the final 30 min | bars in the 5h window |
+|---|---|---|
+| junk (7 names) | 1, 1, 1, 1, 1, 2, 3 | 2 – 13 |
+| genuine (5 names) | 6, 6, 6, 6, 6 | 55 – 60 |
+
+Six is the ceiling for a 30-minute window, so every genuine mover printed in *every* slot of the
+final half hour. This is effectively a **volume proxy** — it partially restores the leg the
+provider will not serve. So a price is trusted when it has at least `min_premarket_prints` = 2
+prints, at least `min_confirm_prints` = 4 of the final six slots filled, and a last print within
+`max_confirm_drift` = 5% of their average. Each failure abstains with its own reason — `single
+pre-market print`, `last print not confirmed`, `spread above limit` — so the CSV says which test
+fired. All are NOT-EVALUATED **markings**, never rejections, and an untrusted name never enters
+the control group: an unbelievable price is a missing reading about a name, not a finding about it.
+
+> Two thresholds are **deliberately not** what the brief sketched, because the live tape
+> contradicted it. Counting *distinct prices* rather than prints does not catch a sparse tape at
+> all (XEL's five bars carried five different prices), and a **1%** drift limit rejects genuine
+> movers while passing strays — five of the seven junk names scored 0.000% drift, since a
+> one-bar window agrees with itself perfectly, whereas VKTX scored 2.797% and ONON 1.128%. On
+> the twelve cited names the shipped gate keeps all five genuine movers and abstains on all
+> seven junk ones.
+
+`outcomes` fills a `premarket_vs_open` column — the pre-market price against the 09:30 open, as
+a signed fraction. That is how these thresholds get tuned, and old CSVs written before the
+column still load (an absent value reads as missing, never as 0).
+
+> **Open question — pre-market coverage.** On 2026-09-22, **234** step-1 survivors had no
+> pre-market print at all, including **AIG, AMT and AFL**. That is suspicious for companies of
+> that size and it is not yet explained; it may be a genuine absence of extended-hours trade,
+> or a gap in what yfinance serves. The run summary states the count every day so the question
+> stays visible instead of being inferred from a short list.
 
 **Two fetch passes.** The relative volume needs twenty sessions of 5-minute bars per name;
 fetching that for every liquid US stock, to produce a list of a handful, is about two orders
@@ -164,6 +217,18 @@ finding. A fortnight of mornings is a mood, not evidence.
 ## News and the optional reason line
 
 For each candidate, EODHD News over the last 18 hours: headline, publisher, timestamp, link.
+**A story counts as this name's news only on positive evidence (GAP-NEWS-MATCH-1)** — the
+provider's own primary symbol, or the ticker in the headline (3+ characters), or the company's
+name as the index spells it, short forms included ("Alnylam reports…", "Ford recalls…") but
+never an ordinary leading word on its own ("American", "Capital"). EODHD's `symbols` is a
+loose tag list, so without this one AXT Inc. headline arrived as news for AXTI, CPRI and DK at
+once, ONON got a Quest/Labcorp article and JAZZ got an Iambic story. Everything unattributed
+is kept in the CSV as **"related, not matched"** (`related_count`/`related_headline`/
+`related_link`) and never printed as the name's news, never shown to the model; `news_match`
+records *how* the printed story was attributed. With `--explain` off the header says "Reason
+line: off" once and no row carries a reason — `no clear reason found` is reserved for an
+`--explain` run that asked and came back empty.
+
 "no news found" is a **mark, never a drop** — a stock up 9% with no headline in the feed is
 the case where the reason is not public yet, which is exactly the one worth seeing. The
 publisher is **derived from the link's host**; EODHD's news rows carry no publisher field,
@@ -187,7 +252,10 @@ request:
 
 One Todoist task per run with candidates, in the project **Gap Ledger**, from
 `TODOIST_API_TOKEN` in the local `.env`. Names, gap, relative volume, flags and headline
-links. **Nothing on an empty day** — a daily "no candidates" task trains you to ignore the
+links. It speaks the unified **API v1** (`https://api.todoist.com/api/v1`) — `/rest/v2` is
+retired and answered the first live run with HTTP 410 (GAP-TODOIST-1); list endpoints there
+are paginated (`{"results": …, "next_cursor": …}`) and the project lookup follows the cursor,
+because a "Gap Ledger" on page two would read as absent and create a second one every morning. **Nothing on an empty day** — a daily "no candidates" task trains you to ignore the
 project. The project is created when it does not exist, and the outcome says so. A delivery
 failure is reported and never fatal: the CSV is the record, Todoist is a convenience.
 

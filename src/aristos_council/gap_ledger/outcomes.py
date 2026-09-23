@@ -129,9 +129,29 @@ def fill_row(row: LedgerRow, *, daily: Sequence[PriceBar], intraday: Sequence[In
     filled.price_1000 = prices[0]
     filled.price_1130 = prices[1]
     filled.close_price = close_price
+    # The diagnostic is derived from the row, so it is filled last and cannot disagree with
+    # the columns it is computed from.
+    filled.premarket_vs_open = premarket_vs_open(filled)
     filled.outcome_note = "; ".join(missing)
     filled.outcomes_filled_at_et = et_stamp(now)
     return filled
+
+
+def premarket_vs_open(row: LedgerRow) -> Optional[float]:
+    """The pre-market price against the 09:30 open, as a fraction — the tuning diagnostic.
+
+    GAP-PRICE-TRUST-1. This is the number that says how often the pre-market print was junk:
+    a real gap opens near where it printed (AMD, 2026-09-21: 579.36 pre-market, 583.88 open,
+    +0.78%), and a stray print does not (ALNY, 2026-09-22: 21% away). Without it the trust
+    thresholds would be tuned on impressions.
+
+    Signed so the direction is legible: POSITIVE means the pre-market print was ABOVE where
+    the session actually opened. None when either side is missing — never 0.0, which would
+    read as a perfect agreement that was never measured.
+    """
+    if row.premarket_price is None or row.open_price is None or row.open_price <= 0:
+        return None
+    return (row.premarket_price - row.open_price) / row.open_price
 
 
 def is_complete(row: LedgerRow) -> bool:

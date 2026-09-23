@@ -12,6 +12,18 @@
 # Cost: roughly one call per listed common stock, plus one per exchange for the listing.
 # Rows younger than max_age_days are skipped without a call, so a re-run is cheap.
 
+# MARKET-INDEX-SKIP-1 - four of these codes are NOT in EODHD's exchange list on this plan,
+# probed against /exchanges-list on 2026-09-23 (70 exchanges returned): MI, HK, T and KS.
+# There is no Italian exchange in the list AT ALL, so MI is not a mis-spelling of a code that
+# exists - Milan is simply not offered here, and neither are Hong Kong, Tokyo or Korea. A
+# listing request for any of them answers HTTP 404.
+#
+# They are LEFT IN deliberately. This file records which venues the index is MEANT to track,
+# and quietly deleting four markets would shrink the peer universe with nothing on the page to
+# say so. Since MARKET-INDEX-SKIP-1 an unlistable exchange is skipped and NAMED in the build
+# summary ("4 exchanges skipped: MI, HTTP 404; ..."), so the gap is reported on every run and
+# costs four listing requests; if the plan ever gains these markets they start working with no
+# edit here. Drop them if you would rather not pay the four requests.
 exchanges:
   # North America
   - US            # NYSE + NASDAQ + AMEX, the deepest single pool of comparables
