@@ -206,7 +206,30 @@ def test_the_viewer_renders_a_logged_day_with_its_candidate_and_control_group(mo
     said = _said(at)
     assert "1 day(s) logged" in said
     assert "1 candidate(s)" in said                 # the Past days tab renders the day
-    assert "Alpha reported results above expectations" in said
+    assert "AAA" in said                            # the table's Ticker column
+    assert "Alpha beats" in said                    # the headline, as a link
+
+
+def test_the_viewer_shows_no_per_row_reason_text(monkeypatch, tmp_path):
+    """GAP-VIEWER-1 item 2: no reason text below the table, and an old CSV's "no clear reason
+    found" lines are not shown."""
+    pytest.importorskip("streamlit")
+    write_day(DAY, [_candidate(reason="no clear reason found")], root=tmp_path)
+    at = _app_test(tmp_path, monkeypatch)
+    assert not at.exception
+    said = _said(at)
+    assert "no clear reason found" not in said
+    assert "Alpha reported results above expectations" not in said
+
+
+def test_the_left_panel_summarises_the_chosen_day(monkeypatch, tmp_path):
+    pytest.importorskip("streamlit")
+    write_day(DAY, [_candidate(), _control()], root=tmp_path)
+    at = _app_test(tmp_path, monkeypatch)
+    said = _said(at)
+    assert "2 logged" in said
+    assert "1 candidate(s)" in said
+    assert "IBKR-confirmed" in said
 
 
 def test_the_viewer_scorecard_holds_the_day_floor_back(monkeypatch, tmp_path):
@@ -220,49 +243,21 @@ def test_the_viewer_scorecard_holds_the_day_floor_back(monkeypatch, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# the viewer's pure render helpers — tested without Streamlit at all
+# the viewer's render helpers
 # --------------------------------------------------------------------------- #
-def test_the_candidate_table_renders_every_figure_from_the_row():
-    pytest.importorskip("streamlit")
-    import gap_ledger_app as viewer
-
-    table = viewer.candidate_table([_candidate()])
-    assert table[0]["Gap"] == "+8.20%"
-    assert table[0]["Rel. pre-market volume"] == "6.40x"
-    assert table[0]["Spread"] == "0.04%"
-    assert table[0]["Link"] == "https://a.com/1"
-
-
-def test_an_unknown_spread_renders_as_unknown_not_as_zero():
-    pytest.importorskip("streamlit")
-    import gap_ledger_app as viewer
-
-    assert viewer.candidate_table([_candidate(spread_pct=None)])[0]["Spread"] == "unknown"
+# GAP-VIEWER-1 moved every render decision into ``gap_ledger.viewer`` as pure functions, and
+# they are tested there (tests/test_gap_ledger_viewer.py) with no Streamlit at all. What is
+# left worth asserting HERE is that the app actually uses them, and that it still refuses to
+# start a run.
+def test_the_app_renders_through_the_pure_viewer_module():
+    source = _APP.read_text(encoding="utf-8")
+    assert "from aristos_council.gap_ledger.viewer import" in source
+    for helper in ("table_markdown", "source_facts", "details_of", "candidates_of"):
+        assert helper in source
 
 
-def test_an_unscoreable_continuation_cell_is_blank_not_a_no():
-    """Blank means NOT SCOREABLE. A "no" there would be a claim the record cannot make."""
-    pytest.importorskip("streamlit")
-    import gap_ledger_app as viewer
-
-    rows = viewer.outcome_table([_candidate(open_price=50.0, price_1000=None)])
-    assert rows[0]["Carried on @ 10:00 ET"] == ""
-
-
-def test_a_filled_continuation_cell_reads_yes_or_no():
-    pytest.importorskip("streamlit")
-    import gap_ledger_app as viewer
-
-    rows = viewer.outcome_table([_candidate(open_price=50.0, price_1000=51.0,
-                                            price_1130=49.0, close_price=49.0)])
-    assert rows[0]["Carried on @ 10:00 ET"] == "yes"
-    assert rows[0]["Carried on @ 11:30 ET"] == "no"
-
-
-def test_the_split_separates_candidates_from_the_control_group():
-    pytest.importorskip("streamlit")
-    import gap_ledger_app as viewer
-
-    candidates, control = viewer.split([_candidate(), _control()])
-    assert [r.ticker for r in candidates] == ["AAA"]
-    assert [r.ticker for r in control] == ["BBB"]
+def test_the_app_no_longer_builds_its_own_table():
+    """The old per-row dict table is gone; one table builder, in the package."""
+    source = _APP.read_text(encoding="utf-8")
+    assert "def candidate_table" not in source
+    assert "def outcome_table" not in source

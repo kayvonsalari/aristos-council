@@ -437,14 +437,14 @@ def test_the_todoist_task_badges_a_verified_name(tmp_path):
 
 
 def test_the_banner_reaches_the_viewer(tmp_path):
-    pytest.importorskip("streamlit")
-    import gap_ledger_app as viewer
-
+    """GAP-VIEWER-1 renders it as a source fact, ONCE above the table."""
     from aristos_council.gap_ledger.ledger import LedgerRow
+    from aristos_council.gap_ledger.viewer import UNVERIFIED, source_facts, verified_of
+
     row = LedgerRow(ticker="AAA", group=GROUP_CANDIDATE, gap_pct=0.10,
                     source=SOURCE_YFINANCE, ibkr_note=IBKR_UNAVAILABLE)
-    assert viewer.candidate_table([row])[0]["Source"] == "YFINANCE"
-    assert "ibkr_note" in open("gap_ledger_app.py", encoding="utf-8").read()
+    assert source_facts([row])[0] == IBKR_UNAVAILABLE
+    assert verified_of(row) == UNVERIFIED
 
 
 def test_when_ib_answers_there_is_no_banner(tmp_path):

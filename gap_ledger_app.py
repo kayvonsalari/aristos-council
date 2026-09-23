@@ -27,10 +27,13 @@ from pathlib import Path
 import streamlit as st
 
 from aristos_council.gap_ledger.config import DEFAULT_ROOT, now_ny
-from aristos_council.gap_ledger.ledger import (GROUP_BASELINE, GROUP_CANDIDATE, LedgerRow,
-                                               ledger_days, read_all, read_day)
+from aristos_council.gap_ledger.ledger import (GROUP_BASELINE, LedgerRow, ledger_days,
+                                               read_all, read_day)
 from aristos_council.gap_ledger.outcomes import is_complete
-from aristos_council.gap_ledger.score import CHECKPOINT_COLUMNS, continued, score
+from aristos_council.gap_ledger.score import score
+from aristos_council.gap_ledger.viewer import (candidates_of, company_of, day_summary,
+                                               details_of, order_rows, row_flags,
+                                               source_facts, table_markdown)
 
 ROOT = Path(__file__).resolve().parent
 
@@ -54,140 +57,102 @@ RUN_HINT = "python -m aristos_council.gap_ledger run"
 OUTCOMES_HINT = "python -m aristos_council.gap_ledger outcomes"
 
 
-# --------------------------------------------------------------------------- #
-# formatting — every value comes from the row; nothing is computed here
-# --------------------------------------------------------------------------- #
-def pct(value) -> str:
-    return "—" if value is None else f"{value * 100:+.2f}%"
+@st.cache_data(show_spinner=False)
+def company_names() -> dict:
+    """``{ticker: company}`` from the market index, for CSVs written before the column.
 
-
-def ratio(value) -> str:
-    return "—" if value is None else f"{value:.2f}x"
-
-
-def money(value) -> str:
-    return "—" if value is None else f"${value:,.2f}"
-
-
-def spread(value) -> str:
-    return "unknown" if value is None else f"{value * 100:.2f}%"
-
-
-def relative_volume_cell(row: LedgerRow) -> str:
-    """The ratio, or ``unavailable`` — never a dash that could read as "about zero".
-
-    A candidate whose relative volume could not be read was selected on its GAP ALONE, and
-    the table is where that has to be visible.
+    Cached because it reads a parquet table of several thousand rows and the answer does not
+    change while the page is open. A missing index is an empty dict, not an error — the name
+    is a label, and a viewer that refused to render without one would be worse than a blank
+    cell.
     """
-    return "unavailable" if row.relative_volume is None else ratio(row.relative_volume)
+    try:
+        from aristos_council.gap_ledger.universe import names_from_index
+
+        return names_from_index()
+    except Exception:                                    # no index, no pandas, no matter
+        return {}
 
 
-def candidate_table(rows: list[LedgerRow]) -> list[dict]:
-    """Today's list as a flat table. The link column is the headline's URL, so a claim is
-    one click from the story it rests on."""
-    return [{
-        "Ticker": row.ticker,
-        # Who verified it. The single most useful column, because it says whether the
-        # relative-volume leg ran at all for this name.
-        "Source": (row.source or "yfinance").upper(),
-        "Gap": pct(row.gap_pct),
-        "Rel. pre-market volume": relative_volume_cell(row),
-        "Prev. close": money(row.previous_close),
-        "Pre-market": money(row.premarket_price),
-        "Spread": spread(row.spread_pct),
-        "Flags": " · ".join(f for f in (row.spread_note, row.relative_volume_note) if f),
-        "News": row.news_found,
-        "Headline": row.headline,
-        "Link": row.news_link,
-    } for row in rows]
+def render_banner(rows: list[LedgerRow]) -> None:
+    """The data-source facts, ONCE, above the table (GAP-VIEWER-1 item 3).
 
-
-def outcome_table(rows: list[LedgerRow]) -> list[dict]:
-    """What the session did, per logged name, with the continuation answers spelled out.
-
-    A blank continuation cell means NOT SCOREABLE — no direction or no price — which is
-    deliberately distinct from "no". The scorecard counts it in neither column.
+    These are facts about the RUN — the gateway was down, the provider served no volume, the
+    subscription does not cover quotes — and repeating them down a column is how a reader
+    learns to stop looking at that column.
     """
-    out = []
+    for fact in source_facts(rows):
+        st.warning(fact)
+
+
+def render_table(rows: list[LedgerRow], names: dict) -> None:
+    """One row per stock, nine columns, in the specified order.
+
+    Markdown rather than ``st.dataframe``: a dataframe's ``LinkColumn`` takes one
+    ``display_text`` for every row, so the headline could not be both the visible text and the
+    link. The trade is click-to-sort, which the fixed order replaces — IBKR-verified first,
+    then the largest absolute gap.
+    """
+    st.markdown(table_markdown(rows, names))
+
+
+def render_details(rows: list[LedgerRow], names: dict, *, key_ns: str) -> None:
+    """Everything the table left out, one expander per stock."""
+    if not rows:
+        return
+    st.caption("Details — spread, prints, IB's own readings, the checkpoints, the notes.")
     for row in rows:
-        record = {
-            "Group": "candidate" if row.group == GROUP_CANDIDATE else "baseline",
-            "Ticker": row.ticker,
-            "Gap": pct(row.gap_pct),
-            "Open": money(row.open_price),
-            "10:00": money(row.price_1000),
-            "11:30": money(row.price_1130),
-            "Close": money(row.close_price),
-        }
-        for label, column in CHECKPOINT_COLUMNS:
-            answer = continued(row, column)
-            record[f"Carried on @ {label}"] = ("" if answer is None
-                                               else ("yes" if answer else "no"))
-        record["Note"] = row.outcome_note
-        out.append(record)
-    return out
+        label = f"{row.ticker}"
+        # The same looked-up name the table uses, so the expander and the row agree.
+        company = company_of(row, names)
+        if company:
+            label += f" — {company}"
+        flags = row_flags(row)
+        if flags:
+            label += f"   ({'; '.join(flags)})"
+        with st.expander(label):
+            pairs = details_of(row)
+            if not pairs:
+                st.write("Nothing beyond the table for this row.")
+                continue
+            left, right = st.columns(2)
+            half = (len(pairs) + 1) // 2
+            for column, chunk in ((left, pairs[:half]), (right, pairs[half:])):
+                with column:
+                    for name, value in chunk:
+                        st.markdown(f"**{name}** · {value}")
 
 
-def split(rows: list[LedgerRow]) -> tuple[list[LedgerRow], list[LedgerRow]]:
-    return ([r for r in rows if r.group == GROUP_CANDIDATE],
-            [r for r in rows if r.group == GROUP_BASELINE])
-
-
-# --------------------------------------------------------------------------- #
-# the day view, shared by "today" and "past days"
-# --------------------------------------------------------------------------- #
 def render_day(day: date, rows: list[LedgerRow], *, key_ns: str) -> None:
-    candidates, baseline = split(rows)
+    """One logged day: the banner, the table, the details, then the control group."""
+    names = company_names()
+    candidates = candidates_of(rows)
+    control = order_rows(r for r in rows if r.group == GROUP_BASELINE)
     stamp = rows[0].run_at_et if rows else ""
     st.caption(f"Screened {day.isoformat()}"
                + (f", run at {stamp} (New York)" if stamp else ""))
 
-    # GAP-IBKR-1 item 3 — said once, above everything, because a yfinance-only day is a
-    # different product from a verified one.
-    banner = next((r.ibkr_note for r in rows if r.ibkr_note), "")
-    if banner:
-        st.error(f"{banner} — relative volume was not measured on this run; the names below "
-                 f"come from yfinance prices with the tape-density trust tests.")
-
-    unavailable = [r for r in candidates if r.relative_volume is None]
-    if unavailable:
-        st.warning(f"Relative pre-market volume was unavailable for "
-                   f"{len(unavailable)} of {len(candidates)} candidate(s) — "
-                   f"{unavailable[0].relative_volume_note}. Those names were selected on "
-                   f"their GAP ALONE.")
+    render_banner(rows)
 
     if not candidates:
-        st.info(f"No candidates on {day.isoformat()} — nothing gapped 3% on 3x pre-market "
-                f"volume. An empty list is a result, not a failure.")
+        st.info(f"No candidates on {day.isoformat()} — nothing cleared the gap and volume "
+                f"screen. An empty list is a result, not a failure.")
     else:
         st.subheader(f"{len(candidates)} candidate(s)")
-        st.dataframe(candidate_table(candidates), width="stretch", hide_index=True,
-                     column_config={"Link": st.column_config.LinkColumn("Link",
-                                                                        display_text="story")})
-        for row in candidates:
-            if row.reason:
-                st.markdown(f"**{row.ticker}** — {row.reason}")
+        render_table(candidates, names)
+        render_details(candidates, names, key_ns=f"{key_ns}_cand")
 
     filled = [r for r in rows if is_complete(r)]
-    with st.expander(f"Outcomes — {len(filled)} of {len(rows)} logged names filled in",
-                     expanded=bool(filled)):
-        if not rows:
-            st.write("Nothing logged for this day.")
-        elif not filled:
-            st.info(f"Outcomes are filled after the close. Run `{OUTCOMES_HINT}`.")
-        else:
-            st.dataframe(outcome_table(rows), width="stretch", hide_index=True)
+    if rows and not filled:
+        st.caption(f"Outcomes are not filled in for this day yet — run `{OUTCOMES_HINT}`.")
 
-    with st.expander(f"Control group — {len(baseline)} name(s)"):
+    with st.expander(f"Control group — {len(control)} name(s)"):
         st.caption("Drawn at random, with a seed fixed by the date, from the names that "
                    "passed the liquidity filter but NOT the gap-and-volume screen. It is "
                    "what the candidates are compared against; without it a carry-on rate "
                    "is a fact about the market, not about the screen.")
-        if baseline:
-            st.dataframe([{"Ticker": r.ticker, "Gap": pct(r.gap_pct),
-                           "Rel. pre-market volume": relative_volume_cell(r),
-                           "Why it did not qualify": r.screen_note} for r in baseline],
-                         width="stretch", hide_index=True)
+        if control:
+            render_table(control, names)
         else:
             st.write("No control group — there were no candidates to match in size.")
 
@@ -220,6 +185,24 @@ def render_past(days: list[date]) -> None:
     chosen = st.selectbox("Day", list(reversed(days)),
                           format_func=lambda d: d.isoformat(), key="past_day")
     render_day(chosen, read_day(chosen, LEDGER_ROOT), key_ns="past")
+
+
+def render_day_panel(days: list[date]) -> None:
+    """The left panel's Day section: pick a logged day, newest first, and see its counts."""
+    if not days:
+        st.sidebar.caption("No days logged yet.")
+        return
+    chosen = st.sidebar.selectbox("Day", list(reversed(days)),
+                                 format_func=lambda d: d.isoformat(), key="panel_day")
+    counts = day_summary(read_day(chosen, LEDGER_ROOT))
+    st.sidebar.markdown(
+        f"**{chosen.isoformat()}**\n\n"
+        f"- {counts['logged']} logged\n"
+        f"- {counts['candidates']} candidate(s)\n"
+        f"- {counts['ibkr_confirmed']} IBKR-confirmed\n"
+        f"- {counts['unverified']} unverified\n"
+        f"- {counts['with_news']} with news\n"
+        f"- {counts['outcomes_filled']} with outcomes filled")
 
 
 def render_scorecard() -> None:
@@ -268,6 +251,7 @@ def main() -> None:
                     "calls and posts a Todoist task, so it stays a deliberate command.")
     st.sidebar.code(f"{RUN_HINT}\n{OUTCOMES_HINT}\n"
                     f"python -m aristos_council.gap_ledger score", language="bash")
+    render_day_panel(days)
 
     today_tab, past_tab, score_tab = st.tabs(["Today", "Past days", "Scorecard"])
     with today_tab:

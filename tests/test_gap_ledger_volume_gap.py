@@ -198,14 +198,16 @@ def test_requiring_the_reading_empties_the_list_and_says_why(tmp_path):
 
 
 def test_the_viewer_warns_that_the_names_were_picked_on_the_gap_alone(tmp_path):
-    pytest.importorskip("streamlit")
-    import gap_ledger_app as viewer
+    """GAP-VIEWER-1: the unmeasured volume is a SOURCE FACT, said once above the table, and
+    the cell reads "n/a" rather than a dash that could pass for a small number."""
+    from aristos_council.gap_ledger.viewer import (FACT_NO_YF_VOLUME, NOT_MEASURED,
+                                                   relative_volume_of, source_facts)
 
     row = LedgerRow(ticker="AMD", group=GROUP_CANDIDATE, gap_pct=0.043,
                     relative_volume=None,
                     relative_volume_note="pre-market baseline is zero over 20 sessions")
-    assert viewer.relative_volume_cell(row) == "unavailable"
-    assert "baseline is zero" in viewer.candidate_table([row])[0]["Flags"]
+    assert relative_volume_of(row) == NOT_MEASURED
+    assert FACT_NO_YF_VOLUME in source_facts([row])
 
 
 # --------------------------------------------------------------------------- #
