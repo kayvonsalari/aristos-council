@@ -77,6 +77,24 @@ class LedgerRow:
     screen_passed: str = ""              # "true" / "false" / "" — three-valued, as text
     screen_note: str = ""                # why it did not pass, for a baseline row
 
+    # -- GAP-IBKR-1: who the numbers above actually came from ---------------- #
+    # "ibkr" when Interactive Brokers verified this name (and its price, volume and spread
+    # therefore OVERRODE yfinance's), "yfinance" otherwise. The single most useful column on
+    # the row, because it says whether the relative-volume leg ran at all.
+    source: str = ""
+    # Said once per run when the gateway was not reachable, so a yfinance-only day is legible
+    # in the CSV and not only in the report that scrolled past.
+    ibkr_note: str = ""
+    # IB's own readings, kept BESIDE the screen's columns rather than only folded into them,
+    # so a disagreement between the two providers is still visible after the fact.
+    ib_last_price: Optional[float] = None
+    ib_gap_pct: Optional[float] = None
+    ib_premarket_volume: Optional[int] = None
+    ib_baseline_median: Optional[float] = None
+    ib_relative_volume: Optional[float] = None
+    ib_bid: Optional[float] = None
+    ib_ask: Optional[float] = None
+
     # -- step 3 ------------------------------------------------------------ #
     # "news found" / "no news found" / "related, not matched" / "news not fetched"
     news_found: str = ""
@@ -135,12 +153,15 @@ FIELDS: tuple[str, ...] = tuple(f.name for f in fields(LedgerRow))
 _FLOATS = {"previous_close", "average_volume", "premarket_price", "gap_pct",
            "baseline_median_volume", "relative_volume", "spread_pct", "open_price",
            "price_1000", "price_1130", "close_price", "premarket_vs_open",
-           "confirm_average", "cfg_min_price", "cfg_min_avg_volume", "cfg_min_abs_gap",
+           "confirm_average", "ib_last_price", "ib_gap_pct", "ib_baseline_median",
+           "ib_relative_volume", "ib_bid", "ib_ask",
+           "cfg_min_price", "cfg_min_avg_volume", "cfg_min_abs_gap",
            "cfg_min_relative_volume", "cfg_wide_spread", "cfg_max_trusted_spread",
            "cfg_max_confirm_drift"}
 _INTS = {"history_days", "premarket_volume", "baseline_sessions", "headline_count",
-         "related_count", "premarket_prints", "confirm_prints", "cfg_min_history_days",
-         "cfg_min_premarket_prints", "cfg_min_confirm_prints", "cfg_news_lookback_hours"}
+         "related_count", "premarket_prints", "confirm_prints", "ib_premarket_volume",
+         "cfg_min_history_days", "cfg_min_premarket_prints", "cfg_min_confirm_prints",
+         "cfg_news_lookback_hours"}
 
 
 # --------------------------------------------------------------------------- #

@@ -91,7 +91,9 @@ def task_body(candidates: Sequence[LedgerRow]) -> str:
         volume = (f"rel. pre-market volume {_times(row.relative_volume)}"
                   if row.relative_volume is not None
                   else f"rel. pre-market volume UNAVAILABLE ({row.relative_volume_note})")
-        line = (f"**{row.ticker}** — gap {_pct(row.gap_pct)}, {volume}"
+        # Which provider verified this name is the first thing worth knowing about it.
+        badge = "IBKR-verified" if row.source == "ibkr" else "yfinance only"
+        line = (f"**{row.ticker}** [{badge}] — gap {_pct(row.gap_pct)}, {volume}"
                 + (f" · {' · '.join(f for f in flags if f)}" if any(flags) else ""))
         parts = [line]
         if row.reason:
@@ -101,6 +103,12 @@ def task_body(candidates: Sequence[LedgerRow]) -> str:
             where = f" ({row.news_source})" if row.news_source else ""
             parts.append(f"  [{headline}]({row.news_link}){where}")
         blocks.append("\n".join(parts))
+    # GAP-IBKR-1 item 3 — the banner belongs here too: the task is what the owner reads in
+    # the morning, and a yfinance-only list is a different product from a verified one.
+    note = next((row.ibkr_note for row in candidates if row.ibkr_note), "")
+    if note:
+        blocks.append(f"**{note}** — relative volume was not measured; these names come "
+                      f"from yfinance prices with the tape-density trust tests.")
     blocks.append("_Screened by maths; no recommendation. Logged in "
                   "data/local/gap_ledger/._")
     return "\n\n".join(blocks)

@@ -46,6 +46,7 @@ in ``VOLUME_UNIT`` so a consumer records it instead of assuming.
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import time as _time
@@ -77,6 +78,39 @@ WHAT_TO_SHOW = "TRADES"
 BAR_SIZE = "5 mins"
 USE_RTH = False
 
+# The 20-session baseline, in ONE request per name. PROBED against the gateway on
+# 2026-09-23, because the allowed duration/bar-size pairs are a fact about IB and not
+# something to assume:
+#
+#   30 mins / 1 M -> 672 bars, 21 dates      5 mins / 1 D -> 192 bars,  1 date
+#   30 mins / 2 M -> 1312 bars, 41 dates     5 mins / 1 W -> 960 bars,  5 dates
+#                                            5 mins / 1 M -> 4032 bars, 21 dates
+#                                            5 mins / 2 M -> 7872 bars, 41 dates
+#
+# The brief suggested 30-minute bars over one month, on the reasoning that 04:00-09:00 ET
+# falls on 30-minute boundaries. It does — but only when the RUN TIME does too, and a run at
+# 09:05 or 08:45 would then have to compare a 30-minute-floored baseline against a
+# to-the-minute numerator, which inflates the ratio by up to half an hour of volume. Since
+# 5-minute bars are allowed over the same two months in the SAME single request, this uses
+# those: one request either way, and the window semantics stay identical to the yfinance path
+# (``screen.baseline_volumes``) for any run time.
+#
+# Two months rather than one so twenty prior sessions still exist after holidays: 1 M returned
+# exactly 21 dates, which leaves no margin at all.
+BASELINE_BAR_SIZE = "5 mins"
+BASELINE_DURATION = "2 M"
+
+# Reading a real bid/ask. snapshot=False is a STREAMING request against the subscription;
+# regulatorySnapshot=False matters just as much, because True is the paid one-off snapshot the
+# brief rules out. Cancelled the moment it has been read.
+QUOTE_WAIT_SECONDS = 6.0
+QUOTE_POLL_SECONDS = 0.25
+# IB error codes worth telling apart. 10089/10090/354 all mean "your subscription does not
+# cover this"; 162 is the historical pacing/service error.
+SUBSCRIPTION_CODES = frozenset({354, 10089, 10090, 10091, 10167, 10168})
+NO_QUOTE_SUBSCRIPTION = ("spread unknown — IBKR market-data subscription does not cover API "
+                         "streaming quotes")
+
 # MEASURED (see the module docstring): shares, but a partial count — roughly 0.34x to 0.67x
 # consolidated volume, varying by day. Named here and carried into the record rather than
 # silently converted, because the number is only meaningful against ANOTHER IB number.
@@ -85,6 +119,34 @@ VOLUME_UNIT = "shares (IB partial tape, ~0.3-0.7x consolidated; compare only wit
 # The gateway's own pacing complaint. Code 162 covers "Historical Market Data Service error"
 # which is what a pacing violation arrives as.
 _PACING_MARKERS = ("pacing violation", "max rate of messages", "too many requests")
+
+
+IB_ASYNC_LOGGERS = ("ib_async", "ib_async.wrapper", "ib_async.client")
+
+
+@contextlib.contextmanager
+def quiet_ib():
+    """Silence ib_async's own per-name ERROR lines for the duration of a request.
+
+    Same discipline as ``bars.quiet_yfinance`` and the same reason: a subscription refusal
+    arrives as a multi-line ERROR per ticker, and a screen that prints sixty of those has
+    buried its own report. Nothing is lost — ``_on_error`` keeps every code and message, the
+    reason is stated once as ``quote_note``, and each affected row carries its own mark.
+
+    Only the level is changed, and only inside the ``with``.
+    """
+    previous = []
+    for name in IB_ASYNC_LOGGERS:
+        logger = logging.getLogger(name)
+        previous.append((logger, logger.level, logger.propagate))
+        logger.setLevel(logging.CRITICAL)
+        logger.propagate = False
+    try:
+        yield
+    finally:
+        for logger, level, propagate in previous:
+            logger.setLevel(level)
+            logger.propagate = propagate
 
 
 class IBKRUnavailable(RuntimeError):
@@ -145,9 +207,15 @@ class _Pacer:
         return waited
 
 
-def request_key(ticker: str, start: date, end: date) -> str:
-    """What makes two historical requests IDENTICAL for the 15-second rule."""
-    return f"{ticker.upper()}|{start.isoformat()}|{end.isoformat()}|{BAR_SIZE}|{WHAT_TO_SHOW}"
+def request_key(ticker: str, start: date, end: date, *, bar_size: str = BAR_SIZE,
+                duration: str = "") -> str:
+    """What makes two historical requests IDENTICAL for the 15-second rule.
+
+    The bar size and duration are part of it: today's 5-minute day and the two-month baseline
+    are different requests for the same name, and must not be made to wait for each other.
+    """
+    return (f"{ticker.upper()}|{start.isoformat()}|{end.isoformat()}|{bar_size}|{duration}"
+            f"|{WHAT_TO_SHOW}")
 
 
 # --------------------------------------------------------------------------- #
@@ -203,6 +271,53 @@ def to_intraday_bar(raw) -> Optional[IntradayBar]:
     return IntradayBar(start=when, open=o, high=h, low=low, close=c, volume=int(volume))
 
 
+def settle_quotes(adapter, seconds: float = 0.5) -> None:
+    """Let a late gateway message arrive while the caller is still suppressing output.
+
+    IB reports a refused market-data subscription ASYNCHRONOUSLY: the complaint for the last
+    quote lands after the call returned, so without this it escapes the quiet block and prints
+    one stray ``Error 300`` per name. Best effort and never raises — this is tidiness, not
+    correctness.
+    """
+    client = getattr(adapter, "_ib", None)
+    if client is None:
+        return
+    try:
+        _wait(client, seconds, getattr(adapter, "_sleep", _time.sleep))
+    except Exception:                                    # pragma: no cover
+        pass
+
+
+def _usable(feed, name: str) -> Optional[float]:
+    """A tick value, or None when it is absent or NaN.
+
+    IB signals "no value" with NaN, and NaN is the one float that must never reach a spread
+    calculation: it compares False against everything and poisons whatever it touches.
+    """
+    value = getattr(feed, name, None)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number <= 0:                  # NaN, or a placeholder zero
+        return None
+    return number
+
+
+def _wait(client, seconds: float, sleep) -> None:
+    """Let the client pump its event loop for ``seconds``.
+
+    ``IB.sleep`` is not ``time.sleep``: it runs the asyncio loop, which is the only way
+    streaming ticks arrive. Falls back to the injected sleep for a client that has no such
+    method (the test fake).
+    """
+    pump = getattr(client, "sleep", None)
+    if callable(pump):
+        pump(seconds)
+    else:
+        sleep(seconds)
+
+
 # --------------------------------------------------------------------------- #
 # the adapter
 # --------------------------------------------------------------------------- #
@@ -230,6 +345,11 @@ class IBKRBars:
         self.pacer = pacer or _Pacer(sleep=sleep)
         self._sleep = sleep
         self._ib = ib                                   # injected in tests; built on demand
+        # What the gateway complained about, (code, message). Read by ``quote_for`` so a
+        # subscription refusal is reported as such instead of as an empty book.
+        self.errors: list = []
+        # Set once when IB refuses to stream quotes at all. A RUN-level fact.
+        self.quote_note = ""
 
     # -- connection --------------------------------------------------------- #
     def _client(self):
@@ -255,8 +375,23 @@ class IBKRBars:
                 f"could not reach IB Gateway at {self.host}:{self.port} "
                 f"(clientId={self.client_id}): {exc}. Is the gateway running and is API "
                 f"access enabled for this client id?") from exc
+        try:
+            client.errorEvent += self._on_error
+        except Exception:                                # a client without the event
+            pass
         self._ib = client
         return client
+
+    def _on_error(self, reqId, code, message, contract=None, *_rest) -> None:
+        """Remember what the gateway complained about, so a refusal can be NAMED.
+
+        ib_async reports most market-data problems through this event rather than by raising,
+        so without it a subscription refusal is indistinguishable from a quiet market.
+        """
+        try:
+            self.errors.append((int(code), str(message)))
+        except Exception:                                # pragma: no cover
+            pass
 
     @property
     def connected(self) -> bool:
@@ -299,8 +434,14 @@ class IBKRBars:
         return qualified[0] if qualified else None
 
     # -- the request -------------------------------------------------------- #
-    def bars_for(self, ticker: str, *, start: date, end: date) -> list[IntradayBar]:
-        """ONE historical request: 5-minute TRADES bars over [start, end), pre-market included.
+    def bars_for(self, ticker: str, *, start: date, end: date,
+                 bar_size: str = BAR_SIZE,
+                 duration: Optional[str] = None) -> list[IntradayBar]:
+        """ONE historical request: TRADES bars over [start, end), pre-market included.
+
+        ``duration`` overrides the day count derived from the window, which is what the
+        twenty-session baseline uses (``BASELINE_DURATION``) to fetch today and the priors
+        together in a single request.
 
         A pacing complaint from the gateway waits and retries; anything else is logged and
         returns nothing, so one bad symbol costs its own row and not the run.
@@ -308,7 +449,8 @@ class IBKRBars:
         contract = self._contract(ticker)
         if contract is None:
             return []
-        key = request_key(ticker, start, end)
+        key = request_key(ticker, start, end, bar_size=bar_size,
+                          duration=duration or duration_for(start, end))
         for attempt, backoff in enumerate((None,) + PACING_BACKOFF_SECONDS):
             if backoff is not None:
                 _log.warning("gap_ledger.ibkr: pacing violation on %s — waiting %.0fs "
@@ -316,10 +458,12 @@ class IBKRBars:
                 self._sleep(backoff)
             self.pacer.before(key)
             try:
-                raw = self._client().reqHistoricalData(
-                    contract, endDateTime=end_datetime_for(end),
-                    durationStr=duration_for(start, end), barSizeSetting=BAR_SIZE,
-                    whatToShow=WHAT_TO_SHOW, useRTH=USE_RTH, formatDate=1)
+                with quiet_ib():
+                    raw = self._client().reqHistoricalData(
+                        contract, endDateTime=end_datetime_for(end),
+                        durationStr=duration or duration_for(start, end),
+                        barSizeSetting=bar_size, whatToShow=WHAT_TO_SHOW, useRTH=USE_RTH,
+                        formatDate=1)
             except Exception as exc:
                 if looks_like_pacing(str(exc)):
                     continue                             # wait and try again, never abort
@@ -344,6 +488,67 @@ class IBKRBars:
                 out[ticker] = bars
         return out
 
+    def quote_for(self, ticker: str) -> Quote:
+        """A brief STREAMING quote, cancelled the moment it has been read.
+
+        ``snapshot=False`` streams against the subscription; ``regulatorySnapshot=False``
+        matters equally, because True is the paid one-off snapshot the brief rules out.
+
+        A book that never arrives is ``Quote()`` — which ``screen.spread_percent`` already
+        reads as *spread unknown* — and when IB says why (a subscription refusal), the reason
+        is kept in ``quote_note`` so the run can state it once rather than per name.
+        """
+        contract = self._contract(ticker)
+        if contract is None:
+            return Quote()
+        client = self._client()
+        before = len(self.errors)
+        with quiet_ib():
+            try:
+                ticker_feed = client.reqMktData(contract, "", snapshot=False,
+                                                regulatorySnapshot=False)
+            except Exception as exc:
+                _log.warning("gap_ledger.ibkr: quote request failed for %s: %s", ticker, exc)
+                return Quote()
+            try:
+                waited = 0.0
+                while waited < QUOTE_WAIT_SECONDS:
+                    _wait(client, QUOTE_POLL_SECONDS, self._sleep)
+                    waited += QUOTE_POLL_SECONDS
+                    bid, ask = _usable(ticker_feed, "bid"), _usable(ticker_feed, "ask")
+                    if bid is not None and ask is not None:
+                        return Quote(bid=bid, ask=ask)
+                    if self._refused(before):
+                        return Quote()
+                return Quote(bid=_usable(ticker_feed, "bid"),
+                             ask=_usable(ticker_feed, "ask"))
+            finally:
+                try:
+                    client.cancelMktData(contract)
+                except Exception as exc:                 # pragma: no cover
+                    _log.debug("gap_ledger.ibkr: cancelMktData failed for %s: %s",
+                               ticker, exc)
+
+    def _refused(self, since: int) -> bool:
+        """Did IB just say the subscription does not cover this? Records the reason once."""
+        for code, message in self.errors[since:]:
+            if code in SUBSCRIPTION_CODES:
+                if not self.quote_note:
+                    self.quote_note = NO_QUOTE_SUBSCRIPTION
+                    _log.warning("gap_ledger.ibkr: %s (IB %s: %s)", NO_QUOTE_SUBSCRIPTION,
+                                 code, message.split(".")[0])
+                return True
+        return False
+
     def quotes(self, tickers: Sequence[str]) -> dict[str, Quote]:
-        """Nothing, deliberately — see the class docstring. Reads as *spread unknown*."""
-        return {}
+        """One streaming quote per name, each cancelled after it is read.
+
+        A name IB will not quote is ABSENT from the mapping, the same way a name it has no
+        bars for is absent — which ``screen`` already handles as *spread unknown*.
+        """
+        out: dict[str, Quote] = {}
+        for ticker in tickers:
+            quote = self.quote_for(ticker)
+            if quote.bid is not None or quote.ask is not None:
+                out[ticker] = quote
+        return out

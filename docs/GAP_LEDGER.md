@@ -132,6 +132,41 @@ column still load (an absent value reads as missing, never as 0).
 > or a gap in what yfinance serves. The run summary states the count every day so the question
 > stays visible instead of being inferred from a short list.
 
+## Interactive Brokers verifies the gap (GAP-IBKR-1)
+
+yfinance publishes no pre-market volume, so everything above is inference. A local **IB Gateway**
+(read-only, port 4001) serves 5-minute TRADES bars *with* volume, and every name yfinance says
+gapped is checked against it — **including the ones the trust tests abstained on**, because those
+are exactly the cases IB can settle.
+
+| | |
+|---|---|
+| **check 1**, one request per name | today's bars: IB's own last pre-market price, its volume 04:00 ET → run time, and the gap against the adjusted previous close already held from yfinance. No trades, or a gap inside the threshold, and the name is **rejected** — `IBKR: no real pre-market move`. That is a reading, not an abstention: IB looked and there was nothing there. |
+| **check 2**, survivors only | the 20-session baseline in **one** request (5-minute bars over two months — the allowed pairs were probed, and 5-minute bars keep the clock window identical to the yfinance path for any run time, where 30-minute bars would force a floored comparison). Relative volume is finally **evaluated**: ≥ 3× passes, below fails. |
+| **spread** | a brief *streaming* quote per surviving name (`snapshot=False`, `regulatorySnapshot=False` — never the paid one-off), cancelled immediately. |
+
+**A verified name overrides yfinance** — its price, volume and spread replace yfinance's, and the
+tape-density trust tests do not apply to it. Those tests exist only because the volume was
+missing; where it is measured they are a worse proxy for the same thing. `source` on the row says
+`ibkr` or `yfinance`, and IB's own readings are kept beside the screen's (`ib_last_price`,
+`ib_gap_pct`, `ib_premarket_volume`, `ib_baseline_median`, `ib_relative_volume`, `ib_bid`,
+`ib_ask`) so a disagreement between providers stays visible. Old CSVs load unchanged.
+
+**If the Gateway is unreachable the run proceeds on yfinance** with the trust tests and says so
+once — `!! IBKR UNAVAILABLE: volume not checked` — in the report, the CSV (`ibkr_note`), the
+Todoist task and the viewer. Never fatal. `--no-ibkr` does the same deliberately.
+
+Two measured facts about this data. **IB volume is shares, but a partial tape**: summed against
+consolidated daily volume it came to 0.34×–0.67×, varying by day, so an absolute IB volume
+threshold is unsafe and an IB figure must never be compared with another provider's — a ratio of
+IB windows is the right construction. And **this subscription does not cover API streaming
+quotes** (error 10089; historical bars work fine), so the spread abstains with that reason rather
+than substituting delayed data; the code is ready for the day it is added.
+
+> **Licence boundary.** IBKR data is licensed for the owner's personal, non-professional use. It
+> stays inside `gap_ledger/`: **nothing in Aristos imports `gap_ledger.ibkr`**, and a test
+> asserts it (`test_gap_ledger_verify.py`). A lens that ranked on it would be redistributing it.
+
 **Two fetch passes.** The relative volume needs twenty sessions of 5-minute bars per name;
 fetching that for every liquid US stock, to produce a list of a handful, is about two orders
 of magnitude more data than the run needs. So pass A reads today's bars for every step-1

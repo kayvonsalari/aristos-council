@@ -29,7 +29,7 @@ recorded in the result so the draw is never a mystery.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Callable, Optional, Sequence
@@ -46,6 +46,8 @@ from .screen import (NO_PREMARKET_PRICE_REASONS, SPREAD_HISTORICAL,
 from .todoist import DeliveryOutcome, TodoistClient, deliver
 from .universe import (NO_DAILY_BARS, PreFilterResult, PreFilterRow, pre_filter,
                        split_common_stock)
+from .verify import (IBKR_UNAVAILABLE, SOURCE_IBKR, SOURCE_YFINANCE, IBKRReading,
+                     apply_reading, check_one, check_two, needs_verifying)
 
 _log = logging.getLogger(__name__)
 
@@ -119,6 +121,21 @@ class RunResult:
     # Set when the provider served no pre-market volume for anything (see
     # ``premarket_volume_unavailable``). A RUN-level fact, said once.
     volume_note: str = ""
+    # GAP-IBKR-1 — what IB said about each name it was asked about, and the run-level notes.
+    ibkr_readings: dict = field(default_factory=dict)
+    # Empty when the gateway answered. Otherwise the banner, said ONCE (item 3).
+    ibkr_note: str = ""
+    # IB's own explanation for having no bid/ask, when it gave one (a subscription refusal).
+    ibkr_quote_note: str = ""
+
+    @property
+    def ibkr_used(self) -> bool:
+        """Did IB reach a verdict on anything this run?"""
+        return any(r.verified for r in self.ibkr_readings.values())
+
+    @property
+    def verified_count(self) -> int:
+        return sum(1 for r in self.ibkr_readings.values() if r.verified)
 
     @property
     def excluded(self) -> list[tuple[str, str]]:
@@ -169,10 +186,21 @@ def _headline_fields(news: Optional[MatchedNews], *, enabled: bool) -> dict:
 
 def build_row(*, day: date, run_at: datetime, group: str, pre: Optional[PreFilterRow],
               screen: Optional[ScreenRow], headlines: Optional[MatchedNews],
-              news_enabled: bool, reason: str, config: GapConfig) -> LedgerRow:
+              news_enabled: bool, reason: str, config: GapConfig,
+              reading: Optional[IBKRReading] = None, ibkr_note: str = "") -> LedgerRow:
     """One CSV row out of the readings. Computes nothing — every number is copied."""
     row = LedgerRow(date=day.isoformat(), group=group, run_at_et=et_stamp(run_at),
-                    reason=reason, **config.as_record())
+                    reason=reason, ibkr_note=ibkr_note, **config.as_record())
+    # GAP-IBKR-1 — who the numbers came from, and IB's own readings kept beside the screen's
+    # so a disagreement between providers is still visible after the fact.
+    row.source = SOURCE_IBKR if (reading is not None and reading.verified) else SOURCE_YFINANCE
+    if reading is not None:
+        row.ib_last_price = reading.last_price
+        row.ib_gap_pct = reading.gap
+        row.ib_premarket_volume = reading.premarket_volume
+        row.ib_baseline_median = reading.baseline_median
+        row.ib_relative_volume = reading.relative_volume
+        row.ib_bid, row.ib_ask = reading.bid, reading.ask
     if pre is not None:
         row.ticker = pre.ticker
         row.previous_close = pre.previous_close
@@ -212,7 +240,7 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                intraday: IntradaySource, day: Optional[date] = None,
                run_at: Optional[datetime] = None, config: GapConfig = DEFAULT_CONFIG,
                root: str | Path = DEFAULT_ROOT, news_source: Optional[NewsSource] = None,
-               company_names: Optional[dict] = None,
+               company_names: Optional[dict] = None, ibkr=None,
                explain_runner=None, todoist: Optional[TodoistClient] = None,
                write: bool = True, refresh: bool = False, live: Optional[bool] = None,
                progress: Progress = _noop) -> RunResult:
@@ -283,8 +311,41 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
     result.gapped = len(gappers)
     progress(f"{len(gappers)} gapped at least {config.min_abs_gap * 100:.1f}%")
 
-    # -- step 2, pass B: the relative volume, on twenty sessions ------------ #
+    # -- step 2, IBKR verification (GAP-IBKR-1) ----------------------------- #
+    # Every name yfinance says gapped goes to IB, INCLUDING the ones the trust tests
+    # abstained on: those are precisely the cases IB can settle. When IB reaches a verdict it
+    # REPLACES the yfinance reading and the trust tests do not apply; when it cannot, the
+    # yfinance path below runs exactly as before.
     result.screened = dict(first_pass)
+    to_verify = needs_verifying(list(first_pass.values()), config=config)
+    if ibkr is not None and to_verify:
+        progress(f"asking IBKR about {len(to_verify)} gapper(s)")
+        result.ibkr_readings, result.ibkr_note, result.ibkr_quote_note = _ibkr_stage(
+            to_verify, ibkr=ibkr, pre_by_ticker=pre_by_ticker, day=day, run_at=run_at,
+            config=config, progress=progress)
+        if result.ibkr_note:
+            progress(f"note: {result.ibkr_note}")
+        for ticker, reading in result.ibkr_readings.items():
+            # A quote is only ever attempted for a name that PASSED check 2, so only those
+            # rows may blame the subscription for having no spread. A rejected name's book
+            # was never asked about, and saying otherwise would be a small lie on the row.
+            unknown = (result.ibkr_quote_note if (reading.passed is True
+                                                 and result.ibkr_quote_note)
+                       else spread_note)
+            result.screened[ticker] = apply_reading(
+                result.screened[ticker], reading, spread_unknown_note=unknown,
+                config=config)
+        confirmed = sum(1 for r in result.ibkr_readings.values() if r.passed is True)
+        progress(f"IBKR reached a verdict on {result.verified_count} of {len(to_verify)}: "
+                 f"{confirmed} confirmed")
+    elif ibkr is None:
+        result.ibkr_note = IBKR_UNAVAILABLE
+
+    # Names IB settled need no yfinance baseline: its verdict already stands on measured
+    # volume, and fetching twenty sessions of zero-volume bars to second-guess it would be
+    # both wasted and misleading.
+    gappers = [t for t in gappers
+               if not (result.ibkr_readings.get(t) or IBKRReading(t)).verified]
     if gappers:
         progress(f"reading {config.relative_volume_days} sessions of pre-market history "
                  f"for {len(gappers)} names")
@@ -299,9 +360,11 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                 previous_close=pre_by_ticker[ticker].previous_close, as_of=day,
                 run_at=run_at, quote=quotes.get(ticker),
                 spread_unknown_note=spread_note, config=config)
-    result.candidates = [result.screened[t] for t in gappers
-                         if result.screened[t].passed is True]
+    # Across BOTH paths: whatever ended up passing, IB-verified or yfinance-screened.
+    result.candidates = [row for row in result.screened.values() if row.passed is True]
     if gappers and premarket_volume_unavailable([result.screened[t] for t in gappers]):
+        # Only about the names the yfinance path actually screened — an IB-verified name has
+        # real volume, so claiming the provider served none would be false.
         result.volume_note = (
             "this provider served NO pre-market volume for any name, so the relative-volume "
             "leg could not be applied — these names were selected on the GAP ALONE")
@@ -339,15 +402,80 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                   pre=pre_by_ticker.get(row.ticker), screen=row,
                   headlines=result.news.get(row.ticker),
                   news_enabled=result.news_enabled,
-                  reason=result.explain.lines.get(row.ticker, ""), config=config)
+                  reason=result.explain.lines.get(row.ticker, ""), config=config,
+                  reading=result.ibkr_readings.get(row.ticker),
+                  ibkr_note=result.ibkr_note)
         for row in result.candidates
     ] + [
         build_row(day=day, run_at=run_at, group=GROUP_BASELINE,
                   pre=pre_by_ticker.get(ticker), screen=result.screened.get(ticker),
-                  headlines=None, news_enabled=False, reason="", config=config)
+                  headlines=None, news_enabled=False, reason="", config=config,
+                  reading=result.ibkr_readings.get(ticker), ibkr_note=result.ibkr_note)
         for ticker in result.baseline
     ]
     return _finish(result, root=root, write=write, todoist=todoist, progress=progress)
+
+
+def _ibkr_stage(tickers: Sequence[str], *, ibkr, pre_by_ticker: dict, day: date,
+                run_at: datetime, config: GapConfig,
+                progress: Progress) -> tuple[dict, str, str]:
+    """IB's verdict per name: ``({ticker: IBKRReading}, run_note, quote_note)``.
+
+    Check 1 is one cheap request for today; check 2 is a whole month of history, so it runs
+    only for survivors. An unreachable gateway returns the banner and NO readings, which
+    leaves every yfinance row and its trust tests standing (item 3) — never fatal.
+    """
+    from .ibkr import (BASELINE_BAR_SIZE, BASELINE_DURATION, IBKRUnavailable, quiet_ib,
+                       settle_quotes)
+
+    readings: dict = {}
+    tomorrow = day + timedelta(days=1)
+    try:
+        progress(f"IBKR check 1 — today's bars for {len(tickers)} name(s)")
+        for ticker in tickers:
+            bars = ibkr.bars_for(ticker, start=day, end=tomorrow)
+            readings[ticker] = check_one(
+                ticker, bars, previous_close=pre_by_ticker[ticker].previous_close,
+                as_of=day, run_at=run_at, config=config)
+    except IBKRUnavailable as exc:
+        # At run start, or part way through: either way the honest answer is that the volume
+        # was not checked, said once, and the run carries on.
+        _log.warning("gap_ledger: IBKR unavailable: %s", exc)
+        return {}, IBKR_UNAVAILABLE, ""
+
+    survivors = [t for t, r in readings.items() if r.passed is None]
+    quote_note = ""
+    if survivors:
+        progress(f"IBKR check 2 — {config.relative_volume_days}-session baseline for "
+                 f"{len(survivors)} name(s)")
+        try:
+            for ticker in survivors:
+                history = ibkr.bars_for(ticker, start=day, end=tomorrow,
+                                        bar_size=BASELINE_BAR_SIZE,
+                                        duration=BASELINE_DURATION)
+                readings[ticker] = check_two(readings[ticker], history, as_of=day,
+                                             run_at=run_at, config=config)
+            passing = [t for t in survivors if readings[t].passed is True]
+            if passing:
+                progress(f"IBKR spread — streaming quote for {len(passing)} name(s)")
+                # Suppressed across the WHOLE stage, not per request: IB reports a refused
+                # subscription asynchronously, so the message lands after the individual call
+                # has returned and a per-request guard cannot catch it. ``settle_quotes``
+                # pumps the loop once at the end so the tail arrives while still quiet.
+                # Nothing is lost — every code is captured and the reason is stated once.
+                with quiet_ib():
+                    for ticker in passing:
+                        quote = ibkr.quote_for(ticker)
+                        readings[ticker] = replace(readings[ticker], bid=quote.bid,
+                                                   ask=quote.ask)
+                    settle_quotes(ibkr)
+                quote_note = getattr(ibkr, "quote_note", "") or ""
+        except IBKRUnavailable as exc:
+            # The gateway went away mid-stage. Whatever it already said stands; the rest keep
+            # their yfinance rows.
+            _log.warning("gap_ledger: IBKR went away mid-run: %s", exc)
+            return readings, IBKR_UNAVAILABLE, quote_note
+    return readings, "", quote_note
 
 
 def _finish(result: RunResult, *, root: str | Path, write: bool,
@@ -413,6 +541,21 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
         f"        {result.no_premarket_trade} of "
         f"{len(result.pre_filtered.passed)} had no pre-market print at all.",
     ]
+    if result.ibkr_note:
+        # Item 3's banner, once, at the top. A yfinance-only morning is a different product
+        # from a verified one and the reader has to know which they are holding.
+        lines.append(result.ibkr_note)
+        lines.append("        falling back to yfinance prices with the tape-density trust "
+                     "tests; relative volume was NOT measured.")
+    elif result.ibkr_used:
+        # "verified" means IB reached a VERDICT, which includes the ones it threw out — so the
+        # line says both numbers rather than one that could be read as either.
+        confirmed = sum(1 for r in result.ibkr_readings.values() if r.passed is True)
+        rejected = sum(1 for r in result.ibkr_readings.values() if r.passed is False)
+        lines.append(f"IBKR checked {result.verified_count} of "
+                     f"{len(result.ibkr_readings)} gapper(s) against real pre-market "
+                     f"volume: {confirmed} confirmed, {rejected} rejected. A verified name "
+                     f"overrides yfinance and skips the trust tests.")
     if result.volume_note:
         # Said ONCE, at the top, where it cannot be missed: an absent section or a repeated
         # per-name note would both leave the reader guessing what the list actually means.
@@ -429,7 +572,9 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
                 mark += f" ({len(news.related)} related)"
             volume = (_times(row.relative_volume) if row.relative_volume is not None
                       else "unavailable")
-            lines.append(f"  {row.ticker:<8} gap {_pct(row.gap):>9}  "
+            reading = result.ibkr_readings.get(row.ticker)
+            source = "IBKR" if (reading is not None and reading.verified) else "yf"
+            lines.append(f"  {row.ticker:<8} [{source:<4}] gap {_pct(row.gap):>9}  "
                          f"rel.vol {volume:>11}  "
                          f"{row.spread_note}  {mark}")
             # With --explain off there is no per-row line at all; the header says so once.
@@ -456,14 +601,27 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
             lines.append(f"  … and {len(not_evaluated) - max_excluded} more")
         lines.append("")
 
+    ib_rejected = {t for t, r in result.ibkr_readings.items() if r.passed is False}
+    # IB's rejections get their own section below, so they are not repeated here.
     rejected = [(t, r) for t, r in result.excluded
-                if (t, r) not in set(not_evaluated)]
+                if (t, r) not in set(not_evaluated) and t not in ib_rejected]
     if rejected:
         lines.append(f"EXCLUDED ({len(rejected)})")
         for ticker, reason in rejected[:max_excluded]:
             lines.append(f"  {ticker:<8} {reason}")
         if len(rejected) > max_excluded:
             lines.append(f"  … and {len(rejected) - max_excluded} more")
+        lines.append("")
+
+    verified_rejects = [(t, r.reason) for t, r in result.ibkr_readings.items()
+                        if r.passed is False]
+    if verified_rejects:
+        lines.append(f"IBKR REJECTED ({len(verified_rejects)}) — IB looked and there was no "
+                     f"move there")
+        for ticker, reason in verified_rejects[:max_excluded]:
+            lines.append(f"  {ticker:<8} {reason}")
+        if len(verified_rejects) > max_excluded:
+            lines.append(f"  … and {len(verified_rejects) - max_excluded} more")
         lines.append("")
 
     lines.append(f"CONTROL GROUP: {len(result.baseline)} name(s) drawn with seed "
