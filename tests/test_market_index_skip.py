@@ -164,17 +164,22 @@ def test_the_store_is_still_flushed_when_an_exchange_is_skipped(tmp_path):
 # --------------------------------------------------------------------------- #
 # the config records the finding
 # --------------------------------------------------------------------------- #
-def test_the_tracked_config_still_lists_all_the_intended_exchanges():
-    """The four absent markets are LEFT IN on purpose: this file records what the index is
-    meant to track, and deleting them would shrink the peer universe with nothing on the
-    page to say so. The skip machinery is what makes that honest."""
+def test_the_tracked_config_lists_the_venues_worth_asking_about():
+    """Superseded in part by INDEX-CAP-RETRY-1. Two things were learned after this test was
+    first written: HK is NOT absent (``/exchanges-list`` omits it, but
+    ``/exchange-symbol-list/HK`` serves 3,512 names — build log 2026-09-23T09:22:20), and
+    Milan has no working code at all (MI/MTA/BIT/MIL/IT/XMIL all 404, probed 2026-09-24), so
+    MI was deleted rather than skipped forever. T and KS stay: they 404 today but are named in
+    every skip summary and have a plausible route to being added."""
     config = mi.load_config(mi.DEFAULT_CONFIG)
-    for code in ("MI", "HK", "T", "KS"):
+    assert "MI" not in config["exchanges"]
+    for code in ("HK", "T", "KS"):
         assert code in config["exchanges"]
 
 
-def test_the_config_explains_why_those_codes_stay():
+def test_the_config_explains_milans_removal_and_the_others_staying():
     text = mi.DEFAULT_CONFIG.read_text(encoding="utf-8")
     assert "MARKET-INDEX-SKIP-1" in text
-    assert "HTTP 404" in text
-    assert "no Italian exchange" in text
+    assert "MILAN IS REMOVED" in text
+    assert "MTA -> 404" in text
+    assert "not on this plan" in text
