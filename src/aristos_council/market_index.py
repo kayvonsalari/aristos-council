@@ -29,6 +29,7 @@ Nothing here reaches a model. The CLI:
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
@@ -105,6 +106,13 @@ CHARGE_FUNDAMENTALS = 10
 CHARGE_LISTING = 1
 DEFAULT_BUDGET = 90_000                 # charged units, not requests
 
+# INDEX-SKIP-RETRY-1 - how long a LISTING request keeps trying when the network gives no answer.
+# Three tries, waiting 30s then 90s between them (one wait per retry, so the tuple's length IS
+# the retry count): about two minutes in all, which rides out a blip (the 2026-09-23 one
+# skipped nine exchanges in a single second) without turning a real outage into a build that
+# never ends. An HTTP 404 is NOT retried: it is an answer.
+NETWORK_BACKOFF_SECONDS = (30.0, 90.0)
+
 # The venues a US listing may sit on. 17,829 US common stocks came back on 2026-09-18, of
 # which 11,508 were OTC (PINK 8,644, OTCQB 1,252, OTCQX 498, OTCGREY 486, OTCCE 475,
 # OTCMKTS 144, OTC 6, OTCBB 3). Fetching those cost 337 of the first build's 526 rows and
@@ -130,12 +138,37 @@ USD_COMPUTED = "computed"
 USD_ABSTAINED = "abstained"
 
 
+# Why an exchange's listing was skipped (BuildOutcome.skip_kinds).
+SKIP_NOT_AVAILABLE = "not_available"
+SKIP_NETWORK = "network"
+SKIP_OTHER = "other"
+
+
 class MarketIndexError(RuntimeError):
     """The index could not be built, read or queried."""
 
 
 class QuotaExhausted(MarketIndexError):
     """The provider refused on quota. A build stops cleanly rather than hammering."""
+
+
+class ExchangeNotAvailable(MarketIndexError):
+    """The provider answered HTTP 404: this listing does not exist on this plan.
+
+    INDEX-SKIP-RETRY-1. A fact about the venue, not about the moment - asking again in two
+    minutes gets the same answer - so it is skipped AT ONCE and reported as "not available".
+    """
+
+
+class NetworkUnavailable(MarketIndexError):
+    """The request never got an answer (URLError, a timeout, a dropped connection, a 5xx),
+    and it kept not getting one through every retry.
+
+    INDEX-SKIP-RETRY-1. A fact about the moment, not about the venue: on 2026-09-23 a network
+    blip made nine exchanges look "unavailable" inside one second, because a URLError was
+    treated exactly like a 404. It is skipped only after the backoff is spent, and reported as
+    "network error, will retry next build" - the venue is fine and the next build asks again.
+    """
 
 
 # --------------------------------------------------------------------------- #
@@ -424,6 +457,17 @@ class IndexStore:
 # --------------------------------------------------------------------------- #
 # the provider
 # --------------------------------------------------------------------------- #
+class _RateLimited(Exception):
+    """Internal: an HTTP 429, so the backoff-and-retry loop in ``_get`` can catch it."""
+
+
+# What "no answer" looks like. URLError covers a failed connection or DNS lookup, and OSError
+# covers the rest of the socket family (a reset, a timeout); HTTPException is a body cut off
+# mid-read. HTTPError is also a URLError, which is why ``_request`` catches it first.
+_NETWORK_ERRORS = (urllib.error.URLError, TimeoutError, ConnectionError, OSError,
+                   http.client.HTTPException)
+
+
 class EODHDIndexSource:
     """Read-only EODHD access for the two endpoints the index is built from.
 
@@ -433,48 +477,85 @@ class EODHDIndexSource:
     """
 
     def __init__(self, api_key: str | None = None, timeout: float = 30.0,
-                 sleep=time.sleep) -> None:
+                 sleep=time.sleep, network_backoff=NETWORK_BACKOFF_SECONDS) -> None:
         raw = api_key if api_key is not None else os.environ.get("EODHD_API_KEY")
         self._key = (raw or "").strip()
         self._timeout = timeout
         self._sleep = sleep
+        self._network_backoff = tuple(network_backoff)
         # MARKET-INDEX-2 - REQUESTS and CHARGED units are different numbers and only one
         # of them is the one the daily allowance runs out of.
         self.requests = 0
         self.charged = 0
 
-    def _get(self, path: str, charge: int = CHARGE_LISTING, **params) -> object:
+    def _get(self, path: str, charge: int = CHARGE_LISTING, *, retry_network: bool = False,
+             **params) -> object:
+        """One EODHD request.
+
+        Three different answers, and they are told apart because each wants a different
+        response: a 429 is a "wait" (backed off here), a 402/403 is a "stop" (quota), and a 404
+        is "this does not exist" (``ExchangeNotAvailable``, no retry - it is an answer). NO
+        answer at all - a URLError, a timeout, a dropped connection, a 5xx - is a fact about
+        the moment, so with ``retry_network`` it is retried on ``network_backoff`` before
+        ``NetworkUnavailable`` is raised. INDEX-SKIP-RETRY-1: it used to be raised as the same
+        error as a 404, which skipped nine healthy exchanges in one second on 2026-09-23.
+        """
         if not self._key:
             raise MarketIndexError("EODHD_API_KEY is not set — the index cannot be built")
         params.setdefault("api_token", self._key)
         params.setdefault("fmt", "json")
         url = f"{BASE_URL}{path}?{urllib.parse.urlencode(params)}"
-        # Back off on 429 rather than giving up: a rate limit is a "wait", a quota is a
-        # "stop", and conflating them either wastes a half-built table or hammers the API.
         for attempt in range(5):
+            try:
+                return self._request(url, path, charge, retry_network=retry_network)
+            except _RateLimited:
+                # Back off on 429 rather than giving up: a rate limit is a "wait", a quota is
+                # a "stop", and conflating them either wastes a half-built table or hammers
+                # the API.
+                self._sleep(2 ** attempt)
+        raise QuotaExhausted(f"EODHD {path}: rate limited five times over")
+
+    def _request(self, url: str, path: str, charge: int, *, retry_network: bool) -> object:
+        """One request, retried on a network failure when asked to."""
+        waits = self._network_backoff if retry_network else ()
+        for tried in range(len(waits) + 1):
             self.requests += 1
             self.charged += charge
             try:
                 with urllib.request.urlopen(url, timeout=self._timeout) as resp:
                     return json.loads(resp.read().decode("utf-8"))
             except urllib.error.HTTPError as exc:
+                # HTTPError is a URLError, so it is caught FIRST: an HTTP status is an answer.
                 if exc.code == 429:
-                    self._sleep(2 ** attempt)
-                    continue
+                    raise _RateLimited from None
                 if exc.code in (402, 403):
                     raise QuotaExhausted(
                         f"EODHD refused {path} with HTTP {exc.code} — quota or plan "
                         f"limit reached") from None
-                raise MarketIndexError(f"EODHD {path}: HTTP {exc.code}") from None
+                if exc.code == 404:
+                    raise ExchangeNotAvailable(f"EODHD {path}: HTTP 404") from None
+                if exc.code >= 500:
+                    failure = f"HTTP {exc.code}"          # a server blip, not an answer
+                else:
+                    raise MarketIndexError(f"EODHD {path}: HTTP {exc.code}") from None
+            except _NETWORK_ERRORS as exc:
+                failure = type(exc).__name__
             except Exception as exc:
                 raise MarketIndexError(f"EODHD {path}: {type(exc).__name__}") from None
-        raise QuotaExhausted(f"EODHD {path}: rate limited five times over")
+            if tried < len(waits):
+                self._sleep(waits[tried])
+                continue
+            raise NetworkUnavailable(f"EODHD {path}: {failure}") from None
+        raise NetworkUnavailable(f"EODHD {path}: no answer")      # pragma: no cover
 
     def common_stocks(self, exchange: str) -> list[dict]:
         """Every COMMON STOCK listed on one exchange. Funds, ADRs, preferred lines and
         indices are dropped here rather than downstream: they are not peers of an
-        operating company and fetching their fundamentals would be the bulk of the bill."""
-        rows = self._get(f"/exchange-symbol-list/{exchange}")
+        operating company and fetching their fundamentals would be the bulk of the bill.
+
+        The one call that RETRIES a network failure: a listing that fails skips its whole
+        exchange (see ``build``), so it is worth two minutes to be sure it is not a blip."""
+        rows = self._get(f"/exchange-symbol-list/{exchange}", retry_network=True)
         out = []
         for row in rows if isinstance(rows, list) else []:
             if isinstance(row, dict) and str(row.get("Type", "")) == COMMON_STOCK:
@@ -633,6 +714,11 @@ class BuildOutcome:
     # the exchanges after it. A listing that fails is a fact about one venue, not about the
     # build.
     skipped_exchanges: list = field(default_factory=list)
+    # INDEX-SKIP-RETRY-1 - WHY each was skipped, by exchange code: SKIP_NOT_AVAILABLE (HTTP 404,
+    # a fact about the venue), SKIP_NETWORK (no answer after every retry, a fact about the
+    # moment) or SKIP_OTHER. They mean different things to the owner - one is "this plan does not
+    # have it", the other is "run it again" - so they are never reported as one number.
+    skip_kinds: dict = field(default_factory=dict)
     stopped: str = ""
 
     def summary(self) -> str:
@@ -646,14 +732,37 @@ class BuildOutcome:
             head += f". {self.skipped_sentence()}"
         return head + (f" - STOPPED: {self.stopped}" if self.stopped else ".")
 
+    def skipped_codes(self, kind: str) -> list[str]:
+        """The exchange codes skipped for ``kind``, in build order."""
+        return [code for code, _reason in self.skipped_exchanges
+                if self.skip_kinds.get(code, SKIP_OTHER) == kind]
+
+    @property
+    def network_skipped(self) -> list[str]:
+        """The exchanges to run again: skipped because nothing answered, not because the
+        venue is missing."""
+        return self.skipped_codes(SKIP_NETWORK)
+
     def skipped_sentence(self) -> str:
-        """``1 exchange skipped: MI, HTTP 404`` - named, so a missing market is never
-        inferred from a short table."""
+        """``2 exchanges skipped - not available (404): MI; network error, will retry next
+        build: XETRA (URLError)`` - named and separated by cause, so a missing market is never
+        inferred from a short table and a blip is never mistaken for a missing venue."""
         if not self.skipped_exchanges:
             return ""
+        reasons = dict(self.skipped_exchanges)
+        groups = []
+        missing = self.skipped_codes(SKIP_NOT_AVAILABLE)
+        if missing:
+            groups.append(f"not available (404): {', '.join(missing)}")
+        blipped = self.skipped_codes(SKIP_NETWORK)
+        if blipped:
+            groups.append("network error, will retry next build: "
+                          + ", ".join(f"{c} ({reasons[c]})" for c in blipped))
+        other = self.skipped_codes(SKIP_OTHER)
+        if other:
+            groups.append("failed: " + ", ".join(f"{c} ({reasons[c]})" for c in other))
         word = "exchange" if len(self.skipped_exchanges) == 1 else "exchanges"
-        detail = "; ".join(f"{code}, {reason}" for code, reason in self.skipped_exchanges)
-        return f"{len(self.skipped_exchanges)} {word} skipped: {detail}"
+        return f"{len(self.skipped_exchanges)} {word} skipped - " + "; ".join(groups)
 
     def venue_lines(self) -> list[str]:
         """Every venue string seen, with a count - once per build, so a venue nobody
@@ -746,7 +855,16 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
                 # European build on 2026-09-22 because Milan answered 404.
                 reason = str(exc).split(": ", 1)[-1] or type(exc).__name__
                 outcome.skipped_exchanges.append((exchange, reason))
-                say(f"{exchange}: SKIPPED - listing failed ({reason}); continuing with "
+                # INDEX-SKIP-RETRY-1 - said by CAUSE. By now a network failure has already
+                # been retried on the backoff, so "will retry next build" is the true remedy.
+                if isinstance(exc, ExchangeNotAvailable):
+                    kind, why = SKIP_NOT_AVAILABLE, "not available on this plan"
+                elif isinstance(exc, NetworkUnavailable):
+                    kind, why = SKIP_NETWORK, "network error after retries, will retry next build"
+                else:
+                    kind, why = SKIP_OTHER, "listing failed"
+                outcome.skip_kinds[exchange] = kind
+                say(f"{exchange}: SKIPPED - {why} ({reason}); continuing with "
                     f"the remaining exchanges")
                 continue
             outcome.listed += len(listings)
@@ -1573,6 +1691,11 @@ def _cmd_build(args) -> int:
         # run to thousands, and a market silently missing from the table is the kind of
         # thing that gets noticed months later.
         _say(f"NOTE: {outcome.skipped_sentence()}")
+    if outcome.network_skipped:
+        # Only the ones that were a blip: a 404 will 404 again, so it is not worth a command.
+        _say("Run the network-skipped exchanges again with:")
+        _say(f"  python -m aristos_council.market_index build "
+             f"--exchanges {','.join(outcome.network_skipped)} --budget {args.budget}")
     if outcome.stopped and "limit" not in outcome.stopped:
         # The exact command that picks up where this one stopped - a resume instruction a
         # reader has to reconstruct is one they will get wrong at 4,000 rows in.

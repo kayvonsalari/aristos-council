@@ -90,6 +90,15 @@ a mis-spelled code. All four stay in `market_index.yaml` on purpose, because tha
 which venues the index is *meant* to track and deleting them would shrink the peer universe
 silently; the cost is four listing requests per build, reported every time.
 
+**A network error is not a 404 (INDEX-SKIP-RETRY-1).** On 2026-09-23 a network blip skipped nine
+healthy exchanges in one second, because a URLError was treated exactly like "not found". A
+listing that gets an HTTP **404** is skipped at once and reported as *not available (404)*; one that
+gets **no answer** (URLError, timeout, dropped connection, 5xx) is retried on a backoff — three
+tries over about two minutes — before it is skipped, and reported as *network error, will retry
+next build*, with the exact command to run those exchanges again. Only the listing call retries; a
+per-symbol fundamentals failure is still counted and moved past, and a quota refusal still stops
+the build.
+
 `market_index.yaml` is tracked and lists the venues. The built table is **not** tracked —
 it is machine-generated and rebuildable, like the cohorts under `data/local/cohorts/`.
 
