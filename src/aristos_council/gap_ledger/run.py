@@ -127,6 +127,13 @@ class RunResult:
     ibkr_note: str = ""
     # IB's own explanation for having no bid/ask, when it gave one (a subscription refusal).
     ibkr_quote_note: str = ""
+    # GAP-REPORT-CLARITY-1 — gappers the trust tests could not vouch for. Counted so the
+    # report can say "N trusted + M untrusted" in one breath instead of two numbers that look
+    # like they disagree.
+    untrusted_gappers: int = 0
+    # The candidates whose relative volume could not be measured at all. Named, not counted,
+    # because a banner that says "these names" has to be able to say which.
+    gap_only: list = field(default_factory=list)
 
     @property
     def ibkr_used(self) -> bool:
@@ -309,7 +316,6 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                if row.gap is not None and abs(row.gap) >= config.min_abs_gap
                and not is_price_untrusted(row)]
     result.gapped = len(gappers)
-    progress(f"{len(gappers)} gapped at least {config.min_abs_gap * 100:.1f}%")
 
     # -- step 2, IBKR verification (GAP-IBKR-1) ----------------------------- #
     # Every name yfinance says gapped goes to IB, INCLUDING the ones the trust tests
@@ -318,8 +324,15 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
     # yfinance path below runs exactly as before.
     result.screened = dict(first_pass)
     to_verify = needs_verifying(list(first_pass.values()), config=config)
+    # GAP-REPORT-CLARITY-1 (c) — said as ONE sentence. "25 gapped at least 3.0%" followed by
+    # "asking IBKR about 40 gappers" read as a contradiction, because the first number counted
+    # only the gappers the trust tests TRUSTED and the second counted every gapper. Both are
+    # true; printing them as two unrelated lines was the problem.
+    result.untrusted_gappers = max(0, len(to_verify) - len(gappers))
+    progress(f"{len(gappers)} trusted gapper(s) + {result.untrusted_gappers} untrusted"
+             + (f", all {len(to_verify)} sent to IBKR" if ibkr is not None and to_verify
+                else ""))
     if ibkr is not None and to_verify:
-        progress(f"asking IBKR about {len(to_verify)} gapper(s)")
         result.ibkr_readings, result.ibkr_note, result.ibkr_quote_note = _ibkr_stage(
             to_verify, ibkr=ibkr, pre_by_ticker=pre_by_ticker, day=day, run_at=run_at,
             config=config, progress=progress)
@@ -362,12 +375,17 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                 spread_unknown_note=spread_note, config=config)
     # Across BOTH paths: whatever ended up passing, IB-verified or yfinance-screened.
     result.candidates = [row for row in result.screened.values() if row.passed is True]
-    if gappers and premarket_volume_unavailable([result.screened[t] for t in gappers]):
-        # Only about the names the yfinance path actually screened — an IB-verified name has
-        # real volume, so claiming the provider served none would be false.
+    # GAP-REPORT-CLARITY-1 (a) — scoped to the names it is actually about, and omitted when
+    # there are none. On 2026-09-24, 16 of 17 candidates were IBKR-verified and the banner
+    # still announced that "these names were selected on the GAP ALONE" — true of DRI and of
+    # nothing else on the page.
+    result.gap_only = sorted(row.ticker for row in result.candidates
+                             if row.relative_volume is None)
+    if result.gap_only:
+        names = ", ".join(result.gap_only)
         result.volume_note = (
-            "this provider served NO pre-market volume for any name, so the relative-volume "
-            "leg could not be applied — these names were selected on the GAP ALONE")
+            f"{len(result.gap_only)} name{'' if len(result.gap_only) == 1 else 's'} "
+            f"selected on the gap alone (no pre-market volume to measure): {names}")
         progress(f"note: {result.volume_note}")
     progress(f"{len(result.candidates)} candidate(s) after relative volume")
 
@@ -499,6 +517,16 @@ def _times(value: Optional[float]) -> str:
     return "—" if value is None else f"{value:.2f}x"
 
 
+def _short_spread(note: str) -> str:
+    """The row's spread mark, without the run-level explanation after the dash.
+
+    GAP-REPORT-CLARITY-1 (b): "spread unknown — IBKR market-data subscription does not cover
+    API streaming quotes" is a fact about the SUBSCRIPTION, printed once in the header. The row
+    keeps the part that is about the row.
+    """
+    return (note or "").split(" — ")[0].strip() or "spread n/a"
+
+
 def _kinds(dropped: Sequence[tuple[str, str]]) -> str:
     """``"73 warrant, 57 unit, …"`` — what the not-common-stock drop actually consisted of.
 
@@ -547,7 +575,11 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
         lines.append(result.ibkr_note)
         lines.append("        falling back to yfinance prices with the tape-density trust "
                      "tests; relative volume was NOT measured.")
-    elif result.ibkr_used:
+    if result.ibkr_quote_note:
+        # GAP-REPORT-CLARITY-1 (b) — once, here. It repeated on all seventeen rows, which is
+        # how a reader learns to stop reading that column.
+        lines.append(f"Spread: {result.ibkr_quote_note}.")
+    if result.ibkr_used and not result.ibkr_note:
         # "verified" means IB reached a VERDICT, which includes the ones it threw out — so the
         # line says both numbers rather than one that could be read as either.
         confirmed = sum(1 for r in result.ibkr_readings.values() if r.passed is True)
@@ -557,8 +589,7 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
                      f"volume: {confirmed} confirmed, {rejected} rejected. A verified name "
                      f"overrides yfinance and skips the trust tests.")
     if result.volume_note:
-        # Said ONCE, at the top, where it cannot be missed: an absent section or a repeated
-        # per-name note would both leave the reader guessing what the list actually means.
+        # Said ONCE, at the top, and only about the names it is true of.
         lines.append(f"!! DATA GAP — {result.volume_note}.")
     lines.append("")
 
@@ -572,11 +603,13 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
                 mark += f" ({len(news.related)} related)"
             volume = (_times(row.relative_volume) if row.relative_volume is not None
                       else "unavailable")
+            # The row says only what is true of the ROW; the reason lives in the header.
+            spread_mark = ("spread n/a" if row.spread is None
+                           else _short_spread(row.spread_note))
             reading = result.ibkr_readings.get(row.ticker)
             source = "IBKR" if (reading is not None and reading.verified) else "yf"
             lines.append(f"  {row.ticker:<8} [{source:<4}] gap {_pct(row.gap):>9}  "
-                         f"rel.vol {volume:>11}  "
-                         f"{row.spread_note}  {mark}")
+                         f"rel.vol {volume:>11}  {spread_mark}  {mark}")
             # With --explain off there is no per-row line at all; the header says so once.
             reason = result.explain.lines.get(row.ticker, "")
             if reason:

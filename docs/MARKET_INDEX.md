@@ -56,6 +56,29 @@ so an interruption can never leave a truncated table where a readable one was. I
 off on HTTP 429 (a rate limit is "wait") and stops cleanly on 402/403 (a quota is "stop"),
 reporting how far it got and how many calls it used.
 
+**A gap the provider does not have is not asked about every build (INDEX-CAP-RETRY-1).**
+Measured 2026-09-24: 2,566 rows carry no market cap and 1,767 no classification, and *every one*
+was fetched with a name — the provider answered and simply had nothing. Probing
+`/fundamentals/0052.TW` returns `"MarketCapitalization": "NA"`, an explicit *not available*
+rather than a blank or a timeout. The 2026-09-23 build refetched 1,502 such rows and filled
+**none**, for roughly 15,000 charged units. So a row that has come back empty
+`empty_retry_after` (2) times is left alone for `empty_retry_days` (30), both set in
+`market_index.yaml`; a refetch that *fills* something resets the count, because that row is
+making progress. Rows written before the counter existed are not treated as unasked — the
+evidence is on the row (listing parser + a name, and `fetched_at` says when) — so the saving
+starts on the next build rather than one build later. `status` splits the gap-less rows into
+**due** and **waiting** so the next build's cost is visible before it is spent.
+
+**Milan is gone (INDEX-CAP-RETRY-1).** `/exchange-symbol-list/MI` answers HTTP 404 on every
+build, and on 2026-09-24 every plausible alternative was tried against the endpoint — `MI`,
+`MTA`, `BIT`, `MIL`, `IT`, `XMIL`, all 404. There is no code to correct it to, so `MI` was
+removed from `market_index.yaml` with the evidence in a comment rather than left to be skipped
+at the cost of a request and a line of noise every build. `T` and `KS` 404 the same way but stay:
+they are named in every skip summary and may be added to the plan. A related correction — the
+earlier claim that **HK** was absent was wrong: `/exchanges-list` omits it, yet
+`/exchange-symbol-list/HK` serves 3,512 names (build log, 2026-09-23T09:22:20). The
+exchange-list endpoint is not authoritative about what the symbol-list endpoint will serve.
+
 **An exchange whose listing fails is skipped, not fatal (MARKET-INDEX-SKIP-1).** One
 unlistable venue used to end the whole run — on 2026-09-22 the European build died at Milan
 (`/exchange-symbol-list/MI` → HTTP 404) and never attempted the exchanges after it. Such an

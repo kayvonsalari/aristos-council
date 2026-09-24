@@ -12,18 +12,25 @@
 # Cost: roughly one call per listed common stock, plus one per exchange for the listing.
 # Rows younger than max_age_days are skipped without a call, so a re-run is cheap.
 
-# MARKET-INDEX-SKIP-1 - four of these codes are NOT in EODHD's exchange list on this plan,
-# probed against /exchanges-list on 2026-09-23 (70 exchanges returned): MI, HK, T and KS.
-# There is no Italian exchange in the list AT ALL, so MI is not a mis-spelling of a code that
-# exists - Milan is simply not offered here, and neither are Hong Kong, Tokyo or Korea. A
-# listing request for any of them answers HTTP 404.
+# MARKET-INDEX-SKIP-1 / INDEX-CAP-RETRY-1 - which codes this plan actually serves, PROBED
+# rather than assumed.
 #
-# They are LEFT IN deliberately. This file records which venues the index is MEANT to track,
-# and quietly deleting four markets would shrink the peer universe with nothing on the page to
-# say so. Since MARKET-INDEX-SKIP-1 an unlistable exchange is skipped and NAMED in the build
-# summary ("4 exchanges skipped: MI, HTTP 404; ..."), so the gap is reported on every run and
-# costs four listing requests; if the plan ever gains these markets they start working with no
-# edit here. Drop them if you would rather not pay the four requests.
+# MILAN IS REMOVED. /exchange-symbol-list/MI answers HTTP 404 on every build, and on
+# 2026-09-24 the obvious alternative spellings were tried directly against the endpoint:
+#
+#     MI -> 404    MTA -> 404    BIT -> 404    MIL -> 404    IT -> 404    XMIL -> 404
+#
+# so there is no code to correct it to; Milan is not on this plan. It is deleted rather than
+# left to be skipped, because a listing request that is KNOWN to 404 costs a request and a
+# line of noise on every single build, and the comment is a better record of the reason than a
+# recurring skip is. Restore it the day the plan gains Borsa Italiana.
+#
+# T and KS (Tokyo, Korea) answer 404 the same way but are LEFT IN: unlike Milan they have a
+# plausible route to being added, they are named in the skip summary every build, and the
+# earlier reading that HK was also absent turned out to be WRONG - /exchanges-list omits HK,
+# yet /exchange-symbol-list/HK serves 3,512 names (build log, 2026-09-23T09:22:20). The
+# exchange-list endpoint is not authoritative about what the symbol-list endpoint will serve,
+# which is exactly why these are probed one at a time and not trusted wholesale.
 exchanges:
   # North America
   - US            # NYSE + NASDAQ + AMEX, the deepest single pool of comparables
@@ -34,7 +41,6 @@ exchanges:
   - PA            # Euronext Paris
   - AS            # Euronext Amsterdam
   - MC            # Madrid
-  - MI            # Milan
   - SW            # SIX Swiss
   - ST            # Stockholm
   - CO            # Copenhagen
@@ -69,5 +75,19 @@ venues:
   US: [NYSE, NASDAQ, NYSE ARCA, AMEX]
 
 max_age_days: 30
+
+# INDEX-CAP-RETRY-1 - how patient to be about a gap the provider does not have.
+#
+# MEASURED, 2026-09-24: 2,566 rows carry no market cap and 1,767 no classification, and every
+# one was fetched WITH A NAME - the provider answered and simply had nothing. A direct probe of
+# /fundamentals/0052.TW returns "MarketCapitalization": "NA", an explicit not-available rather
+# than a blank or a timeout. The 2026-09-23 build refetched 1,502 such rows and filled NONE, at
+# roughly 15,000 charged units.
+#
+# So a row that has been asked and come back empty this many times is left alone for this many
+# days. status splits the gap-less rows into "due" and "waiting" so the next build's cost is
+# visible before it is spent.
+empty_retry_after: 2
+empty_retry_days: 30
 
 root: data/local/market_index
