@@ -27,6 +27,7 @@ import re
 from typing import Iterable, Optional, Sequence
 
 from .ledger import GROUP_CANDIDATE, LedgerRow
+from .outcomes import SPY_COLUMN, directional_move, relative_to_market
 from .verify import SOURCE_IBKR
 
 # What the Result column says. Measured FROM THE OPEN in the gap's direction — the same
@@ -297,6 +298,62 @@ def path_markdown(row: LedgerRow) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# GAP-MARKET-BENCH-1 — the result against the market, not only against the control group
+# --------------------------------------------------------------------------- #
+_CHECKPOINT_PRICE_COLUMNS = ("price_1000", "price_1130", "close_price")
+
+
+def _slash(values, fmt) -> str:
+    """``"+0.4% / — / +1.2%"``, or blank when there is not one reading to show."""
+    if all(v is None for v in values):
+        return ""
+    return " / ".join("—" if v is None else fmt(v) for v in values)
+
+
+def market_triplets(row: LedgerRow) -> tuple:
+    """``(raw, SPY, beyond SPY)`` as ``"10:00 / 11:30 / close"`` strings, each blank when the row
+    has nothing for it.
+
+    Computed from the prices and SPY's stored moves rather than read from the stored ``move_*`` /
+    ``rel_spy_*`` columns, so a CSV filled before those columns existed still shows its raw move.
+    The SPY figure is the market's own signed move; the raw and the relative are in the gap's
+    direction, so a gap-down name that fell more than the market reads as a positive number.
+    """
+    raw = [directional_move(row.open_price, getattr(row, c), row.direction)
+           for c in _CHECKPOINT_PRICE_COLUMNS]
+    spy = [getattr(row, SPY_COLUMN[c]) for c in _CHECKPOINT_PRICE_COLUMNS]
+    beyond = [relative_to_market(r, m, row.direction) for r, m in zip(raw, spy)]
+    return _slash(raw, _signed_pct), _slash(spy, _signed_pct), _slash(beyond, _signed_pct)
+
+
+MARKET_COLUMNS = ("Checkpoint", "Group", "Raw move (mean / median)",
+                  "Beyond SPY (mean / median)", "Names", "With SPY")
+
+
+def _mean_median(stats) -> str:
+    if stats.n == 0:
+        return "—"
+    return f"{_signed_pct(stats.mean)} / {_signed_pct(stats.median)}"
+
+
+def market_markdown(card) -> str:
+    """The scorecard's market table: per checkpoint, candidates then the control group, each
+    raw and beyond SPY. Empty when no checkpoint has any name scored."""
+    if not card.checkpoints:
+        return ""
+    lines = ["| " + " | ".join(MARKET_COLUMNS) + " |",
+             "|" + "|".join(["---"] * len(MARKET_COLUMNS)) + "|"]
+    for check in card.checkpoints:
+        for group, raw, beyond in (("Candidates", check.candidate_move, check.candidate_vs_spy),
+                                   ("Control group", check.baseline_move,
+                                    check.baseline_vs_spy)):
+            lines.append("| " + " | ".join([_escape(check.label), group, _mean_median(raw),
+                                            _mean_median(beyond), str(raw.n),
+                                            str(beyond.n)]) + " |")
+    return NEWLINE.join(lines)
+
+
+# --------------------------------------------------------------------------- #
 # the details expander
 # --------------------------------------------------------------------------- #
 def details_of(row: LedgerRow) -> list[tuple[str, str]]:
@@ -340,6 +397,10 @@ def details_of(row: LedgerRow) -> list[tuple[str, str]]:
     add("Move from first signal to the close", row.signal_move_close, _signed_pct)
     add("10:00 ET", row.price_1000, _money)
     add("11:30 ET", row.price_1130, _money)
+    raw, spy, beyond = market_triplets(row)
+    add("Move from the open (10:00 / 11:30 / close)", raw)
+    add("SPY over the same spans", spy)
+    add("Beyond SPY", beyond)
     add("Pre-market vs open", row.premarket_vs_open, lambda v: f"{v * 100:+.2f}%")
     add("Outcome note", row.outcome_note)
     add("News", row.news_found)
@@ -413,6 +474,9 @@ HOW_TO_READ = (
                     "that it was low."),
     ("Result", "From the OPEN in the gap's direction, at the close: did the move carry on, "
                "reverse, or end flat. Blank until `outcomes` has been run for that day."),
+    ("Beyond SPY", "The name's move from the open in the gap's direction, minus SPY's move over "
+                   "the same span. It separates a name that carried on from one that only "
+                   "rode the market."),
     ("Control group", "An equal-size sample of names that passed the liquidity filter but "
                       "NOT the screen, drawn with a seed fixed by the date. It is what the "
                       "candidates are compared against."),

@@ -264,6 +264,15 @@ denominator).
 Below **40 scored days** the verdict is "not enough days" and no rate is presented as a
 finding. A fortnight of mornings is a mood, not evidence.
 
+**Against the market, not only the control group (GAP-MARKET-BENCH-1).** `outcomes` also records
+SPY's own day — open to 10:00, open to 11:30, open to close — and every candidate and control row
+gets its move from the open raw (in the gap's direction) and relative to SPY (its move minus SPY's,
+in the gap's direction, so a gap-down name is not scored backwards). `score` and the viewer's
+scorecard show both, candidates against control. A missing SPY reading is skipped for the relative
+number only, never counted as a flat day. `outcomes` also fills SPY for past logged days, fetching
+only SPY for a day that is otherwise complete; where the provider no longer keeps that day's 5-minute
+bars the 10:00/11:30 legs stay blank and the report says so.
+
 **Is acting earlier worth anything? (GAP-EARLY-CHECKPOINT-1).** For every IBKR-verified candidate
 the run also logs the *first signal*: the first 5-minute pre-market bar whose price was already at
 the 3% gap in the gap's direction **and** whose volume was at least 3× (`early_volume_multiple`)

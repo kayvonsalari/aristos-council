@@ -25,14 +25,14 @@ presented as a finding, because a fortnight of mornings is a mood, not evidence.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from statistics import mean, median
 from typing import Iterable, Optional, Sequence
 
 from .config import DEFAULT_CONFIG, GapConfig
 from .ledger import GROUP_BASELINE, GROUP_CANDIDATE, LedgerRow
-from .outcomes import directional_move, signal_moves
+from .outcomes import SPY_COLUMN, directional_move, relative_to_market, signal_moves
 from .verify import SOURCE_IBKR
 
 # The checkpoints, in the order they happen. The close is included as the third: it is
@@ -56,6 +56,31 @@ def continued(row: LedgerRow, column: str) -> Optional[bool]:
     if row.direction == 0 or row.open_price is None or price is None:
         return None
     return (price - row.open_price) * row.direction > 0
+
+
+@dataclass(frozen=True)
+class MoveStats:
+    """A set of directional moves, summarised. ``n == 0`` means nothing was scoreable."""
+
+    n: int = 0
+    mean: Optional[float] = None
+    median: Optional[float] = None
+    positive: int = 0
+
+    def sentence(self) -> str:
+        if self.n == 0:
+            return "no scoreable names"
+        return (f"n={self.n}: mean {self.mean * 100:+.2f}%, median {self.median * 100:+.2f}%, "
+                f"{self.positive} of {self.n} up")
+
+
+def move_stats(values: Iterable[Optional[float]]) -> MoveStats:
+    """Mean, median and how many were positive. A missing value is skipped, never a 0."""
+    kept = [v for v in values if v is not None]
+    if not kept:
+        return MoveStats()
+    return MoveStats(n=len(kept), mean=mean(kept), median=median(kept),
+                     positive=sum(1 for v in kept if v > 0))
 
 
 @dataclass(frozen=True)
@@ -83,12 +108,27 @@ class CheckpointScore:
     label: str
     candidates: GroupRate
     baseline: GroupRate
+    # GAP-MARKET-BENCH-1 — how far each group MOVED from the open in the gap's direction (raw),
+    # and how far beyond the market (SPY) it moved over the same span (relative).
+    candidate_move: MoveStats = field(default_factory=MoveStats)
+    baseline_move: MoveStats = field(default_factory=MoveStats)
+    candidate_vs_spy: MoveStats = field(default_factory=MoveStats)
+    baseline_vs_spy: MoveStats = field(default_factory=MoveStats)
 
     @property
     def edge(self) -> Optional[float]:
         """Candidate rate minus control rate, or None when either side has nothing."""
         a, b = self.candidates.rate, self.baseline.rate
         return None if a is None or b is None else a - b
+
+    def market_lines(self) -> list[str]:
+        """Two lines: the raw move, and the move beyond the market, candidates then control."""
+        def pair(mine, theirs) -> str:
+            return f"candidates {mine.sentence()}; control {theirs.sentence()}"
+        return [f"{self.label} raw move from the open: "
+                + pair(self.candidate_move, self.baseline_move),
+                f"{self.label} beyond SPY: "
+                + pair(self.candidate_vs_spy, self.baseline_vs_spy)]
 
     def sentence(self) -> str:
         line = (f"{self.label}: candidates {self.candidates.sentence()}, "
@@ -143,6 +183,10 @@ class Scorecard:
                f"Names scored: {self.candidates} candidates, {self.baseline} baseline."]
         out += [f"  {c.sentence()}" for c in self.checkpoints]
         out.append(self.verdict)
+        market = [line for c in self.checkpoints for line in c.market_lines()]
+        if market:
+            out += ["", "Against the market (SPY), in the gap's direction, from the open:"]
+            out += [f"  {line}" for line in market]
         if self.early is not None:
             out.append("")
             out += self.early.lines()
@@ -152,31 +196,6 @@ class Scorecard:
 # --------------------------------------------------------------------------- #
 # GAP-EARLY-CHECKPOINT-1 — is acting earlier in the pre-market worth anything?
 # --------------------------------------------------------------------------- #
-@dataclass(frozen=True)
-class MoveStats:
-    """A set of directional moves, summarised. ``n == 0`` means nothing was scoreable."""
-
-    n: int = 0
-    mean: Optional[float] = None
-    median: Optional[float] = None
-    positive: int = 0
-
-    def sentence(self) -> str:
-        if self.n == 0:
-            return "no scoreable names"
-        return (f"n={self.n}: mean {self.mean * 100:+.2f}%, median {self.median * 100:+.2f}%, "
-                f"{self.positive} of {self.n} up")
-
-
-def move_stats(values: Iterable[Optional[float]]) -> MoveStats:
-    """Mean, median and how many were positive. A missing value is skipped, never a 0."""
-    kept = [v for v in values if v is not None]
-    if not kept:
-        return MoveStats()
-    return MoveStats(n=len(kept), mean=mean(kept), median=median(kept),
-                     positive=sum(1 for v in kept if v > 0))
-
-
 # The exits each entry is measured to. The close is the one both share, so it is the comparison.
 _SIGNAL_EXITS = ("to 09:00", "to the open", "to the close")
 _OPEN_EXITS = (("to 10:00", "price_1000"), ("to 11:30", "price_1130"),
@@ -276,6 +295,22 @@ def _rate(rows: Iterable[LedgerRow], column: str) -> GroupRate:
     return GroupRate(scored=scored, carried=carried)
 
 
+def _moves(rows: Iterable[LedgerRow], column: str) -> MoveStats:
+    """Each row's move from the open to ``column`` in the gap's direction, summarised. Computed
+    from the prices, not read from the stored ``move_*`` column, so a CSV filled before that
+    column existed scores exactly the same."""
+    return move_stats(directional_move(r.open_price, getattr(r, column), r.direction)
+                      for r in rows)
+
+
+def _vs_market(rows: Iterable[LedgerRow], column: str) -> MoveStats:
+    """The same, minus SPY's move over the same span (in the gap's direction). A row on a day
+    with no SPY reading is skipped for THIS number only, never counted as a zero."""
+    return move_stats(relative_to_market(
+        directional_move(r.open_price, getattr(r, column), r.direction),
+        getattr(r, SPY_COLUMN[column]), r.direction) for r in rows)
+
+
 def score(days: dict[date, Sequence[LedgerRow]], *,
           config: GapConfig = DEFAULT_CONFIG) -> Scorecard:
     """Score every logged day. ``days`` maps a market date to that day's rows."""
@@ -285,9 +320,11 @@ def score(days: dict[date, Sequence[LedgerRow]], *,
     scored_days = sorted(day for day, rows in days.items()
                          if any(continued(r, column) is not None
                                 for r in rows for _, column in CHECKPOINT_COLUMNS))
-    checkpoints = tuple(CheckpointScore(label=label,
-                                        candidates=_rate(candidates, column),
-                                        baseline=_rate(baseline, column))
+    checkpoints = tuple(CheckpointScore(
+        label=label, candidates=_rate(candidates, column), baseline=_rate(baseline, column),
+        candidate_move=_moves(candidates, column), baseline_move=_moves(baseline, column),
+        candidate_vs_spy=_vs_market(candidates, column),
+        baseline_vs_spy=_vs_market(baseline, column))
                         for label, column in CHECKPOINT_COLUMNS
                         if _rate(candidates, column).scored
                         or _rate(baseline, column).scored)

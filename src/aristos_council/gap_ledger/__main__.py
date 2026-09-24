@@ -7,7 +7,8 @@ only command spelled here.
 Three verbs, in the order a day uses them:
 
 ``run``       the pre-market screen. Writes the day's CSV, optionally posts to Todoist.
-``outcomes``  after the close, fill the four readings for a day (or every unfilled day).
+``outcomes``  after the close, fill the four readings and SPY's day for a day (or
+              every unfilled day).
 ``score``     the whole record, candidates against the control group.
 
 The two network-shaped switches are OFF-by-default in the direction that costs money:
@@ -30,7 +31,7 @@ from .config import DEFAULT_CONFIG, DEFAULT_ROOT, DEFAULT_RUN_TIME, GapConfig, a
 from .explain import build_runner
 from .ledger import ledger_days, read_all, read_day
 from .news import EODHDNews
-from .outcomes import SessionNotClosed, fill_day, is_complete
+from .outcomes import SessionNotClosed, fill_day, has_market, is_complete
 from .run import format_report, run_screen
 from .score import score
 from .todoist import RestTodoist
@@ -130,16 +131,19 @@ def cmd_run(args) -> int:
 # outcomes
 # --------------------------------------------------------------------------- #
 def _unfilled_days(root: str) -> list[date]:
-    """Every logged day holding at least one row without all four readings."""
+    """Every logged day holding at least one row without all four readings, or without the
+    market's day (GAP-MARKET-BENCH-1) — which is how a day logged before SPY was recorded gets
+    its SPY columns filled in on the next ``outcomes``."""
     return [day for day in ledger_days(root)
-            if any(not is_complete(row) for row in read_day(day, root))]
+            if any(not is_complete(row) or not has_market(row)
+                   for row in read_day(day, root))]
 
 
 def cmd_outcomes(args) -> int:
     days = ([_parse_date(args.date)] if args.date else _unfilled_days(args.root))
     if not days:
         _say(f"Nothing to fill: every logged day under {args.root} already carries all "
-             f"four readings (or no day is logged yet).")
+             f"four readings and the market's day (or no day is logged yet).")
         return 0
     bars = YFinanceBars(_config(args))
     failures = 0

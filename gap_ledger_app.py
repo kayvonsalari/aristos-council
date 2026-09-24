@@ -38,7 +38,8 @@ from aristos_council.gap_ledger.viewer import (HOW_TO_READ, NEWS_ANY, NEWS_CHOIC
                                                VERIFIED_CHOICES, apply_filters,
                                                candidates_of, checkpoint_markdown,
                                                company_of, day_summary, details_of,
-                                               early_markdown, filter_caption, order_rows,
+                                               early_markdown, filter_caption, market_markdown,
+                                               order_rows,
                                                path_markdown, row_flags,
                                                scorecard_progress, source_facts,
                                                table_markdown)
@@ -312,6 +313,14 @@ def render_scorecard() -> None:
     left, right = st.columns(2)
     left.metric("Days with filled outcomes", f"{card.days_scored} / {card.min_days}")
     right.metric("Names scored", f"{card.candidates} candidates · {card.baseline} baseline")
+
+    if card.checkpoints:
+        st.subheader("Against the market, not only the control group")
+        st.caption("Each name's move from the open in the gap's direction, and that minus "
+                   "SPY's move over the same span (also in the gap's direction). A candidate "
+                   "can carry on more often than the control group and still only be riding "
+                   "the market; the 'beyond SPY' column is the part that is not.")
+        st.markdown(market_markdown(card))
 
     if card.early is not None:
         st.subheader("Acting at the first signal vs acting at the open")

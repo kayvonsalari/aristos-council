@@ -108,8 +108,9 @@ def test_outcomes_with_nothing_to_fill_says_so(tmp_path, capsys):
 
 
 def test_unfilled_days_lists_only_days_with_a_gap(tmp_path):
+    """A gap is a missing price OR a missing market day (GAP-MARKET-BENCH-1)."""
     write_day(DAY, [_candidate(open_price=50.0, price_1000=51.0, price_1130=52.0,
-                               close_price=53.0)], root=tmp_path)
+                               close_price=53.0, spy_move_close=0.004)], root=tmp_path)
     earlier = DAY - timedelta(days=1)
     write_day(earlier, [_candidate(date=earlier.isoformat())], root=tmp_path)
     assert cli._unfilled_days(str(tmp_path)) == [earlier]

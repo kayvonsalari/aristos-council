@@ -153,6 +153,18 @@ class LedgerRow:
     signal_move_0900: Optional[float] = None
     signal_move_open: Optional[float] = None
     signal_move_close: Optional[float] = None
+    # GAP-MARKET-BENCH-1 — this name's move FROM THE OPEN in the gap's direction (raw), the
+    # market's (SPY) move over the same span (signed, NOT direction-adjusted), and the name's
+    # move minus the market's in the gap's direction (relative). Blank where either side is.
+    move_1000: Optional[float] = None
+    move_1130: Optional[float] = None
+    move_close: Optional[float] = None
+    spy_move_1000: Optional[float] = None
+    spy_move_1130: Optional[float] = None
+    spy_move_close: Optional[float] = None
+    rel_spy_1000: Optional[float] = None
+    rel_spy_1130: Optional[float] = None
+    rel_spy_close: Optional[float] = None
 
     # -- the thresholds this row was screened on --------------------------- #
     cfg_min_price: Optional[float] = None
@@ -188,7 +200,9 @@ _FLOATS = {"previous_close", "average_volume", "premarket_price", "gap_pct",
            "cfg_min_relative_volume", "cfg_wide_spread", "cfg_max_trusted_spread",
            "cfg_max_confirm_drift", "first_signal_price", "price_0400", "price_0600",
            "price_0700", "price_0800", "price_0900", "signal_move_0900", "signal_move_open",
-           "signal_move_close", "cfg_early_volume_multiple"}
+           "signal_move_close", "cfg_early_volume_multiple", "move_1000", "move_1130",
+           "move_close", "spy_move_1000", "spy_move_1130", "spy_move_close",
+           "rel_spy_1000", "rel_spy_1130", "rel_spy_close"}
 _INTS = {"history_days", "premarket_volume", "baseline_sessions", "headline_count",
          "related_count", "premarket_prints", "confirm_prints", "ib_premarket_volume",
          "cfg_min_history_days", "cfg_min_premarket_prints", "cfg_min_confirm_prints",

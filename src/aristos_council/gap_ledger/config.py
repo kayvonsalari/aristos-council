@@ -42,6 +42,10 @@ CHECKPOINTS: tuple[time, ...] = (time(10, 0), time(11, 30))
 # 5-minute IBKR bars the run already fetches, so they exist only for IB-verified candidates.
 PATH_MOMENTS: tuple[time, ...] = (time(4, 0), time(6, 0), time(7, 0), time(8, 0), time(9, 0))
 
+# GAP-MARKET-BENCH-1 — the market the names are compared against. Read by ``outcomes`` (which
+# fetches it) and by nothing else: it is never a candidate and never in the pool.
+BENCHMARK = "SPY"
+
 # Where the day's CSV lands. Gitignored: it is a local record of a local run, and it
 # grows one file per trading day.
 DEFAULT_ROOT = "data/local/gap_ledger"
