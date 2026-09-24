@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -869,6 +870,9 @@ def refresh(*, older_than: int = DEFAULT_MAX_AGE_DAYS, **kwargs) -> BuildOutcome
 # --------------------------------------------------------------------------- #
 # status
 # --------------------------------------------------------------------------- #
+EXAMPLES = 5                       # how many tickers status names per kind of excluded row
+
+
 @dataclass
 class IndexStatus:
     rows: int = 0
@@ -889,6 +893,12 @@ class IndexStatus:
     needs_refetch: int = 0
     complete: int = 0
     path: str = ""
+    # INDEX-CLASS-SANITY-1 - rows kept in the table but never used as peers, and which ones, so
+    # a wrong call can be checked rather than trusted.
+    funds: int = 0
+    suspect: int = 0
+    fund_examples: list = field(default_factory=list)
+    suspect_examples: list = field(default_factory=list)
 
     def lines(self) -> list[str]:
         if not self.rows:
@@ -906,6 +916,11 @@ class IndexStatus:
                f"  {self.unresolved} row(s) with neither PrimaryTicker nor ISIN "
                f"(unresolved; treated as home listings)",
                f"  {self.needs_refetch} row(s) will be REFETCHED by the next build",
+               f"  {self.funds} row(s) are {FUND_NOT_A_COMPANY}, excluded from peer groups"
+               + (f" (e.g. {', '.join(self.fund_examples)})" if self.fund_examples else ""),
+               f"  {self.suspect} row(s) {CLASSIFICATION_SUSPECT} - kept, excluded from "
+               f"peer groups" + (f" (e.g. {', '.join(self.suspect_examples)})"
+                                 if self.suspect_examples else ""),
                f"  oldest row: {self.oldest or 'unknown'}",
                "  per exchange:"]
         if self.missing_cap:
@@ -961,6 +976,15 @@ def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
             out.complete += 1
         else:
             out.needs_refetch += 1
+        # A fund is counted as a fund and never also as suspect.
+        if is_fund(row):
+            out.funds += 1
+            if len(out.fund_examples) < EXAMPLES:
+                out.fund_examples.append(row.ticker)
+        elif suspect_reason(row):
+            out.suspect += 1
+            if len(out.suspect_examples) < EXAMPLES:
+                out.suspect_examples.append(row.ticker)
     stamps = sorted(r.fetched_at for r in rows if r.fetched_at)
     out.oldest = stamps[0] if stamps else ""
     return out
@@ -1044,6 +1068,161 @@ def one_row_per_company(rows) -> tuple[list, int]:
         kept.append(group[0])
         dropped += len(group) - 1
     return sorted(kept, key=lambda r: r.ticker), dropped
+
+
+# --------------------------------------------------------------------------- #
+# INDEX-CLASS-SANITY-1 - a fund is not a company, and a label can contradict its own name
+# --------------------------------------------------------------------------- #
+# MEASURED on the built table (21,181 rows), because the peer ladder trusts every row:
+#
+#   0052.TW   "Fubon Taiwan Technology"               GicSubIndustry "Pharmaceuticals"
+#   00939.TW  "China Construction Bank Corp Class H"  GicSubIndustry "Semiconductor Materials"
+#   00941.TW  "China Mobile Ltd"                      GicSubIndustry "Semiconductor Materials"
+#
+# All three are Taiwan ETFs (the 00xx code range) that EODHD lists as "Common Stock", so they
+# passed the listing filter, and the provider's classification for them is nonsense. A row like
+# that becomes a "pharmaceutical peer" or a "semiconductor-equipment peer" of a real company.
+#
+# Two DIFFERENT problems, kept apart because they are handled differently:
+#
+#   FUND        the row is not an operating company at all. Recognised by name and by the code
+#               shape each exchange gives its funds. Kept in the table (it is a faithful mirror
+#               of the provider, the way cross-listings are), excluded from peer groups, and
+#               counted in ``status`` as "fund, not a company".
+#
+#   SUSPECT     the row may well be a company, but its classification contradicts what its own
+#               name says (a "Bank" filed under semiconductors). Kept, excluded from peer
+#               groups, counted. Only a POSITIVE contradiction flags: a row with no
+#               classification at all contradicts nothing (null is not false).
+#
+# Everything here is a pure function of the row. No network, no model.
+_FUND_NAME_PATTERNS = tuple(re.compile(p, re.IGNORECASE) for p in (
+    r"\b(?:etf|etn|etp)s?\b",                 # "... ETF", "VanEck Sui ETN A"
+    r"\bexchange[- ]traded\b",
+    r"\bucits\b", r"\bsicav\b",
+    r"\bfundos?\b",                          # Brazilian funds: "... Fundo De Indice"
+    r"\b(?:leveraged|inverse) product\b",    # HK: "CSOP CSI 300 Index Daily (2x) Leveraged Product"
+    r"\bfunds? (?:series )?trust\b",         # US ETF shells: "Listed Funds Trust"
+    r"\bseries trust\b",
+    r"\bclosed[- ](?:end )?fund\b", r"\bclosed[-]end\b",
+    # UK closed-end funds. NOT a Real Estate / Realty / Mortgage / Property Investment Trust:
+    # those are REITs, operating property companies and legitimate peers (Link REIT, Federal
+    # Realty, PennyMac Mortgage Investment Trust, Allied Properties). Found by surveying the
+    # built table: the unqualified pattern swallowed 60-odd of them.
+    r"(?<!estate )(?<!realty )(?<!mortgage )(?<!property )\binvestment trusts?\b",
+    r"\bindex solutions\b",
+    r"\b(?:ishares|spdr|proshares|xtrackers|lyxor|direxion|vaneck|global x)\b",
+))
+# A fund word is only a FUND when the row does not read as an operating business: Chemtrade
+# Logistics Income Fund is a chemicals company and Rural Funds Group is a REIT. So these count
+# only with corroboration - the provider gave the row neither a classification nor a cap - or
+# with an asset-management classification.
+_FUND_WORD = re.compile(r"\b(?:funds?|index)\b", re.IGNORECASE)
+_FUND_WORD_STRICT = re.compile(r"\bfunds?\b", re.IGNORECASE)
+_ASSET_MANAGEMENT = re.compile(r"asset management", re.IGNORECASE)
+
+# The code shape each exchange gives its funds. Per exchange, because the shapes do not
+# overlap and a pattern that is right for one is a false positive on another.
+#   TW   the 00xx series is ETFs (0050, 0052, 00939 ...); companies start at 1101.
+#   LSE  "0P" + eight characters is a Morningstar fund id, not a ticker.
+_FUND_CODE_PATTERNS = {
+    "TW": re.compile(r"^00\d{2,5}[A-Z]?$"),
+    "LSE": re.compile(r"^0P[0-9A-Z]{8}$"),
+}
+
+FUND_NOT_A_COMPANY = "fund, not a company"
+
+
+def _code_and_market(row: "IndexRow") -> tuple[str, str]:
+    code, _, suffix = (row.ticker or "").upper().rpartition(".")
+    if not code:                                    # no dot: the whole string is the code
+        code, suffix = suffix, ""
+    return code, (row.market or suffix or "").upper()
+
+
+def fund_reason(row: "IndexRow") -> str:
+    """Why this row is a fund rather than a company, or "" when it is not.
+
+    Four tests, strongest first, and the reason names which fired so a wrong call is
+    diagnosable from the row. A row is a fund on a strong name pattern, on its exchange's fund
+    code shape, on a fund word plus an asset-management classification, or on a fund word with
+    NOTHING to say otherwise (no classification and no cap).
+    """
+    name = row.name or ""
+    for pattern in _FUND_NAME_PATTERNS:
+        if pattern.search(name):
+            return f"{FUND_NOT_A_COMPANY} (name: {pattern.search(name).group(0).lower()})"
+    code, market = _code_and_market(row)
+    shape = _FUND_CODE_PATTERNS.get(market)
+    if shape is not None and shape.search(code):
+        return f"{FUND_NOT_A_COMPANY} ({market} fund code {code})"
+    classification = _classification_text(row)
+    if _FUND_WORD_STRICT.search(name) and _ASSET_MANAGEMENT.search(classification):
+        return f"{FUND_NOT_A_COMPANY} (fund in an asset-management classification)"
+    if _FUND_WORD.search(name) and not classification.strip() and row.market_cap is None:
+        return f"{FUND_NOT_A_COMPANY} (fund word, and no classification or cap)"
+    return ""
+
+
+def is_fund(row: "IndexRow") -> bool:
+    return bool(fund_reason(row))
+
+
+def _classification_text(row: "IndexRow") -> str:
+    """Every classification field the row carries, as one lowercase string.
+
+    A field that says "Other" is no classification at all (Granite REIT's US line reads
+    "Other"), so it is dropped: it must not be read as a label that contradicts the name.
+    """
+    return " ".join(x for x in (row.gics_sector, row.gics_industry, row.gics_subindustry,
+                                row.sector, row.industry)
+                    if x and x.strip().lower() != "other").strip().lower()
+
+
+# The name words that say what KIND of business a row is, and the classification text that is
+# CONSISTENT with each. A row is suspect only when the name says one thing and EVERY
+# classification field says something outside the family - one field agreeing is enough to
+# leave it alone, because a false flag deletes a real peer.
+#
+# "Trust" and "Fund" are deliberately not here: Canadian income trusts and royalty funds are
+# ordinary operating businesses with ordinary classifications (Chemtrade -> Commodity
+# Chemicals), so a contradiction test would remove real peers. Funds are handled above.
+_FINANCIAL_FAMILY = re.compile(
+    r"bank|financ|insur|capital markets|mortgage|thrift|credit|lending|loan|asset management|"
+    r"broker|invest|saving|reit|real estate|holding|conglomerate|diversified", re.IGNORECASE)
+_REAL_ESTATE_FAMILY = re.compile(
+    r"reit|real estate|propert|mortgage|financ|hotel|land|realty|trust", re.IGNORECASE)
+_NAME_EXPECTS = (
+    ("bank", re.compile(r"\b(?:bank|banks|banco|bancorp|banca|bankshares)\b", re.IGNORECASE),
+     _FINANCIAL_FAMILY),
+    ("insurance", re.compile(r"\b(?:insurance|insurer|insurers|assurance|reinsurance)\b",
+                             re.IGNORECASE), _FINANCIAL_FAMILY),
+    ("REIT", re.compile(r"\breits?\b|\b(?:real estate|realty|mortgage|property) investment "
+                        r"trusts?\b", re.IGNORECASE), _REAL_ESTATE_FAMILY),
+)
+
+CLASSIFICATION_SUSPECT = "classification suspect"
+
+
+def suspect_reason(row: "IndexRow") -> str:
+    """Why this row's classification contradicts its own name, or "" when it does not.
+
+    A row with no classification at all is NEVER suspect: nothing contradicts anything, and the
+    peer ladder already cannot place it. A fund is not reported here either - it has its own
+    reason and is counted once.
+    """
+    classification = _classification_text(row)
+    if not classification:
+        return ""
+    for word, pattern, family in _NAME_EXPECTS:
+        if pattern.search(row.name or "") and not family.search(classification):
+            return (f"{CLASSIFICATION_SUSPECT} (named like a {word}, filed under "
+                    f"{row.classification or classification})")
+    return ""
+
+
+def is_suspect(row: "IndexRow") -> bool:
+    return not is_fund(row) and bool(suspect_reason(row))
 
 
 # --------------------------------------------------------------------------- #
@@ -1185,16 +1364,34 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                              "index")
         return group
 
+    # INDEX-CLASS-SANITY-1 - a subject that is not a company, or whose label contradicts its own
+    # name, has no peers to give: the classification the ladder would key on is not to be
+    # believed.
+    if is_fund(subject):
+        group.reasons.append(f"{subject.ticker}: {fund_reason(subject)}, so no peer group is "
+                             f"formed")
+        return group
+    if suspect_reason(subject):
+        group.reasons.append(f"{subject.ticker}: {suspect_reason(subject)}, so no peer group "
+                             f"is formed")
+        return group
+
     subject_financial = is_financial(subject)
     if not subject.gics_subindustry:
         group.reasons.append("subject has no GICS sub-industry; fell back to the EODHD "
                              "industry field")
 
     # Everything that is eligible to be a peer at all, before any rung.
-    candidates, no_cap, no_usd = [], 0, 0
+    candidates, no_cap, no_usd, funds, suspect = [], 0, 0, 0, 0
     for row in universe:
         if row.ticker.upper() == subject.ticker.upper():
             continue                                   # never its own peer
+        if is_fund(row):
+            funds += 1
+            continue
+        if suspect_reason(row):
+            suspect += 1
+            continue
         if is_financial(row) != subject_financial:
             continue                                   # financials only with financials
         if row.market_cap is None:
@@ -1212,6 +1409,11 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     # build; they are one company.
     pool, cross_listings = one_row_per_company(candidates)
 
+    if funds:
+        group.reasons.append(f"{funds} candidate(s) skipped: {FUND_NOT_A_COMPANY}")
+    if suspect:
+        group.reasons.append(f"{suspect} candidate(s) skipped: {CLASSIFICATION_SUSPECT} "
+                             f"(the label contradicts the name)")
     if no_cap:
         group.reasons.append(f"{no_cap} candidate(s) skipped: no market cap in the index")
     if no_usd:

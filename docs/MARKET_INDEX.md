@@ -244,6 +244,17 @@ the CLI. A group assembled from someone else's classification can be wrong in wa
 amount of internal consistency will reveal, and the only honest defence is to let the
 reader see who the company was measured against.
 
+**Two kinds of row are kept but never used as peers (INDEX-CLASS-SANITY-1).** EODHD lists Taiwan
+ETFs as "Common Stock" and labels them nonsense (`0052.TW` "Fubon Taiwan Technology" →
+Pharmaceuticals; `00939.TW` "China Construction Bank Corp Class H" → Semiconductor Materials), so a
+fund became a "pharmaceutical peer". A row is a **fund, not a company** on a strong name pattern
+(ETF/ETN, UCITS, *Fundo*, *Series Trust*, closed-end / investment trust, leveraged product), on its
+exchange's fund code shape (Taiwan `00xx`, LSE `0P…` fund ids), or on a fund word with nothing to
+say otherwise; a REIT called an "investment trust", Northern Trust and an income fund that makes
+chemicals are not funds. A row whose classification **contradicts its own name** (a "Bank" under
+semiconductors) is **classification suspect**; a row with no classification is never suspect. Both
+are counted in `status`, and a fund or suspect subject gets no peer group and a stated reason.
+
 ## The peer ladder
 
 `peers(ticker, floor=12, cap=40)` widens only as far as it must, and says how far it went:
