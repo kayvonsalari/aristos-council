@@ -26,14 +26,22 @@ from pathlib import Path
 
 import streamlit as st
 
+from typing import Optional
+
 from aristos_council.gap_ledger.config import DEFAULT_ROOT, now_ny
 from aristos_council.gap_ledger.ledger import (GROUP_BASELINE, LedgerRow, ledger_days,
                                                read_all, read_day)
 from aristos_council.gap_ledger.outcomes import is_complete
 from aristos_council.gap_ledger.score import score
-from aristos_council.gap_ledger.viewer import (candidates_of, company_of, day_summary,
-                                               details_of, order_rows, row_flags,
-                                               source_facts, table_markdown)
+from aristos_council.gap_ledger.viewer import (HOW_TO_READ, NEWS_ANY, NEWS_CHOICES,
+                                               RESULT_ANY, RESULT_CHOICES, VERIFIED_ANY,
+                                               VERIFIED_CHOICES, apply_filters,
+                                               candidates_of, checkpoint_markdown,
+                                               company_of, day_summary, details_of,
+                                               filter_caption, order_rows, row_flags,
+                                               scorecard_progress, source_facts,
+                                               table_markdown)
+from aristos_council.gap_ledger.viewer import NEWLINE
 
 ROOT = Path(__file__).resolve().parent
 
@@ -55,6 +63,29 @@ LEDGER_ROOT = ledger_root()
 
 RUN_HINT = "python -m aristos_council.gap_ledger run"
 OUTCOMES_HINT = "python -m aristos_council.gap_ledger outcomes"
+
+
+def hide_deploy_button() -> None:
+    """Hide the Deploy button, and NOTHING else.
+
+    Surgical on purpose. ``app.py`` carries the scar in writing: a past chrome-strip took out
+    the toolbar menu (settings, theme) and the sidebar collapse toggle along with the cosmetic
+    bits. Deploy is the only control here that does nothing for a local read-only viewer, so it
+    is the only one hidden — and the others are forced visible in the same breath, so a stale
+    stylesheet or a theme cannot take them away either.
+    """
+    st.markdown(
+        """
+        <style>
+          [data-testid="stAppDeployButton"] {display: none !important;}
+          /* Never lose the real controls. */
+          [data-testid="stToolbar"], [data-testid="stMainMenu"], #MainMenu,
+          [data-testid="stSidebarCollapseButton"],
+          [data-testid="stSidebarCollapsedControl"],
+          [data-testid="stExpandSidebarButton"] {visibility: visible !important;}
+        </style>
+        """,
+        unsafe_allow_html=True)
 
 
 @st.cache_data(show_spinner=False)
@@ -123,10 +154,12 @@ def render_details(rows: list[LedgerRow], names: dict, *, key_ns: str) -> None:
                         st.markdown(f"**{name}** · {value}")
 
 
-def render_day(day: date, rows: list[LedgerRow], *, key_ns: str) -> None:
+def render_day(day: date, rows: list[LedgerRow], *, key_ns: str,
+               filters: Optional[dict] = None) -> None:
     """One logged day: the banner, the table, the details, then the control group."""
     names = company_names()
-    candidates = candidates_of(rows)
+    every_candidate = candidates_of(rows)
+    candidates = apply_filters(every_candidate, **(filters or {}))
     control = order_rows(r for r in rows if r.group == GROUP_BASELINE)
     stamp = rows[0].run_at_et if rows else ""
     st.caption(f"Screened {day.isoformat()}"
@@ -134,13 +167,19 @@ def render_day(day: date, rows: list[LedgerRow], *, key_ns: str) -> None:
 
     render_banner(rows)
 
-    if not candidates:
+    if not every_candidate:
         st.info(f"No candidates on {day.isoformat()} — nothing cleared the gap and volume "
                 f"screen. An empty list is a result, not a failure.")
     else:
-        st.subheader(f"{len(candidates)} candidate(s)")
-        render_table(candidates, names)
-        render_details(candidates, names, key_ns=f"{key_ns}_cand")
+        st.subheader(f"{len(every_candidate)} candidate(s)")
+        # What the filters are hiding, said out loud: a table quietly showing three of
+        # seventeen rows is a table that lies by omission.
+        st.caption(filter_caption(len(candidates), len(every_candidate)))
+        if candidates:
+            render_table(candidates, names)
+            render_details(candidates, names, key_ns=f"{key_ns}_cand")
+        else:
+            st.info("No candidate matches these filters. Widen them in the left panel.")
 
     filled = [r for r in rows if is_complete(r)]
     if rows and not filled:
@@ -166,10 +205,10 @@ def render_day(day: date, rows: list[LedgerRow], *, key_ns: str) -> None:
 # --------------------------------------------------------------------------- #
 # the three views
 # --------------------------------------------------------------------------- #
-def render_today(days: list[date]) -> None:
+def render_today(days: list[date], filters: Optional[dict] = None) -> None:
     today = now_ny().date()
     if today in days:
-        render_day(today, read_day(today, LEDGER_ROOT), key_ns="today")
+        render_day(today, read_day(today, LEDGER_ROOT), key_ns="today", filters=filters)
         return
     st.info(f"No screen logged for {today.isoformat()} (New York) yet. "
             f"Run `{RUN_HINT}`.")
@@ -178,31 +217,72 @@ def render_today(days: list[date]) -> None:
                    f"**Past days**.")
 
 
-def render_past(days: list[date]) -> None:
+def render_past(days: list[date], filters: Optional[dict] = None, *,
+                chosen: Optional[date] = None) -> None:
+    """The day the left panel is pointing at. ONE day selector, in the panel — two of them
+    would be two answers to the same question."""
     if not days:
         st.info(f"No days logged yet under `{DEFAULT_ROOT}`. Run `{RUN_HINT}`.")
         return
-    chosen = st.selectbox("Day", list(reversed(days)),
-                          format_func=lambda d: d.isoformat(), key="past_day")
-    render_day(chosen, read_day(chosen, LEDGER_ROOT), key_ns="past")
+    day = chosen if chosen in days else days[-1]
+    render_day(day, read_day(day, LEDGER_ROOT), key_ns="past", filters=filters)
 
 
-def render_day_panel(days: list[date]) -> None:
-    """The left panel's Day section: pick a logged day, newest first, and see its counts."""
+def render_day_panel(days: list[date]) -> Optional[date]:
+    """Section (a) — pick a logged day, newest first, and see that day's counts.
+
+    Returns the chosen day so the tabs can follow the panel instead of keeping a second,
+    separately-remembered idea of which day is on screen.
+    """
+    st.sidebar.subheader("Day")
     if not days:
         st.sidebar.caption("No days logged yet.")
-        return
-    chosen = st.sidebar.selectbox("Day", list(reversed(days)),
-                                 format_func=lambda d: d.isoformat(), key="panel_day")
+        return None
+    chosen = st.sidebar.selectbox("Logged days, newest first", list(reversed(days)),
+                                 format_func=lambda d: d.isoformat(), key="panel_day",
+                                 label_visibility="collapsed")
     counts = day_summary(read_day(chosen, LEDGER_ROOT))
     st.sidebar.markdown(
-        f"**{chosen.isoformat()}**\n\n"
-        f"- {counts['logged']} logged\n"
-        f"- {counts['candidates']} candidate(s)\n"
-        f"- {counts['ibkr_confirmed']} IBKR-confirmed\n"
-        f"- {counts['unverified']} unverified\n"
-        f"- {counts['with_news']} with news\n"
-        f"- {counts['outcomes_filled']} with outcomes filled")
+        f"**{chosen.isoformat()}**" + NEWLINE + NEWLINE
+        + NEWLINE.join([
+            f"- {counts['logged']} logged",
+            f"- {counts['candidates']} candidate(s)",
+            f"- {counts['ibkr_confirmed']} IBKR-confirmed",
+            f"- {counts['unverified']} unverified",
+            f"- {counts['with_news']} with news",
+            f"- {counts['outcomes_filled']} with outcomes filled",
+        ]))
+    return chosen
+
+
+def render_filter_panel() -> dict:
+    """Section (b) — three filters, each over a column the reader can already see.
+
+    A filter over something the table does not show would be a way to hide rows for reasons
+    nobody can check, so there are exactly three and they match the Verified, News and Result
+    columns.
+    """
+    st.sidebar.subheader("Filters")
+    return {
+        "verified": st.sidebar.radio("Verified", VERIFIED_CHOICES, key="filter_verified",
+                                     horizontal=False),
+        "news": st.sidebar.radio("News", NEWS_CHOICES, key="filter_news"),
+        "result": st.sidebar.selectbox("Result", RESULT_CHOICES, key="filter_result"),
+    }
+
+
+def render_help_panel() -> None:
+    """Section (c) — how to read the table, and the commands, both collapsed."""
+    st.sidebar.subheader("How to read it")
+    with st.sidebar.expander("What the columns mean"):
+        for term, meaning in HOW_TO_READ:
+            st.markdown(f"**{term}** — {meaning}")
+    with st.sidebar.expander("Commands"):
+        st.caption("This viewer is read-only: it never starts a screen, because that costs "
+                   "news calls and posts a Todoist task. Copy one of these instead.")
+        st.code(NEWLINE.join([RUN_HINT, OUTCOMES_HINT,
+                              "python -m aristos_council.gap_ledger score"]),
+                language="bash")
 
 
 def render_scorecard() -> None:
@@ -221,17 +301,18 @@ def render_scorecard() -> None:
     else:
         st.success(card.verdict)
 
+    # Item 5 — the distance to an answer as a NUMBER, not only as a refusal.
+    st.markdown(f"**{scorecard_progress(card)}** scored so far.")
+    st.progress(min(1.0, card.days_scored / max(1, card.min_days)))
+
     left, right = st.columns(2)
     left.metric("Days with filled outcomes", f"{card.days_scored} / {card.min_days}")
     right.metric("Names scored", f"{card.candidates} candidates · {card.baseline} baseline")
 
     if card.checkpoints:
-        st.dataframe([{
-            "Checkpoint": c.label,
-            "Candidates": c.candidates.sentence(),
-            "Control group": c.baseline.sentence(),
-            "Edge": "—" if c.edge is None else f"{c.edge * 100:+.0f} points",
-        } for c in card.checkpoints], width="stretch", hide_index=True)
+        # The same Markdown shape and the same green/red as the day table, so the two tables
+        # on this page read alike instead of looking like two different products.
+        st.markdown(checkpoint_markdown(card))
     else:
         st.info(f"Days are logged but no outcome has been filled in yet. "
                 f"Run `{OUTCOMES_HINT}`.")
@@ -244,20 +325,20 @@ def main() -> None:
     st.caption("Pre-market movers on news, picked by maths and scored afterwards. "
                "No recommendations — this is a shortlist and a record, not advice.")
 
+    hide_deploy_button()
+
     days = ledger_days(LEDGER_ROOT)
     st.sidebar.header("Gap Ledger")
     st.sidebar.caption(f"Reading `{DEFAULT_ROOT}` — {len(days)} day(s) logged.")
-    st.sidebar.info("This viewer is read-only. It never starts a screen: that costs news "
-                    "calls and posts a Todoist task, so it stays a deliberate command.")
-    st.sidebar.code(f"{RUN_HINT}\n{OUTCOMES_HINT}\n"
-                    f"python -m aristos_council.gap_ledger score", language="bash")
-    render_day_panel(days)
+    chosen = render_day_panel(days)
+    filters = render_filter_panel()
+    render_help_panel()
 
     today_tab, past_tab, score_tab = st.tabs(["Today", "Past days", "Scorecard"])
     with today_tab:
-        render_today(days)
+        render_today(days, filters)
     with past_tab:
-        render_past(days)
+        render_past(days, filters, chosen=chosen)
     with score_tab:
         render_scorecard()
 

@@ -177,6 +177,10 @@ def row_flags(row: LedgerRow) -> list[str]:
 COLUMNS = ("Ticker", "Company", "Gap", "Verified", "Rel. volume", "Headline", "Open",
            "Close", "Result")
 
+# The row separator, spelled once as a constant and shared by both table builders, so the two
+# Markdown tables on the page can never disagree about how a row ends.
+NEWLINE = chr(10)
+
 
 def _escape(text: str) -> str:
     """Text that is safe inside a Markdown table cell.
@@ -288,6 +292,112 @@ def details_of(row: LedgerRow) -> list[tuple[str, str]]:
     add("Window", f"{row.window_start_et} → {row.window_end_et}"
         if row.window_start_et else "")
     return pairs
+
+
+# --------------------------------------------------------------------------- #
+# the filters (left panel, section b)
+# --------------------------------------------------------------------------- #
+# Deliberately three, each matching a COLUMN the reader can already see. A filter over
+# something the table does not show would be a way to hide rows for reasons nobody can check.
+VERIFIED_ANY, VERIFIED_ONLY, UNVERIFIED_ONLY = "Any", "IBKR-verified", "Unverified"
+NEWS_ANY, NEWS_WITH, NEWS_WITHOUT = "Any", "With news", "Without news"
+RESULT_ANY, RESULT_PENDING = "Any", "not filled in yet"
+
+VERIFIED_CHOICES = (VERIFIED_ANY, VERIFIED_ONLY, UNVERIFIED_ONLY)
+NEWS_CHOICES = (NEWS_ANY, NEWS_WITH, NEWS_WITHOUT)
+RESULT_CHOICES = (RESULT_ANY, CARRIED_ON, REVERSED, FLAT, RESULT_PENDING)
+
+
+def apply_filters(rows: Sequence[LedgerRow], *, verified: str = VERIFIED_ANY,
+                  news: str = NEWS_ANY, result: str = RESULT_ANY) -> list[LedgerRow]:
+    """The rows a reader asked to see. Pure, so the filtering is testable without a browser.
+
+    An unrecognised choice filters NOTHING rather than everything: a typo in a widget must not
+    silently empty the page.
+    """
+    kept = list(rows)
+    if verified == VERIFIED_ONLY:
+        kept = [r for r in kept if r.source == SOURCE_IBKR]
+    elif verified == UNVERIFIED_ONLY:
+        kept = [r for r in kept if r.source != SOURCE_IBKR]
+    if news == NEWS_WITH:
+        kept = [r for r in kept if r.news_found == "news found"]
+    elif news == NEWS_WITHOUT:
+        kept = [r for r in kept if r.news_found != "news found"]
+    if result == RESULT_PENDING:
+        kept = [r for r in kept if not result_of(r)]
+    elif result in (CARRIED_ON, REVERSED, FLAT):
+        kept = [r for r in kept if result_of(r) == result]
+    return kept
+
+
+def filter_caption(shown: int, total: int) -> str:
+    """What the filters are hiding, said out loud.
+
+    A table that quietly shows three of seventeen rows is a table that lies by omission, so the
+    count is always on the page when a filter is doing anything.
+    """
+    if shown == total:
+        return f"Showing all {total} candidate(s)."
+    return f"Showing {shown} of {total} candidate(s) — filters are hiding {total - shown}."
+
+
+# --------------------------------------------------------------------------- #
+# how to read it (left panel, section c)
+# --------------------------------------------------------------------------- #
+# Short, and about the things that are easy to misread rather than the things that are obvious.
+HOW_TO_READ = (
+    ("Gap", "Last pre-market price against the previous DIVIDEND- AND SPLIT-ADJUSTED close. "
+            "Green up, red down."),
+    ("Verified", "✓ IBKR means Interactive Brokers confirmed the move against real "
+                 "pre-market volume, and its price and volume replaced yfinance's. "
+                 "*Unverified* means nothing measured the volume."),
+    ("Rel. volume", "Today's pre-market volume against the median of the same clock window "
+                    "over the prior 20 sessions. **n/a** means it was never measured — not "
+                    "that it was low."),
+    ("Result", "From the OPEN in the gap's direction, at the close: did the move carry on, "
+               "reverse, or end flat. Blank until `outcomes` has been run for that day."),
+    ("Control group", "An equal-size sample of names that passed the liquidity filter but "
+                      "NOT the screen, drawn with a seed fixed by the date. It is what the "
+                      "candidates are compared against."),
+    ("No recommendation", "Maths picks the names. Nothing here is advice, and an empty list "
+                          "is a result rather than a failure."),
+)
+
+
+# --------------------------------------------------------------------------- #
+# the scorecard's progress (item 5)
+# --------------------------------------------------------------------------- #
+def scorecard_progress(card) -> str:
+    """``"12 of 40 trading days"`` — how far the record is from being able to answer.
+
+    The scorecard's own verdict already refuses to call anything a finding below the floor;
+    this is the same fact as a number, so the reader can see the distance rather than infer it.
+    """
+    return f"{card.days_scored} of {card.min_days} trading days"
+
+
+def points_cell(edge) -> str:
+    """An edge in points, coloured the same way the gap is — so the two tables read alike."""
+    if edge is None:
+        return "—"
+    text = f"{edge * 100:+.0f} points"
+    return f":green[{text}]" if edge > 0 else (f":red[{text}]" if edge < 0 else text)
+
+
+CHECKPOINT_COLUMNS_VIEW = ("Checkpoint", "Candidates", "Control group", "Edge")
+
+
+def checkpoint_markdown(card) -> str:
+    """The scorecard's per-checkpoint table, in the same Markdown shape as the day table."""
+    lines = ["| " + " | ".join(CHECKPOINT_COLUMNS_VIEW) + " |",
+             "|" + "|".join(["---"] * len(CHECKPOINT_COLUMNS_VIEW)) + "|"]
+    for check in card.checkpoints:
+        lines.append("| " + " | ".join([_escape(check.label),
+                                        _escape(check.candidates.sentence()),
+                                        _escape(check.baseline.sentence()),
+                                        points_cell(check.edge)]) + " |")
+    return NEWLINE.join(lines)
 
 
 # --------------------------------------------------------------------------- #
