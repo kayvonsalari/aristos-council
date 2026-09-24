@@ -114,6 +114,17 @@ pre-market print`, `last print not confirmed`, `spread above limit` — so the C
 fired. All are NOT-EVALUATED **markings**, never rejections, and an untrusted name never enters
 the control group: an unbelievable price is a missing reading about a name, not a finding about it.
 
+> **What shipped, and why it is not what the brief said.** The brief specified two distinct
+> pre-market prints and a last print within **1%** of the final 30-minute average. What shipped is
+> **≥ 4 prints inside the final 30 minutes** (`min_confirm_prints`) and a **5%** drift limit
+> (`max_confirm_drift`), because the live tape contradicted both halves of the original. Counting
+> *distinct prices* does not catch a sparse tape at all — XEL's stray +11% arrived as five bars
+> carrying five different prices — and a 1% drift limit is worse than useless: a one-bar window
+> agrees with itself perfectly, so five of the seven junk names scored **0.000%** drift while the
+> genuine VKTX scored 2.797% and ONON 1.128%. Applied as written it kept all seven junk names and
+> rejected all five real ones. Density is what separates them (junk 1–3 prints in the final half
+> hour, genuine 6 of a possible 6), so density is the decisive test and drift is a loose backstop.
+>
 > Two thresholds are **deliberately not** what the brief sketched, because the live tape
 > contradicted it. Counting *distinct prices* rather than prints does not catch a sparse tape at
 > all (XEL's five bars carried five different prices), and a **1%** drift limit rejects genuine

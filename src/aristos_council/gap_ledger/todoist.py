@@ -77,6 +77,17 @@ def _times(value: Optional[float]) -> str:
     return "—" if value is None else f"{value:.1f}x"
 
 
+def _short_spread(note: str) -> str:
+    """The part of the spread mark that is about this NAME.
+
+    GAP-REPORT-CLARITY-1 (b): "spread unknown — IBKR market-data subscription does not cover
+    API streaming quotes" explains the account, not the stock. Everything after the dash is
+    dropped here and said once in the footer.
+    """
+    head = (note or "").split(" — ")[0].strip()
+    return "spread n/a" if head in ("", "spread unknown") else head
+
+
 def task_body(candidates: Sequence[LedgerRow]) -> str:
     """One block per name: gap, relative volume, the flags, and the headline link.
 
@@ -85,7 +96,10 @@ def task_body(candidates: Sequence[LedgerRow]) -> str:
     """
     blocks: list[str] = []
     for row in candidates:
-        flags = [row.spread_note, row.news_found]
+        # GAP-REPORT-CLARITY-1 (b) — the row keeps only what is about the row. The
+        # subscription explanation is a fact about the ACCOUNT and is said once at the end,
+        # not seventeen times down the task.
+        flags = [_short_spread(row.spread_note), row.news_found]
         # A candidate whose relative volume could not be read was selected on its GAP ALONE,
         # and the task has to say so — this is the one place the owner reads in the morning.
         volume = (f"rel. pre-market volume {_times(row.relative_volume)}"
@@ -111,6 +125,11 @@ def task_body(candidates: Sequence[LedgerRow]) -> str:
     if note:
         blocks.append(f"**{note}** — relative volume was not measured; these names come "
                       f"from yfinance prices with the tape-density trust tests.")
+    # GAP-REPORT-CLARITY-1 (b) — the subscription explanation, once, at the end.
+    subscription = next((row.spread_note for row in candidates
+                         if " — " in (row.spread_note or "")), "")
+    if subscription:
+        blocks.append(f"_{subscription}._")
     blocks.append("_Screened by maths; no recommendation. Logged in "
                   "data/local/gap_ledger/._")
     return "\n\n".join(blocks)

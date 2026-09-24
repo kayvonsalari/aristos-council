@@ -80,6 +80,22 @@ CAP_KEY = "Highlights::MarketCapitalization"
 # quarter to four times), which a month of drift does not cross.
 DEFAULT_MAX_AGE_DAYS = 30
 
+# INDEX-CAP-RETRY-1 — how long to stop asking about a gap the provider does not have.
+#
+# MEASURED, 2026-09-24: 2,566 rows carry no market cap and 1,767 no classification, and EVERY
+# one of them was fetched under the listing parser WITH A NAME — the provider answered, it
+# simply had nothing. Probing ``/fundamentals/0052.TW`` directly returns
+# ``MarketCapitalization: "NA"``: not a blank, not a timeout, an explicit "not available". A
+# row like that does not fill next month either, and refetching them all cost about 15,000
+# charged units per build for nothing (1,502 refetched on 2026-09-23, none filled).
+#
+# So a row that has been ASKED and got nothing twice is left alone for a month. Two attempts
+# rather than one because the first empty answer could be a bad day at the provider; thirty
+# days because a company that acquires a market cap has usually done something (an IPO, a
+# re-listing) that a monthly sweep will pick up soon enough.
+DEFAULT_EMPTY_RETRY_AFTER = 2
+DEFAULT_EMPTY_RETRY_DAYS = 30
+
 # MARKET-INDEX-2 - EODHD does not charge one unit per request. A /fundamentals call costs
 # TEN and a listing costs one, so a build that reports "6,000 calls" has really spent
 # 60,000 of the daily allowance. Every summary reports both numbers, because only one of
@@ -128,7 +144,12 @@ COLUMNS = ("ticker", "yahoo_ticker", "name", "exchange", "market", "country", "c
            "primary_ticker", "isin",
            "sector", "industry", "gics_sector", "gics_industry", "gics_subindustry",
            "market_cap", "market_cap_usd", "market_cap_usd_source", "fetched_at",
-           "source")
+           "source", "empty_attempts", "last_attempt_at")
+
+# The columns that are WHOLE NUMBERS on the way in and out. Parquet round-trips them as
+# numpy types and the loader stringifies everything it is not told about, which would turn an
+# attempt count into "2" and make the arithmetic below silently wrong.
+_INT_COLUMNS = ("empty_attempts",)
 
 
 @dataclass
@@ -167,6 +188,12 @@ class IndexRow:
     market_cap_usd_source: str = USD_ABSTAINED
     fetched_at: str = ""              # ISO date
     source: str = SOURCE_EODHD
+    # INDEX-CAP-RETRY-1 — how many refetches left this row exactly as incomplete as it was,
+    # and when the last of them happened. Not "how many times we fetched it": a fetch that
+    # FILLED something resets this to zero, because that row is making progress and deserves
+    # to be asked again.
+    empty_attempts: int = 0
+    last_attempt_at: str = ""         # ISO date of the last empty attempt
 
     @property
     def classification(self) -> str:
@@ -198,6 +225,69 @@ class IndexRow:
         return (self.source == SOURCE_EODHD_LISTING
                 and not self.primary_ticker and not self.isin)
 
+    @property
+    def missing_fields(self) -> frozenset:
+        """Which of the things a peer ladder needs this row still lacks.
+
+        Compared before and after a refetch: an unchanged set means the attempt was EMPTY and
+        counts against the backoff, while a smaller set means progress and resets it.
+        """
+        gaps = set()
+        if self.market_cap is None:
+            gaps.add("market_cap")
+        if not self.classification:
+            gaps.add("classification")
+        if self.source != SOURCE_EODHD_LISTING:
+            gaps.add("listing")
+        return frozenset(gaps)
+
+    @property
+    def asked_and_got_nothing(self) -> bool:
+        """Has the provider already been asked about this row and answered without filling it?
+
+        A row fetched under the listing parser that carries a NAME is a row the provider
+        ANSWERED — it returned a document, it just had no cap or no classification in it.
+        (Probed 2026-09-24: ``/fundamentals/0052.TW`` returns
+        ``"MarketCapitalization": "NA"``.) That is different from a row that has never been
+        asked, and it is the evidence the backoff below reads for rows that predate the
+        attempt counter.
+        """
+        return self.source == SOURCE_EODHD_LISTING and bool(self.name)
+
+    def retry_due(self, today: Optional[date] = None, *,
+                  after_attempts: int = DEFAULT_EMPTY_RETRY_AFTER,
+                  every_days: int = DEFAULT_EMPTY_RETRY_DAYS) -> bool:
+        """Should this incomplete row be asked about again today?
+
+        INDEX-CAP-RETRY-1. Below the attempt threshold, always — the first empty answers may
+        be a bad day at the provider. Above it, only once ``every_days`` have passed, because
+        the provider has now said "nothing here" repeatedly and it costs ten charged units to
+        hear it again.
+
+        **Rows that predate the counter are not treated as unasked.** They would otherwise all
+        come back DUE and the first build after this change would spend the very ~25,000 units
+        the change exists to stop spending. The evidence is already ON the row: it was fetched
+        under the listing parser and carries a name, so the provider answered and gave nothing
+        (``asked_and_got_nothing``), and ``fetched_at`` records when. So such a row starts at
+        the threshold, dated by its own last fetch. Once a real build records an attempt the
+        stored numbers take over and this inference stops applying.
+        """
+        attempts = self.empty_attempts
+        stamp = self.last_attempt_at
+        if not attempts and not stamp and self.asked_and_got_nothing:
+            attempts, stamp = max(0, after_attempts), self.fetched_at
+        if attempts < max(0, after_attempts):
+            return True
+        try:
+            last = date.fromisoformat(stamp)
+        except (TypeError, ValueError):
+            return True                       # never asked, or an unreadable date: ask once
+        return ((today or date.today()) - last).days >= max(0, every_days)
+
+    def waiting(self, today: Optional[date] = None, **kwargs) -> bool:
+        """The other side of ``retry_due``, for counting."""
+        return not self.retry_due(today, **kwargs)
+
     def age_days(self, today: Optional[date] = None) -> Optional[int]:
         try:
             when = date.fromisoformat(self.fetched_at)
@@ -225,7 +315,9 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
     path = Path(path)
     if not path.exists():
         return {"exchanges": list(DEFAULT_EXCHANGES),
-                "max_age_days": DEFAULT_MAX_AGE_DAYS, "root": str(DEFAULT_ROOT)}
+                "max_age_days": DEFAULT_MAX_AGE_DAYS, "root": str(DEFAULT_ROOT),
+                "empty_retry_after": DEFAULT_EMPTY_RETRY_AFTER,
+                "empty_retry_days": DEFAULT_EMPTY_RETRY_DAYS}
     doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(doc, dict):
         raise MarketIndexError(f"{path}: expected a mapping, got {type(doc).__name__}")
@@ -241,6 +333,10 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
         "exchanges": [x.strip().upper() for x in exchanges if x.strip()],
         "max_age_days": int(doc.get("max_age_days", DEFAULT_MAX_AGE_DAYS)),
         "root": str(doc.get("root", DEFAULT_ROOT)),
+        # INDEX-CAP-RETRY-1 — how patient to be about a gap the provider does not have.
+        "empty_retry_after": int(doc.get("empty_retry_after",
+                                         DEFAULT_EMPTY_RETRY_AFTER)),
+        "empty_retry_days": int(doc.get("empty_retry_days", DEFAULT_EMPTY_RETRY_DAYS)),
         # MARKET-INDEX-2 - per exchange, and an exchange that is absent is unrestricted.
         "venues": {str(k).strip().upper(): [str(v).strip().upper() for v in (vals or [])]
                    for k, vals in venues.items()},
@@ -291,8 +387,14 @@ class IndexStore:
             for money in ("market_cap", "market_cap_usd"):
                 value = clean.get(money)
                 clean[money] = None if value is None or value != value else float(value)
+            for whole in _INT_COLUMNS:
+                value = clean.get(whole)
+                try:
+                    clean[whole] = int(value) if value is not None and value == value else 0
+                except (TypeError, ValueError):
+                    clean[whole] = 0
             for text in COLUMNS:
-                if text in ("market_cap", "market_cap_usd"):
+                if text in ("market_cap", "market_cap_usd") or text in _INT_COLUMNS:
                     continue
                 clean[text] = "" if clean.get(text) is None else str(clean.get(text))
             rows.append(IndexRow(**clean))
@@ -487,6 +589,25 @@ class _UsdConverter:
         return row
 
 
+def _record_attempt(fresh: IndexRow, previous: Optional[IndexRow], *,
+                    today: date) -> IndexRow:
+    """Carry the empty-attempt bookkeeping onto a freshly fetched row.
+
+    INDEX-CAP-RETRY-1. "Empty" is judged by comparing what the row is MISSING before and
+    after: an unchanged set means the provider gave nothing new, a smaller set means progress
+    and resets the counter, and a complete row carries no counter at all.
+    """
+    if not fresh.missing_fields:
+        fresh.empty_attempts, fresh.last_attempt_at = 0, ""
+        return fresh
+    before = previous.missing_fields if previous is not None else None
+    improved = before is not None and fresh.missing_fields < before
+    fresh.empty_attempts = 0 if improved else (
+        (previous.empty_attempts if previous is not None else 0) + 1)
+    fresh.last_attempt_at = today.isoformat()
+    return fresh
+
+
 @dataclass
 class BuildOutcome:
     exchanges: list[str] = field(default_factory=list)
@@ -495,6 +616,10 @@ class BuildOutcome:
     fetched: int = 0
     skipped_fresh: int = 0
     refetched_incomplete: int = 0    # capless rows refetched regardless of age
+    # INDEX-CAP-RETRY-1 — incomplete rows NOT refetched because the provider has already said
+    # "nothing here" twice and the month is not up. The whole point of the change, so it is
+    # counted and reported rather than showing up as an unexplained drop in requests.
+    waiting_on_backoff: int = 0
     dropped_venue: int = 0           # rows removed from the store: venue not allowed
     failed: int = 0
     requests: int = 0
@@ -512,6 +637,7 @@ class BuildOutcome:
     def summary(self) -> str:
         head = (f"{self.fetched} row(s) fetched ({self.refetched_incomplete} refetched "
                 f"for a missing cap), {self.skipped_fresh} still fresh, "
+                f"{self.waiting_on_backoff} waiting on the empty-gap backoff, "
                 f"{self.dropped_venue} dropped on venue, {self.failed} failed; "
                 f"{self.requests} request(s) = {self.charged:,} charged of "
                 f"{self.budget:,}")
@@ -559,7 +685,9 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
           source: Optional[EODHDIndexSource] = None, max_age_days: int = DEFAULT_MAX_AGE_DAYS,
           usd: Optional[_UsdConverter] = None, today: Optional[date] = None,
           limit: Optional[int] = None, budget: int = DEFAULT_BUDGET,
-          venues: Optional[dict] = None, progress=None) -> BuildOutcome:
+          venues: Optional[dict] = None,
+          empty_retry_after: int = DEFAULT_EMPTY_RETRY_AFTER,
+          empty_retry_days: int = DEFAULT_EMPTY_RETRY_DAYS, progress=None) -> BuildOutcome:
     """Fill or top up the index. Resumable, budgeted, and it never exits silently.
 
     Three reasons a symbol is not fetched, and they are counted separately because they
@@ -586,11 +714,20 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
     # PrimaryTicker and ISIN existed cannot be placed as home listings, so they are
     # refetched like capless ones, and on a 9,018-row index that is most of a day's
     # budget. Better known before the build than discovered during it.
+    backoff = dict(after_attempts=empty_retry_after, every_days=empty_retry_days)
     stale = [r for r in existing.values() if not r.complete]
+    due = [r for r in stale if r.retry_due(today, **backoff)]
+    waiting = len(stale) - len(due)
     if stale:
         say(f"{len(stale)} existing row(s) are incomplete (no market cap, or fetched "
-            f"before PrimaryTicker/ISIN were stored) and will be refetched regardless of "
-            f"age - about {len(stale) * CHARGE_FUNDAMENTALS:,} charged units")
+            f"before PrimaryTicker/ISIN were stored); {len(due)} are due a refetch - about "
+            f"{len(due) * CHARGE_FUNDAMENTALS:,} charged units")
+    if waiting:
+        # INDEX-CAP-RETRY-1 — said up front, because "the build got cheaper" should never be
+        # something the owner has to infer from the bill.
+        say(f"{waiting} incomplete row(s) are waiting on the empty-gap backoff "
+            f"({empty_retry_after} empty attempts, retried every {empty_retry_days} days) - "
+            f"about {waiting * CHARGE_FUNDAMENTALS:,} charged units NOT spent")
 
     try:
         for exchange in outcome.exchanges:
@@ -653,6 +790,11 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
                     outcome.skipped_fresh += 1
                     continue
                 if known is not None and not known.complete:
+                    if not known.retry_due(today, **backoff):
+                        # The provider has already said "nothing here" and the month is not
+                        # up. Skipping is the change; the row keeps its own bookkeeping.
+                        outcome.waiting_on_backoff += 1
+                        continue
                     outcome.refetched_incomplete += 1
 
                 if source.charged + CHARGE_FUNDAMENTALS > budget:
@@ -669,6 +811,11 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
                     outcome.failed += 1
                     continue
                 row = usd.apply(_row_from_general(symbol, exchange, doc, today=today))
+                # INDEX-CAP-RETRY-1 — did this attempt actually fill anything? An unchanged
+                # set of gaps is an EMPTY attempt and counts against the backoff; a smaller
+                # one is progress and resets the count, because a row that is improving
+                # deserves to be asked again next build.
+                row = _record_attempt(row, known, today=today)
                 existing[symbol] = row
                 outcome.fetched += 1
                 since_flush += 1
@@ -729,6 +876,13 @@ class IndexStatus:
     oldest: str = ""
     missing_classification: int = 0
     missing_cap: int = 0
+    # INDEX-CAP-RETRY-1 — the gap-less rows split by whether the next build will ASK again.
+    # Without the split, "2,566 rows carry no market cap" reads as 2,566 rows about to cost
+    # ten units each, which after this change is not what it means.
+    cap_due: int = 0
+    cap_waiting: int = 0
+    classification_due: int = 0
+    classification_waiting: int = 0
     missing_usd: int = 0
     cross_listings: int = 0
     unresolved: int = 0
@@ -742,8 +896,11 @@ class IndexStatus:
                     "Build it with:  python -m aristos_council.market_index build"]
         out = [f"Market index: {self.rows} row(s) in {self.path}",
                f"  complete (usable as peers): {self.complete}",
-               f"  no market cap:              {self.missing_cap}",
-               f"  missing classification:     {self.missing_classification}",
+               f"  no market cap:              {self.missing_cap}"
+               f"  ({self.cap_due} due, {self.cap_waiting} waiting)",
+               f"  missing classification:     {self.missing_classification}"
+               f"  ({self.classification_due} due, "
+               f"{self.classification_waiting} waiting)",
                f"  no USD conversion:          {self.missing_usd}",
                f"  {self.cross_listings} cross-listing(s), excluded from peer groups",
                f"  {self.unresolved} row(s) with neither PrimaryTicker nor ISIN "
@@ -754,19 +911,29 @@ class IndexStatus:
         if self.missing_cap:
             # MARKET-INDEX-2 - the first build produced 526 rows and every one of them had
             # no cap, because the request asked for General and the cap lives under
-            # Highlights. A capless row is refetched by the next build whatever its age.
+            # Highlights.
+            #
+            # INDEX-CAP-RETRY-1 - and they are no longer all refetched. The provider answers
+            # "MarketCapitalization": "NA" for these and it does not change, so a row that has
+            # come back empty twice waits a month. "Due" is what the next build will spend.
             out.insert(1, f"  {self.missing_cap} row(s) carry NO MARKET CAP and cannot be "
-                          f"peers; the next build refetches them.")
+                          f"peers; the next build refetches {self.cap_due} of them "
+                          f"(~{self.cap_due * CHARGE_FUNDAMENTALS:,} charged units), "
+                          f"{self.cap_waiting} are waiting on the backoff.")
         for exchange, n in sorted(self.per_exchange.items(), key=lambda kv: -kv[1]):
             out.append(f"    {exchange:8s} {n:6d}")
         return out
 
 
-def status(store: Optional[IndexStore] = None) -> IndexStatus:
+def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
+           empty_retry_after: int = DEFAULT_EMPTY_RETRY_AFTER,
+           empty_retry_days: int = DEFAULT_EMPTY_RETRY_DAYS) -> IndexStatus:
     """What is in the table. Works on an EMPTY index without raising — the first thing
     anyone runs is ``status``, and it must answer rather than fail."""
     store = store or IndexStore()
     rows = store.load()
+    today = today or date.today()
+    backoff = dict(after_attempts=empty_retry_after, every_days=empty_retry_days)
     out = IndexStatus(rows=len(rows), path=str(store.path))
     for row in rows:
         out.per_exchange[row.exchange or "?"] = out.per_exchange.get(row.exchange or "?", 0) + 1
@@ -774,6 +941,16 @@ def status(store: Optional[IndexStore] = None) -> IndexStatus:
             out.missing_classification += 1
         if row.market_cap is None:
             out.missing_cap += 1
+            # INDEX-CAP-RETRY-1 — split by whether the next build will actually ASK again.
+            if row.retry_due(today, **backoff):
+                out.cap_due += 1
+            else:
+                out.cap_waiting += 1
+        if not row.classification:
+            if row.retry_due(today, **backoff):
+                out.classification_due += 1
+            else:
+                out.classification_waiting += 1
         if row.market_cap is not None and row.market_cap_usd is None:
             out.missing_usd += 1
         if not is_home_listing(row):
@@ -1183,7 +1360,9 @@ def _cmd_build(args) -> int:
     store = _store_for(args)
     outcome = build(exchanges=exchanges, store=store, max_age_days=max_age,
                     usd=_UsdConverter(adapter), limit=args.limit,
-                    budget=args.budget, venues=config.get("venues"), progress=_say)
+                    budget=args.budget, venues=config.get("venues"),
+                    empty_retry_after=config["empty_retry_after"],
+                    empty_retry_days=config["empty_retry_days"], progress=_say)
     for line in outcome.venue_lines():
         _say("  " + line if not line.endswith(":") else line)
     _say(outcome.summary())
@@ -1225,7 +1404,11 @@ def _cmd_peers(args) -> int:
 
 
 def _cmd_status(args) -> int:
-    for line in status(_store_for(args)).lines():
+    # The same backoff the build will use, so "due" is what the next build will actually spend.
+    config = load_config(args.config)
+    for line in status(_store_for(args),
+                       empty_retry_after=config["empty_retry_after"],
+                       empty_retry_days=config["empty_retry_days"]).lines():
         _say(line)
     return 0
 

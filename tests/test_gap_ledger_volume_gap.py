@@ -152,15 +152,18 @@ def _run(tmp_path, **kwargs):
 
 
 def test_the_run_sets_the_note_and_still_produces_the_list(tmp_path):
+    """GAP-REPORT-CLARITY-1 (a) rewrote this banner: it is now SCOPED to the names it is about
+    and NAMES them, rather than claiming the whole page was selected on the gap alone."""
     result = _run(tmp_path)
     assert [r.ticker for r in result.candidates] == ["AMD"]
-    assert "served NO pre-market volume" in result.volume_note
-    assert "GAP ALONE" in result.volume_note
+    assert result.gap_only == ["AMD"]
+    assert "1 name selected on the gap alone" in result.volume_note
+    assert "AMD" in result.volume_note
 
 
 def test_the_report_says_it_once_at_the_top(tmp_path):
     text = format_report(_run(tmp_path))
-    assert text.count("served NO pre-market volume") == 1
+    assert text.count("selected on the gap alone") == 1
     assert "!! DATA GAP" in text
     assert "rel.vol unavailable" in text
 
