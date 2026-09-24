@@ -100,6 +100,24 @@ class LedgerRow:
     ib_bid: Optional[float] = None
     ib_ask: Optional[float] = None
 
+    # -- GAP-EARLY-CHECKPOINT-1: when the move first showed, IBKR-verified candidates only -- #
+    # The first 5-minute bar whose price was already at or beyond the gap threshold in the
+    # gap's direction AND whose volume was well above the usual for that time of day. The time
+    # is when the bar CLOSED (the earliest anyone could have seen it) and the price is that
+    # bar's close. Blank when no bar qualified, and ALWAYS blank on a yfinance-only row: that
+    # provider has no pre-market volume, so there is nothing to compare and nothing is guessed.
+    first_signal_time_et: str = ""
+    first_signal_price: Optional[float] = None
+    # The traded price at each pre-market moment (config.PATH_MOMENTS). Blank when the name did
+    # not print within 15 minutes after that moment, and never filled from anything else.
+    price_0400: Optional[float] = None
+    price_0600: Optional[float] = None
+    price_0700: Optional[float] = None
+    price_0800: Optional[float] = None
+    price_0900: Optional[float] = None
+    # Why the signal is blank on a row IB DID verify.
+    early_signal_note: str = ""
+
     # -- step 3 ------------------------------------------------------------ #
     # "news found" / "no news found" / "related, not matched" / "news not fetched"
     news_found: str = ""
@@ -130,6 +148,23 @@ class LedgerRow:
     premarket_vs_open: Optional[float] = None
     outcome_note: str = ""
     outcomes_filled_at_et: str = ""
+    # GAP-EARLY-CHECKPOINT-1 — what acting at the first signal would have made, in the gap's
+    # direction, as a fraction of the signal price. Blank without a signal.
+    signal_move_0900: Optional[float] = None
+    signal_move_open: Optional[float] = None
+    signal_move_close: Optional[float] = None
+    # GAP-MARKET-BENCH-1 — this name's move FROM THE OPEN in the gap's direction (raw), the
+    # market's (SPY) move over the same span (signed, NOT direction-adjusted), and the name's
+    # move minus the market's in the gap's direction (relative). Blank where either side is.
+    move_1000: Optional[float] = None
+    move_1130: Optional[float] = None
+    move_close: Optional[float] = None
+    spy_move_1000: Optional[float] = None
+    spy_move_1130: Optional[float] = None
+    spy_move_close: Optional[float] = None
+    rel_spy_1000: Optional[float] = None
+    rel_spy_1130: Optional[float] = None
+    rel_spy_close: Optional[float] = None
 
     # -- the thresholds this row was screened on --------------------------- #
     cfg_min_price: Optional[float] = None
@@ -144,6 +179,7 @@ class LedgerRow:
     cfg_min_confirm_prints: Optional[int] = None
     cfg_max_confirm_drift: Optional[float] = None
     cfg_news_lookback_hours: Optional[int] = None
+    cfg_early_volume_multiple: Optional[float] = None
 
     @property
     def direction(self) -> int:
@@ -162,7 +198,11 @@ _FLOATS = {"previous_close", "average_volume", "premarket_price", "gap_pct",
            "ib_relative_volume", "ib_bid", "ib_ask",
            "cfg_min_price", "cfg_min_avg_volume", "cfg_min_abs_gap",
            "cfg_min_relative_volume", "cfg_wide_spread", "cfg_max_trusted_spread",
-           "cfg_max_confirm_drift"}
+           "cfg_max_confirm_drift", "first_signal_price", "price_0400", "price_0600",
+           "price_0700", "price_0800", "price_0900", "signal_move_0900", "signal_move_open",
+           "signal_move_close", "cfg_early_volume_multiple", "move_1000", "move_1130",
+           "move_close", "spy_move_1000", "spy_move_1130", "spy_move_close",
+           "rel_spy_1000", "rel_spy_1130", "rel_spy_close"}
 _INTS = {"history_days", "premarket_volume", "baseline_sessions", "headline_count",
          "related_count", "premarket_prints", "confirm_prints", "ib_premarket_volume",
          "cfg_min_history_days", "cfg_min_premarket_prints", "cfg_min_confirm_prints",

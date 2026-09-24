@@ -37,6 +37,7 @@ from typing import Callable, Optional, Sequence
 from .bars import DailyCache, DailySource, IntradaySource, lookback_start
 from .config import (DEFAULT_CONFIG, DEFAULT_RUN_TIME, DEFAULT_ROOT, GapConfig, at_ny,
                      now_ny)
+from .early import early_reading
 from .explain import NO_REASON, ExplainOutcome, explanations
 from .ledger import (GROUP_BASELINE, GROUP_CANDIDATE, LedgerRow, et_stamp,
                      sample_baseline, write_day)
@@ -194,6 +195,17 @@ def _headline_fields(news: Optional[MatchedNews], *, enabled: bool) -> dict:
     return fields
 
 
+def _apply_early(row: LedgerRow, early) -> None:
+    """An IBKR-verified candidate's pre-market timeline, copied onto the row."""
+    row.early_signal_note = early.note
+    if early.signal_time is not None:
+        row.first_signal_time_et = et_stamp(early.signal_time)
+        row.first_signal_price = early.signal_price
+    for name, value in zip(("price_0400", "price_0600", "price_0700", "price_0800",
+                            "price_0900"), early.path):
+        setattr(row, name, value)
+
+
 def build_row(*, day: date, run_at: datetime, group: str, pre: Optional[PreFilterRow],
               screen: Optional[ScreenRow], headlines: Optional[MatchedNews],
               news_enabled: bool, reason: str, config: GapConfig,
@@ -213,6 +225,8 @@ def build_row(*, day: date, run_at: datetime, group: str, pre: Optional[PreFilte
         row.ib_baseline_median = reading.baseline_median
         row.ib_relative_volume = reading.relative_volume
         row.ib_bid, row.ib_ask = reading.bid, reading.ask
+        if reading.verified and reading.early is not None:
+            _apply_early(row, reading.early)
     if pre is not None:
         row.ticker = pre.ticker
         row.previous_close = pre.previous_close
@@ -481,6 +495,12 @@ def _ibkr_stage(tickers: Sequence[str], *, ibkr, pre_by_ticker: dict, day: date,
                                         duration=BASELINE_DURATION)
                 readings[ticker] = check_two(readings[ticker], history, as_of=day,
                                              run_at=run_at, config=config)
+                if readings[ticker].passed is True:
+                    # GAP-EARLY-CHECKPOINT-1 — from bars already in hand: no new request.
+                    readings[ticker] = replace(readings[ticker], early=early_reading(
+                        history, as_of=day, run_at=run_at,
+                        previous_close=pre_by_ticker[ticker].previous_close,
+                        gap=readings[ticker].gap, config=config))
             passing = [t for t in survivors if readings[t].passed is True]
             if passing:
                 progress(f"IBKR spread — streaming quote for {len(passing)} name(s)")

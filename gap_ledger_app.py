@@ -38,7 +38,9 @@ from aristos_council.gap_ledger.viewer import (HOW_TO_READ, NEWS_ANY, NEWS_CHOIC
                                                VERIFIED_CHOICES, apply_filters,
                                                candidates_of, checkpoint_markdown,
                                                company_of, day_summary, details_of,
-                                               filter_caption, order_rows, row_flags,
+                                               early_markdown, filter_caption, market_markdown,
+                                               order_rows,
+                                               path_markdown, row_flags,
                                                scorecard_progress, source_facts,
                                                table_markdown)
 from aristos_council.gap_ledger.viewer import NEWLINE
@@ -152,6 +154,9 @@ def render_details(rows: list[LedgerRow], names: dict, *, key_ns: str) -> None:
                 with column:
                     for name, value in chunk:
                         st.markdown(f"**{name}** · {value}")
+            path = path_markdown(row)
+            if path:
+                st.markdown(path)
 
 
 def render_day(day: date, rows: list[LedgerRow], *, key_ns: str,
@@ -308,6 +313,27 @@ def render_scorecard() -> None:
     left, right = st.columns(2)
     left.metric("Days with filled outcomes", f"{card.days_scored} / {card.min_days}")
     right.metric("Names scored", f"{card.candidates} candidates · {card.baseline} baseline")
+
+    if card.checkpoints:
+        st.subheader("Against the market, not only the control group")
+        st.caption("Each name's move from the open in the gap's direction, and that minus "
+                   "SPY's move over the same span (also in the gap's direction). A candidate "
+                   "can carry on more often than the control group and still only be riding "
+                   "the market; the 'beyond SPY' column is the part that is not.")
+        st.markdown(market_markdown(card))
+
+    if card.early is not None:
+        st.subheader("Acting at the first signal vs acting at the open")
+        st.caption("IBKR-verified candidates only, in the gap's direction. The first signal is "
+                   "the first 5-minute bar already at the gap with volume well above the usual "
+                   "for its time of day; its time is when that bar closed.")
+        st.markdown(f"**{card.early.days} of {card.early.min_days} trading days** with a "
+                    f"first signal · {card.early.paired} names")
+        st.markdown(early_markdown(card.early))
+        if card.early.enough_days:
+            st.success(card.early.verdict)
+        else:
+            st.warning(card.early.verdict)
 
     if card.checkpoints:
         # The same Markdown shape and the same green/red as the day table, so the two tables

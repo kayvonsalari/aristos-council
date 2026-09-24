@@ -90,6 +90,15 @@ a mis-spelled code. All four stay in `market_index.yaml` on purpose, because tha
 which venues the index is *meant* to track and deleting them would shrink the peer universe
 silently; the cost is four listing requests per build, reported every time.
 
+**A network error is not a 404 (INDEX-SKIP-RETRY-1).** On 2026-09-23 a network blip skipped nine
+healthy exchanges in one second, because a URLError was treated exactly like "not found". A
+listing that gets an HTTP **404** is skipped at once and reported as *not available (404)*; one that
+gets **no answer** (URLError, timeout, dropped connection, 5xx) is retried on a backoff — three
+tries over about two minutes — before it is skipped, and reported as *network error, will retry
+next build*, with the exact command to run those exchanges again. Only the listing call retries; a
+per-symbol fundamentals failure is still counted and moved past, and a quota refusal still stops
+the build.
+
 `market_index.yaml` is tracked and lists the venues. The built table is **not** tracked —
 it is machine-generated and rebuildable, like the cohorts under `data/local/cohorts/`.
 
@@ -243,6 +252,17 @@ This is exactly why **the peer list is shown by name** on the Company Check page
 the CLI. A group assembled from someone else's classification can be wrong in ways no
 amount of internal consistency will reveal, and the only honest defence is to let the
 reader see who the company was measured against.
+
+**Two kinds of row are kept but never used as peers (INDEX-CLASS-SANITY-1).** EODHD lists Taiwan
+ETFs as "Common Stock" and labels them nonsense (`0052.TW` "Fubon Taiwan Technology" →
+Pharmaceuticals; `00939.TW` "China Construction Bank Corp Class H" → Semiconductor Materials), so a
+fund became a "pharmaceutical peer". A row is a **fund, not a company** on a strong name pattern
+(ETF/ETN, UCITS, *Fundo*, *Series Trust*, closed-end / investment trust, leveraged product), on its
+exchange's fund code shape (Taiwan `00xx`, LSE `0P…` fund ids), or on a fund word with nothing to
+say otherwise; a REIT called an "investment trust", Northern Trust and an income fund that makes
+chemicals are not funds. A row whose classification **contradicts its own name** (a "Bank" under
+semiconductors) is **classification suspect**; a row with no classification is never suspect. Both
+are counted in `status`, and a fund or suspect subject gets no peer group and a stated reason.
 
 ## The peer ladder
 

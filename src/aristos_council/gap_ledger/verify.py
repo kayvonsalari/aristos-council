@@ -36,6 +36,7 @@ from typing import Optional, Sequence
 
 from .bars import IntradayBar, Quote
 from .config import DEFAULT_CONFIG, GapConfig
+from .early import EarlyReading
 from .screen import (ScreenRow, baseline_volumes, gap_fraction, last_price,
                      premarket_window, relative_volume, spread_flag, spread_percent,
                      window_volume)
@@ -70,6 +71,8 @@ class IBKRReading:
     relative_volume: Optional[float] = None
     bid: Optional[float] = None
     ask: Optional[float] = None
+    # GAP-EARLY-CHECKPOINT-1 — when the move first showed, for a name that PASSED check 2.
+    early: Optional[EarlyReading] = None
 
     @property
     def verified(self) -> bool:

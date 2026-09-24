@@ -28,8 +28,8 @@ from typing import Optional, Sequence
 
 from ..data.adapter import PriceBar
 from .bars import IntradayBar
-from .config import (CHECKPOINTS, DEFAULT_CONFIG, DEFAULT_ROOT, MARKET_CLOSE, MARKET_OPEN,
-                     NY, GapConfig, at_ny, now_ny)
+from .config import (BENCHMARK, CHECKPOINTS, DEFAULT_CONFIG, DEFAULT_ROOT, MARKET_CLOSE,
+                     MARKET_OPEN, NY, GapConfig, at_ny, now_ny)
 from .ledger import LedgerRow, et_stamp
 
 _log = logging.getLogger(__name__)
@@ -104,34 +104,128 @@ class FillReport:
         return head + "."
 
 
-def fill_row(row: LedgerRow, *, daily: Sequence[PriceBar], intraday: Sequence[IntradayBar],
-             day: date, now: datetime, config: GapConfig = DEFAULT_CONFIG) -> LedgerRow:
-    """One row, filled where the data allows. Returns a NEW row; the input is untouched."""
-    bar = daily_reading(daily, day)
-    missing: list[str] = []
-    open_price = bar.open if bar is not None else None
-    close_price = bar.close if bar is not None else None
-    if bar is None:
-        missing.append("no daily bar for the session")
+# --------------------------------------------------------------------------- #
+# GAP-MARKET-BENCH-1 — the market's own day
+# --------------------------------------------------------------------------- #
+# The row's checkpoint price column -> the market move over the same span. One table, so the
+# fill, the scorecard and the tests cannot disagree about which SPY column answers which.
+SPY_COLUMN = {"price_1000": "spy_move_1000", "price_1130": "spy_move_1130",
+              "close_price": "spy_move_close"}
+MOVE_COLUMN = {"price_1000": "move_1000", "price_1130": "move_1130",
+               "close_price": "move_close"}
+REL_COLUMN = {"price_1000": "rel_spy_1000", "price_1130": "rel_spy_1130",
+              "close_price": "rel_spy_close"}
 
-    prices: list[Optional[float]] = []
-    for moment in CHECKPOINTS:
-        value = price_at(intraday, day, moment) if intraday else None
-        if value is None:
-            missing.append(f"no print within {int(CHECKPOINT_TOLERANCE.total_seconds() // 60)}"
-                           f" minutes of {moment.strftime('%H:%M')} ET")
-        prices.append(value)
-    while len(prices) < 2:                               # a configured third checkpoint
-        prices.append(None)                              # would need a column of its own
+
+@dataclass(frozen=True)
+class MarketDay:
+    """SPY's regular session on one day, read the same way every name is (same-day raw prices:
+    the open and close from the daily bar, the checkpoints from the 5-minute bars)."""
+
+    open: Optional[float] = None
+    price_1000: Optional[float] = None
+    price_1130: Optional[float] = None
+    close_price: Optional[float] = None
+
+    def move(self, column: str) -> Optional[float]:
+        """SPY's SIGNED move from its open to ``column``, as a fraction. Not direction-adjusted:
+        it is the market's own move, and each name's direction is applied when it is compared."""
+        price = getattr(self, column)
+        if self.open is None or price is None or self.open <= 0:
+            return None
+        return (price - self.open) / self.open
+
+
+def market_day(daily: Sequence[PriceBar], intraday: Sequence[IntradayBar],
+               day: date) -> MarketDay:
+    """SPY's readings for ``day``. Any reading the provider did not serve stays None: for a day
+    older than the intraday provider keeps, that is the 10:00 and 11:30 legs, and it is blank
+    rather than borrowed from the daily bar."""
+    bar = daily_reading(daily, day)
+    return MarketDay(open=bar.open if bar else None,
+                     price_1000=price_at(intraday, day, CHECKPOINTS[0]) if intraday else None,
+                     price_1130=price_at(intraday, day, CHECKPOINTS[1]) if intraday else None,
+                     close_price=bar.close if bar else None)
+
+
+def relative_to_market(raw: Optional[float], market: Optional[float],
+                       direction: int) -> Optional[float]:
+    """The name's move minus the market's, in the gap's direction.
+
+    ``raw`` is already direction-adjusted; the market's move is signed, so it is put in the same
+    direction before subtracting. A gap-down name that fell 2% on a day SPY fell 1% did 1 point
+    better than the market at going the gap's way: raw +2%, market +1% in that direction,
+    relative +1 point.
+    """
+    if raw is None or market is None or direction == 0:
+        return None
+    return raw - market * direction
+
+
+def apply_market(row: LedgerRow, market: Optional[MarketDay]) -> LedgerRow:
+    """The row with SPY's moves filled in and the raw and relative results derived from what the
+    row holds NOW. Returns a new row.
+
+    A reading the market could not supply keeps whatever the row already had (never blanked by a
+    later, poorer fetch), and every derived column is recomputed from the final values so it can
+    never disagree with the columns it comes from.
+    """
+    out = LedgerRow(**{**row.__dict__})
+    for price_column, spy_column in SPY_COLUMN.items():
+        if market is not None:
+            fresh = market.move(price_column)
+            if fresh is not None:
+                setattr(out, spy_column, fresh)
+        raw = directional_move(out.open_price, getattr(out, price_column), out.direction)
+        setattr(out, MOVE_COLUMN[price_column], raw)
+        setattr(out, REL_COLUMN[price_column],
+                relative_to_market(raw, getattr(out, spy_column), out.direction))
+    return out
+
+
+def has_market(row: LedgerRow) -> bool:
+    """Does this row carry SPY's day? The close leg is the test: it comes from the daily bar,
+    which the provider always has, so a day missing ONLY the intraday legs is not retried
+    forever."""
+    return row.spy_move_close is not None
+
+
+# --------------------------------------------------------------------------- #
+# filling a row
+# --------------------------------------------------------------------------- #
+def fill_row(row: LedgerRow, *, daily: Sequence[PriceBar], intraday: Sequence[IntradayBar],
+             day: date, now: datetime, config: GapConfig = DEFAULT_CONFIG,
+             market: Optional[MarketDay] = None) -> LedgerRow:
+    """One row, filled where the data allows. Returns a NEW row; the input is untouched.
+
+    A reading the provider does not serve now keeps what the row already held: a refill of an
+    old day (whose 5-minute bars the provider no longer keeps) must not blank prices a fresh
+    fill had recorded. The note is derived from the FINAL values, so it only names what is
+    actually still missing.
+    """
+    bar = daily_reading(daily, day)
+    fresh = {"open_price": bar.open if bar is not None else None,
+             "close_price": bar.close if bar is not None else None}
+    for moment, column in zip(CHECKPOINTS, ("price_1000", "price_1130")):
+        fresh[column] = price_at(intraday, day, moment) if intraday else None
 
     filled = LedgerRow(**{**row.__dict__})
-    filled.open_price = open_price
-    filled.price_1000 = prices[0]
-    filled.price_1130 = prices[1]
-    filled.close_price = close_price
+    for column, value in fresh.items():
+        setattr(filled, column, value if value is not None else getattr(row, column))
+
+    missing: list[str] = []
+    if filled.open_price is None or filled.close_price is None:
+        missing.append("no daily bar for the session")
+    for moment, column in zip(CHECKPOINTS, ("price_1000", "price_1130")):
+        if getattr(filled, column) is None:
+            missing.append(f"no print within {int(CHECKPOINT_TOLERANCE.total_seconds() // 60)}"
+                           f" minutes of {moment.strftime('%H:%M')} ET")
     # The diagnostic is derived from the row, so it is filled last and cannot disagree with
     # the columns it is computed from.
     filled.premarket_vs_open = premarket_vs_open(filled)
+    (filled.signal_move_0900, filled.signal_move_open,
+     filled.signal_move_close) = signal_moves(filled)
+    filled = apply_market(filled, market)
     filled.outcome_note = "; ".join(missing)
     filled.outcomes_filled_at_et = et_stamp(now)
     return filled
@@ -154,6 +248,43 @@ def premarket_vs_open(row: LedgerRow) -> Optional[float]:
     return (row.premarket_price - row.open_price) / row.open_price
 
 
+def directional_move(start: Optional[float], end: Optional[float],
+                     direction: int) -> Optional[float]:
+    """``(end - start) / start`` in the gap's direction, as a fraction.
+
+    None when either price is missing, the start is not a usable price, or there is no
+    direction — a move that could not be measured is never 0.0, which would read as "went
+    nowhere". Positive means the name went the way the gap pointed.
+    """
+    if start is None or end is None or start <= 0 or direction == 0:
+        return None
+    return (end - start) / start * direction
+
+
+def signal_moves(row: LedgerRow) -> tuple:
+    """What acting at the row's FIRST SIGNAL would have made, in the gap's direction:
+    ``(to 09:00, to the open, to the close)`` as fractions of the signal price.
+
+    GAP-EARLY-CHECKPOINT-1. Blank where there is no signal (always, for a yfinance-only row) or
+    where the far end is missing. The 09:00 leg is also blank when the signal itself came AFTER
+    09:00 — a "move to 09:00" that starts later than 09:00 is not a move, and reading it as
+    one would score information from the future.
+    """
+    start = row.first_signal_price
+    if start is None:
+        return (None, None, None)
+    to_0900 = None
+    try:
+        when = datetime.fromisoformat(row.first_signal_time_et)
+    except ValueError:
+        when = None
+    if when is not None and when.astimezone(NY).time() <= time(9, 0):
+        to_0900 = directional_move(start, row.price_0900, row.direction)
+    return (to_0900,
+            directional_move(start, row.open_price, row.direction),
+            directional_move(start, row.close_price, row.direction))
+
+
 def is_complete(row: LedgerRow) -> bool:
     """Does this row carry all four readings? Used to count, and to skip a refill."""
     return None not in (row.open_price, row.price_1000, row.price_1130, row.close_price)
@@ -165,10 +296,15 @@ def is_complete(row: LedgerRow) -> bool:
 def fill_day(day: date, *, daily, intraday, root: str | Path = DEFAULT_ROOT,
              now: Optional[datetime] = None, config: GapConfig = DEFAULT_CONFIG,
              write: bool = True) -> FillReport:
-    """Fill every logged name for ``day``, candidates and control group alike.
+    """Fill every logged name for ``day``, candidates and control group alike, and the market's
+    own day beside them (GAP-MARKET-BENCH-1).
 
     Refuses a session that has not closed (``SessionNotClosed``) rather than writing a
     part-formed close, and refuses nothing else: a day with no CSV simply reports zero rows.
+
+    Only names still missing a price are fetched: a day that is complete except for SPY costs
+    one benchmark request, not a refetch of every name, which is what makes filling the SPY
+    columns for past days cheap.
     """
     from .ledger import read_day, write_day
 
@@ -181,16 +317,37 @@ def fill_day(day: date, *, daily, intraday, root: str | Path = DEFAULT_ROOT,
     if not rows:
         return FillReport(day=day, notes=(f"no ledger for {day}",))
 
-    tickers = sorted({row.ticker for row in rows if row.ticker})
-    daily_bars = daily.daily_bars(tickers, start=day, end=day + timedelta(days=1))
-    intraday_bars = intraday.intraday_bars(tickers, start=day, end=day + timedelta(days=1))
+    wanted = {row.ticker for row in rows if row.ticker and not is_complete(row)}
+    if not all(has_market(row) for row in rows):
+        wanted.add(BENCHMARK)
+    ask = sorted(wanted)
+    daily_bars = daily.daily_bars(ask, start=day, end=day + timedelta(days=1)) if ask else {}
+    intraday_bars = (intraday.intraday_bars(ask, start=day, end=day + timedelta(days=1))
+                     if ask else {})
+    market = None
+    if BENCHMARK in wanted:
+        market = market_day(daily_bars.get(BENCHMARK, []), intraday_bars.get(BENCHMARK, []),
+                            day)
 
-    filled = [fill_row(row, daily=daily_bars.get(row.ticker, []),
-                       intraday=intraday_bars.get(row.ticker, []), day=day, now=now,
-                       config=config) for row in rows]
+    filled = []
+    for row in rows:
+        if is_complete(row):
+            filled.append(apply_market(row, market))
+        else:
+            filled.append(fill_row(row, daily=daily_bars.get(row.ticker, []),
+                                   intraday=intraday_bars.get(row.ticker, []), day=day,
+                                   now=now, config=config, market=market))
     if write:
         write_day(day, filled, root=root)
     complete = [row for row in filled if is_complete(row)]
-    notes = tuple(sorted({row.outcome_note for row in filled if row.outcome_note}))
+    notes = sorted({row.outcome_note for row in filled if row.outcome_note})
+    if market is not None:
+        # Said out loud: an absent SPY column is indistinguishable from a feature that was never
+        # switched on, and that ambiguity has cost this repo debugging rounds before.
+        if market.move("close_price") is None:
+            notes.append(f"{BENCHMARK}: no daily bar for {day} - the market columns stay blank")
+        elif market.move("price_1000") is None or market.move("price_1130") is None:
+            notes.append(f"{BENCHMARK}: no intraday bars for {day} (the provider keeps only "
+                         f"recent 5-minute data) - 10:00/11:30 market moves stay blank")
     return FillReport(day=day, rows=len(filled), filled=len(complete),
-                      incomplete=len(filled) - len(complete), notes=notes)
+                      incomplete=len(filled) - len(complete), notes=tuple(notes))

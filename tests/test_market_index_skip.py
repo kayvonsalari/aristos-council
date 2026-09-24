@@ -5,6 +5,10 @@ HTTP 404, the error propagated out of the per-exchange loop, and every exchange 
 never attempted. The store was flushed and the reason written down — the module is careful
 about that — but the run was over.
 
+(INDEX-SKIP-RETRY-1 later split the cause: HTTP 404 is "not available", and a network failure
+is retried and reported separately - see tests/test_market_index_skip_retry.py. The fakes here
+raise ``ExchangeNotAvailable``, which is what the real source raises for a 404.)
+
 A listing that fails is a fact about ONE venue, not about the build. So it is skipped, named
 in the summary, written to the build log, and the remaining exchanges are fetched.
 
@@ -84,7 +88,7 @@ def test_an_unlistable_exchange_does_not_end_the_build(tmp_path):
     source, store, outcome = _build(
         tmp_path, exchanges=["XETRA", "MI", "LSE"],
         listings={"XETRA": [_listing("SAP")], "LSE": [_listing("BP")]},
-        refuse={"MI": mi.MarketIndexError("EODHD /exchange-symbol-list/MI: HTTP 404")})
+        refuse={"MI": mi.ExchangeNotAvailable("EODHD /exchange-symbol-list/MI: HTTP 404")})
     assert source.asked == ["XETRA", "MI", "LSE"]
     assert outcome.stopped == ""
     assert outcome.fetched == 2
@@ -94,22 +98,22 @@ def test_an_unlistable_exchange_does_not_end_the_build(tmp_path):
 def test_the_skip_is_recorded_with_its_reason(tmp_path):
     _source, _store, outcome = _build(
         tmp_path, exchanges=["XETRA", "MI"], listings={"XETRA": [_listing("SAP")]},
-        refuse={"MI": mi.MarketIndexError("EODHD /exchange-symbol-list/MI: HTTP 404")})
+        refuse={"MI": mi.ExchangeNotAvailable("EODHD /exchange-symbol-list/MI: HTTP 404")})
     assert outcome.skipped_exchanges == [("MI", "HTTP 404")]
 
 
 def test_the_summary_names_the_skipped_exchange(tmp_path):
     _source, _store, outcome = _build(
         tmp_path, exchanges=["MI"], listings={},
-        refuse={"MI": mi.MarketIndexError("EODHD /exchange-symbol-list/MI: HTTP 404")})
-    assert outcome.skipped_sentence() == "1 exchange skipped: MI, HTTP 404"
-    assert "1 exchange skipped: MI, HTTP 404" in outcome.summary()
+        refuse={"MI": mi.ExchangeNotAvailable("EODHD /exchange-symbol-list/MI: HTTP 404")})
+    assert outcome.skipped_sentence() == "1 exchange skipped - not available (404): MI"
+    assert "1 exchange skipped - not available (404): MI" in outcome.summary()
 
 
 def test_all_four_absent_exchanges_are_skipped_and_named(tmp_path):
     """MI, HK, T and KS are all absent from EODHD's list on this plan. Before the fix the
     build died at the first of them and never learned about the other three."""
-    refused = mi.MarketIndexError("EODHD /exchange-symbol-list/X: HTTP 404")
+    refused = mi.ExchangeNotAvailable("EODHD /exchange-symbol-list/X: HTTP 404")
     source, _store, outcome = _build(
         tmp_path, exchanges=["US", "MI", "HK", "T", "KS", "AU"],
         listings={"US": [_listing("AAPL")], "AU": [_listing("BHP")]},
@@ -123,7 +127,7 @@ def test_all_four_absent_exchanges_are_skipped_and_named(tmp_path):
 def test_the_skip_is_written_to_the_build_log(tmp_path):
     _source, store, _outcome = _build(
         tmp_path, exchanges=["MI"], listings={},
-        refuse={"MI": mi.MarketIndexError("EODHD /exchange-symbol-list/MI: HTTP 404")})
+        refuse={"MI": mi.ExchangeNotAvailable("EODHD /exchange-symbol-list/MI: HTTP 404")})
     log = mi.build_log_path(store).read_text(encoding="utf-8")
     assert "MI: SKIPPED" in log
     assert "HTTP 404" in log
@@ -156,7 +160,7 @@ def test_the_store_is_still_flushed_when_an_exchange_is_skipped(tmp_path):
     """The module's existing discipline — no silent exits, always flush — is not weakened."""
     _source, store, _outcome = _build(
         tmp_path, exchanges=["XETRA", "MI"], listings={"XETRA": [_listing("SAP")]},
-        refuse={"MI": mi.MarketIndexError("EODHD /exchange-symbol-list/MI: HTTP 404")})
+        refuse={"MI": mi.ExchangeNotAvailable("EODHD /exchange-symbol-list/MI: HTTP 404")})
     assert store.path.exists()
     assert [r.ticker for r in store.load()] == ["SAP.XETRA"]
 

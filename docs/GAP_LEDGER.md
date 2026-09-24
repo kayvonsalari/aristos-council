@@ -264,6 +264,25 @@ denominator).
 Below **40 scored days** the verdict is "not enough days" and no rate is presented as a
 finding. A fortnight of mornings is a mood, not evidence.
 
+**Against the market, not only the control group (GAP-MARKET-BENCH-1).** `outcomes` also records
+SPY's own day — open to 10:00, open to 11:30, open to close — and every candidate and control row
+gets its move from the open raw (in the gap's direction) and relative to SPY (its move minus SPY's,
+in the gap's direction, so a gap-down name is not scored backwards). `score` and the viewer's
+scorecard show both, candidates against control. A missing SPY reading is skipped for the relative
+number only, never counted as a flat day. `outcomes` also fills SPY for past logged days, fetching
+only SPY for a day that is otherwise complete; where the provider no longer keeps that day's 5-minute
+bars the 10:00/11:30 legs stay blank and the report says so.
+
+**Is acting earlier worth anything? (GAP-EARLY-CHECKPOINT-1).** For every IBKR-verified candidate
+the run also logs the *first signal*: the first 5-minute pre-market bar whose price was already at
+the 3% gap in the gap's direction **and** whose volume was at least 3× (`early_volume_multiple`)
+the median of the same time-of-day bar over the prior 20 sessions, plus the price at 04:00, 06:00,
+07:00, 08:00 and 09:00. The signal time is when the bar *closed*, and a bar still forming at the run
+is not used. A usual volume of zero is not-evaluated, not a pass (3 × 0 would let one stray print
+qualify). `outcomes` adds the move from the signal price to 09:00, the open and the close, and `score`
+prints "acting at the first signal" against "acting at the open" over the same names and the same
+40-day floor. yfinance-only rows leave all of it blank — that provider has no pre-market volume.
+
 ## News and the optional reason line
 
 For each candidate, EODHD News over the last 18 hours: headline, publisher, timestamp, link.
@@ -335,6 +354,7 @@ threshold change can never silently reinterpret yesterday's record.
 | `wide_spread` | 0.1% (marked, never dropped) |
 | `news_lookback_hours` | 18 |
 | `chunk_size` / `chunk_pause_seconds` | 40 tickers / 1.0s |
+| `early_volume_multiple` | 3× the usual volume for that time of day |
 | `min_days_to_score` | 40 |
 
 ## Testing

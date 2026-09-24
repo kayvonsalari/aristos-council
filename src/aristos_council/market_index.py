@@ -29,8 +29,10 @@ Nothing here reaches a model. The CLI:
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -104,6 +106,13 @@ CHARGE_FUNDAMENTALS = 10
 CHARGE_LISTING = 1
 DEFAULT_BUDGET = 90_000                 # charged units, not requests
 
+# INDEX-SKIP-RETRY-1 - how long a LISTING request keeps trying when the network gives no answer.
+# Three tries, waiting 30s then 90s between them (one wait per retry, so the tuple's length IS
+# the retry count): about two minutes in all, which rides out a blip (the 2026-09-23 one
+# skipped nine exchanges in a single second) without turning a real outage into a build that
+# never ends. An HTTP 404 is NOT retried: it is an answer.
+NETWORK_BACKOFF_SECONDS = (30.0, 90.0)
+
 # The venues a US listing may sit on. 17,829 US common stocks came back on 2026-09-18, of
 # which 11,508 were OTC (PINK 8,644, OTCQB 1,252, OTCQX 498, OTCGREY 486, OTCCE 475,
 # OTCMKTS 144, OTC 6, OTCBB 3). Fetching those cost 337 of the first build's 526 rows and
@@ -129,12 +138,37 @@ USD_COMPUTED = "computed"
 USD_ABSTAINED = "abstained"
 
 
+# Why an exchange's listing was skipped (BuildOutcome.skip_kinds).
+SKIP_NOT_AVAILABLE = "not_available"
+SKIP_NETWORK = "network"
+SKIP_OTHER = "other"
+
+
 class MarketIndexError(RuntimeError):
     """The index could not be built, read or queried."""
 
 
 class QuotaExhausted(MarketIndexError):
     """The provider refused on quota. A build stops cleanly rather than hammering."""
+
+
+class ExchangeNotAvailable(MarketIndexError):
+    """The provider answered HTTP 404: this listing does not exist on this plan.
+
+    INDEX-SKIP-RETRY-1. A fact about the venue, not about the moment - asking again in two
+    minutes gets the same answer - so it is skipped AT ONCE and reported as "not available".
+    """
+
+
+class NetworkUnavailable(MarketIndexError):
+    """The request never got an answer (URLError, a timeout, a dropped connection, a 5xx),
+    and it kept not getting one through every retry.
+
+    INDEX-SKIP-RETRY-1. A fact about the moment, not about the venue: on 2026-09-23 a network
+    blip made nine exchanges look "unavailable" inside one second, because a URLError was
+    treated exactly like a 404. It is skipped only after the backoff is spent, and reported as
+    "network error, will retry next build" - the venue is fine and the next build asks again.
+    """
 
 
 # --------------------------------------------------------------------------- #
@@ -423,6 +457,17 @@ class IndexStore:
 # --------------------------------------------------------------------------- #
 # the provider
 # --------------------------------------------------------------------------- #
+class _RateLimited(Exception):
+    """Internal: an HTTP 429, so the backoff-and-retry loop in ``_get`` can catch it."""
+
+
+# What "no answer" looks like. URLError covers a failed connection or DNS lookup, and OSError
+# covers the rest of the socket family (a reset, a timeout); HTTPException is a body cut off
+# mid-read. HTTPError is also a URLError, which is why ``_request`` catches it first.
+_NETWORK_ERRORS = (urllib.error.URLError, TimeoutError, ConnectionError, OSError,
+                   http.client.HTTPException)
+
+
 class EODHDIndexSource:
     """Read-only EODHD access for the two endpoints the index is built from.
 
@@ -432,48 +477,85 @@ class EODHDIndexSource:
     """
 
     def __init__(self, api_key: str | None = None, timeout: float = 30.0,
-                 sleep=time.sleep) -> None:
+                 sleep=time.sleep, network_backoff=NETWORK_BACKOFF_SECONDS) -> None:
         raw = api_key if api_key is not None else os.environ.get("EODHD_API_KEY")
         self._key = (raw or "").strip()
         self._timeout = timeout
         self._sleep = sleep
+        self._network_backoff = tuple(network_backoff)
         # MARKET-INDEX-2 - REQUESTS and CHARGED units are different numbers and only one
         # of them is the one the daily allowance runs out of.
         self.requests = 0
         self.charged = 0
 
-    def _get(self, path: str, charge: int = CHARGE_LISTING, **params) -> object:
+    def _get(self, path: str, charge: int = CHARGE_LISTING, *, retry_network: bool = False,
+             **params) -> object:
+        """One EODHD request.
+
+        Three different answers, and they are told apart because each wants a different
+        response: a 429 is a "wait" (backed off here), a 402/403 is a "stop" (quota), and a 404
+        is "this does not exist" (``ExchangeNotAvailable``, no retry - it is an answer). NO
+        answer at all - a URLError, a timeout, a dropped connection, a 5xx - is a fact about
+        the moment, so with ``retry_network`` it is retried on ``network_backoff`` before
+        ``NetworkUnavailable`` is raised. INDEX-SKIP-RETRY-1: it used to be raised as the same
+        error as a 404, which skipped nine healthy exchanges in one second on 2026-09-23.
+        """
         if not self._key:
             raise MarketIndexError("EODHD_API_KEY is not set — the index cannot be built")
         params.setdefault("api_token", self._key)
         params.setdefault("fmt", "json")
         url = f"{BASE_URL}{path}?{urllib.parse.urlencode(params)}"
-        # Back off on 429 rather than giving up: a rate limit is a "wait", a quota is a
-        # "stop", and conflating them either wastes a half-built table or hammers the API.
         for attempt in range(5):
+            try:
+                return self._request(url, path, charge, retry_network=retry_network)
+            except _RateLimited:
+                # Back off on 429 rather than giving up: a rate limit is a "wait", a quota is
+                # a "stop", and conflating them either wastes a half-built table or hammers
+                # the API.
+                self._sleep(2 ** attempt)
+        raise QuotaExhausted(f"EODHD {path}: rate limited five times over")
+
+    def _request(self, url: str, path: str, charge: int, *, retry_network: bool) -> object:
+        """One request, retried on a network failure when asked to."""
+        waits = self._network_backoff if retry_network else ()
+        for tried in range(len(waits) + 1):
             self.requests += 1
             self.charged += charge
             try:
                 with urllib.request.urlopen(url, timeout=self._timeout) as resp:
                     return json.loads(resp.read().decode("utf-8"))
             except urllib.error.HTTPError as exc:
+                # HTTPError is a URLError, so it is caught FIRST: an HTTP status is an answer.
                 if exc.code == 429:
-                    self._sleep(2 ** attempt)
-                    continue
+                    raise _RateLimited from None
                 if exc.code in (402, 403):
                     raise QuotaExhausted(
                         f"EODHD refused {path} with HTTP {exc.code} — quota or plan "
                         f"limit reached") from None
-                raise MarketIndexError(f"EODHD {path}: HTTP {exc.code}") from None
+                if exc.code == 404:
+                    raise ExchangeNotAvailable(f"EODHD {path}: HTTP 404") from None
+                if exc.code >= 500:
+                    failure = f"HTTP {exc.code}"          # a server blip, not an answer
+                else:
+                    raise MarketIndexError(f"EODHD {path}: HTTP {exc.code}") from None
+            except _NETWORK_ERRORS as exc:
+                failure = type(exc).__name__
             except Exception as exc:
                 raise MarketIndexError(f"EODHD {path}: {type(exc).__name__}") from None
-        raise QuotaExhausted(f"EODHD {path}: rate limited five times over")
+            if tried < len(waits):
+                self._sleep(waits[tried])
+                continue
+            raise NetworkUnavailable(f"EODHD {path}: {failure}") from None
+        raise NetworkUnavailable(f"EODHD {path}: no answer")      # pragma: no cover
 
     def common_stocks(self, exchange: str) -> list[dict]:
         """Every COMMON STOCK listed on one exchange. Funds, ADRs, preferred lines and
         indices are dropped here rather than downstream: they are not peers of an
-        operating company and fetching their fundamentals would be the bulk of the bill."""
-        rows = self._get(f"/exchange-symbol-list/{exchange}")
+        operating company and fetching their fundamentals would be the bulk of the bill.
+
+        The one call that RETRIES a network failure: a listing that fails skips its whole
+        exchange (see ``build``), so it is worth two minutes to be sure it is not a blip."""
+        rows = self._get(f"/exchange-symbol-list/{exchange}", retry_network=True)
         out = []
         for row in rows if isinstance(rows, list) else []:
             if isinstance(row, dict) and str(row.get("Type", "")) == COMMON_STOCK:
@@ -632,6 +714,11 @@ class BuildOutcome:
     # the exchanges after it. A listing that fails is a fact about one venue, not about the
     # build.
     skipped_exchanges: list = field(default_factory=list)
+    # INDEX-SKIP-RETRY-1 - WHY each was skipped, by exchange code: SKIP_NOT_AVAILABLE (HTTP 404,
+    # a fact about the venue), SKIP_NETWORK (no answer after every retry, a fact about the
+    # moment) or SKIP_OTHER. They mean different things to the owner - one is "this plan does not
+    # have it", the other is "run it again" - so they are never reported as one number.
+    skip_kinds: dict = field(default_factory=dict)
     stopped: str = ""
 
     def summary(self) -> str:
@@ -645,14 +732,37 @@ class BuildOutcome:
             head += f". {self.skipped_sentence()}"
         return head + (f" - STOPPED: {self.stopped}" if self.stopped else ".")
 
+    def skipped_codes(self, kind: str) -> list[str]:
+        """The exchange codes skipped for ``kind``, in build order."""
+        return [code for code, _reason in self.skipped_exchanges
+                if self.skip_kinds.get(code, SKIP_OTHER) == kind]
+
+    @property
+    def network_skipped(self) -> list[str]:
+        """The exchanges to run again: skipped because nothing answered, not because the
+        venue is missing."""
+        return self.skipped_codes(SKIP_NETWORK)
+
     def skipped_sentence(self) -> str:
-        """``1 exchange skipped: MI, HTTP 404`` - named, so a missing market is never
-        inferred from a short table."""
+        """``2 exchanges skipped - not available (404): MI; network error, will retry next
+        build: XETRA (URLError)`` - named and separated by cause, so a missing market is never
+        inferred from a short table and a blip is never mistaken for a missing venue."""
         if not self.skipped_exchanges:
             return ""
+        reasons = dict(self.skipped_exchanges)
+        groups = []
+        missing = self.skipped_codes(SKIP_NOT_AVAILABLE)
+        if missing:
+            groups.append(f"not available (404): {', '.join(missing)}")
+        blipped = self.skipped_codes(SKIP_NETWORK)
+        if blipped:
+            groups.append("network error, will retry next build: "
+                          + ", ".join(f"{c} ({reasons[c]})" for c in blipped))
+        other = self.skipped_codes(SKIP_OTHER)
+        if other:
+            groups.append("failed: " + ", ".join(f"{c} ({reasons[c]})" for c in other))
         word = "exchange" if len(self.skipped_exchanges) == 1 else "exchanges"
-        detail = "; ".join(f"{code}, {reason}" for code, reason in self.skipped_exchanges)
-        return f"{len(self.skipped_exchanges)} {word} skipped: {detail}"
+        return f"{len(self.skipped_exchanges)} {word} skipped - " + "; ".join(groups)
 
     def venue_lines(self) -> list[str]:
         """Every venue string seen, with a count - once per build, so a venue nobody
@@ -745,7 +855,16 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
                 # European build on 2026-09-22 because Milan answered 404.
                 reason = str(exc).split(": ", 1)[-1] or type(exc).__name__
                 outcome.skipped_exchanges.append((exchange, reason))
-                say(f"{exchange}: SKIPPED - listing failed ({reason}); continuing with "
+                # INDEX-SKIP-RETRY-1 - said by CAUSE. By now a network failure has already
+                # been retried on the backoff, so "will retry next build" is the true remedy.
+                if isinstance(exc, ExchangeNotAvailable):
+                    kind, why = SKIP_NOT_AVAILABLE, "not available on this plan"
+                elif isinstance(exc, NetworkUnavailable):
+                    kind, why = SKIP_NETWORK, "network error after retries, will retry next build"
+                else:
+                    kind, why = SKIP_OTHER, "listing failed"
+                outcome.skip_kinds[exchange] = kind
+                say(f"{exchange}: SKIPPED - {why} ({reason}); continuing with "
                     f"the remaining exchanges")
                 continue
             outcome.listed += len(listings)
@@ -869,6 +988,9 @@ def refresh(*, older_than: int = DEFAULT_MAX_AGE_DAYS, **kwargs) -> BuildOutcome
 # --------------------------------------------------------------------------- #
 # status
 # --------------------------------------------------------------------------- #
+EXAMPLES = 5                       # how many tickers status names per kind of excluded row
+
+
 @dataclass
 class IndexStatus:
     rows: int = 0
@@ -889,6 +1011,12 @@ class IndexStatus:
     needs_refetch: int = 0
     complete: int = 0
     path: str = ""
+    # INDEX-CLASS-SANITY-1 - rows kept in the table but never used as peers, and which ones, so
+    # a wrong call can be checked rather than trusted.
+    funds: int = 0
+    suspect: int = 0
+    fund_examples: list = field(default_factory=list)
+    suspect_examples: list = field(default_factory=list)
 
     def lines(self) -> list[str]:
         if not self.rows:
@@ -906,6 +1034,11 @@ class IndexStatus:
                f"  {self.unresolved} row(s) with neither PrimaryTicker nor ISIN "
                f"(unresolved; treated as home listings)",
                f"  {self.needs_refetch} row(s) will be REFETCHED by the next build",
+               f"  {self.funds} row(s) are {FUND_NOT_A_COMPANY}, excluded from peer groups"
+               + (f" (e.g. {', '.join(self.fund_examples)})" if self.fund_examples else ""),
+               f"  {self.suspect} row(s) {CLASSIFICATION_SUSPECT} - kept, excluded from "
+               f"peer groups" + (f" (e.g. {', '.join(self.suspect_examples)})"
+                                 if self.suspect_examples else ""),
                f"  oldest row: {self.oldest or 'unknown'}",
                "  per exchange:"]
         if self.missing_cap:
@@ -961,6 +1094,15 @@ def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
             out.complete += 1
         else:
             out.needs_refetch += 1
+        # A fund is counted as a fund and never also as suspect.
+        if is_fund(row):
+            out.funds += 1
+            if len(out.fund_examples) < EXAMPLES:
+                out.fund_examples.append(row.ticker)
+        elif suspect_reason(row):
+            out.suspect += 1
+            if len(out.suspect_examples) < EXAMPLES:
+                out.suspect_examples.append(row.ticker)
     stamps = sorted(r.fetched_at for r in rows if r.fetched_at)
     out.oldest = stamps[0] if stamps else ""
     return out
@@ -1044,6 +1186,161 @@ def one_row_per_company(rows) -> tuple[list, int]:
         kept.append(group[0])
         dropped += len(group) - 1
     return sorted(kept, key=lambda r: r.ticker), dropped
+
+
+# --------------------------------------------------------------------------- #
+# INDEX-CLASS-SANITY-1 - a fund is not a company, and a label can contradict its own name
+# --------------------------------------------------------------------------- #
+# MEASURED on the built table (21,181 rows), because the peer ladder trusts every row:
+#
+#   0052.TW   "Fubon Taiwan Technology"               GicSubIndustry "Pharmaceuticals"
+#   00939.TW  "China Construction Bank Corp Class H"  GicSubIndustry "Semiconductor Materials"
+#   00941.TW  "China Mobile Ltd"                      GicSubIndustry "Semiconductor Materials"
+#
+# All three are Taiwan ETFs (the 00xx code range) that EODHD lists as "Common Stock", so they
+# passed the listing filter, and the provider's classification for them is nonsense. A row like
+# that becomes a "pharmaceutical peer" or a "semiconductor-equipment peer" of a real company.
+#
+# Two DIFFERENT problems, kept apart because they are handled differently:
+#
+#   FUND        the row is not an operating company at all. Recognised by name and by the code
+#               shape each exchange gives its funds. Kept in the table (it is a faithful mirror
+#               of the provider, the way cross-listings are), excluded from peer groups, and
+#               counted in ``status`` as "fund, not a company".
+#
+#   SUSPECT     the row may well be a company, but its classification contradicts what its own
+#               name says (a "Bank" filed under semiconductors). Kept, excluded from peer
+#               groups, counted. Only a POSITIVE contradiction flags: a row with no
+#               classification at all contradicts nothing (null is not false).
+#
+# Everything here is a pure function of the row. No network, no model.
+_FUND_NAME_PATTERNS = tuple(re.compile(p, re.IGNORECASE) for p in (
+    r"\b(?:etf|etn|etp)s?\b",                 # "... ETF", "VanEck Sui ETN A"
+    r"\bexchange[- ]traded\b",
+    r"\bucits\b", r"\bsicav\b",
+    r"\bfundos?\b",                          # Brazilian funds: "... Fundo De Indice"
+    r"\b(?:leveraged|inverse) product\b",    # HK: "CSOP CSI 300 Index Daily (2x) Leveraged Product"
+    r"\bfunds? (?:series )?trust\b",         # US ETF shells: "Listed Funds Trust"
+    r"\bseries trust\b",
+    r"\bclosed[- ](?:end )?fund\b", r"\bclosed[-]end\b",
+    # UK closed-end funds. NOT a Real Estate / Realty / Mortgage / Property Investment Trust:
+    # those are REITs, operating property companies and legitimate peers (Link REIT, Federal
+    # Realty, PennyMac Mortgage Investment Trust, Allied Properties). Found by surveying the
+    # built table: the unqualified pattern swallowed 60-odd of them.
+    r"(?<!estate )(?<!realty )(?<!mortgage )(?<!property )\binvestment trusts?\b",
+    r"\bindex solutions\b",
+    r"\b(?:ishares|spdr|proshares|xtrackers|lyxor|direxion|vaneck|global x)\b",
+))
+# A fund word is only a FUND when the row does not read as an operating business: Chemtrade
+# Logistics Income Fund is a chemicals company and Rural Funds Group is a REIT. So these count
+# only with corroboration - the provider gave the row neither a classification nor a cap - or
+# with an asset-management classification.
+_FUND_WORD = re.compile(r"\b(?:funds?|index)\b", re.IGNORECASE)
+_FUND_WORD_STRICT = re.compile(r"\bfunds?\b", re.IGNORECASE)
+_ASSET_MANAGEMENT = re.compile(r"asset management", re.IGNORECASE)
+
+# The code shape each exchange gives its funds. Per exchange, because the shapes do not
+# overlap and a pattern that is right for one is a false positive on another.
+#   TW   the 00xx series is ETFs (0050, 0052, 00939 ...); companies start at 1101.
+#   LSE  "0P" + eight characters is a Morningstar fund id, not a ticker.
+_FUND_CODE_PATTERNS = {
+    "TW": re.compile(r"^00\d{2,5}[A-Z]?$"),
+    "LSE": re.compile(r"^0P[0-9A-Z]{8}$"),
+}
+
+FUND_NOT_A_COMPANY = "fund, not a company"
+
+
+def _code_and_market(row: "IndexRow") -> tuple[str, str]:
+    code, _, suffix = (row.ticker or "").upper().rpartition(".")
+    if not code:                                    # no dot: the whole string is the code
+        code, suffix = suffix, ""
+    return code, (row.market or suffix or "").upper()
+
+
+def fund_reason(row: "IndexRow") -> str:
+    """Why this row is a fund rather than a company, or "" when it is not.
+
+    Four tests, strongest first, and the reason names which fired so a wrong call is
+    diagnosable from the row. A row is a fund on a strong name pattern, on its exchange's fund
+    code shape, on a fund word plus an asset-management classification, or on a fund word with
+    NOTHING to say otherwise (no classification and no cap).
+    """
+    name = row.name or ""
+    for pattern in _FUND_NAME_PATTERNS:
+        if pattern.search(name):
+            return f"{FUND_NOT_A_COMPANY} (name: {pattern.search(name).group(0).lower()})"
+    code, market = _code_and_market(row)
+    shape = _FUND_CODE_PATTERNS.get(market)
+    if shape is not None and shape.search(code):
+        return f"{FUND_NOT_A_COMPANY} ({market} fund code {code})"
+    classification = _classification_text(row)
+    if _FUND_WORD_STRICT.search(name) and _ASSET_MANAGEMENT.search(classification):
+        return f"{FUND_NOT_A_COMPANY} (fund in an asset-management classification)"
+    if _FUND_WORD.search(name) and not classification.strip() and row.market_cap is None:
+        return f"{FUND_NOT_A_COMPANY} (fund word, and no classification or cap)"
+    return ""
+
+
+def is_fund(row: "IndexRow") -> bool:
+    return bool(fund_reason(row))
+
+
+def _classification_text(row: "IndexRow") -> str:
+    """Every classification field the row carries, as one lowercase string.
+
+    A field that says "Other" is no classification at all (Granite REIT's US line reads
+    "Other"), so it is dropped: it must not be read as a label that contradicts the name.
+    """
+    return " ".join(x for x in (row.gics_sector, row.gics_industry, row.gics_subindustry,
+                                row.sector, row.industry)
+                    if x and x.strip().lower() != "other").strip().lower()
+
+
+# The name words that say what KIND of business a row is, and the classification text that is
+# CONSISTENT with each. A row is suspect only when the name says one thing and EVERY
+# classification field says something outside the family - one field agreeing is enough to
+# leave it alone, because a false flag deletes a real peer.
+#
+# "Trust" and "Fund" are deliberately not here: Canadian income trusts and royalty funds are
+# ordinary operating businesses with ordinary classifications (Chemtrade -> Commodity
+# Chemicals), so a contradiction test would remove real peers. Funds are handled above.
+_FINANCIAL_FAMILY = re.compile(
+    r"bank|financ|insur|capital markets|mortgage|thrift|credit|lending|loan|asset management|"
+    r"broker|invest|saving|reit|real estate|holding|conglomerate|diversified", re.IGNORECASE)
+_REAL_ESTATE_FAMILY = re.compile(
+    r"reit|real estate|propert|mortgage|financ|hotel|land|realty|trust", re.IGNORECASE)
+_NAME_EXPECTS = (
+    ("bank", re.compile(r"\b(?:bank|banks|banco|bancorp|banca|bankshares)\b", re.IGNORECASE),
+     _FINANCIAL_FAMILY),
+    ("insurance", re.compile(r"\b(?:insurance|insurer|insurers|assurance|reinsurance)\b",
+                             re.IGNORECASE), _FINANCIAL_FAMILY),
+    ("REIT", re.compile(r"\breits?\b|\b(?:real estate|realty|mortgage|property) investment "
+                        r"trusts?\b", re.IGNORECASE), _REAL_ESTATE_FAMILY),
+)
+
+CLASSIFICATION_SUSPECT = "classification suspect"
+
+
+def suspect_reason(row: "IndexRow") -> str:
+    """Why this row's classification contradicts its own name, or "" when it does not.
+
+    A row with no classification at all is NEVER suspect: nothing contradicts anything, and the
+    peer ladder already cannot place it. A fund is not reported here either - it has its own
+    reason and is counted once.
+    """
+    classification = _classification_text(row)
+    if not classification:
+        return ""
+    for word, pattern, family in _NAME_EXPECTS:
+        if pattern.search(row.name or "") and not family.search(classification):
+            return (f"{CLASSIFICATION_SUSPECT} (named like a {word}, filed under "
+                    f"{row.classification or classification})")
+    return ""
+
+
+def is_suspect(row: "IndexRow") -> bool:
+    return not is_fund(row) and bool(suspect_reason(row))
 
 
 # --------------------------------------------------------------------------- #
@@ -1185,16 +1482,34 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                              "index")
         return group
 
+    # INDEX-CLASS-SANITY-1 - a subject that is not a company, or whose label contradicts its own
+    # name, has no peers to give: the classification the ladder would key on is not to be
+    # believed.
+    if is_fund(subject):
+        group.reasons.append(f"{subject.ticker}: {fund_reason(subject)}, so no peer group is "
+                             f"formed")
+        return group
+    if suspect_reason(subject):
+        group.reasons.append(f"{subject.ticker}: {suspect_reason(subject)}, so no peer group "
+                             f"is formed")
+        return group
+
     subject_financial = is_financial(subject)
     if not subject.gics_subindustry:
         group.reasons.append("subject has no GICS sub-industry; fell back to the EODHD "
                              "industry field")
 
     # Everything that is eligible to be a peer at all, before any rung.
-    candidates, no_cap, no_usd = [], 0, 0
+    candidates, no_cap, no_usd, funds, suspect = [], 0, 0, 0, 0
     for row in universe:
         if row.ticker.upper() == subject.ticker.upper():
             continue                                   # never its own peer
+        if is_fund(row):
+            funds += 1
+            continue
+        if suspect_reason(row):
+            suspect += 1
+            continue
         if is_financial(row) != subject_financial:
             continue                                   # financials only with financials
         if row.market_cap is None:
@@ -1212,6 +1527,11 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     # build; they are one company.
     pool, cross_listings = one_row_per_company(candidates)
 
+    if funds:
+        group.reasons.append(f"{funds} candidate(s) skipped: {FUND_NOT_A_COMPANY}")
+    if suspect:
+        group.reasons.append(f"{suspect} candidate(s) skipped: {CLASSIFICATION_SUSPECT} "
+                             f"(the label contradicts the name)")
     if no_cap:
         group.reasons.append(f"{no_cap} candidate(s) skipped: no market cap in the index")
     if no_usd:
@@ -1371,6 +1691,11 @@ def _cmd_build(args) -> int:
         # run to thousands, and a market silently missing from the table is the kind of
         # thing that gets noticed months later.
         _say(f"NOTE: {outcome.skipped_sentence()}")
+    if outcome.network_skipped:
+        # Only the ones that were a blip: a 404 will 404 again, so it is not worth a command.
+        _say("Run the network-skipped exchanges again with:")
+        _say(f"  python -m aristos_council.market_index build "
+             f"--exchanges {','.join(outcome.network_skipped)} --budget {args.budget}")
     if outcome.stopped and "limit" not in outcome.stopped:
         # The exact command that picks up where this one stopped - a resume instruction a
         # reader has to reconstruct is one they will get wrong at 4,000 rows in.
