@@ -127,6 +127,9 @@ class RunResult:
     ibkr_note: str = ""
     # IB's own explanation for having no bid/ask, when it gave one (a subscription refusal).
     ibkr_quote_note: str = ""
+    # GAP-VIEWER-1 — ticker -> company name, as handed in. Kept so the report can label a
+    # candidate without a second lookup.
+    company_names: dict = field(default_factory=dict)
     # GAP-REPORT-CLARITY-1 — gappers the trust tests could not vouch for. Counted so the
     # report can say "N trusted + M untrusted" in one breath instead of two numbers that look
     # like they disagree.
@@ -194,10 +197,12 @@ def _headline_fields(news: Optional[MatchedNews], *, enabled: bool) -> dict:
 def build_row(*, day: date, run_at: datetime, group: str, pre: Optional[PreFilterRow],
               screen: Optional[ScreenRow], headlines: Optional[MatchedNews],
               news_enabled: bool, reason: str, config: GapConfig,
-              reading: Optional[IBKRReading] = None, ibkr_note: str = "") -> LedgerRow:
+              reading: Optional[IBKRReading] = None, ibkr_note: str = "",
+              company: str = "") -> LedgerRow:
     """One CSV row out of the readings. Computes nothing — every number is copied."""
     row = LedgerRow(date=day.isoformat(), group=group, run_at_et=et_stamp(run_at),
-                    reason=reason, ibkr_note=ibkr_note, **config.as_record())
+                    reason=reason, ibkr_note=ibkr_note, company=company,
+                    **config.as_record())
     # GAP-IBKR-1 — who the numbers came from, and IB's own readings kept beside the screen's
     # so a disagreement between providers is still visible after the fact.
     row.source = SOURCE_IBKR if (reading is not None and reading.verified) else SOURCE_YFINANCE
@@ -269,7 +274,8 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
     names, not_common = split_common_stock(offered)
     result = RunResult(day=day, run_at=run_at, config=config, pool_size=len(offered),
                        pool_source=pool_source, news_enabled=news_source is not None,
-                       not_common_stock=not_common)
+                       not_common_stock=not_common,
+                       company_names=dict(company_names or {}))
     if not_common:
         progress(f"{len(not_common)} of {len(offered)} are not common stock "
                  f"(warrants, units, rights, preferreds) — not screened")
@@ -422,13 +428,15 @@ def run_screen(*, pool: Sequence[str], pool_source: str, daily: DailySource,
                   news_enabled=result.news_enabled,
                   reason=result.explain.lines.get(row.ticker, ""), config=config,
                   reading=result.ibkr_readings.get(row.ticker),
-                  ibkr_note=result.ibkr_note)
+                  ibkr_note=result.ibkr_note,
+                  company=(company_names or {}).get(row.ticker, ""))
         for row in result.candidates
     ] + [
         build_row(day=day, run_at=run_at, group=GROUP_BASELINE,
                   pre=pre_by_ticker.get(ticker), screen=result.screened.get(ticker),
                   headlines=None, news_enabled=False, reason="", config=config,
-                  reading=result.ibkr_readings.get(ticker), ibkr_note=result.ibkr_note)
+                  reading=result.ibkr_readings.get(ticker), ibkr_note=result.ibkr_note,
+                  company=(company_names or {}).get(ticker, ""))
         for ticker in result.baseline
     ]
     return _finish(result, root=root, write=write, todoist=todoist, progress=progress)
@@ -608,7 +616,11 @@ def format_report(result: RunResult, *, max_excluded: int = 15) -> str:
                            else _short_spread(row.spread_note))
             reading = result.ibkr_readings.get(row.ticker)
             source = "IBKR" if (reading is not None and reading.verified) else "yf"
-            lines.append(f"  {row.ticker:<8} [{source:<4}] gap {_pct(row.gap):>9}  "
+            # The name beside the ticker: "VKTX" tells a reader less than
+            # "VKTX Viking Therapeutics" at 06:00, and the index already knows it.
+            company = (result.company_names or {}).get(row.ticker, "")
+            label = f"{row.ticker} {company}".strip()
+            lines.append(f"  {label[:34]:<34} [{source:<4}] gap {_pct(row.gap):>9}  "
                          f"rel.vol {volume:>11}  {spread_mark}  {mark}")
             # With --explain off there is no per-row line at all; the header says so once.
             reason = result.explain.lines.get(row.ticker, "")

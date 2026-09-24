@@ -107,7 +107,9 @@ def task_body(candidates: Sequence[LedgerRow]) -> str:
                   else f"rel. pre-market volume UNAVAILABLE ({row.relative_volume_note})")
         # Which provider verified this name is the first thing worth knowing about it.
         badge = "IBKR-verified" if row.source == "ibkr" else "yfinance only"
-        line = (f"**{row.ticker}** [{badge}] — gap {_pct(row.gap_pct)}, {volume}"
+        # The company name beside the ticker: this is what the owner reads at 06:00.
+        name = f" ({row.company})" if row.company else ""
+        line = (f"**{row.ticker}**{name} [{badge}] — gap {_pct(row.gap_pct)}, {volume}"
                 + (f" · {' · '.join(f for f in flags if f)}" if any(flags) else ""))
         parts = [line]
         if row.reason:

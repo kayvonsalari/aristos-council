@@ -45,6 +45,11 @@ class LedgerRow:
     # -- identity ---------------------------------------------------------- #
     date: str = ""                       # the market date, YYYY-MM-DD, New York
     ticker: str = ""
+    # GAP-VIEWER-1 — the company name, from the market index at run time (the same name the
+    # news matcher uses, so a headline match and the label on the page can never disagree).
+    # Blank when the index has none: an absent name is never a failure, and the viewer looks
+    # it up for a CSV written before this column existed.
+    company: str = ""
     group: str = GROUP_CANDIDATE
     run_at_et: str = ""
     window_start_et: str = ""

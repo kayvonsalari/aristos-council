@@ -26,11 +26,22 @@ from pathlib import Path
 
 import streamlit as st
 
+from typing import Optional
+
 from aristos_council.gap_ledger.config import DEFAULT_ROOT, now_ny
-from aristos_council.gap_ledger.ledger import (GROUP_BASELINE, GROUP_CANDIDATE, LedgerRow,
-                                               ledger_days, read_all, read_day)
+from aristos_council.gap_ledger.ledger import (GROUP_BASELINE, LedgerRow, ledger_days,
+                                               read_all, read_day)
 from aristos_council.gap_ledger.outcomes import is_complete
-from aristos_council.gap_ledger.score import CHECKPOINT_COLUMNS, continued, score
+from aristos_council.gap_ledger.score import score
+from aristos_council.gap_ledger.viewer import (HOW_TO_READ, NEWS_ANY, NEWS_CHOICES,
+                                               RESULT_ANY, RESULT_CHOICES, VERIFIED_ANY,
+                                               VERIFIED_CHOICES, apply_filters,
+                                               candidates_of, checkpoint_markdown,
+                                               company_of, day_summary, details_of,
+                                               filter_caption, order_rows, row_flags,
+                                               scorecard_progress, source_facts,
+                                               table_markdown)
+from aristos_council.gap_ledger.viewer import NEWLINE
 
 ROOT = Path(__file__).resolve().parent
 
@@ -54,140 +65,133 @@ RUN_HINT = "python -m aristos_council.gap_ledger run"
 OUTCOMES_HINT = "python -m aristos_council.gap_ledger outcomes"
 
 
-# --------------------------------------------------------------------------- #
-# formatting — every value comes from the row; nothing is computed here
-# --------------------------------------------------------------------------- #
-def pct(value) -> str:
-    return "—" if value is None else f"{value * 100:+.2f}%"
+def hide_deploy_button() -> None:
+    """Hide the Deploy button, and NOTHING else.
 
-
-def ratio(value) -> str:
-    return "—" if value is None else f"{value:.2f}x"
-
-
-def money(value) -> str:
-    return "—" if value is None else f"${value:,.2f}"
-
-
-def spread(value) -> str:
-    return "unknown" if value is None else f"{value * 100:.2f}%"
-
-
-def relative_volume_cell(row: LedgerRow) -> str:
-    """The ratio, or ``unavailable`` — never a dash that could read as "about zero".
-
-    A candidate whose relative volume could not be read was selected on its GAP ALONE, and
-    the table is where that has to be visible.
+    Surgical on purpose. ``app.py`` carries the scar in writing: a past chrome-strip took out
+    the toolbar menu (settings, theme) and the sidebar collapse toggle along with the cosmetic
+    bits. Deploy is the only control here that does nothing for a local read-only viewer, so it
+    is the only one hidden — and the others are forced visible in the same breath, so a stale
+    stylesheet or a theme cannot take them away either.
     """
-    return "unavailable" if row.relative_volume is None else ratio(row.relative_volume)
+    st.markdown(
+        """
+        <style>
+          [data-testid="stAppDeployButton"] {display: none !important;}
+          /* Never lose the real controls. */
+          [data-testid="stToolbar"], [data-testid="stMainMenu"], #MainMenu,
+          [data-testid="stSidebarCollapseButton"],
+          [data-testid="stSidebarCollapsedControl"],
+          [data-testid="stExpandSidebarButton"] {visibility: visible !important;}
+        </style>
+        """,
+        unsafe_allow_html=True)
 
 
-def candidate_table(rows: list[LedgerRow]) -> list[dict]:
-    """Today's list as a flat table. The link column is the headline's URL, so a claim is
-    one click from the story it rests on."""
-    return [{
-        "Ticker": row.ticker,
-        # Who verified it. The single most useful column, because it says whether the
-        # relative-volume leg ran at all for this name.
-        "Source": (row.source or "yfinance").upper(),
-        "Gap": pct(row.gap_pct),
-        "Rel. pre-market volume": relative_volume_cell(row),
-        "Prev. close": money(row.previous_close),
-        "Pre-market": money(row.premarket_price),
-        "Spread": spread(row.spread_pct),
-        "Flags": " · ".join(f for f in (row.spread_note, row.relative_volume_note) if f),
-        "News": row.news_found,
-        "Headline": row.headline,
-        "Link": row.news_link,
-    } for row in rows]
+@st.cache_data(show_spinner=False)
+def company_names() -> dict:
+    """``{ticker: company}`` from the market index, for CSVs written before the column.
 
-
-def outcome_table(rows: list[LedgerRow]) -> list[dict]:
-    """What the session did, per logged name, with the continuation answers spelled out.
-
-    A blank continuation cell means NOT SCOREABLE — no direction or no price — which is
-    deliberately distinct from "no". The scorecard counts it in neither column.
+    Cached because it reads a parquet table of several thousand rows and the answer does not
+    change while the page is open. A missing index is an empty dict, not an error — the name
+    is a label, and a viewer that refused to render without one would be worse than a blank
+    cell.
     """
-    out = []
+    try:
+        from aristos_council.gap_ledger.universe import names_from_index
+
+        return names_from_index()
+    except Exception:                                    # no index, no pandas, no matter
+        return {}
+
+
+def render_banner(rows: list[LedgerRow]) -> None:
+    """The data-source facts, ONCE, above the table (GAP-VIEWER-1 item 3).
+
+    These are facts about the RUN — the gateway was down, the provider served no volume, the
+    subscription does not cover quotes — and repeating them down a column is how a reader
+    learns to stop looking at that column.
+    """
+    for fact in source_facts(rows):
+        st.warning(fact)
+
+
+def render_table(rows: list[LedgerRow], names: dict) -> None:
+    """One row per stock, nine columns, in the specified order.
+
+    Markdown rather than ``st.dataframe``: a dataframe's ``LinkColumn`` takes one
+    ``display_text`` for every row, so the headline could not be both the visible text and the
+    link. The trade is click-to-sort, which the fixed order replaces — IBKR-verified first,
+    then the largest absolute gap.
+    """
+    st.markdown(table_markdown(rows, names))
+
+
+def render_details(rows: list[LedgerRow], names: dict, *, key_ns: str) -> None:
+    """Everything the table left out, one expander per stock."""
+    if not rows:
+        return
+    st.caption("Details — spread, prints, IB's own readings, the checkpoints, the notes.")
     for row in rows:
-        record = {
-            "Group": "candidate" if row.group == GROUP_CANDIDATE else "baseline",
-            "Ticker": row.ticker,
-            "Gap": pct(row.gap_pct),
-            "Open": money(row.open_price),
-            "10:00": money(row.price_1000),
-            "11:30": money(row.price_1130),
-            "Close": money(row.close_price),
-        }
-        for label, column in CHECKPOINT_COLUMNS:
-            answer = continued(row, column)
-            record[f"Carried on @ {label}"] = ("" if answer is None
-                                               else ("yes" if answer else "no"))
-        record["Note"] = row.outcome_note
-        out.append(record)
-    return out
+        label = f"{row.ticker}"
+        # The same looked-up name the table uses, so the expander and the row agree.
+        company = company_of(row, names)
+        if company:
+            label += f" — {company}"
+        flags = row_flags(row)
+        if flags:
+            label += f"   ({'; '.join(flags)})"
+        with st.expander(label):
+            pairs = details_of(row)
+            if not pairs:
+                st.write("Nothing beyond the table for this row.")
+                continue
+            left, right = st.columns(2)
+            half = (len(pairs) + 1) // 2
+            for column, chunk in ((left, pairs[:half]), (right, pairs[half:])):
+                with column:
+                    for name, value in chunk:
+                        st.markdown(f"**{name}** · {value}")
 
 
-def split(rows: list[LedgerRow]) -> tuple[list[LedgerRow], list[LedgerRow]]:
-    return ([r for r in rows if r.group == GROUP_CANDIDATE],
-            [r for r in rows if r.group == GROUP_BASELINE])
-
-
-# --------------------------------------------------------------------------- #
-# the day view, shared by "today" and "past days"
-# --------------------------------------------------------------------------- #
-def render_day(day: date, rows: list[LedgerRow], *, key_ns: str) -> None:
-    candidates, baseline = split(rows)
+def render_day(day: date, rows: list[LedgerRow], *, key_ns: str,
+               filters: Optional[dict] = None) -> None:
+    """One logged day: the banner, the table, the details, then the control group."""
+    names = company_names()
+    every_candidate = candidates_of(rows)
+    candidates = apply_filters(every_candidate, **(filters or {}))
+    control = order_rows(r for r in rows if r.group == GROUP_BASELINE)
     stamp = rows[0].run_at_et if rows else ""
     st.caption(f"Screened {day.isoformat()}"
                + (f", run at {stamp} (New York)" if stamp else ""))
 
-    # GAP-IBKR-1 item 3 — said once, above everything, because a yfinance-only day is a
-    # different product from a verified one.
-    banner = next((r.ibkr_note for r in rows if r.ibkr_note), "")
-    if banner:
-        st.error(f"{banner} — relative volume was not measured on this run; the names below "
-                 f"come from yfinance prices with the tape-density trust tests.")
+    render_banner(rows)
 
-    unavailable = [r for r in candidates if r.relative_volume is None]
-    if unavailable:
-        st.warning(f"Relative pre-market volume was unavailable for "
-                   f"{len(unavailable)} of {len(candidates)} candidate(s) — "
-                   f"{unavailable[0].relative_volume_note}. Those names were selected on "
-                   f"their GAP ALONE.")
-
-    if not candidates:
-        st.info(f"No candidates on {day.isoformat()} — nothing gapped 3% on 3x pre-market "
-                f"volume. An empty list is a result, not a failure.")
+    if not every_candidate:
+        st.info(f"No candidates on {day.isoformat()} — nothing cleared the gap and volume "
+                f"screen. An empty list is a result, not a failure.")
     else:
-        st.subheader(f"{len(candidates)} candidate(s)")
-        st.dataframe(candidate_table(candidates), width="stretch", hide_index=True,
-                     column_config={"Link": st.column_config.LinkColumn("Link",
-                                                                        display_text="story")})
-        for row in candidates:
-            if row.reason:
-                st.markdown(f"**{row.ticker}** — {row.reason}")
+        st.subheader(f"{len(every_candidate)} candidate(s)")
+        # What the filters are hiding, said out loud: a table quietly showing three of
+        # seventeen rows is a table that lies by omission.
+        st.caption(filter_caption(len(candidates), len(every_candidate)))
+        if candidates:
+            render_table(candidates, names)
+            render_details(candidates, names, key_ns=f"{key_ns}_cand")
+        else:
+            st.info("No candidate matches these filters. Widen them in the left panel.")
 
     filled = [r for r in rows if is_complete(r)]
-    with st.expander(f"Outcomes — {len(filled)} of {len(rows)} logged names filled in",
-                     expanded=bool(filled)):
-        if not rows:
-            st.write("Nothing logged for this day.")
-        elif not filled:
-            st.info(f"Outcomes are filled after the close. Run `{OUTCOMES_HINT}`.")
-        else:
-            st.dataframe(outcome_table(rows), width="stretch", hide_index=True)
+    if rows and not filled:
+        st.caption(f"Outcomes are not filled in for this day yet — run `{OUTCOMES_HINT}`.")
 
-    with st.expander(f"Control group — {len(baseline)} name(s)"):
+    with st.expander(f"Control group — {len(control)} name(s)"):
         st.caption("Drawn at random, with a seed fixed by the date, from the names that "
                    "passed the liquidity filter but NOT the gap-and-volume screen. It is "
                    "what the candidates are compared against; without it a carry-on rate "
                    "is a fact about the market, not about the screen.")
-        if baseline:
-            st.dataframe([{"Ticker": r.ticker, "Gap": pct(r.gap_pct),
-                           "Rel. pre-market volume": relative_volume_cell(r),
-                           "Why it did not qualify": r.screen_note} for r in baseline],
-                         width="stretch", hide_index=True)
+        if control:
+            render_table(control, names)
         else:
             st.write("No control group — there were no candidates to match in size.")
 
@@ -201,10 +205,10 @@ def render_day(day: date, rows: list[LedgerRow], *, key_ns: str) -> None:
 # --------------------------------------------------------------------------- #
 # the three views
 # --------------------------------------------------------------------------- #
-def render_today(days: list[date]) -> None:
+def render_today(days: list[date], filters: Optional[dict] = None) -> None:
     today = now_ny().date()
     if today in days:
-        render_day(today, read_day(today, LEDGER_ROOT), key_ns="today")
+        render_day(today, read_day(today, LEDGER_ROOT), key_ns="today", filters=filters)
         return
     st.info(f"No screen logged for {today.isoformat()} (New York) yet. "
             f"Run `{RUN_HINT}`.")
@@ -213,13 +217,72 @@ def render_today(days: list[date]) -> None:
                    f"**Past days**.")
 
 
-def render_past(days: list[date]) -> None:
+def render_past(days: list[date], filters: Optional[dict] = None, *,
+                chosen: Optional[date] = None) -> None:
+    """The day the left panel is pointing at. ONE day selector, in the panel — two of them
+    would be two answers to the same question."""
     if not days:
         st.info(f"No days logged yet under `{DEFAULT_ROOT}`. Run `{RUN_HINT}`.")
         return
-    chosen = st.selectbox("Day", list(reversed(days)),
-                          format_func=lambda d: d.isoformat(), key="past_day")
-    render_day(chosen, read_day(chosen, LEDGER_ROOT), key_ns="past")
+    day = chosen if chosen in days else days[-1]
+    render_day(day, read_day(day, LEDGER_ROOT), key_ns="past", filters=filters)
+
+
+def render_day_panel(days: list[date]) -> Optional[date]:
+    """Section (a) — pick a logged day, newest first, and see that day's counts.
+
+    Returns the chosen day so the tabs can follow the panel instead of keeping a second,
+    separately-remembered idea of which day is on screen.
+    """
+    st.sidebar.subheader("Day")
+    if not days:
+        st.sidebar.caption("No days logged yet.")
+        return None
+    chosen = st.sidebar.selectbox("Logged days, newest first", list(reversed(days)),
+                                 format_func=lambda d: d.isoformat(), key="panel_day",
+                                 label_visibility="collapsed")
+    counts = day_summary(read_day(chosen, LEDGER_ROOT))
+    st.sidebar.markdown(
+        f"**{chosen.isoformat()}**" + NEWLINE + NEWLINE
+        + NEWLINE.join([
+            f"- {counts['logged']} logged",
+            f"- {counts['candidates']} candidate(s)",
+            f"- {counts['ibkr_confirmed']} IBKR-confirmed",
+            f"- {counts['unverified']} unverified",
+            f"- {counts['with_news']} with news",
+            f"- {counts['outcomes_filled']} with outcomes filled",
+        ]))
+    return chosen
+
+
+def render_filter_panel() -> dict:
+    """Section (b) — three filters, each over a column the reader can already see.
+
+    A filter over something the table does not show would be a way to hide rows for reasons
+    nobody can check, so there are exactly three and they match the Verified, News and Result
+    columns.
+    """
+    st.sidebar.subheader("Filters")
+    return {
+        "verified": st.sidebar.radio("Verified", VERIFIED_CHOICES, key="filter_verified",
+                                     horizontal=False),
+        "news": st.sidebar.radio("News", NEWS_CHOICES, key="filter_news"),
+        "result": st.sidebar.selectbox("Result", RESULT_CHOICES, key="filter_result"),
+    }
+
+
+def render_help_panel() -> None:
+    """Section (c) — how to read the table, and the commands, both collapsed."""
+    st.sidebar.subheader("How to read it")
+    with st.sidebar.expander("What the columns mean"):
+        for term, meaning in HOW_TO_READ:
+            st.markdown(f"**{term}** — {meaning}")
+    with st.sidebar.expander("Commands"):
+        st.caption("This viewer is read-only: it never starts a screen, because that costs "
+                   "news calls and posts a Todoist task. Copy one of these instead.")
+        st.code(NEWLINE.join([RUN_HINT, OUTCOMES_HINT,
+                              "python -m aristos_council.gap_ledger score"]),
+                language="bash")
 
 
 def render_scorecard() -> None:
@@ -238,17 +301,18 @@ def render_scorecard() -> None:
     else:
         st.success(card.verdict)
 
+    # Item 5 — the distance to an answer as a NUMBER, not only as a refusal.
+    st.markdown(f"**{scorecard_progress(card)}** scored so far.")
+    st.progress(min(1.0, card.days_scored / max(1, card.min_days)))
+
     left, right = st.columns(2)
     left.metric("Days with filled outcomes", f"{card.days_scored} / {card.min_days}")
     right.metric("Names scored", f"{card.candidates} candidates · {card.baseline} baseline")
 
     if card.checkpoints:
-        st.dataframe([{
-            "Checkpoint": c.label,
-            "Candidates": c.candidates.sentence(),
-            "Control group": c.baseline.sentence(),
-            "Edge": "—" if c.edge is None else f"{c.edge * 100:+.0f} points",
-        } for c in card.checkpoints], width="stretch", hide_index=True)
+        # The same Markdown shape and the same green/red as the day table, so the two tables
+        # on this page read alike instead of looking like two different products.
+        st.markdown(checkpoint_markdown(card))
     else:
         st.info(f"Days are logged but no outcome has been filled in yet. "
                 f"Run `{OUTCOMES_HINT}`.")
@@ -261,19 +325,20 @@ def main() -> None:
     st.caption("Pre-market movers on news, picked by maths and scored afterwards. "
                "No recommendations — this is a shortlist and a record, not advice.")
 
+    hide_deploy_button()
+
     days = ledger_days(LEDGER_ROOT)
     st.sidebar.header("Gap Ledger")
     st.sidebar.caption(f"Reading `{DEFAULT_ROOT}` — {len(days)} day(s) logged.")
-    st.sidebar.info("This viewer is read-only. It never starts a screen: that costs news "
-                    "calls and posts a Todoist task, so it stays a deliberate command.")
-    st.sidebar.code(f"{RUN_HINT}\n{OUTCOMES_HINT}\n"
-                    f"python -m aristos_council.gap_ledger score", language="bash")
+    chosen = render_day_panel(days)
+    filters = render_filter_panel()
+    render_help_panel()
 
     today_tab, past_tab, score_tab = st.tabs(["Today", "Past days", "Scorecard"])
     with today_tab:
-        render_today(days)
+        render_today(days, filters)
     with past_tab:
-        render_past(days)
+        render_past(days, filters, chosen=chosen)
     with score_tab:
         render_scorecard()
 
