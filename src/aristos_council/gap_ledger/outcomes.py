@@ -132,6 +132,8 @@ def fill_row(row: LedgerRow, *, daily: Sequence[PriceBar], intraday: Sequence[In
     # The diagnostic is derived from the row, so it is filled last and cannot disagree with
     # the columns it is computed from.
     filled.premarket_vs_open = premarket_vs_open(filled)
+    (filled.signal_move_0900, filled.signal_move_open,
+     filled.signal_move_close) = signal_moves(filled)
     filled.outcome_note = "; ".join(missing)
     filled.outcomes_filled_at_et = et_stamp(now)
     return filled
@@ -152,6 +154,43 @@ def premarket_vs_open(row: LedgerRow) -> Optional[float]:
     if row.premarket_price is None or row.open_price is None or row.open_price <= 0:
         return None
     return (row.premarket_price - row.open_price) / row.open_price
+
+
+def directional_move(start: Optional[float], end: Optional[float],
+                     direction: int) -> Optional[float]:
+    """``(end - start) / start`` in the gap's direction, as a fraction.
+
+    None when either price is missing, the start is not a usable price, or there is no
+    direction — a move that could not be measured is never 0.0, which would read as "went
+    nowhere". Positive means the name went the way the gap pointed.
+    """
+    if start is None or end is None or start <= 0 or direction == 0:
+        return None
+    return (end - start) / start * direction
+
+
+def signal_moves(row: LedgerRow) -> tuple:
+    """What acting at the row's FIRST SIGNAL would have made, in the gap's direction:
+    ``(to 09:00, to the open, to the close)`` as fractions of the signal price.
+
+    GAP-EARLY-CHECKPOINT-1. Blank where there is no signal (always, for a yfinance-only row) or
+    where the far end is missing. The 09:00 leg is also blank when the signal itself came AFTER
+    09:00 — a "move to 09:00" that starts later than 09:00 is not a move, and reading it as
+    one would score information from the future.
+    """
+    start = row.first_signal_price
+    if start is None:
+        return (None, None, None)
+    to_0900 = None
+    try:
+        when = datetime.fromisoformat(row.first_signal_time_et)
+    except ValueError:
+        when = None
+    if when is not None and when.astimezone(NY).time() <= time(9, 0):
+        to_0900 = directional_move(start, row.price_0900, row.direction)
+    return (to_0900,
+            directional_move(start, row.open_price, row.direction),
+            directional_move(start, row.close_price, row.direction))
 
 
 def is_complete(row: LedgerRow) -> bool:

@@ -38,6 +38,10 @@ DEFAULT_RUN_TIME = time(9, 0)
 # are read off 5m bars.
 CHECKPOINTS: tuple[time, ...] = (time(10, 0), time(11, 30))
 
+# GAP-EARLY-CHECKPOINT-1 — the pre-market moments the price path is read at, in ET. Read off the
+# 5-minute IBKR bars the run already fetches, so they exist only for IB-verified candidates.
+PATH_MOMENTS: tuple[time, ...] = (time(4, 0), time(6, 0), time(7, 0), time(8, 0), time(9, 0))
+
 # Where the day's CSV lands. Gitignored: it is a local record of a local run, and it
 # grows one file per trading day.
 DEFAULT_ROOT = "data/local/gap_ledger"
@@ -64,6 +68,13 @@ class GapConfig:
     min_relative_volume: float = 3.0        # today's pre-market vs its 20-session median
     relative_volume_days: int = 20
     wide_spread: float = 0.001              # 0.1% — MARKED, never a reason to drop
+
+    # -- GAP-EARLY-CHECKPOINT-1: was the move already visible earlier? ------- #
+    # A 5-minute pre-market bar counts as "the move was visible" when its price is already at
+    # or beyond ``min_abs_gap`` in the gap's direction AND its volume is at least this multiple
+    # of the median volume of the SAME time-of-day bar over the prior ``relative_volume_days``
+    # sessions. Default 3x, the same bar the relative-volume screen uses.
+    early_volume_multiple: float = 3.0
 
     # -- GAP-PRICE-TRUST-1: is the pre-market price worth believing? -------- #
     #
@@ -155,6 +166,7 @@ class GapConfig:
             "cfg_min_confirm_prints": self.min_confirm_prints,
             "cfg_max_confirm_drift": self.max_confirm_drift,
             "cfg_news_lookback_hours": self.news_lookback_hours,
+            "cfg_early_volume_multiple": self.early_volume_multiple,
         }
 
 

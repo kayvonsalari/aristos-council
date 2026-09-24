@@ -245,6 +245,57 @@ def table_markdown(rows: Sequence[LedgerRow], names: Optional[dict] = None) -> s
     return "\n".join(lines)
 
 
+def _signed_pct(value: float) -> str:
+    return f"{value * 100:+.2f}%"
+
+
+# --------------------------------------------------------------------------- #
+# GAP-EARLY-CHECKPOINT-1 — when the move first showed, and the price path from 04:00
+# --------------------------------------------------------------------------- #
+NO_EARLY_DATA = ("not available — the first signal needs IBKR pre-market volume, and this "
+                 "row was not IBKR-verified")
+
+
+def first_signal_of(row: LedgerRow) -> str:
+    """``"05:35 ET at $52.10"``, or blank when there is none. The reason it is blank is a
+    separate detail (``early_signal_note``), so a verified row says why and an unverified one
+    says what is missing."""
+    if row.first_signal_price is None or not row.first_signal_time_et:
+        return "" if row.source == SOURCE_IBKR else NO_EARLY_DATA
+    stamp = row.first_signal_time_et
+    clock = stamp[11:16] if len(stamp) >= 16 else stamp
+    return f"{clock} ET at {_money(row.first_signal_price)}"
+
+
+def price_path(row: LedgerRow) -> list[tuple[str, Optional[float]]]:
+    """The name's price from 04:00 to the close, in order. A moment with no reading is None —
+    a gap in the path, never a price borrowed from a neighbour."""
+    return [("04:00", row.price_0400), ("06:00", row.price_0600), ("07:00", row.price_0700),
+            ("08:00", row.price_0800), ("09:00", row.price_0900),
+            ("09:30 open", row.open_price), ("10:00", row.price_1000),
+            ("11:30", row.price_1130), ("Close", row.close_price)]
+
+
+def path_markdown(row: LedgerRow) -> str:
+    """The price path as a two-row table: the price, and where it stood against the previous
+    close. Empty when the row has no point on the path at all, so an old CSV shows nothing
+    rather than a row of dashes."""
+    points = price_path(row)
+    if all(price is None for _label, price in points):
+        return ""
+    against = []
+    for _label, price in points:
+        if price is None or not row.previous_close or row.previous_close <= 0:
+            against.append("—")
+        else:
+            against.append(f"{(price - row.previous_close) / row.previous_close * 100:+.2f}%")
+    lines = ["| " + " | ".join(["Price path"] + [label for label, _ in points]) + " |",
+             "|" + "|".join(["---"] * (len(points) + 1)) + "|",
+             "| Price | " + " | ".join(_money(price) for _label, price in points) + " |",
+             "| vs previous close | " + " | ".join(against) + " |"]
+    return NEWLINE.join(lines)
+
+
 # --------------------------------------------------------------------------- #
 # the details expander
 # --------------------------------------------------------------------------- #
@@ -282,6 +333,11 @@ def details_of(row: LedgerRow) -> list[tuple[str, str]]:
     add("IB bid", row.ib_bid, _money)
     add("IB ask", row.ib_ask, _money)
 
+    add("First signal", first_signal_of(row))
+    add("First-signal note", row.early_signal_note)
+    add("Move from first signal to 09:00", row.signal_move_0900, _signed_pct)
+    add("Move from first signal to the open", row.signal_move_open, _signed_pct)
+    add("Move from first signal to the close", row.signal_move_close, _signed_pct)
     add("10:00 ET", row.price_1000, _money)
     add("11:30 ET", row.price_1130, _money)
     add("Pre-market vs open", row.premarket_vs_open, lambda v: f"{v * 100:+.2f}%")
@@ -397,6 +453,26 @@ def checkpoint_markdown(card) -> str:
                                         _escape(check.candidates.sentence()),
                                         _escape(check.baseline.sentence()),
                                         points_cell(check.edge)]) + " |")
+    return NEWLINE.join(lines)
+
+
+EARLY_COLUMNS = ("Entry", "Exit", "Names", "Mean", "Median", "Up")
+
+
+def early_markdown(early) -> str:
+    """The first-signal-versus-open comparison as a Markdown table; empty when absent."""
+    if early is None:
+        return ""
+    lines = ["| " + " | ".join(EARLY_COLUMNS) + " |",
+             "|" + "|".join(["---"] * len(EARLY_COLUMNS)) + "|"]
+    for entry, rows in (("First signal", early.at_signal), ("The open", early.at_open)):
+        for label, stats in rows:
+            if stats.n == 0:
+                cells = ["0", "—", "—", "—"]
+            else:
+                cells = [str(stats.n), _signed_pct(stats.mean), _signed_pct(stats.median),
+                         f"{stats.positive} of {stats.n}"]
+            lines.append("| " + " | ".join([entry, _escape(label)] + cells) + " |")
     return NEWLINE.join(lines)
 
 
