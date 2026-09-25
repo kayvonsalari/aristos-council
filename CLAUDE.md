@@ -77,6 +77,21 @@ LangGraph orchestration, Anthropic models, pydantic state.
   lens set is DERIVED (union of rank strategies' `council_screen_strategy`), never
   hardcoded. Drives both dropdowns: single-ticker page → COUNCIL only, Run
   tab → RANK only.
+- `src/aristos_council/cohorts/` + `data/cohort_definitions.yaml` — **cohorts (COHORT-3).**
+  Built by default from the MARKET INDEX through the same `clean_pool` the peer groups use (all
+  markets except `SA`, which is removed BEFORE one-row-per-company dedup); `--constituents` keeps the
+  COHORT-1 EODHD path for reproducing old versions. Each cohort is EODHD industry codes (optionally
+  narrowed by `gics_subindustry`) plus a USD floor of $1–10bn chosen by ONE mechanical tier rule on how
+  crowded the industry is — never tuned to a count; the 20–60 band pads and truncates nothing.
+  `python -m aristos_council.cohorts plan` is the index-only dry run. History (yfinance) is measured
+  only for the names that pass every other rule. `watch` is personal: the tracked YAML says `false`,
+  the flags live only in the git-ignored `data/local/cohorts/watch.yaml` overlay — never commit a list
+  of watched companies. **Every correction is flagged, never hidden** (`cohorts/flags.py`): † counted
+  once / also listed as (identity alias, name+size link, HK RMB counter, Korean preference line), ‡
+  label overridden, § size corrected or excluded (`data/size_corrections.yaml`), ¶ identity corrected
+  (a self-alias in `data/identity_aliases.yaml`); each company once, a per-company legend at the bottom
+  of `report.md`/`plan`, and excluded companies listed under it with their reason. See
+  `docs/COHORTS.md` and `docs/MARKET_INDEX.md`.
 - `examples/run_council.py` — the single-ticker demo entrypoint (run in Colab, not
   here). `examples/run_pipeline.py` — the v2 universe CLI, now a THIN wrapper over
   `run_rank_pipeline` (`--ranker-only` for a free, no-LLM deterministic ranking).

@@ -27,66 +27,91 @@ aliases:
       000660.KO's (stale price), beyond the name-link tolerance. Measured: SK Hynix appeared twice
       in 2330.TW's cohort.
   # COHORT-3 - found by reading the cohort plan by eye: the same company standing twice in one
-  # cohort. None of these can be caught by a name rule (different names, preference or exchangeable
-  # lines, a renamed company), so each is stated here with its evidence.
+  # cohort. None can be caught by a name rule (different names, preference or exchangeable lines, a
+  # renamed company), so each is stated here with its evidence. Every one was re-checked on
+  # 2026-09-25 against an independent source (Yahoo Finance listings, and the issuer's own filings or
+  # website for the structural claims); nothing here rests on the index alone.
   - ticker: BP-A.LSE
     primary: BP.LSE
     date: 2026-09-25
     reason: >-
-      BP's cumulative preference line (ISIN GB0001385250). The provider gives it the WHOLE
-      company's market cap ($147bn against $116bn for the ordinary line), so it stood as a second
-      BP in Integrated Oil & Gas and, sorting '-' before '.', took the seat.
+      BP's 8% cumulative first preference shares (bp.com share listing information: LSE symbol
+      BP.A). The index gives this line BP's name and a market cap of $147bn, the same order as the
+      whole company's $116bn; Yahoo lists it as "BP p.l.c." with no market cap of its own. It stood as
+      a second BP in Integrated Oil & Gas and, sorting '-' before '.', took the seat.
   - ticker: BP-B.LSE
     primary: BP.LSE
     date: 2026-09-25
     reason: >-
-      BP's second preference line: no ISIN, no PrimaryTicker, the whole company's cap ($142bn).
+      BP's 9% cumulative second preference shares (bp.com share listing information: LSE symbol
+      BP.B). No ISIN or PrimaryTicker in the index, BP's name, a market cap of $142bn against the
+      company's $116bn, and no market cap of its own on Yahoo.
   - ticker: SNN.US
     primary: SN.LSE
     date: 2026-09-25
     reason: >-
-      "Smith & Nephew SNATS Inc" is Smith & Nephew's ADS (US83175M2052). It names itself as home and
-      its name carries no ADR wording, so nothing linked it to SN.LSE: $11.5bn each, twice in
-      Medical Devices.
+      "Smith & Nephew SNATS Inc" is Smith & Nephew's ADS (US83175M2052): Yahoo lists both this line
+      and SN.L as "Smith & Nephew plc". Its name carries no ADR wording and it names itself as home,
+      so nothing linked it to SN.LSE ($11.5bn each in the index).
   - ticker: SRT3.XETRA
     primary: SRT.XETRA
     date: 2026-09-25
     reason: >-
-      Sartorius AG's two share lines (DE0007165631 and DE0007165607, the second named "VZO O.N."),
-      under different names and 1.25x apart, so neither the name link nor a shared handle joined them.
+      Sartorius AG's two share lines (DE0007165631 and DE0007165607): Yahoo lists both SRT3.DE and
+      SRT.DE as "Sartorius Aktiengesellschaft". The index names them differently ("...
+      Aktiengesellschaft" and "... AG VZO O.N.") and 1.25x apart, so neither the name link nor a shared
+      handle joined them. Sartorius Stedim Biotech is a separate company and is not aliased.
   - ticker: TAP-A.US
     primary: TAP.US
     date: 2026-09-25
     reason: >-
-      Molson Coors Class A (US60871R1005); the company is "Molson Coors Beverage Company" on this
-      line and "Molson Coors Brewing Co Class B" on TAP.US.
+      Molson Coors' Class A common stock (US60871R1005): Yahoo lists both TAP-A and TAP as "Molson
+      Coors Beverage Company". The index names the two lines differently ("Molson Coors Beverage
+      Company" and "Molson Coors Brewing Co Class B").
   - ticker: TPX-B.TO
     primary: TAP.US
     date: 2026-09-25
     reason: >-
-      Molson Coors Canada Inc's exchangeable shares (CA6087112067), which are Molson Coors stock by
-      another name.
+      Molson Coors Canada Inc.'s Class B exchangeable shares (CA6087112067). Molson Coors' 10-K
+      describes them as shares of its wholly-owned subsidiary, exchangeable for its Class B common
+      stock and intended to give "substantially the same economic and voting rights". Yahoo's
+      C$10.3bn is about US$7.4bn, matching the index and the parent's own cap.
   - ticker: QSP-UN.TO
     primary: QSR.TO
     date: 2026-09-25
     reason: >-
-      Restaurant Brands International Limited Partnership units, exchangeable one-for-one into
-      the shares on QSR.TO.
+      Restaurant Brands International Limited Partnership Class B exchangeable units (TSX: QSP).
+      RBI's SEC filings describe the partnership as its subsidiary and state that an exchange of the
+      units cancels them and reduces RBI's fully diluted common shares by the same number, so the
+      units are RBI equity under another name. Yahoo lists the same legal name; the index's cap for
+      the units ($24.8bn) is a subset of the shares' ($33.4bn).
   - ticker: CSC.AU
     primary: CS.TO
     date: 2026-09-25
     reason: >-
-      Capstone Copper Corp is the renamed Capstone Mining Corp (CS.TO); the ASX line has no ISIN
-      and no PrimaryTicker and the two names no longer match.
+      Capstone Copper Corp is the renamed Capstone Mining Corp: Yahoo lists both CSC.AX and CS.TO as
+      "Capstone Copper Corp." with the same market cap (A$11.08bn and C$11.11bn). The ASX line has no
+      ISIN or PrimaryTicker in the index and the two names no longer match.
   - ticker: CKI.LSE
     primary: 1038.HK
     date: 2026-09-25
     reason: >-
-      "Ck Infra Holdings Ltd" is CK Infrastructure Holdings' London line: no ISIN, no
-      PrimaryTicker, $20.65bn against $20.96bn.
+      "Ck Infra Holdings Ltd" is CK Infrastructure Holdings' London line: Yahoo lists both CKI.L and
+      1038.HK as "CK Infrastructure Holdings Limited", and the index gives $20.65bn against $20.96bn.
+      No ISIN or PrimaryTicker in the index.
   - ticker: ALI1.XETRA
     primary: AII.AU
     date: 2026-09-25
     reason: >-
-      "ALMONTY INDUSTRY O.N." is Almonty Industries' Xetra line (its PrimaryTicker names AII.TO, which
-      the index does not carry), $4.0bn against $5.2bn on the ASX line.
+      "ALMONTY INDUSTRY O.N." is Almonty Industries' Xetra line: Yahoo lists both ALI1.DE and AII.AX
+      as "Almonty Industries Inc." (its PrimaryTicker in the index names AII.TO, which the index does
+      not carry).
+  - ticker: ADEA.US
+    primary: ADEA.US
+    date: 2026-09-25
+    reason: >-
+      A SELF-alias, which cancels a wrong PrimaryTicker: the provider gives Adeia (ADEA.US,
+      US00676P1075, $2.8bn) the PrimaryTicker XPER.US, but XPER.US is Xperi Inc. (US98423J1016,
+      $0.27bn), a separate company that trades on its own (Yahoo shows both live, with different
+      names and market caps). Read as one company, the two-line size rule refused the larger,
+      correct row as a size outlier.

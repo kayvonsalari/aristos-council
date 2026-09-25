@@ -123,7 +123,7 @@ def cmd_plan(args) -> int:
     defs = _load(args)
     selected = defs if not args.name else [find_definition(defs, args.name)]
     pool = default_index_pool()
-    _say(format_plan(plan(selected, pool, root=args.root), pool))
+    _say(format_plan(plan(selected, pool, root=args.root), pool, all_members=args.members))
     return 0
 
 
@@ -175,6 +175,9 @@ def build_parser() -> argparse.ArgumentParser:
         "plan", help="dry run from the market index: codes, USD floor, member count, band, "
                      "top names, exchanges. No network, nothing written")
     p_plan.add_argument("--name", default="", help="one cohort name or slug (default: all)")
+    p_plan.add_argument("--members", action="store_true",
+                        help="list every member (with its correction symbols and the legend), not "
+                             "just the five largest")
     p_plan.set_defaults(func=cmd_plan)
     return parser
 

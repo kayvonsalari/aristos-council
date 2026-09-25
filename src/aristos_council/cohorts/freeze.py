@@ -16,6 +16,7 @@ from datetime import date
 from pathlib import Path
 
 from .definitions import CohortDefinition
+from .flags import Flag
 from .source import Candidate
 from .symbols import yahoo_symbol
 
@@ -26,7 +27,7 @@ REMOVALS_FILE = "removals.log"
 
 # ``market_cap_usd`` (COHORT-3) is LAST, so a members.csv cut before it existed still reads.
 MEMBER_COLUMNS = ("ticker", "yahoo_ticker", "exchange", "industry", "market_cap",
-                  "currency", "isin", "name", "source", "filled", "market_cap_usd")
+                  "currency", "isin", "name", "source", "filled", "market_cap_usd", "flags")
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,7 @@ def write_members(path: Path, members: list[Candidate]) -> Path:
                 cand.source,
                 ",".join(f"{k}:{v}" for k, v in sorted(cand.filled.items())),
                 "" if cand.market_cap_usd is None else f"{cand.market_cap_usd:.0f}",
+                "".join(f.symbol for f in cand.flags),
             ])
     return path
 
@@ -130,6 +132,7 @@ def read_members(path: str | Path) -> list[Candidate]:
         for row in csv.DictReader(fh):
             cap = row.get("market_cap") or ""
             usd = row.get("market_cap_usd") or ""
+            marks = row.get("flags") or ""
             filled = {}
             for pair in (row.get("filled") or "").split(","):
                 if ":" in pair:
@@ -141,7 +144,8 @@ def read_members(path: str | Path) -> list[Candidate]:
                 market_cap=float(cap) if cap else None,
                 currency=row.get("currency", ""), isin=row.get("isin", ""),
                 source=row.get("source", ""), filled=filled,
-                market_cap_usd=float(usd) if usd else None))
+                market_cap_usd=float(usd) if usd else None,
+                flags=tuple(Flag(ch, "see report.md") for ch in marks)))
     return out
 
 

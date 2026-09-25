@@ -2155,6 +2155,9 @@ def is_financial(row: IndexRow) -> bool:
 #                                        beyond the 1.25x name-link tolerance: SK Hynix twice in
 #                                        TSMC's cohort
 #
+# A primary equal to the row's own ticker is the other kind of correction: it cancels a wrong
+# PrimaryTicker so that two DIFFERENT companies are not read as one.
+#
 # ``data/identity_aliases.yaml`` supplies the PrimaryTicker the provider left out or got wrong:
 #
 #     aliases:
@@ -2205,8 +2208,9 @@ def load_identity_aliases(path: str | Path = DEFAULT_ALIASES) -> list[IdentityAl
                                    f"date and a reason")
         ticker = normalise_symbol(str(entry["ticker"]))
         primary = normalise_symbol(str(entry["primary"]))
-        if ticker == primary:
-            raise MarketIndexError(f"{path}: alias {i} maps {ticker} to itself")
+        # A primary equal to the ticker is allowed, and means something: "this line is ITS OWN
+        # company" - it cancels a PrimaryTicker the provider got wrong (ADEA.US names XPER.US, a
+        # separate company), which would otherwise fold two companies into one.
         if ticker in seen:
             raise MarketIndexError(f"{path}: alias {i} repeats {ticker}")
         seen.add(ticker)
@@ -2241,6 +2245,115 @@ def apply_identity_aliases(rows, aliases) -> tuple[list["IndexRow"], dict]:
 
 def _alias_line(alias: IdentityAlias) -> str:
     return f"identity aliased: {alias.ticker} -> {alias.primary} ({alias.date}: {alias.reason})"
+
+
+# --------------------------------------------------------------------------- #
+# COHORT-3 - a small file of size CORRECTIONS
+# --------------------------------------------------------------------------- #
+# A market cap can be wrong in a way no rule can see: a row with no second line to refute it. Found
+# by reading the cohort plan: an American Depositary Share with ADS price x ORDINARY share count,
+# $343bn for a company with $2.5bn of revenue - and Yahoo agrees with EODHD, because both make the
+# same multiplication, so there is no independent figure to correct it to.
+#
+# ``data/size_corrections.yaml`` is the narrow, dated, reasoned escape hatch, in the style of the
+# label overrides and the identity aliases:
+#
+#     corrections:
+#       - ticker: QH.US
+#         action: exclude            # exclude | set
+#         market_cap_usd: 1.2e9      # required for `set`, and only for `set`
+#         date: 2026-09-25
+#         reason: the evidence
+#
+# DATA CORRECTIONS ONLY: it changes (`set`) or refuses to use (`exclude`) ONE number on the rows a
+# query reads; the table on disk is never rewritten. An excluded company is not silently dropped: it
+# is listed with its reported figure and the reason under every cohort it would have been in.
+DEFAULT_SIZE_CORRECTIONS = Path(__file__).resolve().parents[2] / "data" / "size_corrections.yaml"
+SIZE_EXCLUDE, SIZE_SET = "exclude", "set"
+
+
+@dataclass(frozen=True)
+class SizeCorrection:
+    ticker: str
+    action: str
+    date: str
+    reason: str
+    market_cap_usd: Optional[float] = None
+
+
+def load_size_corrections(path: str | Path = DEFAULT_SIZE_CORRECTIONS) -> list[SizeCorrection]:
+    """The corrections file, or an empty list when there is none. A malformed one is an error."""
+    import yaml
+
+    path = Path(path)
+    if not path.exists():
+        return []
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    entries = doc.get("corrections") if isinstance(doc, dict) else None
+    if entries is None:
+        return []
+    if not isinstance(entries, list):
+        raise MarketIndexError(f"{path}: 'corrections' must be a list")
+    out, seen = [], set()
+    for i, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise MarketIndexError(f"{path}: correction {i} must be a mapping")
+        missing = [k for k in ("ticker", "action", "date", "reason")
+                   if not str(entry.get(k) or "").strip()]
+        if missing:
+            raise MarketIndexError(f"{path}: correction {i} is missing {', '.join(missing)} - "
+                                   f"every correction carries its ticker, an action, a date and "
+                                   f"a reason")
+        action = str(entry["action"]).strip().lower()
+        if action not in (SIZE_EXCLUDE, SIZE_SET):
+            raise MarketIndexError(f"{path}: correction {i}: action must be 'exclude' or 'set', "
+                                   f"got {action!r}")
+        cap = entry.get("market_cap_usd")
+        if action == SIZE_SET:
+            try:
+                cap = float(cap)
+            except (TypeError, ValueError):
+                cap = None
+            if cap is None or cap <= 0:
+                raise MarketIndexError(f"{path}: correction {i}: 'set' needs a positive "
+                                       f"market_cap_usd")
+        elif cap not in (None, ""):
+            raise MarketIndexError(f"{path}: correction {i}: 'exclude' takes no market_cap_usd - "
+                                   f"a figure with no correct value is excluded, not set")
+        else:
+            cap = None
+        ticker = normalise_symbol(str(entry["ticker"]))
+        if ticker in seen:
+            raise MarketIndexError(f"{path}: correction {i} repeats {ticker}")
+        seen.add(ticker)
+        out.append(SizeCorrection(ticker=ticker, action=action, date=str(entry["date"]).strip(),
+                                  reason=" ".join(str(entry["reason"]).split()),
+                                  market_cap_usd=cap))
+    return out
+
+
+def apply_size_corrections(rows, corrections) -> tuple[list["IndexRow"], dict]:
+    """``(rows, applied)``: the rows with any ``set`` figure in place, and
+    ``{ticker: (reported_usd, correction)}`` for every correction that found its row (``exclude``
+    leaves the row as it is and lets the caller refuse it). Rows are copied, never mutated."""
+    import dataclasses
+
+    rows = list(rows)
+    wanted = {c.ticker: c for c in corrections or ()}
+    if not wanted:
+        return rows, {}
+    out, applied = [], {}
+    for row in rows:
+        correction = wanted.get(normalise_symbol(row.ticker))
+        if correction is None:
+            out.append(row)
+            continue
+        applied[normalise_symbol(row.ticker)] = (row.market_cap_usd, correction)
+        if correction.action == SIZE_SET:
+            row = dataclasses.replace(row, market_cap_usd=correction.market_cap_usd,
+                                      market_cap_usd_source="corrected (data/size_corrections.yaml)")
+        out.append(row)
+    return out, applied
 
 
 # ADR / ADS / depositary wording in a row's name.
@@ -2454,7 +2567,8 @@ def _log_distance(cap: Optional[float], subject: float) -> float:
 
 def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
           store: Optional[IndexStore] = None, rows: Optional[list[IndexRow]] = None,
-          size_factor: float = DEFAULT_SIZE_FACTOR, overrides=..., aliases=...) -> PeerGroup:
+          size_factor: float = DEFAULT_SIZE_FACTOR, overrides=..., aliases=...,
+          size_corrections=...) -> PeerGroup:
     """The peer group for one company, by ladder, from the local table only.
 
     Deterministic for a given snapshot: every rung is a filter over the same rows and the
@@ -2482,6 +2596,10 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     if aliases is ...:
         aliases = load_identity_aliases() if rows is None else []
     universe, alias_applied = apply_identity_aliases(universe, aliases)
+    if size_corrections is ...:
+        size_corrections = load_size_corrections() if rows is None else []
+    universe, size_applied = apply_size_corrections(universe, size_corrections)
+    size_refused = {k for k, (_rep, c) in size_applied.items() if c.action == SIZE_EXCLUDE}
 
     wanted = (ticker or "").strip().upper()
     by_ticker = {r.ticker.upper(): r for r in universe}
@@ -2526,6 +2644,11 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                                  f"receipt's own and may be unreliable")
 
     group.subject = subject
+    if normalise_symbol(subject.ticker) in size_refused:
+        correction = size_applied[normalise_symbol(subject.ticker)][1]
+        group.reasons.append(f"{subject.ticker}: excluded by a size correction "
+                             f"({correction.date}: {correction.reason}), so no peer group is formed")
+        return group
     if normalise_symbol(subject.ticker) in applied:
         was, override = applied[normalise_symbol(subject.ticker)]
         group.overridden.append({"ticker": subject.ticker, "role": "subject", "was": was,
@@ -2622,6 +2745,9 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             # compare it. Folding the two together would hide a broken FX rate behind
             # what looks like missing data.
             no_usd += 1
+            continue
+        if normalise_symbol(row.ticker) in size_refused:
+            size_suspect += 1                          # a size correction refuses it, and says so
             continue
         if normalise_symbol(row.ticker) in size_flags:
             size_suspect += 1                          # kept in the table, never a peer
@@ -2756,6 +2882,41 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
 # --------------------------------------------------------------------------- #
 # COHORT-3 - the same cleaned pool, for building cohorts
 # --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class MergedLine:
+    """A line counted under another row's company, and why it was joined."""
+
+    ticker: str
+    name: str
+    kind: str           # "identity alias" | "name and size link" | RECEIPT_HK_RMB | RECEIPT_KR_PREF
+    evidence: str
+
+
+@dataclass(frozen=True)
+class ExcludedRow:
+    """A company kept OUT of the pool because its size cannot be trusted - never silently."""
+
+    ticker: str
+    name: str
+    industry: str
+    sector: str
+    market: str
+    reported_usd: Optional[float]
+    kind: str           # "size correction" (data/size_corrections.yaml) | "size check" (automatic)
+    reason: str
+    date: str = ""
+    sub: str = ""                    # the GICS sub-industry, so a cohort narrowed on it can filter
+    remains_as: tuple = ()           # pool tickers of the SAME company, when the pool still has it
+
+
+# How each kind of correction is evidenced when it is not a stated alias.
+EVIDENCE_NAME_LINK = "same reduced company name and USD market caps within 25%"
+EVIDENCE_HK_RMB = ("Hong Kong RMB counter: HKEX reserves codes 80000-89999 for the RMB counter of a "
+                   "dual-counter share, and the HKD counter is this line's code without the 8")
+EVIDENCE_KR_PREF = ("Korean preference series: the ordinary line's code with a trailing 5, 7 or 9, "
+                    "under an identical company name")
+
+
 @dataclass
 class CleanPool:
     """Every row of the index that may stand as a company in a peer group or a cohort."""
@@ -2767,6 +2928,12 @@ class CleanPool:
     overridden: dict = field(default_factory=dict)     # ticker -> LabelOverride actually applied
     aliased: dict = field(default_factory=dict)        # ticker -> IdentityAlias actually applied
     snapshot: str = ""
+    # COHORT-3 - every correction that touched a row that is IN the pool, so a report can flag it:
+    label_was: dict = field(default_factory=dict)      # ticker -> the label the provider gave
+    merged: dict = field(default_factory=dict)         # kept ticker -> [MergedLine, ...]
+    size_corrected: dict = field(default_factory=dict)  # ticker -> (reported_usd, SizeCorrection)
+    size_excluded: list = field(default_factory=list)  # [ExcludedRow, ...]
+    primary_was: dict = field(default_factory=dict)    # aliased ticker -> the PrimaryTicker given
 
     def lines(self) -> list[str]:
         out = [f"{self.considered} row(s) in the index; {len(self.rows)} companies in the "
@@ -2780,7 +2947,7 @@ class CleanPool:
 
 def clean_pool(rows: Optional[list[IndexRow]] = None, *, store: Optional[IndexStore] = None,
                overrides=..., aliases=..., size_factor: float = DEFAULT_SIZE_FACTOR,
-               exclude_markets: tuple = ()) -> CleanPool:
+               exclude_markets: tuple = (), size_corrections=...) -> CleanPool:
     """The companies of the index after EXACTLY the cleaning ``peers`` applies to its pool.
 
     Label overrides and identity aliases first (read with the real index, never applied to rows
@@ -2808,13 +2975,26 @@ def clean_pool(rows: Optional[list[IndexRow]] = None, *, store: Optional[IndexSt
     universe, label_applied = apply_label_overrides(universe, overrides)
     if aliases is ...:
         aliases = load_identity_aliases() if rows is None else []
+    given_primary = {normalise_symbol(r.ticker): r.primary_ticker for r in universe}
     universe, alias_applied = apply_identity_aliases(universe, aliases)
+    pool.primary_was = {k: given_primary.get(k, "") for k in alias_applied}
+    if size_corrections is ...:
+        size_corrections = load_size_corrections() if rows is None else []
+    universe, size_applied = apply_size_corrections(universe, size_corrections)
+    size_refused = {k for k, (_rep, c) in size_applied.items() if c.action == SIZE_EXCLUDE}
     stamps = sorted(r.fetched_at for r in universe if r.fetched_at)
     pool.snapshot = stamps[-1] if stamps else ""
 
     secondary = secondary_lines(universe)
     size_flags = size_suspects(universe, size_factor)
     candidates = []
+
+    def refuse(row: IndexRow, kind: str, reason: str, date: str = "") -> None:
+        pool.size_excluded.append(ExcludedRow(
+            ticker=row.ticker, name=row.name, industry=(row.industry or "").replace("\xa0", " ").strip(),
+            sector=(row.sector or "").replace("\xa0", " ").strip(), market=row.market,
+            reported_usd=row.market_cap_usd, kind=kind, reason=reason, date=date,
+            sub=(row.gics_subindustry or "").replace("\xa0", " ").strip()))
 
     def skip(reason: str) -> None:
         pool.skipped[reason] = pool.skipped.get(reason, 0) + 1
@@ -2833,16 +3013,76 @@ def clean_pool(rows: Optional[list[IndexRow]] = None, *, store: Optional[IndexSt
             skip("no market cap in the index")
         elif row.market_cap_usd is None:
             skip("a local market cap with no USD conversion")
+        elif key in size_refused:
+            correction = size_applied[key][1]
+            skip("size correction: excluded (data/size_corrections.yaml)")
+            refuse(row, "size correction", correction.reason, correction.date)
         elif key in size_flags:
             skip(SIZE_SUSPECT)
+            refuse(row, "size check", size_flags[key])
         else:
             candidates.append(row)
 
-    kept, dropped, _absorbed = company_pool(candidates, link_by_name=True)
+    kept, dropped, absorbed = company_pool(candidates, link_by_name=True)
     pool.rows, pool.collapsed = kept, dropped
     kept_keys = {normalise_symbol(r.ticker) for r in kept}
     pool.overridden = {k: v[1] for k, v in label_applied.items() if k in kept_keys}
+    pool.label_was = {k: v[0] for k, v in label_applied.items() if k in kept_keys}
     pool.aliased = {k: v for k, v in alias_applied.items()}
+    pool.size_corrected = {k: v for k, v in size_applied.items()
+                           if k in kept_keys and v[1].action == SIZE_SET}
+
+    # COHORT-3 - which lines were counted under another row, and what joined them. A line joined by
+    # the provider's own handles (a shared PrimaryTicker or ISIN) is ordinary identity and is not
+    # a correction; one joined by an alias, by the name-and-size link, or by a code rule is.
+    by_ticker = {normalise_symbol(r.ticker): r for r in candidates}
+    hard_group: dict[str, int] = {}
+    for number, members in enumerate(company_groups(candidates)):
+        for member in members:
+            hard_group[normalise_symbol(member.ticker)] = number
+
+    def add_merged(kept_key: str, line: MergedLine) -> None:
+        pool.merged.setdefault(kept_key, []).append(line)
+
+    for dropped_key, kept_key in absorbed.items():
+        line_row, seat = by_ticker[dropped_key], by_ticker[kept_key]
+        alias = alias_applied.get(dropped_key) or alias_applied.get(kept_key)
+        if alias is not None and alias.primary == alias.ticker:
+            alias = None          # a self-alias cancels a wrong home; it joined nothing
+        if alias is not None:
+            add_merged(kept_key, MergedLine(line_row.ticker, line_row.name, "identity alias",
+                                            " ".join(alias.reason.split())))
+        elif hard_group.get(dropped_key) != hard_group.get(kept_key):
+            add_merged(kept_key, MergedLine(line_row.ticker, line_row.name,
+                                            "name and size link", EVIDENCE_NAME_LINK))
+    # a code rule folds the line into a specific ordinary line: name it under that line
+    for row in universe:
+        key = normalise_symbol(row.ticker)
+        kind = secondary.get(key)
+        if kind == RECEIPT_HK_RMB:
+            code, _market = _code_and_market(row)
+            partner = normalise_symbol(f"{code[1:]}.HK")
+            if partner in kept_keys:
+                add_merged(partner, MergedLine(row.ticker, row.name, kind, EVIDENCE_HK_RMB))
+    for pref_key, ordinary_key in korean_pref_map(universe).items():
+        if ordinary_key in kept_keys and pref_key in secondary:
+            pref = next(r for r in universe if normalise_symbol(r.ticker) == pref_key)
+            add_merged(ordinary_key, MergedLine(pref.ticker, pref.name, RECEIPT_KR_PREF,
+                                                EVIDENCE_KR_PREF))
+    for lines in pool.merged.values():
+        lines.sort(key=lambda m: m.ticker)
+    if pool.size_excluded:
+        every_group: dict[str, int] = {}
+        for number, members in enumerate(company_groups(universe)):
+            for member in members:
+                every_group[normalise_symbol(member.ticker)] = number
+        import dataclasses
+        pool.size_excluded = [
+            dataclasses.replace(e, remains_as=tuple(sorted(
+                r.ticker for r in kept
+                if every_group.get(normalise_symbol(r.ticker))
+                == every_group.get(normalise_symbol(e.ticker)))))
+            for e in pool.size_excluded]
     return pool
 
 

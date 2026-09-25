@@ -94,6 +94,8 @@ class Candidate:
     # COHORT-3 - the GICS sub-industry the index carries for the name (label overrides applied), used
     # only to narrow a cohort that names ``gics_subindustry``.
     gics_subindustry: str = ""
+    # COHORT-3 - every correction that touched this name, as (symbol, note) flags (see flags.py).
+    flags: tuple = ()
     # Per-field source tags for anything that had to be filled from a second provider.
     filled: dict[str, str] = field(default_factory=dict)
 
@@ -353,7 +355,17 @@ def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], s
     log.append(f"{len(matched)} matched the industry code(s) {', '.join(sorted(wanted))}"
                + (" on every index market except Sao Paulo." if defn.all_index_exchanges
                   else "."))
-    return [candidate_from_index_row(r) for r in matched], PATH_INDEX, log
+    from .flags import excluded_for, flags_for
+
+    candidates = [candidate_from_index_row(r) for r in matched]
+    for cand in candidates:
+        cand.flags = flags_for(cand.ticker, pool)
+    refused = excluded_for(defn, pool)
+    if refused:
+        log.append(f"{len(refused)} company(ies) this cohort would have considered were refused "
+                   f"for their size and are listed in the report: "
+                   f"{', '.join(e.ticker for e in refused)}.")
+    return candidates, PATH_INDEX, log
 
 
 def fill_missing(candidates: list[Candidate], filler=None) -> list[str]:

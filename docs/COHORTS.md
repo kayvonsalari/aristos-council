@@ -17,7 +17,68 @@ No model is ever called. The quality report ranks with the deterministic ranker 
 library — in a subprocess, because by the time the rest of the suite has run, langchain is
 already in `sys.modules` for honest reasons and an in-process check would pass regardless.
 
-## The definition file
+## COHORT-3: cohorts are built from the market index
+
+The default source is the **market index** (`docs/MARKET_INDEX.md`), read through the same
+`clean_pool` the peer groups use: one row per company, receipts / BDRs / secondary lines out,
+funds and classification-suspect rows out, label overrides, identity aliases and size
+corrections applied. Every market the index carries **except São Paulo (`SA`)** is in — written
+`exchanges: [ALL]`; `SA` is removed *before* the one-row-per-company step, so a company whose
+home line is on `SA` never lets that line outrank its real listing. Nothing here touches the
+network: `plan` and the pool read the local table only. The EODHD-screener / constituents path
+below is unchanged and is reached with `--constituents` (own-currency floors, the COHORT-1
+definitions in `data/local/cohorts/definitions.yaml`), so old cohort versions stay reproducible.
+
+```
+python -m aristos_council.cohorts plan                # every cohort, dry run: size, floor, legend
+python -m aristos_council.cohorts plan --name "…" --members   # every member, not just the top 5
+python -m aristos_council.cohorts build --all         # freeze (history measured over yfinance)
+```
+
+- **Definitions**: `data/cohort_definitions.yaml` (tracked). Each cohort is EODHD
+  `General::Industry` codes plus a **USD floor between $1bn and $10bn**
+  (`min_market_cap_usd`; the loader refuses anything else). The floor comes from ONE rule,
+  applied mechanically and never revisited after a band result was seen: `n1` = companies in the
+  cohort's codes at or above $1bn in the cleaned pool — how *crowded* the industry is. `n1 ≤ 40`
+  → $1bn, `41–70` → $2bn, `71–100` → $3bn, `101–160` → $5bn, `> 160` → $10bn. It is not a knob for
+  hitting a count: the 20–60 band is unchanged and nothing is padded or truncated.
+- **`gics_subindustry:`** narrows an industry code to the index's GICS sub-industry label (with
+  overrides applied) when the code alone is too wide. A name with **no** sub-industry label is
+  removed with that reason logged — neither a match nor a mismatch.
+- **History is measured last.** The rules run first with history unknown (never a failure);
+  history is then fetched for the survivors only and the rules run again. The membership is
+  identical to measuring everyone first — a name that fails another rule fails it either way —
+  for about a fifth of the yfinance requests. A survivor with too little history is removed then,
+  with the reason.
+- **`watch`**: stored and printed by `plan`; the tracked file says `watch: false` for every
+  cohort. Which cohorts are watched is personal, so it lives only in the git-ignored
+  `data/local/cohorts/watch.yaml` (a `watch:` list of cohort names), applied on top when a command
+  runs (`--no-local-overlay` reads the tracked file as it is). A name in the overlay that matches
+  no cohort is an error. Nothing reads the flag yet beyond `plan`.
+
+### Corrections are flagged, never hidden
+
+A correction changes who is counted or how a company is filed, so every cohort list says so. Each
+affected company appears **once**, with a symbol beside its ticker in `report.md`, the `plan`
+output and (as its own last column, `flags`) `members.csv`; a legend at the bottom of
+`report.md` (section *Corrections and exclusions*) and of each `plan` block says what happened to
+each company:
+
+| Symbol | Meaning, per company |
+|---|---|
+| † | counted once, also listed as `<other line(s)>`; evidence: the reason from `identity_aliases.yaml`, or "same reduced company name and USD market caps within 25%", or the Hong Kong RMB-counter / Korean preference-line rule |
+| ‡ | industry label corrected; from `<old>` to `<new>`; reason, date (`label_overrides.yaml`) |
+| § | size corrected or excluded; reported `<figure>`; reason, date (`size_corrections.yaml`) |
+| ¶ | identity corrected: the provider's PrimaryTicker names a different company; reason, date (a self-alias in `identity_aliases.yaml`) |
+
+A company the index would otherwise have counted twice by the provider's own handles (a shared
+PrimaryTicker or ISIN) is ordinary identity, not a correction, and carries no symbol. A company
+**excluded** for its size (a size-correction `exclude`, or the automatic size check) is listed
+under the legend as *Excluded, not silently dropped* — with the figure it reported, the reason,
+the date, and, for the automatic check, the line under which the company remains in the pool.
+Exclusions are listed only under the cohorts whose codes the company would have been considered in.
+
+## The definition file (constituents path)
 
 `data/local/cohorts/definitions.yaml`. One entry per cohort:
 
@@ -60,7 +121,7 @@ forty precise-looking numbers that move with the euro.
 `members.csv` records each name's currency next to its cap, so the approximation is
 visible rather than implied.
 
-## Where the names come from
+## Where the names come from (constituents path, `--constituents`)
 
 Two paths. Which one runs is **probed at startup, not assumed**, and every report says
 which one built it.
@@ -161,7 +222,7 @@ On a successful build, `data/local/cohorts/<slug>/vN/` gets:
 
 | File | What it is |
 |---|---|
-| `members.csv` | **The membership of record.** ticker, yahoo_ticker, exchange, industry, market cap, currency, ISIN, name, source, filled |
+| `members.csv` | **The membership of record.** ticker, yahoo_ticker, exchange, industry, market cap, currency, ISIN, name, source, filled, market_cap_usd, flags (the correction symbols; see above) |
 | `definition.yaml` | A **copy** of the rule as it was when this version was cut — not a pointer to the editable file |
 | `report.md` | The quality report |
 | `removals.log` | The build log and every removal, with rule and reason |
