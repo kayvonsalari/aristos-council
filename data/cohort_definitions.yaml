@@ -1,0 +1,746 @@
+# COHORT-3 - cohorts built from the MARKET INDEX (data/local/market_index/index.parquet), through the
+# same cleaned pool the peer groups use: one row per company, receipts and foreign lines out,
+# size-suspect and classification-suspect rows out, label overrides and identity aliases applied.
+# Every market the index carries EXCEPT Sao Paulo (SA) - written `exchanges: [ALL]`.
+#
+# This file is separate from data/local/cohorts/definitions.yaml (COHORT-1: ten rules, own-currency
+# floors, S&P 500 + STOXX 600 constituents), which is untouched so that old cohort versions can be
+# reproduced with `--constituents`. No name below collides with one of those ten, and no existing
+# frozen cohort version is ever rebuilt or overwritten by this list (a build of a slug that is
+# already frozen skips it and says so).
+#
+# NOTHING IN THIS FILE IS A LIST OF COMPANIES. Each cohort is a rule: EODHD `General::Industry`
+# codes, read from the real index (probed 2026-09-25 - not guessed), plus a USD floor.
+#
+# THE USD FLOOR is set per cohort between $1bn and $10bn (the loader refuses anything else) by ONE
+# stated rule, applied mechanically and never revisited after a band result was seen:
+#
+#     n1 = companies in the cohort's codes with a USD market cap >= $1bn (cleaned pool, no Sao
+#          Paulo, financials and REITs excluded) - how CROWDED the industry is.
+#     n1 <=  40  ->  $1bn        41-70 -> $2bn        71-100 -> $3bn
+#     101-160    ->  $5bn      > 160   -> $10bn
+#
+# Crowded industries get larger floors and sparse ones smaller. The floor is NOT a knob for hitting
+# a member count: the 20-60 band rule is unchanged, a cohort under 20 reports TOO THIN and one over
+# 60 reports TOO WIDE with a narrower-code suggestion, and nothing is padded or truncated. Some of
+# the cohorts below land outside the band; `python -m aristos_council.cohorts plan` says which.
+#
+# NARROWING. Where a cohort's EODHD industry code alone came out TOO WIDE at its tier floor, it is
+# narrowed to the GICS sub-industry (`gics_subindustry:`, the index's label with overrides applied) that
+# lands in band; where that would strand a real group of companies (Industrial Machinery -> its grid and
+# electrical half) the other sub-industries become their own cohort. A name with no sub-industry label
+# is removed with that reason logged - it is neither a match nor a mismatch. Nothing is truncated.
+#
+# `min_market_cap_usd` is tested against the index's USD conversion. `min_market_cap` (own currency)
+# is deliberately absent: it belongs to the constituents path.
+#
+# `watch: false` on every cohort. The daily watcher runs only cohorts flagged `watch: true`; there
+# is no watcher in this repository yet (Sprint 4F is a plan), so the flag is stored, parsed and
+# printed by `plan`, and nothing reads it beyond that. Which cohorts to watch is the owner's call.
+#
+# GUIDE ENTRIES MERGED OR DROPPED (the index has no clean code, or too few companies, for them):
+#   - integrated oil and gas (21 above $1bn, 18 in the cohort after duplicates) with refining: TOO THIN alone
+#   - water utilities (11 companies above $1bn in the index): merged into gas + multi-utilities
+#   - tobacco (11): merged into beverages
+#   - aluminum (11) with copper; paper (9) with packaging; airports (11) with airlines
+#   - NOT covered, no entry in the guide: coal (Thermal 11, Coking 5), uranium (12), silver (7),
+#     other precious metals (20), solar (12), lumber (6), conglomerates (55), industrial
+#     distribution, rental & leasing, business services, education, and the 11 + 6 + 4 + 1 companies
+#     filed under the index's second, TRBC-style vocabulary ("Semiconductors & Semiconductor
+#     Equipment", "Pharmaceuticals", "Machinery, Tools, Heavy Vehicles, Trains & Ships",
+#     "Biotechnology & Medical Research"). Their labels are in no cohort's codes, so they are in none.
+
+cohorts:
+
+  # guide: integrated oil and gas + refining, MERGED. Integrated oil and gas alone came out TOO THIN (18) once BP stopped standing three times (two of its lines are preference lines the provider gives the whole company's cap); the two downstream codes are the one conventional group of majors and refiners
+  # n1 = 48 (Oil & Gas Integrated 19, Oil & Gas Refining & Marketing 29) -> tier $2bn
+  - name: "Energy - Integrated Oil & Refining"
+    industry:
+      - "Oil & Gas Integrated"
+      - "Oil & Gas Refining & Marketing"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: exploration and production
+  # n1 = 75 (Oil & Gas E&P 75) -> tier $3bn
+  - name: "Energy - Exploration & Production"
+    industry: ["Oil & Gas E&P"]
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: oil and gas services and equipment, kept apart from the producers; drilling is a service and joins it
+  # n1 = 54 (Oil & Gas Equipment & Services 42, Oil & Gas Drilling 12) -> tier $2bn
+  - name: "Energy - Oilfield Services & Equipment"
+    industry:
+      - "Oil & Gas Equipment & Services"
+      - "Oil & Gas Drilling"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: midstream and pipelines
+  # n1 = 52 (Oil & Gas Midstream 52) -> tier $2bn
+  - name: "Energy - Midstream & Pipelines"
+    industry: ["Oil & Gas Midstream"]
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: electric
+  # n1 = 48 (Utilities - Regulated Electric 48) -> tier $2bn
+  - name: "Utilities - Electric"
+    industry: ["Utilities - Regulated Electric"]
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: gas, water. MERGED: water alone has 11 companies above $1bn in the whole index, under the 20 floor at any size; gas has 27. Multi-utilities (diversified) share the same regulated-network economics and join them
+  # n1 = 56 (Utilities - Regulated Gas 27, Utilities - Regulated Water 12, Utilities - Diversified 17) -> tier $2bn
+  - name: "Utilities - Gas, Water & Multi-Utilities"
+    industry:
+      - "Utilities - Regulated Gas"
+      - "Utilities - Regulated Water"
+      - "Utilities - Diversified"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: renewable and independent power (one cohort; the two codes are 32 and 17)
+  # n1 = 49 (Utilities - Renewable 32, Utilities - Independent Power Producers 17) -> tier $2bn
+  - name: "Utilities - Renewable & Independent Power"
+    industry:
+      - "Utilities - Renewable"
+      - "Utilities - Independent Power Producers"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: chemicals. Fertilisers and crop chemicals (Agricultural Inputs, 16) are commodity chemistry and join the 27 in Chemicals
+  # n1 = 43 (Chemicals 27, Agricultural Inputs 16) -> tier $2bn
+  - name: "Materials - Commodity Chemicals & Agri Inputs"
+    industry:
+      - "Chemicals"
+      - "Agricultural Inputs"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: specialty chemicals
+  # n1 = 82 (Specialty Chemicals 82) -> tier $3bn
+  - name: "Materials - Specialty Chemicals"
+    industry: ["Specialty Chemicals"]
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: steel
+  # n1 = 39 (Steel 39) -> tier $1bn
+  - name: "Materials - Steel"
+    industry: ["Steel"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: diversified mining (EODHD's code for it)
+  # n1 = 53 (Other Industrial Metals & Mining 53) -> tier $2bn
+  - name: "Materials - Diversified Mining"
+    industry: ["Other Industrial Metals & Mining"]
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: gold
+  # n1 = 77 (Gold 77) -> tier $3bn
+  - name: "Materials - Gold"
+    industry: ["Gold"]
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: copper and base metals. Aluminum (11) alone is under the floor of 20
+  # n1 = 32 (Copper 21, Aluminum 11) -> tier $1bn
+  - name: "Materials - Copper & Aluminum"
+    industry:
+      - "Copper"
+      - "Aluminum"
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: building materials
+  # n1 = 32 (Building Materials 32) -> tier $1bn
+  - name: "Materials - Building Materials"
+    industry: ["Building Materials"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: packaging. Paper (9) alone is too thin; it is the same customers and cycle
+  # n1 = 39 (Packaging & Containers 29, Paper & Paper Products 10) -> tier $1bn
+  - name: "Materials - Packaging & Paper"
+    industry:
+      - "Packaging & Containers"
+      - "Paper & Paper Products"
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: aerospace and defence
+  # n1 = 104 (Aerospace & Defense 104) -> tier $5bn
+  - name: "Industrials - Aerospace & Defense"
+    industry: ["Aerospace & Defense"]
+    exchanges: [ALL]
+    min_market_cap_usd: 5000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: electrical equipment
+  # n1 = 61 (Electrical Equipment & Parts 61) -> tier $2bn
+  - name: "Industrials - Electrical Equipment"
+    industry: ["Electrical Equipment & Parts"]
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: industrial machinery. NARROWED to the GICS sub-industry 'Industrial Machinery & Supplies & Components': the EODHD code alone is 71 companies at the tier floor (TOO WIDE) and its GICS sub-industries are clearly separable. The electrical half is the next cohort
+  # n1 = 84 (Specialty Industrial Machinery 84; GICS sub-industry Industrial Machinery & Supplies & Components) -> tier $3bn
+  - name: "Industrials - Industrial Machinery"
+    industry: ["Specialty Industrial Machinery"]
+    gics_subindustry:
+      - "Industrial Machinery & Supplies & Components"
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # not in the guide: the other half of the split above. EODHD files grid and electrical makers (the large grid and electrical equipment groups) under 'Specialty Industrial Machinery'; GICS calls them Heavy Electrical Equipment and Electrical Components & Equipment
+  # n1 = 22 (Specialty Industrial Machinery 22; GICS sub-industry Heavy Electrical Equipment / Electrical Components & Equipment) -> tier $1bn
+  - name: "Industrials - Grid & Electrical Machinery"
+    industry: ["Specialty Industrial Machinery"]
+    gics_subindustry:
+      - "Heavy Electrical Equipment"
+      - "Electrical Components & Equipment"
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # not in the guide: the heavy-equipment half of machinery, a distinct code (34)
+  # n1 = 34 (Farm & Heavy Construction Machinery 34) -> tier $1bn
+  - name: "Industrials - Construction & Farm Machinery"
+    industry: ["Farm & Heavy Construction Machinery"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: construction and engineering. 'Construction & Engineering' is a one-company variant label (with a non-breaking space) for the same thing
+  # n1 = 114 (Engineering & Construction 113, Construction & Engineering 1) -> tier $5bn
+  - name: "Industrials - Engineering & Construction"
+    industry:
+      - "Engineering & Construction"
+      - "Construction & Engineering"
+    exchanges: [ALL]
+    min_market_cap_usd: 5000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: airlines. Airports and air services (11) join them
+  # n1 = 44 (Airlines 33, Airports & Air Services 11) -> tier $2bn
+  - name: "Industrials - Airlines & Airports"
+    industry:
+      - "Airlines"
+      - "Airports & Air Services"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: railroads
+  # n1 = 23 (Railroads 23) -> tier $1bn
+  - name: "Industrials - Railroads"
+    industry: ["Railroads"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: logistics and trucking
+  # n1 = 42 (Integrated Freight & Logistics 31, Trucking 11) -> tier $2bn
+  - name: "Industrials - Logistics & Trucking"
+    industry:
+      - "Integrated Freight & Logistics"
+      - "Trucking"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: shipping
+  # n1 = 48 (Marine Shipping 48) -> tier $2bn
+  - name: "Industrials - Marine Shipping"
+    industry: ["Marine Shipping"]
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: building products
+  # n1 = 33 (Building Products & Equipment 33) -> tier $1bn
+  - name: "Industrials - Building Products"
+    industry: ["Building Products & Equipment"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: waste. Waste management alone has 16; treatment controls (8) join it
+  # n1 = 24 (Waste Management 16, Pollution & Treatment Controls 8) -> tier $1bn
+  - name: "Industrials - Waste & Environmental"
+    industry:
+      - "Waste Management"
+      - "Pollution & Treatment Controls"
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: autos
+  # n1 = 40 (Auto Manufacturers 40) -> tier $1bn
+  - name: "Consumer - Auto Manufacturers"
+    industry: ["Auto Manufacturers"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: auto parts
+  # n1 = 66 (Auto Parts 66) -> tier $2bn
+  - name: "Consumer - Auto Parts"
+    industry: ["Auto Parts"]
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: luxury and apparel. Luxury (19), apparel makers (22) and footwear (17) each sit under or near the floor alone
+  # n1 = 57 (Luxury Goods 19, Apparel Manufacturing 21, Footwear & Accessories 17) -> tier $2bn
+  - name: "Consumer - Luxury, Apparel & Footwear"
+    industry:
+      - "Luxury Goods"
+      - "Apparel Manufacturing"
+      - "Footwear & Accessories"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: restaurants
+  # n1 = 33 (Restaurants 33) -> tier $1bn
+  - name: "Consumer - Restaurants"
+    industry: ["Restaurants"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: hotels and leisure, first half: accommodation and gaming venues
+  # n1 = 54 (Lodging 14, Resorts & Casinos 22, Gambling 18) -> tier $2bn
+  - name: "Consumer - Hotels, Resorts & Gaming"
+    industry:
+      - "Lodging"
+      - "Resorts & Casinos"
+      - "Gambling"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: hotels and leisure, second half: leisure products and travel services
+  # n1 = 49 (Leisure 29, Travel Services 20) -> tier $2bn
+  - name: "Consumer - Leisure & Travel"
+    industry:
+      - "Leisure"
+      - "Travel Services"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: household products
+  # n1 = 38 (Household & Personal Products 38) -> tier $1bn
+  - name: "Consumer - Household & Personal Products"
+    industry: ["Household & Personal Products"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: food
+  # n1 = 80 (Packaged Foods 70, Confectioners 10) -> tier $3bn
+  - name: "Consumer - Packaged Foods & Confectionery"
+    industry:
+      - "Packaged Foods"
+      - "Confectioners"
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: beverages, tobacco. MERGED: tobacco has 11 companies above $1bn in the whole index, under the floor of 20 at any size; it shares the consumer-staples sin/consumable profile of alcohol and soft drinks
+  # n1 = 54 (Beverages - Brewers 14, Beverages - Wineries & Distilleries 7, Beverages - Non-Alcoholic 22, Tobacco 11) -> tier $2bn
+  - name: "Consumer - Beverages & Tobacco"
+    industry:
+      - "Beverages - Brewers"
+      - "Beverages - Wineries & Distilleries"
+      - "Beverages - Non-Alcoholic"
+      - "Tobacco"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: staples retail (named for what it is: a plain 'Staples Retail' would slug onto the COHORT-1 cohort 'Consumer Staples Retail')
+  # n1 = 36 (Grocery Stores 22, Discount Stores 14) -> tier $1bn
+  - name: "Consumer - Grocery & Discount Retailers"
+    industry:
+      - "Grocery Stores"
+      - "Discount Stores"
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: discretionary retail
+  # n1 = 79 (Specialty Retail 41, Apparel Retail 20, Home Improvement Retail 6, Department Stores 12) -> tier $3bn
+  - name: "Consumer - Discretionary Retail"
+    industry:
+      - "Specialty Retail"
+      - "Apparel Retail"
+      - "Home Improvement Retail"
+      - "Department Stores"
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: internet retail
+  # n1 = 26 (Internet Retail 26) -> tier $1bn
+  - name: "Consumer - Internet Retail"
+    industry: ["Internet Retail"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: homebuilders
+  # n1 = 23 (Residential Construction 23) -> tier $1bn
+  - name: "Consumer - Homebuilders"
+    industry: ["Residential Construction"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: pharma, the large-cap half
+  # n1 = 23 (Drug Manufacturers - General 23) -> tier $1bn
+  - name: "Health - Large Pharma"
+    industry: ["Drug Manufacturers - General"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: pharma, the specialty and generic half
+  # n1 = 73 (Drug Manufacturers - Specialty & Generic 73) -> tier $3bn
+  - name: "Health - Specialty & Generic Pharma"
+    industry: ["Drug Manufacturers - Specialty & Generic"]
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: biotech
+  # n1 = 230 (Biotechnology 230) -> tier $10bn
+  - name: "Health - Biotechnology"
+    industry: ["Biotechnology"]
+    exchanges: [ALL]
+    min_market_cap_usd: 10000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: medical devices
+  # n1 = 116 (Medical Devices 65, Medical Instruments & Supplies 51) -> tier $5bn
+  - name: "Health - Medical Devices & Instruments"
+    industry:
+      - "Medical Devices"
+      - "Medical Instruments & Supplies"
+    exchanges: [ALL]
+    min_market_cap_usd: 5000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: health services. Plans (11), distribution (13) and health IT (19) are each under the floor alone
+  # n1 = 93 (Medical Care Facilities 50, Healthcare Plans 11, Medical Distribution 13, Health Information Services 19) -> tier $3bn
+  - name: "Health - Services & Managed Care"
+    industry:
+      - "Medical Care Facilities"
+      - "Healthcare Plans"
+      - "Medical Distribution"
+      - "Health Information Services"
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: life science tools (EODHD's code for tools and diagnostics)
+  # n1 = 40 (Diagnostics & Research 40) -> tier $1bn
+  - name: "Health - Life Science Tools & Diagnostics"
+    industry: ["Diagnostics & Research"]
+    exchanges: [ALL]
+    min_market_cap_usd: 1000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: semiconductors. NARROWED to the GICS sub-industry 'Semiconductors': the EODHD code alone was 70 at its tier floor (TOO WIDE); the unlabelled rows under it are removed with that reason logged, not counted as matches
+  # n1 = 81 (Semiconductors 81; GICS sub-industry Semiconductors) -> tier $3bn
+  - name: "Tech - Semiconductors"
+    industry: ["Semiconductors"]
+    gics_subindustry:
+      - "Semiconductors"
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: semiconductor equipment
+  # n1 = 60 (Semiconductor Equipment & Materials 60) -> tier $2bn
+  - name: "Tech - Semiconductor Equipment"
+    industry: ["Semiconductor Equipment & Materials"]
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: application software. NARROWED to the GICS sub-industry 'Application Software': the EODHD code alone was 65 at its tier floor (TOO WIDE) because it also files ride-hailing, HR services, payments and gaming names under software
+  # n1 = 86 (Software - Application 86; GICS sub-industry Application Software) -> tier $3bn
+  - name: "Tech - Application Software"
+    industry: ["Software - Application"]
+    gics_subindustry:
+      - "Application Software"
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: systems software
+  # n1 = 94 (Software - Infrastructure 94) -> tier $3bn
+  - name: "Tech - Systems Software"
+    industry: ["Software - Infrastructure"]
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: IT services
+  # n1 = 66 (Information Technology Services 66) -> tier $2bn
+  - name: "Tech - IT Services"
+    industry: ["Information Technology Services"]
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: hardware. Consumer electronics (13) joins computer hardware (53)
+  # n1 = 66 (Computer Hardware 53, Consumer Electronics 13) -> tier $2bn
+  - name: "Tech - Hardware"
+    industry:
+      - "Computer Hardware"
+      - "Consumer Electronics"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: communications equipment
+  # n1 = 42 (Communication Equipment 42) -> tier $2bn
+  - name: "Tech - Communications Equipment"
+    industry: ["Communication Equipment"]
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: electronic components
+  # n1 = 82 (Electronic Components 82) -> tier $3bn
+  - name: "Tech - Electronic Components"
+    industry: ["Electronic Components"]
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: telecoms
+  # n1 = 72 (Telecom Services 72) -> tier $3bn
+  - name: "Comms - Telecoms"
+    industry: ["Telecom Services"]
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: media and entertainment. Broadcasting (8), publishing (8) and advertising (18) are each under the floor alone
+  # n1 = 71 (Entertainment 37, Broadcasting 8, Publishing 8, Advertising Agencies 18) -> tier $3bn
+  - name: "Comms - Media & Entertainment"
+    industry:
+      - "Entertainment"
+      - "Broadcasting"
+      - "Publishing"
+      - "Advertising Agencies"
+    exchanges: [ALL]
+    min_market_cap_usd: 3000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []
+
+  # guide: interactive media. Gaming (17) alone is under the floor
+  # n1 = 60 (Internet Content & Information 43, Electronic Gaming & Multimedia 17) -> tier $2bn
+  - name: "Comms - Interactive Media & Gaming"
+    industry:
+      - "Internet Content & Information"
+      - "Electronic Gaming & Multimedia"
+    exchanges: [ALL]
+    min_market_cap_usd: 2000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: []

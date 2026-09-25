@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,6 +25,9 @@ BASE_URL = "https://eodhd.com/api"
 PATH_SCREENER = "screener"
 PATH_CONSTITUENTS = "constituents"
 PATH_YFINANCE = "yfinance"
+# COHORT-3 - the names come from the local market index, through the same cleaned pool the peer
+# groups use. No request is made to build the pool.
+PATH_INDEX = "index"
 
 # The index constituent lists the fallback pulls. S&P 500 for the US leg and STOXX 600 for
 # Europe, which between them cover every exchange the shipped definitions name.
@@ -84,6 +88,12 @@ class Candidate:
     security_type: str = ""
     history_years: float | None = None
     source: str = PATH_CONSTITUENTS
+    # COHORT-3 - the market cap converted to USD by the market index, kept beside the one in the
+    # name's own currency. ``None`` for a name that did not come from the index.
+    market_cap_usd: float | None = None
+    # COHORT-3 - the GICS sub-industry the index carries for the name (label overrides applied), used
+    # only to narrow a cohort that names ``gics_subindustry``.
+    gics_subindustry: str = ""
     # Per-field source tags for anything that had to be filled from a second provider.
     filled: dict[str, str] = field(default_factory=dict)
 
@@ -276,6 +286,74 @@ def build_pool(defn, source: EODHDSource, probe: SourceProbe,
             continue
         out.append(_candidate_from_fundamentals(symbol, doc, path))
     return out, path, log
+
+
+# A preference share is filed by the provider as "Common Stock" but is a second line of a company
+# whose ordinary line is elsewhere in the same pool ("China Steel Corp Pref", 2002A.TW, stood in the
+# Steel cohort beside 2002.TW). The NAME says so, and cleanup rule 1 already removes a "Preferred"
+# type as never a primary common line, so the type is read from the name and the existing rule does
+# the rest. Korea's preference series are folded earlier, by PEER-KR-PREF-1.
+_PREFERENCE_NAME = re.compile(r"\b(?:prefs?|preferred|preference|pfd|prf)\b", re.IGNORECASE)
+
+
+def candidate_from_index_row(row) -> Candidate:
+    """One cleaned-pool row of the market index as a cohort candidate.
+
+    The industry is EODHD's ``General::Industry`` exactly as the index stores it, with a
+    non-breaking space read as the space it was meant to be: two live labels ("Aerospace &\xa0Defense",
+    "Construction\xa0& Engineering") carry one, and an exact-string match would silently miss them.
+    """
+    return Candidate(
+        ticker=row.ticker, exchange=row.market or row.ticker.rpartition(".")[2],
+        name=row.name, industry=(row.industry or "").replace("\xa0", " ").strip(),
+        sector=(row.sector or "").replace("\xa0", " ").strip(),
+        market_cap=row.market_cap, currency=row.currency, isin=row.isin,
+        primary_ticker=row.primary_ticker,
+        security_type="Preferred" if _PREFERENCE_NAME.search(row.name or "") else "Common Stock",
+        source=PATH_INDEX, market_cap_usd=row.market_cap_usd,
+        gics_subindustry=(row.gics_subindustry or "").replace("\xa0", " ").strip())
+
+
+def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], str, list[str]]:
+    """``(candidates, path_used, log)`` from a ``market_index.CleanPool``. Same contract as
+    ``build_pool``: no cleanup beyond what the pool already did, so every later removal is a
+    RULE removing a name rather than the source never offering it.
+
+    The pool is the one ``peers`` uses - overrides and aliases applied, one row per company,
+    receipts, funds, classification-suspect and size-suspect rows out. What a cohort adds is its
+    own: Sao Paulo is left out, the definition's exchanges are honoured, and the industry is
+    matched on the code.
+    """
+    from ..market_index import CleanPool  # noqa: F401  (documented type; import is lazy)
+    from .definitions import INDEX_EXCLUDED_MARKETS
+
+    log: list[str] = [
+        f"Source: the local market index, through the same cleaned pool the peer groups use "
+        f"(snapshot {pool.snapshot or 'unknown'}). No request was made."]
+    log.extend(line.strip() for line in pool.lines()[1:])
+    if pool.overridden:
+        log.append(f"{len(pool.overridden)} row(s) in the pool carry a corrected label "
+                   f"(data/label_overrides.yaml): {', '.join(sorted(pool.overridden))}.")
+    if pool.aliased:
+        log.append(f"{len(pool.aliased)} identity alias(es) applied "
+                   f"(data/identity_aliases.yaml): {', '.join(sorted(pool.aliased))}.")
+
+    rows = list(pool.rows)
+    left_out = [r for r in rows if r.market in INDEX_EXCLUDED_MARKETS]
+    rows = [r for r in rows if r.market not in INDEX_EXCLUDED_MARKETS]
+    log.append(f"{len(left_out)} company(ies) on {', '.join(INDEX_EXCLUDED_MARKETS)} (Sao Paulo) "
+               f"left out by decision" + (" - a pool not built with exclude_markets, so they were "
+                                           "still in it" if left_out else "") + ".")
+    if not defn.all_index_exchanges:
+        codes = set(defn.exchange_codes)
+        rows = [r for r in rows if r.market in codes]
+        log.append(f"{len(rows)} on {', '.join(sorted(codes))}.")
+    wanted = set(defn.industry)
+    matched = [r for r in rows if (r.industry or "").replace("\xa0", " ").strip() in wanted]
+    log.append(f"{len(matched)} matched the industry code(s) {', '.join(sorted(wanted))}"
+               + (" on every index market except Sao Paulo." if defn.all_index_exchanges
+                  else "."))
+    return [candidate_from_index_row(r) for r in matched], PATH_INDEX, log
 
 
 def fill_missing(candidates: list[Candidate], filler=None) -> list[str]:

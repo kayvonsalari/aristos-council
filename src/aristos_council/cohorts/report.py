@@ -32,10 +32,17 @@ def render_report(*, defn: CohortDefinition, version: int, built_on: date,
     add(f"- **Industry**: {', '.join(defn.industry_as_written or defn.industry)}"
         + (f" (resolved to {', '.join(defn.industry)})"
            if tuple(defn.industry_as_written) != tuple(defn.industry) else ""))
+    if defn.gics_subindustry:
+        add(f"- **GICS sub-industry** (narrows the industry): {', '.join(defn.gics_subindustry)}")
     add(f"- **Exchanges**: {', '.join(defn.exchanges)} "
         f"({', '.join(defn.exchange_codes)}) — main listings only")
-    add(f"- **Minimum market cap**: {defn.min_market_cap:,.0f} in each name's OWN "
-        f"currency, deliberately unconverted")
+    if defn.uses_index:
+        add(f"- **Minimum market cap**: ${defn.min_market_cap_usd / 1e9:g}bn, in USD as "
+            f"converted by the market index (a per-cohort floor set by a stated rule, never "
+            f"tuned to a count)")
+    else:
+        add(f"- **Minimum market cap**: {defn.min_market_cap:,.0f} in each name's OWN "
+            f"currency, deliberately unconverted")
     add(f"- **Minimum history**: {defn.min_history_years:.0f} years")
     add(f"- **Excluded**: {', '.join(defn.exclude) or 'nothing'}")
     add(f"- **Anchors**: {', '.join(defn.anchors) or 'none'}")

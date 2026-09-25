@@ -1,4 +1,4 @@
-"""COHORT-1 CLI — ``python -m aristos_council.cohorts <build|check|diff>``.
+"""COHORT-1 CLI — ``python -m aristos_council.cohorts <build|check|diff|plan>``.
 
 The brief writes this as ``python -m aristos.cohorts``; this repo's package is
 ``aristos_council`` and there is no ``aristos``, so the command is spelled to match the
@@ -10,9 +10,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from .builder import (DEFAULT_DEFINITIONS, DEFAULT_ROOT, DEFAULT_STRATEGY, build, check,
-                      diff)
-from .definitions import DefinitionError, find_definition, load_definitions
+from .builder import (DEFAULT_DEFINITIONS, DEFAULT_INDEX_DEFINITIONS, DEFAULT_ROOT,
+                      DEFAULT_STRATEGY, build, check, default_index_pool, diff, format_plan, plan)
+from .definitions import (DEFAULT_WATCH_OVERLAY, DefinitionError, apply_watch_overlay,
+                          find_definition, load_definitions, load_watch_overlay)
 from .source import EODHDSource, SourceError
 
 DEFAULT_UNIVERSES = Path("universes")
@@ -31,8 +32,22 @@ def _say(message: str) -> None:
         print(message.encode(encoding, "replace").decode(encoding, "replace"), flush=True)
 
 
+def _definitions_path(args) -> str:
+    """COHORT-3: the index list by default; the COHORT-1 list when ``--constituents`` asks for the
+    old path, so an old cohort version can still be reproduced from the rules that cut it."""
+    if args.definitions:
+        return args.definitions
+    return str(DEFAULT_DEFINITIONS if args.constituents else DEFAULT_INDEX_DEFINITIONS)
+
+
 def _load(args) -> list:
-    return load_definitions(args.definitions)
+    """The definitions, with the LOCAL watch overlay applied (data/local/cohorts/watch.yaml, git-
+    ignored). ``--no-local-overlay`` reads the tracked file as it is - which is what a shared
+    printout (a PR body, a report) must use, since which cohorts are watched is personal."""
+    defs = load_definitions(_definitions_path(args))
+    if getattr(args, "no_local_overlay", False):
+        return defs
+    return apply_watch_overlay(defs, load_watch_overlay(Path(args.root) / DEFAULT_WATCH_OVERLAY))
 
 
 def _selected(args, defs: list) -> list:
@@ -42,7 +57,12 @@ def _selected(args, defs: list) -> list:
 
 
 def _source_and_probe(args):
-    """Build the client and PROBE it once, at startup, logging what it honours."""
+    """Build the client and PROBE it once, at startup, logging what it honours.
+
+    Only the constituents path needs one. The market-index path reads a local file, so it makes no
+    request here and does not spend the probe."""
+    if not args.constituents:
+        return None, None
     source = EODHDSource()
     probe = source.probe()
     _say(probe.sentence())
@@ -53,11 +73,13 @@ def cmd_build(args) -> int:
     defs = _load(args)
     selected = _selected(args, defs)
     source, probe = _source_and_probe(args)
+    index_pool = None if args.constituents else default_index_pool()
     failures = 0
     for defn in selected:
         outcome = build(defn, source=source, probe=probe, root=args.root,
                         universes_dir=(None if args.no_register else args.universes_dir),
-                        rebuild=args.rebuild, strategy_id=args.strategy, progress=_say)
+                        rebuild=args.rebuild, strategy_id=args.strategy, progress=_say,
+                        constituents=args.constituents, index_pool=index_pool)
         _say(outcome.summary())
         if outcome.universe_path:
             _say(f"  registered as a local stock list: {outcome.universe_path}")
@@ -83,10 +105,25 @@ def cmd_check(args) -> int:
 def cmd_diff(args) -> int:
     defs = _load(args)
     source, probe = _source_and_probe(args)
+    index_pool = None if args.constituents else default_index_pool()
     for defn in _selected(args, defs):
         text, _added, _removed = diff(defn, source=source, probe=probe, root=args.root,
-                                      progress=_say)
+                                      progress=_say, constituents=args.constituents,
+                                      index_pool=index_pool)
         _say(text)
+    return 0
+
+
+def cmd_plan(args) -> int:
+    """A dry run: reads the market index and prints what each definition would build. It touches
+    no network (no source, no probe, no fundamentals, no history, no ranker) and writes nothing."""
+    if args.constituents:
+        raise DefinitionError("plan reads the market index; the constituents path needs the "
+                              "network and has no dry run. Drop --constituents.")
+    defs = _load(args)
+    selected = defs if not args.name else [find_definition(defs, args.name)]
+    pool = default_index_pool()
+    _say(format_plan(plan(selected, pool, root=args.root), pool))
     return 0
 
 
@@ -94,8 +131,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m aristos_council.cohorts",
         description="Build, check and diff rule-defined cohorts. No LLM is ever called.")
-    parser.add_argument("--definitions", default=str(DEFAULT_DEFINITIONS),
-                        help=f"definition file (default {DEFAULT_DEFINITIONS})")
+    parser.add_argument("--definitions", default=None,
+                        help=f"definition file (default {DEFAULT_INDEX_DEFINITIONS}; with "
+                             f"--constituents, {DEFAULT_DEFINITIONS})")
+    parser.add_argument("--no-local-overlay", action="store_true",
+                        help="ignore the local watch overlay (data/local/cohorts/watch.yaml) and "
+                             "read the definitions exactly as the tracked file says")
+    parser.add_argument("--constituents", action="store_true",
+                        help="use the OLD source: S&P 500 + STOXX 600 constituents through the "
+                             "EODHD API and the COHORT-1 definitions (own-currency floors). Off "
+                             "by default; it exists so old cohort versions can be reproduced")
     parser.add_argument("--root", default=str(DEFAULT_ROOT),
                         help=f"where frozen cohorts live (default {DEFAULT_ROOT})")
     parser.add_argument("--strategy", default=DEFAULT_STRATEGY,
@@ -125,6 +170,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_diff = sub.add_parser("diff", help="what a rebuild would add or remove")
     add_selector(p_diff, allow_all=True)
     p_diff.set_defaults(func=cmd_diff)
+
+    p_plan = sub.add_parser(
+        "plan", help="dry run from the market index: codes, USD floor, member count, band, "
+                     "top names, exchanges. No network, nothing written")
+    p_plan.add_argument("--name", default="", help="one cohort name or slug (default: all)")
+    p_plan.set_defaults(func=cmd_plan)
     return parser
 
 
