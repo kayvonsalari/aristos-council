@@ -204,6 +204,8 @@ rather than required. One row per company always survives; which one is decided,
 order, by: it is the home listing; its country matches the issuer country in the ISIN;
 then the ticker, so the answer never depends on the order rows came back in.
 
+**Identity is PrimaryTicker first, then ISIN, linked transitively (PEER-DEDUP-1, 2026-09-25).** A US ADR carries its *own* ISIN but names its home line, so ISIN-first kept `TSM.US` apart from `2330.TW` and TSMC was its own peer; rows now group when they share a primary ticker *or* an ISIN, and a company is never its own peer — none of its lines stands in its pool.
+
 **Preferred, not required, on purpose.** A strict "home listings only" filter loses
 companies, which is the same defect wearing a different hat. Of ten German blue chips
 probed the same day, **four name a primary this index does not track** — SAP → `SAP.F`,

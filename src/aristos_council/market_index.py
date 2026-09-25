@@ -1149,18 +1149,64 @@ def is_home_listing(row: "IndexRow") -> bool:
 
 
 def company_key(row: "IndexRow") -> str:
-    """What makes two rows the same company.
+    """The identifier a row itself offers for its company, strongest first.
 
-    ISIN first: AMD.US and AMD.XETRA share US0079031078, which is the fact that makes them
-    one company. Then the primary ticker, which links a cross-listing to its home even
-    when the ISIN is absent. Then the ticker itself, so an unlinkable row is its own
-    company rather than being merged with a stranger.
+    PEER-DEDUP-1: PrimaryTicker FIRST, then ISIN, then the ticker. It used to be ISIN first, and
+    a US ADR carries its OWN ISIN while naming its home line in PrimaryTicker (probed 2026-09-25:
+    TSM.US -> PrimaryTicker "2330.TW", ISIN US8740391003; 2330.TW has TW0003...), so the two
+    were kept apart and TSMC was its own peer. The primary ticker is the fact that says "this is
+    a line of THAT company"; an ISIN only says it is the same security.
+
+    This is the key for ONE row. Companies are built by ``company_groups``, which links rows
+    transitively over all three, because a company's rows do not all carry the same field.
     """
-    if row.isin:
-        return f"isin:{row.isin.strip().upper()}"
-    if row.primary_ticker:
+    if row.primary_ticker and row.primary_ticker.strip():
         return f"primary:{normalise_symbol(row.primary_ticker)}"
+    if row.isin and row.isin.strip():
+        return f"isin:{row.isin.strip().upper()}"
     return f"ticker:{normalise_symbol(row.ticker)}"
+
+
+def _identity_nodes(row: "IndexRow") -> list[str]:
+    """Every handle a row gives for its company: its own ticker, its primary, its ISIN."""
+    nodes = [f"t:{normalise_symbol(row.ticker)}"]
+    if row.primary_ticker and row.primary_ticker.strip():
+        nodes.append(f"t:{normalise_symbol(row.primary_ticker)}")
+    if row.isin and row.isin.strip():
+        nodes.append(f"i:{row.isin.strip().upper()}")
+    return nodes
+
+
+def company_groups(rows) -> list[list["IndexRow"]]:
+    """The rows, grouped so that each group is ONE company.
+
+    Two rows are the same company when they share ANY handle - a primary ticker (one names the
+    other's ticker, or both name the same home) or an ISIN. Linked transitively, PrimaryTicker
+    and ISIN together, because neither alone is enough. Measured on the 22,209-row table
+    (2026-09-25): grouping by PrimaryTicker-else-ISIN alone would leave 727 companies split
+    across two or more groups - Hutchmed's Hong Kong lines ``0013.HK`` and ``13.HK`` (own
+    primary each, one ISIN), its US ADR (primary 0013.HK, its own ISIN) and its London line;
+    Nordea's five lines. ISIN-first, the old rule, left TSMC's ADR standing apart.
+    """
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    materialised = list(rows)
+    for row in materialised:
+        first, *rest = _identity_nodes(row)
+        find(first)
+        for node in rest:
+            parent[find(node)] = find(first)
+    groups: dict[str, list] = {}
+    for row in materialised:
+        groups.setdefault(find(_identity_nodes(row)[0]), []).append(row)
+    return list(groups.values())
 
 
 def _listing_rank(row: "IndexRow") -> tuple:
@@ -1176,12 +1222,9 @@ def _listing_rank(row: "IndexRow") -> tuple:
 
 def one_row_per_company(rows) -> tuple[list, int]:
     """``(kept, dropped)`` - the pool, deduplicated by company."""
-    groups: dict = {}
-    for row in rows:
-        groups.setdefault(company_key(row), []).append(row)
     kept = []
     dropped = 0
-    for group in groups.values():
+    for group in company_groups(rows):
         group.sort(key=_listing_rank)
         kept.append(group[0])
         dropped += len(group) - 1
@@ -1499,11 +1542,23 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         group.reasons.append("subject has no GICS sub-industry; fell back to the EODHD "
                              "industry field")
 
+    # PEER-DEDUP-1 - a company is never its own peer, and "its own" means every LINE of it,
+    # not just the identical ticker string. TSM.US (an ADR that names 2330.TW as home) stood in
+    # TSMC's own cohort because only the ticker was compared.
+    company_of = {}
+    for number, members in enumerate(company_groups(universe)):
+        for member in members:
+            company_of[normalise_symbol(member.ticker)] = number
+    subject_company = company_of.get(normalise_symbol(subject.ticker))
+
     # Everything that is eligible to be a peer at all, before any rung.
-    candidates, no_cap, no_usd, funds, suspect = [], 0, 0, 0, 0
+    candidates, no_cap, no_usd, funds, suspect, own_lines = [], 0, 0, 0, 0, 0
     for row in universe:
-        if row.ticker.upper() == subject.ticker.upper():
+        if normalise_symbol(row.ticker) == normalise_symbol(subject.ticker):
             continue                                   # never its own peer
+        if company_of.get(normalise_symbol(row.ticker)) == subject_company:
+            own_lines += 1                             # ...nor another line of itself
+            continue
         if is_fund(row):
             funds += 1
             continue
@@ -1527,6 +1582,9 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     # build; they are one company.
     pool, cross_listings = one_row_per_company(candidates)
 
+    if own_lines:
+        group.reasons.append(f"{own_lines} other line(s) of {subject.name or subject.ticker} "
+                             f"left out: a company is never its own peer")
     if funds:
         group.reasons.append(f"{funds} candidate(s) skipped: {FUND_NOT_A_COMPANY}")
     if suspect:
