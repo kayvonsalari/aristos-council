@@ -142,6 +142,11 @@ class CompanyCheckResult:
     # this page is ranked by them; they are facts about one company's own accounts.
     debt_and_cash: object = None
     growth_record: object = None
+    # ANALYST-TREND-1 - a non-voting MARK: which way the analysts' consensus EPS for the current
+    # fiscal year has moved over ~90 days (``abs_readings.AnalystTrend``). None unless the caller
+    # asked for it (the Company Check tab does; it costs one EODHD /fundamentals request, 10 units,
+    # cached for the day). It never removes a name and changes no screen, gate, factor or verdict.
+    analyst_trend: object = None
 
     @property
     def display(self) -> str:
@@ -250,7 +255,7 @@ def run_company_check(
     ticker: str, rank_strategy_id: str, reference_universe_id: str, *, adapter,
     strategies_dir: str | Path | None = None, universes_dir: str | Path | None = None,
     runs_dir: str | Path | None = None, screen_strategy_id: Optional[str] = None,
-    today: Optional[date] = None,
+    today: Optional[date] = None, with_analyst_trend: bool = False, analyst_fetcher=None,
 ) -> CompanyCheckResult:
     """Diagnose ONE ticker under ``rank_strategy_id``'s lens screen + factors, with
     cohort context from the latest frozen run of ``reference_universe_id``. NEVER emits
@@ -411,6 +416,17 @@ def run_company_check(
     divergence = price_divergence_flag(fi, screen_criteria)
     pointer = _pointer(screen_cells, gates, screen_less=screen_less,
                        has_record=verdict_of_record is not None)
+
+    # ANALYST-TREND-1 - opt-in, so every caller that does not ask (cohort runs, the watcher, the
+    # existing tests) gets exactly the output it had. It sits HERE, after the screen, the gates, the
+    # factors and the verdict of record are all settled and read by none of them, and after the
+    # UNRATEABLE return, so a name with no data never spends a request. The fetch never raises: no
+    # data is an abstention with a reason, not a broken page.
+    if with_analyst_trend:
+        from .abs_readings import analyst_trend as _analyst_trend
+        from .data.analyst_trend import fetch_analyst_trend
+        readings["analyst_trend"] = _analyst_trend(
+            (analyst_fetcher or fetch_analyst_trend)(ticker, today=today))
 
     return CompanyCheckResult(
         ticker=ticker, company_name=company_name,
@@ -716,6 +732,13 @@ def format_company_check(result: CompanyCheckResult) -> str:
     # factors say where this name sits among its peers, this says where its price sits
     # against its own past. Display only; it decides nothing.
     lines.append(f"VALUATION BAND (absolute; vs own history): {result.valuation_band}")
+
+    # ANALYST FORECAST DIRECTION (ANALYST-TREND-1) - a mark only, and only when it was asked for.
+    if result.analyst_trend is not None:
+        lines.append("ANALYST FORECAST DIRECTION (a mark: it does not vote and changes no "
+                     "verdict):")
+        for line in result.analyst_trend.lines():
+            lines.append(f"  {line}")
 
     # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen run, right after the
     # factor block. Renders only when the checked name had a recorded outcome; otherwise

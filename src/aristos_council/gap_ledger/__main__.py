@@ -39,13 +39,47 @@ from .universe import (UniverseUnavailable, names_from_index, pool_from_index,
                        read_ticker_file)
 
 
-def _say(message: str) -> None:
-    """Print, on a console that may not be able to spell what we want to say.
+# GAP-TODOIST-RETRY-1 (output). The scheduled run's log showed "â€”" for every dash. The run forces UTF-8
+# on stdout, so the file IS valid UTF-8; "â€”" is those bytes read back as cp1252 by whatever opened
+# the log. Forcing UTF-8 is what produces the mojibake for an ANSI reader, so a redirected stream
+# (a log file, a pipe) is written as plain ASCII instead, and only a real console keeps its glyphs.
+_ASCII_PUNCTUATION = {
+    "\u2014": "-", "\u2013": "-", "\u2012": "-", "\u2011": "-", "\u2212": "-",
+    "\u2026": "...", "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+    "\u00d7": "x", "\u00b1": "+/-", "\u2265": ">=", "\u2264": "<=", "\u2192": "->",
+    "\u00a0": " ", "\u2022": "*", "\u26a0": "!", "\u00b7": "-", "\u2713": "ok",
+    "\u20ac": "EUR",
+}
 
-    Windows defaults to cp1252 and dies on an em dash. Losing a character is acceptable;
-    losing the run because of a character is not. (Lifted from ``cohorts.__main__``, which
-    learned it the same way.)
+
+def ascii_safe(text: str) -> str:
+    """The text with typographic punctuation spelled out and accents dropped, so a log file reads the
+    same in any editor. A character with no ASCII spelling becomes '?', never an exception."""
+    import unicodedata
+    text = "".join(_ASCII_PUNCTUATION.get(ch, ch) for ch in text)
+    text = unicodedata.normalize("NFKD", text)
+    return "".join(ch if ord(ch) < 128 else "?" for ch in text
+                   if not unicodedata.combining(ch))
+
+
+def _is_console(stream) -> bool:
+    try:
+        return bool(stream.isatty())
+    except Exception:
+        return False
+
+
+def _say(message: str) -> None:
+    """Print, on a stream that may not be able to spell what we want to say.
+
+    Redirected output (the scheduled run's log) is ASCII-safe; a console keeps its glyphs, and on a
+    legacy code page that cannot encode them, loses the character rather than the run. Windows
+    defaults to cp1252 and dies on an em dash; losing a character is acceptable, losing the run
+    because of a character is not. (Lifted from ``cohorts.__main__``, which learned it the same
+    way.)
     """
+    if not _is_console(sys.stdout):
+        message = ascii_safe(message)
     try:
         print(message, flush=True)
     except UnicodeEncodeError:

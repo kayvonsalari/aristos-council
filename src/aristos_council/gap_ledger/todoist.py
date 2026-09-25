@@ -19,12 +19,15 @@ Two deliberate behaviours worth saying out loud:
 """
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional, Protocol, Sequence
@@ -58,6 +61,21 @@ PROJECT_NAME = "Gap Ledger"
 
 class TodoistUnavailable(RuntimeError):
     """No token, or the API refused in a way that leaves nothing to deliver to."""
+
+
+class TodoistTransient(TodoistUnavailable):
+    """A failure of the MOMENT, worth asking again: a connection reset or dropped, a timeout, a
+    5xx or a 429. GAP-TODOIST-RETRY-1. Everything else (no token, a 4xx such as the retired API's
+    410) is a fact about the request and is reported at once, because asking again cannot change
+    the answer."""
+
+
+# GAP-TODOIST-RETRY-1 - three tries over about a minute: now, +20s, +60s. Found on 2026-09-25, when
+# the scheduled run screened and logged correctly and then lost its one Todoist request to
+# "[WinError 10054] An existing connection was forcibly closed by the remote host", and was not
+# asked again. That error is a plain OSError (ConnectionResetError) raised while READING the reply,
+# which ``urllib`` does not wrap in URLError, so it was neither classified nor retried.
+DELIVERY_BACKOFF = (20.0, 40.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -186,23 +204,30 @@ class RestTodoist:
         return token.strip()
 
     def _call(self, path: str, *, payload: Optional[dict] = None,
-              params: Optional[dict] = None):
+              params: Optional[dict] = None, request_id: str = ""):
         query = f"?{urllib.parse.urlencode(params)}" if params else ""
+        headers = {"Authorization": f"Bearer {self._require_token()}",
+                   "Content-Type": "application/json"}
+        if request_id:
+            headers["X-Request-Id"] = request_id
         request = urllib.request.Request(
             f"{BASE_URL}/{path}{query}",
             data=None if payload is None else json.dumps(payload).encode("utf-8"),
-            headers={"Authorization": f"Bearer {self._require_token()}",
-                     "Content-Type": "application/json"},
-            method="GET" if payload is None else "POST")
+            headers=headers, method="GET" if payload is None else "POST")
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 body = response.read().decode("utf-8")
+            return json.loads(body) if body.strip() else {}
         except urllib.error.HTTPError as exc:
-            raise TodoistUnavailable(
-                f"Todoist refused {request.method} /{path}: HTTP {exc.code}") from exc
-        except (urllib.error.URLError, TimeoutError) as exc:
-            raise TodoistUnavailable(f"Todoist unreachable: {exc}") from exc
-        return json.loads(body) if body.strip() else {}
+            kind = (TodoistTransient if exc.code in (408, 425, 429) or exc.code >= 500
+                    else TodoistUnavailable)
+            raise kind(f"Todoist refused {request.method} /{path}: HTTP {exc.code}") from exc
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
+            # OSError covers ConnectionResetError (WinError 10054) and friends, which escape
+            # urllib unwrapped when they happen while the reply is being read.
+            raise TodoistTransient(f"Todoist unreachable: {exc}") from exc
+        except ValueError as exc:                        # a reply cut off mid-body
+            raise TodoistTransient(f"Todoist reply unreadable: {exc}") from exc
 
     def _projects(self):
         """Every project, following ``next_cursor`` to the end.
@@ -247,7 +272,12 @@ class RestTodoist:
     def create_task(self, *, content: str, description: str, project_id: str) -> str:
         payload = {"content": content, "description": description,
                    "project_id": project_id}
-        created = self._call("tasks", payload=payload)
+        # A reset can arrive AFTER Todoist has created the task, with the reply lost on the way
+        # back. The same request id on every try lets the server treat the repeat as the same
+        # request rather than a second task; the title carries the date and the names, so it is
+        # the same across the tries of one delivery and different from any other day's.
+        request_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"gap-ledger|{project_id}|{content}"))
+        created = self._call("tasks", payload=payload, request_id=request_id)
         return str((created or {}).get("id"))
 
 
@@ -264,6 +294,7 @@ class DeliveryOutcome:
     project_created: bool = False
     error: str = ""
     skipped: str = ""
+    attempts: int = 1                 # GAP-TODOIST-RETRY-1: how many tries it took (or was given)
 
     def sentence(self) -> str:
         if self.error:
@@ -271,26 +302,57 @@ class DeliveryOutcome:
         if self.skipped:
             return f"Todoist: not sent — {self.skipped}"
         made = " (project created)" if self.project_created else ""
-        return f"Todoist: task {self.task_id} created in '{PROJECT_NAME}'{made}."
+        retried = f" (after {self.attempts} tries)" if self.attempts > 1 else ""
+        return f"Todoist: task {self.task_id} created in '{PROJECT_NAME}'{made}{retried}."
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """A failure worth asking again about. A raw ``OSError`` counts as well as our own class: a
+    client that lets a connection reset escape unwrapped is exactly the case that was missed."""
+    return isinstance(exc, (TodoistTransient, OSError, http.client.HTTPException))
 
 
 def deliver(day: date, rows: Sequence[LedgerRow], *,
-            client: Optional[TodoistClient]) -> DeliveryOutcome:
-    """Send the day's candidates as one task. Never raises."""
+            client: Optional[TodoistClient], sleep=time.sleep,
+            backoff: Sequence[float] = DELIVERY_BACKOFF) -> DeliveryOutcome:
+    """Send the day's candidates as one task. Never raises.
+
+    GAP-TODOIST-RETRY-1: a transient failure is asked again after each wait in ``backoff`` (three
+    tries in all by default, over about a minute) before it is reported as "NOT sent". Only the
+    step that failed is repeated - a project found or created stays found - and any other failure
+    is reported on the first try, because waiting cannot change it. The run stays non-fatal
+    whatever happens here: the CSV is the record.
+    """
     candidates = [r for r in rows if r.group == GROUP_CANDIDATE]
     if not candidates:
         return DeliveryOutcome(skipped="no candidates today")
     if client is None:
         return DeliveryOutcome(skipped="delivery switched off")
-    try:
-        project_id = client.find_project(PROJECT_NAME)
-        created = project_id is None
-        if project_id is None:
-            project_id = client.create_project(PROJECT_NAME)
-        task_id = client.create_task(content=task_title(day, candidates),
-                                     description=task_body(candidates),
-                                     project_id=project_id)
-    except Exception as exc:                             # a convenience, never the record
-        _log.warning("gap_ledger: Todoist delivery failed: %s", exc)
-        return DeliveryOutcome(error=str(exc))
-    return DeliveryOutcome(sent=True, task_id=task_id, project_created=created)
+
+    tries = len(backoff) + 1
+    project_id: Optional[str] = None
+    created = False
+    for attempt in range(1, tries + 1):
+        try:
+            if project_id is None:
+                project_id = client.find_project(PROJECT_NAME)
+                created = project_id is None
+                if project_id is None:
+                    project_id = client.create_project(PROJECT_NAME)
+            task_id = client.create_task(content=task_title(day, candidates),
+                                         description=task_body(candidates),
+                                         project_id=project_id)
+        except Exception as exc:                         # a convenience, never the record
+            if _is_transient(exc) and attempt < tries:
+                wait = backoff[attempt - 1]
+                _log.warning("gap_ledger: Todoist delivery attempt %d of %d failed (%s); "
+                             "retrying in %gs", attempt, tries, exc, wait)
+                sleep(wait)
+                continue
+            _log.warning("gap_ledger: Todoist delivery failed: %s", exc)
+            spent = sum(backoff[:attempt - 1])
+            after = f" (after {attempt} tries over {spent:g}s)" if attempt > 1 else ""
+            return DeliveryOutcome(error=f"{exc}{after}", attempts=attempt)
+        return DeliveryOutcome(sent=True, task_id=task_id, project_created=created,
+                               attempts=attempt)
+    raise AssertionError("unreachable")                  # pragma: no cover

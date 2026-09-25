@@ -1197,6 +1197,12 @@ class IndexStatus:
     # say which is wrong), used as they stand.
     size_disputed: int = 0
     size_disputed_examples: list = field(default_factory=list)
+    # PEER-ADR-ALIAS-1 - rows an identity alias applies to, and the ADR/ADS rows nothing links to a
+    # home (so the next orphan is visible rather than found by accident).
+    aliased: int = 0
+    aliased_examples: list = field(default_factory=list)
+    orphan_adrs: int = 0
+    orphan_adr_examples: list = field(default_factory=list)
 
     def lines(self) -> list[str]:
         if not self.rows:
@@ -1221,6 +1227,15 @@ class IndexStatus:
                                  if self.suspect_examples else ""),
                f"  oldest row: {self.oldest or 'unknown'}",
                "  per exchange:"]
+        if self.aliased or self.orphan_adrs:
+            out.insert(out.index("  per exchange:"), (
+                f"  {self.aliased} row(s) carry an identity alias (data/identity_aliases.yaml)"
+                + (f": {', '.join(self.aliased_examples)}" if self.aliased_examples else "")))
+            out.insert(out.index("  per exchange:"), (
+                f"  {self.orphan_adrs} US ADR/ADS row(s) name no home and share their name with "
+                f"no other row - unlinked, may count a company twice"
+                + (f" (e.g. {', '.join(self.orphan_adr_examples)})"
+                   if self.orphan_adr_examples else "")))
         if self.size_disputed:
             out.insert(out.index("  per exchange:"),
                        f"  {self.size_disputed} company(ies) whose lines differ in size by more "
@@ -1263,7 +1278,7 @@ class IndexStatus:
 def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
            empty_retry_after: int = DEFAULT_EMPTY_RETRY_AFTER,
            empty_retry_days: int = DEFAULT_EMPTY_RETRY_DAYS,
-           size_factor: float = DEFAULT_SIZE_FACTOR) -> IndexStatus:
+           size_factor: float = DEFAULT_SIZE_FACTOR, aliases=...) -> IndexStatus:
     """What is in the table. Works on an EMPTY index without raising — the first thing
     anyone runs is ``status``, and it must answer rather than fail."""
     store = store or IndexStore()
@@ -1334,6 +1349,15 @@ def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
         out.size_suspect += 1
         if len(out.size_suspect_examples) < EXAMPLES:
             out.size_suspect_examples.append(row.ticker)
+    if aliases is ...:
+        aliases = load_identity_aliases()
+    present = {normalise_symbol(r.ticker) for r in rows}
+    aliased = [a.ticker for a in aliases or () if a.ticker in present]
+    out.aliased = len(aliased)
+    out.aliased_examples = aliased[:EXAMPLES]
+    orphans = orphan_depositary_rows(rows, aliased)
+    out.orphan_adrs = len(orphans)
+    out.orphan_adr_examples = [r.ticker for r in orphans[:EXAMPLES]]
     for tickers in size_disputes(rows, size_factor):
         out.size_disputed += 1
         if len(out.size_disputed_examples) < EXAMPLES:
@@ -1507,15 +1531,62 @@ def _listing_rank(row: "IndexRow") -> tuple:
     return (home, country_match, normalise_symbol(row.ticker))
 
 
-def one_row_per_company(rows, *, link_by_name: bool = False) -> tuple[list, int]:
-    """``(kept, dropped)`` - the pool, deduplicated by company."""
+def company_pool(rows, *, link_by_name: bool = False) -> tuple[list, int, dict]:
+    """``(kept, dropped, absorbed)``: one row per company, how many were dropped, and
+    ``{dropped ticker: the ticker that kept its place}`` so a caller can say who stood in for whom.
+    """
     kept = []
     dropped = 0
+    absorbed: dict[str, str] = {}
     for group in company_groups(rows, link_by_name=link_by_name):
         group.sort(key=_listing_rank)
         kept.append(group[0])
         dropped += len(group) - 1
-    return sorted(kept, key=lambda r: r.ticker), dropped
+        for other in group[1:]:
+            absorbed[normalise_symbol(other.ticker)] = normalise_symbol(group[0].ticker)
+    return sorted(kept, key=lambda r: r.ticker), dropped, absorbed
+
+
+def distinct_companies(members) -> tuple[int, int]:
+    """``(distinct, shared)``: how many companies a cohort's members are, and how many members share
+    a company name with another and are therefore counted once.
+
+    PEER-DISTINCT-COUNT-1. The count used to read a grouping built over the whole universe, which
+    cannot see what the pool cannot see, so it agreed with the pool by construction and was wrong
+    exactly when the pool was (AZN's cohort reported 14 companies for 13; TSMC's 15 for 14). It now
+    reads ``company_groups`` over the MEMBERS - the same function, with aliases already applied and
+    the name link on, that built the pool - and then also counts members with an identical cleaned
+    name once even when no handle and no size links them: Samsung Electronics and its preference
+    line 1.29x apart are one company however the provider filed them. A member whose name cleans
+    to nothing is never merged.
+    """
+    groups = company_groups(members, link_by_name=True)
+    parent = list(range(len(groups)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    first_with_key: dict[str, int] = {}
+    for number, group in enumerate(groups):
+        for row in group:
+            key = _name_key(row.name)
+            if not key:
+                continue
+            if key in first_with_key:
+                parent[find(number)] = find(first_with_key[key])
+            else:
+                first_with_key[key] = number
+    distinct = len({find(i) for i in range(len(groups))})
+    return distinct, len(list(members)) - distinct
+
+
+def one_row_per_company(rows, *, link_by_name: bool = False) -> tuple[list, int]:
+    """``(kept, dropped)`` - the pool, deduplicated by company."""
+    kept, dropped, _ = company_pool(rows, link_by_name=link_by_name)
+    return kept, dropped
 
 
 # --------------------------------------------------------------------------- #
@@ -1700,6 +1771,7 @@ RECEIPT_CDR = "Canadian receipt (CDR)"
 RECEIPT_LSE_LINE = "London 0xxx line of a foreign company"
 RECEIPT_LSE_GDR = "London depositary receipt (GDR)"
 RECEIPT_SWISS_LINE = "Swiss line of a foreign company"
+RECEIPT_KR_PREF = "Korean preference share"
 
 # Sao Paulo tickers: a BDR is <4 characters>3<2..9> (A1MD34, AVGO34, E1TN34, TSMC34, NVDC34);
 # no Brazilian company code has that shape (they end 3, 4, 5, 6 or 11), and the one 3x-ending
@@ -1743,14 +1815,23 @@ def receipt_kind(row: "IndexRow") -> str:
     return ""
 
 
-# The words that do not identify a company in a name: legal forms, share-class and receipt
-# wording. "Eaton Corporation plc" and "Eaton Corporation PLC" must read as one; "Vestas Wind
-# Systems A/S" must not read as anything else.
+# The words that do not identify a company in a name: legal forms, share-class, receipt and
+# preference wording. "Eaton Corporation plc" and "Eaton Corporation PLC" must read as one; "Vestas
+# Wind Systems A/S" must not read as anything else.
+#
+# PEER-ADR-ALIAS-1 added the depositary and preference words. "American" is NOT noise on its own
+# ("American Express", "American Airlines"); only the PHRASE "american depositary shares/receipts"
+# is stripped. ``shs`` / ``pfd`` / ``prf`` are the abbreviations the provider actually uses for a
+# preference share ("Doosan Pref Shs", "Chinhung International Inc. Pfd. S...", "Nexen Tire Prf 1").
 _NAME_NOISE = frozenset((
     "inc", "corp", "corporation", "plc", "ag", "sa", "nv", "se", "ltd", "limited", "co",
     "company", "holding", "holdings", "group", "ab", "oyj", "asa", "as", "spa", "llc", "the",
-    "n", "a", "b", "class", "series", "ordinary", "shares", "sponsored", "adr", "cdr", "cad",
-    "hedged", "drn", "dr", "incorporated", "kgaa", "sab", "cv"))
+    "n", "a", "b", "class", "series", "ordinary", "share", "shares", "sponsored", "adr", "cdr",
+    "cad", "hedged", "drn", "dr", "incorporated", "kgaa", "sab", "cv",
+    "ads", "gdr", "depositary", "receipt", "receipts",
+    "pref", "preferred", "preference", "pfd", "prf", "shs"))
+_DEPOSITARY_PHRASE = re.compile(
+    r"\b(?:american|global) depositary (?:shares?|receipts?)\b")
 
 
 def _name_key(name: str) -> str:
@@ -1760,6 +1841,7 @@ def _name_key(name: str) -> str:
     text = re.sub(r"\(.*?\)", " ", text.lower())
     if "fully paid" in text:
         return ""     # ASX deferred-settlement placeholders ("Ordinary Fully Paid Deferred ...")
+    text = _DEPOSITARY_PHRASE.sub(" ", text)
     text = re.sub(r"[./]", "", text)                 # N.V. -> nv, S.A. -> sa, A/S -> as
     text = re.sub(r"[^a-z0-9 ]+", " ", text)
     return " ".join(tok for tok in text.split() if tok not in _NAME_NOISE)
@@ -1767,6 +1849,43 @@ def _name_key(name: str) -> str:
 
 def _has_identity(row: "IndexRow") -> bool:
     return bool((row.primary_ticker or "").strip() or (row.isin or "").strip())
+
+
+# PEER-KR-PREF-1 - Korean preference shares. Korea (KO, KQ) lists a company's preference series as
+# SEPARATE rows with their own ISIN and PrimaryTicker, so no handle links them to the ordinary line:
+# 005935.KO "Samsung Electronics Co Pref" ($1,065bn) stood beside 005930.KO ($1,376bn), and any
+# cohort reaching them counted one company twice. The KRX code carries the relation: an ordinary
+# share ends in 0 and its preference series end in 5, 7 or 9 (005930 / 005935; 066570 / 066575).
+#
+# The rule is deliberately narrow, and each half is a guard: the ordinary row must EXIST on the
+# SAME exchange, AND the cleaned names must be identical ("pref", "preferred", "shs" and the like
+# are stripped by ``_name_key``). A code ending in 5 with no 0-line, or with a different name,
+# is left alone: null is not a match. Measured on the live index: 91 six-digit codes end in 5/7/9
+# and 90 have a 0-line; the name half decides how many of those fold.
+_KR_PREF_CODE = re.compile(r"^(\d{5})[579]$")
+
+
+def korean_pref_map(rows) -> dict[str, str]:
+    """``{normalised pref ticker: normalised ordinary ticker}`` for every Korean preference share
+    whose ordinary line is in ``rows`` on the same exchange under an identical cleaned name."""
+    rows = list(rows)
+    by_code = {}
+    for row in rows:
+        code, market = _code_and_market(row)
+        if market in ("KO", "KQ"):
+            by_code[(market, code)] = row
+    out: dict[str, str] = {}
+    for (market, code), row in by_code.items():
+        match = _KR_PREF_CODE.match(code)
+        if not match:
+            continue
+        ordinary = by_code.get((market, match.group(1) + "0"))
+        if ordinary is None:
+            continue
+        key = _name_key(row.name)
+        if key and key == _name_key(ordinary.name):
+            out[normalise_symbol(row.ticker)] = normalise_symbol(ordinary.ticker)
+    return out
 
 
 def secondary_lines(rows) -> dict[str, str]:
@@ -1779,6 +1898,8 @@ def secondary_lines(rows) -> dict[str, str]:
     """
     rows = list(rows)
     out = {normalise_symbol(r.ticker): kind for r in rows if (kind := receipt_kind(r))}
+    for pref in korean_pref_map(rows):
+        out.setdefault(pref, RECEIPT_KR_PREF)
     elsewhere: dict[str, list] = {}
     for row in rows:
         if normalise_symbol(row.ticker) not in out and _has_identity(row):
@@ -1800,6 +1921,9 @@ def _receipt_home(row: "IndexRow", rows, secondary: dict) -> Optional["IndexRow"
     Only a row that is not itself a secondary line, has an identity and carries a size is a
     candidate, and the usual home-listing preference decides between several.
     """
+    ordinary = korean_pref_map(rows).get(normalise_symbol(row.ticker))
+    if ordinary is not None:                      # exact: the code names it, no name search
+        return next((r for r in rows if normalise_symbol(r.ticker) == ordinary), None)
     key = _name_key(row.name)
     if not key:
         return None
@@ -1944,6 +2068,10 @@ class PeerGroup:
     # PEER-LABEL-RECALL-1 - every corrected label this group actually used (the subject's or a
     # member's), so a reader can tell a provider label from a corrected one.
     overridden: list = field(default_factory=list)
+    # PEER-ADR-ALIAS-1 - every identity alias this group actually used, with the role it played
+    # (the line the reader looked up, another line of the subject, a duplicate collapsed into its
+    # home, or a member).
+    aliased: list = field(default_factory=list)
 
     @property
     def available(self) -> bool:
@@ -1973,6 +2101,143 @@ def is_financial(row: IndexRow) -> bool:
         return True
     industry = (row.industry or "").strip().lower()
     return any(industry.startswith(p) for p in _FINANCIAL_INDUSTRY_PREFIXES)
+
+
+# --------------------------------------------------------------------------- #
+# PEER-ADR-ALIAS-1 - a small file of identity CORRECTIONS
+# --------------------------------------------------------------------------- #
+# PrimaryTicker / ISIN / a shared name and size link most lines of one company. Some ADRs escape
+# all three. Measured 2026-09-25 on the live index:
+#
+#   GSK.US   "GlaxoSmithKline PLC ADR"   names ITSELF as PrimaryTicker, has its own ISIN, and its
+#                                        name key is "glaxosmithkline" against "gsk": no link fires,
+#                                        so AZN.LSE's cohort held GSK twice ($102.5bn and $100.6bn)
+#   SKHY.US  "SK Hynix Inc. ADS"         no PrimaryTicker, its own ISIN, and 1.37x from 000660.KO,
+#                                        beyond the 1.25x name-link tolerance: SK Hynix twice in
+#                                        TSMC's cohort
+#
+# ``data/identity_aliases.yaml`` supplies the PrimaryTicker the provider left out or got wrong:
+#
+#     aliases:
+#       - ticker: GSK.US
+#         primary: GSK.LSE
+#         date: 2026-09-25
+#         reason: why this line is the same company as the primary
+#
+# DATA CORRECTIONS ONLY, the same discipline as the label overrides: it changes ONE field
+# (``primary_ticker``) on the rows a query reads, never a size, a label or a peer directly. The
+# table on disk is not rewritten. The consequences follow from rules that already exist - the two
+# lines fall in one company group, so the home line wins ``_listing_rank`` and the ADR's size is
+# never used - and every alias a group actually used is printed as "identity aliased".
+DEFAULT_ALIASES = Path(__file__).resolve().parents[2] / "data" / "identity_aliases.yaml"
+
+
+@dataclass(frozen=True)
+class IdentityAlias:
+    ticker: str
+    primary: str
+    date: str
+    reason: str
+
+
+def load_identity_aliases(path: str | Path = DEFAULT_ALIASES) -> list[IdentityAlias]:
+    """The alias file, or an empty list when there is none. A malformed one is an error: a
+    correction that silently fails to apply is worse than one that is refused."""
+    import yaml
+
+    path = Path(path)
+    if not path.exists():
+        return []
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    entries = doc.get("aliases") if isinstance(doc, dict) else None
+    if entries is None:
+        return []
+    if not isinstance(entries, list):
+        raise MarketIndexError(f"{path}: 'aliases' must be a list")
+    out, seen = [], set()
+    for i, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise MarketIndexError(f"{path}: alias {i} must be a mapping")
+        missing = [k for k in ("ticker", "primary", "date", "reason")
+                   if not str(entry.get(k) or "").strip()]
+        if missing:
+            raise MarketIndexError(f"{path}: alias {i} is missing {', '.join(missing)} - every "
+                                   f"alias carries its ticker, the primary it belongs to, a "
+                                   f"date and a reason")
+        ticker = normalise_symbol(str(entry["ticker"]))
+        primary = normalise_symbol(str(entry["primary"]))
+        if ticker == primary:
+            raise MarketIndexError(f"{path}: alias {i} maps {ticker} to itself")
+        if ticker in seen:
+            raise MarketIndexError(f"{path}: alias {i} repeats {ticker}")
+        seen.add(ticker)
+        out.append(IdentityAlias(ticker=ticker, primary=primary,
+                                 date=str(entry["date"]).strip(),
+                                 reason=str(entry["reason"]).strip()))
+    return out
+
+
+def apply_identity_aliases(rows, aliases) -> tuple[list["IndexRow"], dict]:
+    """``(rows, applied)``: the rows with the aliased PrimaryTicker, and ``{ticker: alias}``.
+
+    Rows are copied, never mutated. Applied BEFORE ``company_groups`` so every rule that groups
+    by company sees the corrected identity.
+    """
+    import dataclasses
+
+    rows = list(rows)
+    wanted = {a.ticker: a for a in aliases or ()}
+    if not wanted:
+        return rows, {}
+    out, applied = [], {}
+    for row in rows:
+        alias = wanted.get(normalise_symbol(row.ticker))
+        if alias is None:
+            out.append(row)
+            continue
+        applied[normalise_symbol(row.ticker)] = alias
+        out.append(dataclasses.replace(row, primary_ticker=alias.primary))
+    return out, applied
+
+
+def _alias_line(alias: IdentityAlias) -> str:
+    return f"identity aliased: {alias.ticker} -> {alias.primary} ({alias.date}: {alias.reason})"
+
+
+# ADR / ADS / depositary wording in a row's name.
+_DEPOSITARY_ROW = re.compile(r"\b(?:ADR|ADS|GDR)\b|depositary", re.IGNORECASE)
+
+
+def orphan_depositary_rows(rows, aliased=()) -> list["IndexRow"]:
+    """US rows named like an ADR/ADS that nothing links to a home line, so the NEXT GSK.US is
+    visible instead of found by accident.
+
+    An orphan names no home (no PrimaryTicker, or one that names the row itself), is not covered by
+    an alias, and shares its cleaned name with no other row - so neither a handle nor the name link
+    can ever merge it with the company it mirrors.
+    """
+    rows = list(rows)
+    aliased = {normalise_symbol(t) for t in aliased}
+    keys: dict[str, int] = {}
+    for row in rows:
+        key = _name_key(row.name)
+        if key:
+            keys[key] = keys.get(key, 0) + 1
+    out = []
+    for row in rows:
+        code, market = _code_and_market(row)
+        if market != "US" or normalise_symbol(row.ticker) in aliased:
+            continue
+        if not _DEPOSITARY_ROW.search(row.name or ""):
+            continue
+        primary = normalise_symbol(row.primary_ticker)
+        if primary and primary != normalise_symbol(row.ticker):
+            continue                                    # it names a home: not an orphan
+        key = _name_key(row.name)
+        if key and keys.get(key, 0) > 1:
+            continue                                    # a name twin exists for the link to use
+        out.append(row)
+    return sorted(out, key=lambda r: r.ticker)
 
 
 # --------------------------------------------------------------------------- #
@@ -2150,7 +2415,7 @@ def _log_distance(cap: Optional[float], subject: float) -> float:
 
 def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
           store: Optional[IndexStore] = None, rows: Optional[list[IndexRow]] = None,
-          size_factor: float = DEFAULT_SIZE_FACTOR, overrides=...) -> PeerGroup:
+          size_factor: float = DEFAULT_SIZE_FACTOR, overrides=..., aliases=...) -> PeerGroup:
     """The peer group for one company, by ladder, from the local table only.
 
     Deterministic for a given snapshot: every rung is a filter over the same rows and the
@@ -2172,6 +2437,13 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         overrides = load_label_overrides() if rows is None else []
     universe, applied = apply_label_overrides(universe, overrides)
 
+    # PEER-ADR-ALIAS-1 - the same rule for identity: the shipped alias file is read with the REAL
+    # index and never applied to rows handed in directly. Applied before anything groups by
+    # company.
+    if aliases is ...:
+        aliases = load_identity_aliases() if rows is None else []
+    universe, alias_applied = apply_identity_aliases(universe, aliases)
+
     wanted = (ticker or "").strip().upper()
     by_ticker = {r.ticker.upper(): r for r in universe}
     by_yahoo = {r.yahoo_ticker.upper(): r for r in universe if r.yahoo_ticker}
@@ -2179,6 +2451,10 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     if subject is None:
         group.reasons.append(f"{ticker} is not in the market index")
         return group
+
+    alias_used: dict[str, str] = {}
+    if normalise_symbol(subject.ticker) in alias_applied:
+        alias_used[normalise_symbol(subject.ticker)] = "line the reader looked up"
 
     # MARKET-INDEX-3 - a cross-listing or an ADR is looked up by the symbol the reader
     # has, and answered for the company. NVO.US is a US line of NOVO-B.CO; its peers are
@@ -2283,6 +2559,9 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             continue                                   # never its own peer
         if company_of.get(normalise_symbol(row.ticker)) == subject_company:
             own_lines += 1                             # ...nor another line of itself
+            if normalise_symbol(row.ticker) in alias_applied:
+                alias_used.setdefault(normalise_symbol(row.ticker),
+                                      "another line of the subject's company")
             continue
         kind = secondary.get(normalise_symbol(row.ticker))
         if kind:
@@ -2312,7 +2591,27 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
 
     # ONE ROW PER COMPANY. AMD.US, AMD.TO and AMD.XETRA were three peers in the 9,018-row
     # build; they are one company.
-    pool, cross_listings = one_row_per_company(candidates, link_by_name=True)
+    pool, cross_listings, absorbed = company_pool(candidates, link_by_name=True)
+
+    def report_aliases(members) -> None:
+        """PEER-ADR-ALIAS-1 - say which aliases THIS group used, and only those. An alias that
+        collapsed a duplicate elsewhere in the table but whose home line is not in this cohort
+        played no part in it and is not mentioned."""
+        member_keys = {normalise_symbol(m.ticker) for m in members}
+        used = dict(alias_used)
+        for key, alias in alias_applied.items():
+            if key in used:
+                continue
+            if absorbed.get(key) in member_keys:
+                used[key] = f"duplicate collapsed into {absorbed[key]}"
+            elif key in member_keys:
+                used[key] = "member"
+        for key in sorted(used):
+            alias = alias_applied[key]
+            group.aliased.append({"ticker": alias.ticker, "primary": alias.primary,
+                                  "role": used[key], "date": alias.date,
+                                  "reason": alias.reason})
+            group.reasons.append(_alias_line(alias))
 
     if own_lines:
         group.reasons.append(f"{own_lines} other line(s) of {subject.name or subject.ticker} "
@@ -2378,8 +2677,12 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                 group.reasons.append(
                     f"matched on: GICS only {tally.get(LABEL_GICS, 0)}, EODHD label only "
                     f"{tally.get(LABEL_EODHD, 0)}, both {tally.get(f'{LABEL_GICS}+{LABEL_EODHD}', 0)}")
-            group.distinct_companies = len({company_of.get(normalise_symbol(r.ticker), r.ticker)
-                                            for r in group.members})
+            group.distinct_companies, shared = distinct_companies(group.members)
+            if shared:
+                group.reasons.append(
+                    f"{shared} member(s) share a company name with another member: counted "
+                    f"once, listed twice")
+            report_aliases(group.members)
             for member in group.members:
                 if normalise_symbol(member.ticker) in applied:
                     was, override = applied[normalise_symbol(member.ticker)]
@@ -2392,6 +2695,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         tried.append((rung, len(matched)))
         group.reasons.append(f"{rung}: only {len(matched)} comparable companies found")
 
+    report_aliases([])
     # ABS-READINGS-2 — the count at the WIDEST rung actually tried, and its name.
     # This line used to report len(pool), the size of the whole eligible pool: for NFLX it
     # said "only 6451 comparable companies found" directly under three rungs that had
@@ -2423,6 +2727,7 @@ def peer_snapshot(group: PeerGroup) -> dict:
         "step": group.step,
         "distinct_companies": group.distinct_companies,
         "label_overrides": list(group.overridden),
+        "identity_aliases": list(group.aliased),
         "band": group.band,
         "members": [r.ticker for r in group.members],
         "yahoo_members": [r.yahoo_ticker for r in group.members if r.yahoo_ticker],

@@ -402,3 +402,136 @@ def growth_record(f, history=None) -> GrowthRecord:
             cagr={w: _cagr(eps, w, eps_label) for w in GROWTH_WINDOWS},
             grew_in=_grew_in(eps, eps_label),
             years_available=len([v for v in eps if v is not None])))
+
+
+# --------------------------------------------------------------------------- #
+# C. analyst forecast direction (ANALYST-TREND-1)
+# --------------------------------------------------------------------------- #
+# A MARK, not a lens: it does not vote, enters no shortlist, removes no name and changes no verdict.
+# It says which way the analysts' consensus EPS for the CURRENT fiscal year has moved over about
+# 90 days. The arithmetic is here, in a pure function over what the provider served, and nowhere
+# near an agent. EPS is quoted in whatever currency the estimates are in; only a RATIO of two
+# figures in that one currency is used, so the currency cancels.
+ANALYST_FLAT_BAND = 0.02          # a move of at most +/-2% of |the 90-days-ago figure| is "flat"
+ANALYST_MIN_ANALYSTS = 3          # fewer estimates than this is not a consensus
+ANALYST_MIN_BASE = 0.01           # a 90-days-ago figure within one cent of zero has no percentage
+
+MARK_RISING = "forecasts rising"
+MARK_FLAT = "forecasts flat"
+MARK_FALLING = "forecasts falling"
+
+
+def _direction(now: float, ago: float) -> tuple[str, float]:
+    """``(mark, fractional change)``; the change is relative to ``abs(ago)`` so a forecast that
+    rises from -0.50 to -0.20 counts as rising, not falling. The band is inclusive, with a hair of
+    tolerance so a move of exactly 2% is not tipped over by floating-point noise."""
+    move = now - ago
+    limit = ANALYST_FLAT_BAND * abs(ago)
+    if abs(move) <= limit + 1e-12:
+        mark = MARK_FLAT
+    else:
+        mark = MARK_RISING if move > 0 else MARK_FALLING
+    return mark, move / abs(ago)
+
+
+def _eps(value: float) -> str:
+    return f"{value:.2f}"
+
+
+@dataclass(frozen=True)
+class AnalystTrend:
+    """The mark for the current fiscal year, the next year beside it, and where both came from."""
+
+    mark: str = ""                                    # one of MARK_*, or "" when abstaining
+    direction: Reading = field(default_factory=Reading)
+    next_year: Reading = field(default_factory=Reading)
+    source: str = ""
+    as_of: str = ""
+    units_charged: int = 0
+    cached: bool = False
+
+    @property
+    def available(self) -> bool:
+        return bool(self.mark)
+
+    def cost_line(self) -> str:
+        if self.units_charged:
+            return f"{self.units_charged} EODHD units charged (one /fundamentals request)"
+        return "0 EODHD units (cached for today)" if self.cached else "0 EODHD units (no request made)"
+
+    def tag(self) -> str:
+        stamp = f", as of {self.as_of}" if self.as_of else ""
+        return f"source: {self.source}{stamp}"
+
+    def lines(self) -> list[str]:
+        return [self.direction.text(), self.next_year.text(),
+                f"{self.tag()} - {self.cost_line()}"]
+
+
+def _change_text(now: float, ago: float) -> str:
+    change = (now - ago) / abs(ago)
+    verb = "up" if change > 0 else "down" if change < 0 else "unchanged"
+    return "unchanged" if verb == "unchanged" else f"{verb} {abs(change):.1%}"
+
+
+def analyst_trend(data) -> AnalystTrend:
+    """The analyst forecast direction from a ``data.analyst_trend.TrendData``.
+
+    Abstains, with the reason shown, when: there is no current-year estimate (no block, or a
+    stale one - expect gaps outside the US); fewer than ``ANALYST_MIN_ANALYSTS`` analysts, or an
+    unstated count; the current or the 90-days-ago estimate is missing; or the 90-days-ago figure
+    is within ``ANALYST_MIN_BASE`` of zero, where a percentage change means nothing. A missing
+    input is never treated as a zero.
+    """
+    tag_kwargs = dict(source=getattr(data, "source", ""), as_of=getattr(data, "as_of", ""),
+                      units_charged=getattr(data, "units_charged", 0),
+                      cached=getattr(data, "cached", False))
+    stamp = (f" (source: {tag_kwargs['source']}"
+             + (f", as of {tag_kwargs['as_of']}" if tag_kwargs["as_of"] else "") + ")")
+
+    def abstain(reason: str, next_year: Optional[Reading] = None) -> AnalystTrend:
+        return AnalystTrend(direction=_abstain(reason + stamp),
+                            next_year=next_year or _abstain("no next-year estimate to show"),
+                            **tag_kwargs)
+
+    current = getattr(data, "current", None)
+    if current is None:
+        return abstain(getattr(data, "note", "") or "no analyst estimate is available")
+
+    # The next year is shown whenever it exists, whether or not the mark can be given.
+    following = getattr(data, "next_year", None)
+    if following is not None and following.now is not None:
+        if following.ago_90d is not None and abs(following.ago_90d) >= ANALYST_MIN_BASE:
+            ny = Reading(
+                value=(following.now - following.ago_90d) / abs(following.ago_90d), unit="fraction",
+                label=(f"next year (fiscal year ending {following.period_end}): consensus EPS "
+                       f"{_eps(following.now)}, {_change_text(following.now, following.ago_90d)} "
+                       f"from {_eps(following.ago_90d)} about 90 days ago"
+                       + (f" ({following.analysts} analysts)" if following.analysts else "")))
+        else:
+            ny = Reading(value=following.now, unit="eps",
+                         label=(f"next year (fiscal year ending {following.period_end}): "
+                                f"consensus EPS {_eps(following.now)}; no usable 90-days-ago "
+                                f"figure to compare with"))
+    else:
+        ny = _abstain("the provider has no next-year (+1y) estimate")
+
+    if current.analysts is None:
+        return abstain("the number of analysts is not stated, so there is no consensus to read", ny)
+    if current.analysts < ANALYST_MIN_ANALYSTS:
+        return abstain(f"only {current.analysts} analyst(s) cover the current year; a consensus "
+                       f"needs at least {ANALYST_MIN_ANALYSTS}", ny)
+    if current.now is None:
+        return abstain("no current consensus EPS estimate", ny)
+    if current.ago_90d is None:
+        return abstain("no 90-days-ago estimate to compare with", ny)
+    if abs(current.ago_90d) < ANALYST_MIN_BASE:
+        return abstain(f"the estimate 90 days ago was {_eps(current.ago_90d)}, within one cent of "
+                       f"zero, so a percentage change means nothing", ny)
+
+    mark, change = _direction(current.now, current.ago_90d)
+    label = (f"{mark} - consensus EPS for the fiscal year ending {current.period_end} is "
+             f"{_eps(current.now)}, {_change_text(current.now, current.ago_90d)} from "
+             f"{_eps(current.ago_90d)} about 90 days ago ({current.analysts} analysts)" + stamp)
+    return AnalystTrend(mark=mark, direction=Reading(value=change, unit="fraction", label=label),
+                        next_year=ny, **tag_kwargs)
