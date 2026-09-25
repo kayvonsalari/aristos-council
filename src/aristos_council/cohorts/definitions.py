@@ -93,6 +93,212 @@ KNOWN_EODHD_INDUSTRIES: frozenset[str] = frozenset({
     "Utilities - Regulated Gas", "Utilities - Regulated Water", "Utilities - Renewable",
 })
 
+# COHORT-3 - every EODHD ``General::Industry`` string the market index carried on 2026-09-25 (197
+# distinct ASCII values; two more differ from a listed one only by a non-breaking space and are
+# normalised before matching). Read from the real index, not guessed. A definition may use any of
+# them, and one that is in none of these tables is still an error at load. Plan and build check
+# again, against the index they are actually reading, that a code has at least one company.
+INDEX_EODHD_INDUSTRIES: frozenset[str] = frozenset({
+    ' Software - Application',
+    ' Utilities - Renewable',
+    'Advertising Agencies',
+    'Aerospace & Defense',
+    'Agricultural Inputs',
+    'Airlines',
+    'Airports & Air Services',
+    'Aluminum',
+    'Apparel Manufacturing',
+    'Apparel Retail',
+    'Asset Management',
+    'Auto & Truck Dealerships',
+    'Auto Manufacturers',
+    'Auto Parts',
+    'Automobiles & Auto Parts',
+    'Banking Services',
+    'Banks',
+    'Banks - Diversified',
+    'Banks - Regional',
+    'Beverages',
+    'Beverages - Brewers',
+    'Beverages - Non-Alcoholic',
+    'Beverages - Wineries & Distilleries',
+    'Biotechnology',
+    'Biotechnology & Medical Research',
+    'Broadcasting',
+    'Building Materials',
+    'Building Products & Equipment',
+    'Business Equipment & Supplies',
+    'Capital Markets',
+    'Chemicals',
+    'Coking Coal',
+    'Communication Equipment',
+    'Communications & Networking',
+    'Computer Hardware',
+    'Computers, Phones & Household Electronics',
+    'Confectioners',
+    'Conglomerates',
+    'Construction Materials',
+    'Consulting Services',
+    'Consumer Electronics',
+    'Construction & Engineering',
+    'Consumer Goods Conglomerates',
+    'Containers & Packaging',
+    'Copper',
+    'Credit Services',
+    'Department Stores',
+    'Diagnostics & Research',
+    'Discount Stores',
+    'Diversified Retail',
+    'Drug Manufacturers - General',
+    'Drug Manufacturers - Specialty & Generic',
+    'Education & Training Services',
+    'Electric Utilities',
+    'Electrical Equipment & Parts',
+    'Electrical Utilities & IPPs',
+    'Electronic Components',
+    'Electronic Equipment & Parts',
+    'Electronic Gaming & Multimedia',
+    'Electronics & Computer Distribution',
+    'Engineering & Construction',
+    'Entertainment',
+    'Farm & Heavy Construction Machinery',
+    'Farm Products',
+    'Financial Conglomerates',
+    'Financial Data & Stock Exchanges',
+    'Financial Technology (Fintech) & Infrastructure',
+    'Food & Drug Retailing',
+    'Food & Tobacco',
+    'Food Distribution',
+    'Footwear & Accessories',
+    'Furnishings, Fixtures & Appliances',
+    'Gambling',
+    'Gold',
+    'Grocery Stores',
+    'Health Information Services',
+    'Healthcare Equipment & Supplies',
+    'Healthcare Plans',
+    'Healthcare Providers & Services',
+    'Home Improvement Retail',
+    'Homebuilding & Construction Supplies',
+    'Hotels & Entertainment Services',
+    'Household & Personal Products',
+    'Household Goods',
+    'Industrial Distribution',
+    'Information Technology Services',
+    'Infrastructure Operations',
+    'Insurance',
+    'Insurance - Diversified',
+    'Insurance - Life',
+    'Insurance - Property & Casualty',
+    'Insurance - Reinsurance',
+    'Insurance - Specialty',
+    'Insurance Brokers',
+    'Integrated Freight & Logistics',
+    'Internet Content & Information',
+    'Internet Retail',
+    'Investment Banking & Investment Services',
+    'Investment Holding Companies',
+    'Leisure',
+    'Leisure Products',
+    'Lodging',
+    'Lumber & Wood Production',
+    'Luxury Goods',
+    'Machinery, Tools, Heavy Vehicles, Trains & Ships',
+    'Marine Shipping',
+    'Media & Publishing',
+    'Medical Care Facilities',
+    'Medical Devices',
+    'Medical Distribution',
+    'Medical Instruments & Supplies',
+    'Metal Fabrication',
+    'Metals & Mining',
+    'Miscellaneous Educational Service Providers',
+    'Mortgage Finance',
+    'Office Equipment',
+    'Oil & Gas',
+    'Oil & Gas Drilling',
+    'Oil & Gas E&P',
+    'Oil & Gas Equipment & Services',
+    'Oil & Gas Integrated',
+    'Oil & Gas Midstream',
+    'Oil & Gas Refining & Marketing',
+    'Oil & Gas Related Equipment and Services',
+    'Other',
+    'Other Industrial Metals & Mining',
+    'Other Precious Metals & Mining',
+    'Packaged Foods',
+    'Packaging & Containers',
+    'Paper & Forest Products',
+    'Paper & Paper Products',
+    'Passenger Transportation Services',
+    'Personal & Household Products & Services',
+    'Personal Services',
+    'Pharmaceutical Retailers',
+    'Pharmaceuticals',
+    'Pollution & Treatment Controls',
+    'Professional & Business Education',
+    'Professional & Commercial Services',
+    'Publishing',
+    'REIT - Diversified',
+    'REIT - Healthcare Facilities',
+    'REIT - Hotel & Motel',
+    'REIT - Industrial',
+    'REIT - Mortgage',
+    'REIT - Office',
+    'REIT - Residential',
+    'REIT - Retail',
+    'REIT - Specialty',
+    'Railroads',
+    'Real Estate - Development',
+    'Real Estate - Diversified',
+    'Real Estate Operations',
+    'Real Estate Services',
+    'Recreational Vehicles',
+    'Renewable Energy',
+    'Rental & Leasing Services',
+    'Residential & Commercial REITs',
+    'Residential Construction',
+    'Resorts & Casinos',
+    'Restaurants',
+    'Scientific & Technical Instruments',
+    'Security & Protection Services',
+    'Semiconductor Equipment & Materials',
+    'Semiconductors',
+    'Semiconductors & Semiconductor Equipment',
+    'Shell Companies',
+    'Silver',
+    'Software',
+    'Software & IT Services',
+    'Software - Application',
+    'Software - Infrastructure',
+    'Solar',
+    'Specialty Business Services',
+    'Specialty Chemicals',
+    'Specialty Industrial Machinery',
+    'Specialty Retail',
+    'Specialty Retailers',
+    'Staffing & Employment Services',
+    'Steel',
+    'Telecom Services',
+    'Telecommunications Services',
+    'Textile Manufacturing',
+    'Textiles & Apparel',
+    'Thermal Coal',
+    'Tobacco',
+    'Tools & Accessories',
+    'Transport Infrastructure',
+    'Travel Services',
+    'Trucking',
+    'Uranium',
+    'Utilities - Diversified',
+    'Utilities - Independent Power Producers',
+    'Utilities - Regulated Electric',
+    'Utilities - Regulated Gas',
+    'Utilities - Regulated Water',
+    'Utilities - Renewable',
+    'Waste Management',
+})
+
 # Exchange code -> the EODHD suffixes that count as "this exchange". EURONEXT and SIX are
 # umbrella names in the brief; EODHD codes the individual books, so one entry maps to
 # several. Main listings only — no OTC, no unsponsored ADR venues.
@@ -110,7 +316,25 @@ EXCHANGE_CODES: dict[str, tuple[str, ...]] = {
     "MADRID": ("MC",),
     "VIENNA": ("VI",),
     "WARSAW": ("WAR",),
+    # COHORT-3 - the other markets the index carries.
+    "TSX": ("TO",),
+    "HONGKONG": ("HK",),
+    "TAIWAN": ("TW",),
+    "AUSTRALIA": ("AU",),
+    "KOREA": ("KO", "KQ"),
+    # Every market the index carries EXCEPT Sao Paulo (see ``INDEX_EXCLUDED_MARKETS``). It names
+    # no suffix of its own, so it can only be read from the index, never from a constituent list.
+    "ALL": (),
 }
+
+# COHORT-3 - markets the index tracks and a cohort never draws from. Sao Paulo's real companies
+# are excluded by decision (its receipts are already secondary lines in the cleaned pool).
+INDEX_EXCLUDED_MARKETS: tuple[str, ...] = ("SA",)
+
+# COHORT-3 - the per-cohort USD floor. Below $1bn is a micro-cap cohort; above $10bn is no longer a
+# size FLOOR but a large-cap-only cohort, which is a different thing to ask for.
+MIN_USD_FLOOR = 1_000_000_000.0
+MAX_USD_FLOOR = 10_000_000_000.0
 
 MIN_MEMBERS = 20
 MAX_MEMBERS = 60
@@ -138,6 +362,21 @@ class CohortDefinition:
     # What the YAML said before ``normalise_industries`` mapped GICS names across, kept so
     # the snapshot beside a frozen cohort reads the way the author wrote it.
     industry_as_written: tuple[str, ...] = ()
+    # COHORT-3. The floor, in USD, applied to the index's converted market cap. When set the
+    # cohort is built from the market index; ``min_market_cap`` (own currency, no FX) is then only
+    # used by the legacy constituents path, if the definition also carries one.
+    min_market_cap_usd: float | None = None
+    # COHORT-3. Whether the daily watcher should run this cohort. Stored and reported; there is no
+    # watcher in this repo yet, so nothing reads it beyond ``plan``.
+    watch: bool = False
+
+    @property
+    def uses_index(self) -> bool:
+        return self.min_market_cap_usd is not None
+
+    @property
+    def all_index_exchanges(self) -> bool:
+        return "ALL" in self.exchanges
 
     @property
     def slug(self) -> str:
@@ -174,7 +413,7 @@ def normalise_industries(raw: object) -> tuple[tuple[str, ...], tuple[str, ...]]
 
     resolved: list[str] = []
     for name in as_written:
-        if name in KNOWN_EODHD_INDUSTRIES:
+        if name in KNOWN_EODHD_INDUSTRIES or name in INDEX_EODHD_INDUSTRIES:
             mapped: tuple[str, ...] = (name,)
         elif name in GICS_TO_EODHD:
             mapped = GICS_TO_EODHD[name]
@@ -212,12 +451,33 @@ def definition_from_mapping(raw: dict) -> CohortDefinition:
     try:
         min_cap = float(raw.get("min_market_cap", 0) or 0)
         min_hist = float(raw.get("min_history_years", 0) or 0)
+        usd_raw = raw.get("min_market_cap_usd")
+        min_usd = None if usd_raw in (None, "") else float(usd_raw)
     except (TypeError, ValueError) as exc:
-        raise DefinitionError(f"{name}: min_market_cap / min_history_years must be numbers") from exc
-    if min_cap <= 0:
-        raise DefinitionError(f"{name}: min_market_cap must be positive")
+        raise DefinitionError(f"{name}: min_market_cap / min_market_cap_usd / "
+                              f"min_history_years must be numbers") from exc
+    if min_usd is not None and not (MIN_USD_FLOOR <= min_usd <= MAX_USD_FLOOR):
+        raise DefinitionError(
+            f"{name}: min_market_cap_usd {min_usd:,.0f} is outside "
+            f"${MIN_USD_FLOOR / 1e9:g}bn - ${MAX_USD_FLOOR / 1e9:g}bn. Below that is a micro-cap "
+            f"cohort; above it is a large-cap-only cohort, not a size floor.")
+    if min_usd is None and min_cap <= 0:
+        raise DefinitionError(f"{name}: min_market_cap must be positive (or give a "
+                              f"min_market_cap_usd to build from the market index)")
+    if min_cap < 0:
+        raise DefinitionError(f"{name}: min_market_cap must not be negative")
     if min_hist <= 0:
         raise DefinitionError(f"{name}: min_history_years must be positive")
+    if "ALL" in exchanges and (len(exchanges) != 1 or min_usd is None):
+        raise DefinitionError(
+            f"{name}: exchanges: [ALL] means every index market except Sao Paulo, stands alone, "
+            f"and needs a min_market_cap_usd (it can only be read from the market index)")
+
+    watch = raw.get("watch", False)
+    if watch is None:
+        watch = False
+    if not isinstance(watch, bool):
+        raise DefinitionError(f"{name}: watch must be true or false, got {watch!r}")
 
     # ``exclude:`` absent means the default; an EXPLICIT empty list means the author
     # deliberately turned the exclusions off, and that is allowed. ``None`` and a missing
@@ -242,7 +502,7 @@ def definition_from_mapping(raw: dict) -> CohortDefinition:
     return CohortDefinition(
         name=name, industry=industry, exchanges=exchanges, min_market_cap=min_cap,
         min_history_years=min_hist, exclude=exclude, anchors=anchors,
-        industry_as_written=as_written)
+        industry_as_written=as_written, min_market_cap_usd=min_usd, watch=watch)
 
 
 def load_definitions(path: str | Path) -> list[CohortDefinition]:
@@ -297,6 +557,12 @@ def excluded_by(defn: CohortDefinition, sector: str, industry: str) -> str:
             if industry.startswith(prefix):
                 return keyword
     return ""
+
+
+def watched(defs: list[CohortDefinition]) -> list[CohortDefinition]:
+    """The definitions the daily watcher would run. COHORT-3 stores the flag; the repo has no
+    watcher yet, so this is the one function a watcher would call."""
+    return [d for d in defs if d.watch]
 
 
 def with_exchanges(defn: CohortDefinition, exchanges: tuple[str, ...]) -> CohortDefinition:

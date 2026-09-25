@@ -24,8 +24,9 @@ DEFINITION_FILE = "definition.yaml"
 REPORT_FILE = "report.md"
 REMOVALS_FILE = "removals.log"
 
+# ``market_cap_usd`` (COHORT-3) is LAST, so a members.csv cut before it existed still reads.
 MEMBER_COLUMNS = ("ticker", "yahoo_ticker", "exchange", "industry", "market_cap",
-                  "currency", "isin", "name", "source", "filled")
+                  "currency", "isin", "name", "source", "filled", "market_cap_usd")
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,7 @@ def write_members(path: Path, members: list[Candidate]) -> Path:
                 cand.name,
                 cand.source,
                 ",".join(f"{k}:{v}" for k, v in sorted(cand.filled.items())),
+                "" if cand.market_cap_usd is None else f"{cand.market_cap_usd:.0f}",
             ])
     return path
 
@@ -127,6 +129,7 @@ def read_members(path: str | Path) -> list[Candidate]:
     with path.open(newline="", encoding="utf-8") as fh:
         for row in csv.DictReader(fh):
             cap = row.get("market_cap") or ""
+            usd = row.get("market_cap_usd") or ""
             filled = {}
             for pair in (row.get("filled") or "").split(","):
                 if ":" in pair:
@@ -137,7 +140,8 @@ def read_members(path: str | Path) -> list[Candidate]:
                 name=row.get("name", ""), industry=row.get("industry", ""),
                 market_cap=float(cap) if cap else None,
                 currency=row.get("currency", ""), isin=row.get("isin", ""),
-                source=row.get("source", ""), filled=filled))
+                source=row.get("source", ""), filled=filled,
+                market_cap_usd=float(usd) if usd else None))
     return out
 
 
@@ -162,6 +166,8 @@ def write_definition_snapshot(path: Path, defn: CohortDefinition, *, version: in
         "exchanges": list(defn.exchanges),
         "exchange_codes": list(defn.exchange_codes),
         "min_market_cap": defn.min_market_cap,
+        "min_market_cap_usd": defn.min_market_cap_usd,
+        "watch": defn.watch,
         "min_history_years": defn.min_history_years,
         "exclude": list(defn.exclude),
         "anchors": list(defn.anchors),

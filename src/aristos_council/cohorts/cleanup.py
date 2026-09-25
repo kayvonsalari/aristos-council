@@ -155,12 +155,21 @@ def rule_size_and_history(candidates: list[Candidate], defn: CohortDefinition
     """Below the cap floor, or too short a history to rank against its own past.
 
     The cap floor is applied in the name's OWN currency, deliberately and without
-    conversion — see ``docs/COHORTS.md``. A missing cap is NOT a failure here: it is a
-    gap, and rule 4 is where gaps are removed, with a reason that says so.
+    conversion — see ``docs/COHORTS.md`` - EXCEPT for a cohort built from the market index
+    (COHORT-3), whose floor is in USD and is tested against the index's converted cap. A missing
+    cap is NOT a failure here: it is a gap, and rule 4 is where gaps are removed, with a reason
+    that says so.
     """
     kept, removals = [], []
     for cand in candidates:
-        if cand.market_cap is not None and cand.market_cap < defn.min_market_cap:
+        if defn.uses_index and cand.market_cap_usd is not None:
+            if cand.market_cap_usd < defn.min_market_cap_usd:
+                removals.append(Removal(
+                    cand.ticker, RULE_SIZE_AND_HISTORY,
+                    f"market cap ${cand.market_cap_usd / 1e9:,.2f}bn (USD, from the index) is "
+                    f"under the floor of ${defn.min_market_cap_usd / 1e9:g}bn"))
+                continue
+        elif cand.market_cap is not None and cand.market_cap < defn.min_market_cap:
             removals.append(Removal(
                 cand.ticker, RULE_SIZE_AND_HISTORY,
                 f"market cap {cand.market_cap:,.0f} {cand.currency or '?'} is under the "
@@ -227,8 +236,37 @@ def clean(candidates: list[Candidate], defn: CohortDefinition
     return kept, removals
 
 
+def wide_hint_for_index(members: list[Candidate], defn: CohortDefinition) -> str:
+    """What would narrow a too-wide cohort built from the index, from the members themselves.
+
+    The floor is NOT offered as the fix: it is set per cohort by a stated rule and is never tuned
+    to a count. A narrower CODE is, when the definition has more than one; a single EODHD industry
+    is already the finest label the index carries, and the sentence says so instead of inventing
+    one. The exchanges a narrower rule could name come with their counts.
+    """
+    by_code: dict[str, int] = {}
+    by_market: dict[str, int] = {}
+    for m in members:
+        by_code[m.industry] = by_code.get(m.industry, 0) + 1
+        by_market[m.exchange] = by_market.get(m.exchange, 0) + 1
+    if len(by_code) > 1:
+        parts = ", ".join(f"{code} {n}" for code, n in
+                          sorted(by_code.items(), key=lambda kv: (-kv[1], kv[0])))
+        code_hint = (f"Narrower code: this cohort spans {len(by_code)} codes ({parts}); any one "
+                     f"of them, or a subset, is a narrower cohort.")
+    else:
+        code_hint = (f"There is no narrower code: {next(iter(by_code))!r} is already the finest "
+                     f"industry label the index carries.")
+    venues = ", ".join(f"{m} {n}" for m, n in
+                       sorted(by_market.items(), key=lambda kv: (-kv[1], kv[0]))[:6])
+    return (f"{code_hint} By venue: {venues}. Naming fewer exchanges in the definition would "
+            f"also cut it. The USD floor is not the lever - it is set by a stated rule, not "
+            f"tuned to a count. Not truncated.")
+
+
 def size_verdict(members: list[Candidate], defn: CohortDefinition,
-                 pool_by_exchange: dict[str, int] | None = None) -> SizeVerdict:
+                 pool_by_exchange: dict[str, int] | None = None, *,
+                 index_path: bool = False) -> SizeVerdict:
     """Thin, wide, or usable — and what would fix it. Never pads and never truncates.
 
     A thin cohort is offered the exchange that would fill it, chosen from what the pool
@@ -240,7 +278,12 @@ def size_verdict(members: list[Candidate], defn: CohortDefinition,
     if n < MIN_MEMBERS:
         need = MIN_MEMBERS - n
         extra = sorted((pool_by_exchange or {}).items(), key=lambda kv: -kv[1])
-        if extra:
+        if index_path and defn.all_index_exchanges:
+            hint = ("It already draws on every index market except Sao Paulo, so no other "
+                    "exchange can fill it - the industry code is the thing to widen, not the "
+                    "venue, and the USD floor is not the lever (it is set by a stated rule, "
+                    "not tuned to a count).")
+        elif extra:
             best, count = extra[0]
             enough = "would fill it" if count >= need else f"would add {count}, still short"
             hint = (f"Adding {best} {enough} ({count} more name(s) matched the same "
@@ -249,6 +292,8 @@ def size_verdict(members: list[Candidate], defn: CohortDefinition,
             hint = ("No other exchange in the source held a matching name — the industry "
                     "code is the thing to widen, not the venue.")
         return SizeVerdict("thin", n, f"Need {need} more. {hint} Not padded.")
+    if n > MAX_MEMBERS and index_path:
+        return SizeVerdict("wide", n, wide_hint_for_index(members, defn))
     if n > MAX_MEMBERS:
         hint = (f"Narrow the industry: this cohort names "
                 f"{', '.join(defn.industry_as_written or defn.industry)}. Splitting the "

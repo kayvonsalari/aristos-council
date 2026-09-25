@@ -2714,6 +2714,89 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     return group
 
 
+# --------------------------------------------------------------------------- #
+# COHORT-3 - the same cleaned pool, for building cohorts
+# --------------------------------------------------------------------------- #
+@dataclass
+class CleanPool:
+    """Every row of the index that may stand as a company in a peer group or a cohort."""
+
+    rows: list = field(default_factory=list)
+    considered: int = 0
+    skipped: dict = field(default_factory=dict)        # reason -> count
+    collapsed: int = 0                                 # lines folded into their company's row
+    overridden: dict = field(default_factory=dict)     # ticker -> LabelOverride actually applied
+    aliased: dict = field(default_factory=dict)        # ticker -> IdentityAlias actually applied
+    snapshot: str = ""
+
+    def lines(self) -> list[str]:
+        out = [f"{self.considered} row(s) in the index; {len(self.rows)} companies in the "
+               f"cleaned pool (index snapshot {self.snapshot or 'unknown'})"]
+        for reason, n in sorted(self.skipped.items()):
+            out.append(f"  {n} skipped: {reason}")
+        if self.collapsed:
+            out.append(f"  {self.collapsed} line(s) collapsed into their company's own row")
+        return out
+
+
+def clean_pool(rows: Optional[list[IndexRow]] = None, *, store: Optional[IndexStore] = None,
+               overrides=..., aliases=..., size_factor: float = DEFAULT_SIZE_FACTOR) -> CleanPool:
+    """The companies of the index after EXACTLY the cleaning ``peers`` applies to its pool.
+
+    Label overrides and identity aliases first (read with the real index, never applied to rows
+    handed in - the same convention as ``peers``), then a row is skipped when it is a secondary
+    trading line, a fund, classification suspect, has no market cap or no USD conversion, or is
+    size suspect, and the rest are reduced to one row per company with the same grouping (handles
+    plus the guarded name link). What ``peers`` adds on top is subject-specific - the subject's own
+    lines and the financial/non-financial split - and is not part of a cohort's pool.
+
+    Deterministic for a given snapshot and pure: nothing is written and nothing is fetched.
+    """
+    universe = rows if rows is not None else (store or IndexStore()).load()
+    pool = CleanPool(considered=len(universe))
+    if not universe:
+        return pool
+    if overrides is ...:
+        overrides = load_label_overrides() if rows is None else []
+    universe, label_applied = apply_label_overrides(universe, overrides)
+    if aliases is ...:
+        aliases = load_identity_aliases() if rows is None else []
+    universe, alias_applied = apply_identity_aliases(universe, aliases)
+    stamps = sorted(r.fetched_at for r in universe if r.fetched_at)
+    pool.snapshot = stamps[-1] if stamps else ""
+
+    secondary = secondary_lines(universe)
+    size_flags = size_suspects(universe, size_factor)
+    candidates = []
+
+    def skip(reason: str) -> None:
+        pool.skipped[reason] = pool.skipped.get(reason, 0) + 1
+
+    for row in universe:
+        key = normalise_symbol(row.ticker)
+        if key in secondary:
+            skip(f"secondary trading line ({secondary[key]})")
+        elif is_fund(row):
+            skip(FUND_NOT_A_COMPANY)
+        elif suspect_reason(row):
+            skip(CLASSIFICATION_SUSPECT)
+        elif row.market_cap is None:
+            skip("no market cap in the index")
+        elif row.market_cap_usd is None:
+            skip("a local market cap with no USD conversion")
+        elif key in size_flags:
+            skip(SIZE_SUSPECT)
+        else:
+            candidates.append(row)
+
+    kept, dropped, _absorbed = company_pool(candidates, link_by_name=True)
+    pool.rows, pool.collapsed = kept, dropped
+    kept_keys = {normalise_symbol(r.ticker) for r in kept}
+    pool.overridden = {k: v[1] for k, v in label_applied.items() if k in kept_keys}
+    pool.aliased = {k: v for k, v in alias_applied.items()}
+    return pool
+
+
 def peer_snapshot(group: PeerGroup) -> dict:
     """What a report saves so a rerun is reproducible: the members and the snapshot date.
 
