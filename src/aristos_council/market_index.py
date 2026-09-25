@@ -140,6 +140,10 @@ SOURCE_EODHD_LISTING = "eodhd+listing"
 # Provenance for the USD column, in the repo's own ``factors`` vocabulary: a converted
 # figure carries its receipt, an unconvertible one abstains rather than guessing.
 USD_COMPUTED = "computed"
+# INDEX-GBX-SCALE-1 - a USD cap converted under the corrected rule for a MINOR-UNIT currency (see
+# ``MINOR_UNIT_MARKET_CAP``). Distinct from USD_COMPUTED so that the in-place repair of the rows
+# built under the old rule is idempotent: only a row still carrying the old tag is rescaled.
+USD_COMPUTED_MAJOR_UNIT = "computed (major unit)"
 USD_ABSTAINED = "abstained"
 
 
@@ -635,12 +639,40 @@ def _row_from_general(symbol: str, exchange: str, doc: dict, *, today: date) -> 
         fetched_at=today.isoformat(), source=SOURCE_EODHD_LISTING)
 
 
+# INDEX-GBX-SCALE-1 - minor-unit quote currencies whose MARKET CAP is served in the MAJOR unit.
+#
+# EODHD codes most London lines "GBX" (pence), and the code is right for the PRICE. The market cap
+# from /fundamentals is in POUNDS regardless. The converter scaled it by 0.01 anyway, so every GBX
+# row read about 100x too low: RR.LSE $1.6bn against $157.9bn on Xetra; Shell, AstraZeneca, HSBC,
+# BHP, Unilever ... all the same. MEASURED on the built table (2026-09-25), comparing each row's
+# stored USD cap with the same company's lines in other currencies: 48 of the 49 comparable GBX
+# rows sit at exactly -2.0 dex (a factor of 100) and NONE at 0 (the 49th, MaxCyte, is -1.75 = a
+# stale London price against a fresh US one); the GBP-coded rows (BP.LSE ...) are correct, and the
+# GBPUSD implied by the GBX rows (usd / cap x 100) is 1.339, the real rate. The docs already said
+# "a GBX code, which is pounds rather than pence" (Victrex, first sighting); the code disagreed.
+#
+# An entry here is a CLAIM ABOUT THE DATA, so it is added only where the data shows it. GBX is the
+# only minor-unit code in the index today (no ZAc, ILA or KWF rows exist to measure); one that
+# turns up is measured the same way before it is listed, and until then it falls through to
+# ``_fetch_fx_rate`` under its own code and abstains rather than being guessed.
+MINOR_UNIT_MARKET_CAP = {"GBX": "GBP", "GBP_PENCE": "GBP"}
+
+
+def _major_unit_currency(currency: str) -> str:
+    """The currency a market cap is actually in, given the row's quote-currency code."""
+    ccy = (currency or "").strip().upper()
+    return MINOR_UNIT_MARKET_CAP.get(ccy, ccy)
+
+
 class _UsdConverter:
     """One FX rate per currency per build, through the repo's existing helper.
 
     ``factors._fetch_fx_rate`` goes via the ranker's own price path, so the rate is cached
     and replayable like every other input. A currency it cannot price abstains — the USD
     column says ``abstained`` rather than carrying a guess (the null != false discipline).
+
+    The rate is for the currency the MARKET CAP is in, which for a minor-unit quote code
+    (GBX) is the major unit - see ``MINOR_UNIT_MARKET_CAP``. No scale factor is applied.
     """
 
     def __init__(self, adapter=None, today: Optional[date] = None) -> None:
@@ -649,22 +681,20 @@ class _UsdConverter:
         self._rates: dict[str, Optional[float]] = {"USD": 1.0}
 
     def rate(self, currency: str) -> Optional[float]:
-        ccy = (currency or "").strip().upper()
+        ccy = _major_unit_currency(currency)
         if not ccy:
             return None
-        # GBX is pence, not a currency: 100 pence to the pound, then pounds to dollars.
         if ccy in self._rates:
             return self._rates[ccy]
         if self._adapter is None:
             self._rates[ccy] = None
             return None
         from .factors import _fetch_fx_rate
-        base, scale = ("GBP", 0.01) if ccy in ("GBX", "GBP_PENCE") else (ccy, 1.0)
         try:
-            raw = _fetch_fx_rate(self._adapter, base, "USD", today=self._today)
+            raw = _fetch_fx_rate(self._adapter, ccy, "USD", today=self._today)
         except Exception:
             raw = None
-        self._rates[ccy] = None if raw is None else raw * scale
+        self._rates[ccy] = raw
         return self._rates[ccy]
 
     def apply(self, row: IndexRow) -> IndexRow:
@@ -675,8 +705,137 @@ class _UsdConverter:
             row.market_cap_usd, row.market_cap_usd_source = None, USD_ABSTAINED
         else:
             row.market_cap_usd = row.market_cap * rate
-            row.market_cap_usd_source = USD_COMPUTED
+            row.market_cap_usd_source = (
+                USD_COMPUTED_MAJOR_UNIT
+                if (row.currency or "").strip().upper() in MINOR_UNIT_MARKET_CAP
+                else USD_COMPUTED)
         return row
+
+
+# --------------------------------------------------------------------------- #
+# INDEX-GBX-SCALE-1 - repairing the rows built under the old rule, in place
+# --------------------------------------------------------------------------- #
+# A GBX row's stored USD cap is ``market_cap x 0.01 x GBPUSD``: the row's OWN recorded FX rate,
+# with the erroneous 0.01 in it. The corrected figure is ``market_cap x GBPUSD``, so it is the
+# stored one times 100 - no new rate is introduced and nothing is refetched. A row is repaired
+# only while it still carries the old tag (idempotent), only when it has a cap and a USD figure,
+# and only when its implied rate is what 0.01 x a plausible GBPUSD looks like; anything else is
+# skipped and counted, never rescaled on faith.
+_PENCE_SCALE = 100.0
+_IMPLIED_RATE_BOUNDS = (0.005, 0.03)         # 0.01 x GBPUSD for GBPUSD in 0.5 .. 3.0
+
+
+@dataclass
+class GbxRepair:
+    repaired: int = 0
+    already_ok: int = 0
+    skipped: int = 0
+    skipped_examples: list = field(default_factory=list)
+    backup: str = ""
+    dry_run: bool = False
+
+    def lines(self) -> list[str]:
+        out = [f"{'Would repair' if self.dry_run else 'Repaired'} {self.repaired} pence-scaled "
+               f"row(s); {self.already_ok} already correct; {self.skipped} skipped "
+               f"(no cap / no USD figure / an implied rate that does not look like 0.01 x GBPUSD)"
+               + (f" e.g. {', '.join(self.skipped_examples)}" if self.skipped_examples else "")]
+        if self.backup:
+            out.append(f"Backup of the index as it was: {self.backup}")
+        return out
+
+
+def rederive_minor_unit_usd(rows) -> tuple[list["IndexRow"], GbxRepair]:
+    """``(rows, report)``: the rows with the pence-scaled USD caps corrected. Pure: the input rows
+    are not mutated."""
+    import dataclasses
+
+    report = GbxRepair()
+    out = []
+    for row in rows:
+        if (row.currency or "").strip().upper() not in MINOR_UNIT_MARKET_CAP:
+            out.append(row)
+            continue
+        if row.market_cap_usd_source == USD_COMPUTED_MAJOR_UNIT:
+            report.already_ok += 1
+            out.append(row)
+            continue
+        if (row.market_cap is None or row.market_cap <= 0 or row.market_cap_usd is None
+                or row.market_cap_usd_source != USD_COMPUTED):
+            if row.market_cap is not None:
+                report.skipped += 1
+                if len(report.skipped_examples) < EXAMPLES:
+                    report.skipped_examples.append(row.ticker)
+            out.append(row)
+            continue
+        implied = row.market_cap_usd / row.market_cap
+        if not (_IMPLIED_RATE_BOUNDS[0] <= implied <= _IMPLIED_RATE_BOUNDS[1]):
+            report.skipped += 1
+            if len(report.skipped_examples) < EXAMPLES:
+                report.skipped_examples.append(row.ticker)
+            out.append(row)
+            continue
+        out.append(dataclasses.replace(
+            row, market_cap_usd=row.market_cap_usd * _PENCE_SCALE,
+            market_cap_usd_source=USD_COMPUTED_MAJOR_UNIT))
+        report.repaired += 1
+    return out, report
+
+
+def _backup_path(store: "IndexStore", today: date) -> Path:
+    """A dated copy alongside the index, never overwriting an earlier one."""
+    base = store.path.with_name(f"{store.path.name}.pre-gbx-scale-{today:%Y%m%d}")
+    candidate, n = base, 1
+    while candidate.exists():
+        n += 1
+        candidate = base.with_name(f"{base.name}-{n}")
+    return candidate
+
+
+# A running build holds the WHOLE table in memory and rewrites the whole file on every flush, so
+# a repair written while one runs is overwritten by its next flush - measured 2026-09-25, when a
+# repair made between two flushes of a Korea build was reverted two minutes later - and a repair
+# could equally drop rows the build had just added. The build's log is written at every flush,
+# which makes its age the cheapest honest signal that someone else owns the file.
+BUILD_ACTIVE_WITHIN_SECONDS = 600
+
+
+def build_seems_active(store: "IndexStore", *, now: Optional[float] = None) -> bool:
+    log = build_log_path(store)
+    try:
+        age = (now if now is not None else time.time()) - log.stat().st_mtime
+    except OSError:
+        return False
+    return age < BUILD_ACTIVE_WITHIN_SECONDS
+
+
+def fix_gbx_scale(store: Optional["IndexStore"] = None, *, today: Optional[date] = None,
+                  dry_run: bool = False, even_if_build_running: bool = False,
+                  now: Optional[float] = None) -> GbxRepair:
+    """Repair the index in place: back it up, then rewrite it with corrected USD caps.
+
+    No network, no build. The backup is written BEFORE the table is touched, and a dry run writes
+    nothing at all. Refuses to WRITE while a build seems to be running (see
+    ``BUILD_ACTIVE_WITHIN_SECONDS``); a dry run is always allowed.
+    """
+    import shutil
+
+    store = store or IndexStore()
+    if not dry_run and not even_if_build_running and build_seems_active(store, now=now):
+        raise MarketIndexError(
+            f"a build seems to be running ({build_log_path(store)} was written in the last "
+            f"{BUILD_ACTIVE_WITHIN_SECONDS // 60} minutes). It rewrites the whole index on every "
+            f"flush, so a repair now would be overwritten. Run this after the build finishes, or "
+            f"pass --even-if-build-running if you know it has stopped.")
+    rows = store.load()
+    fixed, report = rederive_minor_unit_usd(rows)
+    report.dry_run = dry_run
+    if dry_run or not report.repaired:
+        return report
+    backup = _backup_path(store, today or date.today())
+    shutil.copy2(store.path, backup)
+    report.backup = str(backup)
+    store.save(fixed)
+    return report
 
 
 def _record_attempt(fresh: IndexRow, previous: Optional[IndexRow], *,
@@ -1667,15 +1826,18 @@ def _receipt_home(row: "IndexRow", rows, secondary: dict) -> Optional["IndexRow"
 #   * three or more sized listings: a row is flagged only when it disagrees with EVERY other
 #     listing AND those others form a consensus (two of them agree). Figures that all disagree
 #     with each other say nothing about which is wrong, so nothing is flagged;
-#   * exactly TWO sized listings: never flagged. Two figures that disagree cannot say which of
-#     them is the wrong one. This was first written the other way - flag the non-home line against
-#     an explicit home - and MEASURED on the built table it flagged the CORRECT row every time:
-#     RR.LSE (home, currency GBX) reads $1.6bn and RRU.XETRA reads $157.9bn; Rolls-Royce is
-#     about GBP 119bn, so the home line's pounds figure had the pence scale applied to it (the
-#     GBX quirk documented at ``_UsdConverter``, Victrex being the first sighting). The same
-#     shape held for GSK, BAE, National Grid, NatWest, Standard Chartered, Imperial Brands;
+#   * exactly TWO sized listings: the NON-HOME line is flagged against an EXPLICIT home line (one
+#     that names itself as its own primary). If neither or both are home (0013.HK and 13.HK each
+#     name themselves) it abstains, because "which of the two is wrong" is not something the data
+#     can answer;
 #   * one sized listing: nothing to compare against - a company with a single line is never
 #     flagged by this test (null is not false).
+#
+# HISTORY. The two-line rule was first written as above, then SWITCHED OFF in batch 6 because,
+# measured on the built table, it flagged the CORRECT row for every UK company: RR.LSE (home,
+# GBX) read $1.6bn and RRU.XETRA $157.9bn, and the home line was the wrong one because of the
+# pence scaling of a pounds figure (INDEX-GBX-SCALE-1, ``MINOR_UNIT_MARKET_CAP``). With that
+# defect fixed the anchor is sound again and the rule is back on.
 #
 # A company whose lines disagree and cannot be adjudicated is not flagged and not silent:
 # ``size_disputes`` names it, and ``status`` counts it, so the disagreement is visible.
@@ -1697,8 +1859,18 @@ def size_suspects(rows, factor: float = DEFAULT_SIZE_FACTOR) -> dict[str, str]:
     secondary = secondary_lines(rows)
     for company in company_groups(rows):
         sized = _sized_own_lines(company, secondary)
-        if len(sized) < 3:
-            continue                            # one line has nothing to compare; two cannot say
+        if len(sized) < 2:
+            continue                            # one line has nothing to compare against
+        if len(sized) == 2:
+            explicit_home = [r for r in sized if r.primary_ticker and is_home_listing(r)]
+            if len(explicit_home) != 1:
+                continue                        # cannot say which of the two is wrong
+            anchor = explicit_home[0]
+            other = next(r for r in sized if r is not anchor)
+            if _far_apart(other.market_cap_usd, anchor.market_cap_usd, factor):
+                out[normalise_symbol(other.ticker)] = _size_reason(
+                    other, [anchor.market_cap_usd], factor)
+            continue
         for row in sized:
             others = [r.market_cap_usd for r in sized if r is not row]
             if not all(_far_apart(row.market_cap_usd, cap, factor) for cap in others):
@@ -2313,6 +2485,16 @@ def build_parser():
                               f"size_suspect_factor, {DEFAULT_SIZE_FACTOR:g})")
     p_peers.set_defaults(func=_cmd_peers)
 
+    p_gbx = sub.add_parser(
+        "fix-gbx-scale",
+        help="repair London (GBX) USD market caps that were scaled as pence, in place, from the "
+             "stored figures (no network, no build; backs the index up first)")
+    p_gbx.add_argument("--dry-run", action="store_true",
+                       help="count what would change and write nothing")
+    p_gbx.add_argument("--even-if-build-running", action="store_true",
+                       help="write even though a build log was touched in the last 10 minutes")
+    p_gbx.set_defaults(func=_cmd_fix_gbx_scale)
+
     p_status = sub.add_parser("status", help="what is in the index")
     p_status.set_defaults(func=_cmd_status)
     return parser
@@ -2387,6 +2569,18 @@ def _cmd_peers(args) -> int:
              f"{usd:>16s}  {group.matched_on.get(row.ticker, ''):10s} {row.classification}")
     for reason in group.reasons:
         _say(f"  note: {reason}")
+    return 0
+
+
+def _cmd_fix_gbx_scale(args) -> int:
+    try:
+        report = fix_gbx_scale(_store_for(args), dry_run=args.dry_run,
+                               even_if_build_running=args.even_if_build_running)
+    except MarketIndexError as exc:
+        _say(str(exc))
+        return 1
+    for line in report.lines():
+        _say(line)
     return 0
 
 
