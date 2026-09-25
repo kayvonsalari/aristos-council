@@ -3577,7 +3577,7 @@ def render_company_check_tab(show_validation: bool = False) -> None:
                 result = run_company_check(
                     ticker, rank_strategy.id, reference_id, adapter=adapter,
                     strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                    runs_dir=ROOT / "runs")
+                    runs_dir=ROOT / "runs", with_analyst_trend=True)
         except Exception as exc:
             st.exception(exc)
             st.session_state.pop("cc_result", None)
@@ -3601,7 +3601,8 @@ def _render_absolute_readings(result) -> None:
     question: not "how does this rank" but "what is this company like". They do not vote.
     """
     debt, growth = result.debt_and_cash, result.growth_record
-    if debt is None and growth is None:
+    trend = getattr(result, "analyst_trend", None)
+    if debt is None and growth is None and trend is None:
         return
     st.subheader("Absolute readings")
     st.caption("No comparison group. These are facts about this company's own accounts — "
@@ -3613,6 +3614,12 @@ def _render_absolute_readings(result) -> None:
     if growth is not None:
         st.markdown("**Growth record**")
         for line in growth.lines():
+            st.markdown(f"- {line}")
+    if trend is not None:
+        # ANALYST-TREND-1 - a mark, not a lens: it does not vote and changes no verdict. An
+        # abstention is shown with its reason rather than left as an absent section.
+        st.markdown("**Analyst forecast direction**")
+        for line in trend.lines():
             st.markdown(f"- {line}")
 
 

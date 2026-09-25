@@ -44,6 +44,9 @@ def main() -> None:
                    help="reference universe manifest (under universes/) for cohort "
                         "context; omit for raw values with no cohort position")
     p.add_argument("--no-cache", action="store_true")
+    p.add_argument("--analyst-trend", action="store_true",
+                   help="also show the analyst forecast direction (a non-voting mark; one EODHD "
+                        "/fundamentals request = 10 units, cached for the day)")
     args = p.parse_args()
 
     # Guardrail FIRST (the paste-slip lesson): reject a path / flag / '.py' token by
@@ -64,7 +67,7 @@ def main() -> None:
     result = run_company_check(
         ticker, args.strategy, args.reference, adapter=adapter,
         strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR, runs_dir=RUNS_DIR,
-        today=today)
+        today=today, with_analyst_trend=args.analyst_trend)
     print(format_company_check(result))
 
 
