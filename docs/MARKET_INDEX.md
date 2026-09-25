@@ -266,6 +266,8 @@ chemicals are not funds. A row whose classification **contradicts its own name**
 semiconductors) is **classification suspect**; a row with no classification is never suspect. Both
 are counted in `status`, and a fund or suspect subject gets no peer group and a stated reason.
 
+**Secondary trading lines are kept but never peers (PEER-RECEIPTS-1, 2026-09-25).** EODHD serves Brazilian BDRs (`E1TN34.SA`), Canadian CDRs (`AMD.TO`), Swiss lines of foreign stocks (`NVDA.SW`), London `0xxx` lines (`0NMK.LSE`: Vestas at $5bn there, $31bn at home) and London GDRs as ordinary common stock, mostly with no PrimaryTicker or ISIN, so each stood as a company of its own. They stay in the table, are skipped in every pool, and `status` counts them by kind — including how many are the *only* line their company has here (that company then sits in no peer group). A receipt looked up by its own symbol is answered for the company it mirrors.
+
 ## The peer ladder
 
 `peers(ticker, floor=12, cap=40)` widens only as far as it must, and says how far it went:

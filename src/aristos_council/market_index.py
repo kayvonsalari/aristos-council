@@ -1017,6 +1017,11 @@ class IndexStatus:
     suspect: int = 0
     fund_examples: list = field(default_factory=list)
     suspect_examples: list = field(default_factory=list)
+    # PEER-RECEIPTS-1 - secondary trading lines, by kind, and how many of them are the ONLY line
+    # their company has in the index (so the company is absent from every peer group).
+    receipts: dict = field(default_factory=dict)
+    receipt_examples: dict = field(default_factory=dict)
+    receipts_sole: int = 0
 
     def lines(self) -> list[str]:
         if not self.rows:
@@ -1041,6 +1046,17 @@ class IndexStatus:
                                  if self.suspect_examples else ""),
                f"  oldest row: {self.oldest or 'unknown'}",
                "  per exchange:"]
+        if self.receipts:
+            at = out.index("  per exchange:")
+            out.insert(at, f"  {sum(self.receipts.values())} secondary trading line(s) (receipts "
+                           f"and foreign lines) - kept, excluded from peer groups; "
+                           f"{self.receipts_sole} of them are the ONLY line of their company, so "
+                           f"that company is absent from every peer group")
+            for kind, n in sorted(self.receipts.items()):
+                examples = self.receipt_examples.get(kind, [])
+                at += 1
+                out.insert(at + 0, f"    {kind}: {n}" + (f" (e.g. {', '.join(examples)})"
+                                                         if examples else ""))
         if self.missing_cap:
             # MARKET-INDEX-2 - the first build produced 526 rows and every one of them had
             # no cap, because the request asked for General and the cap lives under
@@ -1103,6 +1119,27 @@ def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
             out.suspect += 1
             if len(out.suspect_examples) < EXAMPLES:
                 out.suspect_examples.append(row.ticker)
+    secondary = secondary_lines(rows)
+    if secondary:
+        own_line_sized = set()      # rows of a company that has a non-receipt line with a size
+        for company in company_groups(rows):
+            if any(normalise_symbol(r.ticker) not in secondary and r.market_cap_usd is not None
+                   for r in company):
+                own_line_sized.update(normalise_symbol(r.ticker) for r in company)
+        named_own = {_name_key(r.name) for r in rows
+                     if normalise_symbol(r.ticker) not in secondary and _has_identity(r)
+                     and r.market_cap_usd is not None}
+        for row in rows:
+            kind = secondary.get(normalise_symbol(row.ticker))
+            if not kind:
+                continue
+            out.receipts[kind] = out.receipts.get(kind, 0) + 1
+            examples = out.receipt_examples.setdefault(kind, [])
+            if len(examples) < EXAMPLES:
+                examples.append(row.ticker)
+            if (normalise_symbol(row.ticker) not in own_line_sized
+                    and _name_key(row.name) not in named_own):
+                out.receipts_sole += 1
     stamps = sorted(r.fetched_at for r in rows if r.fetched_at)
     out.oldest = stamps[0] if stamps else ""
     return out
@@ -1387,6 +1424,141 @@ def is_suspect(row: "IndexRow") -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# PEER-RECEIPTS-1 - a receipt is a trading line, not a company
+# --------------------------------------------------------------------------- #
+# MEASURED on the built table (22,209 rows, 2026-09-25). EODHD serves depository receipts and
+# foreign trading lines as ordinary "Common Stock" rows, usually with NEITHER PrimaryTicker nor
+# ISIN (4,825 rows carry no identity at all), so nothing links them to the company they mirror
+# and each one stood in a peer group as a company of its own:
+#
+#   E1TN34.SA   Eaton Corporation plc          a Brazilian BDR, stood in for Eaton itself
+#   AMD.TO      Advanced Micro Devices CDR     a Canadian CDR, beside AMD.US
+#   NVDA.SW     NVIDIA Corporation             a Swiss line, no identity
+#   0NMK.LSE    Vestas Wind Systems A/S        a London "0xxx" line: $5.2bn there against the
+#                                              $31.5bn its home line reports, and filed under
+#                                              "Coal & Consumable Fuels"
+#
+# The London "0xxx" block alone is 2,371 of 3,834 LSE rows; almost all carry a wrong label and
+# a wrong size. So a SECONDARY LINE is kept in the table (it is a faithful mirror of the
+# provider, like a cross-listing), excluded from peer pools, and counted in ``status`` by kind.
+#
+# The cost is stated rather than hidden: a company whose ONLY line in the index is a receipt
+# leaves every peer pool. ``status`` counts those ("the only line of their company").
+RECEIPT_BDR = "Brazilian receipt (BDR)"
+RECEIPT_BR_FRACTIONAL = "Brazilian fractional-lot line"
+RECEIPT_CDR = "Canadian receipt (CDR)"
+RECEIPT_LSE_LINE = "London 0xxx line of a foreign company"
+RECEIPT_LSE_GDR = "London depositary receipt (GDR)"
+RECEIPT_SWISS_LINE = "Swiss line of a foreign company"
+
+# Sao Paulo tickers: a BDR is <4 characters>3<2..9> (A1MD34, AVGO34, E1TN34, TSMC34, NVDC34);
+# no Brazilian company code has that shape (they end 3, 4, 5, 6 or 11), and the one 3x-ending
+# code in the table, TF533, is five characters. A fractional-lot line is the company's code plus F.
+_BDR_CODE = re.compile(r"^[A-Z0-9]{4}3[2-9]$")
+_BDR_ISIN = re.compile(r"^BR[A-Z0-9]{4}BDR[A-Z0-9]{3}$")
+_BR_FRACTIONAL_CODE = re.compile(r"^[A-Z0-9]{4}\d{1,2}F$")
+_CDR_NAME = re.compile(r"\bCDR\b")
+# London's "0xxx" lines: a zero and three characters (0QMI, 0A0D, 0NMK). UK companies do not
+# start with a zero, and the 10-character "0P" Morningstar fund ids are handled as funds above.
+_LSE_FOREIGN_CODE = re.compile(r"^0[A-Z0-9]{3}$")
+_GDR_NAME = re.compile(r"\bGDR\b|global depositary", re.IGNORECASE)
+
+
+def receipt_kind(row: "IndexRow") -> str:
+    """What kind of secondary trading line this row is, or "" when it is a company's own line.
+
+    A pure function of the row: exchange, code shape, name, ISIN and PrimaryTicker. Nothing here
+    needs the rest of the table; the one case that does (a Swiss line with no identity at all)
+    is ``secondary_lines``.
+    """
+    code, market = _code_and_market(row)
+    name = row.name or ""
+    if market == "SA":
+        if _BDR_CODE.match(code) or _BDR_ISIN.match((row.isin or "").upper()):
+            return RECEIPT_BDR
+        if _BR_FRACTIONAL_CODE.match(code):
+            return RECEIPT_BR_FRACTIONAL
+    elif market == "TO":
+        if _CDR_NAME.search(name):
+            return RECEIPT_CDR
+    elif market == "LSE":
+        if _LSE_FOREIGN_CODE.match(code):
+            return RECEIPT_LSE_LINE
+        if _GDR_NAME.search(name):
+            return RECEIPT_LSE_GDR
+    elif market == "SW":
+        primary = normalise_symbol(row.primary_ticker)
+        if primary and not primary.endswith(".SW"):
+            return RECEIPT_SWISS_LINE      # LLY.SW -> LLY.US, NIBEB.SW -> NIBE-B.ST
+    return ""
+
+
+# The words that do not identify a company in a name: legal forms, share-class and receipt
+# wording. "Eaton Corporation plc" and "Eaton Corporation PLC" must read as one; "Vestas Wind
+# Systems A/S" must not read as anything else.
+_NAME_NOISE = frozenset((
+    "inc", "corp", "corporation", "plc", "ag", "sa", "nv", "se", "ltd", "limited", "co",
+    "company", "holding", "holdings", "group", "ab", "oyj", "asa", "as", "spa", "llc", "the",
+    "n", "a", "b", "class", "series", "ordinary", "shares", "sponsored", "adr", "cdr", "cad",
+    "hedged", "drn", "dr", "incorporated", "kgaa", "sab", "cv"))
+
+
+def _name_key(name: str) -> str:
+    """A company name reduced to what identifies it, or "" when nothing is left."""
+    import unicodedata
+    text = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode()
+    text = re.sub(r"\(.*?\)", " ", text.lower())
+    text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    return " ".join(tok for tok in text.split() if tok not in _NAME_NOISE)
+
+
+def _has_identity(row: "IndexRow") -> bool:
+    return bool((row.primary_ticker or "").strip() or (row.isin or "").strip())
+
+
+def secondary_lines(rows) -> dict[str, str]:
+    """``{normalised ticker: kind}`` for every secondary trading line in ``rows``.
+
+    ``receipt_kind`` for each row, plus the one case a single row cannot show: a SIX row with
+    neither PrimaryTicker nor ISIN (NVDA.SW, INTC.SW, ASML.SW) whose name is listed elsewhere
+    WITH an identity. A Swiss row that has no identity and no such twin is left alone - CENTIEL
+    and INFRACORE are real Swiss companies.
+    """
+    rows = list(rows)
+    out = {normalise_symbol(r.ticker): kind for r in rows if (kind := receipt_kind(r))}
+    elsewhere: dict[str, list] = {}
+    for row in rows:
+        if normalise_symbol(row.ticker) not in out and _has_identity(row):
+            elsewhere.setdefault(_name_key(row.name), []).append(row)
+    for row in rows:
+        code, market = _code_and_market(row)
+        if market != "SW" or _has_identity(row) or normalise_symbol(row.ticker) in out:
+            continue
+        key = _name_key(row.name)
+        if key and any(_code_and_market(twin)[1] != "SW" for twin in elsewhere.get(key, ())):
+            out[normalise_symbol(row.ticker)] = RECEIPT_SWISS_LINE
+    return out
+
+
+def _receipt_home(row: "IndexRow", rows, secondary: dict) -> Optional["IndexRow"]:
+    """The company's own line for a receipt that names no home, found by NAME, or None.
+
+    Used to answer for the company when the reader looks a receipt up (``E1TN34.SA`` is Eaton).
+    Only a row that is not itself a secondary line, has an identity and carries a size is a
+    candidate, and the usual home-listing preference decides between several.
+    """
+    key = _name_key(row.name)
+    if not key:
+        return None
+    twins = [r for r in rows
+             if normalise_symbol(r.ticker) != normalise_symbol(row.ticker)
+             and normalise_symbol(r.ticker) not in secondary
+             and _has_identity(r) and r.market_cap_usd is not None
+             and _name_key(r.name) == key]
+    return min(twins, key=_listing_rank) if twins else None
+
+
+# --------------------------------------------------------------------------- #
 # peers
 # --------------------------------------------------------------------------- #
 RUNG_SUBINDUSTRY_TIGHT = "sub-industry, 1/4x–4x"
@@ -1502,6 +1674,21 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                 f"{subject.ticker} is a listing of {subject.primary_ticker}, which is not "
                 f"in the index; peers computed for {subject.ticker} as it stands")
 
+    # PEER-RECEIPTS-1 - a receipt looked up by the symbol the reader has is answered for the
+    # company it mirrors, found by name because the provider gives it no identity.
+    secondary = secondary_lines(universe)
+    subject_kind = secondary.get(normalise_symbol(subject.ticker), "")
+    if subject_kind:
+        home = _receipt_home(subject, universe, secondary)
+        if home is not None:
+            group.reasons.append(f"{subject.ticker} is a {subject_kind}; peers computed for "
+                                 f"{home.ticker}, the company's own line")
+            subject = home
+        else:
+            group.reasons.append(f"{subject.ticker} is a {subject_kind} and the company's own "
+                                 f"line is not in the index; its label and size are the "
+                                 f"receipt's own and may be unreliable")
+
     group.subject = subject
     stamps = sorted(r.fetched_at for r in universe if r.fetched_at)
     group.snapshot = stamps[-1] if stamps else ""
@@ -1553,11 +1740,16 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
 
     # Everything that is eligible to be a peer at all, before any rung.
     candidates, no_cap, no_usd, funds, suspect, own_lines = [], 0, 0, 0, 0, 0
+    receipts: dict[str, int] = {}
     for row in universe:
         if normalise_symbol(row.ticker) == normalise_symbol(subject.ticker):
             continue                                   # never its own peer
         if company_of.get(normalise_symbol(row.ticker)) == subject_company:
             own_lines += 1                             # ...nor another line of itself
+            continue
+        kind = secondary.get(normalise_symbol(row.ticker))
+        if kind:
+            receipts[kind] = receipts.get(kind, 0) + 1   # kept in the table, never a peer
             continue
         if is_fund(row):
             funds += 1
@@ -1585,6 +1777,11 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     if own_lines:
         group.reasons.append(f"{own_lines} other line(s) of {subject.name or subject.ticker} "
                              f"left out: a company is never its own peer")
+    if receipts:
+        group.reasons.append(
+            f"{sum(receipts.values())} candidate(s) skipped: secondary trading line, not a "
+            f"company (" + ", ".join(f"{kind} {n}" for kind, n in sorted(receipts.items()))
+            + ")")
     if funds:
         group.reasons.append(f"{funds} candidate(s) skipped: {FUND_NOT_A_COMPANY}")
     if suspect:

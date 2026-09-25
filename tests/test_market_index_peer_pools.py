@@ -13,8 +13,11 @@ anchored to a row that misbehaved rather than to an invented one.
 """
 from __future__ import annotations
 
-from aristos_council.market_index import (SOURCE_EODHD_LISTING, IndexRow, company_groups,
-                                          company_key, one_row_per_company, peers)
+from aristos_council.market_index import (RECEIPT_BDR, RECEIPT_BR_FRACTIONAL, RECEIPT_CDR,
+                                          RECEIPT_LSE_GDR, RECEIPT_LSE_LINE, RECEIPT_SWISS_LINE,
+                                          SOURCE_EODHD_LISTING, IndexRow, IndexStore,
+                                          company_groups, company_key, one_row_per_company,
+                                          peers, receipt_kind, secondary_lines, status)
 
 SNAPSHOT = "2026-09-25"
 
@@ -125,3 +128,135 @@ def test_a_row_with_no_identity_at_all_is_its_own_company():
 def test_the_primary_ticker_outranks_the_isin_as_a_row_key():
     row = _row("TSM.US", primary="2330.TW", isin="US8740391003")
     assert company_key(row) == "primary:2330.TW"
+
+
+# =========================================================================== #
+# PEER-RECEIPTS-1
+# =========================================================================== #
+# Real rows, as served: a receipt usually has NO PrimaryTicker and NO ISIN.
+def _bdr(code="E1TN34", name="Eaton Corporation plc", cap_bn=170.0, **kw):
+    return _row(f"{code}.SA", name, cap_bn=cap_bn, primary="", isin="", market="SA",
+                currency="BRL", **kw)
+
+
+def test_the_brazilian_receipt_shapes_are_recognised():
+    for code in ("E1TN34", "A1MD34", "AVGO34", "TSMC34", "NVDC34", "AURA33", "MUTC34"):
+        assert receipt_kind(_bdr(code)) == RECEIPT_BDR, code
+
+
+def test_a_bdr_is_also_recognised_by_its_isin_when_the_code_is_ordinary():
+    row = _row("XXXX3.SA", "Some Receipt", primary="", isin="BRA1MDBDR002", market="SA")
+    assert receipt_kind(row) == RECEIPT_BDR
+
+
+def test_a_real_brazilian_company_is_not_a_receipt():
+    """WEG, Petrobras and a unit line end 3, 4 or 11 - never 32-39."""
+    for code, name in (("WEGE3", "WEG S.A."), ("PETR4", "Petroleo Brasileiro"),
+                       ("BPAC11", "Banco BTG Pactual"), ("TF533", "Some Fund Unit")):
+        assert receipt_kind(_row(f"{code}.SA", name, market="SA")) == "", code
+
+
+def test_a_brazilian_fractional_lot_line_is_a_secondary_line():
+    assert receipt_kind(_row("AALR3F.SA", "AALR3F", primary="", isin="", market="SA")
+                        ) == RECEIPT_BR_FRACTIONAL
+
+
+def test_a_canadian_cdr_is_recognised_by_its_name_and_a_canadian_company_is_not():
+    cdr = _row("AMD.TO", "Advanced Micro Devices CDR (CAD Hedged)", primary="", isin="",
+               market="TO", currency="CAD")
+    assert receipt_kind(cdr) == RECEIPT_CDR
+    assert receipt_kind(_row("SHOP.TO", "Shopify Inc.", market="TO")) == ""
+
+
+def test_london_0xxx_lines_are_secondary_and_a_uk_ticker_is_not():
+    """0A0D / 0NMK / 0QMI are the international order book lines: 2,371 of the 3,834 LSE rows."""
+    for code in ("0NMK", "0QMI", "0A0D", "0SEA"):
+        assert receipt_kind(_row(f"{code}.LSE", "Some Foreign Co", market="LSE")
+                            ) == RECEIPT_LSE_LINE, code
+    for code in ("BP", "VOD", "3IN", "RR"):
+        assert receipt_kind(_row(f"{code}.LSE", "A UK Company", market="LSE")) == "", code
+
+
+def test_a_london_gdr_is_a_receipt():
+    """Ming Yang's London line: a GDR with no identity, which the index served at $1,000bn."""
+    gdr = _row("MYSE.LSE", "Ming Yang Smart Energy Group Ltd. GDR", primary="", isin="",
+               market="LSE", cap_bn=999.6)
+    assert receipt_kind(gdr) == RECEIPT_LSE_GDR
+
+
+def test_a_swiss_line_that_names_a_foreign_home_is_secondary():
+    assert receipt_kind(_row("LLY.SW", "Eli Lilly and Company", primary="LLY.US",
+                             market="SW")) == RECEIPT_SWISS_LINE
+    assert receipt_kind(_row("UHRN.SW", "Swatch Group", primary="UHR.SW", market="SW")) == ""
+
+
+def test_a_swiss_row_with_no_identity_is_a_line_only_when_its_name_is_listed_elsewhere():
+    """NVDA.SW names nothing, but NVIDIA is in the index with an identity. CENTIEL is a real Swiss
+    company and has no such twin, so it stays."""
+    nvda_sw = _row("NVDA.SW", "NVIDIA Corporation", primary="", isin="", market="SW")
+    nvda_us = _row("NVDA.US", "NVIDIA Corporation", market="US")
+    centiel = _row("CNTL.SW", "CENTIEL N AG", primary="", isin="", market="SW")
+    found = secondary_lines([nvda_sw, nvda_us, centiel])
+    assert found == {"NVDA.SW": RECEIPT_SWISS_LINE}
+
+
+def _vestas_and_wind_rivals():
+    home = _row("VWS.CO", "Vestas Wind Systems A/S", cap_bn=31.5, sub="Heavy Electrical Equipment",
+                isin="DK0061539921", market="CO", currency="DKK")
+    london = _row("0NMK.LSE", "Vestas Wind Systems A/S", cap_bn=5.2,
+                  sub="Heavy Electrical Equipment", primary="VWS.CO", isin="DK0061539921",
+                  market="LSE")
+    return home, london
+
+
+def test_vestas_london_line_never_appears_as_a_peer():
+    home, london = _vestas_and_wind_rivals()
+    subject = _row("SUBJ.US", "Wind Subject", cap_bn=30.0, sub="Heavy Electrical Equipment")
+    rivals = _fillers(13, cap_bn=30.0, sub="Heavy Electrical Equipment")
+    group = peers("SUBJ.US", rows=[subject, home, london, *rivals])
+    assert "0NMK.LSE" not in _tickers(group)
+    assert "VWS.CO" in _tickers(group)          # ...but the company itself still is
+
+
+def test_eatons_brazilian_receipt_never_stands_in_for_eaton():
+    """E1TN34.SA has no identity, so nothing merged it into ETN.US: it was a second Eaton, and
+    in Siemens Energy's cohort it stood as an Eaton of its own."""
+    eaton = _row("ETN.US", "Eaton Corporation PLC", cap_bn=165.0, sub="Industrial Machinery")
+    receipt = _bdr("E1TN34", "Eaton Corporation plc", cap_bn=169.8, sub="Industrial Machinery")
+    subject = _row("SUBJ.XETRA", "Machinery Subject", cap_bn=140.0, sub="Industrial Machinery")
+    rivals = _fillers(12, cap_bn=140.0, sub="Industrial Machinery")
+    members = _tickers(peers("SUBJ.XETRA", rows=[subject, eaton, receipt, *rivals]))
+    assert "ETN.US" in members and "E1TN34.SA" not in members
+
+
+def test_a_receipt_looked_up_by_its_own_symbol_is_answered_for_the_company():
+    eaton = _row("ETN.US", "Eaton Corporation PLC", cap_bn=165.0)
+    receipt = _bdr("E1TN34", "Eaton Corporation plc", cap_bn=169.8)
+    rows = [eaton, receipt, *_fillers(13, cap_bn=165.0)]
+    group = peers("E1TN34.SA", rows=rows)
+    assert group.subject.ticker == "ETN.US"
+    assert any("E1TN34.SA is a Brazilian receipt (BDR)" in r for r in group.reasons)
+    assert "E1TN34.SA" not in _tickers(group)
+
+
+def test_the_cohort_report_counts_skipped_receipts_by_kind():
+    subject = _row("SUBJ.US", "Subject", cap_bn=100.0)
+    rows = [subject, *_fillers(13), _bdr("A1MD34", "Some Co"), _bdr("AVGO34", "Other Co"),
+            _row("AMD.TO", "AMD CDR (CAD Hedged)", primary="", isin="", market="TO")]
+    line = next(r for r in peers("SUBJ.US", rows=rows).reasons if "secondary trading line" in r)
+    assert line.startswith("3 candidate(s) skipped")
+    assert f"{RECEIPT_BDR} 2" in line and f"{RECEIPT_CDR} 1" in line
+
+
+def test_status_counts_receipts_by_kind_and_says_which_leave_a_company_out(tmp_path):
+    store = IndexStore(tmp_path)
+    eaton = _row("ETN.US", "Eaton Corporation PLC")
+    twin = _bdr("E1TN34", "Eaton Corporation plc")               # its company has an own line
+    orphan = _bdr("A1OS34", "A. O. Smith Corporation")           # the ONLY line of its company
+    store.save([eaton, twin, orphan])
+    out = status(store)
+    assert out.receipts == {RECEIPT_BDR: 2}
+    assert out.receipts_sole == 1
+    text = " ".join(out.lines())
+    assert "2 secondary trading line(s)" in text and "1 of them are the ONLY line" in text
+    assert f"{RECEIPT_BDR}: 2" in text
