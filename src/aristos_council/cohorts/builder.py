@@ -16,6 +16,7 @@ from collections import Counter
 
 from .cleanup import Removal, SizeVerdict, clean, size_verdict
 from .definitions import CohortDefinition, DefinitionError
+from .flags import excluded_for, legend_lines, symbols
 from .freeze import (DEFINITION_FILE, MEMBERS_FILE, REMOVALS_FILE, REPORT_FILE,
                      FrozenCohort, current_version, next_version, read_members,
                      register_universe, version_dir, write_definition_snapshot,
@@ -55,6 +56,8 @@ class BuildOutcome:
     skipped: str = ""
     frozen: bool = False
     registration_error: str = ""
+    # COHORT-3 - companies refused for their size that this cohort would have considered
+    excluded: list = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -181,10 +184,12 @@ def _pool_for(defn: CohortDefinition, *, source, probe, index_pool,
     path = resolve_path(defn, constituents=constituents)
     if path == PATH_INDEX:
         pool = index_pool if index_pool is not None else default_index_pool()
-        return build_pool_from_index(defn, pool, progress=progress)
+        candidates, used, log = build_pool_from_index(defn, pool, progress=progress)
+        return candidates, used, log, pool
     if source is None or probe is None:
         raise DefinitionError(f"{defn.name}: the constituents path needs a source and a probe")
-    return build_pool(defn, source, probe, progress=progress)
+    candidates, used, log = build_pool(defn, source, probe, progress=progress)
+    return candidates, used, log, None
 
 
 def build(defn: CohortDefinition, *, source: EODHDSource | None = None,
@@ -209,26 +214,33 @@ def build(defn: CohortDefinition, *, source: EODHDSource | None = None,
 
     # 1. the pool ----------------------------------------------------------- #
     say(f"{defn.name}: building the pool…")
-    candidates, path_used, log = _pool_for(defn, source=source, probe=probe,
-                                          index_pool=index_pool, constituents=constituents,
-                                          progress=say)
+    candidates, path_used, log, pool_obj = _pool_for(
+        defn, source=source, probe=probe, index_pool=index_pool, constituents=constituents,
+        progress=say)
     out.path_used, out.log = path_used, log
 
     # 2. secondary source, for gaps only ------------------------------------ #
     log.extend(fill_missing(candidates))
 
-    # 3. history ------------------------------------------------------------ #
+    # 3+4. cleanup, with history measured only for the names that survive the other rules ------ #
+    # History decides nothing until a name has passed one-line, size, exclusions and data, and the
+    # measurement is a price-history request per name. The first pass runs every rule with history
+    # unknown (never a failure); history is then measured for the survivors only and the rules run
+    # again. The result is identical - a name that fails another rule fails it either way - for
+    # about a fifth of the requests (2,289 survivors of 12,829 candidates on the live index).
     provider = history_provider if history_provider is not None else default_history_provider
-    say(f"{defn.name}: measuring history for {len(candidates)} name(s)…")
-    years = provider(candidates) or {}
-    for cand in candidates:
+    members, removals = clean(candidates, defn)
+    say(f"{defn.name}: measuring history for {len(members)} of {len(candidates)} name(s)…")
+    years = provider(members) or {}
+    for cand in members:
         if cand.ticker in years:
             cand.history_years = years[cand.ticker]
-    log.append(f"History established for {len(years)} of {len(candidates)} name(s).")
-
-    # 4. cleanup ------------------------------------------------------------ #
     members, removals = clean(candidates, defn)
+    log.append(f"History established for {len(years)} of {len(candidates)} name(s); it is measured "
+               f"only for the names that passed every other rule.")
     out.members, out.removals = members, removals
+    if pool_obj is not None:
+        out.excluded = excluded_for(defn, pool_obj)
     log.append(f"Cleanup removed {len(removals)}, leaving {len(members)}.")
 
     # 5. size --------------------------------------------------------------- #
@@ -258,7 +270,7 @@ def build(defn: CohortDefinition, *, source: EODHDSource | None = None,
     (directory / REPORT_FILE).write_text(
         render_report(defn=defn, version=version, built_on=today, members=members,
                       removals=removals, size=out.size, quality=out.quality,
-                      source_log=log, strategy_id=strategy_id),
+                      source_log=log, strategy_id=strategy_id, excluded=out.excluded),
         encoding="utf-8")
 
     out.version, out.directory, out.frozen = version, directory, True
@@ -347,13 +359,14 @@ def diff(defn: CohortDefinition, *, source: EODHDSource | None = None,
     current = {c.ticker for c in read_members(version_dir(root, defn.slug, version)
                                               / MEMBERS_FILE)}
     say(f"{defn.name}: rebuilding the pool to compare…")
-    candidates, _path, _log = _pool_for(defn, source=source, probe=probe,
-                                        index_pool=index_pool, constituents=constituents,
-                                        progress=say)
+    candidates, _path, _log, _pool = _pool_for(
+        defn, source=source, probe=probe, index_pool=index_pool, constituents=constituents,
+        progress=say)
     fill_missing(candidates)
     provider = history_provider if history_provider is not None else default_history_provider
-    years_map = provider(candidates) or {}
-    for cand in candidates:
+    survivors, _ = clean(candidates, defn)
+    years_map = provider(survivors) or {}
+    for cand in survivors:
         if cand.ticker in years_map:
             cand.history_years = years_map[cand.ticker]
 
@@ -380,6 +393,7 @@ class PlanEntry:
     error: str = ""
     frozen_version: int | None = None                  # an existing cohort under this slug
     untranslatable: int = 0                            # members with no Yahoo symbol
+    excluded: list = field(default_factory=list)       # COHORT-3: refused for size, listed
 
     @property
     def status(self) -> str:
@@ -411,13 +425,14 @@ def plan(defs: list[CohortDefinition], pool, *, root: str | Path = DEFAULT_ROOT
     for defn in defs:
         entry = PlanEntry(definition=defn, frozen_version=current_version(root, defn.slug))
         try:
-            candidates, _path, _log = _pool_for(defn, source=None, probe=None, index_pool=pool,
-                                                constituents=False)
+            candidates, _path, _log, _pool = _pool_for(
+                defn, source=None, probe=None, index_pool=pool, constituents=False)
         except DefinitionError as exc:
             entry.error = str(exc)
             entries.append(entry)
             continue
         entry.matched = len(candidates)
+        entry.excluded = excluded_for(defn, pool)
         if not candidates:
             entry.error = (f"no company in the index carries the code(s) "
                            f"{', '.join(defn.industry)}")
@@ -447,8 +462,12 @@ def _bn(value: float | None) -> str:
     return "?" if value is None else f"${value / 1e9:,.1f}bn"
 
 
-def format_plan(entries: list[PlanEntry], pool=None) -> str:
-    """The plan as text: one block per cohort, then the tally."""
+def format_plan(entries: list[PlanEntry], pool=None, *, all_members: bool = False) -> str:
+    """The plan as text: one block per cohort, then the tally.
+
+    Every company a correction touched carries its symbol wherever it is shown, and the legend for
+    the companies shown follows the block (COHORT-3). ``all_members`` lists every member, not only
+    the five largest."""
     from .definitions import MAX_MEMBERS, MIN_MEMBERS
 
     out: list[str] = ["COHORT-3 plan - read from the market index, no network."]
@@ -473,8 +492,26 @@ def format_plan(entries: list[PlanEntry], pool=None) -> str:
                    f"cleanup removed {cut})")
         out.append(f"  band:      {e.size.sentence()}")
         out.append(f"  exchanges: " + ", ".join(f"{m} {n}" for m, n in e.markets))
-        out.append("  top 5:     " + "; ".join(
-            f"{m.ticker} {m.name[:22]} {_bn(m.market_cap_usd)}" for m in e.top))
+        def shown(m, width=22):
+            marks = f" {symbols(m.flags)}" if m.flags else ""
+            return f"{m.ticker}{marks} {m.name[:width]} {_bn(m.market_cap_usd)}"
+        if all_members:
+            out.append("  members:")
+            for m in sorted(e.members, key=lambda c: -(c.market_cap_usd or 0.0)):
+                out.append("    " + shown(m, 34))
+            listed = e.members
+        else:
+            out.append("  top 5:     " + "; ".join(shown(m) for m in e.top))
+            listed = e.top
+        flagged_all = sum(1 for m in e.members if m.flags)
+        if flagged_all:
+            out.append(f"  flagged:   {flagged_all} of {len(e.members)} member(s) carry a "
+                       f"correction symbol"
+                       + ("" if all_members else " (--members lists them all, with the legend)"))
+        legend = legend_lines(listed, e.excluded)
+        if legend:
+            out.append("  legend:")
+            out.extend(("    " + line) if line else "" for line in legend)
         notes = []
         if e.frozen_version is not None:
             notes.append(f"a cohort with this slug is already frozen at v{e.frozen_version} "

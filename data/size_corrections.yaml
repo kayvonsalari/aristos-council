@@ -1,0 +1,23 @@
+# COHORT-3 - corrections to a market cap the index reports, for peer groups and cohorts.
+# DATA CORRECTIONS ONLY: `set` replaces one USD figure, `exclude` refuses to use one, on the rows a
+# query reads; the index on disk is not rewritten. Every use is FLAGGED (section sign) in the cohort
+# lists and reports that contain the company, and an excluded company is listed there with its
+# reported figure and this reason - never silently dropped. Same discipline as
+# data/label_overrides.yaml and data/identity_aliases.yaml.
+#
+# Each entry needs: ticker (EODHD form), action (exclude | set), date, reason.
+# `set` also needs market_cap_usd. `exclude` takes none: a figure with no correct value to replace it
+# is refused, not guessed.
+#
+# Add an entry only with evidence in the reason, and prefer `set` only when the correct figure is
+# established by a source that does not share the error.
+corrections:
+  - ticker: QH.US
+    action: exclude
+    date: 2026-09-25
+    reason: >-
+      Quhuo Limited's American Depositary Shares read $343.3bn in the index (EODHD) and $350.4bn on
+      Yahoo. Both are the ADS price ($3.98) multiplied by 87.9 billion ORDINARY shares, and one ADS
+      is many ordinary shares, so the figure is overstated by that ratio. Annual revenue is $2.5bn,
+      which makes the stated cap 136 times revenue for a gig-logistics business. The true cap cannot
+      be established from either source, so the company is excluded instead of being given a figure.

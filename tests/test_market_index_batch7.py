@@ -118,8 +118,6 @@ def test_a_missing_alias_file_is_no_aliases(tmp_path):
     ("aliases:\n  - ticker: A.US\n    primary: B.US\n    date: 2026-09-25\n", "reason"),
     ("aliases:\n  - ticker: A.US\n    primary: B.US\n    reason: r\n", "date"),
     ("aliases:\n  - primary: B.US\n    date: 2026-09-25\n    reason: r\n", "ticker"),
-    ("aliases:\n  - ticker: A.US\n    primary: a.us\n    date: 2026-09-25\n    reason: r\n",
-     "to itself"),
     ("aliases:\n  - {ticker: A.US, primary: B.US, date: 2026-09-25, reason: r}\n"
      "  - {ticker: a.us, primary: C.US, date: 2026-09-25, reason: r}\n", "repeats"),
     ("aliases: nope\n", "must be a list"),

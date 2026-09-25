@@ -11,13 +11,14 @@ from datetime import date
 from .cleanup import RULE_NAMES, Removal, SizeVerdict
 from .definitions import CohortDefinition
 from .quality import QualityReport
+from .flags import legend_lines, symbols
 from .source import Candidate
 
 
 def render_report(*, defn: CohortDefinition, version: int, built_on: date,
                   members: list[Candidate], removals: list[Removal],
                   size: SizeVerdict, quality: QualityReport | None,
-                  source_log: list[str], strategy_id: str = "") -> str:
+                  source_log: list[str], strategy_id: str = "", excluded=()) -> str:
     out: list[str] = []
     add = out.append
 
@@ -79,7 +80,8 @@ def render_report(*, defn: CohortDefinition, version: int, built_on: date,
         anchor = " ⚓" if cand.code.upper() in {a.split(".")[0].upper()
                                                for a in defn.anchors} else ""
         cap = "—" if cand.market_cap is None else f"{cand.market_cap:,.0f} {cand.currency}"
-        add(f"| {cand.ticker}{anchor} | {cand.name} | {cand.exchange} | {cand.industry} "
+        marks = f" {symbols(cand.flags)}" if cand.flags else ""      # COHORT-3: see the legend
+        add(f"| {cand.ticker}{marks}{anchor} | {cand.name} | {cand.exchange} | {cand.industry} "
             f"| {cap} | {cand.source}"
             + (f" (+{'/'.join(cand.filled)}: yfinance)" if cand.filled else "") + " |")
     add("")
@@ -103,6 +105,21 @@ def render_report(*, defn: CohortDefinition, version: int, built_on: date,
             for r in group:
                 add(f"- `{r.ticker}` — {r.reason}")
             add("")
+    add("")
+
+    # -- corrections: flagged, never hidden (COHORT-3) ----------------------- #
+    add("## Corrections and exclusions")
+    add("")
+    legend = legend_lines(members, excluded)
+    if not legend:
+        add("No member of this cohort carries a correction flag, and no company was excluded "
+            "for its size.")
+    else:
+        add("Every company a correction touched appears once, with a symbol above; this says what "
+            "was done to each. Nothing here changes who is a member.")
+        add("")
+        for line in legend:
+            add(f"    {line}" if line else "")
     add("")
     if strategy_id:
         add(f"_Ranker-only run under `{strategy_id}`. No model was called._")

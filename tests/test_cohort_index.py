@@ -449,12 +449,12 @@ def test_a_thin_index_cohort_is_not_frozen(tmp_path):
     assert not list(tmp_path.glob("**/members.csv"))
 
 
-def test_members_csv_carries_the_usd_cap_last_and_an_old_file_still_reads(tmp_path):
+def test_members_csv_carries_the_usd_cap_and_the_flags_last_and_an_old_file_still_reads(tmp_path):
     cand = Candidate(ticker="X.US", exchange="US", industry="Steel", name="X", market_cap=5e9,
                      market_cap_usd=5e9, currency="USD", source=PATH_INDEX)
     path = write_members(tmp_path / "members.csv", [cand])
     header = next(csv.reader(path.open(encoding="utf-8")))
-    assert header[-1] == "market_cap_usd" and read_members(path)[0].market_cap_usd == 5e9
+    assert header[-2:] == ["market_cap_usd", "flags"] and read_members(path)[0].market_cap_usd == 5e9
     old = tmp_path / "old.csv"
     old.write_text("ticker,yahoo_ticker,exchange,industry,market_cap,currency,isin,name,source,"
                    "filled\nX.US,X,US,Steel,5000000000,USD,,X,constituents,\n", encoding="utf-8")
