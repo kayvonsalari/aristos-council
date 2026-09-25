@@ -73,8 +73,10 @@ starts on the next build rather than one build later. `status` splits the gap-le
 build, and on 2026-09-24 every plausible alternative was tried against the endpoint — `MI`,
 `MTA`, `BIT`, `MIL`, `IT`, `XMIL`, all 404. There is no code to correct it to, so `MI` was
 removed from `market_index.yaml` with the evidence in a comment rather than left to be skipped
-at the cost of a request and a line of noise every build. `T` and `KS` 404 the same way but stay:
-they are named in every skip summary and may be added to the plan. A related correction — the
+at the cost of a request and a line of noise every build. **Korea and Tokyo (INDEX-EXCHANGE-CODES-1,
+2026-09-25):** `KS` was never EODHD's code — Korea is two exchanges, and `/exchange-symbol-list/KO`
+(KOSPI, 941 common stocks) and `/KQ` (KOSDAQ, 1,849) both answer, so the yaml now lists `KO` and
+`KQ`. `T` and `TSE` both 404, so **Tokyo is not tracked** until a code that answers is found. A related correction — the
 earlier claim that **HK** was absent was wrong: `/exchanges-list` omits it, yet
 `/exchange-symbol-list/HK` serves 3,512 names (build log, 2026-09-23T09:22:20). The
 exchange-list endpoint is not authoritative about what the symbol-list endpoint will serve.
@@ -85,10 +87,8 @@ unlistable venue used to end the whole run — on 2026-09-22 the European build 
 exchange is now skipped, named in the build log and counted in the summary ("4 exchanges
 skipped: MI, HTTP 404; …"), and the rest of the build proceeds; a *quota* refusal still stops
 everything. Probing `/exchanges-list` on 2026-09-23 (70 exchanges) showed **MI, HK, T and KS
-are all absent on this plan** — there is no Italian exchange in the list at all, so `MI` is not
-a mis-spelled code. All four stay in `market_index.yaml` on purpose, because that file records
-which venues the index is *meant* to track and deleting them would shrink the peer universe
-silently; the cost is four listing requests per build, reported every time.
+absent from that list** (HK and Korea turned out to be served anyway — see above) — there is no Italian exchange in the list at all, so `MI` is not
+a mis-spelled code. (Superseded: `MI` and Tokyo are now removed and `KS` is replaced by `KO` and `KQ`, as above.)
 
 **A network error is not a 404 (INDEX-SKIP-RETRY-1).** On 2026-09-23 a network blip skipped nine
 healthy exchanges in one second, because a URLError was treated exactly like "not found". A
@@ -221,8 +221,8 @@ the home listing is not in the index, the row is used as it stands and that is s
 
 ### Size in one currency
 
-The bands compare **`market_cap_usd`, never the local figure**. Tokyo and Korea are next
-in the build order, and a 900bn JPY company is about 6bn USD: banded in local units
+The bands compare **`market_cap_usd`, never the local figure**. Korea (`KO`, `KQ`) is in
+the build order and Tokyo may follow, and a 900bn JPY company is about 6bn USD: banded in local units
 against a 9bn USD subject it would look a hundred times too large.
 
 A row with a local cap but **no USD conversion** is excluded from the pool and counted

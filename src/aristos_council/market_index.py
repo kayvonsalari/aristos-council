@@ -338,7 +338,7 @@ class IndexRow:
 # the main European books, and the Asian and Latin American venues where the comparables
 # for a chip maker or a miner are listed.
 DEFAULT_EXCHANGES = ("US", "XETRA", "LSE", "PA", "AS", "MC", "MI", "SW", "ST", "CO",
-                     "OL", "HE", "TO", "HK", "T", "KS", "AU", "TW", "SA")
+                     "OL", "HE", "TO", "HK", "KO", "KQ", "AU", "TW", "SA")
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:

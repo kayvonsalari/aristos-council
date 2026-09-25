@@ -25,9 +25,18 @@
 # line of noise on every single build, and the comment is a better record of the reason than a
 # recurring skip is. Restore it the day the plan gains Borsa Italiana.
 #
-# T and KS (Tokyo, Korea) answer 404 the same way but are LEFT IN: unlike Milan they have a
-# plausible route to being added, they are named in the skip summary every build, and the
-# earlier reading that HK was also absent turned out to be WRONG - /exchanges-list omits HK,
+# INDEX-EXCHANGE-CODES-1 - KOREA AND TOKYO, probed 2026-09-25, one request each:
+#
+#     /exchange-symbol-list/KO  -> answered, 941 common stocks    (KOSPI)
+#     /exchange-symbol-list/KQ  -> answered, 1,849 common stocks  (KOSDAQ)
+#     /exchange-symbol-list/TSE -> 404
+#
+# "KS" was never EODHD's code for Korea: Korea is TWO exchanges, KO and KQ, and both are listed
+# below. "T" and "TSE" both 404, so TOKYO IS NOT LISTED HERE - there is no code known to work,
+# and a listing request that is KNOWN to 404 costs a request and a line of noise on every build
+# (the Milan precedent above). Restore it under the code that answers, once one is found.
+#
+# The earlier reading that HK was also absent turned out to be WRONG - /exchanges-list omits HK,
 # yet /exchange-symbol-list/HK serves 3,512 names (build log, 2026-09-23T09:22:20). The
 # exchange-list endpoint is not authoritative about what the symbol-list endpoint will serve,
 # which is exactly why these are probed one at a time and not trusted wholesale.
@@ -49,8 +58,8 @@ exchanges:
   # Asia-Pacific and Latin America — where the comparables for a chip maker, a miner or
   # a shipping line are actually listed. Peers follow the industry, not the listing.
   - HK
-  - T             # Tokyo
-  - KS            # Korea
+  - KO            # Korea KOSPI
+  - KQ            # Korea KOSDAQ
   - AU            # Australia
   - TW            # Taiwan
   - SA            # Brazil
