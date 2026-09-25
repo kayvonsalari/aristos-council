@@ -1692,6 +1692,7 @@ RUNG_NONE = "none"
 
 DEFAULT_FLOOR = 12
 DEFAULT_CAP = 40
+LADDER_STEPS = 3                   # the three rungs above, numbered 1-3 in the cohort report
 
 _FINANCIAL_SECTORS = ("financial services", "financials", "financial")
 _FINANCIAL_INDUSTRY_PREFIXES = ("bank", "insurance", "capital markets",
@@ -1707,6 +1708,12 @@ class PeerGroup:
     band: str = ""
     reasons: list[str] = field(default_factory=list)
     snapshot: str = ""
+    # PEER-LABEL-MATCH-1 - which step of the ladder (1, 2 or 3) found the cohort, how many
+    # DISTINCT companies it holds (counted by company identity, not by ticker), and which label
+    # system matched each member ("GICS" / "EODHD").
+    step: int = 0
+    distinct_companies: int = 0
+    matched_on: dict = field(default_factory=dict)
 
     @property
     def available(self) -> bool:
@@ -1720,7 +1727,8 @@ class PeerGroup:
         if not self.members:
             return "; ".join(self.reasons) or "no peer group could be formed"
         return (f"{len(self.members)} peers at {self.rung} ({self.band}), "
-                f"index snapshot {self.snapshot or 'unknown'}")
+                f"index snapshot {self.snapshot or 'unknown'} - found at step {self.step} of "
+                f"{LADDER_STEPS}, {self.distinct_companies} distinct companies")
 
 
 def is_financial(row: IndexRow) -> bool:
@@ -1737,11 +1745,53 @@ def is_financial(row: IndexRow) -> bool:
     return any(industry.startswith(p) for p in _FINANCIAL_INDUSTRY_PREFIXES)
 
 
-def _classification(row: IndexRow, level: str) -> str:
-    """The key a rung compares on, falling back when GICS is absent."""
-    if level == "subindustry":
-        return row.gics_subindustry or row.industry
-    return row.gics_industry or row.industry
+# PEER-LABEL-MATCH-1 - like with like. A row carries two label SYSTEMS that merely share words:
+# the GICS fields (sub-industry, industry) and EODHD's own ``industry``. The ladder used to fall
+# back from one to the other, so a row with NO GICS label was matched against GICS names on the
+# strength of its EODHD wording ("Semiconductors" is both an EODHD industry and a GICS
+# sub-industry). Now GICS is compared with GICS and EODHD with EODHD, and nothing else.
+LABEL_GICS = "GICS"
+LABEL_EODHD = "EODHD"
+
+# A provider's stand-in for "no label" is not a label: 'Other' is EODHD's industry for 1,400-odd
+# unrelated rows, and matching them on it would be matching on nothing.
+_NON_LABELS = frozenset(("", "other", "n/a", "na", "unknown", "none", "-", "--", "nan", "null"))
+
+
+def _label(value) -> str:
+    text = (value or "").strip().lower()
+    return "" if text in _NON_LABELS else text
+
+
+def _gics_label(row: IndexRow, level: str) -> str:
+    return _label(row.gics_subindustry if level == "subindustry" else row.gics_industry)
+
+
+def _eodhd_label(row: IndexRow) -> str:
+    return _label(row.industry)
+
+
+def _subject_systems(subject: IndexRow, level: str) -> tuple:
+    """The label systems the subject can be matched in at this level.
+
+    Only the system the subject actually HAS a label in: a subject with a GICS sub-industry is
+    matched on GICS; one without falls to its EODHD industry - and only against EODHD industry.
+    """
+    if _gics_label(subject, level):
+        return (LABEL_GICS,)
+    if _eodhd_label(subject):
+        return (LABEL_EODHD,)
+    return ()
+
+
+def _label_hits(row: IndexRow, subject: IndexRow, level: str, systems: tuple) -> tuple:
+    """The label systems in which ``row`` matches the subject, in ``systems`` only."""
+    hits = []
+    if LABEL_GICS in systems and _gics_label(row, level) == _gics_label(subject, level):
+        hits.append(LABEL_GICS)
+    if LABEL_EODHD in systems and _eodhd_label(row) == _eodhd_label(subject):
+        hits.append(LABEL_EODHD)
+    return tuple(hits)
 
 
 def _within(cap: Optional[float], subject: float, low: float, high: float) -> bool:
@@ -1857,8 +1907,8 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
 
     subject_financial = is_financial(subject)
     if not subject.gics_subindustry:
-        group.reasons.append("subject has no GICS sub-industry; fell back to the EODHD "
-                             "industry field")
+        group.reasons.append("subject has no GICS sub-industry; matched on its EODHD industry "
+                             "label only, and only against other EODHD industry labels")
 
     # PEER-DEDUP-1 - a company is never its own peer, and "its own" means every LINE of it,
     # not just the identical ticker string. TSM.US (an ADR that names 2330.TW as home) stood in
@@ -1942,13 +1992,18 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     )
     subject_cap = subject.market_cap_usd
     tried: list = []
-    for rung, level, low, high in ladder:
-        key = _classification(subject, level)
-        if not key:
+    for step, (rung, level, low, high) in enumerate(ladder, start=1):
+        systems = _subject_systems(subject, level)
+        if not systems:
             continue
-        matched = [r for r in pool
-                   if _classification(r, level) == key
-                   and _within(r.market_cap_usd, subject_cap, low, high)]
+        matched, how = [], {}
+        for r in pool:
+            if not _within(r.market_cap_usd, subject_cap, low, high):
+                continue
+            hits = _label_hits(r, subject, level, systems)
+            if hits:
+                matched.append(r)
+                how[r.ticker] = "+".join(hits)
         if len(matched) >= floor:
             matched.sort(key=lambda r: (_log_distance(r.market_cap_usd, subject_cap),
                                         r.ticker))
@@ -1959,6 +2014,10 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                     f"nearest in size")
             group.members = sorted(trimmed, key=lambda r: r.ticker)
             group.rung, group.band = rung, f"{low:g}x-{high:g}x market cap (USD)"
+            group.step = step
+            group.matched_on = {r.ticker: how[r.ticker] for r in group.members}
+            group.distinct_companies = len({company_of.get(normalise_symbol(r.ticker), r.ticker)
+                                            for r in group.members})
             return group
         tried.append((rung, len(matched)))
         group.reasons.append(f"{rung}: only {len(matched)} comparable companies found")
@@ -1991,6 +2050,8 @@ def peer_snapshot(group: PeerGroup) -> dict:
         "subject": group.subject.ticker if group.subject else "",
         "snapshot": group.snapshot,
         "rung": group.rung,
+        "step": group.step,
+        "distinct_companies": group.distinct_companies,
         "band": group.band,
         "members": [r.ticker for r in group.members],
         "yahoo_members": [r.yahoo_ticker for r in group.members if r.yahoo_ticker],
@@ -2118,13 +2179,13 @@ def _cmd_peers(args) -> int:
         return 1
     _say(group.sentence())
     _say(f"{'ticker':16s} {'name':28s} {'exch':6s} {'local cap':>20s} "
-         f"{'USD cap':>16s}  sub-industry")
+         f"{'USD cap':>16s}  {'matched':10s} sub-industry")
     for row in group.members:
         local = ("-" if row.market_cap is None
                  else f"{row.market_cap:,.0f} {row.currency}")
         usd = "-" if row.market_cap_usd is None else f"{row.market_cap_usd:,.0f}"
         _say(f"{row.ticker:16s} {row.name[:28]:28s} {row.exchange:6s} {local:>20s} "
-             f"{usd:>16s}  {row.classification}")
+             f"{usd:>16s}  {group.matched_on.get(row.ticker, ''):10s} {row.classification}")
     for reason in group.reasons:
         _say(f"  note: {reason}")
     return 0

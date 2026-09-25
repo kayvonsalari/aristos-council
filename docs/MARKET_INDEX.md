@@ -282,8 +282,12 @@ are counted in `status`, and a fund or suspect subject gets no peer group and a 
 | — | abstain, naming the **widest rung tried** and its count | |
 
 It widens the **band** before the **classification**, because keeping the industry is the
-cheaper concession. Where GICS fields are missing it falls back to the EODHD industry
-field and says so in the reasons.
+cheaper concession. **Labels are compared like with like (PEER-LABEL-MATCH-1, 2026-09-25):** GICS against
+GICS, EODHD's own `industry` against EODHD's — never one against the other, so a row with no GICS label is not
+matched against GICS names by coincidence of wording ("Semiconductors" is both an EODHD industry and a GICS
+sub-industry), and the provider's `Other` is not a label at all. A subject with no GICS sub-industry is matched
+on its EODHD industry only, and the reasons say so. The cohort report states **which step (1, 2 or 3) found the
+cohort and how many distinct companies it holds**, and the peer table shows which label system matched each member.
 
 Always excluded: the subject itself; rows with no market cap (counted in the reasons);
 and financials unless the subject is itself a financial — a bank's balance sheet is its

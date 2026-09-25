@@ -17,7 +17,8 @@ from aristos_council.market_index import (RECEIPT_BDR, RECEIPT_BR_FRACTIONAL, RE
                                           RECEIPT_LSE_GDR, RECEIPT_LSE_LINE, RECEIPT_SWISS_LINE,
                                           SOURCE_EODHD_LISTING, IndexRow, IndexStore,
                                           company_groups, company_key, one_row_per_company,
-                                          load_config, peers, receipt_kind, secondary_lines,
+                                          load_config, peer_snapshot, peers, receipt_kind,
+                                          secondary_lines,
                                           size_disputes, size_suspects, status)
 
 SNAPSHOT = "2026-09-25"
@@ -362,3 +363,88 @@ def test_status_counts_size_suspect_rows_and_undecidable_companies(tmp_path):
     assert out.size_disputed == 1
     text = " ".join(out.lines())
     assert "1 row(s) size suspect" in text and "cannot be adjudicated" in text
+
+
+# =========================================================================== #
+# PEER-LABEL-MATCH-1
+# =========================================================================== #
+def _no_gics(ticker, name="", *, eodhd="Semiconductors", cap_bn=100.0):
+    """A row with an EODHD industry and NO GICS label - what the provider serves for many
+    secondary and thinly-covered lines (NVDA.SW read 'Semiconductors' and no GICS at all)."""
+    return _row(ticker, name, sub="", industry="", eodhd=eodhd, cap_bn=cap_bn)
+
+
+def test_a_row_with_no_gics_label_is_not_matched_against_gics_names_by_wording():
+    """'Semiconductors' is BOTH an EODHD industry and a GICS sub-industry. The ladder used to fall
+    back from one to the other, so these 14 GICS-less rows counted as GICS semiconductors."""
+    subject = _row("SUBJ.US", "Subject", sub="Semiconductors", eodhd="Semiconductors")
+    look_alikes = [_no_gics(f"LOOK{i:02d}.US") for i in range(14)]
+    group = peers("SUBJ.US", rows=[subject, *look_alikes])
+    assert not group.available
+    assert all(m.ticker not in _tickers(group) for m in look_alikes)
+
+
+def test_a_subject_with_no_gics_label_is_matched_on_eodhd_labels_only():
+    subject = _no_gics("SUBJ.US", "Subject")
+    eodhd_peers = [_no_gics(f"EOD{i:02d}.US") for i in range(12)]
+    gics_only = [_row(f"GICS{i:02d}.US", sub="Semiconductors", industry="Semiconductors",
+                      eodhd="") for i in range(5)]
+    group = peers("SUBJ.US", rows=[subject, *eodhd_peers, *gics_only])
+    assert group.available
+    assert set(_tickers(group)) == {m.ticker for m in eodhd_peers}
+    assert set(group.matched_on.values()) == {"EODHD"}
+    assert any("EODHD industry label only" in r for r in group.reasons)
+
+
+def test_a_subject_with_a_gics_label_matches_gics_and_says_so():
+    subject = _row("SUBJ.US", "Subject")
+    group = peers("SUBJ.US", rows=[subject, *_fillers(12)])
+    assert group.available and set(group.matched_on.values()) == {"GICS"}
+
+
+def test_the_providers_other_is_not_a_label():
+    """EODHD files 1,400-odd unrelated rows under industry 'Other'; two of them are not peers."""
+    subject = _no_gics("SUBJ.US", "Subject", eodhd="Other")
+    others = [_no_gics(f"OTH{i:02d}.US", eodhd="Other") for i in range(14)]
+    group = peers("SUBJ.US", rows=[subject, *others])
+    assert not group.available
+
+
+def test_the_report_states_the_step_and_the_distinct_company_count():
+    subject = _row("SUBJ.US", "Subject")
+    group = peers("SUBJ.US", rows=[subject, *_fillers(13)])
+    assert group.step == 1 and group.distinct_companies == 13
+    sentence = group.sentence()
+    assert "found at step 1 of 3" in sentence and "13 distinct companies" in sentence
+
+
+def test_a_cohort_found_by_a_wider_rung_names_that_step():
+    """Fillers at 8x the subject's size: outside the tight band (step 1), inside the wide one."""
+    subject = _row("SUBJ.US", "Subject", cap_bn=10.0)
+    group = peers("SUBJ.US", rows=[subject, *_fillers(13, cap_bn=80.0)])
+    assert group.step == 2 and "found at step 2 of 3" in group.sentence()
+
+
+def test_the_industry_rung_is_step_three():
+    subject = _row("SUBJ.US", "Subject", sub="Alpha", industry="Group", eodhd="Alpha Ind")
+    cousins = [_row(f"COUS{i:02d}.US", sub=f"Beta{i}", industry="Group", eodhd=f"Beta Ind {i}",
+                    cap_bn=100.0) for i in range(13)]
+    group = peers("SUBJ.US", rows=[subject, *cousins])
+    assert group.step == 3 and group.rung.startswith("industry")
+
+
+def test_the_distinct_count_is_by_company_not_by_ticker():
+    """A cohort's count is companies: after dedup no two members share an identity."""
+    subject = _row("SUBJ.US", "Subject")
+    twin_a = _row("TWIN.US", "Twin Co", primary="TWIN.US", isin="US0000000001")
+    twin_b = _row("TWIN.XETRA", "Twin Co", primary="TWIN.US", isin="DE0000000001",
+                  market="XETRA")
+    group = peers("SUBJ.US", rows=[subject, twin_a, twin_b, *_fillers(12)])
+    assert len(group.members) == 13 and group.distinct_companies == 13
+    assert sum(1 for m in _tickers(group) if m.startswith("TWIN")) == 1
+
+
+def test_the_snapshot_records_the_step_and_the_distinct_count():
+    subject = _row("SUBJ.US", "Subject")
+    snap = peer_snapshot(peers("SUBJ.US", rows=[subject, *_fillers(13)]))
+    assert snap["step"] == 1 and snap["distinct_companies"] == 13

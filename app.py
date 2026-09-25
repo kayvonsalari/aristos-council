@@ -3648,6 +3648,7 @@ def _render_peers(result) -> None:
         "Market cap (USD)": ("—" if r.market_cap_usd is None
                              else f"{r.market_cap_usd:,.0f}"),
         "Sub-industry": r.classification,
+        "Matched on": group.matched_on.get(r.ticker, ""),
     } for r in group.members]), hide_index=True, width="stretch")
     for reason in group.reasons:
         st.caption(f"· {reason}")
