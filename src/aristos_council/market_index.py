@@ -1714,6 +1714,9 @@ class PeerGroup:
     step: int = 0
     distinct_companies: int = 0
     matched_on: dict = field(default_factory=dict)
+    # PEER-LABEL-RECALL-1 - every corrected label this group actually used (the subject's or a
+    # member's), so a reader can tell a provider label from a corrected one.
+    overridden: list = field(default_factory=list)
 
     @property
     def available(self) -> bool:
@@ -1745,6 +1748,110 @@ def is_financial(row: IndexRow) -> bool:
     return any(industry.startswith(p) for p in _FINANCIAL_INDUSTRY_PREFIXES)
 
 
+# --------------------------------------------------------------------------- #
+# PEER-LABEL-RECALL-1 - a small file of label CORRECTIONS
+# --------------------------------------------------------------------------- #
+# The index mirrors the provider's classification (see docs/MARKET_INDEX.md, "Whose
+# classification is this?") and does not maintain a private taxonomy. But a provider label that is
+# plainly wrong hides a rival from every cohort it belongs to: Siemens Energy and Schneider
+# Electric are filed as Industrial Machinery and Micron's US line as Semiconductor Materials &
+# Equipment. ``data/label_overrides.yaml`` is the narrow, dated, reasoned escape hatch:
+#
+#     overrides:
+#       - ticker: ENR.XETRA
+#         gics_subindustry: Heavy Electrical Equipment
+#         date: 2026-09-25
+#         reason: why the provider's label is wrong
+#         gics_industry: Electrical Equipment      # optional
+#
+# DATA CORRECTIONS ONLY: it changes a label, never a size, a listing or a peer. The table on disk
+# is never rewritten - the correction is applied to the rows a query reads, and every use is
+# shown in the cohort report as "label overridden". The corrected GICS INDUSTRY is taken from the
+# file when given, otherwise from the industry the index's own rows already carry for that
+# sub-industry, so a corrected row also sits in the right industry for the wide rung.
+DEFAULT_OVERRIDES = Path(__file__).resolve().parents[2] / "data" / "label_overrides.yaml"
+
+
+@dataclass(frozen=True)
+class LabelOverride:
+    ticker: str
+    gics_subindustry: str
+    date: str
+    reason: str
+    gics_industry: str = ""
+
+
+def load_label_overrides(path: str | Path = DEFAULT_OVERRIDES) -> list[LabelOverride]:
+    """The override file, or an empty list when there is none. A malformed one is an error:
+    a correction that silently fails to apply is worse than one that is refused."""
+    import yaml
+
+    path = Path(path)
+    if not path.exists():
+        return []
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    entries = doc.get("overrides") if isinstance(doc, dict) else None
+    if entries is None:
+        return []
+    if not isinstance(entries, list):
+        raise MarketIndexError(f"{path}: 'overrides' must be a list")
+    out = []
+    for i, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise MarketIndexError(f"{path}: override {i} must be a mapping")
+        missing = [k for k in ("ticker", "gics_subindustry", "date", "reason")
+                   if not str(entry.get(k) or "").strip()]
+        if missing:
+            raise MarketIndexError(f"{path}: override {i} is missing {', '.join(missing)} - "
+                                   f"every correction carries its ticker, the corrected label, "
+                                   f"a date and a reason")
+        out.append(LabelOverride(
+            ticker=normalise_symbol(str(entry["ticker"])),
+            gics_subindustry=str(entry["gics_subindustry"]).strip(),
+            date=str(entry["date"]).strip(), reason=str(entry["reason"]).strip(),
+            gics_industry=str(entry.get("gics_industry") or "").strip()))
+    return out
+
+
+def apply_label_overrides(rows, overrides) -> tuple[list["IndexRow"], dict]:
+    """``(rows, applied)``: the rows with corrected labels, and ``{ticker: (was, override)}``.
+
+    Rows are copied, never mutated, so the caller's table (and the index on disk) is untouched.
+    """
+    import dataclasses
+    from collections import Counter
+
+    rows = list(rows)
+    wanted = {o.ticker: o for o in overrides or ()}
+    if not wanted:
+        return rows, {}
+    industry_of: dict[str, Counter] = {}
+    for row in rows:
+        if row.gics_subindustry and row.gics_industry:
+            industry_of.setdefault(row.gics_subindustry, Counter())[row.gics_industry] += 1
+    out, applied = [], {}
+    for row in rows:
+        override = wanted.get(normalise_symbol(row.ticker))
+        if override is None:
+            out.append(row)
+            continue
+        industry = override.gics_industry
+        if not industry and industry_of.get(override.gics_subindustry):
+            counts = industry_of[override.gics_subindustry]
+            industry = sorted(counts, key=lambda k: (-counts[k], k))[0]
+        applied[normalise_symbol(row.ticker)] = (
+            row.gics_subindustry or row.industry or "unlabelled", override)
+        out.append(dataclasses.replace(
+            row, gics_subindustry=override.gics_subindustry,
+            gics_industry=industry or row.gics_industry))
+    return out, applied
+
+
+def _override_line(ticker: str, was: str, override: LabelOverride) -> str:
+    return (f"label overridden: {ticker} {was} -> {override.gics_subindustry} "
+            f"({override.date}: {override.reason})")
+
+
 # PEER-LABEL-MATCH-1 - like with like. A row carries two label SYSTEMS that merely share words:
 # the GICS fields (sub-industry, industry) and EODHD's own ``industry``. The ladder used to fall
 # back from one to the other, so a row with NO GICS label was matched against GICS names on the
@@ -1772,16 +1879,20 @@ def _eodhd_label(row: IndexRow) -> str:
 
 
 def _subject_systems(subject: IndexRow, level: str) -> tuple:
-    """The label systems the subject can be matched in at this level.
+    """The label systems the subject can be matched in at this level: every one it has a label in.
 
-    Only the system the subject actually HAS a label in: a subject with a GICS sub-industry is
-    matched on GICS; one without falls to its EODHD industry - and only against EODHD industry.
+    PEER-LABEL-RECALL-1: a peer qualifies on EITHER system, so a wrong label in one does not hide
+    a rival. Measured 2026-09-25: Siemens Energy and Schneider Electric are filed by GICS as
+    "Industrial Machinery" while their rivals (GE Vernova, Vestas, Eaton) are "Heavy Electrical
+    Equipment" or "Electrical Components" - but EODHD files them all under one industry, so the
+    second system finds what the first hides. Each system still compares only with itself.
     """
+    systems = []
     if _gics_label(subject, level):
-        return (LABEL_GICS,)
+        systems.append(LABEL_GICS)
     if _eodhd_label(subject):
-        return (LABEL_EODHD,)
-    return ()
+        systems.append(LABEL_EODHD)
+    return tuple(systems)
 
 
 def _label_hits(row: IndexRow, subject: IndexRow, level: str, systems: tuple) -> tuple:
@@ -1812,7 +1923,7 @@ def _log_distance(cap: Optional[float], subject: float) -> float:
 
 def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
           store: Optional[IndexStore] = None, rows: Optional[list[IndexRow]] = None,
-          size_factor: float = DEFAULT_SIZE_FACTOR) -> PeerGroup:
+          size_factor: float = DEFAULT_SIZE_FACTOR, overrides=...) -> PeerGroup:
     """The peer group for one company, by ladder, from the local table only.
 
     Deterministic for a given snapshot: every rung is a filter over the same rows and the
@@ -1824,6 +1935,15 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         group.reasons.append("the market index is empty — run "
                              "`python -m aristos_council.market_index build`")
         return group
+
+    # PEER-LABEL-RECALL-1 - corrected labels are applied to the rows this query reads, before the
+    # subject is looked up, so the subject, its other lines and every candidate see them. Left at
+    # its default the shipped file is read when the REAL index is (``store``/no ``rows``) and
+    # nothing is applied to rows handed in directly, so a fabricated table never meets a real
+    # correction by accident.
+    if overrides is ...:
+        overrides = load_label_overrides() if rows is None else []
+    universe, applied = apply_label_overrides(universe, overrides)
 
     wanted = (ticker or "").strip().upper()
     by_ticker = {r.ticker.upper(): r for r in universe}
@@ -1864,6 +1984,12 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                                  f"receipt's own and may be unreliable")
 
     group.subject = subject
+    if normalise_symbol(subject.ticker) in applied:
+        was, override = applied[normalise_symbol(subject.ticker)]
+        group.overridden.append({"ticker": subject.ticker, "role": "subject", "was": was,
+                                 "now": override.gics_subindustry, "date": override.date,
+                                 "reason": override.reason})
+        group.reasons.append(_override_line(subject.ticker, was, override))
     stamps = sorted(r.fetched_at for r in universe if r.fetched_at)
     group.snapshot = stamps[-1] if stamps else ""
 
@@ -1909,6 +2035,8 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     if not subject.gics_subindustry:
         group.reasons.append("subject has no GICS sub-industry; matched on its EODHD industry "
                              "label only, and only against other EODHD industry labels")
+    elif not _eodhd_label(subject):
+        group.reasons.append("subject has no EODHD industry label; matched on GICS only")
 
     # PEER-DEDUP-1 - a company is never its own peer, and "its own" means every LINE of it,
     # not just the identical ticker string. TSM.US (an ADR that names 2330.TW as home) stood in
@@ -2016,8 +2144,23 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             group.rung, group.band = rung, f"{low:g}x-{high:g}x market cap (USD)"
             group.step = step
             group.matched_on = {r.ticker: how[r.ticker] for r in group.members}
+            tally = {}
+            for how_matched in group.matched_on.values():
+                tally[how_matched] = tally.get(how_matched, 0) + 1
+            if len(systems) > 1:
+                group.reasons.append(
+                    f"matched on: GICS only {tally.get(LABEL_GICS, 0)}, EODHD label only "
+                    f"{tally.get(LABEL_EODHD, 0)}, both {tally.get(f'{LABEL_GICS}+{LABEL_EODHD}', 0)}")
             group.distinct_companies = len({company_of.get(normalise_symbol(r.ticker), r.ticker)
                                             for r in group.members})
+            for member in group.members:
+                if normalise_symbol(member.ticker) in applied:
+                    was, override = applied[normalise_symbol(member.ticker)]
+                    group.overridden.append({
+                        "ticker": member.ticker, "role": "member", "was": was,
+                        "now": override.gics_subindustry, "date": override.date,
+                        "reason": override.reason})
+                    group.reasons.append(_override_line(member.ticker, was, override))
             return group
         tried.append((rung, len(matched)))
         group.reasons.append(f"{rung}: only {len(matched)} comparable companies found")
@@ -2052,6 +2195,7 @@ def peer_snapshot(group: PeerGroup) -> dict:
         "rung": group.rung,
         "step": group.step,
         "distinct_companies": group.distinct_companies,
+        "label_overrides": list(group.overridden),
         "band": group.band,
         "members": [r.ticker for r in group.members],
         "yahoo_members": [r.yahoo_ticker for r in group.members if r.yahoo_ticker],

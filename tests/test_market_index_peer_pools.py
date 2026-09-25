@@ -16,8 +16,9 @@ from __future__ import annotations
 from aristos_council.market_index import (RECEIPT_BDR, RECEIPT_BR_FRACTIONAL, RECEIPT_CDR,
                                           RECEIPT_LSE_GDR, RECEIPT_LSE_LINE, RECEIPT_SWISS_LINE,
                                           SOURCE_EODHD_LISTING, IndexRow, IndexStore,
+                                          MarketIndexError, apply_label_overrides,
                                           company_groups, company_key, one_row_per_company,
-                                          load_config, peer_snapshot, peers, receipt_kind,
+                                          load_config, load_label_overrides, peer_snapshot, peers, receipt_kind,
                                           secondary_lines,
                                           size_disputes, size_suspects, status)
 
@@ -377,7 +378,7 @@ def _no_gics(ticker, name="", *, eodhd="Semiconductors", cap_bn=100.0):
 def test_a_row_with_no_gics_label_is_not_matched_against_gics_names_by_wording():
     """'Semiconductors' is BOTH an EODHD industry and a GICS sub-industry. The ladder used to fall
     back from one to the other, so these 14 GICS-less rows counted as GICS semiconductors."""
-    subject = _row("SUBJ.US", "Subject", sub="Semiconductors", eodhd="Semiconductors")
+    subject = _row("SUBJ.US", "Subject", sub="Semiconductors", eodhd="Chip Design")
     look_alikes = [_no_gics(f"LOOK{i:02d}.US") for i in range(14)]
     group = peers("SUBJ.US", rows=[subject, *look_alikes])
     assert not group.available
@@ -396,9 +397,9 @@ def test_a_subject_with_no_gics_label_is_matched_on_eodhd_labels_only():
     assert any("EODHD industry label only" in r for r in group.reasons)
 
 
-def test_a_subject_with_a_gics_label_matches_gics_and_says_so():
-    subject = _row("SUBJ.US", "Subject")
-    group = peers("SUBJ.US", rows=[subject, *_fillers(12)])
+def test_a_member_matched_on_gics_alone_says_so():
+    subject = _row("SUBJ.US", "Subject", eodhd="Chip Design")
+    group = peers("SUBJ.US", rows=[subject, *_fillers(12)])       # fillers: EODHD "Semiconductors"
     assert group.available and set(group.matched_on.values()) == {"GICS"}
 
 
@@ -448,3 +449,157 @@ def test_the_snapshot_records_the_step_and_the_distinct_count():
     subject = _row("SUBJ.US", "Subject")
     snap = peer_snapshot(peers("SUBJ.US", rows=[subject, *_fillers(13)]))
     assert snap["step"] == 1 and snap["distinct_companies"] == 13
+
+
+# =========================================================================== #
+# PEER-LABEL-RECALL-1
+# =========================================================================== #
+SIM = "Specialty Industrial Machinery"        # EODHD's industry for the whole electrical family
+MACH = "Industrial Machinery & Supplies & Components"
+HEAVY = "Heavy Electrical Equipment"
+COMPONENTS = "Electrical Components & Equipment"
+
+
+def _co(ticker, name, cap_bn, *, sub, gics_industry, eodhd=SIM, **kw):
+    return _row(ticker, name, cap_bn=cap_bn, sub=sub, industry=gics_industry, eodhd=eodhd, **kw)
+
+
+def test_a_wrong_label_in_one_system_does_not_hide_a_rival_the_other_system_finds():
+    """The Schneider / Siemens shape: GICS files them as machinery, EODHD files them with Eaton."""
+    subject = _co("SUBJ.US", "Subject", 165, sub=COMPONENTS, gics_industry="Electrical Equipment")
+    gics_only = [_co(f"GICS{i}.US", f"Gics Rival {i}", 100 + i * 20, sub=COMPONENTS,
+                     gics_industry="Electrical Equipment", eodhd="Electrical Parts")
+                 for i in range(6)]
+    eodhd_only = [_co(f"EOD{i}.US", f"Eodhd Rival {i}", 100 + i * 20, sub=MACH,
+                      gics_industry="Machinery") for i in range(6)]
+    group = peers("SUBJ.US", rows=[subject, *gics_only, *eodhd_only])
+    assert group.available and group.step == 1 and len(group.members) == 12
+    assert {group.matched_on[m] for m in _tickers(group)} == {"GICS", "EODHD"}
+    assert any("matched on: GICS only 6, EODHD label only 6, both 0" in r
+               for r in group.reasons)
+
+
+def _eaton_world():
+    eaton = _co("ETN.US", "Eaton Corporation PLC", 165.0, sub=COMPONENTS,
+                gics_industry="Electrical Equipment", market="US")
+    same_gics = [_co(f"{c}.US", n, cap, sub=COMPONENTS, gics_industry="Electrical Equipment",
+                     eodhd="Electrical Parts", market="US")
+                 for c, n, cap in (("EMR", "Emerson Electric", 75), ("HUBB", "Hubbell", 52),
+                                   ("AME", "Ametek", 45), ("ROK", "Rockwell Automation", 42),
+                                   ("PWR", "Quanta", 60), ("VRT", "Vertiv", 55))]
+    same_eodhd = [_co("SU.PA", "Schneider Electric S.E.", 190.8, sub=MACH,
+                      gics_industry="Machinery", market="PA"),
+                  _co("SIE.XETRA", "Siemens Aktiengesellschaft", 236.4, sub=MACH,
+                      gics_industry="Machinery", market="XETRA"),
+                  *[_co(f"{c}.ST", n, cap, sub=MACH, gics_industry="Machinery", market="ST")
+                    for c, n, cap in (("ATCO-A", "Atlas Copco AB Series A", 103.6),
+                                      ("SAND", "Sandvik AB", 49.1),
+                                      ("PH", "Parker-Hannifin", 119.0),
+                                      ("ITW", "Illinois Tool Works", 76.7))]]
+    return [eaton, *same_gics, *same_eodhd]
+
+
+def test_eatons_cohort_reaches_twelve_with_schneider_and_siemens_present():
+    """Six by GICS and six by EODHD label: neither system fills the floor alone, together they
+    do, at the tight step, and the two names the owner looked for are in it."""
+    rows = _eaton_world()
+    only_gics = [r for r in rows if r.gics_subindustry == COMPONENTS and r.ticker != "ETN.US"]
+    assert len(only_gics) == 6                              # the floor is 12: GICS alone fails
+    group = peers("ETN.US", rows=rows, overrides=load_label_overrides())
+    members = _tickers(group)
+    assert group.available and len(members) >= 12 and group.step == 1
+    assert "SU.PA" in members and "SIE.XETRA" in members
+    assert group.distinct_companies == len(members)
+
+
+def test_siemens_energys_cohort_holds_ge_vernova_and_vestas():
+    """ENR.XETRA is filed as Industrial Machinery. The override puts it with its real rivals and
+    the report says so; Vestas is outside the tight band, so the cohort is found at step 2."""
+    subject = _co("ENR.XETRA", "Siemens Energy AG", 136.9, sub=MACH, gics_industry="Machinery",
+                  market="XETRA")
+    gev = _co("GEV.US", "GE Vernova LLC", 250.4, sub=HEAVY, gics_industry="Electrical Equipment")
+    vestas = _co("VWS.CO", "Vestas Wind Systems A/S", 31.5, sub=HEAVY,
+                 gics_industry="Electrical Equipment", market="CO")
+    others = [_co(f"HEAVY{i}.US", f"Heavy Rival {i}", 20.0 + i, sub=HEAVY,
+                  gics_industry="Electrical Equipment", eodhd="Grid Equipment")
+              for i in range(10)]
+    group = peers("ENR.XETRA", rows=[subject, gev, vestas, *others],
+                  overrides=load_label_overrides())
+    assert group.available and group.step == 2
+    assert "GEV.US" in _tickers(group) and "VWS.CO" in _tickers(group)
+    assert any(r.startswith("label overridden: ENR.XETRA") and HEAVY in r for r in group.reasons)
+    assert group.overridden[0]["ticker"] == "ENR.XETRA" and group.overridden[0]["role"] == "subject"
+
+
+def test_an_override_can_bring_in_a_rival_the_eodhd_label_does_not():
+    """Micron's US line is filed as Semiconductor Materials & Equipment. Without the correction
+    it is not a semiconductor peer; with it, it is, and the report says the label was changed."""
+    subject = _row("TSM.US", "TSMC", cap_bn=100, sub="Semiconductors", eodhd="Chip Design")
+    micron = _row("MU.US", "Micron Technology Inc", cap_bn=110,
+                  sub="Semiconductor Materials & Equipment", eodhd="Semiconductors")
+    fillers = _fillers(12, cap_bn=100.0, eodhd="Chip Design")
+    rows = [subject, micron, *fillers]
+    without = peers("TSM.US", rows=rows, overrides=[])
+    with_it = peers("TSM.US", rows=rows, overrides=load_label_overrides())
+    assert "MU.US" not in _tickers(without) and without.step == 1      # 12 fill the floor alone
+    assert "MU.US" in _tickers(with_it) and with_it.step == 1
+    line = next(r for r in with_it.reasons if r.startswith("label overridden: MU.US"))
+    assert "Semiconductor Materials & Equipment -> Semiconductors" in line
+    assert "2026-09-25" in line
+
+
+def test_every_use_of_an_override_is_reported_and_an_unused_one_is_not():
+    subject = _row("SUBJ.US", "Subject", sub="Semiconductors")
+    rows = [subject, *_fillers(12), _row("MU.US", "Micron", sub="Semiconductors")]
+    group = peers("SUBJ.US", rows=rows, overrides=load_label_overrides())
+    assert [o["ticker"] for o in group.overridden] == ["MU.US"]
+    assert not any("ENR.XETRA" in r for r in group.reasons)
+
+
+def test_overrides_are_not_applied_to_a_table_handed_in_directly_by_default():
+    """A fabricated table must never meet a real correction by accident (MU.US is a real key)."""
+    subject = _row("SUBJ.US", "Subject", sub="Semiconductors", eodhd="Chip Design")
+    micron = _row("MU.US", "Micron", sub="Semiconductor Materials & Equipment",
+                  eodhd="Semiconductors")
+    group = peers("SUBJ.US", rows=[subject, micron, *_fillers(11, eodhd="Chip Design")])
+    assert group.overridden == []
+
+
+def test_applying_an_override_never_mutates_the_callers_rows():
+    micron = _row("MU.US", "Micron", sub="Semiconductor Materials & Equipment")
+    corrected, applied = apply_label_overrides([micron], load_label_overrides())
+    assert corrected[0].gics_subindustry == "Semiconductors"
+    assert micron.gics_subindustry == "Semiconductor Materials & Equipment"
+    assert applied["MU.US"][0] == "Semiconductor Materials & Equipment"
+
+
+def test_a_corrected_rows_industry_follows_from_the_industry_its_new_sub_industry_carries():
+    peer = _row("GEV.US", sub=HEAVY, industry="Electrical Equipment")
+    wrong = _row("ENR.XETRA", sub=MACH, industry="Machinery")
+    corrected, _ = apply_label_overrides([peer, wrong], load_label_overrides())
+    assert next(r for r in corrected if r.ticker == "ENR.XETRA").gics_industry == \
+        "Electrical Equipment"
+
+
+def test_the_shipped_override_file_is_complete_and_seeded_as_specified():
+    seeded = {o.ticker: o for o in load_label_overrides()}
+    assert seeded["ENR.XETRA"].gics_subindustry == HEAVY
+    assert seeded["SU.PA"].gics_subindustry == HEAVY
+    assert seeded["MU.US"].gics_subindustry == "Semiconductors"
+    assert all(o.date and o.reason for o in seeded.values())
+
+
+def test_an_override_without_a_reason_or_a_date_is_refused(tmp_path):
+    bad = tmp_path / "o.yaml"
+    bad.write_text("overrides:\n  - ticker: X.US\n    gics_subindustry: Foo\n"
+                   "    date: 2026-09-25\n", encoding="utf-8")
+    try:
+        load_label_overrides(bad)
+    except MarketIndexError as exc:
+        assert "reason" in str(exc)
+    else:
+        raise AssertionError("an override with no reason must be refused")
+
+
+def test_a_missing_override_file_is_no_overrides(tmp_path):
+    assert load_label_overrides(tmp_path / "nothing.yaml") == []

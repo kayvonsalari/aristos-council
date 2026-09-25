@@ -1,0 +1,31 @@
+# PEER-LABEL-RECALL-1 - corrections to the provider's GICS sub-industry, for the market index's
+# peer groups. DATA CORRECTIONS ONLY: a label, never a size, a listing or a peer. Applied to the
+# rows a query reads (the index on disk is not rewritten) and shown in every cohort report that
+# uses one, as "label overridden".
+#
+# Each entry needs: ticker (EODHD form), gics_subindustry (the corrected label), date, reason.
+# gics_industry is optional; when absent it is taken from the industry the index's own rows carry
+# for that sub-industry.
+#
+# Add an entry only for a label that is plainly wrong, with the evidence in the reason.
+overrides:
+  - ticker: ENR.XETRA
+    gics_subindustry: Heavy Electrical Equipment
+    date: 2026-09-25
+    reason: >-
+      Siemens Energy is filed as Industrial Machinery & Supplies & Components; it makes grid,
+      turbine and generator equipment, the same business as GE Vernova and Vestas (both
+      Heavy Electrical Equipment). The wrong label hid its closest rivals from its cohort.
+  - ticker: SU.PA
+    gics_subindustry: Heavy Electrical Equipment
+    date: 2026-09-25
+    reason: >-
+      Schneider Electric is filed as Industrial Machinery & Supplies & Components; it is an
+      electrical distribution and grid-equipment maker, not a machinery company.
+  - ticker: MU.US
+    gics_subindustry: Semiconductors
+    date: 2026-09-25
+    reason: >-
+      Micron's US listing is filed as Semiconductor Materials & Equipment; Micron makes memory
+      chips (its Xetra line is already filed as Semiconductors), so it was missing from the
+      cohorts of the chip makers it competes with.

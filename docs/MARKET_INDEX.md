@@ -250,6 +250,12 @@ second-guess them. U-Haul comes back under *Passenger Airlines*; that is their l
 a judgement of ours, and correcting it by hand would mean maintaining a private taxonomy
 that silently disagrees with the source every report cites.
 
+**One narrow exception: `data/label_overrides.yaml` (PEER-LABEL-RECALL-1).** A provider label that is plainly
+wrong hides a rival from every cohort it belongs to, so a small dated file corrects a GICS sub-industry per ticker
+(seeded: Siemens Energy and Schneider Electric → Heavy Electrical Equipment; Micron's US line → Semiconductors).
+Every entry carries a date and a reason; it corrects a label only — never a size, a listing or a peer; the index
+on disk is not rewritten; and every use is printed in the cohort report as `label overridden`.
+
 This is exactly why **the peer list is shown by name** on the Company Check page and in
 the CLI. A group assembled from someone else's classification can be wrong in ways no
 amount of internal consistency will reveal, and the only honest defence is to let the
@@ -288,6 +294,11 @@ matched against GICS names by coincidence of wording ("Semiconductors" is both a
 sub-industry), and the provider's `Other` is not a label at all. A subject with no GICS sub-industry is matched
 on its EODHD industry only, and the reasons say so. The cohort report states **which step (1, 2 or 3) found the
 cohort and how many distinct companies it holds**, and the peer table shows which label system matched each member.
+
+**A peer qualifies on either label system (PEER-LABEL-RECALL-1, 2026-09-25):** it matches the subject on its GICS
+sub-industry (steps 1–2) or industry (step 3) *or* on its EODHD industry, so a wrong label in one system does not
+hide a rival — GICS files Siemens Energy and Schneider as machinery while EODHD files them with Eaton. Size bands
+and the floor of 12 are unchanged, and the report says how many members matched on each system.
 
 Always excluded: the subject itself; rows with no market cap (counted in the reasons);
 and financials unless the subject is itself a financial — a bank's balance sheet is its
