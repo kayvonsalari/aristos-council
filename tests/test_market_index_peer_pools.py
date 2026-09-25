@@ -287,13 +287,26 @@ def test_a_row_far_from_a_consensus_of_the_companys_other_lines_is_size_suspect(
     assert "size suspect" in flagged["VWDRY.US"] and "$5.2bn" in flagged["VWDRY.US"]
 
 
-def test_two_lines_that_disagree_cannot_say_which_is_wrong_so_neither_is_flagged():
-    """The real shape: RR.LSE (GBX) reads $1.6bn and RRU.XETRA $157.9bn. Rolls-Royce is about
-    GBP 119bn, so it is the HOME line that is wrong - flagging the non-home line, as the first
-    version of this rule did, excluded the correct row for every UK company."""
-    rows = _lines("Rolls-Royce Holdings PLC", RR_LSE=1.6, RRU_XETRA=157.9)
-    assert size_suspects(rows) == {}
-    assert size_disputes(rows) == [["RR.LSE", "RRU.XETRA"]]
+def test_two_lines_that_disagree_flag_the_non_home_line_against_an_explicit_home():
+    """INDEX-GBX-SCALE-1 re-enabled this. Batch 6 had switched it off because RR.LSE (home, GBX)
+    read $1.6bn and RRU.XETRA $157.9bn - the home line was wrong only because a pounds figure was
+    scaled as pence. With that fixed, the home line is the sound anchor again."""
+    rows = _lines("Some Co", HOME_LSE=100.0, OTHER_XETRA=10.0)
+    flagged = size_suspects(rows)
+    assert list(flagged) == ["OTHER.XETRA"] and "size suspect" in flagged["OTHER.XETRA"]
+    assert size_disputes(rows) == []                    # adjudicated, so not "undecidable"
+
+
+def test_two_lines_within_the_factor_are_not_flagged():
+    assert size_suspects(_lines("Some Co", HOME_LSE=100.0, OTHER_XETRA=60.0)) == {}
+
+
+def test_two_lines_with_no_single_explicit_home_still_abstain():
+    """0013.HK and 13.HK each name themselves as primary: neither can anchor the other."""
+    a = _row("0013.HK", "Hutchmed", cap_bn=1.0, isin="KYG4672N1198", market="HK")
+    b = _row("13.HK", "Hutchmed", cap_bn=20.0, isin="KYG4672N1198", market="HK")
+    assert size_suspects([a, b]) == {}
+    assert size_disputes([a, b]) == [["0013.HK", "13.HK"]]
 
 
 def test_three_figures_that_all_disagree_flag_nothing_but_are_reported_as_disputed():
@@ -357,8 +370,9 @@ def test_a_size_suspect_subject_is_kept_but_its_doubtful_size_is_said():
 
 def test_status_counts_size_suspect_rows_and_undecidable_companies(tmp_path):
     store = IndexStore(tmp_path)
-    store.save([*_lines("Wind Co", VWS_CO=31.5, VWSB_XETRA=31.0, VWDRY_US=5.2),
-                *_lines("Two Line Co", RR_LSE=1.6, RRU_XETRA=157.9)])
+    twins = [_row("0013.HK", "Twin Co", cap_bn=1.0, isin="KYG4672N1198", market="HK"),
+             _row("13.HK", "Twin Co", cap_bn=20.0, isin="KYG4672N1198", market="HK")]
+    store.save([*_lines("Wind Co", VWS_CO=31.5, VWSB_XETRA=31.0, VWDRY_US=5.2), *twins])
     out = status(store)
     assert out.size_suspect == 1 and out.size_suspect_examples == ["VWDRY.US"]
     assert out.size_disputed == 1
