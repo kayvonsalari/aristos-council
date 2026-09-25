@@ -21,7 +21,8 @@ import pytest
 from aristos_council.market_index import (SOURCE_EODHD_LISTING, IdentityAlias, IndexRow,
                                           IndexStore, MarketIndexError, _name_key,
                                           apply_identity_aliases, company_groups,
-                                          distinct_companies, load_identity_aliases, orphan_depositary_rows,
+                                          RECEIPT_KR_PREF, distinct_companies, korean_pref_map,
+                                          load_identity_aliases, secondary_lines, orphan_depositary_rows,
                                           peer_snapshot, peers, status)
 
 SNAPSHOT = "2026-09-25"
@@ -305,3 +306,95 @@ def test_the_distinct_count_and_the_pool_agree_on_the_live_shapes():
     pref = _row("005935.KO", "Samsung Electronics Co Pref", cap_bn=1065.4, market="KO")
     assert len(company_groups([ordinary, pref], link_by_name=True)) == 2
     assert distinct_companies([ordinary, pref]) == (1, 1)
+
+
+# =========================================================================== #
+# PEER-KR-PREF-1
+# =========================================================================== #
+def _kr(code, name, cap_bn, market="KO", **kw):
+    return _row(f"{code}.{market}", name, cap_bn=cap_bn, market=market, currency="KRW", **kw)
+
+
+def _korea():
+    return [
+        _kr("005930", "Samsung Electronics Co Ltd", 1376.0),
+        _kr("005935", "Samsung Electronics Co Pref", 1065.4),
+        _kr("066570", "LG Electronics Inc", 12.0),
+        _kr("066575", "Lg Electronics Pref", 6.0),
+        _kr("091165", "Lone Pref Series Co", 1.0),                       # ends in 5, no 0-line
+    ]
+
+
+def test_samsung_and_lg_preference_lines_fold_into_their_ordinary_line():
+    rows = _korea()
+    assert korean_pref_map(rows) == {"005935.KO": "005930.KO", "066575.KO": "066570.KO"}
+    found = secondary_lines(rows)
+    assert found == {"005935.KO": RECEIPT_KR_PREF, "066575.KO": RECEIPT_KR_PREF}
+
+
+def test_the_second_and_third_series_end_in_7_and_9():
+    rows = [_kr("005380", "Hyundai Motor Co Ltd", 40.0), _kr("005385", "Hyundai Motor Co Pref", 10.0),
+            _kr("005387", "Hyundai Motor Co Pfd", 5.0), _kr("005389", "Hyundai Motor Co Prf", 4.0)]
+    assert set(korean_pref_map(rows)) == {"005385.KO", "005387.KO", "005389.KO"}
+
+
+def test_a_code_ending_in_5_with_no_ordinary_line_is_left_alone():
+    assert "091165.KO" not in secondary_lines(_korea())
+
+
+def test_a_code_ending_in_5_whose_ordinary_line_has_a_different_name_is_left_alone():
+    """Null is not a match: same code shape, but the names do not agree, so nothing folds."""
+    rows = [_kr("000150", "Doosan Bobcat Inc", 3.0), _kr("000155", "Doosan Pref Shs", 6.0)]
+    assert secondary_lines(rows) == {}
+
+
+def test_the_ordinary_line_must_be_on_the_same_exchange():
+    rows = [_kr("005930", "Samsung Electronics Co Ltd", 1376.0, market="KO"),
+            _kr("005935", "Samsung Electronics Co Pref", 1065.4, market="KQ")]
+    assert secondary_lines(rows) == {}
+
+
+def test_a_korean_ordinary_line_and_non_korean_codes_are_never_touched():
+    rows = [_kr("005930", "Samsung Electronics Co Ltd", 1376.0),
+            _row("00590.TW", "Some Taiwan Co", market="TW"),
+            _row("AAPL.US", "Apple Inc", market="US")]
+    assert secondary_lines(rows) == {}
+
+
+def _samsung_world():
+    subject = _kr("005930", "Samsung Electronics Co Ltd", 1376.0, sub="Semiconductors",
+                  industry="Semis", eodhd="Semiconductors")
+    pref = _kr("005935", "Samsung Electronics Co Pref", 1065.4, sub="Semiconductors",
+               industry="Semis", eodhd="Semiconductors")
+    rivals = [_row(f"SEMI{i:02d}.US", f"Semi Co {i}", cap_bn=1200.0 + i * 20, sub="Semiconductors",
+                   industry="Semis", eodhd="Semiconductors") for i in range(13)]
+    return [subject, pref, *rivals]
+
+
+def test_a_preference_line_is_never_a_peer_and_is_counted():
+    rivals = _fillers(13, cap_bn=1100.0, sub="Semiconductors", industry="Semis",
+                      eodhd="Semiconductors")
+    subject = _row("SUBJ.US", "Chip Subject", cap_bn=1200.0, sub="Semiconductors",
+                   industry="Semis", eodhd="Semiconductors")
+    rows = [subject, *_samsung_world()[:2], *rivals]
+    group = peers("SUBJ.US", rows=rows, aliases=[])
+    members = _tickers(group)
+    assert "005930.KO" in members and "005935.KO" not in members
+    assert any("Korean preference share 1" in r for r in group.reasons)
+
+
+def test_looking_up_the_preference_line_answers_for_the_ordinary_line():
+    group = peers("005935.KO", rows=_samsung_world(), aliases=[])
+    assert group.subject.ticker == "005930.KO"
+    assert any("005935.KO is a Korean preference share; peers computed for 005930.KO"
+               in r for r in group.reasons)
+    assert "005935.KO" not in _tickers(group) and group.available
+
+
+def test_status_counts_korean_preference_shares_as_their_own_kind(tmp_path):
+    store = IndexStore(tmp_path)
+    store.save(_korea())
+    out = status(store, aliases=[])
+    assert out.receipts == {RECEIPT_KR_PREF: 2}
+    assert out.receipts_sole == 0                      # each has its ordinary line here
+    assert f"{RECEIPT_KR_PREF}: 2 (e.g. 005935.KO, 066575.KO)" in " ".join(out.lines())

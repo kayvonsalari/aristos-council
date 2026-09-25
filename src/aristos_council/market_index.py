@@ -1771,6 +1771,7 @@ RECEIPT_CDR = "Canadian receipt (CDR)"
 RECEIPT_LSE_LINE = "London 0xxx line of a foreign company"
 RECEIPT_LSE_GDR = "London depositary receipt (GDR)"
 RECEIPT_SWISS_LINE = "Swiss line of a foreign company"
+RECEIPT_KR_PREF = "Korean preference share"
 
 # Sao Paulo tickers: a BDR is <4 characters>3<2..9> (A1MD34, AVGO34, E1TN34, TSMC34, NVDC34);
 # no Brazilian company code has that shape (they end 3, 4, 5, 6 or 11), and the one 3x-ending
@@ -1850,6 +1851,43 @@ def _has_identity(row: "IndexRow") -> bool:
     return bool((row.primary_ticker or "").strip() or (row.isin or "").strip())
 
 
+# PEER-KR-PREF-1 - Korean preference shares. Korea (KO, KQ) lists a company's preference series as
+# SEPARATE rows with their own ISIN and PrimaryTicker, so no handle links them to the ordinary line:
+# 005935.KO "Samsung Electronics Co Pref" ($1,065bn) stood beside 005930.KO ($1,376bn), and any
+# cohort reaching them counted one company twice. The KRX code carries the relation: an ordinary
+# share ends in 0 and its preference series end in 5, 7 or 9 (005930 / 005935; 066570 / 066575).
+#
+# The rule is deliberately narrow, and each half is a guard: the ordinary row must EXIST on the
+# SAME exchange, AND the cleaned names must be identical ("pref", "preferred", "shs" and the like
+# are stripped by ``_name_key``). A code ending in 5 with no 0-line, or with a different name,
+# is left alone: null is not a match. Measured on the live index: 91 six-digit codes end in 5/7/9
+# and 90 have a 0-line; the name half decides how many of those fold.
+_KR_PREF_CODE = re.compile(r"^(\d{5})[579]$")
+
+
+def korean_pref_map(rows) -> dict[str, str]:
+    """``{normalised pref ticker: normalised ordinary ticker}`` for every Korean preference share
+    whose ordinary line is in ``rows`` on the same exchange under an identical cleaned name."""
+    rows = list(rows)
+    by_code = {}
+    for row in rows:
+        code, market = _code_and_market(row)
+        if market in ("KO", "KQ"):
+            by_code[(market, code)] = row
+    out: dict[str, str] = {}
+    for (market, code), row in by_code.items():
+        match = _KR_PREF_CODE.match(code)
+        if not match:
+            continue
+        ordinary = by_code.get((market, match.group(1) + "0"))
+        if ordinary is None:
+            continue
+        key = _name_key(row.name)
+        if key and key == _name_key(ordinary.name):
+            out[normalise_symbol(row.ticker)] = normalise_symbol(ordinary.ticker)
+    return out
+
+
 def secondary_lines(rows) -> dict[str, str]:
     """``{normalised ticker: kind}`` for every secondary trading line in ``rows``.
 
@@ -1860,6 +1898,8 @@ def secondary_lines(rows) -> dict[str, str]:
     """
     rows = list(rows)
     out = {normalise_symbol(r.ticker): kind for r in rows if (kind := receipt_kind(r))}
+    for pref in korean_pref_map(rows):
+        out.setdefault(pref, RECEIPT_KR_PREF)
     elsewhere: dict[str, list] = {}
     for row in rows:
         if normalise_symbol(row.ticker) not in out and _has_identity(row):
@@ -1881,6 +1921,9 @@ def _receipt_home(row: "IndexRow", rows, secondary: dict) -> Optional["IndexRow"
     Only a row that is not itself a secondary line, has an identity and carries a size is a
     candidate, and the usual home-listing preference decides between several.
     """
+    ordinary = korean_pref_map(rows).get(normalise_symbol(row.ticker))
+    if ordinary is not None:                      # exact: the code names it, no name search
+        return next((r for r in rows if normalise_symbol(r.ticker) == ordinary), None)
     key = _name_key(row.name)
     if not key:
         return None
