@@ -29,7 +29,7 @@ SNAPSHOT = date(2026, 9, 18).isoformat()
 
 def _row(ticker, *, cap=10e9, sub="Semiconductors", industry="Semiconductors",
          sector="Technology", currency="USD", exchange="US", name=None,
-         usd=..., primary=None, isin=None):
+         usd=..., primary=None, isin=None, eodhd=None):
     """A fabricated index row.
 
     MARKET-INDEX-3 changed the contract these rows have to meet, and the fixture moves
@@ -40,9 +40,14 @@ def _row(ticker, *, cap=10e9, sub="Semiconductors", industry="Semiconductors",
       * a row is a HOME listing when its ticker equals its PrimaryTicker, so the default
         is its own ticker; pass ``primary`` to make it a cross-listing.
     """
+    # PEER-LABEL-RECALL-1 - the two label systems are compared separately, and a peer qualifies on
+    # either. EODHD's own industry is roughly sub-industry-grained in the real table (171 distinct
+    # values against 172 GICS sub-industries), so a fixture that wants the two to differ passes
+    # ``eodhd``; left out it keeps the text of ``industry`` as before.
     return IndexRow(ticker=ticker, yahoo_ticker=ticker.split(".")[0], name=name or ticker,
                     exchange=exchange, currency=currency, sector=sector,
-                    industry=industry, gics_industry=industry, gics_subindustry=sub,
+                    industry=industry if eodhd is None else eodhd,
+                    gics_industry=industry, gics_subindustry=sub,
                     market_cap=cap,
                     market_cap_usd=(cap if usd is ... else usd),
                     market_cap_usd_source=("computed" if (cap if usd is ... else usd)
@@ -70,10 +75,12 @@ def _index() -> list[IndexRow]:
     # 3. A thin sub-industry inside a deep INDUSTRY -> rung (c).
     for i in range(4):
         rows.append(_row(f"AIR{i:02d}.US", cap=8e9 * (1.0 + i * 0.05),
-                         sub="Airlines", industry="Transport", sector="Industrials"))
+                         sub="Airlines", industry="Transport", sector="Industrials",
+                         eodhd="Airlines"))
     for i in range(20):
         rows.append(_row(f"RAIL{i:02d}.US", cap=8e9 * (1.0 + i * 0.05),
-                         sub="Rail", industry="Transport", sector="Industrials"))
+                         sub="Rail", industry="Transport", sector="Industrials",
+                         eodhd="Railroads"))
     # 4. A sub-industry too thin at every rung -> abstain.
     for i in range(3):
         rows.append(_row(f"LONE{i:02d}.US", cap=2e9, sub="Space Tourism",

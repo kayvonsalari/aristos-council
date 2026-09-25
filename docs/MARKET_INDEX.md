@@ -73,8 +73,10 @@ starts on the next build rather than one build later. `status` splits the gap-le
 build, and on 2026-09-24 every plausible alternative was tried against the endpoint — `MI`,
 `MTA`, `BIT`, `MIL`, `IT`, `XMIL`, all 404. There is no code to correct it to, so `MI` was
 removed from `market_index.yaml` with the evidence in a comment rather than left to be skipped
-at the cost of a request and a line of noise every build. `T` and `KS` 404 the same way but stay:
-they are named in every skip summary and may be added to the plan. A related correction — the
+at the cost of a request and a line of noise every build. **Korea and Tokyo (INDEX-EXCHANGE-CODES-1,
+2026-09-25):** `KS` was never EODHD's code — Korea is two exchanges, and `/exchange-symbol-list/KO`
+(KOSPI, 941 common stocks) and `/KQ` (KOSDAQ, 1,849) both answer, so the yaml now lists `KO` and
+`KQ`. `T` and `TSE` both 404, so **Tokyo is not tracked** until a code that answers is found. A related correction — the
 earlier claim that **HK** was absent was wrong: `/exchanges-list` omits it, yet
 `/exchange-symbol-list/HK` serves 3,512 names (build log, 2026-09-23T09:22:20). The
 exchange-list endpoint is not authoritative about what the symbol-list endpoint will serve.
@@ -85,10 +87,8 @@ unlistable venue used to end the whole run — on 2026-09-22 the European build 
 exchange is now skipped, named in the build log and counted in the summary ("4 exchanges
 skipped: MI, HTTP 404; …"), and the rest of the build proceeds; a *quota* refusal still stops
 everything. Probing `/exchanges-list` on 2026-09-23 (70 exchanges) showed **MI, HK, T and KS
-are all absent on this plan** — there is no Italian exchange in the list at all, so `MI` is not
-a mis-spelled code. All four stay in `market_index.yaml` on purpose, because that file records
-which venues the index is *meant* to track and deleting them would shrink the peer universe
-silently; the cost is four listing requests per build, reported every time.
+absent from that list** (HK and Korea turned out to be served anyway — see above) — there is no Italian exchange in the list at all, so `MI` is not
+a mis-spelled code. (Superseded: `MI` and Tokyo are now removed and `KS` is replaced by `KO` and `KQ`, as above.)
 
 **A network error is not a 404 (INDEX-SKIP-RETRY-1).** On 2026-09-23 a network blip skipped nine
 healthy exchanges in one second, because a URLError was treated exactly like "not found". A
@@ -204,6 +204,8 @@ rather than required. One row per company always survives; which one is decided,
 order, by: it is the home listing; its country matches the issuer country in the ISIN;
 then the ticker, so the answer never depends on the order rows came back in.
 
+**Identity is PrimaryTicker first, then ISIN, linked transitively (PEER-DEDUP-1, 2026-09-25).** A US ADR carries its *own* ISIN but names its home line, so ISIN-first kept `TSM.US` apart from `2330.TW` and TSMC was its own peer; rows now group when they share a primary ticker *or* an ISIN, and a company is never its own peer — none of its lines stands in its pool. Lines no handle links (`ASML.AS` and `ASML.US` each name themselves as primary, with different ISINs; Alphabet's four lines; Atlas Copco's A and B shares) are linked by **the same reduced company name *and* USD caps within 25%** — the size guard is what keeps `APA` Corp and APA Group (1.54×) apart — for the pool and the "own peer" test only, not for the size-sanity test below.
+
 **Preferred, not required, on purpose.** A strict "home listings only" filter loses
 companies, which is the same defect wearing a different hat. Of ten German blue chips
 probed the same day, **four name a primary this index does not track** — SAP → `SAP.F`,
@@ -221,8 +223,8 @@ the home listing is not in the index, the row is used as it stands and that is s
 
 ### Size in one currency
 
-The bands compare **`market_cap_usd`, never the local figure**. Tokyo and Korea are next
-in the build order, and a 900bn JPY company is about 6bn USD: banded in local units
+The bands compare **`market_cap_usd`, never the local figure**. Korea (`KO`, `KQ`) is in
+the build order and Tokyo may follow, and a 900bn JPY company is about 6bn USD: banded in local units
 against a 9bn USD subject it would look a hundred times too large.
 
 A row with a local cap but **no USD conversion** is excluded from the pool and counted
@@ -248,6 +250,12 @@ second-guess them. U-Haul comes back under *Passenger Airlines*; that is their l
 a judgement of ours, and correcting it by hand would mean maintaining a private taxonomy
 that silently disagrees with the source every report cites.
 
+**One narrow exception: `data/label_overrides.yaml` (PEER-LABEL-RECALL-1).** A provider label that is plainly
+wrong hides a rival from every cohort it belongs to, so a small dated file corrects a GICS sub-industry per ticker
+(seeded: Siemens Energy and Schneider Electric → Heavy Electrical Equipment; Micron's US line → Semiconductors).
+Every entry carries a date and a reason; it corrects a label only — never a size, a listing or a peer; the index
+on disk is not rewritten; and every use is printed in the cohort report as `label overridden`.
+
 This is exactly why **the peer list is shown by name** on the Company Check page and in
 the CLI. A group assembled from someone else's classification can be wrong in ways no
 amount of internal consistency will reveal, and the only honest defence is to let the
@@ -264,6 +272,10 @@ chemicals are not funds. A row whose classification **contradicts its own name**
 semiconductors) is **classification suspect**; a row with no classification is never suspect. Both
 are counted in `status`, and a fund or suspect subject gets no peer group and a stated reason.
 
+**Secondary trading lines are kept but never peers (PEER-RECEIPTS-1, 2026-09-25).** EODHD serves Brazilian BDRs (`E1TN34.SA`), Canadian CDRs (`AMD.TO`), Swiss lines of foreign stocks (`NVDA.SW`), London `0xxx` lines (`0NMK.LSE`: Vestas at $5bn there, $31bn at home) and London GDRs as ordinary common stock, mostly with no PrimaryTicker or ISIN, so each stood as a company of its own. They stay in the table, are skipped in every pool, and `status` counts them by kind — including how many are the *only* line their company has here (that company then sits in no peer group). A receipt looked up by its own symbol is answered for the company it mirrors.
+
+**A size the company's other lines refute is kept but never a peer (PEER-SIZE-SANITY-1, 2026-09-25).** A row whose USD cap is more than `size_suspect_factor` (default 5×, in `market_index.yaml`) from *every* other own line of its company, while those others agree with each other, is *size suspect*: excluded from pools and counted in `status`. Two lines that disagree cannot say which is wrong, so neither is flagged — they are counted as "cannot be adjudicated" instead. On the 2026-09-25 table this flagged 21 rows, all real errors (20 London `GBX` lines reading ~100× low, and `NOKIA.ST`), and left 34 disagreeing companies unjudged. **Known upstream defect surfaced by this:** London lines quoted in `GBX` carry a pounds figure that `_UsdConverter` scales as pence, so e.g. `RR.LSE` reads $1.6bn against $158bn elsewhere; the converter is not changed here.
+
 ## The peer ladder
 
 `peers(ticker, floor=12, cap=40)` widens only as far as it must, and says how far it went:
@@ -276,8 +288,17 @@ are counted in `status`, and a fund or suspect subject gets no peer group and a 
 | — | abstain, naming the **widest rung tried** and its count | |
 
 It widens the **band** before the **classification**, because keeping the industry is the
-cheaper concession. Where GICS fields are missing it falls back to the EODHD industry
-field and says so in the reasons.
+cheaper concession. **Labels are compared like with like (PEER-LABEL-MATCH-1, 2026-09-25):** GICS against
+GICS, EODHD's own `industry` against EODHD's — never one against the other, so a row with no GICS label is not
+matched against GICS names by coincidence of wording ("Semiconductors" is both an EODHD industry and a GICS
+sub-industry), and the provider's `Other` is not a label at all. A subject with no GICS sub-industry is matched
+on its EODHD industry only, and the reasons say so. The cohort report states **which step (1, 2 or 3) found the
+cohort and how many distinct companies it holds**, and the peer table shows which label system matched each member.
+
+**A peer qualifies on either label system (PEER-LABEL-RECALL-1, 2026-09-25):** it matches the subject on its GICS
+sub-industry (steps 1–2) or industry (step 3) *or* on its EODHD industry, so a wrong label in one system does not
+hide a rival — GICS files Siemens Energy and Schneider as machinery while EODHD files them with Eaton. Size bands
+and the floor of 12 are unchanged, and the report says how many members matched on each system.
 
 Always excluded: the subject itself; rows with no market cap (counted in the reasons);
 and financials unless the subject is itself a financial — a bank's balance sheet is its

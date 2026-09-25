@@ -173,12 +173,15 @@ def test_the_tracked_config_lists_the_venues_worth_asking_about():
     first written: HK is NOT absent (``/exchanges-list`` omits it, but
     ``/exchange-symbol-list/HK`` serves 3,512 names — build log 2026-09-23T09:22:20), and
     Milan has no working code at all (MI/MTA/BIT/MIL/IT/XMIL all 404, probed 2026-09-24), so
-    MI was deleted rather than skipped forever. T and KS stay: they 404 today but are named in
-    every skip summary and have a plausible route to being added."""
+    MI was deleted rather than skipped forever. Superseded again by INDEX-EXCHANGE-CODES-1
+    (2026-09-25): KS and T were not EODHD codes; Korea answers as KO and KQ, and Tokyo (T, TSE)
+    404s and is not listed."""
     config = mi.load_config(mi.DEFAULT_CONFIG)
     assert "MI" not in config["exchanges"]
-    for code in ("HK", "T", "KS"):
+    for code in ("HK", "KO", "KQ"):
         assert code in config["exchanges"]
+    for code in ("T", "KS"):
+        assert code not in config["exchanges"]
 
 
 def test_the_config_explains_milans_removal_and_the_others_staying():

@@ -296,5 +296,15 @@ def test_the_config_records_why_milan_went_and_why_the_others_stayed():
     text = mi.DEFAULT_CONFIG.read_text(encoding="utf-8")
     assert "MILAN IS REMOVED" in text
     assert "MTA -> 404" in text
-    for code in ("T", "KS", "HK"):
-        assert code in mi.load_config(mi.DEFAULT_CONFIG)["exchanges"]
+    assert "HK" in mi.load_config(mi.DEFAULT_CONFIG)["exchanges"]
+
+
+def test_korea_is_tracked_under_the_codes_eodhd_answers_to():
+    """INDEX-EXCHANGE-CODES-1. KO and KQ answered on 2026-09-25 (941 and 1,849 common stocks);
+    "KS" and "T" are not EODHD codes (404), and TSE 404s too, so Tokyo is not listed."""
+    exchanges = mi.load_config(mi.DEFAULT_CONFIG)["exchanges"]
+    assert "KO" in exchanges and "KQ" in exchanges
+    for dead in ("KS", "T", "TSE"):
+        assert dead not in exchanges and dead not in mi.DEFAULT_EXCHANGES
+    assert "KO" in mi.DEFAULT_EXCHANGES and "KQ" in mi.DEFAULT_EXCHANGES
+    assert "TSE -> 404" in mi.DEFAULT_CONFIG.read_text(encoding="utf-8")

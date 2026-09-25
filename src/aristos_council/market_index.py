@@ -82,6 +82,11 @@ CAP_KEY = "Highlights::MarketCapitalization"
 # quarter to four times), which a month of drift does not cross.
 DEFAULT_MAX_AGE_DAYS = 30
 
+# PEER-SIZE-SANITY-1 - see the section of that name below. Here because ``status`` and ``peers``
+# take the factor as a default argument.
+DEFAULT_SIZE_FACTOR = 5.0
+SIZE_SUSPECT = "size suspect"
+
 # INDEX-CAP-RETRY-1 — how long to stop asking about a gap the provider does not have.
 #
 # MEASURED, 2026-09-24: 2,566 rows carry no market cap and 1,767 no classification, and EVERY
@@ -338,7 +343,7 @@ class IndexRow:
 # the main European books, and the Asian and Latin American venues where the comparables
 # for a chip maker or a miner are listed.
 DEFAULT_EXCHANGES = ("US", "XETRA", "LSE", "PA", "AS", "MC", "MI", "SW", "ST", "CO",
-                     "OL", "HE", "TO", "HK", "T", "KS", "AU", "TW", "SA")
+                     "OL", "HE", "TO", "HK", "KO", "KQ", "AU", "TW", "SA")
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
@@ -351,7 +356,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
         return {"exchanges": list(DEFAULT_EXCHANGES),
                 "max_age_days": DEFAULT_MAX_AGE_DAYS, "root": str(DEFAULT_ROOT),
                 "empty_retry_after": DEFAULT_EMPTY_RETRY_AFTER,
-                "empty_retry_days": DEFAULT_EMPTY_RETRY_DAYS}
+                "empty_retry_days": DEFAULT_EMPTY_RETRY_DAYS,
+                "size_suspect_factor": DEFAULT_SIZE_FACTOR}
     doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(doc, dict):
         raise MarketIndexError(f"{path}: expected a mapping, got {type(doc).__name__}")
@@ -371,6 +377,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
         "empty_retry_after": int(doc.get("empty_retry_after",
                                          DEFAULT_EMPTY_RETRY_AFTER)),
         "empty_retry_days": int(doc.get("empty_retry_days", DEFAULT_EMPTY_RETRY_DAYS)),
+        # PEER-SIZE-SANITY-1 - how far a row's size may be from the company's other listings.
+        "size_suspect_factor": float(doc.get("size_suspect_factor", DEFAULT_SIZE_FACTOR)),
         # MARKET-INDEX-2 - per exchange, and an exchange that is absent is unrestricted.
         "venues": {str(k).strip().upper(): [str(v).strip().upper() for v in (vals or [])]
                    for k, vals in venues.items()},
@@ -1017,6 +1025,19 @@ class IndexStatus:
     suspect: int = 0
     fund_examples: list = field(default_factory=list)
     suspect_examples: list = field(default_factory=list)
+    # PEER-RECEIPTS-1 - secondary trading lines, by kind, and how many of them are the ONLY line
+    # their company has in the index (so the company is absent from every peer group).
+    receipts: dict = field(default_factory=dict)
+    receipt_examples: dict = field(default_factory=dict)
+    receipts_sole: int = 0
+    # PEER-SIZE-SANITY-1 - rows whose size the company's other lines refute; counted apart from
+    # the receipts, funds and suspect labels above (a row is counted under the first that fits).
+    size_suspect: int = 0
+    size_suspect_examples: list = field(default_factory=list)
+    # ...and the companies whose lines disagree where no row could be blamed (two lines cannot
+    # say which is wrong), used as they stand.
+    size_disputed: int = 0
+    size_disputed_examples: list = field(default_factory=list)
 
     def lines(self) -> list[str]:
         if not self.rows:
@@ -1041,6 +1062,28 @@ class IndexStatus:
                                  if self.suspect_examples else ""),
                f"  oldest row: {self.oldest or 'unknown'}",
                "  per exchange:"]
+        if self.size_disputed:
+            out.insert(out.index("  per exchange:"),
+                       f"  {self.size_disputed} company(ies) whose lines differ in size by more "
+                       f"than the limit and cannot be adjudicated - sizes used as they stand"
+                       + (f" (e.g. {', '.join(self.size_disputed_examples)})"
+                          if self.size_disputed_examples else ""))
+        if self.size_suspect:
+            out.insert(out.index("  per exchange:"),
+                       f"  {self.size_suspect} row(s) {SIZE_SUSPECT} - kept, excluded from peer "
+                       f"groups" + (f" (e.g. {', '.join(self.size_suspect_examples)})"
+                                    if self.size_suspect_examples else ""))
+        if self.receipts:
+            at = out.index("  per exchange:")
+            out.insert(at, f"  {sum(self.receipts.values())} secondary trading line(s) (receipts "
+                           f"and foreign lines) - kept, excluded from peer groups; "
+                           f"{self.receipts_sole} of them are the ONLY line of their company, so "
+                           f"that company is absent from every peer group")
+            for kind, n in sorted(self.receipts.items()):
+                examples = self.receipt_examples.get(kind, [])
+                at += 1
+                out.insert(at + 0, f"    {kind}: {n}" + (f" (e.g. {', '.join(examples)})"
+                                                         if examples else ""))
         if self.missing_cap:
             # MARKET-INDEX-2 - the first build produced 526 rows and every one of them had
             # no cap, because the request asked for General and the cap lives under
@@ -1060,7 +1103,8 @@ class IndexStatus:
 
 def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
            empty_retry_after: int = DEFAULT_EMPTY_RETRY_AFTER,
-           empty_retry_days: int = DEFAULT_EMPTY_RETRY_DAYS) -> IndexStatus:
+           empty_retry_days: int = DEFAULT_EMPTY_RETRY_DAYS,
+           size_factor: float = DEFAULT_SIZE_FACTOR) -> IndexStatus:
     """What is in the table. Works on an EMPTY index without raising — the first thing
     anyone runs is ``status``, and it must answer rather than fail."""
     store = store or IndexStore()
@@ -1103,6 +1147,38 @@ def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
             out.suspect += 1
             if len(out.suspect_examples) < EXAMPLES:
                 out.suspect_examples.append(row.ticker)
+    secondary = secondary_lines(rows)
+    if secondary:
+        own_line_sized = set()      # rows of a company that has a non-receipt line with a size
+        for company in company_groups(rows):
+            if any(normalise_symbol(r.ticker) not in secondary and r.market_cap_usd is not None
+                   for r in company):
+                own_line_sized.update(normalise_symbol(r.ticker) for r in company)
+        named_own = {_name_key(r.name) for r in rows
+                     if normalise_symbol(r.ticker) not in secondary and _has_identity(r)
+                     and r.market_cap_usd is not None}
+        for row in rows:
+            kind = secondary.get(normalise_symbol(row.ticker))
+            if not kind:
+                continue
+            out.receipts[kind] = out.receipts.get(kind, 0) + 1
+            examples = out.receipt_examples.setdefault(kind, [])
+            if len(examples) < EXAMPLES:
+                examples.append(row.ticker)
+            if (normalise_symbol(row.ticker) not in own_line_sized
+                    and _name_key(row.name) not in named_own):
+                out.receipts_sole += 1
+    for ticker in sorted(size_suspects(rows, size_factor)):
+        row = next(r for r in rows if normalise_symbol(r.ticker) == ticker)
+        if ticker in secondary or is_fund(row) or suspect_reason(row):
+            continue                                   # already counted under its first reason
+        out.size_suspect += 1
+        if len(out.size_suspect_examples) < EXAMPLES:
+            out.size_suspect_examples.append(row.ticker)
+    for tickers in size_disputes(rows, size_factor):
+        out.size_disputed += 1
+        if len(out.size_disputed_examples) < EXAMPLES:
+            out.size_disputed_examples.append("/".join(tickers))
     stamps = sorted(r.fetched_at for r in rows if r.fetched_at)
     out.oldest = stamps[0] if stamps else ""
     return out
@@ -1149,18 +1225,116 @@ def is_home_listing(row: "IndexRow") -> bool:
 
 
 def company_key(row: "IndexRow") -> str:
-    """What makes two rows the same company.
+    """The identifier a row itself offers for its company, strongest first.
 
-    ISIN first: AMD.US and AMD.XETRA share US0079031078, which is the fact that makes them
-    one company. Then the primary ticker, which links a cross-listing to its home even
-    when the ISIN is absent. Then the ticker itself, so an unlinkable row is its own
-    company rather than being merged with a stranger.
+    PEER-DEDUP-1: PrimaryTicker FIRST, then ISIN, then the ticker. It used to be ISIN first, and
+    a US ADR carries its OWN ISIN while naming its home line in PrimaryTicker (probed 2026-09-25:
+    TSM.US -> PrimaryTicker "2330.TW", ISIN US8740391003; 2330.TW has TW0003...), so the two
+    were kept apart and TSMC was its own peer. The primary ticker is the fact that says "this is
+    a line of THAT company"; an ISIN only says it is the same security.
+
+    This is the key for ONE row. Companies are built by ``company_groups``, which links rows
+    transitively over all three, because a company's rows do not all carry the same field.
     """
-    if row.isin:
-        return f"isin:{row.isin.strip().upper()}"
-    if row.primary_ticker:
+    if row.primary_ticker and row.primary_ticker.strip():
         return f"primary:{normalise_symbol(row.primary_ticker)}"
+    if row.isin and row.isin.strip():
+        return f"isin:{row.isin.strip().upper()}"
     return f"ticker:{normalise_symbol(row.ticker)}"
+
+
+def _identity_nodes(row: "IndexRow") -> list[str]:
+    """Every handle a row gives for its company: its own ticker, its primary, its ISIN."""
+    nodes = [f"t:{normalise_symbol(row.ticker)}"]
+    if row.primary_ticker and row.primary_ticker.strip():
+        nodes.append(f"t:{normalise_symbol(row.primary_ticker)}")
+    if row.isin and row.isin.strip():
+        nodes.append(f"i:{row.isin.strip().upper()}")
+    return nodes
+
+
+def company_groups(rows, *, link_by_name: bool = False) -> list[list["IndexRow"]]:
+    """The rows, grouped so that each group is ONE company.
+
+    Two rows are the same company when they share ANY handle - a primary ticker (one names the
+    other's ticker, or both name the same home) or an ISIN. Linked transitively, PrimaryTicker
+    and ISIN together, because neither alone is enough. Measured on the 22,209-row table
+    (2026-09-25): grouping by PrimaryTicker-else-ISIN alone would leave 727 companies split
+    across two or more groups - Hutchmed's Hong Kong lines ``0013.HK`` and ``13.HK`` (own
+    primary each, one ISIN), its US ADR (primary 0013.HK, its own ISIN) and its London line;
+    Nordea's five lines. ISIN-first, the old rule, left TSMC's ADR standing apart.
+
+    ``link_by_name`` adds a third, GUARDED link for lines the provider gives no common handle:
+    see ``_link_groups_by_name``.
+    """
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    materialised = list(rows)
+    for row in materialised:
+        first, *rest = _identity_nodes(row)
+        find(first)
+        for node in rest:
+            parent[find(node)] = find(first)
+    groups: dict[str, list] = {}
+    for row in materialised:
+        groups.setdefault(find(_identity_nodes(row)[0]), []).append(row)
+    linked = list(groups.values())
+    return _link_groups_by_name(linked) if link_by_name else linked
+
+
+# Two lines of one company, in one currency, differ by FX and timing - a few per cent; the
+# widest legitimate gap seen in the table is a Hong Kong RMB counter against the HKD one, at 24%.
+NAME_LINK_TOLERANCE = 1.25
+
+
+def _link_groups_by_name(groups: list) -> list:
+    """Merge groups that share a company NAME and a size, for lines no handle links.
+
+    Measured 2026-09-25: 385 reduced company names span more than one group in the eligible pool,
+    and most are one company - Alphabet x4, ArcelorMittal x4, Alibaba x4, ASML x3 (``ASML.AS``
+    and ``ASML.US`` each name THEMSELVES as primary, with different ISINs), Atlas Copco's A and B
+    shares, Illinois Tool Works' Xetra line. PrimaryTicker and ISIN cannot link those, and left
+    apart they were counted as several peers - the defect this batch exists to remove.
+
+    A name alone is not enough, and the guard is what makes this safe: the two rows must ALSO
+    carry USD caps within ``NAME_LINK_TOLERANCE``. Different companies do share a short name
+    (APA Corp in the US at $15.7bn and APA Group in Australia at $10.2bn, 1.54x; Argan Inc and
+    Argan SA, 2.5x), and they are not merged. A row with no size is never linked - null is not
+    a match. It is used for the peer POOL and the subject's own lines, not for the size-sanity
+    test, which needs the lines this would merge to still be separate.
+    """
+    parent = list(range(len(groups)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    buckets: dict[str, list] = {}
+    for number, members in enumerate(groups):
+        for row in members:
+            key = _name_key(row.name)
+            if len(key) >= 3 and row.market_cap_usd is not None and row.market_cap_usd > 0:
+                buckets.setdefault(key, []).append((number, row))
+    for entries in buckets.values():
+        for i, (first, a) in enumerate(entries):
+            for second, b in entries[i + 1:]:
+                if (find(first) != find(second)
+                        and not _far_apart(a.market_cap_usd, b.market_cap_usd,
+                                           NAME_LINK_TOLERANCE)):
+                    parent[find(second)] = find(first)
+    merged: dict[int, list] = {}
+    for number, members in enumerate(groups):
+        merged.setdefault(find(number), []).extend(members)
+    return list(merged.values())
 
 
 def _listing_rank(row: "IndexRow") -> tuple:
@@ -1174,14 +1348,11 @@ def _listing_rank(row: "IndexRow") -> tuple:
     return (home, country_match, normalise_symbol(row.ticker))
 
 
-def one_row_per_company(rows) -> tuple[list, int]:
+def one_row_per_company(rows, *, link_by_name: bool = False) -> tuple[list, int]:
     """``(kept, dropped)`` - the pool, deduplicated by company."""
-    groups: dict = {}
-    for row in rows:
-        groups.setdefault(company_key(row), []).append(row)
     kept = []
     dropped = 0
-    for group in groups.values():
+    for group in company_groups(rows, link_by_name=link_by_name):
         group.sort(key=_listing_rank)
         kept.append(group[0])
         dropped += len(group) - 1
@@ -1344,6 +1515,229 @@ def is_suspect(row: "IndexRow") -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# PEER-RECEIPTS-1 - a receipt is a trading line, not a company
+# --------------------------------------------------------------------------- #
+# MEASURED on the built table (22,209 rows, 2026-09-25). EODHD serves depository receipts and
+# foreign trading lines as ordinary "Common Stock" rows, usually with NEITHER PrimaryTicker nor
+# ISIN (4,825 rows carry no identity at all), so nothing links them to the company they mirror
+# and each one stood in a peer group as a company of its own:
+#
+#   E1TN34.SA   Eaton Corporation plc          a Brazilian BDR, stood in for Eaton itself
+#   AMD.TO      Advanced Micro Devices CDR     a Canadian CDR, beside AMD.US
+#   NVDA.SW     NVIDIA Corporation             a Swiss line, no identity
+#   0NMK.LSE    Vestas Wind Systems A/S        a London "0xxx" line: $5.2bn there against the
+#                                              $31.5bn its home line reports, and filed under
+#                                              "Coal & Consumable Fuels"
+#
+# The London "0xxx" block alone is 2,371 of 3,834 LSE rows; almost all carry a wrong label and
+# a wrong size. So a SECONDARY LINE is kept in the table (it is a faithful mirror of the
+# provider, like a cross-listing), excluded from peer pools, and counted in ``status`` by kind.
+#
+# The cost is stated rather than hidden: a company whose ONLY line in the index is a receipt
+# leaves every peer pool. ``status`` counts those ("the only line of their company").
+RECEIPT_BDR = "Brazilian receipt (BDR)"
+RECEIPT_BR_FRACTIONAL = "Brazilian fractional-lot line"
+RECEIPT_CDR = "Canadian receipt (CDR)"
+RECEIPT_LSE_LINE = "London 0xxx line of a foreign company"
+RECEIPT_LSE_GDR = "London depositary receipt (GDR)"
+RECEIPT_SWISS_LINE = "Swiss line of a foreign company"
+
+# Sao Paulo tickers: a BDR is <4 characters>3<2..9> (A1MD34, AVGO34, E1TN34, TSMC34, NVDC34);
+# no Brazilian company code has that shape (they end 3, 4, 5, 6 or 11), and the one 3x-ending
+# code in the table, TF533, is five characters. A fractional-lot line is the company's code plus F.
+_BDR_CODE = re.compile(r"^[A-Z0-9]{4}3[2-9]$")
+_BDR_ISIN = re.compile(r"^BR[A-Z0-9]{4}BDR[A-Z0-9]{3}$")
+_BR_FRACTIONAL_CODE = re.compile(r"^[A-Z0-9]{4}\d{1,2}F$")
+_CDR_NAME = re.compile(r"\bCDR\b")
+# London's "0xxx" lines: a zero and three characters (0QMI, 0A0D, 0NMK). UK companies do not
+# start with a zero, and the 10-character "0P" Morningstar fund ids are handled as funds above.
+_LSE_FOREIGN_CODE = re.compile(r"^0[A-Z0-9]{3}$")
+_GDR_NAME = re.compile(r"\bGDR\b|global depositary", re.IGNORECASE)
+
+
+def receipt_kind(row: "IndexRow") -> str:
+    """What kind of secondary trading line this row is, or "" when it is a company's own line.
+
+    A pure function of the row: exchange, code shape, name, ISIN and PrimaryTicker. Nothing here
+    needs the rest of the table; the one case that does (a Swiss line with no identity at all)
+    is ``secondary_lines``.
+    """
+    code, market = _code_and_market(row)
+    name = row.name or ""
+    if market == "SA":
+        if _BDR_CODE.match(code) or _BDR_ISIN.match((row.isin or "").upper()):
+            return RECEIPT_BDR
+        if _BR_FRACTIONAL_CODE.match(code):
+            return RECEIPT_BR_FRACTIONAL
+    elif market == "TO":
+        if _CDR_NAME.search(name):
+            return RECEIPT_CDR
+    elif market == "LSE":
+        if _LSE_FOREIGN_CODE.match(code):
+            return RECEIPT_LSE_LINE
+        if _GDR_NAME.search(name):
+            return RECEIPT_LSE_GDR
+    elif market == "SW":
+        primary = normalise_symbol(row.primary_ticker)
+        if primary and not primary.endswith(".SW"):
+            return RECEIPT_SWISS_LINE      # LLY.SW -> LLY.US, NIBEB.SW -> NIBE-B.ST
+    return ""
+
+
+# The words that do not identify a company in a name: legal forms, share-class and receipt
+# wording. "Eaton Corporation plc" and "Eaton Corporation PLC" must read as one; "Vestas Wind
+# Systems A/S" must not read as anything else.
+_NAME_NOISE = frozenset((
+    "inc", "corp", "corporation", "plc", "ag", "sa", "nv", "se", "ltd", "limited", "co",
+    "company", "holding", "holdings", "group", "ab", "oyj", "asa", "as", "spa", "llc", "the",
+    "n", "a", "b", "class", "series", "ordinary", "shares", "sponsored", "adr", "cdr", "cad",
+    "hedged", "drn", "dr", "incorporated", "kgaa", "sab", "cv"))
+
+
+def _name_key(name: str) -> str:
+    """A company name reduced to what identifies it, or "" when nothing is left."""
+    import unicodedata
+    text = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode()
+    text = re.sub(r"\(.*?\)", " ", text.lower())
+    if "fully paid" in text:
+        return ""     # ASX deferred-settlement placeholders ("Ordinary Fully Paid Deferred ...")
+    text = re.sub(r"[./]", "", text)                 # N.V. -> nv, S.A. -> sa, A/S -> as
+    text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    return " ".join(tok for tok in text.split() if tok not in _NAME_NOISE)
+
+
+def _has_identity(row: "IndexRow") -> bool:
+    return bool((row.primary_ticker or "").strip() or (row.isin or "").strip())
+
+
+def secondary_lines(rows) -> dict[str, str]:
+    """``{normalised ticker: kind}`` for every secondary trading line in ``rows``.
+
+    ``receipt_kind`` for each row, plus the one case a single row cannot show: a SIX row with
+    neither PrimaryTicker nor ISIN (NVDA.SW, INTC.SW, ASML.SW) whose name is listed elsewhere
+    WITH an identity. A Swiss row that has no identity and no such twin is left alone - CENTIEL
+    and INFRACORE are real Swiss companies.
+    """
+    rows = list(rows)
+    out = {normalise_symbol(r.ticker): kind for r in rows if (kind := receipt_kind(r))}
+    elsewhere: dict[str, list] = {}
+    for row in rows:
+        if normalise_symbol(row.ticker) not in out and _has_identity(row):
+            elsewhere.setdefault(_name_key(row.name), []).append(row)
+    for row in rows:
+        code, market = _code_and_market(row)
+        if market != "SW" or _has_identity(row) or normalise_symbol(row.ticker) in out:
+            continue
+        key = _name_key(row.name)
+        if key and any(_code_and_market(twin)[1] != "SW" for twin in elsewhere.get(key, ())):
+            out[normalise_symbol(row.ticker)] = RECEIPT_SWISS_LINE
+    return out
+
+
+def _receipt_home(row: "IndexRow", rows, secondary: dict) -> Optional["IndexRow"]:
+    """The company's own line for a receipt that names no home, found by NAME, or None.
+
+    Used to answer for the company when the reader looks a receipt up (``E1TN34.SA`` is Eaton).
+    Only a row that is not itself a secondary line, has an identity and carries a size is a
+    candidate, and the usual home-listing preference decides between several.
+    """
+    key = _name_key(row.name)
+    if not key:
+        return None
+    twins = [r for r in rows
+             if normalise_symbol(r.ticker) != normalise_symbol(row.ticker)
+             and normalise_symbol(r.ticker) not in secondary
+             and _has_identity(r) and r.market_cap_usd is not None
+             and _name_key(r.name) == key]
+    return min(twins, key=_listing_rank) if twins else None
+
+
+# --------------------------------------------------------------------------- #
+# PEER-SIZE-SANITY-1 - a size that no other line of the company supports
+# --------------------------------------------------------------------------- #
+# The peer ladder bands on USD market cap, so a row whose cap is wrong lands in the wrong band or,
+# worse, in the right one for the wrong reason. Measured 2026-09-25: Ming Yang's London GDR reads
+# $999.6bn (it is a wind-turbine maker worth a few billion), and Vestas' London line reads $5.2bn
+# against $31.5bn on its home line and $31.0bn on Xetra.
+#
+# A row is SIZE SUSPECT when its USD cap is more than ``factor`` times away from the same
+# company's other listings (default 5x). It stays in the table, is excluded from peer groups and
+# is counted. The rule is deliberately unwilling to guess:
+#
+#   * three or more sized listings: a row is flagged only when it disagrees with EVERY other
+#     listing AND those others form a consensus (two of them agree). Figures that all disagree
+#     with each other say nothing about which is wrong, so nothing is flagged;
+#   * exactly TWO sized listings: never flagged. Two figures that disagree cannot say which of
+#     them is the wrong one. This was first written the other way - flag the non-home line against
+#     an explicit home - and MEASURED on the built table it flagged the CORRECT row every time:
+#     RR.LSE (home, currency GBX) reads $1.6bn and RRU.XETRA reads $157.9bn; Rolls-Royce is
+#     about GBP 119bn, so the home line's pounds figure had the pence scale applied to it (the
+#     GBX quirk documented at ``_UsdConverter``, Victrex being the first sighting). The same
+#     shape held for GSK, BAE, National Grid, NatWest, Standard Chartered, Imperial Brands;
+#   * one sized listing: nothing to compare against - a company with a single line is never
+#     flagged by this test (null is not false).
+#
+# A company whose lines disagree and cannot be adjudicated is not flagged and not silent:
+# ``size_disputes`` names it, and ``status`` counts it, so the disagreement is visible.
+#
+# Secondary lines are neither judged nor allowed to vote: they are already excluded from every
+# pool and their sizes are the least trustworthy in the table.
+def _far_apart(a: float, b: float, factor: float) -> bool:
+    return max(a, b) / min(a, b) > factor
+
+
+def _sized_own_lines(company, secondary: dict) -> list:
+    return [r for r in company if r.market_cap_usd is not None and r.market_cap_usd > 0
+            and normalise_symbol(r.ticker) not in secondary]
+
+
+def size_suspects(rows, factor: float = DEFAULT_SIZE_FACTOR) -> dict[str, str]:
+    """``{normalised ticker: reason}`` for every row whose size the company's other lines refute."""
+    out: dict[str, str] = {}
+    secondary = secondary_lines(rows)
+    for company in company_groups(rows):
+        sized = _sized_own_lines(company, secondary)
+        if len(sized) < 3:
+            continue                            # one line has nothing to compare; two cannot say
+        for row in sized:
+            others = [r.market_cap_usd for r in sized if r is not row]
+            if not all(_far_apart(row.market_cap_usd, cap, factor) for cap in others):
+                continue
+            if not any(not _far_apart(a, b, factor)
+                       for i, a in enumerate(others) for b in others[i + 1:]):
+                continue                        # no consensus among the others: abstain
+            out[normalise_symbol(row.ticker)] = _size_reason(row, others, factor)
+    return out
+
+
+def size_disputes(rows, factor: float = DEFAULT_SIZE_FACTOR) -> list[list[str]]:
+    """Companies whose lines disagree by more than ``factor`` and where NO row could be flagged.
+
+    Each entry is the tickers of one company. Used to say so, not to exclude anything: the sizes
+    of these companies are used as they stand.
+    """
+    flagged = size_suspects(rows, factor)
+    secondary = secondary_lines(rows)
+    out = []
+    for company in company_groups(rows):
+        sized = _sized_own_lines(company, secondary)
+        if len(sized) < 2 or any(normalise_symbol(r.ticker) in flagged for r in sized):
+            continue
+        caps = [r.market_cap_usd for r in sized]
+        if any(_far_apart(a, b, factor) for i, a in enumerate(caps) for b in caps[i + 1:]):
+            out.append(sorted(r.ticker for r in sized))
+    return out
+
+
+def _size_reason(row: "IndexRow", others: list, factor: float) -> str:
+    reference = sorted(others)[len(others) // 2]
+    ratio = max(row.market_cap_usd, reference) / min(row.market_cap_usd, reference)
+    return (f"{SIZE_SUSPECT} (${row.market_cap_usd / 1e9:,.1f}bn here against "
+            f"${reference / 1e9:,.1f}bn on the company's other listings, {ratio:.1f}x apart; "
+            f"the limit is {factor:g}x)")
+
+
+# --------------------------------------------------------------------------- #
 # peers
 # --------------------------------------------------------------------------- #
 RUNG_SUBINDUSTRY_TIGHT = "sub-industry, 1/4x–4x"
@@ -1353,6 +1747,7 @@ RUNG_NONE = "none"
 
 DEFAULT_FLOOR = 12
 DEFAULT_CAP = 40
+LADDER_STEPS = 3                   # the three rungs above, numbered 1-3 in the cohort report
 
 _FINANCIAL_SECTORS = ("financial services", "financials", "financial")
 _FINANCIAL_INDUSTRY_PREFIXES = ("bank", "insurance", "capital markets",
@@ -1368,6 +1763,15 @@ class PeerGroup:
     band: str = ""
     reasons: list[str] = field(default_factory=list)
     snapshot: str = ""
+    # PEER-LABEL-MATCH-1 - which step of the ladder (1, 2 or 3) found the cohort, how many
+    # DISTINCT companies it holds (counted by company identity, not by ticker), and which label
+    # system matched each member ("GICS" / "EODHD").
+    step: int = 0
+    distinct_companies: int = 0
+    matched_on: dict = field(default_factory=dict)
+    # PEER-LABEL-RECALL-1 - every corrected label this group actually used (the subject's or a
+    # member's), so a reader can tell a provider label from a corrected one.
+    overridden: list = field(default_factory=list)
 
     @property
     def available(self) -> bool:
@@ -1381,7 +1785,8 @@ class PeerGroup:
         if not self.members:
             return "; ".join(self.reasons) or "no peer group could be formed"
         return (f"{len(self.members)} peers at {self.rung} ({self.band}), "
-                f"index snapshot {self.snapshot or 'unknown'}")
+                f"index snapshot {self.snapshot or 'unknown'} - found at step {self.step} of "
+                f"{LADDER_STEPS}, {self.distinct_companies} distinct companies")
 
 
 def is_financial(row: IndexRow) -> bool:
@@ -1398,11 +1803,161 @@ def is_financial(row: IndexRow) -> bool:
     return any(industry.startswith(p) for p in _FINANCIAL_INDUSTRY_PREFIXES)
 
 
-def _classification(row: IndexRow, level: str) -> str:
-    """The key a rung compares on, falling back when GICS is absent."""
-    if level == "subindustry":
-        return row.gics_subindustry or row.industry
-    return row.gics_industry or row.industry
+# --------------------------------------------------------------------------- #
+# PEER-LABEL-RECALL-1 - a small file of label CORRECTIONS
+# --------------------------------------------------------------------------- #
+# The index mirrors the provider's classification (see docs/MARKET_INDEX.md, "Whose
+# classification is this?") and does not maintain a private taxonomy. But a provider label that is
+# plainly wrong hides a rival from every cohort it belongs to: Siemens Energy and Schneider
+# Electric are filed as Industrial Machinery and Micron's US line as Semiconductor Materials &
+# Equipment. ``data/label_overrides.yaml`` is the narrow, dated, reasoned escape hatch:
+#
+#     overrides:
+#       - ticker: ENR.XETRA
+#         gics_subindustry: Heavy Electrical Equipment
+#         date: 2026-09-25
+#         reason: why the provider's label is wrong
+#         gics_industry: Electrical Equipment      # optional
+#
+# DATA CORRECTIONS ONLY: it changes a label, never a size, a listing or a peer. The table on disk
+# is never rewritten - the correction is applied to the rows a query reads, and every use is
+# shown in the cohort report as "label overridden". The corrected GICS INDUSTRY is taken from the
+# file when given, otherwise from the industry the index's own rows already carry for that
+# sub-industry, so a corrected row also sits in the right industry for the wide rung.
+DEFAULT_OVERRIDES = Path(__file__).resolve().parents[2] / "data" / "label_overrides.yaml"
+
+
+@dataclass(frozen=True)
+class LabelOverride:
+    ticker: str
+    gics_subindustry: str
+    date: str
+    reason: str
+    gics_industry: str = ""
+
+
+def load_label_overrides(path: str | Path = DEFAULT_OVERRIDES) -> list[LabelOverride]:
+    """The override file, or an empty list when there is none. A malformed one is an error:
+    a correction that silently fails to apply is worse than one that is refused."""
+    import yaml
+
+    path = Path(path)
+    if not path.exists():
+        return []
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    entries = doc.get("overrides") if isinstance(doc, dict) else None
+    if entries is None:
+        return []
+    if not isinstance(entries, list):
+        raise MarketIndexError(f"{path}: 'overrides' must be a list")
+    out = []
+    for i, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise MarketIndexError(f"{path}: override {i} must be a mapping")
+        missing = [k for k in ("ticker", "gics_subindustry", "date", "reason")
+                   if not str(entry.get(k) or "").strip()]
+        if missing:
+            raise MarketIndexError(f"{path}: override {i} is missing {', '.join(missing)} - "
+                                   f"every correction carries its ticker, the corrected label, "
+                                   f"a date and a reason")
+        out.append(LabelOverride(
+            ticker=normalise_symbol(str(entry["ticker"])),
+            gics_subindustry=str(entry["gics_subindustry"]).strip(),
+            date=str(entry["date"]).strip(), reason=str(entry["reason"]).strip(),
+            gics_industry=str(entry.get("gics_industry") or "").strip()))
+    return out
+
+
+def apply_label_overrides(rows, overrides) -> tuple[list["IndexRow"], dict]:
+    """``(rows, applied)``: the rows with corrected labels, and ``{ticker: (was, override)}``.
+
+    Rows are copied, never mutated, so the caller's table (and the index on disk) is untouched.
+    """
+    import dataclasses
+    from collections import Counter
+
+    rows = list(rows)
+    wanted = {o.ticker: o for o in overrides or ()}
+    if not wanted:
+        return rows, {}
+    industry_of: dict[str, Counter] = {}
+    for row in rows:
+        if row.gics_subindustry and row.gics_industry:
+            industry_of.setdefault(row.gics_subindustry, Counter())[row.gics_industry] += 1
+    out, applied = [], {}
+    for row in rows:
+        override = wanted.get(normalise_symbol(row.ticker))
+        if override is None:
+            out.append(row)
+            continue
+        industry = override.gics_industry
+        if not industry and industry_of.get(override.gics_subindustry):
+            counts = industry_of[override.gics_subindustry]
+            industry = sorted(counts, key=lambda k: (-counts[k], k))[0]
+        applied[normalise_symbol(row.ticker)] = (
+            row.gics_subindustry or row.industry or "unlabelled", override)
+        out.append(dataclasses.replace(
+            row, gics_subindustry=override.gics_subindustry,
+            gics_industry=industry or row.gics_industry))
+    return out, applied
+
+
+def _override_line(ticker: str, was: str, override: LabelOverride) -> str:
+    return (f"label overridden: {ticker} {was} -> {override.gics_subindustry} "
+            f"({override.date}: {override.reason})")
+
+
+# PEER-LABEL-MATCH-1 - like with like. A row carries two label SYSTEMS that merely share words:
+# the GICS fields (sub-industry, industry) and EODHD's own ``industry``. The ladder used to fall
+# back from one to the other, so a row with NO GICS label was matched against GICS names on the
+# strength of its EODHD wording ("Semiconductors" is both an EODHD industry and a GICS
+# sub-industry). Now GICS is compared with GICS and EODHD with EODHD, and nothing else.
+LABEL_GICS = "GICS"
+LABEL_EODHD = "EODHD"
+
+# A provider's stand-in for "no label" is not a label: 'Other' is EODHD's industry for 1,400-odd
+# unrelated rows, and matching them on it would be matching on nothing.
+_NON_LABELS = frozenset(("", "other", "n/a", "na", "unknown", "none", "-", "--", "nan", "null"))
+
+
+def _label(value) -> str:
+    text = (value or "").strip().lower()
+    return "" if text in _NON_LABELS else text
+
+
+def _gics_label(row: IndexRow, level: str) -> str:
+    return _label(row.gics_subindustry if level == "subindustry" else row.gics_industry)
+
+
+def _eodhd_label(row: IndexRow) -> str:
+    return _label(row.industry)
+
+
+def _subject_systems(subject: IndexRow, level: str) -> tuple:
+    """The label systems the subject can be matched in at this level: every one it has a label in.
+
+    PEER-LABEL-RECALL-1: a peer qualifies on EITHER system, so a wrong label in one does not hide
+    a rival. Measured 2026-09-25: Siemens Energy and Schneider Electric are filed by GICS as
+    "Industrial Machinery" while their rivals (GE Vernova, Vestas, Eaton) are "Heavy Electrical
+    Equipment" or "Electrical Components" - but EODHD files them all under one industry, so the
+    second system finds what the first hides. Each system still compares only with itself.
+    """
+    systems = []
+    if _gics_label(subject, level):
+        systems.append(LABEL_GICS)
+    if _eodhd_label(subject):
+        systems.append(LABEL_EODHD)
+    return tuple(systems)
+
+
+def _label_hits(row: IndexRow, subject: IndexRow, level: str, systems: tuple) -> tuple:
+    """The label systems in which ``row`` matches the subject, in ``systems`` only."""
+    hits = []
+    if LABEL_GICS in systems and _gics_label(row, level) == _gics_label(subject, level):
+        hits.append(LABEL_GICS)
+    if LABEL_EODHD in systems and _eodhd_label(row) == _eodhd_label(subject):
+        hits.append(LABEL_EODHD)
+    return tuple(hits)
 
 
 def _within(cap: Optional[float], subject: float, low: float, high: float) -> bool:
@@ -1423,7 +1978,7 @@ def _log_distance(cap: Optional[float], subject: float) -> float:
 
 def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
           store: Optional[IndexStore] = None, rows: Optional[list[IndexRow]] = None,
-          ) -> PeerGroup:
+          size_factor: float = DEFAULT_SIZE_FACTOR, overrides=...) -> PeerGroup:
     """The peer group for one company, by ladder, from the local table only.
 
     Deterministic for a given snapshot: every rung is a filter over the same rows and the
@@ -1435,6 +1990,15 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         group.reasons.append("the market index is empty — run "
                              "`python -m aristos_council.market_index build`")
         return group
+
+    # PEER-LABEL-RECALL-1 - corrected labels are applied to the rows this query reads, before the
+    # subject is looked up, so the subject, its other lines and every candidate see them. Left at
+    # its default the shipped file is read when the REAL index is (``store``/no ``rows``) and
+    # nothing is applied to rows handed in directly, so a fabricated table never meets a real
+    # correction by accident.
+    if overrides is ...:
+        overrides = load_label_overrides() if rows is None else []
+    universe, applied = apply_label_overrides(universe, overrides)
 
     wanted = (ticker or "").strip().upper()
     by_ticker = {r.ticker.upper(): r for r in universe}
@@ -1459,7 +2023,28 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                 f"{subject.ticker} is a listing of {subject.primary_ticker}, which is not "
                 f"in the index; peers computed for {subject.ticker} as it stands")
 
+    # PEER-RECEIPTS-1 - a receipt looked up by the symbol the reader has is answered for the
+    # company it mirrors, found by name because the provider gives it no identity.
+    secondary = secondary_lines(universe)
+    subject_kind = secondary.get(normalise_symbol(subject.ticker), "")
+    if subject_kind:
+        home = _receipt_home(subject, universe, secondary)
+        if home is not None:
+            group.reasons.append(f"{subject.ticker} is a {subject_kind}; peers computed for "
+                                 f"{home.ticker}, the company's own line")
+            subject = home
+        else:
+            group.reasons.append(f"{subject.ticker} is a {subject_kind} and the company's own "
+                                 f"line is not in the index; its label and size are the "
+                                 f"receipt's own and may be unreliable")
+
     group.subject = subject
+    if normalise_symbol(subject.ticker) in applied:
+        was, override = applied[normalise_symbol(subject.ticker)]
+        group.overridden.append({"ticker": subject.ticker, "role": "subject", "was": was,
+                                 "now": override.gics_subindustry, "date": override.date,
+                                 "reason": override.reason})
+        group.reasons.append(_override_line(subject.ticker, was, override))
     stamps = sorted(r.fetched_at for r in universe if r.fetched_at)
     group.snapshot = stamps[-1] if stamps else ""
 
@@ -1494,16 +2079,43 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                              f"is formed")
         return group
 
+    # PEER-SIZE-SANITY-1 - the subject is kept (it is the company asked about) but its size is
+    # said to be doubtful, because every band below is a multiple of it.
+    size_flags = size_suspects(universe, size_factor)
+    if normalise_symbol(subject.ticker) in size_flags:
+        group.reasons.append(f"{subject.ticker}: {size_flags[normalise_symbol(subject.ticker)]} "
+                             f"- the size bands below are built on it as it stands")
+
     subject_financial = is_financial(subject)
     if not subject.gics_subindustry:
-        group.reasons.append("subject has no GICS sub-industry; fell back to the EODHD "
-                             "industry field")
+        group.reasons.append("subject has no GICS sub-industry; matched on its EODHD industry "
+                             "label only, and only against other EODHD industry labels")
+    elif not _eodhd_label(subject):
+        group.reasons.append("subject has no EODHD industry label; matched on GICS only")
+
+    # PEER-DEDUP-1 - a company is never its own peer, and "its own" means every LINE of it,
+    # not just the identical ticker string. TSM.US (an ADR that names 2330.TW as home) stood in
+    # TSMC's own cohort because only the ticker was compared.
+    company_of = {}
+    for number, members in enumerate(company_groups(universe, link_by_name=True)):
+        for member in members:
+            company_of[normalise_symbol(member.ticker)] = number
+    subject_company = company_of.get(normalise_symbol(subject.ticker))
 
     # Everything that is eligible to be a peer at all, before any rung.
-    candidates, no_cap, no_usd, funds, suspect = [], 0, 0, 0, 0
+    candidates, no_cap, no_usd, funds, suspect, own_lines = [], 0, 0, 0, 0, 0
+    receipts: dict[str, int] = {}
+    size_suspect = 0
     for row in universe:
-        if row.ticker.upper() == subject.ticker.upper():
+        if normalise_symbol(row.ticker) == normalise_symbol(subject.ticker):
             continue                                   # never its own peer
+        if company_of.get(normalise_symbol(row.ticker)) == subject_company:
+            own_lines += 1                             # ...nor another line of itself
+            continue
+        kind = secondary.get(normalise_symbol(row.ticker))
+        if kind:
+            receipts[kind] = receipts.get(kind, 0) + 1   # kept in the table, never a peer
+            continue
         if is_fund(row):
             funds += 1
             continue
@@ -1521,12 +2133,27 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             # what looks like missing data.
             no_usd += 1
             continue
+        if normalise_symbol(row.ticker) in size_flags:
+            size_suspect += 1                          # kept in the table, never a peer
+            continue
         candidates.append(row)
 
     # ONE ROW PER COMPANY. AMD.US, AMD.TO and AMD.XETRA were three peers in the 9,018-row
     # build; they are one company.
-    pool, cross_listings = one_row_per_company(candidates)
+    pool, cross_listings = one_row_per_company(candidates, link_by_name=True)
 
+    if own_lines:
+        group.reasons.append(f"{own_lines} other line(s) of {subject.name or subject.ticker} "
+                             f"left out: a company is never its own peer")
+    if receipts:
+        group.reasons.append(
+            f"{sum(receipts.values())} candidate(s) skipped: secondary trading line, not a "
+            f"company (" + ", ".join(f"{kind} {n}" for kind, n in sorted(receipts.items()))
+            + ")")
+    if size_suspect:
+        group.reasons.append(f"{size_suspect} candidate(s) skipped: {SIZE_SUSPECT} (a market "
+                             f"cap more than {size_factor:g}x from the same company's other "
+                             f"listings)")
     if funds:
         group.reasons.append(f"{funds} candidate(s) skipped: {FUND_NOT_A_COMPANY}")
     if suspect:
@@ -1548,13 +2175,18 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     )
     subject_cap = subject.market_cap_usd
     tried: list = []
-    for rung, level, low, high in ladder:
-        key = _classification(subject, level)
-        if not key:
+    for step, (rung, level, low, high) in enumerate(ladder, start=1):
+        systems = _subject_systems(subject, level)
+        if not systems:
             continue
-        matched = [r for r in pool
-                   if _classification(r, level) == key
-                   and _within(r.market_cap_usd, subject_cap, low, high)]
+        matched, how = [], {}
+        for r in pool:
+            if not _within(r.market_cap_usd, subject_cap, low, high):
+                continue
+            hits = _label_hits(r, subject, level, systems)
+            if hits:
+                matched.append(r)
+                how[r.ticker] = "+".join(hits)
         if len(matched) >= floor:
             matched.sort(key=lambda r: (_log_distance(r.market_cap_usd, subject_cap),
                                         r.ticker))
@@ -1565,6 +2197,25 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                     f"nearest in size")
             group.members = sorted(trimmed, key=lambda r: r.ticker)
             group.rung, group.band = rung, f"{low:g}x-{high:g}x market cap (USD)"
+            group.step = step
+            group.matched_on = {r.ticker: how[r.ticker] for r in group.members}
+            tally = {}
+            for how_matched in group.matched_on.values():
+                tally[how_matched] = tally.get(how_matched, 0) + 1
+            if len(systems) > 1:
+                group.reasons.append(
+                    f"matched on: GICS only {tally.get(LABEL_GICS, 0)}, EODHD label only "
+                    f"{tally.get(LABEL_EODHD, 0)}, both {tally.get(f'{LABEL_GICS}+{LABEL_EODHD}', 0)}")
+            group.distinct_companies = len({company_of.get(normalise_symbol(r.ticker), r.ticker)
+                                            for r in group.members})
+            for member in group.members:
+                if normalise_symbol(member.ticker) in applied:
+                    was, override = applied[normalise_symbol(member.ticker)]
+                    group.overridden.append({
+                        "ticker": member.ticker, "role": "member", "was": was,
+                        "now": override.gics_subindustry, "date": override.date,
+                        "reason": override.reason})
+                    group.reasons.append(_override_line(member.ticker, was, override))
             return group
         tried.append((rung, len(matched)))
         group.reasons.append(f"{rung}: only {len(matched)} comparable companies found")
@@ -1597,6 +2248,9 @@ def peer_snapshot(group: PeerGroup) -> dict:
         "subject": group.subject.ticker if group.subject else "",
         "snapshot": group.snapshot,
         "rung": group.rung,
+        "step": group.step,
+        "distinct_companies": group.distinct_companies,
+        "label_overrides": list(group.overridden),
         "band": group.band,
         "members": [r.ticker for r in group.members],
         "yahoo_members": [r.yahoo_ticker for r in group.members if r.yahoo_ticker],
@@ -1653,6 +2307,10 @@ def build_parser():
     p_peers.add_argument("ticker")
     p_peers.add_argument("--floor", type=int, default=DEFAULT_FLOOR)
     p_peers.add_argument("--cap", type=int, default=DEFAULT_CAP)
+    p_peers.add_argument("--size-factor", type=float, default=None,
+                         help="a row whose USD cap is more than this many times away from the "
+                              "company's other listings is size suspect (default: the config's "
+                              f"size_suspect_factor, {DEFAULT_SIZE_FACTOR:g})")
     p_peers.set_defaults(func=_cmd_peers)
 
     p_status = sub.add_parser("status", help="what is in the index")
@@ -1708,7 +2366,11 @@ def _cmd_build(args) -> int:
 
 
 def _cmd_peers(args) -> int:
-    group = peers(args.ticker, floor=args.floor, cap=args.cap, store=_store_for(args))
+    factor = args.size_factor
+    if factor is None:
+        factor = load_config(args.config).get("size_suspect_factor", DEFAULT_SIZE_FACTOR)
+    group = peers(args.ticker, floor=args.floor, cap=args.cap, store=_store_for(args),
+                  size_factor=factor)
     if not group.available:
         _say(f"No peer group for {args.ticker}.")
         for reason in group.reasons:
@@ -1716,13 +2378,13 @@ def _cmd_peers(args) -> int:
         return 1
     _say(group.sentence())
     _say(f"{'ticker':16s} {'name':28s} {'exch':6s} {'local cap':>20s} "
-         f"{'USD cap':>16s}  sub-industry")
+         f"{'USD cap':>16s}  {'matched':10s} sub-industry")
     for row in group.members:
         local = ("-" if row.market_cap is None
                  else f"{row.market_cap:,.0f} {row.currency}")
         usd = "-" if row.market_cap_usd is None else f"{row.market_cap_usd:,.0f}"
         _say(f"{row.ticker:16s} {row.name[:28]:28s} {row.exchange:6s} {local:>20s} "
-             f"{usd:>16s}  {row.classification}")
+             f"{usd:>16s}  {group.matched_on.get(row.ticker, ''):10s} {row.classification}")
     for reason in group.reasons:
         _say(f"  note: {reason}")
     return 0
@@ -1733,7 +2395,8 @@ def _cmd_status(args) -> int:
     config = load_config(args.config)
     for line in status(_store_for(args),
                        empty_retry_after=config["empty_retry_after"],
-                       empty_retry_days=config["empty_retry_days"]).lines():
+                       empty_retry_days=config["empty_retry_days"],
+                       size_factor=config["size_suspect_factor"]).lines():
         _say(line)
     return 0
 
