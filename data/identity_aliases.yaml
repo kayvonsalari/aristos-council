@@ -1,0 +1,28 @@
+# PEER-ADR-ALIAS-1 - the PrimaryTicker the provider left out or got wrong, for the market index's
+# peer groups. DATA CORRECTIONS ONLY: it changes one field (primary_ticker) on the rows a query
+# reads, never a size, a label or a peer directly, and the index on disk is not rewritten. Once a
+# line is aliased the existing rules do the rest: it falls in its home line's company, so it is
+# never that company's own peer and never a second member of a cohort. Every alias a cohort used
+# is printed in its report as "identity aliased".
+#
+# Each entry needs: ticker (the line to correct, EODHD form), primary (the home line's EODHD
+# ticker), date, reason.
+#
+# Add an entry only for a line that is plainly the same company as its primary, with the evidence
+# in the reason. `python -m aristos_council.market_index status` lists ADR/ADS rows that nothing
+# links to a home, which is where the next candidate will show up.
+aliases:
+  - ticker: GSK.US
+    primary: GSK.LSE
+    date: 2026-09-25
+    reason: >-
+      "GlaxoSmithKline PLC ADR" names itself as its PrimaryTicker and carries its own ISIN, and
+      its name (glaxosmithkline) is not GSK's, so no handle and no name link joins it to GSK.LSE.
+      Measured: AZN.LSE's cohort held GSK twice ($102.5bn and $100.6bn).
+  - ticker: SKHY.US
+    primary: 000660.KO
+    date: 2026-09-25
+    reason: >-
+      "SK Hynix Inc. American Depositary Shares" carries no PrimaryTicker, and its size is 1.37x
+      000660.KO's (stale price), beyond the name-link tolerance. Measured: SK Hynix appeared twice
+      in 2330.TW's cohort.
