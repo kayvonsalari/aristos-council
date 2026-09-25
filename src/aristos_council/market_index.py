@@ -1253,7 +1253,7 @@ def _identity_nodes(row: "IndexRow") -> list[str]:
     return nodes
 
 
-def company_groups(rows) -> list[list["IndexRow"]]:
+def company_groups(rows, *, link_by_name: bool = False) -> list[list["IndexRow"]]:
     """The rows, grouped so that each group is ONE company.
 
     Two rows are the same company when they share ANY handle - a primary ticker (one names the
@@ -1263,6 +1263,9 @@ def company_groups(rows) -> list[list["IndexRow"]]:
     across two or more groups - Hutchmed's Hong Kong lines ``0013.HK`` and ``13.HK`` (own
     primary each, one ISIN), its US ADR (primary 0013.HK, its own ISIN) and its London line;
     Nordea's five lines. ISIN-first, the old rule, left TSMC's ADR standing apart.
+
+    ``link_by_name`` adds a third, GUARDED link for lines the provider gives no common handle:
+    see ``_link_groups_by_name``.
     """
     parent: dict[str, str] = {}
 
@@ -1282,7 +1285,56 @@ def company_groups(rows) -> list[list["IndexRow"]]:
     groups: dict[str, list] = {}
     for row in materialised:
         groups.setdefault(find(_identity_nodes(row)[0]), []).append(row)
-    return list(groups.values())
+    linked = list(groups.values())
+    return _link_groups_by_name(linked) if link_by_name else linked
+
+
+# Two lines of one company, in one currency, differ by FX and timing - a few per cent; the
+# widest legitimate gap seen in the table is a Hong Kong RMB counter against the HKD one, at 24%.
+NAME_LINK_TOLERANCE = 1.25
+
+
+def _link_groups_by_name(groups: list) -> list:
+    """Merge groups that share a company NAME and a size, for lines no handle links.
+
+    Measured 2026-09-25: 385 reduced company names span more than one group in the eligible pool,
+    and most are one company - Alphabet x4, ArcelorMittal x4, Alibaba x4, ASML x3 (``ASML.AS``
+    and ``ASML.US`` each name THEMSELVES as primary, with different ISINs), Atlas Copco's A and B
+    shares, Illinois Tool Works' Xetra line. PrimaryTicker and ISIN cannot link those, and left
+    apart they were counted as several peers - the defect this batch exists to remove.
+
+    A name alone is not enough, and the guard is what makes this safe: the two rows must ALSO
+    carry USD caps within ``NAME_LINK_TOLERANCE``. Different companies do share a short name
+    (APA Corp in the US at $15.7bn and APA Group in Australia at $10.2bn, 1.54x; Argan Inc and
+    Argan SA, 2.5x), and they are not merged. A row with no size is never linked - null is not
+    a match. It is used for the peer POOL and the subject's own lines, not for the size-sanity
+    test, which needs the lines this would merge to still be separate.
+    """
+    parent = list(range(len(groups)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    buckets: dict[str, list] = {}
+    for number, members in enumerate(groups):
+        for row in members:
+            key = _name_key(row.name)
+            if len(key) >= 3 and row.market_cap_usd is not None and row.market_cap_usd > 0:
+                buckets.setdefault(key, []).append((number, row))
+    for entries in buckets.values():
+        for i, (first, a) in enumerate(entries):
+            for second, b in entries[i + 1:]:
+                if (find(first) != find(second)
+                        and not _far_apart(a.market_cap_usd, b.market_cap_usd,
+                                           NAME_LINK_TOLERANCE)):
+                    parent[find(second)] = find(first)
+    merged: dict[int, list] = {}
+    for number, members in enumerate(groups):
+        merged.setdefault(find(number), []).extend(members)
+    return list(merged.values())
 
 
 def _listing_rank(row: "IndexRow") -> tuple:
@@ -1296,11 +1348,11 @@ def _listing_rank(row: "IndexRow") -> tuple:
     return (home, country_match, normalise_symbol(row.ticker))
 
 
-def one_row_per_company(rows) -> tuple[list, int]:
+def one_row_per_company(rows, *, link_by_name: bool = False) -> tuple[list, int]:
     """``(kept, dropped)`` - the pool, deduplicated by company."""
     kept = []
     dropped = 0
-    for group in company_groups(rows):
+    for group in company_groups(rows, link_by_name=link_by_name):
         group.sort(key=_listing_rank)
         kept.append(group[0])
         dropped += len(group) - 1
@@ -1547,6 +1599,9 @@ def _name_key(name: str) -> str:
     import unicodedata
     text = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode()
     text = re.sub(r"\(.*?\)", " ", text.lower())
+    if "fully paid" in text:
+        return ""     # ASX deferred-settlement placeholders ("Ordinary Fully Paid Deferred ...")
+    text = re.sub(r"[./]", "", text)                 # N.V. -> nv, S.A. -> sa, A/S -> as
     text = re.sub(r"[^a-z0-9 ]+", " ", text)
     return " ".join(tok for tok in text.split() if tok not in _NAME_NOISE)
 
@@ -2042,7 +2097,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     # not just the identical ticker string. TSM.US (an ADR that names 2330.TW as home) stood in
     # TSMC's own cohort because only the ticker was compared.
     company_of = {}
-    for number, members in enumerate(company_groups(universe)):
+    for number, members in enumerate(company_groups(universe, link_by_name=True)):
         for member in members:
             company_of[normalise_symbol(member.ticker)] = number
     subject_company = company_of.get(normalise_symbol(subject.ticker))
@@ -2085,7 +2140,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
 
     # ONE ROW PER COMPANY. AMD.US, AMD.TO and AMD.XETRA were three peers in the 9,018-row
     # build; they are one company.
-    pool, cross_listings = one_row_per_company(candidates)
+    pool, cross_listings = one_row_per_company(candidates, link_by_name=True)
 
     if own_lines:
         group.reasons.append(f"{own_lines} other line(s) of {subject.name or subject.ticker} "

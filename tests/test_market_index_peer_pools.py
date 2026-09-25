@@ -603,3 +603,74 @@ def test_an_override_without_a_reason_or_a_date_is_refused(tmp_path):
 
 def test_a_missing_override_file_is_no_overrides(tmp_path):
     assert load_label_overrides(tmp_path / "nothing.yaml") == []
+
+
+# =========================================================================== #
+# PEER-DEDUP-1, part 2 - lines no handle links (measured on the real table)
+# =========================================================================== #
+def test_two_lines_that_each_name_themselves_as_primary_are_one_company_by_name_and_size():
+    """ASML.AS and ASML.US: different ISINs, each its own primary. In TSMC's cohort twice."""
+    nl = _row("ASML.AS", "ASML Holding N.V.", cap_bn=653.2, isin="NL0010273215", market="AS")
+    us = _row("ASML.US", "ASML Holding NV ADR", cap_bn=645.3, isin="USN070592100", market="US")
+    assert len(company_groups([nl, us])) == 2                       # no shared handle...
+    assert len(company_groups([nl, us], link_by_name=True)) == 1    # ...but one company
+    kept, dropped = one_row_per_company([nl, us], link_by_name=True)
+    assert [r.ticker for r in kept] == ["ASML.AS"] and dropped == 1
+
+
+def test_share_classes_of_one_company_are_one_peer():
+    a = _row("ATCO-A.ST", "Atlas Copco AB Series A", cap_bn=103.6, isin="SE0017486889")
+    b = _row("ATCO-B.ST", "Atlas Copco AB Series B", cap_bn=89.9, isin="SE0017486897")
+    assert len(company_groups([a, b], link_by_name=True)) == 1
+
+
+def test_different_companies_that_share_a_short_name_are_not_merged():
+    """APA Corp (US, $15.7bn) and APA Group (Australia, $10.2bn) are 1.54x apart; Argan Inc and
+    Argan SA are 2.5x apart. The size guard is what stops a name from merging strangers."""
+    apa_us = _row("APA.US", "APA Corporation", cap_bn=15.7, isin="US03743Q1085")
+    apa_au = _row("APA.AU", "APA Group", cap_bn=10.2, isin="AU000000APA1")
+    argan_us = _row("AGX.US", "Argan Inc", cap_bn=5.4, isin="US04010E1091")
+    argan_fr = _row("ARG.PA", "Argan SA", cap_bn=2.1, isin="FR0010481960")
+    assert len(company_groups([apa_us, apa_au, argan_us, argan_fr], link_by_name=True)) == 4
+
+
+def test_a_line_with_no_size_is_never_linked_by_name():
+    sized = _row("ACME.US", "Acme Holdings", cap_bn=10.0)
+    unsized = _row("ACME.MX", "Acme Holdings", cap_bn=None)
+    assert len(company_groups([sized, unsized], link_by_name=True)) == 2
+
+
+def test_the_name_link_is_off_by_default_so_the_size_test_still_sees_separate_lines():
+    a = _row("ASML.AS", "ASML Holding N.V.", cap_bn=653.2, isin="NL0010273215")
+    b = _row("ASML.US", "ASML Holding NV ADR", cap_bn=645.3, isin="USN070592100")
+    assert len(company_groups([a, b])) == 2
+
+
+def test_a_cohort_never_holds_one_company_under_two_tickers_even_when_no_handle_links_them():
+    """Eaton's real cohort held Illinois Tool Works as ITW.US and ILT.XETRA, Parker-Hannifin as
+    PH.US and PAR.XETRA, Atlas Copco as ATCO-A and ATCO-B: 18 'peers', 15 companies."""
+    subject = _row("SUBJ.US", "Subject", cap_bn=100.0)
+    itw_us = _row("ITW.US", "Illinois Tool Works Inc", cap_bn=76.7, isin="US4523081093")
+    itw_de = _row("ILT.XETRA", "Illinois Tool Works Inc.", cap_bn=76.5, isin="US4523081093x",
+                  primary="ILT.XETRA", market="XETRA")
+    group = peers("SUBJ.US", rows=[subject, itw_us, itw_de, *_fillers(12)])
+    assert sum(1 for m in _tickers(group) if m.startswith(("ITW", "ILT"))) == 1
+    assert group.distinct_companies == len(group.members) == 13
+
+
+def test_a_line_of_the_subjects_own_company_found_only_by_name_is_not_its_peer():
+    """ASML.US, asked about ASML.AS, is the same company however the provider links it."""
+    nl = _row("ASML.AS", "ASML Holding N.V.", cap_bn=653.2, isin="NL0010273215", market="AS")
+    us = _row("ASML.US", "ASML Holding NV ADR", cap_bn=645.3, isin="USN070592100", market="US")
+    rivals = [_row(f"RIV{i:02d}.US", cap_bn=650.0 + i) for i in range(12)]
+    group = peers("ASML.AS", rows=[nl, us, *rivals])
+    assert group.available and "ASML.US" not in _tickers(group)
+    assert any("never its own peer" in r for r in group.reasons)
+
+
+def test_placeholder_names_are_not_a_company_name():
+    """ASX deferred-settlement lines are all called 'Ordinary Fully Paid Deferred Settlement': four
+    different companies read as one by name, and none of them by that name."""
+    a = _row("AHNDA.AU", "Ordinary Fully Paid Deferred Settlement", cap_bn=0.01)
+    b = _row("EVRDD.AU", "Ordinary Fully Paid Deferred Settlement", cap_bn=0.01)
+    assert len(company_groups([a, b], link_by_name=True)) == 2
