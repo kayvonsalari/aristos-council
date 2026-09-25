@@ -21,7 +21,7 @@ import pytest
 from aristos_council.market_index import (SOURCE_EODHD_LISTING, IdentityAlias, IndexRow,
                                           IndexStore, MarketIndexError, _name_key,
                                           apply_identity_aliases, company_groups,
-                                          load_identity_aliases, orphan_depositary_rows,
+                                          distinct_companies, load_identity_aliases, orphan_depositary_rows,
                                           peer_snapshot, peers, status)
 
 SNAPSHOT = "2026-09-25"
@@ -257,3 +257,51 @@ def test_status_counts_aliased_rows_and_stops_calling_them_orphans(tmp_path):
     assert out.aliased == 1 and out.aliased_examples == ["GSK.US"]
     assert out.orphan_adrs == 1 and out.orphan_adr_examples == ["ORPH.US"]
     assert "1 row(s) carry an identity alias" in " ".join(out.lines())
+
+
+# =========================================================================== #
+# PEER-DISTINCT-COUNT-1
+# =========================================================================== #
+def _twin_table(*, second_name="Twin Company", second_cap=180.0):
+    subject = _row("SUBJ.US", "Subject Pharma", cap_bn=120.0)
+    a = _row("TWIN.US", "Twin Company", cap_bn=100.0, isin="US0000000011")
+    b = _row("TWIN2.XETRA", second_name, cap_bn=second_cap, isin="DE0000000022", market="XETRA")
+    return [subject, a, b, *_fillers(11, cap_bn=110.0)]
+
+
+def test_two_members_that_share_a_name_and_no_handle_are_counted_once_and_still_listed():
+    """1.8x apart: beyond the name-link tolerance, so both survive the pool - and the count says so."""
+    group = peers("SUBJ.US", rows=_twin_table(), aliases=[])
+    members = _tickers(group)
+    assert "TWIN.US" in members and "TWIN2.XETRA" in members         # never dropped silently
+    assert len(members) == 13 and group.distinct_companies == 12
+    assert "1 member(s) share a company name with another member: counted once, listed twice"         in group.reasons
+    assert "12 distinct companies" in group.sentence()
+
+
+def test_a_cohort_whose_names_are_all_different_reports_no_sharing():
+    group = peers("SUBJ.US", rows=_twin_table(second_name="Another Company"), aliases=[])
+    assert group.distinct_companies == len(group.members) == 13
+    assert not any("share a company name" in r for r in group.reasons)
+
+
+def test_members_with_no_usable_name_are_never_merged_by_name():
+    a = _row("A.US", "", cap_bn=100.0)
+    b = _row("B.US", "Ordinary Fully Paid Deferred Settlement", cap_bn=100.0)
+    c = _row("C.US", "Ordinary Fully Paid Deferred Settlement", cap_bn=180.0)
+    assert distinct_companies([a, b, c]) == (3, 0)
+
+
+def test_the_count_reads_the_same_grouping_as_the_pool_including_aliases():
+    """Aliases are applied before grouping, so an aliased pair is one company here too."""
+    rows, _ = apply_identity_aliases(_azn_table(), [ALIAS_GSK])
+    gsk = [r for r in rows if r.ticker.startswith("GSK")]
+    assert distinct_companies(gsk) == (1, 1)
+
+
+def test_the_distinct_count_and_the_pool_agree_on_the_live_shapes():
+    """Preference share and ordinary share, 1.29x apart, beyond the link: two rows, one company."""
+    ordinary = _row("005930.KO", "Samsung Electronics Co Ltd", cap_bn=1376.0, market="KO")
+    pref = _row("005935.KO", "Samsung Electronics Co Pref", cap_bn=1065.4, market="KO")
+    assert len(company_groups([ordinary, pref], link_by_name=True)) == 2
+    assert distinct_companies([ordinary, pref]) == (1, 1)

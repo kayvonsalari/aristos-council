@@ -1547,6 +1547,42 @@ def company_pool(rows, *, link_by_name: bool = False) -> tuple[list, int, dict]:
     return sorted(kept, key=lambda r: r.ticker), dropped, absorbed
 
 
+def distinct_companies(members) -> tuple[int, int]:
+    """``(distinct, shared)``: how many companies a cohort's members are, and how many members share
+    a company name with another and are therefore counted once.
+
+    PEER-DISTINCT-COUNT-1. The count used to read a grouping built over the whole universe, which
+    cannot see what the pool cannot see, so it agreed with the pool by construction and was wrong
+    exactly when the pool was (AZN's cohort reported 14 companies for 13; TSMC's 15 for 14). It now
+    reads ``company_groups`` over the MEMBERS - the same function, with aliases already applied and
+    the name link on, that built the pool - and then also counts members with an identical cleaned
+    name once even when no handle and no size links them: Samsung Electronics and its preference
+    line 1.29x apart are one company however the provider filed them. A member whose name cleans
+    to nothing is never merged.
+    """
+    groups = company_groups(members, link_by_name=True)
+    parent = list(range(len(groups)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    first_with_key: dict[str, int] = {}
+    for number, group in enumerate(groups):
+        for row in group:
+            key = _name_key(row.name)
+            if not key:
+                continue
+            if key in first_with_key:
+                parent[find(number)] = find(first_with_key[key])
+            else:
+                first_with_key[key] = number
+    distinct = len({find(i) for i in range(len(groups))})
+    return distinct, len(list(members)) - distinct
+
+
 def one_row_per_company(rows, *, link_by_name: bool = False) -> tuple[list, int]:
     """``(kept, dropped)`` - the pool, deduplicated by company."""
     kept, dropped, _ = company_pool(rows, link_by_name=link_by_name)
@@ -2598,8 +2634,11 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                 group.reasons.append(
                     f"matched on: GICS only {tally.get(LABEL_GICS, 0)}, EODHD label only "
                     f"{tally.get(LABEL_EODHD, 0)}, both {tally.get(f'{LABEL_GICS}+{LABEL_EODHD}', 0)}")
-            group.distinct_companies = len({company_of.get(normalise_symbol(r.ticker), r.ticker)
-                                            for r in group.members})
+            group.distinct_companies, shared = distinct_companies(group.members)
+            if shared:
+                group.reasons.append(
+                    f"{shared} member(s) share a company name with another member: counted "
+                    f"once, listed twice")
             report_aliases(group.members)
             for member in group.members:
                 if normalise_symbol(member.ticker) in applied:
