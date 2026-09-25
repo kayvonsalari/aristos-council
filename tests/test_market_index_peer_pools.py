@@ -17,7 +17,8 @@ from aristos_council.market_index import (RECEIPT_BDR, RECEIPT_BR_FRACTIONAL, RE
                                           RECEIPT_LSE_GDR, RECEIPT_LSE_LINE, RECEIPT_SWISS_LINE,
                                           SOURCE_EODHD_LISTING, IndexRow, IndexStore,
                                           company_groups, company_key, one_row_per_company,
-                                          peers, receipt_kind, secondary_lines, status)
+                                          load_config, peers, receipt_kind, secondary_lines,
+                                          size_disputes, size_suspects, status)
 
 SNAPSHOT = "2026-09-25"
 
@@ -260,3 +261,104 @@ def test_status_counts_receipts_by_kind_and_says_which_leave_a_company_out(tmp_p
     text = " ".join(out.lines())
     assert "2 secondary trading line(s)" in text and "1 of them are the ONLY line" in text
     assert f"{RECEIPT_BDR}: 2" in text
+
+
+# =========================================================================== #
+# PEER-SIZE-SANITY-1
+# =========================================================================== #
+def _lines(company="Vestas Wind Systems A/S", **caps_bn):
+    """One company, several lines, each ``TICKER=cap_bn``; the first is the home line."""
+    rows = []
+    home = next(iter(caps_bn)).replace("_", ".")
+    for i, (ticker, cap) in enumerate(caps_bn.items()):
+        code = ticker.replace("_", ".")
+        rows.append(_row(code, company, cap_bn=cap, primary=home,
+                         isin=f"{home}-ISIN{i:04d}", market=code.rpartition(".")[2]))
+    return rows
+
+
+def test_a_row_far_from_a_consensus_of_the_companys_other_lines_is_size_suspect():
+    """Vestas: $31.5bn at home and $31.0bn on Xetra, $5.2bn on a third non-receipt line."""
+    rows = _lines(VWS_CO=31.5, VWSB_XETRA=31.0, VWDRY_US=5.2)
+    flagged = size_suspects(rows)
+    assert list(flagged) == ["VWDRY.US"]
+    assert "size suspect" in flagged["VWDRY.US"] and "$5.2bn" in flagged["VWDRY.US"]
+
+
+def test_two_lines_that_disagree_cannot_say_which_is_wrong_so_neither_is_flagged():
+    """The real shape: RR.LSE (GBX) reads $1.6bn and RRU.XETRA $157.9bn. Rolls-Royce is about
+    GBP 119bn, so it is the HOME line that is wrong - flagging the non-home line, as the first
+    version of this rule did, excluded the correct row for every UK company."""
+    rows = _lines("Rolls-Royce Holdings PLC", RR_LSE=1.6, RRU_XETRA=157.9)
+    assert size_suspects(rows) == {}
+    assert size_disputes(rows) == [["RR.LSE", "RRU.XETRA"]]
+
+
+def test_three_figures_that_all_disagree_flag_nothing_but_are_reported_as_disputed():
+    rows = _lines(A_US=1.0, B_US=10.0, C_US=100.0)
+    assert size_suspects(rows) == {}
+    assert len(size_disputes(rows)) == 1
+
+
+def test_a_company_with_one_sized_line_is_never_flagged_or_disputed():
+    (only,) = _lines(VWS_CO=31.5)
+    assert size_suspects([only]) == {} and size_disputes([only]) == []
+
+
+def test_a_line_with_no_size_is_not_a_witness():
+    """No cap is not a small cap: it neither votes nor is judged (null is not false)."""
+    rows = _lines(VWS_CO=31.5, VWSB_XETRA=31.0, VWDRY_US=None)
+    assert size_suspects(rows) == {}
+
+
+def test_receipts_do_not_vote():
+    """Two London 0xxx lines that share one error must not outvote the correct home line."""
+    home = _row("VWS.CO", "Vestas Wind Systems A/S", cap_bn=31.5, primary="VWS.CO",
+                isin="DK0061539921", market="CO")
+    xetra = _row("VWSB.XETRA", "Vestas Wind Systems A/S", cap_bn=31.0, primary="VWS.CO",
+                 isin="DK0061539921", market="XETRA")
+    bad_a = _row("0NMK.LSE", "Vestas Wind Systems A/S", cap_bn=5.2, primary="VWS.CO",
+                 isin="DK0061539921", market="LSE")
+    bad_b = _row("0NML.LSE", "Vestas Wind Systems A/S", cap_bn=5.1, primary="VWS.CO",
+                 isin="DK0061539921", market="LSE")
+    assert size_suspects([home, xetra, bad_a, bad_b]) == {}
+    assert size_disputes([home, xetra, bad_a, bad_b]) == []       # they are simply not evidence
+
+
+def test_the_factor_is_configurable():
+    rows = _lines(A_US=100.0, B_US=100.0, C_US=17.0)          # 5.9x apart
+    assert list(size_suspects(rows)) == ["C.US"]
+    assert size_suspects(rows, factor=7.0) == {}
+
+
+def test_the_default_factor_is_five_and_the_config_carries_it():
+    assert load_config()["size_suspect_factor"] == 5.0
+    assert "size_suspect_factor" in open("market_index.yaml", encoding="utf-8").read()
+
+
+def test_a_size_suspect_row_is_kept_out_of_the_pool_and_counted_in_the_report():
+    subject = _row("SUBJ.US", "Subject", cap_bn=30.0)
+    lines = _lines("Wind Co", VWS_CO=31.5, VWSB_XETRA=31.0, VWDRY_US=5.2)
+    group = peers("SUBJ.US", rows=[subject, *lines, *_fillers(13, cap_bn=30.0)])
+    members = _tickers(group)
+    assert "VWDRY.US" not in members and "VWS.CO" in members
+    assert any("1 candidate(s) skipped: size suspect" in r for r in group.reasons)
+
+
+def test_a_size_suspect_subject_is_kept_but_its_doubtful_size_is_said():
+    lines = _lines("Wind Co", VWS_CO=5.2, VWSB_XETRA=31.0, VWDRY_US=31.5)   # the HOME line is odd
+    rows = [*lines, *_fillers(13, cap_bn=5.0)]
+    group = peers("VWS.CO", rows=rows)
+    assert group.subject.ticker == "VWS.CO" and group.available
+    assert any("VWS.CO: size suspect" in r and "as it stands" in r for r in group.reasons)
+
+
+def test_status_counts_size_suspect_rows_and_undecidable_companies(tmp_path):
+    store = IndexStore(tmp_path)
+    store.save([*_lines("Wind Co", VWS_CO=31.5, VWSB_XETRA=31.0, VWDRY_US=5.2),
+                *_lines("Two Line Co", RR_LSE=1.6, RRU_XETRA=157.9)])
+    out = status(store)
+    assert out.size_suspect == 1 and out.size_suspect_examples == ["VWDRY.US"]
+    assert out.size_disputed == 1
+    text = " ".join(out.lines())
+    assert "1 row(s) size suspect" in text and "cannot be adjudicated" in text

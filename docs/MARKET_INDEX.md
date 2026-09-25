@@ -268,6 +268,8 @@ are counted in `status`, and a fund or suspect subject gets no peer group and a 
 
 **Secondary trading lines are kept but never peers (PEER-RECEIPTS-1, 2026-09-25).** EODHD serves Brazilian BDRs (`E1TN34.SA`), Canadian CDRs (`AMD.TO`), Swiss lines of foreign stocks (`NVDA.SW`), London `0xxx` lines (`0NMK.LSE`: Vestas at $5bn there, $31bn at home) and London GDRs as ordinary common stock, mostly with no PrimaryTicker or ISIN, so each stood as a company of its own. They stay in the table, are skipped in every pool, and `status` counts them by kind — including how many are the *only* line their company has here (that company then sits in no peer group). A receipt looked up by its own symbol is answered for the company it mirrors.
 
+**A size the company's other lines refute is kept but never a peer (PEER-SIZE-SANITY-1, 2026-09-25).** A row whose USD cap is more than `size_suspect_factor` (default 5×, in `market_index.yaml`) from *every* other own line of its company, while those others agree with each other, is *size suspect*: excluded from pools and counted in `status`. Two lines that disagree cannot say which is wrong, so neither is flagged — they are counted as "cannot be adjudicated" instead. On the 2026-09-25 table this flagged 21 rows, all real errors (20 London `GBX` lines reading ~100× low, and `NOKIA.ST`), and left 34 disagreeing companies unjudged. **Known upstream defect surfaced by this:** London lines quoted in `GBX` carry a pounds figure that `_UsdConverter` scales as pence, so e.g. `RR.LSE` reads $1.6bn against $158bn elsewhere; the converter is not changed here.
+
 ## The peer ladder
 
 `peers(ticker, floor=12, cap=40)` widens only as far as it must, and says how far it went:

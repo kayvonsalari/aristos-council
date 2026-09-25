@@ -82,6 +82,11 @@ CAP_KEY = "Highlights::MarketCapitalization"
 # quarter to four times), which a month of drift does not cross.
 DEFAULT_MAX_AGE_DAYS = 30
 
+# PEER-SIZE-SANITY-1 - see the section of that name below. Here because ``status`` and ``peers``
+# take the factor as a default argument.
+DEFAULT_SIZE_FACTOR = 5.0
+SIZE_SUSPECT = "size suspect"
+
 # INDEX-CAP-RETRY-1 — how long to stop asking about a gap the provider does not have.
 #
 # MEASURED, 2026-09-24: 2,566 rows carry no market cap and 1,767 no classification, and EVERY
@@ -351,7 +356,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
         return {"exchanges": list(DEFAULT_EXCHANGES),
                 "max_age_days": DEFAULT_MAX_AGE_DAYS, "root": str(DEFAULT_ROOT),
                 "empty_retry_after": DEFAULT_EMPTY_RETRY_AFTER,
-                "empty_retry_days": DEFAULT_EMPTY_RETRY_DAYS}
+                "empty_retry_days": DEFAULT_EMPTY_RETRY_DAYS,
+                "size_suspect_factor": DEFAULT_SIZE_FACTOR}
     doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(doc, dict):
         raise MarketIndexError(f"{path}: expected a mapping, got {type(doc).__name__}")
@@ -371,6 +377,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
         "empty_retry_after": int(doc.get("empty_retry_after",
                                          DEFAULT_EMPTY_RETRY_AFTER)),
         "empty_retry_days": int(doc.get("empty_retry_days", DEFAULT_EMPTY_RETRY_DAYS)),
+        # PEER-SIZE-SANITY-1 - how far a row's size may be from the company's other listings.
+        "size_suspect_factor": float(doc.get("size_suspect_factor", DEFAULT_SIZE_FACTOR)),
         # MARKET-INDEX-2 - per exchange, and an exchange that is absent is unrestricted.
         "venues": {str(k).strip().upper(): [str(v).strip().upper() for v in (vals or [])]
                    for k, vals in venues.items()},
@@ -1022,6 +1030,14 @@ class IndexStatus:
     receipts: dict = field(default_factory=dict)
     receipt_examples: dict = field(default_factory=dict)
     receipts_sole: int = 0
+    # PEER-SIZE-SANITY-1 - rows whose size the company's other lines refute; counted apart from
+    # the receipts, funds and suspect labels above (a row is counted under the first that fits).
+    size_suspect: int = 0
+    size_suspect_examples: list = field(default_factory=list)
+    # ...and the companies whose lines disagree where no row could be blamed (two lines cannot
+    # say which is wrong), used as they stand.
+    size_disputed: int = 0
+    size_disputed_examples: list = field(default_factory=list)
 
     def lines(self) -> list[str]:
         if not self.rows:
@@ -1046,6 +1062,17 @@ class IndexStatus:
                                  if self.suspect_examples else ""),
                f"  oldest row: {self.oldest or 'unknown'}",
                "  per exchange:"]
+        if self.size_disputed:
+            out.insert(out.index("  per exchange:"),
+                       f"  {self.size_disputed} company(ies) whose lines differ in size by more "
+                       f"than the limit and cannot be adjudicated - sizes used as they stand"
+                       + (f" (e.g. {', '.join(self.size_disputed_examples)})"
+                          if self.size_disputed_examples else ""))
+        if self.size_suspect:
+            out.insert(out.index("  per exchange:"),
+                       f"  {self.size_suspect} row(s) {SIZE_SUSPECT} - kept, excluded from peer "
+                       f"groups" + (f" (e.g. {', '.join(self.size_suspect_examples)})"
+                                    if self.size_suspect_examples else ""))
         if self.receipts:
             at = out.index("  per exchange:")
             out.insert(at, f"  {sum(self.receipts.values())} secondary trading line(s) (receipts "
@@ -1076,7 +1103,8 @@ class IndexStatus:
 
 def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
            empty_retry_after: int = DEFAULT_EMPTY_RETRY_AFTER,
-           empty_retry_days: int = DEFAULT_EMPTY_RETRY_DAYS) -> IndexStatus:
+           empty_retry_days: int = DEFAULT_EMPTY_RETRY_DAYS,
+           size_factor: float = DEFAULT_SIZE_FACTOR) -> IndexStatus:
     """What is in the table. Works on an EMPTY index without raising — the first thing
     anyone runs is ``status``, and it must answer rather than fail."""
     store = store or IndexStore()
@@ -1140,6 +1168,17 @@ def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
             if (normalise_symbol(row.ticker) not in own_line_sized
                     and _name_key(row.name) not in named_own):
                 out.receipts_sole += 1
+    for ticker in sorted(size_suspects(rows, size_factor)):
+        row = next(r for r in rows if normalise_symbol(r.ticker) == ticker)
+        if ticker in secondary or is_fund(row) or suspect_reason(row):
+            continue                                   # already counted under its first reason
+        out.size_suspect += 1
+        if len(out.size_suspect_examples) < EXAMPLES:
+            out.size_suspect_examples.append(row.ticker)
+    for tickers in size_disputes(rows, size_factor):
+        out.size_disputed += 1
+        if len(out.size_disputed_examples) < EXAMPLES:
+            out.size_disputed_examples.append("/".join(tickers))
     stamps = sorted(r.fetched_at for r in rows if r.fetched_at)
     out.oldest = stamps[0] if stamps else ""
     return out
@@ -1559,6 +1598,91 @@ def _receipt_home(row: "IndexRow", rows, secondary: dict) -> Optional["IndexRow"
 
 
 # --------------------------------------------------------------------------- #
+# PEER-SIZE-SANITY-1 - a size that no other line of the company supports
+# --------------------------------------------------------------------------- #
+# The peer ladder bands on USD market cap, so a row whose cap is wrong lands in the wrong band or,
+# worse, in the right one for the wrong reason. Measured 2026-09-25: Ming Yang's London GDR reads
+# $999.6bn (it is a wind-turbine maker worth a few billion), and Vestas' London line reads $5.2bn
+# against $31.5bn on its home line and $31.0bn on Xetra.
+#
+# A row is SIZE SUSPECT when its USD cap is more than ``factor`` times away from the same
+# company's other listings (default 5x). It stays in the table, is excluded from peer groups and
+# is counted. The rule is deliberately unwilling to guess:
+#
+#   * three or more sized listings: a row is flagged only when it disagrees with EVERY other
+#     listing AND those others form a consensus (two of them agree). Figures that all disagree
+#     with each other say nothing about which is wrong, so nothing is flagged;
+#   * exactly TWO sized listings: never flagged. Two figures that disagree cannot say which of
+#     them is the wrong one. This was first written the other way - flag the non-home line against
+#     an explicit home - and MEASURED on the built table it flagged the CORRECT row every time:
+#     RR.LSE (home, currency GBX) reads $1.6bn and RRU.XETRA reads $157.9bn; Rolls-Royce is
+#     about GBP 119bn, so the home line's pounds figure had the pence scale applied to it (the
+#     GBX quirk documented at ``_UsdConverter``, Victrex being the first sighting). The same
+#     shape held for GSK, BAE, National Grid, NatWest, Standard Chartered, Imperial Brands;
+#   * one sized listing: nothing to compare against - a company with a single line is never
+#     flagged by this test (null is not false).
+#
+# A company whose lines disagree and cannot be adjudicated is not flagged and not silent:
+# ``size_disputes`` names it, and ``status`` counts it, so the disagreement is visible.
+#
+# Secondary lines are neither judged nor allowed to vote: they are already excluded from every
+# pool and their sizes are the least trustworthy in the table.
+def _far_apart(a: float, b: float, factor: float) -> bool:
+    return max(a, b) / min(a, b) > factor
+
+
+def _sized_own_lines(company, secondary: dict) -> list:
+    return [r for r in company if r.market_cap_usd is not None and r.market_cap_usd > 0
+            and normalise_symbol(r.ticker) not in secondary]
+
+
+def size_suspects(rows, factor: float = DEFAULT_SIZE_FACTOR) -> dict[str, str]:
+    """``{normalised ticker: reason}`` for every row whose size the company's other lines refute."""
+    out: dict[str, str] = {}
+    secondary = secondary_lines(rows)
+    for company in company_groups(rows):
+        sized = _sized_own_lines(company, secondary)
+        if len(sized) < 3:
+            continue                            # one line has nothing to compare; two cannot say
+        for row in sized:
+            others = [r.market_cap_usd for r in sized if r is not row]
+            if not all(_far_apart(row.market_cap_usd, cap, factor) for cap in others):
+                continue
+            if not any(not _far_apart(a, b, factor)
+                       for i, a in enumerate(others) for b in others[i + 1:]):
+                continue                        # no consensus among the others: abstain
+            out[normalise_symbol(row.ticker)] = _size_reason(row, others, factor)
+    return out
+
+
+def size_disputes(rows, factor: float = DEFAULT_SIZE_FACTOR) -> list[list[str]]:
+    """Companies whose lines disagree by more than ``factor`` and where NO row could be flagged.
+
+    Each entry is the tickers of one company. Used to say so, not to exclude anything: the sizes
+    of these companies are used as they stand.
+    """
+    flagged = size_suspects(rows, factor)
+    secondary = secondary_lines(rows)
+    out = []
+    for company in company_groups(rows):
+        sized = _sized_own_lines(company, secondary)
+        if len(sized) < 2 or any(normalise_symbol(r.ticker) in flagged for r in sized):
+            continue
+        caps = [r.market_cap_usd for r in sized]
+        if any(_far_apart(a, b, factor) for i, a in enumerate(caps) for b in caps[i + 1:]):
+            out.append(sorted(r.ticker for r in sized))
+    return out
+
+
+def _size_reason(row: "IndexRow", others: list, factor: float) -> str:
+    reference = sorted(others)[len(others) // 2]
+    ratio = max(row.market_cap_usd, reference) / min(row.market_cap_usd, reference)
+    return (f"{SIZE_SUSPECT} (${row.market_cap_usd / 1e9:,.1f}bn here against "
+            f"${reference / 1e9:,.1f}bn on the company's other listings, {ratio:.1f}x apart; "
+            f"the limit is {factor:g}x)")
+
+
+# --------------------------------------------------------------------------- #
 # peers
 # --------------------------------------------------------------------------- #
 RUNG_SUBINDUSTRY_TIGHT = "sub-industry, 1/4x–4x"
@@ -1638,7 +1762,7 @@ def _log_distance(cap: Optional[float], subject: float) -> float:
 
 def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
           store: Optional[IndexStore] = None, rows: Optional[list[IndexRow]] = None,
-          ) -> PeerGroup:
+          size_factor: float = DEFAULT_SIZE_FACTOR) -> PeerGroup:
     """The peer group for one company, by ladder, from the local table only.
 
     Deterministic for a given snapshot: every rung is a filter over the same rows and the
@@ -1724,6 +1848,13 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                              f"is formed")
         return group
 
+    # PEER-SIZE-SANITY-1 - the subject is kept (it is the company asked about) but its size is
+    # said to be doubtful, because every band below is a multiple of it.
+    size_flags = size_suspects(universe, size_factor)
+    if normalise_symbol(subject.ticker) in size_flags:
+        group.reasons.append(f"{subject.ticker}: {size_flags[normalise_symbol(subject.ticker)]} "
+                             f"- the size bands below are built on it as it stands")
+
     subject_financial = is_financial(subject)
     if not subject.gics_subindustry:
         group.reasons.append("subject has no GICS sub-industry; fell back to the EODHD "
@@ -1741,6 +1872,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     # Everything that is eligible to be a peer at all, before any rung.
     candidates, no_cap, no_usd, funds, suspect, own_lines = [], 0, 0, 0, 0, 0
     receipts: dict[str, int] = {}
+    size_suspect = 0
     for row in universe:
         if normalise_symbol(row.ticker) == normalise_symbol(subject.ticker):
             continue                                   # never its own peer
@@ -1768,6 +1900,9 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             # what looks like missing data.
             no_usd += 1
             continue
+        if normalise_symbol(row.ticker) in size_flags:
+            size_suspect += 1                          # kept in the table, never a peer
+            continue
         candidates.append(row)
 
     # ONE ROW PER COMPANY. AMD.US, AMD.TO and AMD.XETRA were three peers in the 9,018-row
@@ -1782,6 +1917,10 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             f"{sum(receipts.values())} candidate(s) skipped: secondary trading line, not a "
             f"company (" + ", ".join(f"{kind} {n}" for kind, n in sorted(receipts.items()))
             + ")")
+    if size_suspect:
+        group.reasons.append(f"{size_suspect} candidate(s) skipped: {SIZE_SUSPECT} (a market "
+                             f"cap more than {size_factor:g}x from the same company's other "
+                             f"listings)")
     if funds:
         group.reasons.append(f"{funds} candidate(s) skipped: {FUND_NOT_A_COMPANY}")
     if suspect:
@@ -1908,6 +2047,10 @@ def build_parser():
     p_peers.add_argument("ticker")
     p_peers.add_argument("--floor", type=int, default=DEFAULT_FLOOR)
     p_peers.add_argument("--cap", type=int, default=DEFAULT_CAP)
+    p_peers.add_argument("--size-factor", type=float, default=None,
+                         help="a row whose USD cap is more than this many times away from the "
+                              "company's other listings is size suspect (default: the config's "
+                              f"size_suspect_factor, {DEFAULT_SIZE_FACTOR:g})")
     p_peers.set_defaults(func=_cmd_peers)
 
     p_status = sub.add_parser("status", help="what is in the index")
@@ -1963,7 +2106,11 @@ def _cmd_build(args) -> int:
 
 
 def _cmd_peers(args) -> int:
-    group = peers(args.ticker, floor=args.floor, cap=args.cap, store=_store_for(args))
+    factor = args.size_factor
+    if factor is None:
+        factor = load_config(args.config).get("size_suspect_factor", DEFAULT_SIZE_FACTOR)
+    group = peers(args.ticker, floor=args.floor, cap=args.cap, store=_store_for(args),
+                  size_factor=factor)
     if not group.available:
         _say(f"No peer group for {args.ticker}.")
         for reason in group.reasons:
@@ -1988,7 +2135,8 @@ def _cmd_status(args) -> int:
     config = load_config(args.config)
     for line in status(_store_for(args),
                        empty_retry_after=config["empty_retry_after"],
-                       empty_retry_days=config["empty_retry_days"]).lines():
+                       empty_retry_days=config["empty_retry_days"],
+                       size_factor=config["size_suspect_factor"]).lines():
         _say(line)
     return 0
 

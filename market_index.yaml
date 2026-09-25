@@ -85,6 +85,12 @@ venues:
 
 max_age_days: 30
 
+# PEER-SIZE-SANITY-1 - a row whose USD market cap is more than this many times away from the same
+# company's other listings is SIZE SUSPECT: kept in the table, never used as a peer, counted in
+# `status`. Ming Yang's London GDR read $999.6bn; Vestas' London line read $5.2bn against $31.5bn
+# at home. Read by `peers` and `status`; a build does not use it.
+size_suspect_factor: 5.0
+
 # INDEX-CAP-RETRY-1 - how patient to be about a gap the provider does not have.
 #
 # MEASURED, 2026-09-24: 2,566 rows carry no market cap and 1,767 no classification, and every
