@@ -91,6 +91,9 @@ class Candidate:
     # COHORT-3 - the market cap converted to USD by the market index, kept beside the one in the
     # name's own currency. ``None`` for a name that did not come from the index.
     market_cap_usd: float | None = None
+    # COHORT-3 - the GICS sub-industry the index carries for the name (label overrides applied), used
+    # only to narrow a cohort that names ``gics_subindustry``.
+    gics_subindustry: str = ""
     # Per-field source tags for anything that had to be filled from a second provider.
     filled: dict[str, str] = field(default_factory=dict)
 
@@ -307,7 +310,8 @@ def candidate_from_index_row(row) -> Candidate:
         market_cap=row.market_cap, currency=row.currency, isin=row.isin,
         primary_ticker=row.primary_ticker,
         security_type="Preferred" if _PREFERENCE_NAME.search(row.name or "") else "Common Stock",
-        source=PATH_INDEX, market_cap_usd=row.market_cap_usd)
+        source=PATH_INDEX, market_cap_usd=row.market_cap_usd,
+        gics_subindustry=(row.gics_subindustry or "").replace("\xa0", " ").strip())
 
 
 def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], str, list[str]]:
@@ -338,7 +342,8 @@ def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], s
     left_out = [r for r in rows if r.market in INDEX_EXCLUDED_MARKETS]
     rows = [r for r in rows if r.market not in INDEX_EXCLUDED_MARKETS]
     log.append(f"{len(left_out)} company(ies) on {', '.join(INDEX_EXCLUDED_MARKETS)} (Sao Paulo) "
-               f"left out by decision.")
+               f"left out by decision" + (" - a pool not built with exclude_markets, so they were "
+                                           "still in it" if left_out else "") + ".")
     if not defn.all_index_exchanges:
         codes = set(defn.exchange_codes)
         rows = [r for r in rows if r.market in codes]

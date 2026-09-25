@@ -1505,7 +1505,7 @@ def _link_groups_by_name(groups: list) -> list:
     for number, members in enumerate(groups):
         for row in members:
             key = _name_key(row.name)
-            if len(key) >= 3 and row.market_cap_usd is not None and row.market_cap_usd > 0:
+            if len(key) >= 2 and row.market_cap_usd is not None and row.market_cap_usd > 0:
                 buckets.setdefault(key, []).append((number, row))
     for entries in buckets.values():
         for i, (first, a) in enumerate(entries):
@@ -1521,14 +1521,23 @@ def _link_groups_by_name(groups: list) -> list:
 
 
 def _listing_rank(row: "IndexRow") -> tuple:
-    """Which row of a company is the one to keep. Lower is better."""
+    """Which row of a company is the one to keep. Lower is better.
+
+    A DEPOSITARY RECEIPT (a name that says ADR / ADS / GDR / depositary) ranks below any ordinary
+    line of the same company, whatever else is true of it. COHORT-3 found SAP: ``SAP.US`` names
+    its own home in PrimaryTicker (an ADR that calls itself home), ``SAP.XETRA`` names a venue the
+    index does not track, so they tied on home and country and the ticker tiebreak
+    (``SAP.US`` < ``SAP.XETRA``) seated the ADR. The receipt is a claim on the shares, not the
+    shares.
+    """
+    receipt = 1 if _DEPOSITARY_ROW.search(row.name or "") else 0
     home = 0 if is_home_listing(row) else 1
     # The ISIN fallback: the home listing is the one whose venue country matches the
     # company's own country. ISINs carry the issuer country in their first two letters.
     country_match = 1
     if row.country and row.isin and len(row.isin) >= 2:
         country_match = 0 if row.isin[:2].upper() == row.country.strip().upper() else 1
-    return (home, country_match, normalise_symbol(row.ticker))
+    return (receipt, home, country_match, normalise_symbol(row.ticker))
 
 
 def company_pool(rows, *, link_by_name: bool = False) -> tuple[list, int, dict]:
@@ -1772,6 +1781,7 @@ RECEIPT_LSE_LINE = "London 0xxx line of a foreign company"
 RECEIPT_LSE_GDR = "London depositary receipt (GDR)"
 RECEIPT_SWISS_LINE = "Swiss line of a foreign company"
 RECEIPT_KR_PREF = "Korean preference share"
+RECEIPT_HK_RMB = "Hong Kong RMB counter"
 
 # Sao Paulo tickers: a BDR is <4 characters>3<2..9> (A1MD34, AVGO34, E1TN34, TSMC34, NVDC34);
 # no Brazilian company code has that shape (they end 3, 4, 5, 6 or 11), and the one 3x-ending
@@ -1783,6 +1793,13 @@ _CDR_NAME = re.compile(r"\bCDR\b")
 # London's "0xxx" lines: a zero and three characters (0QMI, 0A0D, 0NMK). UK companies do not
 # start with a zero, and the 10-character "0P" Morningstar fund ids are handled as funds above.
 _LSE_FOREIGN_CODE = re.compile(r"^0[A-Z0-9]{3}$")
+# COHORT-3 - a Hong Kong dual-counter security trades in HKD under its own code and in RMB under 8xxxx
+# (80016 is Sun Hung Kai's RMB counter, 0016 its HKD one). HKEX reserves 80000-89999 for these
+# counters and nothing else - GEM codes are four-digit 8xxx - so the CODE decides it, with no partner
+# and no name needed. Measured 2026-09-25: 15 such rows had their HKD counter in the cleaned pool and
+# survived as a second company (a large carmaker, Geely, Meituan, Kuaishou, Li Ning...), 1.03x-3.65x
+# apart in the index, and the ticker tiebreak ('8' < '9') seated Alibaba on its RMB counter 89988.
+_HK_RMB_CODE = re.compile(r"^8\d{4}$")
 _GDR_NAME = re.compile(r"\bGDR\b|global depositary", re.IGNORECASE)
 
 
@@ -1800,6 +1817,9 @@ def receipt_kind(row: "IndexRow") -> str:
             return RECEIPT_BDR
         if _BR_FRACTIONAL_CODE.match(code):
             return RECEIPT_BR_FRACTIONAL
+    elif market == "HK":
+        if _HK_RMB_CODE.match(code):
+            return RECEIPT_HK_RMB
     elif market == "TO":
         if _CDR_NAME.search(name):
             return RECEIPT_CDR
@@ -1829,7 +1849,21 @@ _NAME_NOISE = frozenset((
     "n", "a", "b", "class", "series", "ordinary", "share", "shares", "sponsored", "adr", "cdr",
     "cad", "hedged", "drn", "dr", "incorporated", "kgaa", "sab", "cv",
     "ads", "gdr", "depositary", "receipt", "receipts",
-    "pref", "preferred", "preference", "pfd", "prf", "shs"))
+    "pref", "preferred", "preference", "pfd", "prf", "shs",
+    # COHORT-3: "Life360, Inc. Common Stock" (US) and "LIFE360 Inc" (AU) were two companies in
+    # the Application Software cohort. Seven such pairs joined across the pool and none was false.
+    "common", "stock",
+    # Nordic "ser." (series) and Swiss "Ps" (Partizipationsschein): Stora Enso ser. A / ser. R,
+    # Schindler Holding / Schindler Ps.
+    "ser", "ps"))
+# A trailing single letter is a share-class marker ("Under Armour Inc C", "Stora Enso Oyj R"), but
+# only THESE letters: "Kodi-S" / "Kodi-M" and "Cantor Equity Partners I" / "V" are different
+# companies told apart by exactly such a letter, and a rule that is sometimes wrong is not a rule.
+_CLASS_LETTERS = frozenset("abcdekr")
+# German-market quote wording: "ZSCALER INC. DL-,001" (dollar par), "ALMONTY INDUSTRY O.N." (ohne
+# Nennwert: no par). It says how the line is quoted, never which company it is.
+_GERMAN_PAR = re.compile(r"\b(?:dl|eo|sf|dk|sk|nk|zl|hf)\s*-?\s*,\s*\d+")
+_GERMAN_NO_PAR = re.compile(r"\bo\.n\.")
 _DEPOSITARY_PHRASE = re.compile(
     r"\b(?:american|global) depositary (?:shares?|receipts?)\b")
 
@@ -1842,9 +1876,14 @@ def _name_key(name: str) -> str:
     if "fully paid" in text:
         return ""     # ASX deferred-settlement placeholders ("Ordinary Fully Paid Deferred ...")
     text = _DEPOSITARY_PHRASE.sub(" ", text)
+    text = _GERMAN_NO_PAR.sub(" ", text)
+    text = _GERMAN_PAR.sub(" ", text)
     text = re.sub(r"[./]", "", text)                 # N.V. -> nv, S.A. -> sa, A/S -> as
     text = re.sub(r"[^a-z0-9 ]+", " ", text)
-    return " ".join(tok for tok in text.split() if tok not in _NAME_NOISE)
+    tokens = [tok for tok in text.split() if tok not in _NAME_NOISE]
+    if len(tokens) > 1 and tokens[-1] in _CLASS_LETTERS:
+        tokens = tokens[:-1]                         # ... Inc C -> ... Inc
+    return " ".join(tokens)
 
 
 def _has_identity(row: "IndexRow") -> bool:
@@ -2740,7 +2779,8 @@ class CleanPool:
 
 
 def clean_pool(rows: Optional[list[IndexRow]] = None, *, store: Optional[IndexStore] = None,
-               overrides=..., aliases=..., size_factor: float = DEFAULT_SIZE_FACTOR) -> CleanPool:
+               overrides=..., aliases=..., size_factor: float = DEFAULT_SIZE_FACTOR,
+               exclude_markets: tuple = ()) -> CleanPool:
     """The companies of the index after EXACTLY the cleaning ``peers`` applies to its pool.
 
     Label overrides and identity aliases first (read with the real index, never applied to rows
@@ -2750,10 +2790,17 @@ def clean_pool(rows: Optional[list[IndexRow]] = None, *, store: Optional[IndexSt
     plus the guarded name link). What ``peers`` adds on top is subject-specific - the subject's own
     lines and the financial/non-financial split - and is not part of a cohort's pool.
 
+    ``exclude_markets`` (a cohort's Sao Paulo decision) drops those lines BEFORE the one-row-per-
+    company step, not after it. Dropping afterwards would take a company whose ordinary line is on
+    an excluded market out of the pool altogether: a Brazilian miner's ordinary shares are on Sao Paulo, its US
+    line is the only one left, and it must keep its seat rather than lose it to a line the cohort
+    then throws away. Left empty (the default, and what ``peers`` uses) nothing is excluded.
+
     Deterministic for a given snapshot and pure: nothing is written and nothing is fetched.
     """
     universe = rows if rows is not None else (store or IndexStore()).load()
     pool = CleanPool(considered=len(universe))
+    excluded = {str(m).upper() for m in exclude_markets}
     if not universe:
         return pool
     if overrides is ...:
@@ -2776,6 +2823,8 @@ def clean_pool(rows: Optional[list[IndexRow]] = None, *, store: Optional[IndexSt
         key = normalise_symbol(row.ticker)
         if key in secondary:
             skip(f"secondary trading line ({secondary[key]})")
+        elif excluded and (row.market or "").upper() in excluded:
+            skip(f"line on an excluded market ({', '.join(sorted(excluded))})")
         elif is_fund(row):
             skip(FUND_NOT_A_COMPANY)
         elif suspect_reason(row):

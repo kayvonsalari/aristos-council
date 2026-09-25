@@ -140,8 +140,10 @@ def default_ranker(tickers: list[str], strategy_id: str, *, today: date | None =
 def default_index_pool():
     """The cleaned pool of the real market index, read once. No request is made."""
     from ..market_index import IndexStore, clean_pool, load_config
+    from .definitions import INDEX_EXCLUDED_MARKETS
 
-    return clean_pool(store=IndexStore(load_config()["root"]))
+    return clean_pool(store=IndexStore(load_config()["root"]),
+                      exclude_markets=INDEX_EXCLUDED_MARKETS)
 
 
 def resolve_path(defn: CohortDefinition, *, constituents: bool | None = None) -> str:
@@ -421,6 +423,14 @@ def plan(defs: list[CohortDefinition], pool, *, root: str | Path = DEFAULT_ROOT
                            f"{', '.join(defn.industry)}")
             entries.append(entry)
             continue
+        if defn.gics_subindustry:
+            carried = {c.gics_subindustry.lower() for c in candidates}
+            missing = [s for s in defn.gics_subindustry if s.lower() not in carried]
+            if missing:
+                entry.error = (f"no company under the code(s) {', '.join(defn.industry)} carries "
+                               f"the GICS sub-industry {', '.join(missing)}")
+                entries.append(entry)
+                continue
         members, removals = clean(candidates, defn)
         entry.members, entry.removals = members, removals
         entry.size = size_verdict(members, defn, {}, index_path=True)
@@ -450,7 +460,9 @@ def format_plan(entries: list[PlanEntry], pool=None) -> str:
         tag = {"ok": "in band", "thin": "THIN", "wide": "WIDE", "error": "ERROR"}.get(
             e.status, e.status)
         out.append(f"{d.name}  [{tag}]  watch: {'yes' if d.watch else 'no'}")
-        out.append(f"  codes:     {', '.join(d.industry)}")
+        out.append(f"  codes:     {', '.join(d.industry)}"
+                   + (f"  +  GICS sub-industry: {', '.join(d.gics_subindustry)}"
+                      if d.gics_subindustry else ""))
         if e.error:
             out.append(f"  error:     {e.error}")
             out.append("")

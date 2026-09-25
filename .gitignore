@@ -37,6 +37,8 @@ holdings*.txt
 # definitions.yaml IS source and stays tracked (the negation below). See docs/COHORTS.md.
 data/local/cohorts/*/
 !data/local/cohorts/definitions.yaml
+# COHORT-3 - which cohorts the owner watches is personal: a local overlay, never committed.
+data/local/cohorts/watch*.yaml
 
 # COHORT-1 — cohort lists registered for the UI, one per build. The frozen members.csv
 # is the record; this is a copy for the sidebar.

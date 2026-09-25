@@ -520,3 +520,364 @@ def test_the_shipped_header_states_the_floor_rule_and_the_watch_flag_and_what_wa
 def test_the_cohort_one_definition_file_is_untouched_and_still_loads_as_legacy():
     legacy = load_definitions(DEFAULT_DEFINITIONS)
     assert len(legacy) == 10 and all(not d.uses_index and d.min_market_cap > 0 for d in legacy)
+
+
+# =========================================================================== #
+# 9. narrowing a wide cohort to a GICS sub-industry (never by truncating)
+# =========================================================================== #
+def _sw(ticker, name, sub, cap_bn=5.0, market=None):
+    return _row(ticker, name, industry="Software - Application", sector="Technology", sub=sub,
+                cap_bn=cap_bn, market=market or ticker.rpartition(".")[2])
+
+
+def test_a_sub_industry_narrows_the_cohort_and_each_removal_says_why():
+    rows = ([_sw(f"APP{i:02d}.US", f"App Co {i}", "Application Software") for i in range(25)]
+            + [_sw("RIDE.US", "Ride Hailing Inc", "Passenger Ground Transportation"),
+               _sw("HR.US", "Hr Services Inc", "Human Resource & Employment Services"),
+               _sw("NOLABEL.US", "Unlabelled Software Inc", "")])
+    wide = _defn(name="Sw Wide", industry=["Software - Application"])
+    narrow = _defn(name="Sw Narrow", industry=["Software - Application"],
+                   gics_subindustry=["Application Software"])
+    pool = clean_pool(rows)
+    cands = build_pool_from_index(narrow, pool)[0]
+    members, removals = clean(cands, narrow)
+    assert len(members) == 25 and all(m.gics_subindustry == "Application Software" for m in members)
+    reasons = {r.ticker: r.reason for r in removals}
+    assert "'Passenger Ground Transportation' is not Application Software" in reasons["RIDE.US"]
+    assert "no GICS sub-industry label" in reasons["NOLABEL.US"]
+    assert "not counted as a match or a mismatch" in reasons["NOLABEL.US"]
+    assert len(clean(build_pool_from_index(wide, pool)[0], wide)[0]) == 28   # nothing else changed
+
+
+def test_a_sub_industry_narrowing_can_bring_a_wide_cohort_into_band_without_truncating():
+    rows = ([_sw(f"APP{i:02d}.US", f"App Co {i}", "Application Software") for i in range(45)]
+            + [_sw(f"OTH{i:02d}.US", f"Other Co {i}", "Systems Software") for i in range(20)])
+    (wide,) = plan([_defn(industry=["Software - Application"])], clean_pool(rows),
+                   root=Path("no/such"))
+    (narrow,) = plan([_defn(industry=["Software - Application"],
+                            gics_subindustry=["Application Software"])],
+                     clean_pool(rows), root=Path("no/such"))
+    assert wide.status == "wide" and len(wide.members) == 65      # never truncated
+    assert narrow.status == "ok" and len(narrow.members) == 45
+
+
+def test_the_wide_hint_names_the_sub_industries_when_the_code_has_several():
+    rows = ([_sw(f"APP{i:02d}.US", f"App Co {i}", "Application Software") for i in range(45)]
+            + [_sw(f"OTH{i:02d}.US", f"Other Co {i}", "Systems Software") for i in range(20)])
+    (entry,) = plan([_defn(industry=["Software - Application"])], clean_pool(rows),
+                    root=Path("no/such"))
+    sentence = entry.size.sentence()
+    assert "Narrower code:" in sentence and "gics_subindustry" in sentence
+    assert "Application Software 45" in sentence and "Systems Software 20" in sentence
+    assert "There is no narrower code" not in sentence
+
+
+def test_a_sub_industry_no_company_carries_is_an_error_line_in_the_plan():
+    rows = [_sw(f"APP{i:02d}.US", f"App Co {i}", "Application Software") for i in range(25)]
+    (entry,) = plan([_defn(industry=["Software - Application"],
+                           gics_subindustry=["Made Up Sub-Industry"])], clean_pool(rows),
+                    root=Path("no/such"))
+    assert entry.status == "error" and "carries the GICS sub-industry Made Up" in entry.error
+
+
+def test_the_sub_industry_field_is_validated_and_index_only():
+    assert _defn(gics_subindustry="Semiconductors").gics_subindustry == ("Semiconductors",)
+    assert _defn(gics_subindustry=["A", " B "]).gics_subindustry == ("A", "B")
+    assert _defn().gics_subindustry == ()
+    with pytest.raises(DefinitionError, match="is empty"):
+        _defn(gics_subindustry=[" "])
+    legacy = {"name": "Old", "industry": ["Steel"], "exchanges": ["US"], "min_market_cap": 1e9,
+              "min_history_years": 5, "gics_subindustry": ["X"]}
+    with pytest.raises(DefinitionError, match="needs a min_market_cap_usd"):
+        definition_from_mapping(legacy)
+
+
+def test_a_label_override_reaches_the_sub_industry_a_cohort_narrows_on():
+    """Micron's US line is filed under the wrong sub-industry; the override that fixes peers fixes
+    the cohort too, because both read the same cleaned pool."""
+    from aristos_council.market_index import LabelOverride
+    mu = _row("MU.US", "Micron Technology Inc", industry="Semiconductors", sector="Technology",
+              sub="Semiconductor Materials & Equipment", cap_bn=1100.0)
+    defn = _defn(name="Semi Test", industry=["Semiconductors"], gics_subindustry=["Semiconductors"])
+    fix = LabelOverride("MU.US", "Semiconductors", "2026-09-25", "memory chips")
+    without = clean(build_pool_from_index(defn, clean_pool([mu], overrides=[]))[0], defn)[0]
+    with_it = clean(build_pool_from_index(defn, clean_pool([mu], overrides=[fix]))[0], defn)[0]
+    assert without == [] and _tickers(with_it) == ["MU.US"]
+
+
+def test_the_shipped_narrowed_cohorts_name_their_sub_industry_and_document_why():
+    text = SHIPPED.read_text(encoding="utf-8")
+    defs = {d.name: d for d in load_definitions(SHIPPED)}
+    assert defs["Tech - Semiconductors"].gics_subindustry == ("Semiconductors",)
+    assert defs["Tech - Application Software"].gics_subindustry == ("Application Software",)
+    assert defs["Industrials - Industrial Machinery"].gics_subindustry == (
+        "Industrial Machinery & Supplies & Components",)
+    grid = defs["Industrials - Grid & Electrical Machinery"]
+    assert set(grid.gics_subindustry) == {"Heavy Electrical Equipment",
+                                          "Electrical Components & Equipment"}
+    assert grid.industry == defs["Industrials - Industrial Machinery"].industry
+    assert text.count("NARROWED to the GICS sub-industry") == 3
+
+
+# =========================================================================== #
+# 10. one seat per company: a depositary receipt never beats an ordinary line
+# =========================================================================== #
+def _sap_shaped():
+    """SAP: the ADR names its OWN home; the Xetra line names a venue the index does not track. They
+    tie on home and country, and the old ticker tiebreak (SAP.US < SAP.XETRA) seated the ADR."""
+    adr = _row("SAP.US", "SAP SE ADR", industry="Software - Application", sector="Technology",
+               sub="Application Software", cap_bn=241.7, primary="SAPA.F", isin="US8030542042")
+    ordinary = _row("SAP.XETRA", "SAP SE", industry="Software - Application", sector="Technology",
+                    sub="Application Software", cap_bn=242.6, primary="SAP.F",
+                    isin="DE0007164600", market="XETRA")
+    adr.country, ordinary.country = "US", "DE"
+    return adr, ordinary
+
+
+def test_an_adr_never_takes_a_companys_seat_from_its_ordinary_line():
+    adr, ordinary = _sap_shaped()
+    kept = clean_pool([adr, ordinary]).rows
+    assert [r.ticker for r in kept] == ["SAP.XETRA"]
+    assert [r.ticker for r in clean_pool([ordinary, adr]).rows] == ["SAP.XETRA"]   # order-free
+
+
+def test_an_adr_that_is_the_only_line_still_keeps_its_seat():
+    adr, _ordinary = _sap_shaped()
+    assert [r.ticker for r in clean_pool([adr]).rows] == ["SAP.US"]
+
+
+def test_the_receipt_rule_reads_the_name_and_not_a_substring_of_it():
+    """'Madrid', 'Adrian' and 'Loads' must not read as ADR/ADS."""
+    plain = [_row("A.US", "Madrid Steel Corp"), _row("B.US", "Adrian Metals Inc"),
+             _row("C.US", "Loads Steel Ltd")]
+    from aristos_council.market_index import _listing_rank
+    assert all(_listing_rank(r)[0] == 0 for r in plain)
+    assert _listing_rank(_row("D.US", "Some Co American Depositary Shares"))[0] == 1
+
+
+# =========================================================================== #
+# 11. Sao Paulo is excluded BEFORE one row per company, so a Brazilian miner keeps its seat
+# =========================================================================== #
+def _vale_shaped():
+    """A Brazilian miner's ordinary shares are on Sao Paulo; its US line is a self-named ADR."""
+    ordinary = _row("MINE3.SA", "Minera Brasileira S.A.", industry="Other Industrial Metals & Mining",
+                    market="SA", currency="BRL", primary="MINE3.SA", isin="BRMINEACNOR0",
+                    cap_bn=60.5)
+    adr = _row("MINE.US", "Minera Brasileira SA ADR", industry="Other Industrial Metals & Mining",
+               primary="MINE3.SA", isin="US6000001055", cap_bn=60.5)
+    return ordinary, adr
+
+
+def test_a_company_whose_ordinary_line_is_on_sao_paulo_keeps_its_us_line_in_a_cohort():
+    ordinary, adr = _vale_shaped()
+    rows = [ordinary, adr]
+    # the plain pool (what peers use) seats the ordinary line, on Sao Paulo...
+    assert [r.ticker for r in clean_pool(rows).rows] == ["MINE3.SA"]
+    # ...and a cohort, which excludes Sao Paulo FIRST, must not lose the company with it
+    cohort_pool = clean_pool(rows, exclude_markets=("SA",))
+    assert [r.ticker for r in cohort_pool.rows] == ["MINE.US"]
+    assert any("excluded market" in line for line in cohort_pool.lines())
+    defn = _defn(name="Mining Test", industry=["Other Industrial Metals & Mining"])
+    assert _tickers(build_pool_from_index(defn, cohort_pool)[0]) == ["MINE.US"]
+
+
+def test_the_default_cohort_pool_excludes_sao_paulo_up_front(monkeypatch):
+    seen = {}
+
+    def fake_clean_pool(*a, **k):
+        seen.update(k)
+        return clean_pool([])
+    monkeypatch.setattr("aristos_council.market_index.clean_pool", fake_clean_pool)
+    monkeypatch.setattr("aristos_council.market_index.IndexStore", lambda root: None)
+    builder.default_index_pool()
+    assert seen["exclude_markets"] == ("SA",)
+
+
+# =========================================================================== #
+# 12. the local watch overlay: personal, never in the tracked file
+# =========================================================================== #
+from aristos_council.cohorts.definitions import (apply_watch_overlay,  # noqa: E402
+                                                 load_watch_overlay)
+
+
+def test_the_overlay_switches_named_cohorts_on_and_leaves_the_rest_as_written(tmp_path):
+    overlay = tmp_path / "watch.yaml"
+    overlay.write_text("watch:\n  - Steel Test\n  - b_steel\n", encoding="utf-8")
+    defs = [_defn(name="Steel Test"), _defn(name="B Steel"), _defn(name="C Steel"),
+            _defn(name="D Steel", watch=True)]
+    out = apply_watch_overlay(defs, load_watch_overlay(overlay))
+    assert {d.name: d.watch for d in out} == {"Steel Test": True, "B Steel": True,
+                                              "C Steel": False, "D Steel": True}
+    assert [d.watch for d in defs] == [False, False, False, True]      # the input is untouched
+
+
+def test_a_missing_overlay_is_no_overlay_and_a_typo_is_an_error(tmp_path):
+    assert load_watch_overlay(tmp_path / "nothing.yaml") == []
+    assert [d.watch for d in apply_watch_overlay([_defn()], [])] == [False]
+    with pytest.raises(DefinitionError, match="no cohort named"):
+        apply_watch_overlay([_defn()], ["Not A Cohort"])
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("watch: nope\n", encoding="utf-8")
+    with pytest.raises(DefinitionError, match="expected a 'watch:' list"):
+        load_watch_overlay(bad)
+
+
+def test_the_cli_applies_the_overlay_from_the_cohort_root_and_can_ignore_it(tmp_path):
+    defs = tmp_path / "defs.yaml"
+    defs.write_text("cohorts:\n  - name: Steel Test\n    industry: [Steel]\n    exchanges: [ALL]\n"
+                    "    min_market_cap_usd: 1000000000\n    min_history_years: 5\n"
+                    "  - name: Other Steel\n    industry: [Steel]\n    exchanges: [ALL]\n"
+                    "    min_market_cap_usd: 1000000000\n    min_history_years: 5\n",
+                    encoding="utf-8")
+    root = tmp_path / "cohorts"
+    root.mkdir()
+    (root / "watch.yaml").write_text("watch:\n  - Steel Test\n", encoding="utf-8")
+    parser = cli.build_parser()
+    with_it = parser.parse_args(["--definitions", str(defs), "--root", str(root), "plan"])
+    without = parser.parse_args(["--definitions", str(defs), "--root", str(root),
+                                 "--no-local-overlay", "plan"])
+    assert {d.name: d.watch for d in cli._load(with_it)} == {"Steel Test": True,
+                                                             "Other Steel": False}
+    assert {d.name: d.watch for d in cli._load(without)} == {"Steel Test": False,
+                                                             "Other Steel": False}
+
+
+def test_the_overlay_file_is_git_ignored_and_the_tracked_list_watches_nothing():
+    import subprocess
+    ignored = subprocess.run(["git", "check-ignore", "-q", "data/local/cohorts/watch.yaml"],
+                             cwd=ROOT, capture_output=True)
+    assert ignored.returncode == 0                      # git says: ignored
+    assert all(d.watch is False for d in load_definitions(SHIPPED))
+    assert not any(d.watch for d in load_definitions(DEFAULT_DEFINITIONS))
+
+
+def test_the_tracked_files_name_no_company_the_owner_watches():
+    """The overlay lists cohort names only; and neither it nor anything tracked in the cohort
+    definitions carries a personal watch list. The shipped file is a rule list, not a portfolio."""
+    text = SHIPPED.read_text(encoding="utf-8").lower()
+    assert "watchlist" not in text and "portfolio" not in text
+    assert "anchors: []" in text
+
+
+# =========================================================================== #
+# 13. two duplicates the by-eye check found in the live plan
+# =========================================================================== #
+def test_a_company_stamped_common_stock_on_one_venue_is_the_same_company_as_its_plain_name():
+    """Life360 stood twice in Application Software: 'LIFE360 Inc' (AU) and 'Life360, Inc. Common
+    Stock' (US), a few per cent apart in size."""
+    from aristos_council.market_index import _name_key
+    assert _name_key("Life360, Inc. Common Stock") == _name_key("LIFE360 Inc") == "life360"
+    au = _sw("360.AU", "LIFE360 Inc", "Application Software", cap_bn=3.36)
+    us = _sw("LIF.US", "Life360, Inc. Common Stock", "Application Software", cap_bn=3.23)
+    assert [r.ticker for r in clean_pool([au, us]).rows] in (["360.AU"], ["LIF.US"])
+    assert len(clean_pool([au, us]).rows) == 1
+
+
+def test_a_hong_kong_rmb_counter_is_a_secondary_line_of_its_hkd_counter():
+    """A carmaker stood twice in Auto Manufacturers: 1211.HK ($93bn) and 81211.HK ($130bn), 1.39x apart in
+    the index - beyond the name-link tolerance. HKEX reserves 80000-89999 for RMB counters."""
+    from aristos_council.market_index import RECEIPT_HK_RMB, receipt_kind
+    hkd = _row("1211.HK", "Sunrise Motor Company Limited", industry="Auto Manufacturers", cap_bn=93.4)
+    rmb = _row("81211.HK", "Sunrise Motor Company Limited", industry="Auto Manufacturers", cap_bn=130.1)
+    assert receipt_kind(rmb) == RECEIPT_HK_RMB and receipt_kind(hkd) == ""
+    assert [r.ticker for r in clean_pool([hkd, rmb]).rows] == ["1211.HK"]
+    assert "Hong Kong RMB counter" in " ".join(clean_pool([hkd, rmb]).lines())
+
+
+def test_a_hong_kong_gem_code_is_not_an_rmb_counter():
+    """GEM (growth board) codes are four-digit 8xxx: 8442.HK is a company."""
+    from aristos_council.market_index import receipt_kind
+    for code in ("8442.HK", "8001.HK", "0008.HK", "80.HK"):
+        assert receipt_kind(_row(code, "Some Co", market="HK")) == "", code
+    for code in ("80016.HK", "89988.HK", "86618.HK"):
+        assert receipt_kind(_row(code, "Some Co", market="HK")) == "Hong Kong RMB counter", code
+
+
+def test_the_rmb_counter_rule_gives_a_company_its_hkd_seat_not_the_ticker_tiebreak_winner():
+    """Alibaba was seated on 89988.HK because '8' sorts before '9'."""
+    hkd = _row("9988.HK", "Alibaba Group Holding Limited", cap_bn=282.0, industry="Internet Retail")
+    rmb = _row("89988.HK", "Alibaba Group Holding Limited", cap_bn=305.0, industry="Internet Retail")
+    assert [r.ticker for r in clean_pool([rmb, hkd]).rows] == ["9988.HK"]
+
+
+# =========================================================================== #
+# 14. more duplicates the by-eye check found (name wording, and the alias file)
+# =========================================================================== #
+@pytest.mark.parametrize("name, key", [
+    ("ZSCALER INC. DL-,001", "zscaler"),                 # German dollar-par quote wording
+    ("ALMONTY INDUSTRY O.N.", "almonty industry"),       # ohne Nennwert
+    ("Under Armour Inc C", "under armour"),              # a trailing share-class letter
+    ("Under Armour Inc A", "under armour"),
+    ("Stora Enso Oyj ser. R", "stora enso"),             # Nordic series
+    ("Stora Enso Oyj A", "stora enso"),
+    ("Schindler Ps", "schindler"),                       # Swiss participation certificate
+    ("Zillow Group Inc Class C", "zillow"),
+    ("BP p.l.c", "bp"),
+])
+def test_wording_that_says_how_a_line_is_quoted_is_not_part_of_a_company_name(name, key):
+    from aristos_council.market_index import _name_key
+    assert _name_key(name) == key
+
+
+@pytest.mark.parametrize("a, b", [
+    ("Kodi-S Co Ltd", "Kodi-M Co Ltd"),
+    ("Cantor Equity Partners I, Inc.", "Cantor Equity Partners V, Inc."),
+    ("Alpha Holdings S", "Alpha Holdings M"),
+])
+def test_a_trailing_letter_that_is_not_a_share_class_still_tells_two_companies_apart(a, b):
+    """A rule that is sometimes wrong is not a rule: Kodi-S and Kodi-M, two SPACs numbered I and V."""
+    from aristos_council.market_index import _name_key
+    assert _name_key(a) != _name_key(b)
+    x = _row("X1.US", a, cap_bn=0.02)
+    y = _row("Y1.US", b, cap_bn=0.02)
+    assert len(clean_pool([x, y]).rows) == 2
+
+
+def test_a_two_letter_company_name_is_a_name_once_the_size_guard_is_there():
+    """'BP' was excluded by a three-character floor: BP.LSE and BP.US stood as two companies."""
+    lse = _row("BP.LSE", "BP PLC", industry="Oil & Gas Integrated", cap_bn=115.6)
+    adr = _row("BP.US", "BP PLC ADR", industry="Oil & Gas Integrated", cap_bn=114.8)
+    assert [r.ticker for r in clean_pool([lse, adr]).rows] == ["BP.LSE"]
+    other = _row("XX.US", "BP Prudhoe Bay Royalty Trust", industry="Oil & Gas Integrated", cap_bn=0.1)
+    assert len(clean_pool([lse, other]).rows) == 2       # a longer name is not "bp"
+
+
+def test_two_share_lines_of_one_company_on_two_exchanges_are_one_company():
+    """Stora Enso: A and R shares on Stockholm and on Helsinki."""
+    rows = [_row("STE-A.ST", "Stora Enso Oyj ser. A", cap_bn=9.88, market="ST"),
+            _row("STE-R.ST", "Stora Enso Oyj ser. R", cap_bn=10.07, market="ST"),
+            _row("STEAV.HE", "Stora Enso Oyj A", cap_bn=9.90, market="HE"),
+            _row("STERV.HE", "Stora Enso Oyj R", cap_bn=9.87, market="HE")]
+    assert len(clean_pool(rows).rows) == 1
+
+
+def test_preference_lines_stamped_with_the_whole_companys_cap_take_the_seat_without_an_alias():
+    """BP-A / BP-B.LSE: the ordinary line's cap x1.27 and x1.23, and '-' sorts before '.'. They
+    join the group transitively (146.8 is 1.04x from 141.7, which is 1.23x from 115.6) and win it."""
+    ordinary = _row("BP.LSE", "BP PLC", cap_bn=115.6, isin="GB0007980591")
+    pref_a = _row("BP-A.LSE", "BP p.l.c", cap_bn=146.8, isin="GB0001385250")
+    pref_b = _row("BP-B.LSE", "BP p.l.c", cap_bn=141.7, primary="", isin="")
+    table = [pref_a, pref_b, ordinary]
+    assert [r.ticker for r in clean_pool(table, aliases=[]).rows] == ["BP-A.LSE"]
+    fixes = [IdentityAlias("BP-A.LSE", "BP.LSE", "2026-09-25", "a preference line"),
+             IdentityAlias("BP-B.LSE", "BP.LSE", "2026-09-25", "a second preference line")]
+    assert [r.ticker for r in clean_pool(table, aliases=fixes).rows] == ["BP.LSE"]
+
+
+def test_the_shipped_alias_file_carries_the_cohort_findings_each_with_its_evidence():
+    from aristos_council.market_index import load_identity_aliases
+    shipped = {a.ticker: a for a in load_identity_aliases()}
+    expected = {"BP-A.LSE": "BP.LSE", "BP-B.LSE": "BP.LSE", "SNN.US": "SN.LSE",
+                "SRT3.XETRA": "SRT.XETRA", "TAP-A.US": "TAP.US", "TPX-B.TO": "TAP.US",
+                "QSP-UN.TO": "QSR.TO", "CSC.AU": "CS.TO", "CKI.LSE": "1038.HK",
+                "ALI1.XETRA": "AII.AU", "GSK.US": "GSK.LSE", "SKHY.US": "000660.KO"}
+    assert {t: shipped[t].primary for t in expected} == expected
+    assert all(len(a.reason) > 40 and a.date == "2026-09-25" for a in shipped.values())
+
+
+def test_integrated_oil_and_refining_is_one_cohort_because_integrated_alone_came_out_thin():
+    defs = {d.name: d for d in load_definitions(SHIPPED)}
+    merged = defs["Energy - Integrated Oil & Refining"]
+    assert set(merged.industry) == {"Oil & Gas Integrated", "Oil & Gas Refining & Marketing"}
+    assert "Energy - Integrated Oil & Gas" not in defs and "Energy - Refining & Marketing" not in defs
+    assert "TOO THIN alone" in SHIPPED.read_text(encoding="utf-8")

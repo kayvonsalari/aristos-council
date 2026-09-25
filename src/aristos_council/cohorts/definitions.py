@@ -369,6 +369,12 @@ class CohortDefinition:
     # COHORT-3. Whether the daily watcher should run this cohort. Stored and reported; there is no
     # watcher in this repo yet, so nothing reads it beyond ``plan``.
     watch: bool = False
+    # COHORT-3. A NARROWER code than the EODHD industry: the GICS sub-industry the index carries
+    # (label overrides applied). When set, a name must match the industry code AND one of these.
+    # A name with no sub-industry label at all is removed, with that reason in the removal log: an
+    # absence cannot be shown to belong, and it is not a contradiction either, so it is never
+    # counted as either.
+    gics_subindustry: tuple[str, ...] = ()
 
     @property
     def uses_index(self) -> bool:
@@ -473,6 +479,18 @@ def definition_from_mapping(raw: dict) -> CohortDefinition:
             f"{name}: exchanges: [ALL] means every index market except Sao Paulo, stands alone, "
             f"and needs a min_market_cap_usd (it can only be read from the market index)")
 
+    subs_raw = raw.get("gics_subindustry")
+    if subs_raw is None:
+        subs: tuple[str, ...] = ()
+    else:
+        listed = [subs_raw] if isinstance(subs_raw, str) else list(subs_raw)
+        subs = tuple(str(s).strip() for s in listed if str(s).strip())
+        if not subs:
+            raise DefinitionError(f"{name}: gics_subindustry is empty - leave it out instead")
+        if min_usd is None:
+            raise DefinitionError(f"{name}: gics_subindustry narrows an index cohort, so it needs "
+                                  f"a min_market_cap_usd (the constituents path has no such field)")
+
     watch = raw.get("watch", False)
     if watch is None:
         watch = False
@@ -502,7 +520,8 @@ def definition_from_mapping(raw: dict) -> CohortDefinition:
     return CohortDefinition(
         name=name, industry=industry, exchanges=exchanges, min_market_cap=min_cap,
         min_history_years=min_hist, exclude=exclude, anchors=anchors,
-        industry_as_written=as_written, min_market_cap_usd=min_usd, watch=watch)
+        industry_as_written=as_written, min_market_cap_usd=min_usd, watch=watch,
+        gics_subindustry=subs)
 
 
 def load_definitions(path: str | Path) -> list[CohortDefinition]:
@@ -557,6 +576,40 @@ def excluded_by(defn: CohortDefinition, sector: str, industry: str) -> str:
             if industry.startswith(prefix):
                 return keyword
     return ""
+
+
+# COHORT-3 - which cohorts the owner watches is PERSONAL, so it is not written in the tracked
+# definitions file (every cohort there says ``watch: false``). A local, git-ignored overlay switches
+# cohorts on at load time. It lists cohort NAMES (or slugs) only - never a company - and a name that
+# matches no cohort is an error, so a typo cannot silently watch nothing.
+DEFAULT_WATCH_OVERLAY = "watch.yaml"          # next to the frozen cohorts, under data/local/cohorts
+
+
+def load_watch_overlay(path: str | Path) -> list[str]:
+    """The cohort names the local overlay watches, or an empty list when there is no overlay."""
+    import yaml
+
+    path = Path(path)
+    if not path.exists():
+        return []
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    listed = doc.get("watch") if isinstance(doc, dict) else doc
+    if listed is None:
+        return []
+    if not isinstance(listed, list) or not all(isinstance(x, str) and x.strip() for x in listed):
+        raise DefinitionError(f"{path}: expected a 'watch:' list of cohort names")
+    return [x.strip() for x in listed]
+
+
+def apply_watch_overlay(defs: list[CohortDefinition], names: list[str]) -> list[CohortDefinition]:
+    """``defs`` with ``watch=True`` on every cohort ``names`` lists. Other cohorts keep what the
+    definition file said. A name that matches no cohort raises."""
+    if not names:
+        return list(defs)
+    chosen: set[str] = set()
+    for name in names:
+        chosen.add(find_definition(defs, name).slug)
+    return [replace(d, watch=True) if d.slug in chosen else d for d in defs]
 
 
 def watched(defs: list[CohortDefinition]) -> list[CohortDefinition]:

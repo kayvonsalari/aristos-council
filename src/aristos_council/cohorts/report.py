@@ -32,6 +32,8 @@ def render_report(*, defn: CohortDefinition, version: int, built_on: date,
     add(f"- **Industry**: {', '.join(defn.industry_as_written or defn.industry)}"
         + (f" (resolved to {', '.join(defn.industry)})"
            if tuple(defn.industry_as_written) != tuple(defn.industry) else ""))
+    if defn.gics_subindustry:
+        add(f"- **GICS sub-industry** (narrows the industry): {', '.join(defn.gics_subindustry)}")
     add(f"- **Exchanges**: {', '.join(defn.exchanges)} "
         f"({', '.join(defn.exchange_codes)}) — main listings only")
     if defn.uses_index:

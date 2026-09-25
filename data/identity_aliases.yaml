@@ -26,3 +26,67 @@ aliases:
       "SK Hynix Inc. American Depositary Shares" carries no PrimaryTicker, and its size is 1.37x
       000660.KO's (stale price), beyond the name-link tolerance. Measured: SK Hynix appeared twice
       in 2330.TW's cohort.
+  # COHORT-3 - found by reading the cohort plan by eye: the same company standing twice in one
+  # cohort. None of these can be caught by a name rule (different names, preference or exchangeable
+  # lines, a renamed company), so each is stated here with its evidence.
+  - ticker: BP-A.LSE
+    primary: BP.LSE
+    date: 2026-09-25
+    reason: >-
+      BP's cumulative preference line (ISIN GB0001385250). The provider gives it the WHOLE
+      company's market cap ($147bn against $116bn for the ordinary line), so it stood as a second
+      BP in Integrated Oil & Gas and, sorting '-' before '.', took the seat.
+  - ticker: BP-B.LSE
+    primary: BP.LSE
+    date: 2026-09-25
+    reason: >-
+      BP's second preference line: no ISIN, no PrimaryTicker, the whole company's cap ($142bn).
+  - ticker: SNN.US
+    primary: SN.LSE
+    date: 2026-09-25
+    reason: >-
+      "Smith & Nephew SNATS Inc" is Smith & Nephew's ADS (US83175M2052). It names itself as home and
+      its name carries no ADR wording, so nothing linked it to SN.LSE: $11.5bn each, twice in
+      Medical Devices.
+  - ticker: SRT3.XETRA
+    primary: SRT.XETRA
+    date: 2026-09-25
+    reason: >-
+      Sartorius AG's two share lines (DE0007165631 and DE0007165607, the second named "VZO O.N."),
+      under different names and 1.25x apart, so neither the name link nor a shared handle joined them.
+  - ticker: TAP-A.US
+    primary: TAP.US
+    date: 2026-09-25
+    reason: >-
+      Molson Coors Class A (US60871R1005); the company is "Molson Coors Beverage Company" on this
+      line and "Molson Coors Brewing Co Class B" on TAP.US.
+  - ticker: TPX-B.TO
+    primary: TAP.US
+    date: 2026-09-25
+    reason: >-
+      Molson Coors Canada Inc's exchangeable shares (CA6087112067), which are Molson Coors stock by
+      another name.
+  - ticker: QSP-UN.TO
+    primary: QSR.TO
+    date: 2026-09-25
+    reason: >-
+      Restaurant Brands International Limited Partnership units, exchangeable one-for-one into
+      the shares on QSR.TO.
+  - ticker: CSC.AU
+    primary: CS.TO
+    date: 2026-09-25
+    reason: >-
+      Capstone Copper Corp is the renamed Capstone Mining Corp (CS.TO); the ASX line has no ISIN
+      and no PrimaryTicker and the two names no longer match.
+  - ticker: CKI.LSE
+    primary: 1038.HK
+    date: 2026-09-25
+    reason: >-
+      "Ck Infra Holdings Ltd" is CK Infrastructure Holdings' London line: no ISIN, no
+      PrimaryTicker, $20.65bn against $20.96bn.
+  - ticker: ALI1.XETRA
+    primary: AII.AU
+    date: 2026-09-25
+    reason: >-
+      "ALMONTY INDUSTRY O.N." is Almonty Industries' Xetra line (its PrimaryTicker names AII.TO, which
+      the index does not carry), $4.0bn against $5.2bn on the ASX line.

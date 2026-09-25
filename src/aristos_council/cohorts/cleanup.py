@@ -187,8 +187,10 @@ def rule_size_and_history(candidates: list[Candidate], defn: CohortDefinition
 
 def rule_exclusions(candidates: list[Candidate], defn: CohortDefinition
                     ) -> tuple[list[Candidate], list[Removal]]:
-    """Financials and REITs, when the definition says so."""
+    """Financials and REITs, when the definition says so - and, for a cohort narrowed to a GICS
+    sub-industry (COHORT-3), the names outside it, each removal saying which and why."""
     kept, removals = [], []
+    wanted = {s.lower() for s in defn.gics_subindustry}
     for cand in candidates:
         keyword = excluded_by(defn, cand.sector, cand.industry)
         if keyword:
@@ -196,6 +198,16 @@ def rule_exclusions(candidates: list[Candidate], defn: CohortDefinition
                 cand.ticker, RULE_EXCLUSIONS,
                 f"excluded as {keyword} (sector {cand.sector or '?'}, industry "
                 f"{cand.industry or '?'})"))
+        elif wanted and not cand.gics_subindustry:
+            removals.append(Removal(
+                cand.ticker, RULE_EXCLUSIONS,
+                f"no GICS sub-industry label, so it cannot be shown to belong to "
+                f"{', '.join(defn.gics_subindustry)} (not counted as a match or a mismatch)"))
+        elif wanted and cand.gics_subindustry.lower() not in wanted:
+            removals.append(Removal(
+                cand.ticker, RULE_EXCLUSIONS,
+                f"GICS sub-industry {cand.gics_subindustry!r} is not "
+                f"{', '.join(defn.gics_subindustry)} (industry {cand.industry or '?'})"))
         else:
             kept.append(cand)
     return kept, removals
@@ -255,8 +267,19 @@ def wide_hint_for_index(members: list[Candidate], defn: CohortDefinition) -> str
         code_hint = (f"Narrower code: this cohort spans {len(by_code)} codes ({parts}); any one "
                      f"of them, or a subset, is a narrower cohort.")
     else:
-        code_hint = (f"There is no narrower code: {next(iter(by_code))!r} is already the finest "
-                     f"industry label the index carries.")
+        by_sub: dict[str, int] = {}
+        for m in members:
+            if m.gics_subindustry:
+                by_sub[m.gics_subindustry] = by_sub.get(m.gics_subindustry, 0) + 1
+        if len(by_sub) > 1:
+            parts = ", ".join(f"{s} {n}" for s, n in
+                              sorted(by_sub.items(), key=lambda kv: (-kv[1], kv[0]))[:6])
+            code_hint = (f"Narrower code: {next(iter(by_code))!r} is one EODHD industry, but its "
+                         f"GICS sub-industries are {parts}; naming one under gics_subindustry "
+                         f"gives a narrower cohort.")
+        else:
+            code_hint = (f"There is no narrower code: {next(iter(by_code))!r} is already the "
+                         f"finest industry label the index carries.")
     venues = ", ".join(f"{m} {n}" for m, n in
                        sorted(by_market.items(), key=lambda kv: (-kv[1], kv[0]))[:6])
     return (f"{code_hint} By venue: {venues}. Naming fewer exchanges in the definition would "

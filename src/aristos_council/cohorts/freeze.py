@@ -167,6 +167,7 @@ def write_definition_snapshot(path: Path, defn: CohortDefinition, *, version: in
         "exchange_codes": list(defn.exchange_codes),
         "min_market_cap": defn.min_market_cap,
         "min_market_cap_usd": defn.min_market_cap_usd,
+        "gics_subindustry": list(defn.gics_subindustry),
         "watch": defn.watch,
         "min_history_years": defn.min_history_years,
         "exclude": list(defn.exclude),

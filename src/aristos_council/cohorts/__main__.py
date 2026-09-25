@@ -12,7 +12,8 @@ from pathlib import Path
 
 from .builder import (DEFAULT_DEFINITIONS, DEFAULT_INDEX_DEFINITIONS, DEFAULT_ROOT,
                       DEFAULT_STRATEGY, build, check, default_index_pool, diff, format_plan, plan)
-from .definitions import DefinitionError, find_definition, load_definitions
+from .definitions import (DEFAULT_WATCH_OVERLAY, DefinitionError, apply_watch_overlay,
+                          find_definition, load_definitions, load_watch_overlay)
 from .source import EODHDSource, SourceError
 
 DEFAULT_UNIVERSES = Path("universes")
@@ -40,7 +41,13 @@ def _definitions_path(args) -> str:
 
 
 def _load(args) -> list:
-    return load_definitions(_definitions_path(args))
+    """The definitions, with the LOCAL watch overlay applied (data/local/cohorts/watch.yaml, git-
+    ignored). ``--no-local-overlay`` reads the tracked file as it is - which is what a shared
+    printout (a PR body, a report) must use, since which cohorts are watched is personal."""
+    defs = load_definitions(_definitions_path(args))
+    if getattr(args, "no_local_overlay", False):
+        return defs
+    return apply_watch_overlay(defs, load_watch_overlay(Path(args.root) / DEFAULT_WATCH_OVERLAY))
 
 
 def _selected(args, defs: list) -> list:
@@ -127,6 +134,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--definitions", default=None,
                         help=f"definition file (default {DEFAULT_INDEX_DEFINITIONS}; with "
                              f"--constituents, {DEFAULT_DEFINITIONS})")
+    parser.add_argument("--no-local-overlay", action="store_true",
+                        help="ignore the local watch overlay (data/local/cohorts/watch.yaml) and "
+                             "read the definitions exactly as the tracked file says")
     parser.add_argument("--constituents", action="store_true",
                         help="use the OLD source: S&P 500 + STOXX 600 constituents through the "
                              "EODHD API and the COHORT-1 definitions (own-currency floors). Off "
