@@ -224,6 +224,15 @@ def peers_for_ranking(group) -> tuple[list[str], list[str]]:
     return out, skipped
 
 
+def _us_line(ticker: str, store) -> Optional[str]:
+    """The company's US line, for the ratings EODHD publishes only for US listings - or None."""
+    from .market_index import IndexStore, load_config, us_line_of
+    try:
+        return us_line_of(ticker, store=store or IndexStore(load_config()["root"]))
+    except Exception:                                     # no index -> no fallback, not a failure
+        return None
+
+
 def _default_adapter(today: date):
     from .data.cache import DEFAULT_CACHE_DIR, CachingAdapter
     from .data.provider import select_market_adapter
@@ -303,7 +312,8 @@ def run_company_report(
     check = run_company_check(
         ticker, ids[0] if ids else DEFAULT_ID, "", adapter=adapter,
         strategies_dir=strategies_dir, universes_dir=universes_dir, runs_dir=runs_dir,
-        today=today, with_analyst_trend=True, with_valuation_band=with_valuation_band)
+        today=today, with_analyst_trend=True, with_valuation_band=with_valuation_band,
+        ratings_fallback_symbol=_us_line(ticker, store))
     attach_peers(check, store=store)
     report = CompanyReport(ticker=ticker, check=check, lens_ids=ids,
                            with_valuation_band=with_valuation_band,
@@ -415,7 +425,7 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # summary -> agreement (headline + table) -> each lens's vote -> peers -> valuation band ->
 # absolute readings -> analyst forecasts -> sources
 SECTION_ORDER = ("summary", "agreement", "lens votes", "peers", "valuation band",
-                 "absolute readings", "analyst forecasts", "sources")
+                 "absolute readings", "what analysts say", "sources")
 
 
 def agreement_table_lines(report: CompanyReport) -> list[str]:
@@ -495,7 +505,7 @@ def format_company_report(report: CompanyReport) -> str:
     forecasts = analyst_forecast_lines(c)
     marker = (mixed_source_marker(c, c.analyst_trend.source)
               if getattr(c, "analyst_trend", None) is not None else "")
-    lines.append("ANALYST FORECASTS (a mark: it does not vote and changes no verdict)" + marker)
+    lines.append("WHAT ANALYSTS SAY (a mark: it does not vote and changes no verdict)" + marker)
     if forecasts:
         lines.extend(forecasts[1:])                       # the heading above replaces the sub-heading
     else:
@@ -556,11 +566,17 @@ def company_facts_pack(report: CompanyReport) -> dict:
             "debt_and_cash": c.debt_and_cash.lines() if c.debt_and_cash is not None else [],
             "growth_record": ((c.growth_record.lines() + c.growth_record.notes())
                               if c.growth_record is not None else [])},
-        "analyst_forecasts": ({"headline": trend.headline,
-                               "rows": [dict(zip(("period", "expected_now", "three_months_ago",
-                                                  "change", "analysts"), (r.label, *r.cells())))
-                                        for r in trend.rows]}
-                              if trend is not None else {"headline": "not available"}),
+        "what_analysts_say": ({
+            "ratings": ({"summary": trend.ratings.summary_line(),
+                         "strong_buy": trend.ratings.counts[0], "buy": trend.ratings.counts[1],
+                         "hold": trend.ratings.counts[2], "sell": trend.ratings.counts[3],
+                         "strong_sell": trend.ratings.counts[4], "total": trend.ratings.total,
+                         "average_price_target": trend.ratings.target_sentence,
+                         "of_the_us_listing": not trend.ratings.own_listing}
+                        if trend.ratings is not None and trend.ratings.available
+                        else {"not_available": trend.ratings.note if trend.ratings else ""}),
+            "forecasts": trend.forecast_sentences()}
+            if trend is not None else {"not_available": "no analyst data"}),
     }
 
 

@@ -78,7 +78,7 @@ one sentence and describe only the facts about the company alone.
 - `asked` — 1-2 sentences. Which company, how big its peer group was, which tests ran.
 - `happened` — 2-4 sentences. How the company ranked and what each test said; the agreement.
 - `survived` — 1-3 sentences. What stands out in its own numbers: the price against its own
-  past, its debts, its growth, what analysts expect (`analyst_forecasts`).
+  past, its debts, its growth, what analysts say (`what_analysts_say`: how many rate it strong buy, buy, hold, sell and strong sell, the average price target against today's price, and what they expect it to earn per share). Say the counts and the target as the pack gives them; if the ratings are those of the company's US listing, say so.
 - `doubt` — 1-3 sentences. The marks, any test that did not apply, a broad group, missing data.
 - `cannot_say` — 1 sentence. What this check cannot tell you.
 

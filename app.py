@@ -3622,22 +3622,27 @@ def _render_absolute_readings(result, *, with_analyst: bool = True) -> None:
     if trend is not None:
         # ANALYST-TREND-1 - a mark, not a lens: it does not vote and changes no verdict. An
         # abstention is shown with its reason rather than left as an absent section.
-        st.markdown("**Analyst forecast direction**"
-                    + mixed_source_marker(result, trend.source))
-        _render_analyst_table(trend)
+        st.markdown("**What analysts say**" + mixed_source_marker(result, trend.source))
+        _render_analyst_body(trend)
 
 
-def _render_analyst_table(trend) -> None:
-    """The analyst headline sentence and its This year / Next year table."""
-    st.markdown(f"**{trend.headline}**")
-    if trend.rows:
-        import pandas as pd
-        from aristos_council.abs_readings import TABLE_COLUMNS
-        st.dataframe(pd.DataFrame(
-            [{"": row.label, **dict(zip(TABLE_COLUMNS, row.cells()))} for row in trend.rows]),
-            hide_index=True, width="stretch")
-        if trend.currency_note():
-            st.caption(trend.currency_note())
+def _render_analyst_body(trend) -> None:
+    """WHAT ANALYSTS SAY: the ratings (a line, a one-row table, the average target against today's
+    price), then the forecasts as plain sentences - no table of forecasts, no 'EPS'."""
+    import pandas as pd
+
+    ratings = trend.ratings
+    if ratings is not None and ratings.available:
+        st.markdown(f"**{ratings.summary_line()}**")
+        head, row = ratings.table()
+        st.dataframe(pd.DataFrame([dict(zip(head, row))]), hide_index=True, width="stretch")
+        for line in ratings.lines()[1:]:
+            st.markdown(line)
+    else:
+        st.caption(ratings.lines()[0] if ratings is not None else
+                   "Analyst ratings are not shown: no analyst data.")
+    for sentence in trend.forecast_sentences():
+        st.markdown(sentence)
 
 
 def _render_analyst_forecasts(result) -> None:
@@ -3645,13 +3650,13 @@ def _render_analyst_forecasts(result) -> None:
     from aristos_council.company_check import mixed_source_marker
 
     trend = getattr(result, "analyst_trend", None)
-    st.subheader("Analyst forecasts")
+    st.subheader("What analysts say")
     if trend is None:
         st.caption("Not available.")
         return
     st.caption("A mark: it does not vote and changes no verdict."
                + mixed_source_marker(result, trend.source))
-    _render_analyst_table(trend)
+    _render_analyst_body(trend)
 
 
 def _render_peers(result) -> None:

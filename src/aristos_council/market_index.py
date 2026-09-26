@@ -1338,6 +1338,38 @@ def possible_foreign_lines(rows, secondary: Optional[dict] = None) -> list["Inde
     return sorted(out, key=lambda r: r.ticker)
 
 
+def us_line_of(ticker: str, *, store: Optional[IndexStore] = None, rows=None,
+               aliases=..., size_corrections=...) -> Optional[str]:
+    """The EODHD symbol of the same company's US line (an ADR, or its US primary), or None.
+
+    Used for the ONE thing EODHD only publishes for US lines: analyst ratings. The company is found
+    exactly as ``peers`` finds it - identity aliases applied, lines grouped by PrimaryTicker, ISIN and
+    the guarded name-and-size link - and a US line that is a fund or an excluded row is never offered.
+    A US-listed ``ticker`` returns None (its own line already answers)."""
+    universe = rows if rows is not None else (store or IndexStore()).load()
+    if aliases is ...:
+        aliases = load_identity_aliases() if rows is None else []
+    universe, _ = apply_identity_aliases(universe, aliases)
+    if size_corrections is ...:
+        size_corrections = load_size_corrections() if rows is None else []
+    universe, applied = apply_size_corrections(universe, size_corrections)
+    refused = {k for k, (_r, c) in applied.items() if c.action == SIZE_EXCLUDE}
+    wanted = (ticker or "").strip().upper()
+    subject = next((r for r in universe if r.ticker.upper() == wanted
+                    or (r.yahoo_ticker or "").upper() == wanted), None)
+    if subject is None or (subject.market or "").upper() == "US":
+        return None
+    for company in company_groups(universe, link_by_name=True):
+        if subject not in company:
+            continue
+        candidates = [r for r in company
+                      if (r.market or "").upper() == "US" and not is_fund(r)
+                      and normalise_symbol(r.ticker) not in refused]
+        if candidates:
+            return sorted(candidates, key=lambda r: (not is_home_listing(r), r.ticker))[0].ticker
+    return None
+
+
 def contradicting_name_pairs(rows, secondary: Optional[dict] = None) -> list[tuple]:
     """US rows that share a cleaned company name with ANOTHER US row under a different ISIN while
     EODHD files the two under contradicting industries - each pair once, ``(row, other)`` ordered by

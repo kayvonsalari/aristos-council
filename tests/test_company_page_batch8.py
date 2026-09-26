@@ -231,13 +231,13 @@ def test_a_provider_is_named_once_in_the_footer_and_nowhere_above_it():
     above, _, footer = text.partition("\nSOURCES:")
     assert footer, "the Sources block is missing"
     assert "EODHD" not in above, [l for l in above.splitlines() if "EODHD" in l]
-    for topic in ("Analyst forecasts: EODHD Earnings::Trend", "Growth record: EODHD, 36 annual",
+    for topic in ("Analyst ratings and forecasts: EODHD, as of", "Growth record: EODHD, 36 annual",
                   "Fundamentals and accounts:", "Prices:", "Market index:"):
         assert topic in footer, topic
     html = company_check_html(result)
     body, _, html_footer = html.partition("<h2>Sources</h2>")
-    assert html_footer and "Analyst forecasts:" in html_footer
-    assert "EODHD Earnings" not in body and "36 annual reports" not in body
+    assert html_footer and "Analyst ratings and forecasts:" in html_footer
+    assert "36 annual reports" not in body
 
 
 def test_a_value_from_a_different_source_keeps_a_short_marker_that_points_to_the_footer():
@@ -256,9 +256,9 @@ def test_a_value_from_a_different_source_keeps_a_short_marker_that_points_to_the
 def test_the_marker_appears_in_both_exports_when_the_sources_differ():
     result = _check_with_analyst()
     result.providers = {**result.providers, "fundamentals": "yfinance"}
-    assert ("Analyst forecast direction (a mark: it does not vote and changes no verdict) "
+    assert ("What analysts say (a mark: it does not vote and changes no verdict) "
             "(see Sources)") in format_company_check(result)
-    assert "Analyst forecast direction (see Sources)" in company_check_html(result)
+    assert "What analysts say (see Sources)" in company_check_html(result)
 
 
 def test_a_static_fund_receipt_keeps_a_marker_not_the_provider_beside_the_figure():

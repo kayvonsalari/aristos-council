@@ -323,7 +323,7 @@ def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
     report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
     pack = company_facts_pack(report)
     assert set(pack) == {"company", "lenses", "agreement", "valuation_band", "absolute_readings",
-                         "analyst_forecasts"}
+                         "what_analysts_say"}
     assert pack["company"]["peer_group"]["step"] == 1
     assert [l["votes"] for l in pack["lenses"]] == [True, True]
     assert pack["agreement"]["buy_lenses_to_name"] == list(report.agreement.buy)
@@ -335,13 +335,13 @@ def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
 # =========================================================================== #
 _TEXT_HEADS = {"summary": "SUMMARY", "agreement": "AGREEMENT", "lens votes": "LENS VOTES",
                "peers": "PEERS", "valuation band": "VALUATION BAND",
-               "absolute readings": "ABSOLUTE READINGS", "analyst forecasts": "ANALYST FORECASTS",
+               "absolute readings": "ABSOLUTE READINGS", "what analysts say": "WHAT ANALYSTS SAY",
                "sources": "SOURCES"}
 _HTML_HEADS = {"summary": "<h2>Summary</h2>", "agreement": "<h2>Agreement</h2>",
                "lens votes": "<h2>Lens votes</h2>", "peers": "<h2>Peers</h2>",
                "valuation band": "<h2>Valuation band</h2>",
                "absolute readings": "<h2>Absolute readings</h2>",
-               "analyst forecasts": "<h2>Analyst forecasts</h2>", "sources": "<h2>Sources</h2>"}
+               "what analysts say": "<h2>What analysts say</h2>", "sources": "<h2>Sources</h2>"}
 
 
 def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
@@ -349,7 +349,7 @@ def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
     report = _run([RAW, SCREENED], tmp_path=tmp_path, with_summary=True,
                   reader_runner=_Writer(_fields(probe)), save=False)
     assert SECTION_ORDER == ("summary", "agreement", "lens votes", "peers", "valuation band",
-                             "absolute readings", "analyst forecasts", "sources")
+                             "absolute readings", "what analysts say", "sources")
     text, html = format_company_report(report), company_report_html(report)
     for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
         at = [doc.index(heads[name]) for name in SECTION_ORDER]
@@ -469,7 +469,7 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     assert not at.exception
     heads = [str(getattr(h, "value", "")) for h in at.subheader]
     assert heads[:4] == ["Summary", "Agreement", "Lens votes", "Peers"], heads
-    assert heads[-3:] == ["Absolute readings", "Analyst forecasts", "Sources"], heads
+    assert heads[-3:] == ["Absolute readings", "What analysts say", "Sources"], heads
     assert "Valuation band" in heads
     frames = [df.value for df in at.dataframe]
     assert any("BUY votes" in list(f.columns) for f in frames)            # the agreement row

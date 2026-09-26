@@ -1655,7 +1655,7 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
                  or '<section class="section"><h2>Absolute readings</h2>'
                     '<p class="note">none available</p></section>')
     parts.append(_analyst_forecasts_html(c)
-                 or '<section class="section"><h2>Analyst forecasts</h2>'
+                 or '<section class="section"><h2>What analysts say</h2>'
                     '<p class="note">not available</p></section>')
     sources = company_sources(c)
     if sources:
@@ -1691,9 +1691,9 @@ def _absolute_readings_html(result, *, with_analyst: bool = True) -> str:
                    + "</h3>" + _bullets(_esc(ln) for ln in growth.lines()))
         out.extend(f'<p class="note">{_esc(ln)}</p>' for ln in growth.notes())
     if trend is not None:
-        out.append("<h3>Analyst forecast direction"
+        out.append("<h3>What analysts say"
                    + _esc(mixed_source_marker(result, trend.source)) + "</h3>"
-                   f"<p><strong>{_esc(trend.headline)}</strong></p>" + _analyst_table_html(trend))
+                   + _what_analysts_say_html(trend))
     out.append("</section>")
     return "".join(out)
 
@@ -1710,22 +1710,25 @@ def _analyst_forecasts_html(result) -> str:
     trend = result.analyst_trend
     if trend is None:
         return ""
-    return ('<section class="section"><h2>Analyst forecasts</h2>'
+    return ('<section class="section"><h2>What analysts say</h2>'
             f'<p class="note">A mark: it does not vote and changes no verdict'
             f'{_esc(mixed_source_marker(result, trend.source))}.</p>'
-            f"<p><strong>{_esc(trend.headline)}</strong></p>" + _analyst_table_html(trend)
-            + "</section>")
+            + _what_analysts_say_html(trend) + "</section>")
 
 
-def _analyst_table_html(trend) -> str:
-    from ..abs_readings import TABLE_COLUMNS
-    if not trend.rows:
-        return ""
-    body = [[_esc(row.label)] + [f'<span class="mono">{_esc(c)}</span>' for c in row.cells()]
-            for row in trend.rows]
-    note = trend.currency_note()
-    return (_table(["", *TABLE_COLUMNS], body)
-            + (f'<p class="note">{_esc(note)}</p>' if note else ""))
+def _what_analysts_say_html(trend) -> str:
+    """The ratings (a line, a one-row table, the target sentence), then the forecast sentences."""
+    ratings = trend.ratings
+    out = []
+    if ratings is not None and ratings.available:
+        head, row = ratings.table()
+        out.append(f"<p><strong>{_esc(ratings.summary_line())}</strong></p>"
+                   + _table(head, [[f'<span class="mono">{_esc(c)}</span>' for c in row]]))
+        out.extend(f"<p>{_esc(line)}</p>" for line in ratings.lines()[1:])
+    else:
+        out.append(f'<p class="note">{_esc(ratings.lines()[0] if ratings is not None else "Analyst ratings are not shown: no analyst data.")}</p>')
+    out.extend(f"<p>{_esc(sentence)}</p>" for sentence in trend.forecast_sentences())
+    return "".join(out)
 
 
 def _company_peers_html(result) -> str:
