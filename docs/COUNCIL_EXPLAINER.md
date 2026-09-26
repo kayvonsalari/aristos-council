@@ -79,17 +79,22 @@ not a cut), §4 the screen criteria with current thresholds, and §5 the guards.
 document and the code ever disagree, the code — and The Calculations, which is generated
 from it — win.
 
-Eight lenses (rank strategies) are visible on one engine, each pinning its own factors and
+Ten lenses (rank strategies) are visible on one engine, each pinning its own factors and
 floors in a versioned YAML (a published strategy is never edited in place — a new version is
-created instead). Five rank over stocks: **Conservative Formula** (defensive income — low
+created instead). Seven rank over stocks: **Conservative Formula** (defensive income — low
 volatility + net payout +
 12-month momentum, screened for covered income, real yield, leverage, and a
 momentum-breakdown floor), **value + momentum** (the flagship — Greenblatt's earnings yield +
 return on capital with a momentum factor added to demote falling knives; financials excluded),
 **Growth at a Reasonable Price** (revenue growth + ROIC + valuation + momentum),
 **Greenblatt RAW** (the canonical Magic Formula + momentum with *no screens* — the
-exploratory comparison lens), and **Financials** (banks/insurers/networks ranked on
-price-to-book + return on equity + momentum, the value lenses' sector exclusion inverted).
+exploratory comparison lens), **Financials** (banks/insurers/networks ranked on
+price-to-book + return on equity + momentum, the value lenses' sector exclusion inverted),
+**Cyclical Income** (income from companies whose profits move with a cycle — oil, mining, shipping —
+where "raised the dividend for ten years" is the wrong test, so it asks "has not cut in five"), and
+**Forensic**, a *check* lens that does not vote: it ranks companies on whether reported profits are
+backed by cash and how far the balance sheet sits from distress, and only *marks* doubts on the
+other lenses' picks.
 The value strategies pair with an absolute-floor lens screen run as a prefilter — the screen
 says who qualifies, the ranking orders survivors; the RAW and Financials lenses rank without
 one (quality enters through ranking). The classic Magic Formula, dividend-aristocrat, and
@@ -143,8 +148,8 @@ per-run.
 
 If you are deciding whether to trust this system, the honest answer is that the trust does not
 come from the language models. It comes from the deterministic code that surrounds them and from
-an automated test suite — over 900 tests at last count (927 passing, 6 skipped, as of
-2026-07-28) — that runs the entire pipeline on every
+an automated test suite — over 3,600 tests at last count (3,625 passing, 1 skipped, as of
+2026-09-26) — that runs the entire pipeline on every
 change with fake models and fake data, no API keys and no network. Each guarantee below is
 enforced by that code and re-checked by those tests; none of it depends on a model behaving well
 on the day.

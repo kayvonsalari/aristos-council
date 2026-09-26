@@ -498,15 +498,16 @@ def test_the_shipped_list_covers_every_sector_the_brief_names():
         assert sum(1 for n in names if n.startswith(f"{sector} - ")) >= 3, sector
 
 
-def test_no_shipped_cohort_collides_with_a_cohort_one_definition_or_a_frozen_version():
-    """The ten COHORT-1 slugs are frozen local data that this list must never touch."""
+def test_no_shipped_cohort_collides_with_a_cohort_one_definition():
+    """The ten COHORT-1 slugs are frozen local data that this list must never touch.
+
+    (This test also used to look for a frozen version of a shipped slug in the developer's own
+    ``data/local/cohorts`` - a guard for the days before the 57 were frozen. Once they were, it read
+    the real local directory and went red on the one machine that had done what the guard was
+    protecting, so it now compares definitions only: no test reads local data.)"""
     legacy = {d.slug for d in load_definitions(DEFAULT_DEFINITIONS)}
     new = {d.slug for d in load_definitions(SHIPPED)}
     assert not (legacy & new), sorted(legacy & new)
-    frozen = ROOT / "data" / "local" / "cohorts"
-    if frozen.exists():
-        existing = {p.name for p in frozen.iterdir() if p.is_dir()}
-        assert not (existing & new), sorted(existing & new)
 
 
 def test_the_shipped_header_states_the_floor_rule_and_the_watch_flag_and_what_was_merged():

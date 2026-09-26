@@ -5,11 +5,18 @@ from EODHD, stored as parquet, queried with **no network at all**. It exists so 
 "who are this company's peers?" is a local lookup rather than an API call per report.
 
 ```
-python -m aristos_council.market_index status
+python -m aristos_council.market_index status                 # what is in the table (local, no network)
 python -m aristos_council.market_index build [--exchanges US,XETRA,LSE] [--limit N] [--budget N]
-python -m aristos_council.market_index refresh [--older-than 30]
-python -m aristos_council.market_index peers TICKER [--floor 12] [--cap 40]
+python -m aristos_council.market_index refresh [--older-than 30] [--exchanges ...] [--limit N] [--budget N]
+python -m aristos_council.market_index peers TICKER [--floor 12] [--cap 40] [--size-factor 5]
+python -m aristos_council.market_index fix-gbx-scale [--dry-run]   # one-off London cap repair, no network
 ```
+
+`status` and `peers` read the local table only. `build` and `refresh` **make charged EODHD calls**
+(see *What a build costs*); `fix-gbx-scale` changes the table in place from its stored figures (and
+backs it up first). The table lives under `data/local/market_index/` (git-ignored, rebuildable) and
+`market_index.yaml` says where. Cohorts (`docs/COHORTS.md`) and Gap Ledger (`docs/GAP_LEDGER.md`)
+read it too; they never write to it.
 
 ## Why a table and not an endpoint
 
@@ -17,7 +24,7 @@ This was measured, not assumed, on 2026-09-18:
 
 | Path | What it actually does |
 |---|---|
-| Finnhub `/stock/peers` | **403 for every non-US symbol** on this plan — ten of twenty-one portfolio holdings got nothing. Where it answers: at most **12** names, includes the subject itself, ignores size entirely (Eaton peered with two micro-caps), and returns its own symbology including tickers with spaces. |
+| Finnhub `/stock/peers` | **403 for every non-US symbol** on this plan — every non-US name got nothing. Where it answers: at most **12** names, includes the subject itself, ignores size entirely (a $100bn industrial peered with two micro-caps), and returns its own symbology including tickers with spaces. |
 | EODHD `/screener` | **403** on this plan (found building COHORT-1). |
 | S&P 500 + STOXX 600 | 1,026 names over 132 industries — a **median of six** companies per industry, only eight buckets holding twenty or more. Too small to be a peer source. |
 
@@ -47,6 +54,47 @@ tagged* column, converted through the repo's existing FX helper (`factors._fetch
 which goes via the ranker's own cached price path) and marked `abstained` for any currency
 it cannot price. A guess is never written into the reported figure.
 
+## Exchanges covered, and missing
+
+`market_index.yaml` lists the exchange **codes** a build fetches. Which codes work is a property
+of the data plan, so each was **probed with one request** rather than assumed; a code that answers
+HTTP 404 is removed from the file with the evidence in a comment, because a request that is known
+to fail costs a call and a line of noise on every build.
+
+**Covered — 18 codes, 24,999 rows** (snapshot 2026-09-26; rows = common stocks the provider lists
+on that code, after the US venue filter):
+
+| Region | Codes (rows) |
+|---|---|
+| North America | `US` NYSE / NASDAQ / NYSE ARCA / AMEX only (6,047) · `TO` Toronto (874) |
+| Europe | `LSE` London (3,834) · `XETRA` (708) · `PA` Paris (629) · `AS` Amsterdam (110) · `MC` Madrid (236) · `SW` SIX Swiss (226) · `ST` Stockholm (934) · `CO` Copenhagen (178) · `OL` Oslo (297) · `HE` Helsinki (190) |
+| Asia-Pacific | `HK` Hong Kong (3,513) · `KO` Korea KOSPI (941) · `KQ` Korea KOSDAQ (1,849) · `AU` Australia (1,859) · `TW` Taiwan (1,102) |
+| Latin America | `SA` São Paulo (1,472) — **in the index, excluded from cohorts and peers** (see below) |
+
+**Missing:**
+
+- **Tokyo is not covered.** `/exchange-symbol-list/TSE` and `/T` both answer HTTP 404 on this plan,
+  so there is no code known to work. Japanese companies therefore have no home line here, and any
+  peer group or cohort in which they belong (electronics, autos, machinery) is missing them.
+  Restore it under the code that answers, once one is found (INDEX-EXCHANGE-CODES-1, 2026-09-25).
+- **Milan (Borsa Italiana) is not covered.** `MI`, `MTA`, `BIT`, `MIL`, `IT` and `XMIL` all answer
+  404 (probed 2026-09-24); the provider's exchange list has no Italian exchange at all. Italian
+  companies appear only where they cross-list.
+- **Every other venue not in the table** — Vienna, Brussels, Lisbon, Dublin, Warsaw, Tel Aviv,
+  Singapore, Mumbai, Shanghai / Shenzhen, Mexico, and so on — has not been requested. They are a
+  one-line addition to `market_index.yaml` once probed and their cost is accepted.
+
+Two corrections to earlier beliefs, kept because they explain the file's comments: Korea is **two**
+exchanges (`KO` and `KQ`; `KS` was never the provider's code), and **Hong Kong is served** although
+the provider's exchange list omits it — that list is not authoritative about what the symbol-list
+endpoint serves, which is why codes are probed one at a time.
+
+**São Paulo is indexed but not used for peers or cohorts.** About half its rows (722 of 1,472) are Brazilian
+depositary receipts (BDRs) of foreign companies, which stood as companies of their own. `clean_pool`
+drops the `SA` market **before** it picks one line per company (`exclude_markets=("SA",)`), so a
+company whose only other line is on `SA` is not lost, and a real listing never loses its seat to a
+São Paulo line.
+
 ## Building it
 
 The build is **resumable and safe to interrupt**. Rows already present and younger than
@@ -69,26 +117,12 @@ evidence is on the row (listing parser + a name, and `fetched_at` says when) —
 starts on the next build rather than one build later. `status` splits the gap-less rows into
 **due** and **waiting** so the next build's cost is visible before it is spent.
 
-**Milan is gone (INDEX-CAP-RETRY-1).** `/exchange-symbol-list/MI` answers HTTP 404 on every
-build, and on 2026-09-24 every plausible alternative was tried against the endpoint — `MI`,
-`MTA`, `BIT`, `MIL`, `IT`, `XMIL`, all 404. There is no code to correct it to, so `MI` was
-removed from `market_index.yaml` with the evidence in a comment rather than left to be skipped
-at the cost of a request and a line of noise every build. **Korea and Tokyo (INDEX-EXCHANGE-CODES-1,
-2026-09-25):** `KS` was never EODHD's code — Korea is two exchanges, and `/exchange-symbol-list/KO`
-(KOSPI, 941 common stocks) and `/KQ` (KOSDAQ, 1,849) both answer, so the yaml now lists `KO` and
-`KQ`. `T` and `TSE` both 404, so **Tokyo is not tracked** until a code that answers is found. A related correction — the
-earlier claim that **HK** was absent was wrong: `/exchanges-list` omits it, yet
-`/exchange-symbol-list/HK` serves 3,512 names (build log, 2026-09-23T09:22:20). The
-exchange-list endpoint is not authoritative about what the symbol-list endpoint will serve.
-
-**An exchange whose listing fails is skipped, not fatal (MARKET-INDEX-SKIP-1).** One
-unlistable venue used to end the whole run — on 2026-09-22 the European build died at Milan
-(`/exchange-symbol-list/MI` → HTTP 404) and never attempted the exchanges after it. Such an
-exchange is now skipped, named in the build log and counted in the summary ("4 exchanges
-skipped: MI, HTTP 404; …"), and the rest of the build proceeds; a *quota* refusal still stops
-everything. Probing `/exchanges-list` on 2026-09-23 (70 exchanges) showed **MI, HK, T and KS
-absent from that list** (HK and Korea turned out to be served anyway — see above) — there is no Italian exchange in the list at all, so `MI` is not
-a mis-spelled code. (Superseded: `MI` and Tokyo are now removed and `KS` is replaced by `KO` and `KQ`, as above.)
+**An exchange whose listing fails is skipped, not fatal (MARKET-INDEX-SKIP-1).** One unlistable
+venue used to end the whole run — on 2026-09-22 the European build died at Milan and never
+attempted the exchanges after it. Such an exchange is now skipped, named in the build log and
+counted in the summary ("4 exchanges skipped: MI, HTTP 404; …"), and the rest of the build
+proceeds; a *quota* refusal still stops everything. Which codes the plan actually serves is in
+[Exchanges covered, and missing](#exchanges-covered-and-missing).
 
 **A network error is not a 404 (INDEX-SKIP-RETRY-1).** On 2026-09-23 a network blip skipped nine
 healthy exchanges in one second, because a URLError was treated exactly like "not found". A
@@ -187,7 +221,7 @@ Two defects showed up the first time the ladder ran over a real 9,018-row index.
 
 ### Home listings
 
-TSMC's peer group contained **AMD.US, AMD.TO and AMD.XETRA**, and NVDA.US beside
+A large chip maker's peer group contained **AMD.US, AMD.TO and AMD.XETRA**, and NVDA.US beside
 NVD.XETRA. Those are one company each. A peer group that counts a company three times is
 not a comparison, it is a weighted average nobody asked for.
 
@@ -204,7 +238,7 @@ rather than required. One row per company always survives; which one is decided,
 order, by: it is the home listing; its country matches the issuer country in the ISIN;
 then the ticker, so the answer never depends on the order rows came back in.
 
-**Identity is PrimaryTicker first, then ISIN, linked transitively (PEER-DEDUP-1, 2026-09-25).** A US ADR carries its *own* ISIN but names its home line, so ISIN-first kept `TSM.US` apart from `2330.TW` and TSMC was its own peer; rows now group when they share a primary ticker *or* an ISIN, and a company is never its own peer — none of its lines stands in its pool. Lines no handle links (`ASML.AS` and `ASML.US` each name themselves as primary, with different ISINs; Alphabet's four lines; Atlas Copco's A and B shares) are linked by **the same reduced company name *and* USD caps within 25%** — the size guard is what keeps `APA` Corp and APA Group (1.54×) apart — for the pool and the "own peer" test only, not for the size-sanity test below.
+**Identity is PrimaryTicker first, then ISIN, linked transitively (PEER-DEDUP-1, 2026-09-25).** A US ADR carries its *own* ISIN but names its home line, so ISIN-first kept a US ADR apart from its Taiwan home line and the company was its own peer; rows now group when they share a primary ticker *or* an ISIN, and a company is never its own peer — none of its lines stands in its pool. Lines no handle links (a Dutch company's Amsterdam and US lines that each name themselves as primary, with different ISINs; a US company's four share-class lines; a Swedish company's A and B shares) are linked by **the same reduced company name *and* USD caps within 25%** — the size guard is what keeps `APA` Corp and APA Group (1.54×) apart — for the pool and the "own peer" test only, not for the size-sanity test below.
 
 **Preferred, not required, on purpose.** A strict "home listings only" filter loses
 companies, which is the same defect wearing a different hat. Of ten German blue chips
@@ -252,7 +286,7 @@ that silently disagrees with the source every report cites.
 
 **One narrow exception: `data/label_overrides.yaml` (PEER-LABEL-RECALL-1).** A provider label that is plainly
 wrong hides a rival from every cohort it belongs to, so a small dated file corrects a GICS sub-industry per ticker
-(seeded: Siemens Energy and Schneider Electric → Heavy Electrical Equipment; Micron's US line → Semiconductors).
+(seeded with two European grid-equipment makers filed as general machinery, corrected to Heavy Electrical Equipment, and Micron's US line, filed under semiconductor equipment, corrected to Semiconductors).
 Every entry carries a date and a reason; it corrects a label only — never a size, a listing or a peer; the index
 on disk is not rewritten; and every use is printed in the cohort report as `label overridden`.
 
@@ -284,6 +318,42 @@ are counted in `status`, and a fund or suspect subject gets no peer group and a 
 - **Size corrections — `data/size_corrections.yaml`.** For a market cap no rule can refute because there is no second line to refute it. `action: exclude` keeps the company out of every pool and peer group and lists it as excluded; `action: set` replaces the USD figure with a stated one (`market_cap_usd`) and tags the row's source `corrected`. Same discipline as the label overrides: dated, reasoned, applied to copies, real index only (never to rows handed in directly), a malformed file is an error, and every use is printed. Seeded: `QH.US` (Quhuo) — an ADS price × the *ordinary* share count gives $343.3bn (EODHD) and $350.4bn (Yahoo, the same multiplication) for a company with $2.5bn of revenue; the true capitalisation cannot be established from either, so the company is excluded rather than guessed at.
 - **Everything above is flagged in cohort lists** — see `docs/COHORTS.md`, *Corrections are flagged, never hidden*.
 
+## Peer rules at a glance
+
+Peer groups and cohorts read the **same cleaned pool** (`clean_pool`), so a rule fixed once is fixed
+for both. From the raw table (which keeps every row, so a reader can still look a company up by any
+of its lines) the pool is built as follows. First, two kinds of **dated, reasoned correction** are applied to *copies* of the rows (never to the table on disk): a **label override** where the provider's industry is plainly wrong (`data/label_overrides.yaml`), and an **identity alias** saying which company a line belongs to (`data/identity_aliases.yaml`; a *self-alias* says "this line is its own company"). A row then becomes a pool member only if it survives, in this order:
+
+1. **Not a secondary trading line** — Brazilian BDRs, Canadian CDRs, London `0xxx` lines and GDRs,
+   Swiss lines of foreign stocks, Hong Kong RMB counters (`8xxxx.HK`) and Korean preference lines
+   are receipts of a company that already has a home line. *(Receipts excluded.)*
+2. **Not on an excluded market** — São Paulo (`SA`), removed before step 6 so it never wins a seat.
+3. **Not a fund** and **not classification-suspect** (a "Bank" filed under semiconductors).
+4. **Has a market cap**, and a **USD** one (a local cap with no conversion is counted separately).
+5. **Not excluded by a size correction** (`data/size_corrections.yaml`) and **not size-suspect** (its
+   USD cap is more than 5× away from every other line of the same company while those agree).
+6. **One row per company** (*dedup*): lines are grouped by PrimaryTicker, then ISIN, then by the
+   same reduced company name with USD caps within 25%; the ordinary home line wins the seat, a
+   depositary receipt never outranks an ordinary line, and the rest are counted, not listed.
+
+Then `peers()` applies the **ladder** below: a **floor of 12** peers and a **cap of 40**, widening
+the size band before the classification (¼×–4×, then ⅒×–10×, then the wider industry), or abstaining
+and naming how far it looked. The **subject** is never its own peer, and financials are only peers
+of financials.
+
+**Corrections are flagged wherever a list is shown.** In a cohort's member list and report each
+company a correction touched carries one symbol, and a legend at the bottom says what was done to it:
+
+| Symbol | Meaning |
+|---|---|
+| † | counted once, also listed as `<other line(s)>`; with the evidence (alias reason, name-and-size link, HK RMB counter, Korean preference line) |
+| ‡ | industry label corrected: from `<old>` to `<new>`, reason, date |
+| § | size corrected or excluded: the figure the index reported, reason, date. Excluded companies are listed under the legend, never silently dropped |
+| ¶ | identity corrected: the provider's PrimaryTicker names a different company, reason, date |
+
+The peer table prints the same facts as text ("identity aliased", "label overridden", "size
+correction: excluded"). Details for cohorts: `docs/COHORTS.md`.
+
 ## The peer ladder
 
 `peers(ticker, floor=12, cap=40)` widens only as far as it must, and says how far it went:
@@ -305,7 +375,7 @@ cohort and how many distinct companies it holds**, and the peer table shows whic
 
 **A peer qualifies on either label system (PEER-LABEL-RECALL-1, 2026-09-25):** it matches the subject on its GICS
 sub-industry (steps 1–2) or industry (step 3) *or* on its EODHD industry, so a wrong label in one system does not
-hide a rival — GICS files Siemens Energy and Schneider as machinery while EODHD files them with Eaton. Size bands
+hide a rival — GICS files two grid-equipment makers as machinery while EODHD files them with the electrical-equipment group. Size bands
 and the floor of 12 are unchanged, and the report says how many members matched on each system.
 
 Always excluded: the subject itself; rows with no market cap (counted in the reasons);

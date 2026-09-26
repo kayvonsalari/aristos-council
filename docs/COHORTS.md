@@ -6,11 +6,15 @@ and then it is frozen and versioned. Nothing in the builder path accepts a hand-
 member.
 
 ```
-python -m aristos_council.cohorts build --all
-python -m aristos_council.cohorts build --name "Pharma EU-US" --rebuild
-python -m aristos_council.cohorts check --name "Pharma EU-US"
-python -m aristos_council.cohorts diff  --name "Pharma EU-US"
+python -m aristos_council.cohorts plan                                   # dry run, no network, writes nothing
+python -m aristos_council.cohorts build --all                            # freeze every cohort not yet built
+python -m aristos_council.cohorts build --name "Tech - Semiconductors" --rebuild   # cut the next version
+python -m aristos_council.cohorts check --name "Tech - Semiconductors"   # quality report only
+python -m aristos_council.cohorts diff  --name "Tech - Semiconductors"   # what a rebuild would change
 ```
+
+(`build` measures price history over yfinance for the names that pass every other rule, so it takes
+a while and needs network access; `plan` reads only the local market index.)
 
 No model is ever called. The quality report ranks with the deterministic ranker only, and
 `tests/test_cohorts_no_llm.py` asserts that no module in the package imports a model
@@ -77,6 +81,81 @@ PrimaryTicker or ISIN) is ordinary identity, not a correction, and carries no sy
 under the legend as *Excluded, not silently dropped* — with the figure it reported, the reason,
 the date, and, for the automatic check, the line under which the company remains in the pool.
 Exclusions are listed only under the cohorts whose codes the company would have been considered in.
+
+### The 57 cohorts
+
+`data/cohort_definitions.yaml` defines **57 cohorts** across eight sectors, one per industry group
+a reader would recognise (the list follows a conventional sector guide; where the index has no clean
+code, or too few companies, for a guide entry it was merged into a neighbour or dropped — the
+reasons are in the file's header). Frozen as v1 on 2026-09-26 with the history test applied:
+**2,023 members in all, every cohort inside the 20–60 band (smallest 21, largest 58), none thin,
+none wide.** Floors by the tier rule: 17 cohorts at $1bn, 22 at $2bn, 14 at $3bn, 3 at $5bn, 1 at
+$10bn. "Definition" is the EODHD industry code(s), with the GICS sub-industry a code was narrowed to
+where the code alone was too wide.
+
+| Sector | Cohort | Floor | Members | Definition |
+|---|---|---|---|---|
+| Energy | Integrated Oil & Refining | $2bn | 42 | Oil & Gas Integrated; Oil & Gas Refining & Marketing |
+| Energy | Exploration & Production | $3bn | 38 | Oil & Gas E&P |
+| Energy | Oilfield Services & Equipment | $2bn | 32 | Oil & Gas Equipment & Services; Oil & Gas Drilling |
+| Energy | Midstream & Pipelines | $2bn | 37 | Oil & Gas Midstream |
+| Utilities | Electric | $2bn | 43 | Utilities - Regulated Electric |
+| Utilities | Gas, Water & Multi-Utilities | $2bn | 48 | Utilities - Regulated Gas; Utilities - Regulated Water; Utilities - Diversified |
+| Utilities | Renewable & Independent Power | $2bn | 34 | Utilities - Renewable; Utilities - Independent Power Producers |
+| Materials | Commodity Chemicals & Agri Inputs | $2bn | 23 | Chemicals; Agricultural Inputs |
+| Materials | Specialty Chemicals | $3bn | 45 | Specialty Chemicals |
+| Materials | Steel | $1bn | 35 | Steel |
+| Materials | Diversified Mining | $2bn | 23 | Other Industrial Metals & Mining |
+| Materials | Gold | $3bn | 51 | Gold |
+| Materials | Copper & Aluminum | $1bn | 28 | Copper; Aluminum |
+| Materials | Building Materials | $1bn | 26 | Building Materials |
+| Materials | Packaging & Paper | $1bn | 38 | Packaging & Containers; Paper & Paper Products |
+| Industrials | Aerospace & Defense | $5bn | 48 | Aerospace & Defense |
+| Industrials | Electrical Equipment | $2bn | 36 | Electrical Equipment & Parts |
+| Industrials | Industrial Machinery | $3bn | 50 | Specialty Industrial Machinery → narrowed to Industrial Machinery & Supplies & Components |
+| Industrials | Grid & Electrical Machinery | $1bn | 21 | Specialty Industrial Machinery → narrowed to Heavy Electrical Equipment; Electrical Components & Equipment |
+| Industrials | Construction & Farm Machinery | $1bn | 28 | Farm & Heavy Construction Machinery |
+| Industrials | Engineering & Construction | $5bn | 42 | Engineering & Construction; Construction & Engineering |
+| Industrials | Airlines & Airports | $2bn | 34 | Airlines; Airports & Air Services |
+| Industrials | Railroads | $1bn | 23 | Railroads |
+| Industrials | Logistics & Trucking | $2bn | 28 | Integrated Freight & Logistics; Trucking |
+| Industrials | Marine Shipping | $2bn | 27 | Marine Shipping |
+| Industrials | Building Products | $1bn | 31 | Building Products & Equipment |
+| Industrials | Waste & Environmental | $1bn | 22 | Waste Management; Pollution & Treatment Controls |
+| Consumer | Auto Manufacturers | $1bn | 29 | Auto Manufacturers |
+| Consumer | Auto Parts | $2bn | 35 | Auto Parts |
+| Consumer | Luxury, Apparel & Footwear | $2bn | 40 | Luxury Goods; Apparel Manufacturing; Footwear & Accessories |
+| Consumer | Restaurants | $1bn | 27 | Restaurants |
+| Consumer | Hotels, Resorts & Gaming | $2bn | 36 | Lodging; Resorts & Casinos; Gambling |
+| Consumer | Leisure & Travel | $2bn | 27 | Leisure; Travel Services |
+| Consumer | Household & Personal Products | $1bn | 27 | Household & Personal Products |
+| Consumer | Packaged Foods & Confectionery | $3bn | 38 | Packaged Foods; Confectioners |
+| Consumer | Beverages & Tobacco | $2bn | 41 | Beverages - Brewers; Beverages - Wineries & Distilleries; Beverages - Non-Alcoholic; Tobacco |
+| Consumer | Grocery & Discount Retailers | $1bn | 35 | Grocery Stores; Discount Stores |
+| Consumer | Discretionary Retail | $3bn | 39 | Specialty Retail; Apparel Retail; Home Improvement Retail; Department Stores |
+| Consumer | Internet Retail | $1bn | 22 | Internet Retail |
+| Consumer | Homebuilders | $1bn | 22 | Residential Construction |
+| Health | Large Pharma | $1bn | 21 | Drug Manufacturers - General |
+| Health | Specialty & Generic Pharma | $3bn | 29 | Drug Manufacturers - Specialty & Generic |
+| Health | Biotechnology | $10bn | 35 | Biotechnology |
+| Health | Medical Devices & Instruments | $5bn | 45 | Medical Devices; Medical Instruments & Supplies |
+| Health | Services & Managed Care | $3bn | 34 | Medical Care Facilities; Healthcare Plans; Medical Distribution; Health Information Services |
+| Health | Life Science Tools & Diagnostics | $1bn | 36 | Diagnostics & Research |
+| Tech | Semiconductors | $3bn | 54 | Semiconductors → narrowed to Semiconductors |
+| Tech | Semiconductor Equipment | $2bn | 40 | Semiconductor Equipment & Materials |
+| Tech | Application Software | $3bn | 51 | Software - Application → narrowed to Application Software |
+| Tech | Systems Software | $3bn | 43 | Software - Infrastructure |
+| Tech | IT Services | $2bn | 40 | Information Technology Services |
+| Tech | Hardware | $2bn | 43 | Computer Hardware; Consumer Electronics |
+| Tech | Communications Equipment | $2bn | 27 | Communication Equipment |
+| Tech | Electronic Components | $3bn | 45 | Electronic Components |
+| Comms | Telecoms | $3bn | 58 | Telecom Services |
+| Comms | Media & Entertainment | $3bn | 34 | Entertainment; Broadcasting; Publishing; Advertising Agencies |
+| Comms | Interactive Media & Gaming | $2bn | 37 | Internet Content & Information; Electronic Gaming & Multimedia |
+
+Companies with no cohort: those in an industry code no cohort lists (for example coal, uranium,
+silver, conglomerates, rental & leasing, education and the provider's second, "TRBC-style" labels)
+and those under their cohort's floor. Nothing is added to fill a gap.
 
 ## The definition file (constituents path)
 
@@ -158,7 +237,8 @@ Applied **in this order**, which is part of the contract (`cleanup.RULES`, pinne
 test). Every removal is logged with its rule and the value that tripped it.
 
 1. **One line per company.** Drop ADRs, GDRs, preferred lines, secondary listings and
-   duplicate share classes; keep the primary listing. Survivor chosen by: the issuer's own
+   duplicate share classes; keep the primary listing. (On the index path the cleaned pool has
+   already done this; the rule stays as a guard.) Survivor chosen by: the issuer's own
    `PrimaryTicker`, then the exchange order the definition itself lists, then market cap,
    then the symbol so the result never depends on dict order.
 2. **Size and history.** Below the cap floor, or too short a history. A **missing** cap is
@@ -245,8 +325,11 @@ list in the sidebar and a cut on disk can never disagree about which one it is.
 
 ## What is committed
 
-`definitions.yaml` is source and is committed. The built cohorts under
-`data/local/cohorts/<slug>/` are machine-generated local data and are **not** — they are
-rebuilt from the rule on any machine, and committing one cohort built today while nine
-others were not would be a confusing half-state. Flip it by removing the entry in
-`.gitignore` if you want them tracked the way `verdicts/` and `reports/` are.
+`data/cohort_definitions.yaml` (the 57 rules), the correction files it relies on
+(`data/label_overrides.yaml`, `data/identity_aliases.yaml`, `data/size_corrections.yaml`) and this
+documentation are source and are committed. The built cohorts under `data/local/cohorts/<slug>/`
+and the local stock lists they register under `universes/local/` are machine-generated and are
+**not** — they are rebuilt from the rules on any machine with a market index, and committing some
+built cohorts and not others would be a confusing half-state. Flip it by removing the entry in
+`.gitignore` if you want them tracked the way `verdicts/` and `reports/` are. The watch overlay
+(`data/local/cohorts/watch.yaml`) is local by design and never committed.
