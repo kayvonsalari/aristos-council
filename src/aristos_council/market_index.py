@@ -2135,11 +2135,17 @@ def _size_reason(row: "IndexRow", others: list, factor: float) -> str:
 RUNG_SUBINDUSTRY_TIGHT = "sub-industry, 1/4x–4x"
 RUNG_SUBINDUSTRY_WIDE = "sub-industry, 1/10x–10x"
 RUNG_INDUSTRY_WIDE = "industry, 1/10x–10x"
+# Step 4 (owner's ruling 2026-09-26, replacing the 2026-09-18 rule that abstained before reaching the
+# sector): when the three rungs above all fall under the floor - Nestle's "Packaged Foods & Meats" has
+# a handful of comparable companies at any size - the SECTOR is tried, at the same wide band. It is a
+# BROAD group and says so on the page. Only if the sector also fails does the ladder abstain.
+RUNG_SECTOR = "sector, 1/10x-10x"
+BROAD_SECTOR_NOTE = "broad sector group - wider than a normal peer group"
 RUNG_NONE = "none"
 
 DEFAULT_FLOOR = 12
 DEFAULT_CAP = 40
-LADDER_STEPS = 3                   # the three rungs above, numbered 1-3 in the cohort report
+LADDER_STEPS = 4                   # the rungs above, numbered 1-4 in the cohort report
 
 _FINANCIAL_SECTORS = ("financial services", "financials", "financial")
 _FINANCIAL_INDUSTRY_PREFIXES = ("bank", "insurance", "capital markets",
@@ -2184,12 +2190,18 @@ class PeerGroup:
     def thin(self) -> bool:
         return 0 < len(self.members) < DEFAULT_FLOOR
 
+    @property
+    def broad(self) -> bool:
+        """True for a step-4 (sector) group: wider than a normal peer group, and said to be."""
+        return self.rung == RUNG_SECTOR
+
     def sentence(self) -> str:
         if not self.members:
             return "; ".join(self.reasons) or "no peer group could be formed"
-        return (f"{len(self.members)} peers at {self.rung} ({self.band}), "
+        text = (f"{len(self.members)} peers at {self.rung} ({self.band}), "
                 f"index snapshot {self.snapshot or 'unknown'} - found at step {self.step} of "
                 f"{LADDER_STEPS}, {self.distinct_companies} distinct companies")
+        return f"{text} - {BROAD_SECTOR_NOTE}" if self.broad else text
 
 
 def is_financial(row: IndexRow) -> bool:
@@ -2579,11 +2591,15 @@ def _label(value) -> str:
 
 
 def _gics_label(row: IndexRow, level: str) -> str:
+    if level == "sector":
+        return _label(row.gics_sector)
     return _label(row.gics_subindustry if level == "subindustry" else row.gics_industry)
 
 
-def _eodhd_label(row: IndexRow) -> str:
-    return _label(row.industry)
+def _eodhd_label(row: IndexRow, level: str = "industry") -> str:
+    """EODHD's own label at this level: its ``industry`` for steps 1-3, its ``sector`` for step 4.
+    (The provider has no finer or coarser tier than those two.)"""
+    return _label(row.sector if level == "sector" else row.industry)
 
 
 def _subject_systems(subject: IndexRow, level: str) -> tuple:
@@ -2598,7 +2614,7 @@ def _subject_systems(subject: IndexRow, level: str) -> tuple:
     systems = []
     if _gics_label(subject, level):
         systems.append(LABEL_GICS)
-    if _eodhd_label(subject):
+    if _eodhd_label(subject, level):
         systems.append(LABEL_EODHD)
     return tuple(systems)
 
@@ -2608,7 +2624,7 @@ def _label_hits(row: IndexRow, subject: IndexRow, level: str, systems: tuple) ->
     hits = []
     if LABEL_GICS in systems and _gics_label(row, level) == _gics_label(subject, level):
         hits.append(LABEL_GICS)
-    if LABEL_EODHD in systems and _eodhd_label(row) == _eodhd_label(subject):
+    if LABEL_EODHD in systems and _eodhd_label(row, level) == _eodhd_label(subject, level):
         hits.append(LABEL_EODHD)
     return tuple(hits)
 
@@ -2887,6 +2903,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         (RUNG_SUBINDUSTRY_TIGHT, "subindustry", 0.25, 4.0),
         (RUNG_SUBINDUSTRY_WIDE, "subindustry", 0.10, 10.0),
         (RUNG_INDUSTRY_WIDE, "industry", 0.10, 10.0),
+        (RUNG_SECTOR, "sector", 0.10, 10.0),
     )
     subject_cap = subject.market_cap_usd
     tried: list = []
@@ -2914,6 +2931,9 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             group.rung, group.band = rung, f"{low:g}x-{high:g}x market cap (USD)"
             group.step = step
             group.systems = tuple(systems)
+            if rung == RUNG_SECTOR:
+                group.reasons.append(f"{BROAD_SECTOR_NOTE}: the company's own industry has too "
+                                     f"few comparable companies, so its whole sector was used")
             group.matched_on = {r.ticker: how[r.ticker] for r in group.members}
             tally = {}
             for how_matched in group.matched_on.values():

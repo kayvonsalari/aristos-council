@@ -17,7 +17,7 @@ from datetime import date
 import pytest
 
 from aristos_council.market_index import (DEFAULT_CAP, DEFAULT_FLOOR, RUNG_INDUSTRY_WIDE,
-                                          RUNG_NONE, RUNG_SUBINDUSTRY_TIGHT,
+                                          RUNG_NONE, RUNG_SECTOR, RUNG_SUBINDUSTRY_TIGHT,
                                           RUNG_SUBINDUSTRY_WIDE, SOURCE_EODHD_LISTING,
                                           IndexRow, IndexStore, company_key,
                                           is_financial, is_home_listing,
@@ -83,8 +83,10 @@ def _index() -> list[IndexRow]:
                          eodhd="Railroads"))
     # 4. A sub-industry too thin at every rung -> abstain.
     for i in range(3):
+        # its own SECTOR too: since step 4 (2026-09-26) a company whose sector is shared with a
+        # crowd is no longer left without peers, so an abstention needs a sector with no crowd.
         rows.append(_row(f"LONE{i:02d}.US", cap=2e9, sub="Space Tourism",
-                         industry="Space Tourism", sector="Industrials"))
+                         industry="Space Tourism", sector="Space"))
     # 5. Financials, deep, so a financial subject has peers and a non-financial never
     #    sees them.
     for i in range(30):
@@ -710,12 +712,12 @@ def test_status_says_how_many_rows_cannot_be_peers(tmp_path):
 
 
 def _listed(ticker, *, primary=None, isin=None, cap_usd=10e9, cap=None, currency="USD",
-            sub="Semiconductors", country="US", name=None):
+            sub="Semiconductors", country="US", name=None, sector="Technology"):
     return IndexRow(
         ticker=ticker, yahoo_ticker=ticker.split(".")[0], name=name or ticker,
         exchange=ticker.split(".")[-1], market=ticker.split(".")[-1], country=country,
         currency=currency, primary_ticker=(primary if primary is not None else ticker),
-        isin=isin or "", sector="Technology", industry=sub, gics_industry=sub,
+        isin=isin or "", sector=sector, industry=sub, gics_industry=sub,
         gics_subindustry=sub, market_cap=(cap if cap is not None else cap_usd),
         market_cap_usd=cap_usd,
         market_cap_usd_source=("computed" if cap_usd is not None else "abstained"),
@@ -923,9 +925,11 @@ def test_the_peer_abstention_names_the_WIDEST_rung_it_tried_and_its_count():
     Entertainment" - 6,451 being the size of the whole eligible pool - directly under
     three rungs that had correctly reported 3, 5 and 9. The number a reader needs is how
     close the last and most generous attempt came."""
-    subject = _listed("NFLX.US", isin="US64110L1061", sub="Movies & Entertainment")
+    subject = _listed("NFLX.US", isin="US64110L1061", sub="Movies & Entertainment",
+                      sector="Communication Services")
     two_peers = [_listed(f"PEER{i}.US", isin=f"US555555550{i}",
-                         sub="Movies & Entertainment") for i in range(2)]
+                         sub="Movies & Entertainment", sector="Communication Services")
+                 for i in range(2)]
     crowd = [_listed(f"OTHER{i}.US", isin=f"US666666{i:04d}", sub="Semiconductors")
              for i in range(40)]
 
@@ -933,6 +937,8 @@ def test_the_peer_abstention_names_the_WIDEST_rung_it_tried_and_its_count():
 
     assert not group.available
     final = group.reasons[-1]
-    assert RUNG_INDUSTRY_WIDE in final, final
+    # the widest rung is now the SECTOR (step 4), and it found the same 2 - the crowd is a
+    # different sector, so it cannot be mistaken for a wider group of the same kind
+    assert RUNG_SECTOR in final, final
     assert "only 2 comparable companies" in final, final
     assert "42" not in final and "40" not in final      # not the size of the pool

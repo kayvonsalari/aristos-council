@@ -103,25 +103,40 @@ def write_summary(multi_result, *, runner=None, cohort_name: str = "",
     READER-5: only the FOUR withholding checks can fail, so only they can trigger that
     retry. A summary that is merely long, or that used a term without a gloss, publishes
     on the first call with the fault recorded in ``meta["notes"]``."""
-    from .reader_check import check_summary
-    from .reader_facts import build_facts_pack, facts_pack_json
+    from .reader_facts import build_facts_pack
 
     pack = build_facts_pack(multi_result, cohort_name=cohort_name,
                             cohort_thesis=cohort_thesis)
-    base_meta = {"prompt_version": PROMPT_VERSION,
+    return write_summary_from_pack(pack, runner=runner)
+
+
+def write_summary_from_pack(pack: dict, *, runner=None, prompt: Optional[str] = None,
+                            prompt_version: str = PROMPT_VERSION) -> ReaderResult:
+    """The writer loop over a READY facts pack: ask, check, retry once, publish or withhold.
+
+    Split out of ``write_summary`` (Company Report, Part B) so a second surface - one company
+    against its peer group - runs the SAME loop under the SAME READER-5 contract (four checks may
+    withhold: a number not in the pack, a company not in the pack, a test given the wrong role, a
+    named vote left unmentioned) with its own prompt and its own pack. ``prompt`` defaults to the
+    run summary's; nothing about a run summary changes."""
+    from .reader_check import check_summary
+    from .reader_facts import facts_pack_json
+
+    base_meta = {"prompt_version": prompt_version,
                  "model": getattr(runner, "model_id", None),
                  "temperature": getattr(runner, "temperature", None)}
 
     if runner is None:
         return ReaderResult(note=NO_RUNNER_NOTE, meta={**base_meta, "written": False})
 
+    system = prompt if prompt is not None else prompt_text()
     facts = facts_pack_json(pack)
     checks: list[str] = []
     summary = None
     check = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            summary = runner.invoke(prompt_text(), _user_message(facts, checks))
+            summary = runner.invoke(system, _user_message(facts, checks))
         except Exception as exc:                  # a model/transport failure is a NOTE
             return ReaderResult(
                 note=f"Summary not written: {type(exc).__name__}",

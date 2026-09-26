@@ -428,6 +428,15 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
     if missing_top:
         problems.append("top agreement not mentioned: " + ", ".join(missing_top))
 
+    # 4b. Company Report - a lens that rated the ONE company BUY is the strongest single fact its
+    # page produces, so it must be named. Only a company facts pack carries the key, so a run
+    # summary is checked exactly as before.
+    unnamed_votes = [label for label in
+                     ((pack or {}).get("agreement") or {}).get("buy_lenses_to_name") or []
+                     if label and label.lower() not in text.lower()]
+    if unnamed_votes:
+        problems.append("BUY vote not mentioned: " + ", ".join(unnamed_votes))
+
     # ------------------------------------------------------------------ ADVISE
     # Detected exactly as before; recorded, never enforced. Each of these withheld a live
     # summary that was otherwise true, which is what READER-5 exists to stop.

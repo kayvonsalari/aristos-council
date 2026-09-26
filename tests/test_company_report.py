@@ -1,0 +1,496 @@
+"""COMPANY REPORT (Part B + D) - one company against its peer group, on fabricated data.
+
+Nothing here reaches the network, the real market index or a model: the adapter is a fake that
+manufactures fundamentals from a ticker's number, the peer table is fabricated rows behind a tiny
+store, and the summary runner is injected (or asserted never to be touched).
+
+What is pinned: a fabricated peer table gives a deterministic vote; a lens that screens the company
+out does not vote; no peer group means no votes and a stated reason (the band and the readings
+survive); the summary is never called unless ticked; every export follows one page order; the run
+is saved with the peer snapshot and every lens's ranks; and the Run tab's own ranks are untouched.
+"""
+from __future__ import annotations
+
+import json
+from datetime import date
+from pathlib import Path
+
+import pytest
+
+from aristos_council.company_report import (SECTION_ORDER, LensVote, build_agreement,
+                                            company_facts_pack, format_company_report,
+                                            run_company_report)
+from aristos_council.data.adapter import (Fundamentals, MarketDataAdapter, PriceBar,
+                                          PriceHistory)
+from aristos_council.export.report_html import company_report_html
+from aristos_council.market_index import SOURCE_EODHD_LISTING, IndexRow
+
+STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
+UNIV_DIR = Path(__file__).resolve().parents[1] / "universes"
+RAW = "magic_formula_raw_v1"
+SCREENED = "magic_formula_v1"            # prefilters on min_roic 12%: a 6% company is screened OUT
+TODAY = date(2026, 6, 30)
+N_PEERS = 13
+
+
+def _number(ticker: str) -> int:
+    return 50 if ticker == "CO" else int(ticker[1:])
+
+
+class _Adapter(MarketDataAdapter):
+    """Fundamentals manufactured from the ticker: peers P00..P12 improve with their number, the
+    company CO sits in the middle on EBIT but earns only ~6% on its capital."""
+
+    name = "fake"
+
+    def __init__(self, company_ebit: float = 400.0):
+        self.company_ebit = company_ebit
+
+    def get_fundamentals(self, ticker):
+        n = _number(ticker)
+        ebit = self.company_ebit if ticker == "CO" else 500.0 + 100.0 * n
+        return Fundamentals(
+            ticker=ticker, name=f"{ticker} Corp", company_name=f"{ticker} Corp",
+            market_cap=2e10, sector="Technology", currency="USD", financial_currency="USD",
+            ebit=[ebit], pe_ratio=10.0 + n / 4.0,
+            operating_income=[ebit, ebit * 0.95, ebit * 0.9, ebit * 0.85],
+            tax_provision=[ebit * 0.2] * 4, pretax_income=[ebit * 0.97] * 4,
+            invested_capital=[5000.0] * 4, total_revenue=[900.0, 850, 800, 750],
+            total_debt=1_000.0, total_cash=400.0, operating_cash_flow=250.0)
+
+    def get_price_history(self, ticker, *, start, end):
+        slope = 0.05 + 0.01 * _number(ticker)
+        return PriceHistory(ticker=ticker, bars=[
+            PriceBar(day=date(2026, 1, 1), open=100, high=101, low=99,
+                     close=100 + slope * i, adj_close=100 + slope * i, volume=10)
+            for i in range(300)])
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return []
+
+
+def _row(ticker, code, *, name="", cap=2e10, sub="Semiconductors"):
+    return IndexRow(
+        ticker=ticker, yahoo_ticker=code, name=name or f"{code} Corp", exchange="US", market="US",
+        currency="USD", sector="Technology", industry="Semiconductors",
+        gics_sector="Information Technology", gics_industry="Semiconductors", gics_subindustry=sub,
+        market_cap=cap, market_cap_usd=cap, market_cap_usd_source="computed",
+        primary_ticker=ticker, isin=f"XX{abs(hash(ticker)) % 10**10:010d}", fetched_at="2026-09-26",
+        source=SOURCE_EODHD_LISTING)
+
+
+class _Store:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def load(self):
+        return list(self._rows)
+
+
+def _table(n_peers=N_PEERS):
+    return _Store([_row("CO.US", "CO", name="Company Co")]
+                  + [_row(f"P{i:02d}.US", f"P{i:02d}") for i in range(n_peers)])
+
+
+def _run(lens_ids, *, tmp_path, store=None, company_ebit=400.0, **kw):
+    kw.setdefault("with_valuation_band", True)
+    return run_company_report("CO", lens_ids, adapter=_Adapter(company_ebit),
+                              strategies_dir=STRAT_DIR,
+                              universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
+                              store=store or _table(), **kw)
+
+
+# =========================================================================== #
+# votes
+# =========================================================================== #
+def test_a_fabricated_peer_table_gives_a_deterministic_vote(tmp_path):
+    first = _run([RAW], tmp_path=tmp_path, save=False)
+    second = _run([RAW], tmp_path=tmp_path, save=False)
+    vote = first.votes[0]
+    assert vote.ranked and vote.strategy_id == RAW and vote.votes
+    assert vote.cohort_size == N_PEERS + 1                # the company and its 13 peers
+    assert [v.result() for v in first.votes] == [v.result() for v in second.votes]
+    assert vote.result() == f"{vote.word} - {vote.position}" + \
+        {1: "st", 2: "nd", 3: "rd"}.get(vote.position % 10 if not 10 <= vote.position % 100 <= 20
+                                        else 0, "th") + f" of {N_PEERS + 1}"
+    assert vote.word in ("BUY", "HOLD", "SELL")
+
+
+def test_the_lens_run_ranks_the_company_exactly_as_the_run_tab_ranks_that_list(tmp_path):
+    """Ranks and verdicts in the Run tab are byte-identical: the vote IS the company's row of a
+    plain ``run_rank_pipeline`` over [company + peers]."""
+    from aristos_council.pipeline import run_rank_pipeline
+    from aristos_council.rank_engine import cohort_positions
+
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    result = run_rank_pipeline(report.universe, RAW, ranker_only=True, adapter=_Adapter(),
+                               today=TODAY, strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR)
+    row = next(r for r in result.ranked if r.ticker == "CO")
+    assert report.votes[0].verdict == row.verdict
+    assert report.votes[0].position == cohort_positions(result.ranked)[row.ticker][0]
+
+
+def test_a_lens_that_screens_the_company_out_does_not_vote(tmp_path):
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    raw, screened = report.votes
+    assert raw.ranked and not screened.ranked
+    assert screened.status == "excluded"
+    assert screened.result().startswith("does not apply - ")
+    assert "return on invested capital" in screened.result()      # the screen's own reason
+    ag = report.agreement
+    assert ag.n_voting == 2 and len(ag.buy) + len(ag.hold) + len(ag.sell) == 1
+    assert [label for label, _ in ag.not_applicable] == [screened.label]
+    assert "(1 does not apply to this company)" in ag.headline
+
+
+def test_the_agreement_counts_equal_votes_and_a_check_marks_without_voting():
+    votes = [LensVote("a", "Alpha", status="ranked", verdict="buy", position=2, cohort_size=14),
+             LensVote("b", "Beta", status="ranked", verdict="hold", position=6, cohort_size=14),
+             LensVote("c", "Gamma", status="excluded", reason="size floor"),
+             LensVote("f", "Forensic", kind="check", status="ranked", verdict="sell", position=13,
+                      cohort_size=14)]
+    ag = build_agreement(votes, band_percentile=92.0, band_requested=True)
+    assert ag.n_voting == 3                                # the check is not a voter
+    assert ag.buy == ("Alpha",) and ag.hold == ("Beta",) and ag.sell == ()
+    assert ag.headline == "BUY on 1 of the 3 voting lenses (1 does not apply to this company)"
+    assert ag.checks == {"Forensic": "doubted"}
+    assert "doubted by Forensic" in ag.marks
+    assert any(m.startswith("priced high: 92nd percentile") for m in ag.marks)
+    row = ag.table_row("Company Co")
+    assert row["BUY votes"] == "1 of 3" and row["Voted BUY"] == "Alpha"
+    assert row["Checks"] == "Forensic: doubted"
+    # the band mark is a mark only when the band was asked for
+    assert not any("priced high" in m for m in
+                   build_agreement(votes, band_percentile=92.0, band_requested=False).marks)
+
+
+def test_a_check_lens_speaks_its_own_words_and_never_votes(tmp_path):
+    report = _run([RAW, "forensic_v1"], tmp_path=tmp_path, save=False)
+    forensic = report.votes[1]
+    assert not forensic.votes and forensic.role == "marks (does not vote)"
+    if forensic.ranked:
+        assert forensic.word in ("clean", "no concern", "doubted")
+    assert report.agreement.n_voting == 1 and "Forensic" in report.agreement.checks
+
+
+# =========================================================================== #
+# no peer group
+# =========================================================================== #
+def test_no_peer_group_gives_no_votes_and_a_reason_but_keeps_the_band_and_the_readings(tmp_path):
+    lonely = _Store([_row("CO.US", "CO", name="Company Co", sub="Space Tourism")])
+    lonely._rows[0].sector = "Space"
+    lonely._rows[0].gics_sector = "Space"
+    lonely._rows[0].industry = "Space Tourism"
+    lonely._rows[0].gics_industry = "Space Tourism"
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, store=lonely, save=False)
+    assert report.peer_group is not None and not report.peer_group.available
+    assert report.no_vote_reason.startswith("no peer group, so no lens can vote")
+    assert all(v.status == "no_group" and not v.ranked for v in report.votes)
+    assert report.universe == []                             # nothing was ranked
+    text = format_company_report(report)
+    assert "No vote:" in text or "no peer group" in text
+    assert "VALUATION BAND" in text and "ABSOLUTE READINGS" in text
+    assert report.check.debt_and_cash is not None            # the readings survive
+    assert report.check.valuation_band != "—"                # ...and so does the band
+
+
+def test_a_company_missing_from_the_index_says_so_and_still_reports_its_readings(tmp_path):
+    report = _run([RAW], tmp_path=tmp_path, store=_Store([_row("P00.US", "P00")]), save=False)
+    assert not report.peer_group.available
+    assert "not in the market index" in report.no_vote_reason
+    assert report.check.debt_and_cash is not None
+
+
+def test_step_four_peers_are_ranked_like_any_other_and_the_page_says_it_is_broad(tmp_path):
+    """A company whose industry is thin gets its sector; the votes are measured against that wider
+    group and the report names it as such."""
+    rows = [_row("CO.US", "CO", name="Company Co", sub="Only One Of Its Kind")]
+    rows[0].industry = rows[0].gics_industry = "Only One Industry"
+    rows += [_row(f"P{i:02d}.US", f"P{i:02d}", sub=f"Sub {i}") for i in range(N_PEERS)]
+    for r in rows[1:]:
+        r.industry, r.gics_industry = f"Industry {r.ticker}", f"GICS Industry {r.ticker}"
+    report = _run([RAW], tmp_path=tmp_path, store=_Store(rows), save=False)
+    assert report.peer_group.step == 4 and report.peer_group.broad
+    assert report.votes[0].ranked
+    assert "broad sector group - wider than a normal peer group" in format_company_report(report)
+
+
+# =========================================================================== #
+# the summary: opt-in, one call, never unless ticked
+# =========================================================================== #
+class _ExplodingRunner:
+    model_id, temperature = "boom", 0.0
+
+    def invoke(self, system, user):                        # pragma: no cover - must never run
+        raise AssertionError("a model was called although the summary was not ticked")
+
+
+def test_the_summary_is_never_called_unless_ticked(tmp_path, monkeypatch):
+    import aristos_council.company_report as cr
+
+    def _boom(*a, **k):                                     # pragma: no cover - must never run
+        raise AssertionError("write_company_summary ran although the summary was not ticked")
+    monkeypatch.setattr(cr, "write_company_summary", _boom)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-would-bill-if-used")
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, reader_runner=_ExplodingRunner(),
+                  save=False)                                # with_summary defaults to False
+    assert report.summary is None
+    assert "SUMMARY" not in format_company_report(report).split("AGREEMENT")[0]
+    assert "<h2>Summary</h2>" not in company_report_html(report)
+
+
+def test_without_a_key_a_ticked_summary_says_so_and_calls_nothing(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    report = _run([RAW], tmp_path=tmp_path, with_summary=True, save=False)
+    assert not report.summary.available
+    assert "no API key" in report.summary.note
+    assert "no API key" in format_company_report(report)
+
+
+class _Writer:
+    """A stand-in for the reader model: returns a fixed five-field summary, counts its calls."""
+
+    model_id, temperature = "fake-reader", 0.0
+
+    def __init__(self, fields):
+        self.fields, self.calls = fields, 0
+
+    def invoke(self, system, user):
+        from aristos_council.agents.schemas import ReaderSummary
+        self.calls += 1
+        return ReaderSummary(**self.fields)
+
+
+def _fields(report, extra=""):
+    ag = report.agreement
+    buy = ", ".join(ag.buy) or "no test"
+    return dict(
+        asked=f"This checks Company Co against {N_PEERS} similar companies under {len(report.votes)} tests.",
+        happened=f"It was rated BUY by {buy}. {ag.headline}.{extra}",
+        survived="Analysts are holding their profit forecasts steady.",
+        doubt="One test may not apply.", cannot_say="This says nothing about the future.")
+
+
+def test_a_ticked_summary_makes_one_call_and_is_published_when_it_passes(tmp_path):
+    probe = _run([RAW], tmp_path=tmp_path, save=False)
+    writer = _Writer(_fields(probe))
+    report = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=writer, save=False)
+    assert writer.calls == 1
+    assert report.summary.available, report.summary.note
+    text = format_company_report(report)
+    assert text.index("SUMMARY") < text.index("AGREEMENT")   # the summary leads the page
+    assert "Company Co" in text
+
+
+def test_the_reader_withholds_a_number_that_is_not_on_the_page(tmp_path):
+    probe = _run([RAW], tmp_path=tmp_path, save=False)
+    writer = _Writer(_fields(probe, extra=" Its profit grew 777 percent."))
+    report = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=writer, save=False)
+    assert not report.summary.available
+    assert "number not in the facts: 777" in report.summary.note
+    assert writer.calls == 2                                  # one corrective retry, as the run summary
+
+
+def test_the_reader_withholds_a_company_that_is_not_on_the_page(tmp_path):
+    probe = _run([RAW], tmp_path=tmp_path, save=False)
+    writer = _Writer(_fields(probe, extra=" Compare ACME."))
+    report = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=writer, save=False)
+    assert not report.summary.available and "name not in the run: ACME" in report.summary.note
+
+
+def test_the_reader_withholds_a_lens_given_the_wrong_role(tmp_path):
+    probe = _run([RAW, "forensic_v1"], tmp_path=tmp_path, save=False)
+    fields = _fields(probe)
+    fields["happened"] += " Forensic is a picker and counts as a vote."
+    writer = _Writer(fields)
+    report = _run([RAW, "forensic_v1"], tmp_path=tmp_path, with_summary=True,
+                  reader_runner=writer, save=False)
+    assert not report.summary.available and "role mismatch" in report.summary.note
+
+
+def test_the_reader_withholds_a_buy_vote_it_leaves_unmentioned(tmp_path):
+    probe = _run([RAW], tmp_path=tmp_path, save=False, company_ebit=6000.0)
+    assert probe.agreement.buy == (probe.votes[0].label,), "the strong company must be rated BUY"
+    fields = _fields(probe)
+    for key in ("asked", "happened", "survived", "doubt", "cannot_say"):
+        fields[key] = fields[key].replace(probe.agreement.buy[0], "one test")
+    report = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(fields),
+                  save=False, company_ebit=6000.0)
+    assert not report.summary.available and "BUY vote not mentioned" in report.summary.note
+
+
+def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    pack = company_facts_pack(report)
+    assert set(pack) == {"company", "lenses", "agreement", "valuation_band", "absolute_readings",
+                         "analyst_forecasts"}
+    assert pack["company"]["peer_group"]["step"] == 1
+    assert [l["votes"] for l in pack["lenses"]] == [True, True]
+    assert pack["agreement"]["buy_lenses_to_name"] == list(report.agreement.buy)
+    assert pack["absolute_readings"]["debt_and_cash"] == report.check.debt_and_cash.lines()
+
+
+# =========================================================================== #
+# page order, exports, the saved run
+# =========================================================================== #
+_TEXT_HEADS = {"summary": "SUMMARY", "agreement": "AGREEMENT", "lens votes": "LENS VOTES",
+               "peers": "PEERS", "valuation band": "VALUATION BAND",
+               "absolute readings": "ABSOLUTE READINGS", "analyst forecasts": "ANALYST FORECASTS",
+               "sources": "SOURCES"}
+_HTML_HEADS = {"summary": "<h2>Summary</h2>", "agreement": "<h2>Agreement</h2>",
+               "lens votes": "<h2>Lens votes</h2>", "peers": "<h2>Peers</h2>",
+               "valuation band": "<h2>Valuation band</h2>",
+               "absolute readings": "<h2>Absolute readings</h2>",
+               "analyst forecasts": "<h2>Analyst forecasts</h2>", "sources": "<h2>Sources</h2>"}
+
+
+def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
+    probe = _run([RAW], tmp_path=tmp_path, save=False)
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, with_summary=True,
+                  reader_runner=_Writer(_fields(probe)), save=False)
+    assert SECTION_ORDER == ("summary", "agreement", "lens votes", "peers", "valuation band",
+                             "absolute readings", "analyst forecasts", "sources")
+    text, html = format_company_report(report), company_report_html(report)
+    for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
+        at = [doc.index(heads[name]) for name in SECTION_ORDER]
+        assert at == sorted(at), (heads, at)
+
+
+def test_an_unticked_summary_leaves_no_section_and_the_order_holds(tmp_path):
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    text, html = format_company_report(report), company_report_html(report)
+    order = [n for n in SECTION_ORDER if n != "summary"]
+    assert "SUMMARY" not in text and "<h2>Summary</h2>" not in html
+    for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
+        at = [doc.index(heads[name]) for name in order]
+        assert at == sorted(at)
+
+
+def test_an_unticked_band_says_so_in_both_exports_and_is_not_fetched(tmp_path):
+    report = _run([RAW], tmp_path=tmp_path, with_valuation_band=False, save=False)
+    assert report.check.valuation_band == "—"
+    assert "not requested" in format_company_report(report)
+    assert "not requested" in company_report_html(report)
+    assert report.check.band_percentile is None
+    assert not any("priced high" in m for m in report.agreement.marks)
+
+
+def test_the_run_is_saved_under_runs_with_the_peer_snapshot_and_every_lens_ranks(tmp_path):
+    report = _run([RAW, SCREENED], tmp_path=tmp_path)          # save=True (the default)
+    directory = Path(report.saved_to)
+    assert directory.parent == tmp_path / "runs" and "_company_check_CO" in directory.name
+    record = json.loads((directory / "report.json").read_text(encoding="utf-8"))
+    assert record["kind"] == "company_report" and record["ticker"] == "CO"
+    assert record["peer_snapshot"]["subject"] == "CO.US"
+    assert len(record["peer_snapshot"]["members"]) == N_PEERS and record["peer_snapshot"]["step"] == 1
+    assert set(record["lens_ranks"]) == {RAW, SCREENED}
+    ranked = record["lens_ranks"][RAW]["ranked"]
+    assert len(ranked) == N_PEERS + 1                          # the WHOLE list, peers included
+    assert {"ticker", "position", "verdict", "combined_rank"} <= set(ranked[0])
+    assert any(e["ticker"] == "CO" for e in record["lens_ranks"][SCREENED]["excluded"])
+    assert record["votes"][1]["status"] == "excluded" and record["agreement"]["headline"]
+    saved_text = (directory / "report.txt").read_text(encoding="utf-8")
+    tail = "Ran in"                       # the saved file predates the "saved under" clause
+    assert saved_text.split(tail)[0] == format_company_report(report).split(tail)[0]
+    # the frozen-run reader must never mistake it for a replayable run
+    assert not (directory / "manifest.json").exists()
+
+
+def test_a_saved_company_report_is_not_picked_up_as_a_reference_run(tmp_path):
+    from aristos_council.company_check import _latest_reference_run
+    _run([RAW], tmp_path=tmp_path)
+    assert _latest_reference_run(tmp_path / "runs", RAW, []) is None
+
+
+def test_the_report_states_its_time_and_the_day_cache(tmp_path):
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    assert report.seconds >= 0 and "Ran in" in format_company_report(report)
+
+
+def test_an_unrateable_company_stops_at_the_reason(tmp_path):
+    class _Dead(_Adapter):
+        def get_fundamentals(self, ticker):
+            return Fundamentals(ticker=ticker) if ticker == "CO" else super().get_fundamentals(ticker)
+
+        def get_price_history(self, ticker, *, start, end):
+            if ticker == "CO":
+                raise RuntimeError("no timezone found, symbol may be delisted")
+            return super().get_price_history(ticker, start=start, end=end)
+    report = run_company_report("CO", [RAW], adapter=_Dead(), strategies_dir=STRAT_DIR,
+                                universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
+                                store=_table(), save=False)
+    assert report.unrateable and report.votes == [] or all(not v.ranked for v in report.votes)
+    text = format_company_report(report)
+    assert "UNRATEABLE" in text and "AGREEMENT" not in text
+    assert "UNRATEABLE" in company_report_html(report)
+
+
+def test_no_lens_ticked_says_so_and_still_reports_the_readings(tmp_path):
+    report = _run([], tmp_path=tmp_path, save=False)
+    assert report.votes == [] and report.agreement is None
+    assert report.no_vote_reason == "No lens is ticked, so there is nothing to vote."
+    assert report.check.debt_and_cash is not None
+
+
+def test_importing_the_report_reaches_no_model_library():
+    """In a subprocess, because by the time the rest of the suite has run langchain is in
+    sys.modules for honest reasons and an in-process check would pass regardless."""
+    import subprocess
+    import sys
+    code = ("import sys; import aristos_council.company_report; "
+            "bad = sorted(m for m in sys.modules if m.split('.')[0] in "
+            "('langchain', 'langchain_core', 'langchain_anthropic', 'anthropic', 'langgraph')); "
+            "print(bad)")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                         cwd=str(Path(__file__).resolve().parents[1]))
+    assert out.stdout.strip() == "[]", out.stdout + out.stderr
+
+
+# =========================================================================== #
+# the page renders the report (Streamlit AppTest, fabricated report, no network)
+# =========================================================================== #
+def _page():                                            # pragma: no cover - runs inside AppTest
+    import streamlit as st
+
+    import app
+    app._render_company_report(st.session_state["_report"])
+
+
+def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tmp_path):
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+
+    probe = _run([RAW], tmp_path=tmp_path, save=False)
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False, with_summary=True,
+                  reader_runner=_Writer(_fields(probe)))
+    at = AppTest.from_function(_page, default_timeout=60)
+    at.session_state["_report"] = report
+    at.run()
+    assert not at.exception
+    heads = [str(getattr(h, "value", "")) for h in at.subheader]
+    assert heads[:4] == ["Summary", "Agreement", "Lens votes", "Peers"], heads
+    assert heads[-3:] == ["Absolute readings", "Analyst forecasts", "Sources"], heads
+    assert "Valuation band" in heads
+    frames = [df.value for df in at.dataframe]
+    assert any("BUY votes" in list(f.columns) for f in frames)            # the agreement row
+    assert any("Result" in list(f.columns) for f in frames)               # the vote table
+    votes = next(f for f in frames if "Result" in list(f.columns))
+    assert any(str(r).startswith("does not apply - ") for r in votes["Result"])
+    assert any("Market cap (USD)" in list(f.columns) for f in frames)     # the numeric peers table
+    # the page carries no Streamlit-side model call: the summary came from the injected writer
+    assert report.summary.available
+
+
+def test_the_page_says_so_when_there_is_no_peer_group(tmp_path):
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+
+    report = _run([RAW], tmp_path=tmp_path, store=_Store([_row("P00.US", "P00")]), save=False)
+    at = AppTest.from_function(_page, default_timeout=60)
+    at.session_state["_report"] = report
+    at.run()
+    assert not at.exception
+    blob = " ".join(str(getattr(i, "value", "")) for i in at.info)
+    assert "No vote:" in blob and "no peer group" in blob
+    heads = [str(getattr(h, "value", "")) for h in at.subheader]
+    assert "Valuation band" in heads and "Absolute readings" in heads      # they survive

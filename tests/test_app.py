@@ -376,12 +376,10 @@ class _LensGrid:
     the picker OFFER" still have a real question, so this stands in for it — ``.options``
     is every lens offered, in offer order, which is exactly what the dropdown's was."""
 
-    def __init__(self, at):
-        cc = next((s for s in at.selectbox
-                   if str(s.label).startswith("Strategy (lens screen")), None)
-        offered = set(cc.options) if cc is not None else None
-        self._boxes = [c for c in at.checkbox
-                       if offered is None or str(c.label) in offered]
+    def __init__(self, at, prefix: str = "uni_lens_"):
+        # Company Check offers the SAME lenses through the SAME component under its own keys
+        # (``cc_lens_``); the Run tab's boxes are the ``uni_lens_`` ones. Two tabs, one component.
+        self._boxes = [c for c in at.checkbox if str(getattr(c, "key", "") or "").startswith(prefix)]
         self.options = [str(c.label) for c in self._boxes]
 
     @property
@@ -399,8 +397,9 @@ def _lens_checkbox(at, needle):
     """One "Also grade with" lens checkbox, by its exact label or a fragment of it (exact
     wins, so "Growth" never resolves to "Growth ETFs (US)"). The whole set is visible at
     once — that is the point of the checkbox group replacing the multiselect."""
-    return (next((c for c in at.checkbox if str(c.label) == needle), None)
-            or next(c for c in at.checkbox if needle in str(c.label)))
+    run_tab = [c for c in at.checkbox if str(getattr(c, "key", "") or "").startswith("uni_lens_")]
+    return (next((c for c in run_tab if str(c.label) == needle), None)
+            or next(c for c in run_tab if needle in str(c.label)))
 
 
 def _lens_checkbox_labels(at):
@@ -601,7 +600,7 @@ def test_both_strategy_pickers_list_the_live_strategies():
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
     rank = _strategy_picker(at).options
-    cc = _dropdown(at, "Strategy (lens screen + factors)").options
+    cc = _LensGrid(at, "cc_lens_").options       # Company Check: the SAME component, its own keys
     assert list(rank) == list(cc)                                    # one picker, one set
     for opts in (rank, cc):
         assert "Growth" in opts                                      # plain names now
@@ -617,49 +616,39 @@ def test_both_strategy_pickers_list_the_live_strategies():
     # the drift the ONE picker module exists to prevent.
     _etfs_mode(at)
     rank = _strategy_picker(at).options
-    cc = _dropdown(at, "Strategy (lens screen + factors)").options
+    cc = _LensGrid(at, "cc_lens_").options
     assert list(rank) == list(cc)
     assert len(rank) == 3 and all("ETF" in o for o in rank)
 
 
-def test_the_same_lists_are_offered_in_both_selectors():
-    # UNI-1 ITEM 1's contract survives the cohort deletion: BOTH the Run tab's List
-    # selector and the Company Check reference selector discover from universes/ through
-    # the same role-derived visible_universes, so they offer the same lists (each with its
-    # own extra entry — "New list" / "(none …)").
+def test_company_check_has_no_strategy_dropdown_and_no_reference_universe_picker():
+    """Company Report (Part B): the single Strategy dropdown and the Reference universe picker are
+    replaced by the lens tick boxes - the SAME component the Run tab uses - because a company is
+    now measured against its own peer group under every ticked lens, not against a list somebody
+    had to choose. The valuation band and the summary are their own tick boxes."""
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    uni = _dropdown(at, "List").options                              # Run tab
-    ref = _dropdown(at, "Reference universe (for factor context)").options  # Company Check
-    def _names(opts):
-        return {o.lstrip("⭐ ").split(" · ")[0] for o in opts
-                if o != "New list" and not o.startswith("(none")}
-    assert _names(uni) == _names(ref)
-    # the never-graded trap bench stays backstage in both (default toggle off) — and it is
-    # a fixture now, so it is not in universes/ at all
-    assert not any("Validation Bench" in o for o in uni)
-    assert not any("Validation Bench" in o for o in ref)
+    labels = {str(s.label) for s in at.selectbox}
+    assert "Strategy (lens screen + factors)" not in labels
+    assert "Reference universe (for factor context)" not in labels
+    cc_boxes = _LensGrid(at, "cc_lens_")
+    assert cc_boxes.options and len(cc_boxes.ticked) == 1            # one pre-ticked, like the Run tab
+    ticks = {str(c.label) for c in at.checkbox}
+    assert "Plain-English summary" in ticks                          # the Run tab's and the page's
+    band = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_valuation_band")
+    summary = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary")
+    assert band.value is True and summary.value is False             # the summary is OFF by default
+    assert any(b.label.startswith("▶ Run company check (free — no LLM)") for b in at.button)
 
 
-def test_suggested_universe_renders_first_in_the_reference_selector():
-    # UNI-1 ITEM 2 survives FUND-UI-2 where it still means something: Company Check's
-    # REFERENCE cohort is a manifest picked for factor context, so the selected strategy's
-    # suggested cohort still heads it with the ⭐ marker, every other cohort selectable
-    # below (a hierarchy, never a lock). The Run tab's List selector is no longer a
-    # manifest picker — it is your saved lists — so it carries no suggestion ordering.
+def test_ticking_the_summary_says_the_run_calls_a_model_once():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary").set_value(True).run()
     assert not at.exception
-    _etfs_mode(at)                             # ASSET-MODE-1: the ETF lens is behind it
-    cc_dd = _dropdown(at, "Strategy (lens screen + factors)")
-    etf = next(o for o in cc_dd.options if "ETF Index Tracker" in o)
-    cc_dd.set_value(etf).run()
-    assert not at.exception
-    ref = _dropdown(at, "Reference universe (for factor context)").options
-    assert ref[0] == "⭐ ETF Index Tracker — UCITS · 5 names"        # suggested group first
-    assert not any(o.startswith("⭐") for o in ref[1:])             # only the suggested one
-    assert any(o.startswith("Dividend ETFs (US) ·") for o in ref)   # cross-lens selectable
+    assert any(b.label.startswith("▶ Run company check + summary (one model call)")
+               for b in at.button)
 
 
 def test_the_run_tab_list_selector_offers_no_suggestion_ordering():
@@ -1003,9 +992,10 @@ def test_editing_a_shipped_list_forks_and_never_writes_back_to_the_manifest():
 
 
 def test_saved_local_universe_appears_in_both_selectors():
-    # UNIED-1 Item 3: a saved local list is discovered front-stage (default toggle off) in
-    # BOTH the Run tab's List selector and the Company Check reference selector, tagged
-    # "(local)". Written into the real (gitignored) universes/local/ then removed.
+    # UNIED-1 Item 3: a saved local list is discovered front-stage (default toggle off) in the
+    # Run tab's List selector, tagged "(local)". (Company Check no longer has a reference
+    # selector: a company is measured against its own peer group.) Written into the real
+    # (gitignored) universes/local/ then removed.
     from streamlit.testing.v1 import AppTest
     local_dir = app.UNIVERSES_DIR / "local"
     local_dir.mkdir(parents=True, exist_ok=True)
@@ -1018,9 +1008,7 @@ def test_saved_local_universe_appears_in_both_selectors():
         at = AppTest.from_file(str(_APP), default_timeout=60).run()
         assert not at.exception
         uni = _dropdown(at, "List").options
-        ref = _dropdown(at, "Reference universe (for factor context)").options
         assert any("Apptest Local (local)" in o for o in uni)
-        assert any("Apptest Local (local)" in o for o in ref)
     finally:
         f.unlink(missing_ok=True)
 

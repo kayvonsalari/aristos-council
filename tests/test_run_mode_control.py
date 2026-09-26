@@ -127,12 +127,23 @@ def _run_tab(*, extra_lens: str | None = None, timeout: int = 90):
     return at
 
 
+class _Offered:
+    """The lenses the Run tab offers, as its tick boxes. (This helper used to read them off Company
+    Check's Strategy dropdown, which the Company Report replaced with the same tick boxes.)"""
+
+    def __init__(self, at):
+        self.options = [str(c.label) for c in at.checkbox
+                        if str(getattr(c, "key", "") or "").startswith("uni_lens_")]
+
+
 def _strategy_picker(at):
-    return next(s for s in at.selectbox if "strateg" in str(s.label).lower())
+    return _Offered(at)
 
 
 def _lens_checkbox(at, label: str):
-    return next(c for c in at.checkbox if str(c.label) == label)
+    # the RUN tab's box: Company Check offers the same lenses under its own keys (``cc_lens_``)
+    return next(c for c in at.checkbox if str(c.label) == label
+                and str(getattr(c, "key", "") or "").startswith("uni_lens_"))
 
 
 def _run_mode_widget(at):

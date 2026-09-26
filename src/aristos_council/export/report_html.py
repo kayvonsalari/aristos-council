@@ -1599,12 +1599,86 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
     return _document(title=title, body="\n".join(parts))
 
 
-def _company_readings_html(result) -> str:
-    """Absolute readings (debt and cash, growth record, analyst forecasts) - the same sentences the
-    page and the text export print, from the same objects."""
+_JOIN = "\n"
+
+
+def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
+    """The Company Report as ONE self-contained HTML file, in the page order: summary (if asked
+    for), agreement headline and table, each lens's vote, peers, valuation band, absolute readings,
+    analyst forecasts, Sources. The same objects the text export prints, so the two cannot drift."""
+    from ..company_check import company_sources
+    from ..company_report import (BAND_NOT_REQUESTED, HOUSE_LINE, NO_LENS_REASON,
+                                  agreement_table_lines)
+
+    c = report.check
+    stamp = _local_stamp(run_start)
+    parts = ['<header class="doc"><p class="kicker">Aristos Council · company report · one '
+             "company against its peer group</p>"
+             f"<h1>{_esc(report.display)}</h1>"
+             + _kv([("lenses", ", ".join(f"<code>{_esc(i)}</code>" for i in report.lens_ids)),
+                    ("run", _esc(stamp))])
+             + f'<p class="house">{_esc(HOUSE_LINE)}</p></header>']
+    if report.unrateable:
+        parts.append(_callout(f"UNRATEABLE — {c.data_integrity.note}. No data, so no votes and no "
+                              "readings.", kind="alert"))
+        parts.append(_footer())
+        return _document(title=f"Company Report — {report.display}", body=_JOIN.join(parts))
+
+    if report.summary is not None:
+        parts.append(_reader_section(report.summary))
+
+    parts.append('<section class="section"><h2>Agreement</h2>')
+    if report.agreement is not None:
+        row = report.agreement.table_row(report.display)
+        parts.append(f"<p><strong>{_esc(report.agreement.headline)}</strong></p>"
+                     + _table(list(row), [[_esc(str(v)) for v in row.values()]]))
+    else:
+        parts.append(f'<p class="note">No vote: {_esc(report.no_vote_reason)}</p>')
+    parts.append("</section>")
+
+    parts.append('<section class="section"><h2>Lens votes</h2>')
+    if report.votes:
+        body = [[_esc(v.label), _esc(v.role), _esc(v.result()), _esc(v.asks)]
+                for v in report.votes]
+        parts.append(_table(["Lens", "Role", "Result", "What it asks"], body))
+    else:
+        parts.append(f'<p class="note">{_esc(report.no_vote_reason or NO_LENS_REASON)}</p>')
+    parts.append("</section>")
+
+    parts.append(_company_peers_html(c))
+
+    parts.append('<section class="section"><h2>Valuation band</h2>'
+                 '<p class="note">This company against its own history; a mark, never a veto.</p>'
+                 f"<p>{_esc(c.valuation_band if report.with_valuation_band else BAND_NOT_REQUESTED)}"
+                 "</p></section>")
+    parts.append(_absolute_readings_html(c, with_analyst=False)
+                 or '<section class="section"><h2>Absolute readings</h2>'
+                    '<p class="note">none available</p></section>')
+    parts.append(_analyst_forecasts_html(c)
+                 or '<section class="section"><h2>Analyst forecasts</h2>'
+                    '<p class="note">not available</p></section>')
+    sources = company_sources(c)
+    if sources:
+        parts.append('<section class="section"><h2>Sources</h2>'
+                     + _bullets(f"<strong>{_esc(s.topic)}:</strong> {_esc(s.text)}"
+                                for s in sources) + "</section>")
+    tail = f"Ran in {report.seconds:.1f}s"
+    if report.cache.get("hits") is not None:
+        tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"
+    parts.append(f'<p class="note">{_esc(tail)}</p>')
+    parts.append(_footer())
+    return _document(title=f"Company Report — {report.display}" + (f" — {stamp}" if stamp else ""),
+                     body=_JOIN.join(parts))
+
+
+def _absolute_readings_html(result, *, with_analyst: bool = True) -> str:
+    """Absolute readings (debt and cash, growth record, and - unless ``with_analyst`` is False -
+    analyst forecasts) - the same sentences the page and the text export print, from the same
+    objects."""
     from ..company_check import mixed_source_marker
 
-    debt, growth, trend = result.debt_and_cash, result.growth_record, result.analyst_trend
+    debt, growth = result.debt_and_cash, result.growth_record
+    trend = result.analyst_trend if with_analyst else None
     if debt is None and growth is None and trend is None:
         return ""
     out = ['<section class="section"><h2>Absolute readings</h2>'
@@ -1622,6 +1696,25 @@ def _company_readings_html(result) -> str:
                    f"<p><strong>{_esc(trend.headline)}</strong></p>" + _analyst_table_html(trend))
     out.append("</section>")
     return "".join(out)
+
+
+def _company_readings_html(result) -> str:
+    """The single-lens check's block: debt, growth and analyst forecasts under one heading."""
+    return _absolute_readings_html(result, with_analyst=True)
+
+
+def _analyst_forecasts_html(result) -> str:
+    """The Company Report's own section, after the absolute readings."""
+    from ..company_check import mixed_source_marker
+
+    trend = result.analyst_trend
+    if trend is None:
+        return ""
+    return ('<section class="section"><h2>Analyst forecasts</h2>'
+            f'<p class="note">A mark: it does not vote and changes no verdict'
+            f'{_esc(mixed_source_marker(result, trend.source))}.</p>'
+            f"<p><strong>{_esc(trend.headline)}</strong></p>" + _analyst_table_html(trend)
+            + "</section>")
 
 
 def _analyst_table_html(trend) -> str:

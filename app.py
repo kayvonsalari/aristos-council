@@ -1191,6 +1191,33 @@ def lens_checkbox_key(strategy_id: str) -> str:
     return f"uni_lens_{strategy_id}"
 
 
+def cc_lens_checkbox_key(strategy_id: str) -> str:
+    """The Company Check tab's own key for the same box. Two tabs render on every run, and two
+    widgets with one key is a Streamlit error, so the component takes its keys from the caller."""
+    return f"cc_lens_{strategy_id}"
+
+
+def render_lens_checkboxes(choices, key_for) -> list[tuple[str, bool]]:
+    """THE lens tick boxes (SHORTLIST-3 / CAPTION-2): same list, same order, same VISIBLE caption
+    under each lens, in up to three contiguous columns. The Run tab and Company Check both call
+    this, so a change to how lenses are offered lands on both at once. ``key_for`` maps a strategy
+    id to its session key. Returns ``[(label, ticked), ...]`` for ``selected_labels``."""
+    extras: list[tuple[str, bool]] = []
+    if not choices:
+        return extras
+    n_cols = min(3, len(choices))
+    per_col = -(-len(choices) // n_cols)             # ceil: contiguous, offer-ordered
+    for i, col in enumerate(st.columns(n_cols)):
+        with col:
+            for c in choices[i * per_col:(i + 1) * per_col]:
+                extras.append((c.label, st.checkbox(c.label, key=key_for(c.id))))
+                # CAPTION-2: a VISIBLE caption, not a hover tooltip — a reader comparing five
+                # checkboxes cannot hover five things at once.
+                if lens_caption(c.strategy):
+                    st.caption(lens_caption(c.strategy))
+    return extras
+
+
 # --------------------------------------------------------------------------- #
 # RUN MODE (RUNMODE-1) — ONE control for what used to be two
 # --------------------------------------------------------------------------- #
@@ -2887,7 +2914,8 @@ def _render_universe_result(result) -> None:
 
 
 
-def _preselect_default_lens(choices) -> None:
+def _preselect_default_lens(choices, *, seeded_key: str = "uni_lenses_seeded",
+                            key_for=None) -> None:
     """Tick the suggested-first lens ONCE per session (SHORTLIST-3).
 
     With the primary dropdown gone, nothing would be selected on a fresh start and the Run
@@ -2895,11 +2923,11 @@ def _preselect_default_lens(choices) -> None:
     lens ``default_index`` already nominated is pre-ticked, exactly once: the flag is what
     makes unticking it stick, instead of the box re-ticking itself on every rerun.
     """
-    if st.session_state.get("uni_lenses_seeded") or not choices:
+    if st.session_state.get(seeded_key) or not choices:
         return
-    st.session_state["uni_lenses_seeded"] = True
+    st.session_state[seeded_key] = True
     chosen = choices[default_index(choices)]
-    st.session_state.setdefault(lens_checkbox_key(chosen.id), True)
+    st.session_state.setdefault((key_for or lens_checkbox_key)(chosen.id), True)
 
 
 def render_universe_tab(show_validation: bool = False) -> None:
@@ -2950,19 +2978,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
     st.markdown("**Lenses**")
     st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
     _preselect_default_lens(choices)
-    extras: list[tuple[str, bool]] = []
-    if choices:
-        n_cols = min(3, len(choices))
-        per_col = -(-len(choices) // n_cols)             # ceil: contiguous, offer-ordered
-        for i, col in enumerate(st.columns(n_cols)):
-            with col:
-                for c in choices[i * per_col:(i + 1) * per_col]:
-                    extras.append((c.label,
-                                   st.checkbox(c.label, key=lens_checkbox_key(c.id))))
-                    # CAPTION-2: a VISIBLE caption, not a hover tooltip — a reader
-                    # comparing five checkboxes cannot hover five things at once.
-                    if lens_caption(c.strategy):
-                        st.caption(lens_caption(c.strategy))
+    extras = render_lens_checkboxes(choices, lens_checkbox_key)
     # VALBAND-1: the valuation-band toggle rides WITH the extra-lens group but is NOT a
     # lens — extra lenses GRADE (add a verdict column), the band CONTEXTUALIZES (adds an
     # absolute percentile column, re-grades nothing). Default OFF: unticked -> no band
@@ -3487,9 +3503,6 @@ def render_scoreboard_tab() -> None:
                    "`examples/score_snapshot.py` (the prospective scoreboard).")
 
 
-_CC_STATUS_HEX = {"PASS": "#2E7D32", "FAIL": "#B23B3B", "NOT-EVALUATED": "#B8860B"}
-
-
 def _company_check_adapter():
     """A cached yfinance adapter for the single-name fetch (free — no keys, no LLM)."""
     from datetime import date as _date
@@ -3501,24 +3514,23 @@ def _company_check_adapter():
 
 
 def render_company_check_tab(show_validation: bool = False) -> None:
-    """Single-name diagnostic — 'why isn't X on the list?'. NO verdict is ever shown
-    (a rank over one name is fabricated); this reports the screen, the gates, factor
-    values with NAMED-cohort context, and the price-divergence flag."""
-    from aristos_council.company_check import run_company_check
-    from aristos_council.universe import list_universes
+    """Company Check (Company Report, Part B): ONE company against its own peer group. Tick the
+    lenses (the same component and list as the Run tab, several at once), tick the valuation band,
+    optionally tick the plain-English summary, run. Each ticked lens ranks the company among its
+    peers exactly as a Run-tab run ranks a list; the company's vote is its verdict in that run.
+    The math judges; the only thing that can call a model is the summary, and only when ticked."""
+    import os
 
-    st.subheader("Company Check — single-name diagnostic")
-    st.caption("Why isn't a name on the list? Every screen criterion with values, each "
-               "factor vs a named reference cohort, and the price-divergence flag. "
-               "**No verdict** — a verdict is a cohort statement (a universe run).")
+    from aristos_council.company_report import run_company_report
 
-    # The SAME picker the Run tab uses (FUND-UI-2, strategy/picker.py). Before this,
-    # Company Check re-implemented the filter, the ordering and the default inline — which
-    # is why STRAT-PICKER-1's fix landed on one surface only.
+    st.subheader("Company Check — one company against its peers")
+    st.caption("Every ticked lens ranks the company among its peer group and gives one vote of "
+               "equal weight; a check lens marks and does not vote. **The math judges — the "
+               "model only writes, and only if you tick the summary.**")
+
+    # The SAME picker and switch the Run tab uses (FUND-UI-2, strategy/picker.py, ASSET-MODE-1).
     choices = strategy_choices([o[2] for o in list_rank_strategy_options(STRATEGIES_DIR)],
                                show_validation=show_validation)
-    # ASSET-MODE-1: the same switch, on the same picker — the CHECK itself is untouched,
-    # only which lenses it is offered against.
     choices = [c for c in choices if _mode_filters()[0](c.strategy)]
     if not choices:
         st.error(f"No {asset_mode()} strategies found under {STRATEGIES_DIR}")
@@ -3527,76 +3539,62 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
                                             placeholder="MU"))
 
-    # Strategy — defaults to the flagship when it is offered. The dropdown shows the
-    # friendly display_name; the id is a small caption.
-    labels = choice_labels(choices)
-    choice = st.selectbox("Strategy (lens screen + factors)", labels,
-                          index=default_index(choices), key="cc_strategy")
-    rank_strategy = resolve(choices, choice) or choices[0].strategy
-    st.caption(f"`{rank_strategy.id}`")                  # the stable record key
-    if strategy_role(rank_strategy):
-        st.caption(f"↳ {strategy_role(rank_strategy)}")
+    st.markdown("**Lenses**")
+    st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
+    _preselect_default_lens(choices, seeded_key="cc_lenses_seeded", key_for=cc_lens_checkbox_key)
+    extras = render_lens_checkboxes(choices, cc_lens_checkbox_key)
+    strategies = resolve_all(choices, selected_labels(extras=extras))
+    for strategy in strategies:
+        bits = f"`{strategy.id}`"                          # the stable record key
+        if strategy_role(strategy):
+            bits += f" · {strategy_role(strategy)}"
+        st.caption(bits)
 
-    # Reference universe — manifests only (context comes from a persisted run; never a
-    # fresh universe fetch). A 'None' option runs raw values with no cohort position.
-    manifests = visible_universes(list_universes(UNIVERSES_DIR),
-                                  show_validation=show_validation)
-    # ASSET-MODE-1: the reference cohort starts new analysis too, so it follows the switch
-    # like every other picker. It also keeps the UNI-1 contract that this selector and the
-    # Run tab's List offer the same set — they would otherwise disagree in Stocks mode.
-    manifests = [u for u in manifests if _mode_filters()[1](u)]
-    NONE = "(none — raw values, no cohort context)"
-    # UNI-1 ITEM 2: the selected strategy's SUGGESTED universes render first here too
-    # (same helper the Run tab used for its manifest dropdown — no drift). This is a
-    # reference cohort for factor CONTEXT, not a run input, so it stays a manifest picker.
-    # Absent field -> unchanged.
-    suggested, others = suggested_first(
-        manifests, getattr(rank_strategy, "suggested_universes", []))
-    ref_ordered = suggested + others
-    ref_labels = ([f"⭐ {universe_label(u)} · {len(u.tickers)} names" for u in suggested]
-                  + [f"{universe_label(u)} · {len(u.tickers)} names" for u in others]
-                  + [NONE])
-    ref_choice = st.selectbox("Reference universe (for factor context)", ref_labels,
-                              key="cc_reference")
-    if suggested:
-        st.caption("⭐ = suggested for this strategy · every universe stays selectable")
-    reference = None if ref_choice == NONE else ref_ordered[ref_labels.index(ref_choice)]
-    reference_id = "" if reference is None else reference.id
-    if reference is not None:
-        st.caption(f"`{reference.id}`")                  # the stable record key
-        if universe_role(reference):
-            st.caption(f"↳ {universe_role(reference)}")
+    with_band = st.checkbox(
+        "Valuation band (context — no verdict)", value=True, key="cc_valuation_band",
+        help="Where today's valuation sits in this company's OWN 5-year EV/EBIT (or P/E) range — "
+             "15th percentile = historically cheap, 92nd = near its own peak. It marks; it never "
+             "vetoes and never grades. Ticking it fetches the company's 5-year price history.")
+    with_summary = st.checkbox(
+        "Plain-English summary", value=False, key="cc_summary",
+        help="One short note at the top, written from the tables below; every number in it is "
+             "checked back against them, and a summary that fails is withheld with its reason. "
+             "It explains; it never recommends. This is the only thing on this page that calls a "
+             "model — one call — and it is off unless you tick it.")
+    has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    if with_summary and not has_key:
+        st.info("The summary needs ANTHROPIC_API_KEY in the environment or `.env`; without it the "
+                "page runs without a summary and says so.")
 
-    run = st.button("▶ Run company check (free — no LLM)", type="primary",
-                    disabled=not ticker, key="cc_run")
+    run = st.button(
+        "▶ Run company check (free — no LLM)" if not with_summary
+        else "▶ Run company check + summary (one model call)",
+        type="primary", disabled=not ticker, key="cc_run")
     if run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
+        status = st.status("Starting…", expanded=True)
         try:
-            with st.spinner(f"Diagnosing {ticker}…"):
-                adapter = _company_check_adapter()
-                result = run_company_check(
-                    ticker, rank_strategy.id, reference_id, adapter=adapter,
-                    strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                    runs_dir=ROOT / "runs", with_analyst_trend=True)
+            report = run_company_report(
+                ticker, [s_.id for s_ in strategies], adapter=_company_check_adapter(),
+                strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
+                runs_dir=ROOT / "runs", with_valuation_band=with_band,
+                with_summary=with_summary, progress=lambda msg: status.update(label=msg))
         except Exception as exc:
+            status.update(label="Run failed", state="error")
             st.exception(exc)
-            st.session_state.pop("cc_result", None)
+            st.session_state.pop("cc_report", None)
         else:
-            from aristos_council.company_check import attach_peers
-            attach_peers(result)                     # the group is computed ONCE, held on the result
-            st.session_state["cc_result"] = result
+            status.update(label="Done.", state="complete")
+            st.session_state["cc_report"] = report
             st.session_state["cc_run_start"] = run_start
-            # The friendly name for the HTML export's header (the result carries only the
-            # id). Display-only; absent -> the export falls back to the id (never invents).
-            st.session_state["cc_strategy_name"] = strategy_label(rank_strategy)
 
-    result = st.session_state.get("cc_result")
-    if result is not None:
+    report = st.session_state.get("cc_report")
+    if report is not None:
         st.divider()
-        _render_company_check(result)
+        _render_company_report(report)
 
 
-def _render_absolute_readings(result) -> None:
+def _render_absolute_readings(result, *, with_analyst: bool = True) -> None:
     """ABS-READINGS-1 — what the accounts say, with no comparison group involved.
 
     Beside the valuation band and the Forensic marks because they answer the same kind of
@@ -3605,7 +3603,7 @@ def _render_absolute_readings(result) -> None:
     from aristos_council.company_check import mixed_source_marker
 
     debt, growth = result.debt_and_cash, result.growth_record
-    trend = getattr(result, "analyst_trend", None)
+    trend = getattr(result, "analyst_trend", None) if with_analyst else None
     if debt is None and growth is None and trend is None:
         return
     st.subheader("Absolute readings")
@@ -3626,15 +3624,34 @@ def _render_absolute_readings(result) -> None:
         # abstention is shown with its reason rather than left as an absent section.
         st.markdown("**Analyst forecast direction**"
                     + mixed_source_marker(result, trend.source))
-        st.markdown(f"**{trend.headline}**")
-        if trend.rows:
-            import pandas as pd
-            from aristos_council.abs_readings import TABLE_COLUMNS
-            st.dataframe(pd.DataFrame(
-                [{"": row.label, **dict(zip(TABLE_COLUMNS, row.cells()))} for row in trend.rows]),
-                hide_index=True, width="stretch")
-            if trend.currency_note():
-                st.caption(trend.currency_note())
+        _render_analyst_table(trend)
+
+
+def _render_analyst_table(trend) -> None:
+    """The analyst headline sentence and its This year / Next year table."""
+    st.markdown(f"**{trend.headline}**")
+    if trend.rows:
+        import pandas as pd
+        from aristos_council.abs_readings import TABLE_COLUMNS
+        st.dataframe(pd.DataFrame(
+            [{"": row.label, **dict(zip(TABLE_COLUMNS, row.cells()))} for row in trend.rows]),
+            hide_index=True, width="stretch")
+        if trend.currency_note():
+            st.caption(trend.currency_note())
+
+
+def _render_analyst_forecasts(result) -> None:
+    """The Company Report's own section, after the absolute readings."""
+    from aristos_council.company_check import mixed_source_marker
+
+    trend = getattr(result, "analyst_trend", None)
+    st.subheader("Analyst forecasts")
+    if trend is None:
+        st.caption("Not available.")
+        return
+    st.caption("A mark: it does not vote and changes no verdict."
+               + mixed_source_marker(result, trend.source))
+    _render_analyst_table(trend)
 
 
 def _render_peers(result) -> None:
@@ -3674,6 +3691,85 @@ def _render_peers(result) -> None:
         st.caption(f"· {reason}")
 
 
+def _render_company_report(report) -> None:
+    """The Company Report page, in the ONE order every surface uses: summary (if asked for) →
+    agreement headline and table → each lens's vote → peers → valuation band → absolute readings →
+    analyst forecasts → Sources. The text and HTML exports follow the same order."""
+    import pandas as pd
+
+    from aristos_council.company_report import (BAND_NOT_REQUESTED, HOUSE_LINE, NO_LENS_REASON,
+                                                format_company_report)
+    from aristos_council.export.report_html import company_report_html
+
+    check = report.check
+    st.markdown(f"### Company Report — {report.display}")
+    st.caption(HOUSE_LINE)
+    if report.unrateable:
+        st.warning(f"⚪ **UNRATEABLE** — {check.data_integrity.note}. No data, so no votes and no "
+                   "readings.")
+        return
+
+    if report.summary is not None:                       # only when it was ticked
+        from aristos_council.reader import (READER_SECTION_NOTE, READER_SECTION_TITLE,
+                                            reader_paragraphs)
+        st.subheader(READER_SECTION_TITLE)
+        if report.summary.available:
+            for lead, text in reader_paragraphs(report.summary.summary):
+                st.markdown(f"**{lead}** {text}")
+            st.caption(READER_SECTION_NOTE)
+        else:
+            st.info(report.summary.note)
+
+    st.subheader("Agreement")
+    if report.agreement is not None:
+        st.markdown(f"**{report.agreement.headline}**")
+        st.dataframe(pd.DataFrame([report.agreement.table_row(report.display)]),
+                     hide_index=True, width="stretch")
+    else:
+        st.info(f"No vote: {report.no_vote_reason}")
+
+    st.subheader("Lens votes")
+    if report.votes:
+        st.dataframe(pd.DataFrame([{"Lens": v.label, "Role": v.role, "Result": v.result(),
+                                    "What it asks": v.asks} for v in report.votes]),
+                     hide_index=True, width="stretch")
+    else:
+        st.info(report.no_vote_reason or NO_LENS_REASON)
+
+    _render_peers(check)
+
+    st.subheader("Valuation band")
+    st.caption("This company against its own history; a mark, never a veto.")
+    st.write(check.valuation_band if report.with_valuation_band else BAND_NOT_REQUESTED)
+
+    _render_absolute_readings(check, with_analyst=False)
+    _render_analyst_forecasts(check)
+    _render_sources(check)
+
+    # Two exports side by side (REPORT-HTML-1): the text is canonical, the HTML the shareable copy.
+    from aristos_council.download_names import (company_check_download_name,
+                                                company_check_html_download_name)
+
+    run_start = st.session_state.get("cc_run_start") or datetime.now(timezone.utc)
+    txt_name = company_check_download_name(report.ticker, "company_report", run_start)
+    html_name = company_check_html_download_name(report.ticker, "company_report", run_start)
+    col_txt, col_html = st.columns(2)
+    with col_txt:
+        st.download_button(f"⬇ Download report as text — {txt_name}",
+                           data=format_company_report(report), file_name=txt_name,
+                           mime="text/plain", key="cc_report_download")
+    with col_html:
+        st.download_button(f"⬇ Download report (HTML) — {html_name}",
+                           data=company_report_html(report, run_start=run_start),
+                           file_name=html_name, mime="text/html", key="cc_report_download_html")
+    tail = f"Ran in {report.seconds:.1f}s"
+    if report.cache.get("hits") is not None:
+        tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"
+    if report.saved_to:
+        tail += f"; saved under `{report.saved_to}`"
+    st.caption(tail)
+
+
 def _render_sources(result) -> None:
     """ONE Sources block at the bottom (batch 8): every provider the page drew on with its as-of
     date, and the correction files used. Nothing above it names a provider."""
@@ -3685,149 +3781,6 @@ def _render_sources(result) -> None:
     st.subheader("Sources")
     for s in sources:
         st.markdown(f"- **{s.topic}:** {s.text}")
-
-
-def _render_company_check(result) -> None:
-    from aristos_council.company_check import format_company_check
-
-    st.markdown(f"### Company Check — {result.display}")
-    st.caption("Single-name diagnostic · **NO VERDICT** — verdicts are cohort "
-               "statements (see `docs/SCOREBOARD.md`).")
-    st.caption(f"strategy: `{result.rank_strategy_id}` · lens screen: "
-               f"`{result.screen_strategy_id or 'none'}` · reference: "
-               f"`{result.reference_universe_id or '—'}`")
-
-    if result.unrateable:
-        st.warning(f"⚪ **UNRATEABLE** — {result.data_integrity.note}. No data, so no "
-                   "diagnosis and no verdict.")
-        st.info(result.pointer)
-        return
-
-    import pandas as pd
-
-    # SCREEN — a screen-less strategy (CCFIX-2) screens nothing; say so rather than
-    # diagnosing against a default lens.
-    if result.screen_less:
-        st.subheader("Screen — none")
-        st.info("**No lens screen** — this strategy screens nothing; quality enters via "
-                "ranking only. Gates below still apply.")
-    else:
-        st.subheader("Screen — all criteria evaluated for diagnosis")
-        st.caption("A universe run excludes on the FIRST confirmed fail; here every "
-                   "criterion is evaluated so the whole picture is visible.")
-        srows = [{"Criterion": c.name, "Observed": _cc_num(c.observed),
-                  "Threshold": _cc_num(c.threshold), "Status": c.status,
-                  "Gating": "gating" if c.gating else "non-gating",
-                  "Basis": c.basis or "", "Borderline": "●" if c.borderline else ""}
-                 for c in result.screen]
-        if srows:
-            sdf = pd.DataFrame(srows)
-            styler = sdf.style.map(
-                lambda v: f"color: {_CC_STATUS_HEX.get(v, '')}; font-weight: 700",
-                subset=["Status"])
-            st.dataframe(styler, hide_index=True, width="stretch")
-        # A must-fail with no observed value (e.g. PEG growth <= 0) shows its REASON,
-        # not a bare "—" (CCFIX-3).
-        for c in result.screen:
-            if c.status == "FAIL" and c.observed is None:
-                st.caption(f"↳ **{c.name}**: {c.note or 'fails closed by design'}")
-        if result.market_cap_in_gates:
-            st.caption("`min_market_cap` — same floor as the universe gate; shown once, "
-                       "under **Gates** below.")
-
-    if result.gates:
-        st.subheader("Gates — sector / cap / payout")
-        gdf = pd.DataFrame([{"Gate": g.name, "Status": g.status, "Detail": g.detail}
-                            for g in result.gates])
-        styler = gdf.style.map(
-            lambda v: f"color: {_CC_STATUS_HEX.get(v, '')}; font-weight: 700",
-            subset=["Status"])
-        st.dataframe(styler, hide_index=True, width="stretch")
-        for g in result.gates:                          # strategy-configured rationale (ITEM 2)
-            if g.rationale:
-                st.caption(f"↳ **{g.name}**: {g.rationale}")
-
-    # FACTORS + cohort context.
-    st.subheader("Factor values + cohort context")
-    if result.reference_available:
-        st.caption(f"Position vs the latest persisted run of "
-                   f"`{result.reference_universe_id}` (run {result.reference_run_date}, "
-                   f"{result.reference_cohort_n} ranked) — replayed offline, no fresh "
-                   "fetch.")
-    else:
-        st.caption("No reference run available — showing raw values. Run that list "
-                   "once (the Run tab) to get cohort context.")
-    from aristos_council.company_check import factor_source_display, format_factor_value
-
-    for fc in result.factors:
-        st.markdown(f"- **{fc.label}** (`{fc.factor}`): "
-                    f"{format_factor_value(fc.factor, fc.value)} "
-                    f"_[{factor_source_display(fc.source)}]_ — {fc.context}")
-
-    _render_absolute_readings(result)
-    _render_peers(result)
-
-    # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen reference run when the
-    # checked name had a recorded outcome; Company Check never issues one itself.
-    if result.verdict_of_record:
-        st.markdown(f"**VERDICT OF RECORD:** {result.verdict_of_record}")
-
-    # Divergence flag — prominent.
-    if result.divergence_flag:
-        st.warning(f"**Price/fundamentals divergence** — {result.divergence_flag}")
-
-    # Data integrity footer.
-    di = result.data_integrity
-    with st.expander("Data integrity"):
-        st.markdown(f"- fundamentals: **{'ok' if di.fundamentals_ok else 'MISSING'}** · "
-                    f"price: **{'ok' if di.price_ok else 'MISSING'}**")
-        if di.abstained_criteria:
-            st.markdown("- criteria not evaluated (abstained): "
-                        + ", ".join(di.abstained_criteria))
-        if di.not_evaluated_factors:
-            st.markdown("- factors not evaluated: "
-                        + ", ".join(di.not_evaluated_factors))
-        for flag in di.implausible:                          # VERIFY-2 ITEM 4
-            st.markdown(f"- ⚠ {flag}")
-
-    st.info(result.pointer)
-    _render_sources(result)
-    # Unique, self-describing filenames: ticker + strategy + run-start (ITEM 6). A
-    # single-name file ALWAYS carries the ticker. Two exports side by side
-    # (REPORT-HTML-1): the text report stays canonical, the HTML is the shareable copy.
-    from aristos_council.download_names import (
-        company_check_download_name, company_check_html_download_name)
-    from aristos_council.export.report_html import company_check_html
-
-    cc_run_start = st.session_state.get("cc_run_start") or datetime.now(timezone.utc)
-    cc_txt_name = company_check_download_name(result.ticker, result.rank_strategy_id,
-                                               cc_run_start)
-    cc_html_name = company_check_html_download_name(
-        result.ticker, result.rank_strategy_id, cc_run_start)
-    dl_txt, dl_html = st.columns(2)
-    with dl_txt:
-        st.download_button(
-            f"⬇ Download check as text — {cc_txt_name}",
-            data=format_company_check(result), file_name=cc_txt_name,
-            mime="text/plain", key="cc_download")
-    with dl_html:
-        st.download_button(
-            f"⬇ Download report (HTML) — {cc_html_name}",
-            data=company_check_html(
-                result, run_start=cc_run_start,
-                strategy_display_name=st.session_state.get("cc_strategy_name", "")),
-            file_name=cc_html_name,
-            mime="text/html", key="cc_download_html")
-    st.caption("Text is the canonical record. The HTML is one self-contained file (no "
-               "external requests) for sharing outside the repo — Print → PDF for paper.")
-
-
-def _cc_num(v) -> str:
-    if v is None:
-        return "—"
-    if isinstance(v, float) and (abs(v) >= 1e6 or (v != 0 and abs(v) < 1e-3)):
-        return f"{v:,.0f}"
-    return f"{v:.4g}" if isinstance(v, float) else str(v)
 
 
 # --------------------------------------------------------------------------- #
