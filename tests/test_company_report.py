@@ -138,9 +138,9 @@ def test_a_lens_that_screens_the_company_out_does_not_vote(tmp_path):
     assert screened.result().startswith("does not apply - ")
     assert "return on invested capital" in screened.result()      # the screen's own reason
     ag = report.agreement
-    assert ag.n_voting == 2 and len(ag.buy) + len(ag.hold) + len(ag.sell) == 1
+    assert ag.n_ticked == 2 and ag.n_voted == 1 and ag.n_not_applying == 1
     assert [label for label, _ in ag.not_applicable] == [screened.label]
-    assert "(1 does not apply to this company)" in ag.headline
+    assert ag.headline.endswith("; 1 lens did not apply to this company")
 
 
 def test_the_agreement_counts_equal_votes_and_a_check_marks_without_voting():
@@ -150,14 +150,14 @@ def test_the_agreement_counts_equal_votes_and_a_check_marks_without_voting():
              LensVote("f", "Forensic", kind="check", status="ranked", verdict="sell", position=13,
                       cohort_size=14)]
     ag = build_agreement(votes, band_percentile=92.0, band_requested=True)
-    assert ag.n_voting == 3                                # the check is not a voter
+    assert ag.n_ticked == 3 and ag.n_voted == 2            # the check is not a voter
     assert ag.buy == ("Alpha",) and ag.hold == ("Beta",) and ag.sell == ()
-    assert ag.headline == "BUY on 1 of the 3 voting lenses (1 does not apply to this company)"
+    assert ag.headline == "BUY on 1 of 2 votes; 1 lens did not apply to this company"
     assert ag.checks == {"Forensic": "doubted"}
     assert "doubted by Forensic" in ag.marks
     assert any(m.startswith("priced high: 92nd percentile") for m in ag.marks)
     row = ag.table_row("Company Co")
-    assert row["BUY votes"] == "1 of 3" and row["Voted BUY"] == "Alpha"
+    assert row["BUY votes"] == "1 of 2" and row["Voted BUY"] == "Alpha"
     assert row["Checks"] == "Forensic: doubted"
     # the band mark is a mark only when the band was asked for
     assert not any("priced high" in m for m in
@@ -170,7 +170,7 @@ def test_a_check_lens_speaks_its_own_words_and_never_votes(tmp_path):
     assert not forensic.votes and forensic.role == "marks (does not vote)"
     if forensic.ranked:
         assert forensic.word in ("clean", "no concern", "doubted")
-    assert report.agreement.n_voting == 1 and "Forensic" in report.agreement.checks
+    assert report.agreement.n_ticked == 1 and "Forensic" in report.agreement.checks
 
 
 # =========================================================================== #
@@ -494,3 +494,78 @@ def test_the_page_says_so_when_there_is_no_peer_group(tmp_path):
     assert "No vote:" in blob and "no peer group" in blob
     heads = [str(getattr(h, "value", "")) for h in at.subheader]
     assert "Valuation band" in heads and "Absolute readings" in heads      # they survive
+
+
+# =========================================================================== #
+# AGREEMENT-COUNT-1 - the denominator is the lenses that VOTED
+# =========================================================================== #
+def _ranked(label, verdict, position=14, of=14, **kw):
+    return LensVote(label.lower(), label, status="ranked", verdict=verdict, position=position,
+                    cohort_size=of, **kw)
+
+
+def _not_applying(label):
+    return LensVote(label.lower(), label, status="excluded",
+                    reason="return on invested capital 10.5%; the rule requires at least 12%.")
+
+
+def test_one_vote_and_two_lenses_that_did_not_apply_is_0_of_1_not_0_of_3():
+    """AZN.L: Magic Formula RAW SELL 14th of 14; Value + Momentum and Growth both 'does not apply'.
+    It printed 'BUY on 0 of the 3 voting lenses (2 do not apply)' and the summary said 'three voting
+    tests' and 'three tests ran' before listing four."""
+    forensic = LensVote("f", "Forensic", kind="check", status="ranked", verdict="buy", position=3,
+                        cohort_size=14)
+    ag = build_agreement([_ranked("Magic Formula RAW", "sell"), _not_applying("Value + Momentum"),
+                          _not_applying("Growth"), forensic])
+    assert (ag.n_ticked, ag.n_voted, ag.n_not_applying, ag.n_checks) == (3, 1, 2, 1)
+    assert ag.headline == "BUY on 0 of 1 vote; 2 lenses did not apply to this company"
+    assert ag.table_row("AstraZeneca PLC (AZN.L)")["BUY votes"] == "0 of 1"
+    assert ag.sell == ("Magic Formula RAW",)
+
+
+def test_no_lens_voted_is_said_in_words_never_0_of_0():
+    ag = build_agreement([_not_applying("Value + Momentum"), _not_applying("Growth")])
+    assert ag.n_voted == 0 and ag.n_not_applying == 2
+    assert ag.headline == "No lens voted: every ticked lens's rules exclude this company"
+    assert "0 of 0" not in ag.headline
+    assert ag.table_row("Company Co")["BUY votes"] == "no vote"
+
+
+def test_three_votes_is_x_of_3_and_nothing_is_said_about_lenses_that_did_not_apply():
+    ag = build_agreement([_ranked("Alpha", "buy", 2), _ranked("Beta", "buy", 3),
+                          _ranked("Gamma", "hold", 8)])
+    assert ag.n_voted == 3 and ag.n_not_applying == 0
+    assert ag.headline == "BUY on 2 of 3 votes"
+    assert ag.table_row("Company Co")["BUY votes"] == "2 of 3"
+    one = build_agreement([_ranked("Alpha", "buy", 2)])
+    assert one.headline == "BUY on 1 of 1 vote"
+
+
+def test_the_facts_pack_carries_voted_did_not_apply_and_check_counts_separately(tmp_path):
+    report = _run([RAW, SCREENED, "forensic_v1"], tmp_path=tmp_path, save=False)
+    say = company_facts_pack(report)["agreement"]
+    assert say["lenses_that_voted"] == 1 and say["lenses_that_did_not_apply"] == 1
+    assert say["check_lenses_that_do_not_vote"] == 1
+    assert "voting_lenses" not in say                       # the ambiguous lump is gone
+    assert say["headline"] == report.agreement.headline
+    assert [l["applies"] for l in company_facts_pack(report)["lenses"]] == [True, False, True]
+
+
+def test_the_run_tab_table_counts_only_the_lenses_that_voted_on_that_name():
+    """The same defect lived in the Run tab's agreement table: 'BUY votes: 2 of 3' where the third
+    lens had not ranked the name at all. The denominator is now the lenses that voted on THAT name."""
+    from aristos_council.pipeline import LensAgreement, LensAgreementRow, lens_agreement_table
+
+    row = LensAgreementRow(ticker="X", display="X Corp", buy_lenses=("Alpha", "Beta"),
+                           hold_lenses=(), sell_lenses=(),
+                           not_ranked=(("Gamma", "return on invested capital 4%"),))
+    ag = LensAgreement(voting_ids=["a", "b", "c"], voting_labels={"a": "Alpha", "b": "Beta",
+                                                                   "c": "Gamma"},
+                       check_ids=[], check_labels={}, rows=[row])
+    _cols, rows = lens_agreement_table(ag)
+    assert rows[0]["BUY votes"] == "2 of 2: Alpha, Beta (1 did not apply)"
+    full = LensAgreementRow(ticker="Y", display="Y Corp", buy_lenses=("Alpha",),
+                            hold_lenses=("Beta",), sell_lenses=("Gamma",))
+    assert lens_agreement_table(LensAgreement(
+        voting_ids=["a", "b", "c"], voting_labels={}, check_ids=[], check_labels={},
+        rows=[full]))[1][0]["BUY votes"] == "1 of 3: Alpha"

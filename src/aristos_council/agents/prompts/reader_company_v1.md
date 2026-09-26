@@ -61,6 +61,12 @@ check's own** — "rated BUY" — and are always allowed.
 **The agreement, in plain words.** `agreement.headline` says how many of the voting tests rated
 the company BUY. Say it as a person would, and say which tests, by name.
 
+**Count the tests by the pack's three separate counts** — `lenses_that_voted`,
+`lenses_that_did_not_apply` and `check_lenses_that_do_not_vote`. A test that did not apply did
+not vote: never count it among the voters ("BUY on 0 of 1 vote; 2 tests did not apply"), and
+the number of tests that ran is the three counts added together, so never say "three tests ran"
+and then name four.
+
 **A mark is a caution, never a rejection.** `agreement.marks` may hold `doubted by <test>` (a
 check found something) or `priced high: Nth percentile of its own 5-year range` (it costs far
 more than usual for the profit it makes, compared with its own last five years). Say them

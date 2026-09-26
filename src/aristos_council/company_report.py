@@ -104,9 +104,14 @@ class LensVote:
 
 @dataclass(frozen=True)
 class CompanyAgreement:
-    """The equal-vote agreement for ONE company (SHORTLIST-3's rule, read off its own votes)."""
+    """The equal-vote agreement for ONE company (SHORTLIST-3's rule, read off its own votes).
 
-    n_voting: int
+    AGREEMENT-COUNT-1: the denominator is the lenses that actually VOTED - ranked the company. A lens
+    whose rules exclude it did not vote and is counted apart (``not_applicable``), and a check lens
+    (Forensic) never votes at all (``checks``). Counting a lens that did not apply as a voter is how
+    AZN.L read "BUY on 0 of the 3 voting lenses" when one lens had voted."""
+
+    n_ticked: int                     # voting lenses ticked (they voted, or did not apply)
     buy: tuple = ()                   # voting lens labels that rated the company BUY
     hold: tuple = ()
     sell: tuple = ()
@@ -119,26 +124,40 @@ class CompanyAgreement:
         return len(self.buy)
 
     @property
+    def n_voted(self) -> int:
+        """Lenses that actually voted: ranked the company BUY, HOLD or SELL."""
+        return len(self.buy) + len(self.hold) + len(self.sell)
+
+    @property
+    def n_not_applying(self) -> int:
+        return len(self.not_applicable)
+
+    @property
+    def n_checks(self) -> int:
+        """Check lenses ticked: they mark, they never vote."""
+        return len(self.checks)
+
+    def _did_not_apply(self) -> str:
+        k = self.n_not_applying
+        return f"{k} {'lens' if k == 1 else 'lenses'} did not apply to this company"
+
+    @property
     def headline(self) -> str:
-        if not self.n_voting:
+        """"BUY on 0 of 1 vote; 2 lenses did not apply to this company", or - when nothing voted -
+        "No lens voted: every ticked lens's rules exclude this company". Never "0 of 0"."""
+        if not self.n_ticked:
             return ("No voting lens is ticked - every lens here is a check, and a check marks "
                     "rather than votes.")
-        plural = "lens" if self.n_voting == 1 else "lenses"
-        applied = len(self.buy) + len(self.hold) + len(self.sell)
-        if not applied:
-            return (f"None of the {self.n_voting} voting {plural} applies to this company, so "
-                    f"there is no vote.")
-        head = f"BUY on {self.buy_votes} of the {self.n_voting} voting {plural}"
-        if self.not_applicable:
-            k = len(self.not_applicable)
-            head += f" ({k} {'does' if k == 1 else 'do'} not apply to this company)"
-        return head
+        if not self.n_voted:
+            return "No lens voted: every ticked lens's rules exclude this company"
+        head = f"BUY on {self.buy_votes} of {self.n_voted} vote{'' if self.n_voted == 1 else 's'}"
+        return f"{head}; {self._did_not_apply()}" if self.n_not_applying else head
 
     def table_row(self, display: str) -> dict:
         """The one row of the agreement table, the Run tab's columns for a single company."""
         checks = "; ".join(f"{label}: {word}" for label, word in self.checks.items()) or "none ticked"
         return {"Company": display,
-                "BUY votes": f"{self.buy_votes} of {self.n_voting}" if self.n_voting else "-",
+                "BUY votes": (f"{self.buy_votes} of {self.n_voted}" if self.n_voted else "no vote"),
                 "Voted BUY": ", ".join(self.buy) or "none",
                 "Checks": checks,
                 "Marks": "; ".join(self.marks) or "none"}
@@ -164,7 +183,7 @@ def build_agreement(votes: list[LensVote], *, band_percentile: Optional[float] =
     marks.append(band_mark(band_percentile) if band_requested else "")
     marks += [f"{v.label}: {v.factor_note.strip(' ·')}" for v in votes if v.ranked and v.factor_note]
     return CompanyAgreement(
-        n_voting=len(voting),
+        n_ticked=len(voting),
         buy=tuple(v.label for v in ranked if v.verdict == "buy"),
         hold=tuple(v.label for v in ranked if v.verdict == "hold"),
         sell=tuple(v.label for v in ranked if v.verdict == "sell"),
@@ -551,7 +570,11 @@ def company_facts_pack(report: CompanyReport) -> dict:
                         {"sentence": report.no_vote_reason or "no peer group"})},
         "lenses": lenses,
         "agreement": ({
-            "available": True, "headline": ag.headline, "voting_lenses": ag.n_voting,
+            "available": True, "headline": ag.headline,
+            # AGREEMENT-COUNT-1: three separate counts, never one "voting lenses" that lumps a lens
+            # that did not apply in with the ones that voted
+            "lenses_that_voted": ag.n_voted, "lenses_that_did_not_apply": ag.n_not_applying,
+            "check_lenses_that_do_not_vote": ag.n_checks,
             "buy_votes": ag.buy_votes, "buy_lenses": list(ag.buy), "hold_lenses": list(ag.hold),
             "sell_lenses": list(ag.sell),
             "does_not_apply": [f"{label} ({why})" for label, why in ag.not_applicable],

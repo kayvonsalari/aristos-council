@@ -3524,6 +3524,13 @@ class LensAgreementRow:
         return len(self.buy_lenses)
 
     @property
+    def voted(self) -> int:
+        """Voting lenses that actually voted on THIS name (BUY, HOLD or SELL). A lens that did not
+        rank it (its rules excluded it, or no data) is in ``not_ranked`` and is not a voter -
+        AGREEMENT-COUNT-1: the table's denominator is this, not the number of lenses ticked."""
+        return len(self.buy_lenses) + len(self.hold_lenses) + len(self.sell_lenses)
+
+    @property
     def sell_votes(self) -> int:
         return len(self.sell_lenses)
 
@@ -3839,9 +3846,10 @@ def lens_agreement_table(ag) -> tuple:
             "Name": r.display,
             # The COUNT and WHO. A bare "2 of 3" makes a reader go and look; naming the
             # lenses is the difference between a score and a reading.
-            "BUY votes": (f"{r.buy_votes} of {ag.n_voting}: " + ", ".join(r.buy_lenses)
+            "BUY votes": (f"{r.buy_votes} of {r.voted}: " + ", ".join(r.buy_lenses)
+                          + (f" ({len(r.not_ranked)} did not apply)" if r.not_ranked else "")
                           if r.buy_votes else "—"),
-            "SELL votes": (f"{r.sell_votes} of {ag.n_voting}: " + ", ".join(r.sell_lenses)
+            "SELL votes": (f"{r.sell_votes} of {r.voted}: " + ", ".join(r.sell_lenses)
                            if r.sell_votes else "—"),
         }
         for sid in ag.check_ids:
