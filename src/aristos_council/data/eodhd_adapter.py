@@ -43,6 +43,7 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import replace
 from datetime import date, datetime
 
 from .adapter import (
@@ -164,7 +165,96 @@ def _annual_series(yearly: object, key: str) -> list[float]:
     return out
 
 
-def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
+def _dated_series(yearly: object, key: str) -> tuple[list[float], list[str]]:
+    """``(values, period-end dates)`` of one statement line, NEWEST-FIRST and index-parallel: the
+    same cells ``_annual_series`` keeps, with the fiscal-period date each came from (the yearly dict's
+    own key - never guessed)."""
+    if not isinstance(yearly, dict):
+        return [], []
+    values: list[float] = []
+    dates: list[str] = []
+    for period in sorted(yearly.keys(), reverse=True):
+        row = yearly.get(period) or {}
+        v = _coerce_float(row.get(key)) if isinstance(row, dict) else None
+        if v is not None:
+            values.append(v)
+            dates.append(str(period)[:10])
+    return values, dates
+
+
+# (Fundamentals field, statement, EODHD key) for every positional annual list a lens can read. The
+# first six are mapped by ``fundamentals_from_payload`` always; the rest only with ``with_periods``.
+_PERIOD_LISTS = (
+    ("total_revenue", "income", "totalRevenue"),
+    ("operating_income", "income", "operatingIncome"),
+    ("ebit", "income", "ebit"),
+    ("tax_provision", "income", "incomeTaxExpense"),
+    ("pretax_income", "income", "incomeBeforeTax"),
+    ("net_income", "income", "netIncome"),
+    ("gross_profit_annual", "income", "grossProfit"),
+    ("invested_capital", "balance", "netInvestedCapital"),
+    ("retained_earnings_annual", "balance", "retainedEarnings"),
+    ("total_liabilities_annual", "balance", "totalLiab"),
+    ("total_assets_annual", "balance", "totalAssets"),
+    ("long_term_debt_annual", "balance", "longTermDebt"),
+    ("current_assets_annual", "balance", "totalCurrentAssets"),
+    ("current_liabilities_annual", "balance", "totalCurrentLiabilities"),
+    ("shares_outstanding_annual", "balance", "commonStockSharesOutstanding"),
+    ("shareholders_equity", "balance", "totalStockholderEquity"),
+    ("free_cash_flow_annual", "cashflow", "freeCashFlow"),
+    ("operating_cash_flow_annual", "cashflow", "totalCashFromOperatingActivities"),
+    ("capital_expenditure_annual", "cashflow", "capitalExpenditures"),
+)
+
+
+def _row_value(rows: object, period: str, *keys: str) -> float | None:
+    """The first present numeric ``keys`` cell of the statement row for ``period``."""
+    row = rows.get(period) if isinstance(rows, dict) else None
+    if not isinstance(row, dict):
+        return None
+    for key in keys:
+        v = _coerce_float(row.get(key))
+        if v is not None:
+            return v
+    return None
+
+
+def _period_scalars(income: object, balance: object, cashflow: object) -> dict:
+    """``{period-end: single-period scalars}`` for every fiscal period any statement reports. The
+    scalars are what the current-value fields (eps, debt, cash, ...) mean FOR THAT PERIOD, so a
+    point-in-time read can use the newest period it is allowed to see instead of today's figures.
+
+    EPS is derived, not reported: net income over the period's shares outstanding (the same derivation
+    ``abs_readings`` uses for a missing EPS line) - abstains when either is missing or shares are not
+    positive. Nothing is invented: a scalar the statements do not carry is None."""
+    periods = set()
+    for rows in (income, balance, cashflow):
+        if isinstance(rows, dict):
+            periods.update(str(k)[:10] for k in rows)
+    out: dict[str, dict[str, float | None]] = {}
+    for period in sorted(periods, reverse=True):
+        shares = _row_value(balance, period, "commonStockSharesOutstanding")
+        net = _row_value(income, period, "netIncome")
+        debt = _row_value(balance, period, "shortLongTermDebtTotal", "totalDebt")
+        if debt is None:
+            short, long_ = (_row_value(balance, period, "shortTermDebt"),
+                            _row_value(balance, period, "longTermDebt"))
+            debt = (short or 0.0) + (long_ or 0.0) if (short is not None or long_ is not None) else None
+        paid = _row_value(cashflow, period, "dividendsPaid")
+        out[period] = {
+            "eps": (net / shares) if (net is not None and shares and shares > 0) else None,
+            "free_cash_flow": _row_value(cashflow, period, "freeCashFlow"),
+            "total_debt": debt,
+            "total_cash": _row_value(balance, period, "cashAndShortTermInvestments", "cash"),
+            "dividends_paid": abs(paid) if paid is not None else None,
+            "operating_cash_flow": _row_value(cashflow, period, "totalCashFromOperatingActivities"),
+            "capital_expenditure": _row_value(cashflow, period, "capitalExpenditures"),
+            "shares_outstanding": shares,
+        }
+    return out
+
+
+def fundamentals_from_payload(ticker: str, data: dict, *, with_periods: bool = False) -> Fundamentals:
     """Map an EODHD ``/fundamentals`` payload onto the Fundamentals DTO.
 
     Pure (no network) so tests drive it from a recorded fixture. Missing fields
@@ -192,7 +282,19 @@ def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
     # info["freeCashflow"]; take the newest yearly value.
     fcf_series = _annual_series(cashflow_yearly, "freeCashFlow")
 
-    return Fundamentals(
+    # BACKTEST-1: on request, ALSO carry every annual list a lens can read with the fiscal-period
+    # date of each value, and the per-period scalars. Off by default: a normal read maps exactly what
+    # it always did.
+    periods: dict = {}
+    if with_periods:
+        statements = {"income": income_yearly, "balance": balance_yearly, "cashflow": cashflow_yearly}
+        lists, dates = {}, {}
+        for field_name, statement, key in _PERIOD_LISTS:
+            lists[field_name], dates[field_name] = _dated_series(statements[statement], key)
+        periods = {**lists, "period_ends": dates,
+                   "period_scalars": _period_scalars(income_yearly, balance_yearly, cashflow_yearly)}
+
+    base = Fundamentals(
         ticker=ticker,
         name=_clean_str(general.get("Name")),
         market_cap=_coerce_float(highlights.get("MarketCapitalization")),
@@ -230,6 +332,7 @@ def fundamentals_from_payload(ticker: str, data: dict) -> Fundamentals:
         retained_earnings_annual=_annual_series(balance_yearly, "retainedEarnings"),
         total_liabilities_annual=_annual_series(balance_yearly, "totalLiab"),
     )
+    return replace(base, **periods) if periods else base
 
 
 def dividend_events_from_rows(
@@ -264,7 +367,11 @@ class EODHDAdapter(MarketDataAdapter):
     # (see screening.streak_by_method). Declarative only — screening owns the math.
     dividend_streak_method = "calendar_year_sum"
 
-    def __init__(self, api_key: str | None = None, timeout: float = 15.0) -> None:
+    def __init__(self, api_key: str | None = None, timeout: float = 15.0,
+                 with_periods: bool = False) -> None:
+        # with_periods: also map the dated annual lists and per-period scalars (BACKTEST-1). Off,
+        # every read is byte-identical to before.
+        self._with_periods = with_periods
         # .strip(): stray whitespace in an env var / notebook secret must not be
         # able to cause a silent HTTP 401 (mirrors the finnhub adapter).
         raw = api_key if api_key is not None else os.environ.get("EODHD_API_KEY")
@@ -282,7 +389,7 @@ class EODHDAdapter(MarketDataAdapter):
         data = self._get_json(f"/fundamentals/{urllib.parse.quote(symbol)}")
         if not isinstance(data, dict) or not data:
             raise DataUnavailable(f"EODHD returned no fundamentals for {symbol}")
-        return fundamentals_from_payload(symbol, data)
+        return fundamentals_from_payload(symbol, data, with_periods=self._with_periods)
 
     # ------------------------------------------------------------------ #
     def get_dividend_history(
