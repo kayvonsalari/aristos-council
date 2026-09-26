@@ -162,7 +162,6 @@ class CompanyCheckResult:
     # Company Report (Part B) - the band's percentile (None when not computed or abstained), so the
     # agreement row can carry the SAME "priced high" mark the Run tab's table does.
     band_percentile: Optional[float] = None
-    band_requested: bool = True
 
     @property
     def display(self) -> str:
@@ -272,7 +271,7 @@ def run_company_check(
     strategies_dir: str | Path | None = None, universes_dir: str | Path | None = None,
     runs_dir: str | Path | None = None, screen_strategy_id: Optional[str] = None,
     today: Optional[date] = None, with_analyst_trend: bool = False, analyst_fetcher=None,
-    with_valuation_band: bool = True,
+    ratings_fallback_symbol: Optional[str] = None,
 ) -> CompanyCheckResult:
     """Diagnose ONE ticker under ``rank_strategy_id``'s lens screen + factors, with
     cohort context from the latest frozen run of ``reference_universe_id``. NEVER emits
@@ -297,12 +296,10 @@ def run_company_check(
     screen_criteria = list(screen_strategy.criteria) if screen_strategy else []
     screen_strategy_id_str = screen_strategy.id if screen_strategy else ""
 
-    # VALBAND-1: gather_factor_inputs gates the absolute band (an extra 5-year fetch) behind
-    # with_valuation_band. Company Check has always shown it, so the default stays True and every
-    # existing caller is byte-unchanged; the Company Check tab's "Valuation band" tick box
-    # (Company Report, Part B) is what passes False. An unticked band is "—", never a guess.
-    fi = gather_factor_inputs(adapter, ticker, today=today,
-                              with_valuation_band=with_valuation_band)
+    # BAND-ALWAYS-ON-1: the absolute band (a 5-year price fetch through the day-cache) is always
+    # computed here - it is free and Company Check has always shown it. An abstention carries its
+    # reason ("not evaluated - insufficient history"); it is never a missing section.
+    fi = gather_factor_inputs(adapter, ticker, today=today, with_valuation_band=True)
     f = fi.fundamentals
     company_name = getattr(f, "company_name", None) if f is not None else None
     # ABS-READINGS-1 — pure functions over the fundamentals already fetched. No extra
@@ -448,11 +445,18 @@ def run_company_check(
     if with_analyst_trend:
         from .abs_readings import analyst_trend as _analyst_trend
         from .data.analyst_trend import fetch_analyst_trend
+        fetch = analyst_fetcher or fetch_analyst_trend
+        # the fallback is offered only when there is one, so a plain fetcher (a test double with the
+        # old signature) is called exactly as before
+        trend_data = (fetch(ticker, today=today, ratings_fallback_symbol=ratings_fallback_symbol)
+                      if ratings_fallback_symbol else fetch(ticker, today=today))
+        price, price_ccy, own = _ratings_price(adapter, trend_data, ticker, fi, f, today)
         readings["analyst_trend"] = _analyst_trend(
-            (analyst_fetcher or fetch_analyst_trend)(ticker, today=today),
+            trend_data,
             # the ACCOUNTS' currency (the estimates are per-share profits in it); None -> stated
             # as "currency not stated by the source", never guessed from the quote currency
-            currency=getattr(f, "financial_currency", None))
+            currency=getattr(f, "financial_currency", None), company=company_name or ticker,
+            price=price, price_currency=price_ccy, own_listing=own)
 
     return CompanyCheckResult(
         ticker=ticker, company_name=company_name,
@@ -465,10 +469,37 @@ def run_company_check(
         verdict_of_record=verdict_of_record, valuation_band=band_text,
         market_cap_in_gates=market_cap_in_gates, screen_less=screen_less,
         providers=providers, fx_source=fx_source,
-        band_percentile=(getattr(getattr(fi, "valuation_band", None), "percentile", None)
-                         if with_valuation_band else None),
-        band_requested=with_valuation_band,
+        band_percentile=getattr(getattr(fi, "valuation_band", None), "percentile", None),
         **readings)
+
+
+def _ratings_price(adapter, trend_data, ticker: str, fi, f, today: date):
+    """``(price, price currency, ratings are the company's own listing's)`` for the listing the
+    RATINGS describe. The company's own last close and quote currency when the ratings are its own;
+    when they are its US line's (EODHD has none for a London or Hong Kong line), that line's latest
+    close - so the target is compared with the price of the same security, in its own currency."""
+    from datetime import timedelta
+
+    from .cohorts.symbols import SymbolError, eodhd_symbol, yahoo_symbol
+
+    ratings = getattr(trend_data, "ratings", None)
+    own_price = (getattr(fi, "last_close", None), getattr(f, "currency", None) or "")
+    if ratings is None or not ratings.symbol:
+        return (*own_price, True)
+    try:
+        own_symbol = eodhd_symbol(ticker)
+    except SymbolError:
+        own_symbol = ""
+    if ratings.symbol == own_symbol or not own_symbol:
+        return (*own_price, True)
+    try:
+        other = yahoo_symbol(ratings.symbol)
+        bars = adapter.get_price_history(other, start=today - timedelta(days=10), end=today).bars
+        close = next((b.close for b in reversed(bars) if b.close), None)
+        currency = getattr(adapter.get_fundamentals(other), "currency", None) or ""
+    except Exception:                       # no price for the US line is an abstention, not a crash
+        return None, "", False
+    return close, currency, False
 
 
 _FX_SOURCE = re.compile(r", source (?P<provider>\S+) (?P<pair>[^;)]*)")
@@ -559,8 +590,12 @@ def company_sources(result: "CompanyCheckResult") -> list[SourceLine]:
         out.append(SourceLine("Growth record", growth.source_tag.split("source:", 1)[-1].strip()))
     trend = getattr(result, "analyst_trend", None)
     if trend is not None and getattr(trend, "source", ""):
-        out.append(SourceLine("Analyst forecasts",
-                              f"{trend.source}" + (f", as of {trend.as_of}" if trend.as_of else "")))
+        ratings = getattr(trend, "ratings", None)
+        via = (f" (ratings from the US listing {ratings.listing})"
+               if ratings is not None and ratings.available and not ratings.own_listing else "")
+        out.append(SourceLine("Analyst ratings and forecasts",
+                              f"{trend.source}" + (f", as of {trend.as_of}" if trend.as_of else "")
+                              + via))
     if getattr(result, "fx_source", ""):
         out.append(SourceLine("Currency rates in the valuation band",
                               f"{result.fx_source}, monthly"))
@@ -843,20 +878,21 @@ def analyst_forecast_lines(result) -> list[str]:
     year. Empty when it was not asked for."""
     if getattr(result, "analyst_trend", None) is None:
         return []
-    return ["  Analyst forecast direction (a mark: it does not vote and changes no verdict)"
+    return ["  What analysts say (a mark: it does not vote and changes no verdict)"
             + mixed_source_marker(result, result.analyst_trend.source),
             *(f"    {ln}" for ln in result.analyst_trend.lines())]
 
 
-def peers_lines(result) -> list[str]:
-    """The PEERS block as text, or [] when there is neither a group nor a reason to give."""
+def peers_lines(result, *, columns=None, company_ticker: str = "") -> list[str]:
+    """The PEERS block as text, or [] when there is neither a group nor a reason to give. With
+    ``columns`` (a Company Report's per-lens rank columns) the company is the first row."""
     group = getattr(result, "peer_group", None)
     if group is not None:
         from .peer_table import peer_text_lines
         lines = ["PEERS (who this company would be measured against):"]
         if group.available:
             lines.append(f"  {group.sentence()}")
-            lines.extend(f"  {ln}" for ln in peer_text_lines(group))
+            lines.extend(f"  {ln}" for ln in peer_text_lines(group, columns, company_ticker))
         else:
             lines.append("  No peer group for this name.")
         lines.extend(f"  · {reason}" for reason in group.reasons)

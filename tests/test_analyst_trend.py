@@ -98,10 +98,14 @@ def test_the_recorded_apple_year_reads_flat_and_says_where_it_came_from():
     assert trend.mark == MARK_FLAT                        # +0.68% is inside the +/-2% band
     assert trend.headline == "Analysts are holding their profit forecasts steady"
     this_year, next_year = trend.rows
-    assert this_year.label == "This year (to Sep 2026)"
-    assert this_year.cells() == ("8.82", "8.76", "+0.7%", "39")
-    assert next_year.label == "Next year (to Sep 2027)"
-    assert next_year.cells()[3] == "40"
+    assert this_year.label == "This year (to Sep 2026)" and this_year.analysts == 39
+    assert next_year.label == "Next year (to Sep 2027)" and next_year.analysts == 40
+    # ANALYST-RATINGS-1: the forecasts are PLAIN SENTENCES - no table, no "EPS"
+    first, second = trend.forecast_sentences()[:2]
+    assert first.startswith("Analysts expect the company to earn 8.82 per share this year. "
+                            "Three months ago they expected 8.76, so their view has barely changed.")
+    assert second.startswith("Analysts expect the company to earn 9.58 per share next year.")
+    assert "EPS" not in " ".join(trend.lines())
     # where it came from is a Sources-block fact: the reading keeps the tag, the lines do not
     assert trend.tag() == f"source: {SOURCE_TAG}, as of 2026-09-25"
     assert SOURCE_TAG not in " ".join(trend.lines())
@@ -170,7 +174,10 @@ def test_the_next_year_is_shown_even_when_the_mark_abstains():
     assert trend.mark == "" and "only 1 analyst(s)" in trend.headline
     this_year, next_year = trend.rows
     assert next_year.label == "Next year (to Dec 2027)"
-    assert next_year.cells() == ("6.00", "5.00", "+20.0%", "1")
+    sentences = trend.forecast_sentences()
+    assert sentences[0].startswith("Analyst forecasts for this year are not shown: only 1 analyst")
+    assert sentences[1] == ("Analysts expect the company to earn 6.00 per share next year. Three "
+                            "months ago they expected 5.00, so analysts have raised their forecasts.")
 
 
 def test_the_cost_is_logged_not_printed_on_the_page(caplog):
@@ -197,18 +204,30 @@ def test_the_headline_is_one_sentence_for_each_mark_or_the_reason():
     assert "only 2 analyst(s)" in analyst_trend(_data(analysts=2)).headline
 
 
-def test_the_table_is_in_the_accounts_currency_and_says_so_when_it_is_unknown():
+def test_the_forecast_sentences_use_the_accounts_currency_and_say_so_when_it_is_unknown():
     """'TWD 107.85' for a Taiwanese name; with no currency the bare figure and a stated note."""
     data = TrendData(current=TrendPeriod("2026-12-31", 107.85, 98.58, 25),
                      next_year=TrendPeriod("2027-12-31", 130.0, 120.0, 22), as_of="2026-09-25")
-    twd = analyst_trend(data, currency="TWD")
-    assert twd.rows[0].label == "This year (to Dec 2026)"
-    assert twd.rows[0].cells() == ("TWD 107.85", "TWD 98.58", "+9.4%", "25")
+    twd = analyst_trend(data, currency="TWD", company="Taiwan Semiconductor Manufacturing Co Ltd")
+    assert twd.forecast_sentences()[0] == (
+        "Analysts expect Taiwan Semiconductor Manufacturing to earn TWD 107.85 per share this year. "
+        "Three months ago they expected TWD 98.58, so analysts have raised their forecasts.")
     assert twd.currency_note() == ""
     unknown = analyst_trend(data)
-    assert unknown.rows[0].cells()[0] == "107.85"
+    assert "to earn 107.85 per share" in unknown.forecast_sentences()[0]
     assert unknown.currency_note() == "(currency not stated by the source)"
     assert "(currency not stated by the source)" in unknown.lines()[-1]
+
+
+def test_the_wording_follows_the_existing_rising_flat_falling_rule():
+    def first(now, ago):
+        return analyst_trend(_data(now=now, ago=ago), currency="USD",
+                             company="Example Corp").forecast_sentences()[0]
+    assert first(12.0, 10.0).endswith("so analysts have raised their forecasts.")
+    assert first(10.1, 10.0).endswith("so their view has barely changed.")          # inside +/-2%
+    assert first(10.2, 10.0).endswith("so their view has barely changed.")          # the band is inclusive
+    assert first(8.0, 10.0).endswith("so analysts have cut their forecasts.")
+    assert first(12.0, 10.0).startswith("Analysts expect Example to earn $12.00 per share this year.")
 
 
 # =========================================================================== #
@@ -217,8 +236,12 @@ def test_the_table_is_in_the_accounts_currency_and_says_so_when_it_is_unknown():
 class _Opener:
     """Records every request; serves a recorded payload."""
 
-    def __init__(self, payload=None, error=None):
-        self.payload, self.error, self.urls = payload, error, []
+    def __init__(self, payload=None, error=None, ratings="NA", currency="USD"):
+        # /fundamentals now answers the COMBINED filter (Earnings::Trend, AnalystRatings and the
+        # listing's currency in ONE reply), keyed by block name; ``payload`` is the trend block.
+        self.error, self.urls = error, []
+        self.payload = {"Earnings::Trend": payload, "AnalystRatings": ratings,
+                        "General::CurrencyCode": currency}
 
     def __call__(self, url, timeout=None):
         self.urls.append(url)
@@ -343,9 +366,9 @@ def _without_analyst_block(text: str) -> str:
     the analyst line of the Sources block - the mark's own footprint, nothing else."""
     out, skipping = [], False
     for line in text.split("\n"):
-        if line.startswith("  Analyst forecasts:"):
+        if line.startswith("  Analyst ratings and forecasts:"):
             continue
-        if line.startswith("  Analyst forecast direction"):
+        if line.startswith("  What analysts say"):
             skipping = True
             continue
         if skipping and line.startswith("    "):
@@ -359,7 +382,7 @@ def test_off_by_default_nothing_is_fetched_and_the_output_is_untouched():
     fetch = _fetcher(_TRENDS["rising"])
     result = _mu_check(analyst_fetcher=fetch)                  # with_analyst_trend not asked for
     assert result.analyst_trend is None and fetch.calls == []
-    assert "Analyst forecast direction" not in format_company_check(result)
+    assert "What analysts say" not in format_company_check(result)
 
 
 @pytest.mark.parametrize("which", sorted(_TRENDS))
@@ -371,17 +394,17 @@ def test_the_mark_changes_no_screen_gate_factor_or_verdict_whatever_it_says(whic
     assert on.analyst_trend is not None
     assert dataclasses.replace(on, analyst_trend=None) == off
     assert _without_analyst_block(format_company_check(on)) == format_company_check(off)
-    assert "Analyst forecast direction" in format_company_check(on)
+    assert "What analysts say" in format_company_check(on)
 
 
 def test_the_headline_and_its_abstention_are_both_printed():
     rising = format_company_check(_mu_check(with_analyst_trend=True,
                                             analyst_fetcher=_fetcher(_TRENDS["rising"])))
-    assert "Analysts are raising their profit forecasts" in rising
-    assert "This year (to Dec 2026)" in rising
+    assert "so analysts have raised their forecasts" in rising
+    assert "per share this year" in rising
     quiet = format_company_check(_mu_check(with_analyst_trend=True,
                                            analyst_fetcher=_fetcher(_TRENDS["abstaining"])))
-    assert "EODHD has no Earnings::Trend block for this name" in quiet
+    assert "Analyst forecasts are not shown: EODHD has no Earnings::Trend block" in quiet
     assert "does not vote and changes no verdict" in quiet
 
 

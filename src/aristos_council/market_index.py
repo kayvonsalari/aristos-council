@@ -1227,6 +1227,9 @@ class IndexStatus:
     # Identity-less Toronto rows whose cleaned name also belongs to a row WITH an identity: probably
     # a foreign company's line, REPORT ONLY - nothing is excluded or merged on this evidence.
     possible_foreign: list = field(default_factory=list)
+    # US rows named like another US row under a different ISIN with a contradicting industry
+    # (CCZ.US beside CMCSA.US): ``[(ticker, industry, other ticker, other industry)]``, report only.
+    contradicting_pairs: list = field(default_factory=list)
 
     def lines(self) -> list[str]:
         if not self.rows:
@@ -1265,6 +1268,13 @@ class IndexStatus:
                 f"  {len(self.possible_foreign)} Toronto row(s) with no identity share a cleaned "
                 f"name with a row that has one - possible foreign lines (report only, nothing "
                 f"excluded): {', '.join(self.possible_foreign)}"))
+        if self.contradicting_pairs:
+            out.insert(out.index("  per exchange:"), (
+                f"  {len(self.contradicting_pairs)} pair(s) of US rows share a cleaned name under "
+                f"different ISINs while EODHD files them under contradicting industries - possibly "
+                f"a bond-like or preferred line read as a company (report only, nothing excluded): "
+                + "; ".join(f"{a} ({ia}) vs {b} ({ib})"
+                            for a, ia, b, ib in self.contradicting_pairs)))
         if self.size_disputed:
             out.insert(out.index("  per exchange:"),
                        f"  {self.size_disputed} company(ies) whose lines differ in size by more "
@@ -1326,6 +1336,63 @@ def possible_foreign_lines(rows, secondary: Optional[dict] = None) -> list["Inde
         if key and (elsewhere.get(key, set()) - {"TO"}):
             out.append(r)
     return sorted(out, key=lambda r: r.ticker)
+
+
+def us_line_of(ticker: str, *, store: Optional[IndexStore] = None, rows=None,
+               aliases=..., size_corrections=...) -> Optional[str]:
+    """The EODHD symbol of the same company's US line (an ADR, or its US primary), or None.
+
+    Used for the ONE thing EODHD only publishes for US lines: analyst ratings. The company is found
+    exactly as ``peers`` finds it - identity aliases applied, lines grouped by PrimaryTicker, ISIN and
+    the guarded name-and-size link - and a US line that is a fund or an excluded row is never offered.
+    A US-listed ``ticker`` returns None (its own line already answers)."""
+    universe = rows if rows is not None else (store or IndexStore()).load()
+    if aliases is ...:
+        aliases = load_identity_aliases() if rows is None else []
+    universe, _ = apply_identity_aliases(universe, aliases)
+    if size_corrections is ...:
+        size_corrections = load_size_corrections() if rows is None else []
+    universe, applied = apply_size_corrections(universe, size_corrections)
+    refused = {k for k, (_r, c) in applied.items() if c.action == SIZE_EXCLUDE}
+    wanted = (ticker or "").strip().upper()
+    subject = next((r for r in universe if r.ticker.upper() == wanted
+                    or (r.yahoo_ticker or "").upper() == wanted), None)
+    if subject is None or (subject.market or "").upper() == "US":
+        return None
+    for company in company_groups(universe, link_by_name=True):
+        if subject not in company:
+            continue
+        candidates = [r for r in company
+                      if (r.market or "").upper() == "US" and not is_fund(r)
+                      and normalise_symbol(r.ticker) not in refused]
+        if candidates:
+            return sorted(candidates, key=lambda r: (not is_home_listing(r), r.ticker))[0].ticker
+    return None
+
+
+def contradicting_name_pairs(rows, secondary: Optional[dict] = None) -> list[tuple]:
+    """US rows that share a cleaned company name with ANOTHER US row under a different ISIN while
+    EODHD files the two under contradicting industries - each pair once, ``(row, other)`` ordered by
+    ticker. The pattern behind CCZ.US: Comcast's exchangeable ZONES debenture, a bond-like security
+    that carries the company's name, read as a $61bn company filed under 'REIT - Residential' beside
+    CMCSA.US. Most pairs are share classes and preferred lines of one company (Duke, DTE, Entergy)
+    and a few are two companies whose names reduce alike (Graham, Toro). REPORT ONLY: the evidence is a
+    name, so nothing is excluded or merged on it - it makes the next CCZ visible."""
+    secondary = secondary if secondary is not None else secondary_lines(rows)
+    by_name: dict[str, list] = {}
+    for r in rows:
+        key = _name_key(r.name)
+        if key and (r.market or "").upper() == "US"                 and normalise_symbol(r.ticker) not in secondary:
+            by_name.setdefault(key, []).append(r)
+    pairs = []
+    for group in by_name.values():
+        ordered = sorted(group, key=lambda r: r.ticker)
+        for i, a in enumerate(ordered):
+            for b in ordered[i + 1:]:
+                if (a.isin and b.isin and a.isin != b.isin and _label(a.industry)
+                        and _label(b.industry) and _label(a.industry) != _label(b.industry)):
+                    pairs.append((a, b))
+    return sorted(pairs, key=lambda p: (p[0].ticker, p[1].ticker))
 
 
 def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
@@ -1410,6 +1477,9 @@ def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
     out.aliased_examples = aliased[:EXAMPLES]
     aliased_rows, _applied = apply_identity_aliases(rows, aliases)
     out.possible_foreign = [r.ticker for r in possible_foreign_lines(aliased_rows, secondary)]
+    out.contradicting_pairs = [(a.ticker, (a.industry or "").strip(), b.ticker,
+                                (b.industry or "").strip())
+                               for a, b in contradicting_name_pairs(rows, secondary)]
     orphans = orphan_depositary_rows(rows, aliased)
     out.orphan_adrs = len(orphans)
     out.orphan_adr_examples = [r.ticker for r in orphans[:EXAMPLES]]

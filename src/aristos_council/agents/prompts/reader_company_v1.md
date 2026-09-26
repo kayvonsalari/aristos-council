@@ -61,6 +61,12 @@ check's own** — "rated BUY" — and are always allowed.
 **The agreement, in plain words.** `agreement.headline` says how many of the voting tests rated
 the company BUY. Say it as a person would, and say which tests, by name.
 
+**Count the tests by the pack's three separate counts** — `lenses_that_voted`,
+`lenses_that_did_not_apply` and `check_lenses_that_do_not_vote`. A test that did not apply did
+not vote: never count it among the voters ("BUY on 0 of 1 vote; 2 tests did not apply"), and
+the number of tests that ran is the three counts added together, so never say "three tests ran"
+and then name four.
+
 **A mark is a caution, never a rejection.** `agreement.marks` may hold `doubted by <test>` (a
 check found something) or `priced high: Nth percentile of its own 5-year range` (it costs far
 more than usual for the profit it makes, compared with its own last five years). Say them
@@ -78,7 +84,7 @@ one sentence and describe only the facts about the company alone.
 - `asked` — 1-2 sentences. Which company, how big its peer group was, which tests ran.
 - `happened` — 2-4 sentences. How the company ranked and what each test said; the agreement.
 - `survived` — 1-3 sentences. What stands out in its own numbers: the price against its own
-  past, its debts, its growth, what analysts expect (`analyst_forecasts`).
+  past, its debts, its growth, what analysts say (`what_analysts_say`: how many rate it strong buy, buy, hold, sell and strong sell, the average price target against today's price, and what they expect it to earn per share). Say the counts and the target as the pack gives them; if the ratings are those of the company's US listing, say so.
 - `doubt` — 1-3 sentences. The marks, any test that did not apply, a broad group, missing data.
 - `cannot_say` — 1 sentence. What this check cannot tell you.
 

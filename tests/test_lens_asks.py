@@ -26,35 +26,44 @@ from aristos_council.strategy.rank_loader import load_rank_strategy
 
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 
-# The verbatim text each shipped lens asks. Pinned so a reword is a deliberate edit here,
+# The verbatim text each shipped lens asks (LENS-CAPTIONS-1: including every gate). Pinned so a reword is a deliberate edit here,
 # not a silent drift in a YAML — these sentences are what a reader meets beside a verdict.
 EXPECTED = {
     "magic_formula_raw_v1":
         "Cheap and good: high profit on the money invested, a low price for that "
-        "profit, and a rising share.",
+        "profit, and a rising share, for companies worth at least $5bn (not banks, "
+        "insurers or utilities).",
     "magic_formula_momentum_v1":
-        "The same as Magic Formula RAW, but only for companies earning at least 12% on "
-        "their capital.",
+        "The same as Magic Formula RAW (companies worth at least $5bn, not banks, "
+        "insurers or utilities), but only for companies earning at least 12% on their "
+        "capital.",
     "growth_garp_v2":
-        "Growing fast at a fair price: sales up at least 10% a year, and not overpaying "
-        "for that growth.",
+        "Growing fast at a fair price: sales up at least 10% a year, earning at least "
+        "12% on its capital, and not overpaying for that growth (its price no more than "
+        "twice its growth rate), for companies worth at least $5bn.",
     "conservative_plus_v1":
-        "Steady income with the trend intact: a calm share, a covered dividend raised "
-        "for 10 years, and no recent fall.",
+        "Steady income with the trend intact: a yield of at least 1.5%, paid from cash "
+        "(no more than 80% of free cash flow) and raised for 10 years, from a company "
+        "worth at least $5bn with debt no bigger than its market value and a share "
+        "price not down more than 10%; the calmest share ranks best.",
     "forensic_v1":
         "Are the profits real: cash behind the earnings, a safe balance sheet, and "
-        "improving health checks.",
+        "improving health checks, for companies worth at least $5bn (not banks or "
+        "insurers).",
     "financials_v1":
-        "Banks and insurers on their own terms: return on equity against price-to-book.",
-    "etf_dividend_v1": "Distributing funds: payout, fee, size and trend.",
-    "etf_growth_v1": "Growth funds: fee, trend and scale, no yield.",
-    "etf_core_v1": "Index trackers: fee, size and trend.",
-    # Added when feat/cyclical-income-1 was rebased onto SHORTLIST-1: the guard
-    # `test_every_visible_lens_has_one` caught the new lens arriving without a question,
-    # which is exactly what it is for.
+        "Banks and insurers on their own terms: return on equity against price-to-book, "
+        "for financial companies worth at least $5bn.",
+    "etf_dividend_v1":
+        "Distributing funds: payout, fee, size and trend.",
+    "etf_growth_v1":
+        "Growth funds: fee, trend and scale, no yield.",
+    "etf_core_v1":
+        "Index trackers: fee, size and trend.",
     "cyclical_income_v1":
-        "Income that survives the cycle: a covered dividend not cut in five years, with "
-        "manageable debt.",
+        "Income that survives the cycle: a yield of at least 1.5%, paid from cash (no "
+        "more than 80% of free cash flow), not cut in five years, with debt no bigger "
+        "than the company's market value, from a company worth at least $5bn (not a "
+        "bank or insurer).",
 }
 
 
@@ -87,7 +96,9 @@ def test_the_sentences_are_plain_english_not_field_names():
         asks = load_rank_strategy(path).asks
         assert asks[0].isupper() and asks.endswith("."), sid
         assert "_" not in asks, sid                      # no snake_case factor/criterion
-        assert len(asks) <= 130, sid                     # one line, not a paragraph
+        # one caption, not a paragraph. LENS-CAPTIONS-1 raised this from 130: a caption now
+        # names every gate that can keep a company out, and that takes a sentence or two.
+        assert len(asks) <= 340, sid
 
 
 def test_asks_is_distinct_from_the_strings_it_sits_beside():

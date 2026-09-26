@@ -30,7 +30,8 @@ version: 1
 # CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
 # meeting a verdict without having read the YAML.
 asks: >-
-  Are the profits real: cash behind the earnings, a safe balance sheet, and improving health checks.
+  Are the profits real: cash behind the earnings, a safe balance sheet, and improving health
+  checks, for companies worth at least $5bn (not banks or insurers).
 
 # KIND-1 — a CHECK lens: it doubts, it does not select. A SELL here is a reason
 # to distrust another lens's BUY, never a rejection in its own right; it declares

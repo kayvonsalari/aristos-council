@@ -93,7 +93,6 @@ def _table(n_peers=N_PEERS):
 
 
 def _run(lens_ids, *, tmp_path, store=None, company_ebit=400.0, **kw):
-    kw.setdefault("with_valuation_band", True)
     return run_company_report("CO", lens_ids, adapter=_Adapter(company_ebit),
                               strategies_dir=STRAT_DIR,
                               universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
@@ -138,9 +137,9 @@ def test_a_lens_that_screens_the_company_out_does_not_vote(tmp_path):
     assert screened.result().startswith("does not apply - ")
     assert "return on invested capital" in screened.result()      # the screen's own reason
     ag = report.agreement
-    assert ag.n_voting == 2 and len(ag.buy) + len(ag.hold) + len(ag.sell) == 1
+    assert ag.n_ticked == 2 and ag.n_voted == 1 and ag.n_not_applying == 1
     assert [label for label, _ in ag.not_applicable] == [screened.label]
-    assert "(1 does not apply to this company)" in ag.headline
+    assert ag.headline.endswith("; 1 lens did not apply to this company")
 
 
 def test_the_agreement_counts_equal_votes_and_a_check_marks_without_voting():
@@ -149,19 +148,18 @@ def test_the_agreement_counts_equal_votes_and_a_check_marks_without_voting():
              LensVote("c", "Gamma", status="excluded", reason="size floor"),
              LensVote("f", "Forensic", kind="check", status="ranked", verdict="sell", position=13,
                       cohort_size=14)]
-    ag = build_agreement(votes, band_percentile=92.0, band_requested=True)
-    assert ag.n_voting == 3                                # the check is not a voter
+    ag = build_agreement(votes, band_percentile=92.0)
+    assert ag.n_ticked == 3 and ag.n_voted == 2            # the check is not a voter
     assert ag.buy == ("Alpha",) and ag.hold == ("Beta",) and ag.sell == ()
-    assert ag.headline == "BUY on 1 of the 3 voting lenses (1 does not apply to this company)"
+    assert ag.headline == "BUY on 1 of 2 votes; 1 lens did not apply to this company"
     assert ag.checks == {"Forensic": "doubted"}
     assert "doubted by Forensic" in ag.marks
     assert any(m.startswith("priced high: 92nd percentile") for m in ag.marks)
     row = ag.table_row("Company Co")
-    assert row["BUY votes"] == "1 of 3" and row["Voted BUY"] == "Alpha"
+    assert row["BUY votes"] == "1 of 2" and row["Voted BUY"] == "Alpha"
     assert row["Checks"] == "Forensic: doubted"
-    # the band mark is a mark only when the band was asked for
-    assert not any("priced high" in m for m in
-                   build_agreement(votes, band_percentile=92.0, band_requested=False).marks)
+    # no percentile (the band abstained) -> no band mark, and never a made-up one
+    assert not any("priced high" in m for m in build_agreement(votes, band_percentile=None).marks)
 
 
 def test_a_check_lens_speaks_its_own_words_and_never_votes(tmp_path):
@@ -170,7 +168,7 @@ def test_a_check_lens_speaks_its_own_words_and_never_votes(tmp_path):
     assert not forensic.votes and forensic.role == "marks (does not vote)"
     if forensic.ranked:
         assert forensic.word in ("clean", "no concern", "doubted")
-    assert report.agreement.n_voting == 1 and "Forensic" in report.agreement.checks
+    assert report.agreement.n_ticked == 1 and "Forensic" in report.agreement.checks
 
 
 # =========================================================================== #
@@ -323,7 +321,7 @@ def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
     report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
     pack = company_facts_pack(report)
     assert set(pack) == {"company", "lenses", "agreement", "valuation_band", "absolute_readings",
-                         "analyst_forecasts"}
+                         "what_analysts_say"}
     assert pack["company"]["peer_group"]["step"] == 1
     assert [l["votes"] for l in pack["lenses"]] == [True, True]
     assert pack["agreement"]["buy_lenses_to_name"] == list(report.agreement.buy)
@@ -335,13 +333,13 @@ def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
 # =========================================================================== #
 _TEXT_HEADS = {"summary": "SUMMARY", "agreement": "AGREEMENT", "lens votes": "LENS VOTES",
                "peers": "PEERS", "valuation band": "VALUATION BAND",
-               "absolute readings": "ABSOLUTE READINGS", "analyst forecasts": "ANALYST FORECASTS",
+               "absolute readings": "ABSOLUTE READINGS", "what analysts say": "WHAT ANALYSTS SAY",
                "sources": "SOURCES"}
 _HTML_HEADS = {"summary": "<h2>Summary</h2>", "agreement": "<h2>Agreement</h2>",
                "lens votes": "<h2>Lens votes</h2>", "peers": "<h2>Peers</h2>",
                "valuation band": "<h2>Valuation band</h2>",
                "absolute readings": "<h2>Absolute readings</h2>",
-               "analyst forecasts": "<h2>Analyst forecasts</h2>", "sources": "<h2>Sources</h2>"}
+               "what analysts say": "<h2>What analysts say</h2>", "sources": "<h2>Sources</h2>"}
 
 
 def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
@@ -349,7 +347,7 @@ def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
     report = _run([RAW, SCREENED], tmp_path=tmp_path, with_summary=True,
                   reader_runner=_Writer(_fields(probe)), save=False)
     assert SECTION_ORDER == ("summary", "agreement", "lens votes", "peers", "valuation band",
-                             "absolute readings", "analyst forecasts", "sources")
+                             "absolute readings", "what analysts say", "sources")
     text, html = format_company_report(report), company_report_html(report)
     for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
         at = [doc.index(heads[name]) for name in SECTION_ORDER]
@@ -366,13 +364,16 @@ def test_an_unticked_summary_leaves_no_section_and_the_order_holds(tmp_path):
         assert at == sorted(at)
 
 
-def test_an_unticked_band_says_so_in_both_exports_and_is_not_fetched(tmp_path):
-    report = _run([RAW], tmp_path=tmp_path, with_valuation_band=False, save=False)
-    assert report.check.valuation_band == "—"
-    assert "not requested" in format_company_report(report)
-    assert "not requested" in company_report_html(report)
-    assert report.check.band_percentile is None
-    assert not any("priced high" in m for m in report.agreement.marks)
+def test_the_band_is_always_there_no_tick_box_no_not_requested(tmp_path):
+    """BAND-ALWAYS-ON-1: the section is in the report every time - a reading, or an abstention with
+    its reason - and there is no parameter to leave it out."""
+    import inspect
+    assert "with_valuation_band" not in inspect.signature(run_company_report).parameters
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    text, html = format_company_report(report), company_report_html(report)
+    assert "VALUATION BAND" in text and "<h2>Valuation band</h2>" in html
+    assert "not requested" not in text and "not requested" not in html
+    assert report.check.valuation_band != "—"                 # computed, not skipped
 
 
 def test_the_run_is_saved_under_runs_with_the_peer_snapshot_and_every_lens_ranks(tmp_path):
@@ -469,7 +470,7 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     assert not at.exception
     heads = [str(getattr(h, "value", "")) for h in at.subheader]
     assert heads[:4] == ["Summary", "Agreement", "Lens votes", "Peers"], heads
-    assert heads[-3:] == ["Absolute readings", "Analyst forecasts", "Sources"], heads
+    assert heads[-3:] == ["Absolute readings", "What analysts say", "Sources"], heads
     assert "Valuation band" in heads
     frames = [df.value for df in at.dataframe]
     assert any("BUY votes" in list(f.columns) for f in frames)            # the agreement row
@@ -494,3 +495,182 @@ def test_the_page_says_so_when_there_is_no_peer_group(tmp_path):
     assert "No vote:" in blob and "no peer group" in blob
     heads = [str(getattr(h, "value", "")) for h in at.subheader]
     assert "Valuation band" in heads and "Absolute readings" in heads      # they survive
+
+
+# =========================================================================== #
+# AGREEMENT-COUNT-1 - the denominator is the lenses that VOTED
+# =========================================================================== #
+def _ranked(label, verdict, position=14, of=14, **kw):
+    return LensVote(label.lower(), label, status="ranked", verdict=verdict, position=position,
+                    cohort_size=of, **kw)
+
+
+def _not_applying(label):
+    return LensVote(label.lower(), label, status="excluded",
+                    reason="return on invested capital 10.5%; the rule requires at least 12%.")
+
+
+def test_one_vote_and_two_lenses_that_did_not_apply_is_0_of_1_not_0_of_3():
+    """AZN.L: Magic Formula RAW SELL 14th of 14; Value + Momentum and Growth both 'does not apply'.
+    It printed 'BUY on 0 of the 3 voting lenses (2 do not apply)' and the summary said 'three voting
+    tests' and 'three tests ran' before listing four."""
+    forensic = LensVote("f", "Forensic", kind="check", status="ranked", verdict="buy", position=3,
+                        cohort_size=14)
+    ag = build_agreement([_ranked("Magic Formula RAW", "sell"), _not_applying("Value + Momentum"),
+                          _not_applying("Growth"), forensic])
+    assert (ag.n_ticked, ag.n_voted, ag.n_not_applying, ag.n_checks) == (3, 1, 2, 1)
+    assert ag.headline == "BUY on 0 of 1 vote; 2 lenses did not apply to this company"
+    assert ag.table_row("AstraZeneca PLC (AZN.L)")["BUY votes"] == "0 of 1"
+    assert ag.sell == ("Magic Formula RAW",)
+
+
+def test_no_lens_voted_is_said_in_words_never_0_of_0():
+    ag = build_agreement([_not_applying("Value + Momentum"), _not_applying("Growth")])
+    assert ag.n_voted == 0 and ag.n_not_applying == 2
+    assert ag.headline == "No lens voted: every ticked lens's rules exclude this company"
+    assert "0 of 0" not in ag.headline
+    assert ag.table_row("Company Co")["BUY votes"] == "no vote"
+
+
+def test_three_votes_is_x_of_3_and_nothing_is_said_about_lenses_that_did_not_apply():
+    ag = build_agreement([_ranked("Alpha", "buy", 2), _ranked("Beta", "buy", 3),
+                          _ranked("Gamma", "hold", 8)])
+    assert ag.n_voted == 3 and ag.n_not_applying == 0
+    assert ag.headline == "BUY on 2 of 3 votes"
+    assert ag.table_row("Company Co")["BUY votes"] == "2 of 3"
+    one = build_agreement([_ranked("Alpha", "buy", 2)])
+    assert one.headline == "BUY on 1 of 1 vote"
+
+
+def test_the_facts_pack_carries_voted_did_not_apply_and_check_counts_separately(tmp_path):
+    report = _run([RAW, SCREENED, "forensic_v1"], tmp_path=tmp_path, save=False)
+    say = company_facts_pack(report)["agreement"]
+    assert say["lenses_that_voted"] == 1 and say["lenses_that_did_not_apply"] == 1
+    assert say["check_lenses_that_do_not_vote"] == 1
+    assert "voting_lenses" not in say                       # the ambiguous lump is gone
+    assert say["headline"] == report.agreement.headline
+    assert [l["applies"] for l in company_facts_pack(report)["lenses"]] == [True, False, True]
+
+
+def test_the_run_tab_table_counts_only_the_lenses_that_voted_on_that_name():
+    """The same defect lived in the Run tab's agreement table: 'BUY votes: 2 of 3' where the third
+    lens had not ranked the name at all. The denominator is now the lenses that voted on THAT name."""
+    from aristos_council.pipeline import LensAgreement, LensAgreementRow, lens_agreement_table
+
+    row = LensAgreementRow(ticker="X", display="X Corp", buy_lenses=("Alpha", "Beta"),
+                           hold_lenses=(), sell_lenses=(),
+                           not_ranked=(("Gamma", "return on invested capital 4%"),))
+    ag = LensAgreement(voting_ids=["a", "b", "c"], voting_labels={"a": "Alpha", "b": "Beta",
+                                                                   "c": "Gamma"},
+                       check_ids=[], check_labels={}, rows=[row])
+    _cols, rows = lens_agreement_table(ag)
+    assert rows[0]["BUY votes"] == "2 of 2: Alpha, Beta (1 did not apply)"
+    full = LensAgreementRow(ticker="Y", display="Y Corp", buy_lenses=("Alpha",),
+                            hold_lenses=("Beta",), sell_lenses=("Gamma",))
+    assert lens_agreement_table(LensAgreement(
+        voting_ids=["a", "b", "c"], voting_labels={}, check_ids=[], check_labels={},
+        rows=[full]))[1][0]["BUY votes"] == "1 of 3: Alpha"
+
+
+# =========================================================================== #
+# PEER-RANK-COLUMNS-1 - one rank column per ticked lens in the Peers table
+# =========================================================================== #
+def _cols(report):
+    from aristos_council.peer_table import rank_columns
+    return rank_columns(report)
+
+
+def test_one_rank_column_per_ticked_lens_that_ran_headed_with_its_size(tmp_path):
+    report = _run([RAW, SCREENED, "forensic_v1"], tmp_path=tmp_path, save=False)
+    cols = _cols(report)
+    assert [c.kind for c in cols] == ["rank", "rank", "mark"]
+    assert cols[0].header == f"Magic Formula RAW rank (of {len(report.lens_ranks[RAW]['ranked'])})"
+    assert cols[2].header == "Forensic mark (check - does not vote)"          # labelled as a mark
+    assert cols[0].header.endswith(f"(of {N_PEERS + 1})")
+
+
+def test_the_company_is_the_first_row_marked_and_every_rank_is_the_saved_one(tmp_path):
+    from aristos_council.peer_table import peer_rows
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    rows = peer_rows(report.peer_group, _cols(report), report.ticker)
+    assert rows[0].is_company and rows[0].marked_ticker == "CO (this company)"
+    assert len(rows) == N_PEERS + 1
+    saved = {e["ticker"]: e["position"] for e in report.lens_ranks[RAW]["ranked"]}
+    assert rows[0].ranks[0][1] == saved["CO"] == report.votes[0].position    # the vote's own rank
+    for row in rows[1:]:
+        assert row.ranks[0][1] == saved[row.ticker.split(".")[0]]
+    # the peers stay in USD-cap order below the company
+    caps = [r.cap_usd for r in rows[1:]]
+    assert caps == sorted(caps, reverse=True)
+
+
+def test_a_company_the_lens_screens_out_reads_does_not_apply_not_blank_not_a_number(tmp_path):
+    from aristos_council.peer_table import peer_rows
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    rows = peer_rows(report.peer_group, _cols(report), report.ticker)
+    company = rows[0]
+    assert company.ranks[1] == (_cols(report)[1].header, "does not apply")     # CO fails min ROIC
+    assert isinstance(company.ranks[0][1], int)                                 # ...but RAW ranked it
+
+
+def test_no_lens_ticked_or_no_peer_group_means_no_rank_columns(tmp_path):
+    none_ticked = _run([], tmp_path=tmp_path, save=False)
+    assert _cols(none_ticked) == []
+    lonely = _run([RAW], tmp_path=tmp_path, store=_Store([_row("P00.US", "P00")]), save=False)
+    assert _cols(lonely) == []
+    assert "Rank" not in format_company_report(lonely) or "rank (of" not in format_company_report(lonely)
+
+
+def test_the_text_and_html_exports_carry_the_same_columns_with_the_company_first(tmp_path):
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    headers = [c.header for c in _cols(report)]
+    text, html = format_company_report(report), company_report_html(report)
+    for header in headers:
+        assert header in text and header in html
+    assert text.index("CO (this company)") < text.index("P00.US")
+    assert html.index("CO (this company)") < html.index("P00.US")
+    assert "does not apply" in text.split("PEERS")[1].split("VALUATION BAND")[0]
+
+
+def test_the_pages_rank_columns_are_numeric_so_they_sort_by_rank(tmp_path):
+    from aristos_council.peer_table import peer_frame_records, rank_display
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    records = peer_frame_records(report.peer_group, _cols(report), report.ticker)
+    raw_header, screened_header = [c.header for c in _cols(report)]
+    assert records[0]["Ticker"] == "CO (this company)"
+    assert all(isinstance(r[raw_header], float) for r in records)              # sortable numbers
+    assert records[0][screened_header] is None                                 # no number to sort on
+    assert rank_display(records[0][screened_header]) == "does not apply"       # ...and it says so
+    assert rank_display(3.0) == "3" and rank_display(None) == "does not apply"
+
+
+def test_a_peer_with_no_data_reads_no_data_not_does_not_apply():
+    from aristos_council.peer_table import RankColumn, rank_display
+    col = RankColumn("Lens rank (of 2)", "rank", {"A": 1, "B": "no data", "C": "does not apply"})
+    assert rank_display(col.values["B"]) == "no data"
+    assert rank_display(col.values["C"]) == "does not apply"
+
+
+def test_the_columns_cost_nothing_no_fetch_no_model_call(tmp_path):
+    """Built from the ranks the run already saved: the day-cache counters do not move."""
+    class _Counting(_Adapter):
+        calls = 0
+
+        def get_fundamentals(self, ticker):
+            type(self).calls += 1
+            return super().get_fundamentals(ticker)
+
+        def get_price_history(self, ticker, *, start, end):
+            type(self).calls += 1
+            return super().get_price_history(ticker, start=start, end=end)
+    adapter = _Counting()
+    report = run_company_report("CO", [RAW, SCREENED], adapter=adapter, strategies_dir=STRAT_DIR,
+                                universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
+                                store=_table(), save=False)
+    before = _Counting.calls
+    for _ in range(3):
+        _cols(report)
+        format_company_report(report)
+        company_report_html(report)
+    assert _Counting.calls == before                        # not one more fetch, with columns or not
+    assert report.summary is None                            # and no model call

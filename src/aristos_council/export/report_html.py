@@ -1607,8 +1607,8 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     for), agreement headline and table, each lens's vote, peers, valuation band, absolute readings,
     analyst forecasts, Sources. The same objects the text export prints, so the two cannot drift."""
     from ..company_check import company_sources
-    from ..company_report import (BAND_NOT_REQUESTED, HOUSE_LINE, NO_LENS_REASON,
-                                  agreement_table_lines)
+    from ..company_report import HOUSE_LINE, NO_LENS_REASON
+    from ..peer_table import rank_columns
 
     c = report.check
     stamp = _local_stamp(run_start)
@@ -1645,17 +1645,16 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
         parts.append(f'<p class="note">{_esc(report.no_vote_reason or NO_LENS_REASON)}</p>')
     parts.append("</section>")
 
-    parts.append(_company_peers_html(c))
+    parts.append(_company_peers_html(c, rank_columns(report), report.ticker))
 
     parts.append('<section class="section"><h2>Valuation band</h2>'
                  '<p class="note">This company against its own history; a mark, never a veto.</p>'
-                 f"<p>{_esc(c.valuation_band if report.with_valuation_band else BAND_NOT_REQUESTED)}"
-                 "</p></section>")
+                 f"<p>{_esc(c.valuation_band)}</p></section>")
     parts.append(_absolute_readings_html(c, with_analyst=False)
                  or '<section class="section"><h2>Absolute readings</h2>'
                     '<p class="note">none available</p></section>')
     parts.append(_analyst_forecasts_html(c)
-                 or '<section class="section"><h2>Analyst forecasts</h2>'
+                 or '<section class="section"><h2>What analysts say</h2>'
                     '<p class="note">not available</p></section>')
     sources = company_sources(c)
     if sources:
@@ -1691,9 +1690,9 @@ def _absolute_readings_html(result, *, with_analyst: bool = True) -> str:
                    + "</h3>" + _bullets(_esc(ln) for ln in growth.lines()))
         out.extend(f'<p class="note">{_esc(ln)}</p>' for ln in growth.notes())
     if trend is not None:
-        out.append("<h3>Analyst forecast direction"
+        out.append("<h3>What analysts say"
                    + _esc(mixed_source_marker(result, trend.source)) + "</h3>"
-                   f"<p><strong>{_esc(trend.headline)}</strong></p>" + _analyst_table_html(trend))
+                   + _what_analysts_say_html(trend))
     out.append("</section>")
     return "".join(out)
 
@@ -1710,27 +1709,31 @@ def _analyst_forecasts_html(result) -> str:
     trend = result.analyst_trend
     if trend is None:
         return ""
-    return ('<section class="section"><h2>Analyst forecasts</h2>'
+    return ('<section class="section"><h2>What analysts say</h2>'
             f'<p class="note">A mark: it does not vote and changes no verdict'
             f'{_esc(mixed_source_marker(result, trend.source))}.</p>'
-            f"<p><strong>{_esc(trend.headline)}</strong></p>" + _analyst_table_html(trend)
-            + "</section>")
+            + _what_analysts_say_html(trend) + "</section>")
 
 
-def _analyst_table_html(trend) -> str:
-    from ..abs_readings import TABLE_COLUMNS
-    if not trend.rows:
-        return ""
-    body = [[_esc(row.label)] + [f'<span class="mono">{_esc(c)}</span>' for c in row.cells()]
-            for row in trend.rows]
-    note = trend.currency_note()
-    return (_table(["", *TABLE_COLUMNS], body)
-            + (f'<p class="note">{_esc(note)}</p>' if note else ""))
+def _what_analysts_say_html(trend) -> str:
+    """The ratings (a line, a one-row table, the target sentence), then the forecast sentences."""
+    ratings = trend.ratings
+    out = []
+    if ratings is not None and ratings.available:
+        head, row = ratings.table()
+        out.append(f"<p><strong>{_esc(ratings.summary_line())}</strong></p>"
+                   + _table(head, [[f'<span class="mono">{_esc(c)}</span>' for c in row]]))
+        out.extend(f"<p>{_esc(line)}</p>" for line in ratings.lines()[1:])
+    else:
+        out.append(f'<p class="note">{_esc(ratings.lines()[0] if ratings is not None else "Analyst ratings are not shown: no analyst data.")}</p>')
+    out.extend(f"<p>{_esc(sentence)}</p>" for sentence in trend.forecast_sentences())
+    return "".join(out)
 
 
-def _company_peers_html(result) -> str:
-    """The peers table, market caps through the one money formatter."""
-    from ..peer_table import ONE_SYSTEM_NOTE, has_one_system_peers, peer_rows
+def _company_peers_html(result, columns=None, company_ticker: str = "") -> str:
+    """The peers table, market caps through the one money formatter; with ``columns`` the company is
+    the first row and there is one rank column per lens."""
+    from ..peer_table import ONE_SYSTEM_NOTE, has_one_system_peers, peer_rows, rank_display
     group = result.peer_group
     if group is None:
         return (f'<section class="section"><h2>Peers</h2><p class="note">The market index is '
@@ -1739,14 +1742,17 @@ def _company_peers_html(result) -> str:
     out = ['<section class="section"><h2>Peers</h2>']
     if group.available:
         out.append(f'<p class="note">{_esc(group.sentence())}</p>')
-        rows = peer_rows(group)
+        columns = list(columns or ())
+        rows = peer_rows(group, columns, company_ticker)
         body = [[f'<span class="mono">{_esc(r.marked_ticker)}</span>', _esc(r.name),
                  _esc(r.exchange),
                  f'<span class="mono">{_esc(r.usd_text)}</span>',
-                 f'<span class="mono">{_esc(r.local_text)}</span>', _esc(r.sub_industry)]
-                for r in rows]
+                 f'<span class="mono">{_esc(r.local_text)}</span>',
+                 *(f'<span class="mono">{_esc(rank_display(cell) if c.kind == "rank" else cell)}'
+                   f"</span>" for c, (_h, cell) in zip(columns, r.ranks)),
+                 _esc(r.sub_industry)] for r in rows]
         out.append(_table(["Ticker", "Name", "Exchange", "Market cap (USD)", "Market cap (local)",
-                           "Sub-industry"], body))
+                           *(c.header for c in columns), "Sub-industry"], body))
         if has_one_system_peers(rows):
             out.append(f'<p class="note">{_esc(ONE_SYSTEM_NOTE)}</p>')
     else:

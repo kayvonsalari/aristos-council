@@ -37,6 +37,7 @@ from .company_check import (CompanyCheckResult, absolute_reading_lines, analyst_
                             attach_peers, company_sources, mixed_source_marker, peers_lines,
                             run_company_check)
 from .data.adapter import normalize_ticker
+from .peer_table import rank_columns
 from .tools.valuation_band import ordinal
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -44,7 +45,6 @@ _ROOT = Path(__file__).resolve().parents[2]
 HOUSE_LINE = ("The math judges: each vote below is the lens's own verdict on this company ranked "
               "among its peer group, and every lens counts once. Nothing here is a recommendation.")
 NO_LENS_REASON = "No lens is ticked, so there is nothing to vote."
-BAND_NOT_REQUESTED = "not requested - tick \"Valuation band\" to see where today's price sits in its own history"
 SUMMARY_NOT_ASKED = ""          # an unticked summary leaves NO section, not a placeholder
 
 
@@ -104,9 +104,14 @@ class LensVote:
 
 @dataclass(frozen=True)
 class CompanyAgreement:
-    """The equal-vote agreement for ONE company (SHORTLIST-3's rule, read off its own votes)."""
+    """The equal-vote agreement for ONE company (SHORTLIST-3's rule, read off its own votes).
 
-    n_voting: int
+    AGREEMENT-COUNT-1: the denominator is the lenses that actually VOTED - ranked the company. A lens
+    whose rules exclude it did not vote and is counted apart (``not_applicable``), and a check lens
+    (Forensic) never votes at all (``checks``). Counting a lens that did not apply as a voter is how
+    AZN.L read "BUY on 0 of the 3 voting lenses" when one lens had voted."""
+
+    n_ticked: int                     # voting lenses ticked (they voted, or did not apply)
     buy: tuple = ()                   # voting lens labels that rated the company BUY
     hold: tuple = ()
     sell: tuple = ()
@@ -119,33 +124,47 @@ class CompanyAgreement:
         return len(self.buy)
 
     @property
+    def n_voted(self) -> int:
+        """Lenses that actually voted: ranked the company BUY, HOLD or SELL."""
+        return len(self.buy) + len(self.hold) + len(self.sell)
+
+    @property
+    def n_not_applying(self) -> int:
+        return len(self.not_applicable)
+
+    @property
+    def n_checks(self) -> int:
+        """Check lenses ticked: they mark, they never vote."""
+        return len(self.checks)
+
+    def _did_not_apply(self) -> str:
+        k = self.n_not_applying
+        return f"{k} {'lens' if k == 1 else 'lenses'} did not apply to this company"
+
+    @property
     def headline(self) -> str:
-        if not self.n_voting:
+        """"BUY on 0 of 1 vote; 2 lenses did not apply to this company", or - when nothing voted -
+        "No lens voted: every ticked lens's rules exclude this company". Never "0 of 0"."""
+        if not self.n_ticked:
             return ("No voting lens is ticked - every lens here is a check, and a check marks "
                     "rather than votes.")
-        plural = "lens" if self.n_voting == 1 else "lenses"
-        applied = len(self.buy) + len(self.hold) + len(self.sell)
-        if not applied:
-            return (f"None of the {self.n_voting} voting {plural} applies to this company, so "
-                    f"there is no vote.")
-        head = f"BUY on {self.buy_votes} of the {self.n_voting} voting {plural}"
-        if self.not_applicable:
-            k = len(self.not_applicable)
-            head += f" ({k} {'does' if k == 1 else 'do'} not apply to this company)"
-        return head
+        if not self.n_voted:
+            return "No lens voted: every ticked lens's rules exclude this company"
+        head = f"BUY on {self.buy_votes} of {self.n_voted} vote{'' if self.n_voted == 1 else 's'}"
+        return f"{head}; {self._did_not_apply()}" if self.n_not_applying else head
 
     def table_row(self, display: str) -> dict:
         """The one row of the agreement table, the Run tab's columns for a single company."""
         checks = "; ".join(f"{label}: {word}" for label, word in self.checks.items()) or "none ticked"
         return {"Company": display,
-                "BUY votes": f"{self.buy_votes} of {self.n_voting}" if self.n_voting else "-",
+                "BUY votes": (f"{self.buy_votes} of {self.n_voted}" if self.n_voted else "no vote"),
                 "Voted BUY": ", ".join(self.buy) or "none",
                 "Checks": checks,
                 "Marks": "; ".join(self.marks) or "none"}
 
 
-def build_agreement(votes: list[LensVote], *, band_percentile: Optional[float] = None,
-                    band_requested: bool = False) -> CompanyAgreement:
+def build_agreement(votes: list[LensVote], *,
+                    band_percentile: Optional[float] = None) -> CompanyAgreement:
     """The agreement over ``votes`` - pure, so it is tested without a run."""
     from .pipeline import band_mark, check_mark
     from .report_language import verdict_word
@@ -161,10 +180,10 @@ def build_agreement(votes: list[LensVote], *, band_percentile: Optional[float] =
             marks.append(check_mark(v.label, v.verdict))
         else:
             check_words[v.label] = "does not apply"
-    marks.append(band_mark(band_percentile) if band_requested else "")
+    marks.append(band_mark(band_percentile))
     marks += [f"{v.label}: {v.factor_note.strip(' ·')}" for v in votes if v.ranked and v.factor_note]
     return CompanyAgreement(
-        n_voting=len(voting),
+        n_ticked=len(voting),
         buy=tuple(v.label for v in ranked if v.verdict == "buy"),
         hold=tuple(v.label for v in ranked if v.verdict == "hold"),
         sell=tuple(v.label for v in ranked if v.verdict == "sell"),
@@ -183,7 +202,6 @@ class CompanyReport:
     votes: list = field(default_factory=list)         # LensVote, in the order the lenses were ticked
     agreement: Optional[CompanyAgreement] = None
     no_vote_reason: str = ""                          # why there is no vote, when there is none
-    with_valuation_band: bool = True
     summary: object = None                            # a reader.ReaderResult, only when asked for
     universe: list = field(default_factory=list)      # the tickers every lens ranked, company first
     lens_ranks: dict = field(default_factory=dict)    # strategy id -> the run's ranks, for the record
@@ -222,6 +240,15 @@ def peers_for_ranking(group) -> tuple[list[str], list[str]]:
         if symbol not in out:
             out.append(symbol)
     return out, skipped
+
+
+def _us_line(ticker: str, store) -> Optional[str]:
+    """The company's US line, for the ratings EODHD publishes only for US listings - or None."""
+    from .market_index import IndexStore, load_config, us_line_of
+    try:
+        return us_line_of(ticker, store=store or IndexStore(load_config()["root"]))
+    except Exception:                                     # no index -> no fallback, not a failure
+        return None
 
 
 def _default_adapter(today: date):
@@ -281,7 +308,7 @@ def lens_ranks_record(multi) -> dict:
 
 def run_company_report(
     ticker: str, lens_ids: list[str], *, adapter=None, strategies_dir=None, universes_dir=None,
-    runs_dir=None, today: Optional[date] = None, with_valuation_band: bool = True,
+    runs_dir=None, today: Optional[date] = None,
     with_summary: bool = False, reader_runner=None, store=None, save: bool = True,
     progress: Optional[Callable[[str], None]] = None,
 ) -> CompanyReport:
@@ -303,10 +330,10 @@ def run_company_report(
     check = run_company_check(
         ticker, ids[0] if ids else DEFAULT_ID, "", adapter=adapter,
         strategies_dir=strategies_dir, universes_dir=universes_dir, runs_dir=runs_dir,
-        today=today, with_analyst_trend=True, with_valuation_band=with_valuation_band)
+        today=today, with_analyst_trend=True,
+        ratings_fallback_symbol=_us_line(ticker, store))
     attach_peers(check, store=store)
     report = CompanyReport(ticker=ticker, check=check, lens_ids=ids,
-                           with_valuation_band=with_valuation_band,
                            run_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
     # ----- the votes ---------------------------------------------------------------------- #
@@ -344,8 +371,7 @@ def run_company_report(
     # No agreement when no lens ran (no peer group, no data): "no vote, and here is why" is the
     # honest statement, not "none of the lenses applies".
     if report.votes and any(v.status != "no_group" for v in report.votes):
-        report.agreement = build_agreement(report.votes, band_percentile=check.band_percentile,
-                                           band_requested=with_valuation_band)
+        report.agreement = build_agreement(report.votes, band_percentile=check.band_percentile)
 
     # ----- the opt-in summary: the ONE model call, and only when asked for ------------------ #
     if with_summary:
@@ -374,7 +400,6 @@ def report_record(report: CompanyReport) -> dict:
     return {
         "kind": "company_report", "ticker": report.ticker, "company": report.display,
         "run_at": report.run_at, "lenses": list(report.lens_ids),
-        "valuation_band_requested": report.with_valuation_band,
         "peer_snapshot": peer_snapshot(group) if group is not None and group.subject else None,
         "peer_sentence": group.sentence() if group is not None else "",
         "universe": list(report.universe),
@@ -415,7 +440,7 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # summary -> agreement (headline + table) -> each lens's vote -> peers -> valuation band ->
 # absolute readings -> analyst forecasts -> sources
 SECTION_ORDER = ("summary", "agreement", "lens votes", "peers", "valuation band",
-                 "absolute readings", "analyst forecasts", "sources")
+                 "absolute readings", "what analysts say", "sources")
 
 
 def agreement_table_lines(report: CompanyReport) -> list[str]:
@@ -479,12 +504,12 @@ def format_company_report(report: CompanyReport) -> str:
         lines.append(f"  {report.no_vote_reason or NO_LENS_REASON}")
     lines.append("")
 
-    peer_block = peers_lines(c)
+    peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
     lines.extend(peer_block if peer_block else ["PEERS: none computed"])
     lines.append("")
 
     lines.append("VALUATION BAND (this company against its own history; a mark, never a veto)")
-    lines.append(f"  {c.valuation_band if report.with_valuation_band else BAND_NOT_REQUESTED}")
+    lines.append(f"  {c.valuation_band}")
     lines.append("")
 
     lines.append("ABSOLUTE READINGS (no comparison group; they do not vote)")
@@ -495,7 +520,7 @@ def format_company_report(report: CompanyReport) -> str:
     forecasts = analyst_forecast_lines(c)
     marker = (mixed_source_marker(c, c.analyst_trend.source)
               if getattr(c, "analyst_trend", None) is not None else "")
-    lines.append("ANALYST FORECASTS (a mark: it does not vote and changes no verdict)" + marker)
+    lines.append("WHAT ANALYSTS SAY (a mark: it does not vote and changes no verdict)" + marker)
     if forecasts:
         lines.extend(forecasts[1:])                       # the heading above replaces the sub-heading
     else:
@@ -541,7 +566,11 @@ def company_facts_pack(report: CompanyReport) -> dict:
                         {"sentence": report.no_vote_reason or "no peer group"})},
         "lenses": lenses,
         "agreement": ({
-            "available": True, "headline": ag.headline, "voting_lenses": ag.n_voting,
+            "available": True, "headline": ag.headline,
+            # AGREEMENT-COUNT-1: three separate counts, never one "voting lenses" that lumps a lens
+            # that did not apply in with the ones that voted
+            "lenses_that_voted": ag.n_voted, "lenses_that_did_not_apply": ag.n_not_applying,
+            "check_lenses_that_do_not_vote": ag.n_checks,
             "buy_votes": ag.buy_votes, "buy_lenses": list(ag.buy), "hold_lenses": list(ag.hold),
             "sell_lenses": list(ag.sell),
             "does_not_apply": [f"{label} ({why})" for label, why in ag.not_applicable],
@@ -550,17 +579,22 @@ def company_facts_pack(report: CompanyReport) -> dict:
             "buy_lenses_to_name": list(ag.buy),
             "top_agreement": []} if ag is not None else
             {"available": False, "reason": report.no_vote_reason}),
-        "valuation_band": (c.valuation_band if report.with_valuation_band
-                           else "not requested"),
+        "valuation_band": c.valuation_band,
         "absolute_readings": {
             "debt_and_cash": c.debt_and_cash.lines() if c.debt_and_cash is not None else [],
             "growth_record": ((c.growth_record.lines() + c.growth_record.notes())
                               if c.growth_record is not None else [])},
-        "analyst_forecasts": ({"headline": trend.headline,
-                               "rows": [dict(zip(("period", "expected_now", "three_months_ago",
-                                                  "change", "analysts"), (r.label, *r.cells())))
-                                        for r in trend.rows]}
-                              if trend is not None else {"headline": "not available"}),
+        "what_analysts_say": ({
+            "ratings": ({"summary": trend.ratings.summary_line(),
+                         "strong_buy": trend.ratings.counts[0], "buy": trend.ratings.counts[1],
+                         "hold": trend.ratings.counts[2], "sell": trend.ratings.counts[3],
+                         "strong_sell": trend.ratings.counts[4], "total": trend.ratings.total,
+                         "average_price_target": trend.ratings.target_sentence,
+                         "of_the_us_listing": not trend.ratings.own_listing}
+                        if trend.ratings is not None and trend.ratings.available
+                        else {"not_available": trend.ratings.note if trend.ratings else ""}),
+            "forecasts": trend.forecast_sentences()}
+            if trend is not None else {"not_available": "no analyst data"}),
     }
 
 
@@ -607,7 +641,6 @@ def main(argv=None) -> int:
     parser.add_argument("--lens", action="append", dest="lenses",
                         help="a rank strategy id to tick (repeat for several); default: "
                              + ", ".join(DEFAULT_LENSES))
-    parser.add_argument("--no-band", action="store_true", help="leave the valuation band unticked")
     parser.add_argument("--summary", action="store_true",
                         help="tick the plain-English summary (one model call; needs ANTHROPIC_API_KEY)")
     parser.add_argument("--no-save", action="store_true", help="do not write the run under runs/")
@@ -619,7 +652,7 @@ def main(argv=None) -> int:
     except Exception:
         pass
     report = run_company_report(
-        args.ticker, args.lenses or list(DEFAULT_LENSES), with_valuation_band=not args.no_band,
+        args.ticker, args.lenses or list(DEFAULT_LENSES),
         with_summary=args.summary, save=not args.no_save,
         progress=lambda m: print(m, flush=True) if os.environ.get("ARISTOS_VERBOSE") else None)
     print(format_company_report(report))

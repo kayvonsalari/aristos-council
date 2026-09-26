@@ -477,12 +477,145 @@ HEADLINES = {
     MARK_FALLING: "Analysts are cutting their profit forecasts",
 }
 
-TABLE_COLUMNS = ("Profit per share expected now", "Three months ago", "Change", "Analysts")
+# ANALYST-RATINGS-1 - the forecast wording, by the same rule as the mark (rising / flat within +/-2% /
+# falling), said as a plain clause after "so ...".
+_VIEW_CLAUSE = {
+    MARK_RISING: "analysts have raised their forecasts",
+    MARK_FLAT: "their view has barely changed",
+    MARK_FALLING: "analysts have cut their forecasts",
+}
+
+RATINGS_HEADINGS = ("Strong buy", "Buy", "Hold", "Sell", "Strong sell", "Total")
+
+# Quote codes for a MINOR unit (pence, cents, agorot) and the major unit they are a hundredth of.
+_MINOR_UNITS = {"GBX": "GBP", "GBp": "GBP", "GBPENCE": "GBP", "GBP_PENCE": "GBP", "ZAc": "ZAR",
+                "ZAC": "ZAR", "ILA": "ILS"}
+# A target and a price in the SAME unit differ by a small factor; a hundredfold gap means one of them
+# is in pence and the other in pounds. Outside this band the two are not compared.
+_SAME_UNIT_RATIO = (0.25, 4.0)
+
+
+def plain_company_name(name: str) -> str:
+    """"AstraZeneca PLC" -> "AstraZeneca", "Micron Technology, Inc." -> "Micron Technology": the
+    corporate suffix is not how a person says the name. Empty in, empty out."""
+    import re
+
+    text = re.sub(r"\s*\(.*?\)\s*$", "", (name or "").strip())
+    suffixes = {"inc", "inc.", "corp", "corp.", "corporation", "plc", "ltd", "ltd.", "limited", "sa",
+                "s.a.", "ag", "nv", "n.v.", "se", "co", "co.", "company", "spa", "s.p.a.", "ab",
+                "asa", "oyj", "as", "a/s", "kgaa", "sab", "holdings", "holding", "group"}
+    words = text.replace(",", " ").split()
+    while len(words) > 1 and words[-1].lower() in suffixes:
+        words.pop()
+    return " ".join(words)
+
+
+@dataclass(frozen=True)
+class RatingsView:
+    """The analysts' rating counts and average price target, as the page says them.
+
+    ``note`` is the reason when there is nothing to show; a target that could not be compared with
+    the price says why in ``target_note`` and the counts still stand."""
+
+    counts: tuple = ()                # strong buy, buy, hold, sell, strong sell
+    total: int = 0
+    target: Optional[float] = None    # in ``currency``, after any pence -> pounds step
+    currency: str = ""
+    price: Optional[float] = None     # today's price in the SAME currency and unit as ``target``
+    target_note: str = ""
+    note: str = ""
+    listing: str = ""                 # the EODHD symbol these ratings describe
+    own_listing: bool = True          # False when they are the same company's US line
+
+    @property
+    def available(self) -> bool:
+        return bool(self.total)
+
+    def summary_line(self) -> str:
+        """"24 analysts: 9 strong buy, 8 buy, 6 hold, 1 sell, 0 strong sell"."""
+        sb, b, h, s, ss = self.counts
+        return (f"{self.total} analysts: {sb} strong buy, {b} buy, {h} hold, {s} sell, "
+                f"{ss} strong sell")
+
+    def table(self) -> tuple[list[str], list[str]]:
+        return list(RATINGS_HEADINGS), [str(n) for n in (*self.counts, self.total)]
+
+    @property
+    def target_sentence(self) -> str:
+        """"Average price target £135.20, 12% above today's price" - or why there is none."""
+        if self.target is None:
+            return self.target_note or "No average price target is given."
+        money = format_money(self.target, self.currency or None)
+        if self.price is None or self.price <= 0:
+            return (f"Average price target {money}"
+                    + (f" ({self.target_note})" if self.target_note else ""))
+        move = (self.target - self.price) / self.price
+        if abs(move) < 0.005:
+            gap = "about the same as today's price"
+        else:
+            gap = f"{abs(move):.0%} {'above' if move > 0 else 'below'} today's price"
+        return f"Average price target {money}, {gap}"
+
+    def lines(self) -> list[str]:
+        if not self.available:
+            return [f"Analyst ratings are not shown: {self.note}"]
+        out = [self.summary_line()]
+        if self.listing and not self.own_listing:
+            out.append(f"(these are the ratings for the US listing {self.listing}; the company's "
+                       f"own listing has none)")
+        out.append(self.target_sentence)
+        return out
+
+
+def _minor(code: str) -> Optional[str]:
+    return _MINOR_UNITS.get((code or "").strip())
+
+
+def ratings_view(ratings, note: str, *, price: Optional[float] = None,
+                 price_currency: str = "", own_listing: bool = True) -> RatingsView:
+    """The ratings and the target against today's price - in ONE unit, or not at all.
+
+    ``price`` is the latest close of the listing the RATINGS describe (the company's own, or its US
+    line's), in ``price_currency`` as the price feed quotes it. The target has the currency of its
+    listing. They are compared only when they are provably the same currency: equal codes, or a
+    pence code on one side and its pound on the other (converted, both stated in pounds). A target
+    whose currency is unknown, or that disagrees with the price's, is shown WITHOUT a comparison and
+    says why - never converted, never guessed."""
+    if ratings is None:
+        return RatingsView(note=note or "no analyst ratings are available")
+    counts = (ratings.strong_buy, ratings.buy, ratings.hold, ratings.sell, ratings.strong_sell)
+    base = dict(counts=counts, total=ratings.total, listing=ratings.symbol, own_listing=own_listing)
+    target, tcur = ratings.target_price, (ratings.currency or "").strip()
+    if target is None:
+        return RatingsView(**base, target_note="No average price target is given.")
+    if not tcur:
+        return RatingsView(**base, target_note=(
+            "The currency of the average price target is not stated by the source, so it is not "
+            "compared with the price."))
+    # like with like: put target and price in one currency AND one unit, or abstain
+    pcur = (price_currency or "").strip()
+    t_major, t_scale = (_minor(tcur) or tcur), (100.0 if _minor(tcur) else 1.0)
+    p_major, p_scale = (_minor(pcur) or pcur), (100.0 if _minor(pcur) else 1.0)
+    money_target = target / t_scale
+    if price is None or not pcur:
+        return RatingsView(**base, target=money_target, currency=t_major,
+                           target_note="today's price is not available to compare with")
+    if t_major.upper() != p_major.upper():
+        return RatingsView(**base, target=target, currency=tcur, target_note=(
+            f"the target is in {tcur} but the price is in {pcur}, so they are not compared"))
+    money_price = price / p_scale
+    ratio = money_target / money_price if money_price else 0.0
+    if not _SAME_UNIT_RATIO[0] <= ratio <= _SAME_UNIT_RATIO[1]:
+        return RatingsView(**base, target=money_target, currency=t_major, target_note=(
+            f"the target ({format_money(money_target, t_major)}) and the price "
+            f"({format_money(money_price, p_major)}) disagree by a factor no target explains, so "
+            f"they are not compared"))
+    return RatingsView(**base, target=money_target, currency=t_major, price=money_price)
 
 
 @dataclass(frozen=True)
 class ForecastRow:
-    """One fiscal year of the analyst table: ``label`` is "This year (to Dec 2026)"."""
+    """One fiscal year of the analysts' EPS forecast: ``label`` is "this year (to Dec 2026)"."""
 
     label: str
     now: Optional[float] = None
@@ -496,16 +629,26 @@ class ForecastRow:
             return None
         return (self.now - self.ago_90d) / abs(self.ago_90d)
 
-    def cells(self) -> tuple[str, str, str, str]:
-        def eps(v):
-            return "—" if v is None else format_money(v, self.currency or None)
-        change = "—" if self.change is None else f"{self.change:+.1%}"
-        return (eps(self.now), eps(self.ago_90d), change,
-                "—" if self.analysts is None else str(self.analysts))
+    @property
+    def mark(self) -> str:
+        if self.change is None:
+            return ""
+        return _direction(self.now, self.ago_90d)[0]
+
+    def sentence(self, company: str, when: str) -> str:
+        """"Analysts expect AstraZeneca to earn $10.25 per share this year. Three months ago they
+        expected $10.30, so their view has barely changed." """
+        who = company or "the company"
+        money = lambda v: format_money(v, self.currency or None)
+        head = f"Analysts expect {who} to earn {money(self.now)} per share {when}."
+        if self.ago_90d is None or self.change is None:
+            return (f"{head} There is no usable figure from three months ago to compare with.")
+        return (f"{head} Three months ago they expected {money(self.ago_90d)}, so "
+                f"{_VIEW_CLAUSE[self.mark]}.")
 
 
 def _period_label(prefix: str, period_end: str) -> str:
-    """"This year (to Dec 2026)" from a fiscal year-end date. Unparseable -> the bare prefix."""
+    """"this year (to Dec 2026)" from a fiscal year-end date. Unparseable -> the bare prefix."""
     try:
         from datetime import date
         end = date.fromisoformat(str(period_end)[:10])
@@ -516,11 +659,11 @@ def _period_label(prefix: str, period_end: str) -> str:
 
 @dataclass(frozen=True)
 class AnalystTrend:
-    """The mark for the current fiscal year, the next year beside it, and where both came from.
+    """WHAT ANALYSTS SAY: the ratings first (counts and the average target against today's price),
+    then the forecasts as plain sentences. A MARK - it does not vote and changes no verdict.
 
-    Batch 8: the page shows ONE sentence (``headline``) and a small table (``rows``) in the
-    accounts' currency. The mark, its rule (rising/flat/falling, a +/-2% band) and the abstentions
-    are unchanged; how many units the request cost is logged, not printed."""
+    The mark (rising / flat / falling for the current year), its +/-2% band and its abstentions are
+    the earlier rule, unchanged; how many units the request cost is logged, not printed."""
 
     mark: str = ""                                    # one of MARK_*, or "" when abstaining
     direction: Reading = field(default_factory=Reading)
@@ -529,7 +672,9 @@ class AnalystTrend:
     units_charged: int = 0
     cached: bool = False
     rows: tuple = ()                                  # ForecastRow, this year then next year
-    currency: str = ""
+    currency: str = ""                                # of the accounts (the forecasts' currency)
+    company: str = ""                                 # plain name for the sentences
+    ratings: Optional[RatingsView] = None
 
     @property
     def available(self) -> bool:
@@ -537,7 +682,7 @@ class AnalystTrend:
 
     def cost_line(self) -> str:
         if self.units_charged:
-            return f"{self.units_charged} EODHD units charged (one /fundamentals request)"
+            return f"{self.units_charged} EODHD units charged"
         return "0 EODHD units (cached for today)" if self.cached else "0 EODHD units (no request made)"
 
     def tag(self) -> str:
@@ -552,42 +697,62 @@ class AnalystTrend:
         return self.direction.note or self.direction.label or "no analyst estimate is available"
 
     def currency_note(self) -> str:
-        """Said once under the table when the accounts' currency is unknown - never a guess."""
+        """Said once when the accounts' currency is unknown - never a guess."""
         return "" if self.currency else f"({CURRENCY_NOT_STATED})"
 
-    def lines(self) -> list[str]:
-        """The headline, then one line per fiscal year with the same figures the table shows. The
-        cost line is deliberately absent (see the class docstring)."""
-        out = [self.headline]
-        for row in self.rows:
-            now, ago, change, analysts = row.cells()
-            out.append(f"{row.label}: expected now {now}, three months ago {ago}, change "
-                       f"{change}, {analysts} analysts")
+    def forecast_sentences(self) -> list[str]:
+        """This year's and next year's forecast, each a plain sentence. When this year cannot be
+        read (too few analysts, no figure from three months ago) the reason stands in its place and
+        next year is still said."""
+        out: list[str] = []
+        whens = ("this year", "next year")
+        for i, row in enumerate(self.rows[:2]):
+            if i == 0 and not self.mark:
+                out.append(f"Analyst forecasts for this year are not shown: {self.direction.note}.")
+                continue
+            out.append(row.sentence(self.company, whens[0 if row.label.lower().startswith("this")
+                                                        else 1]))
+        if not self.rows:
+            out.append(f"Analyst forecasts are not shown: {self.direction.note or 'no estimate'}.")
         if self.rows and self.currency_note():
             out.append(self.currency_note())
         return out
 
+    def lines(self) -> list[str]:
+        """Everything the text export prints: the ratings, then the forecasts."""
+        out = list(self.ratings.lines()) if self.ratings is not None else []
+        out += self.forecast_sentences()
+        return out
 
-def analyst_trend(data, currency: Optional[str] = None) -> AnalystTrend:
-    """The analyst forecast direction from a ``data.analyst_trend.TrendData``.
+
+def analyst_trend(data, currency: Optional[str] = None, *, company: str = "",
+                  price: Optional[float] = None, price_currency: str = "",
+                  own_listing: bool = True) -> AnalystTrend:
+    """WHAT ANALYSTS SAY from a ``data.analyst_trend.TrendData``.
 
     ``currency`` is the currency of the ACCOUNTS (``Fundamentals.financial_currency``): the estimates
-    are per-share profits in the statement currency, so the table prints "TWD 107.85", and with no
-    currency it prints the bare figure and says the currency is not stated - never a guess.
+    are per-share profits in it, and with no currency the figures print bare and say so - never a
+    guess. ``price`` / ``price_currency`` are the latest close and its quote code for the listing the
+    RATINGS describe, so the target is compared with the price it can honestly be compared with.
 
-    Abstains, with the reason shown, when: there is no current-year estimate (no block, or a
-    stale one - expect gaps outside the US); fewer than ``ANALYST_MIN_ANALYSTS`` analysts, or an
-    unstated count; the current or the 90-days-ago estimate is missing; or the 90-days-ago figure
-    is within ``ANALYST_MIN_BASE`` of zero, where a percentage change means nothing. A missing
-    input is never treated as a zero. The next year is shown whenever it exists.
-    """
+    The forecast mark abstains, with the reason shown, when: there is no current-year estimate (no
+    block, or a stale one - expect gaps outside the US); fewer than ``ANALYST_MIN_ANALYSTS`` analysts,
+    or an unstated count; the current or the 90-days-ago estimate is missing; or the 90-days-ago
+    figure is within ``ANALYST_MIN_BASE`` of zero, where a percentage change means nothing. A missing
+    input is never treated as a zero. The next year is shown whenever it exists."""
     ccy = (currency or "").strip()
+    ratings = getattr(data, "ratings", None)
     base = dict(source=getattr(data, "source", ""), as_of=getattr(data, "as_of", ""),
                 units_charged=getattr(data, "units_charged", 0),
-                cached=getattr(data, "cached", False), currency=ccy)
+                cached=getattr(data, "cached", False), currency=ccy,
+                company=plain_company_name(company),
+                ratings=ratings_view(
+                    ratings, getattr(data, "ratings_note", ""), price=price,
+                    price_currency=price_currency, own_listing=own_listing))
     # What the request cost is for the LOG, not the page.
     _log.info("analyst trend: %s", AnalystTrend(**{k: v for k, v in base.items()
-                                                    if k != "currency"}).cost_line())
+                                                    if k in ("source", "as_of", "units_charged",
+                                                             "cached")}).cost_line())
 
     current = getattr(data, "current", None)
     following = getattr(data, "next_year", None)
