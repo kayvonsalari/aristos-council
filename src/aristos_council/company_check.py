@@ -162,7 +162,6 @@ class CompanyCheckResult:
     # Company Report (Part B) - the band's percentile (None when not computed or abstained), so the
     # agreement row can carry the SAME "priced high" mark the Run tab's table does.
     band_percentile: Optional[float] = None
-    band_requested: bool = True
 
     @property
     def display(self) -> str:
@@ -272,7 +271,7 @@ def run_company_check(
     strategies_dir: str | Path | None = None, universes_dir: str | Path | None = None,
     runs_dir: str | Path | None = None, screen_strategy_id: Optional[str] = None,
     today: Optional[date] = None, with_analyst_trend: bool = False, analyst_fetcher=None,
-    with_valuation_band: bool = True, ratings_fallback_symbol: Optional[str] = None,
+    ratings_fallback_symbol: Optional[str] = None,
 ) -> CompanyCheckResult:
     """Diagnose ONE ticker under ``rank_strategy_id``'s lens screen + factors, with
     cohort context from the latest frozen run of ``reference_universe_id``. NEVER emits
@@ -297,12 +296,10 @@ def run_company_check(
     screen_criteria = list(screen_strategy.criteria) if screen_strategy else []
     screen_strategy_id_str = screen_strategy.id if screen_strategy else ""
 
-    # VALBAND-1: gather_factor_inputs gates the absolute band (an extra 5-year fetch) behind
-    # with_valuation_band. Company Check has always shown it, so the default stays True and every
-    # existing caller is byte-unchanged; the Company Check tab's "Valuation band" tick box
-    # (Company Report, Part B) is what passes False. An unticked band is "—", never a guess.
-    fi = gather_factor_inputs(adapter, ticker, today=today,
-                              with_valuation_band=with_valuation_band)
+    # BAND-ALWAYS-ON-1: the absolute band (a 5-year price fetch through the day-cache) is always
+    # computed here - it is free and Company Check has always shown it. An abstention carries its
+    # reason ("not evaluated - insufficient history"); it is never a missing section.
+    fi = gather_factor_inputs(adapter, ticker, today=today, with_valuation_band=True)
     f = fi.fundamentals
     company_name = getattr(f, "company_name", None) if f is not None else None
     # ABS-READINGS-1 — pure functions over the fundamentals already fetched. No extra
@@ -472,9 +469,7 @@ def run_company_check(
         verdict_of_record=verdict_of_record, valuation_band=band_text,
         market_cap_in_gates=market_cap_in_gates, screen_less=screen_less,
         providers=providers, fx_source=fx_source,
-        band_percentile=(getattr(getattr(fi, "valuation_band", None), "percentile", None)
-                         if with_valuation_band else None),
-        band_requested=with_valuation_band,
+        band_percentile=getattr(getattr(fi, "valuation_band", None), "percentile", None),
         **readings)
 
 
@@ -888,15 +883,16 @@ def analyst_forecast_lines(result) -> list[str]:
             *(f"    {ln}" for ln in result.analyst_trend.lines())]
 
 
-def peers_lines(result) -> list[str]:
-    """The PEERS block as text, or [] when there is neither a group nor a reason to give."""
+def peers_lines(result, *, columns=None, company_ticker: str = "") -> list[str]:
+    """The PEERS block as text, or [] when there is neither a group nor a reason to give. With
+    ``columns`` (a Company Report's per-lens rank columns) the company is the first row."""
     group = getattr(result, "peer_group", None)
     if group is not None:
         from .peer_table import peer_text_lines
         lines = ["PEERS (who this company would be measured against):"]
         if group.available:
             lines.append(f"  {group.sentence()}")
-            lines.extend(f"  {ln}" for ln in peer_text_lines(group))
+            lines.extend(f"  {ln}" for ln in peer_text_lines(group, columns, company_ticker))
         else:
             lines.append("  No peer group for this name.")
         lines.extend(f"  · {reason}" for reason in group.reasons)

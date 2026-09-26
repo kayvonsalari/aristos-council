@@ -2979,22 +2979,14 @@ def render_universe_tab(show_validation: bool = False) -> None:
     st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
     _preselect_default_lens(choices)
     extras = render_lens_checkboxes(choices, lens_checkbox_key)
-    # VALBAND-1: the valuation-band toggle rides WITH the extra-lens group but is NOT a
-    # lens — extra lenses GRADE (add a verdict column), the band CONTEXTUALIZES (adds an
-    # absolute percentile column, re-grades nothing). Default OFF: unticked -> no band
-    # computation, no extra fetch, output byte-identical to a pre-VALBAND run.
-    with_valuation_band = st.checkbox(
-        "Valuation band (context column — no verdict)", value=False,
-        key="uni_valuation_band",
-        help="Adds an absolute column: where today's valuation sits in each name's OWN "
-             "5-year EV/EBIT (or P/E) distribution — 15th percentile = historically "
-             "cheap, 92nd = near its own peak. Unlike the extra lenses above it never "
-             "grades, reorders, or narrates; it only contextualizes. Off by default — "
-             "ticking it fetches each name's 5-year price history.")
-    # READER-1: ONE short AI note about the whole RUN, not about a name. It rides beside
-    # the band toggle because neither is a lens: the band adds context, this adds prose,
-    # and neither grades anything. Default OFF, and INDEPENDENT of the run mode — ticked
-    # on a ranker-only run it makes exactly one model call and nothing else.
+    # BAND-ALWAYS-ON-1 (owner's ruling 2026-09-26): the valuation band is ALWAYS computed and shown -
+    # it is free (yfinance history through the day-cache, no model call), so it has no tick box. It
+    # CONTEXTUALIZES (an absolute percentile column: where today's valuation sits in each name's OWN
+    # 5-year EV/EBIT or P/E range), never grades, reorders or narrates.
+    # READER-1: ONE short AI note about the whole RUN, not about a name. Neither this nor the band is
+    # a lens: the band adds context, this adds prose, and neither grades anything. Default OFF, and
+    # INDEPENDENT of the run mode — ticked on a ranker-only run it makes exactly one model call and
+    # nothing else.
     with_reader = st.checkbox(
         "Plain-English summary",
         value=False, key="uni_reader",
@@ -3366,7 +3358,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
             multi_result = run_multi_strategy_pipeline(
                 universe, strategy_ids, universe_id=universe_id,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                freeze_dir=ROOT / "runs", with_valuation_band=with_valuation_band,
+                freeze_dir=ROOT / "runs", with_valuation_band=True,
                 derived_from=derived_from,
                 min_market_cap_override=min_market_cap_override,
                 # READER-1: one call per run, off unless asked for.
@@ -3412,7 +3404,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 universe, rank_strategy.id, universe_id=universe_id,
                 council_mode=mode, ranker_only=True,
                 narrate_coverage=narrate_coverage, derived_from=derived_from,
-                with_valuation_band=with_valuation_band,
+                with_valuation_band=True,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 # Freeze this run's raw inputs so Company Check's reference-cohort reader
                 # (_latest_reference_run) can replay it offline — without this the UI
@@ -3515,8 +3507,8 @@ def _company_check_adapter():
 
 def render_company_check_tab(show_validation: bool = False) -> None:
     """Company Check (Company Report, Part B): ONE company against its own peer group. Tick the
-    lenses (the same component and list as the Run tab, several at once), tick the valuation band,
-    optionally tick the plain-English summary, run. Each ticked lens ranks the company among its
+    lenses (the same component and list as the Run tab, several at once), optionally tick the
+    plain-English summary, run. The valuation band is always shown. Each ticked lens ranks the company among its
     peers exactly as a Run-tab run ranks a list; the company's vote is its verdict in that run.
     The math judges; the only thing that can call a model is the summary, and only when ticked."""
     import os
@@ -3550,11 +3542,7 @@ def render_company_check_tab(show_validation: bool = False) -> None:
             bits += f" · {strategy_role(strategy)}"
         st.caption(bits)
 
-    with_band = st.checkbox(
-        "Valuation band (context — no verdict)", value=True, key="cc_valuation_band",
-        help="Where today's valuation sits in this company's OWN 5-year EV/EBIT (or P/E) range — "
-             "15th percentile = historically cheap, 92nd = near its own peak. It marks; it never "
-             "vetoes and never grades. Ticking it fetches the company's 5-year price history.")
+    # The valuation band has no tick box (BAND-ALWAYS-ON-1): it is always computed and shown.
     with_summary = st.checkbox(
         "Plain-English summary", value=False, key="cc_summary",
         help="One short note at the top, written from the tables below; every number in it is "
@@ -3577,8 +3565,7 @@ def render_company_check_tab(show_validation: bool = False) -> None:
             report = run_company_report(
                 ticker, [s_.id for s_ in strategies], adapter=_company_check_adapter(),
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                runs_dir=ROOT / "runs", with_valuation_band=with_band,
-                with_summary=with_summary, progress=lambda msg: status.update(label=msg))
+                runs_dir=ROOT / "runs", with_summary=with_summary, progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")
             st.exception(exc)
@@ -3659,8 +3646,10 @@ def _render_analyst_forecasts(result) -> None:
     _render_analyst_body(trend)
 
 
-def _render_peers(result) -> None:
-    """MARKET-INDEX-1 — who this company would be measured against."""
+def _render_peers(result, columns=None, company_ticker: str = "") -> None:
+    """MARKET-INDEX-1 — who this company would be measured against. With ``columns`` (the Company
+    Report's per-lens ranks, read from the run's saved ranks) the company is the first row and there
+    is one sortable rank column per lens."""
     from aristos_council.peer_table import (LOCAL_COLUMN, LOCAL_FORMAT, ONE_SYSTEM_NOTE,
                                             USD_COLUMN, USD_FORMAT, has_one_system_peers,
                                             peer_frame_records, peer_rows)
@@ -3682,10 +3671,21 @@ def _render_peers(result) -> None:
 
     st.caption(group.sentence())
     import pandas as pd
+
+    from aristos_council.peer_table import rank_display
     # Numbers stay numbers (sortable by size), largest USD cap first. The local column is in the
     # MAJOR unit: a London cap is pounds although its quote code says GBX (INDEX-GBX-SCALE-1).
+    columns = list(columns or ())
+    frame = pd.DataFrame(peer_frame_records(group, columns, company_ticker))
+    data = frame
+    rank_headers = [c.header for c in columns if c.kind == "rank"]
+    if rank_headers:
+        # A rank column stays NUMERIC (it sorts by rank); the words - "does not apply", "no data" -
+        # are only how a cell that has no number reads.
+        data = frame.style.format({h: (lambda v: rank_display(v)) for h in rank_headers},
+                                  na_rep="does not apply")
     st.dataframe(
-        pd.DataFrame(peer_frame_records(group)), hide_index=True, width="stretch",
+        data, hide_index=True, width="stretch",
         column_config={
             USD_COLUMN: st.column_config.NumberColumn(USD_COLUMN, format=USD_FORMAT),
             LOCAL_COLUMN: st.column_config.NumberColumn(LOCAL_COLUMN, format=LOCAL_FORMAT),
@@ -3702,7 +3702,7 @@ def _render_company_report(report) -> None:
     analyst forecasts → Sources. The text and HTML exports follow the same order."""
     import pandas as pd
 
-    from aristos_council.company_report import (BAND_NOT_REQUESTED, HOUSE_LINE, NO_LENS_REASON,
+    from aristos_council.company_report import (HOUSE_LINE, NO_LENS_REASON,
                                                 format_company_report)
     from aristos_council.export.report_html import company_report_html
 
@@ -3741,11 +3741,12 @@ def _render_company_report(report) -> None:
     else:
         st.info(report.no_vote_reason or NO_LENS_REASON)
 
-    _render_peers(check)
+    from aristos_council.peer_table import rank_columns
+    _render_peers(check, rank_columns(report), report.ticker)
 
     st.subheader("Valuation band")
     st.caption("This company against its own history; a mark, never a veto.")
-    st.write(check.valuation_band if report.with_valuation_band else BAND_NOT_REQUESTED)
+    st.write(check.valuation_band)
 
     _render_absolute_readings(check, with_analyst=False)
     _render_analyst_forecasts(check)

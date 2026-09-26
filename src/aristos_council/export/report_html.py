@@ -1607,8 +1607,8 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     for), agreement headline and table, each lens's vote, peers, valuation band, absolute readings,
     analyst forecasts, Sources. The same objects the text export prints, so the two cannot drift."""
     from ..company_check import company_sources
-    from ..company_report import (BAND_NOT_REQUESTED, HOUSE_LINE, NO_LENS_REASON,
-                                  agreement_table_lines)
+    from ..company_report import HOUSE_LINE, NO_LENS_REASON
+    from ..peer_table import rank_columns
 
     c = report.check
     stamp = _local_stamp(run_start)
@@ -1645,12 +1645,11 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
         parts.append(f'<p class="note">{_esc(report.no_vote_reason or NO_LENS_REASON)}</p>')
     parts.append("</section>")
 
-    parts.append(_company_peers_html(c))
+    parts.append(_company_peers_html(c, rank_columns(report), report.ticker))
 
     parts.append('<section class="section"><h2>Valuation band</h2>'
                  '<p class="note">This company against its own history; a mark, never a veto.</p>'
-                 f"<p>{_esc(c.valuation_band if report.with_valuation_band else BAND_NOT_REQUESTED)}"
-                 "</p></section>")
+                 f"<p>{_esc(c.valuation_band)}</p></section>")
     parts.append(_absolute_readings_html(c, with_analyst=False)
                  or '<section class="section"><h2>Absolute readings</h2>'
                     '<p class="note">none available</p></section>')
@@ -1731,9 +1730,10 @@ def _what_analysts_say_html(trend) -> str:
     return "".join(out)
 
 
-def _company_peers_html(result) -> str:
-    """The peers table, market caps through the one money formatter."""
-    from ..peer_table import ONE_SYSTEM_NOTE, has_one_system_peers, peer_rows
+def _company_peers_html(result, columns=None, company_ticker: str = "") -> str:
+    """The peers table, market caps through the one money formatter; with ``columns`` the company is
+    the first row and there is one rank column per lens."""
+    from ..peer_table import ONE_SYSTEM_NOTE, has_one_system_peers, peer_rows, rank_display
     group = result.peer_group
     if group is None:
         return (f'<section class="section"><h2>Peers</h2><p class="note">The market index is '
@@ -1742,14 +1742,17 @@ def _company_peers_html(result) -> str:
     out = ['<section class="section"><h2>Peers</h2>']
     if group.available:
         out.append(f'<p class="note">{_esc(group.sentence())}</p>')
-        rows = peer_rows(group)
+        columns = list(columns or ())
+        rows = peer_rows(group, columns, company_ticker)
         body = [[f'<span class="mono">{_esc(r.marked_ticker)}</span>', _esc(r.name),
                  _esc(r.exchange),
                  f'<span class="mono">{_esc(r.usd_text)}</span>',
-                 f'<span class="mono">{_esc(r.local_text)}</span>', _esc(r.sub_industry)]
-                for r in rows]
+                 f'<span class="mono">{_esc(r.local_text)}</span>',
+                 *(f'<span class="mono">{_esc(rank_display(cell) if c.kind == "rank" else cell)}'
+                   f"</span>" for c, (_h, cell) in zip(columns, r.ranks)),
+                 _esc(r.sub_industry)] for r in rows]
         out.append(_table(["Ticker", "Name", "Exchange", "Market cap (USD)", "Market cap (local)",
-                           "Sub-industry"], body))
+                           *(c.header for c in columns), "Sub-industry"], body))
         if has_one_system_peers(rows):
             out.append(f'<p class="note">{_esc(ONE_SYSTEM_NOTE)}</p>')
     else:

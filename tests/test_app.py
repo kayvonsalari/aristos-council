@@ -636,9 +636,12 @@ def test_company_check_has_no_strategy_dropdown_and_no_reference_universe_picker
     assert cc_boxes.options and len(cc_boxes.ticked) == 1            # one pre-ticked, like the Run tab
     ticks = {str(c.label) for c in at.checkbox}
     assert "Plain-English summary" in ticks                          # the Run tab's and the page's
-    band = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_valuation_band")
     summary = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary")
-    assert band.value is True and summary.value is False             # the summary is OFF by default
+    assert summary.value is False                                    # the summary is OFF by default
+    # BAND-ALWAYS-ON-1: the valuation band has NO tick box on either tab - it is always shown
+    assert not any("Valuation band" in str(c.label) for c in at.checkbox)
+    assert not any(str(getattr(c, "key", "")) in ("cc_valuation_band", "uni_valuation_band")
+                   for c in at.checkbox)
     assert any(b.label.startswith("▶ Run company check (free — no LLM)") for b in at.button)
 
 

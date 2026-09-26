@@ -27,6 +27,8 @@ from typing import Optional
 from .market_index import MINOR_UNIT_MARKET_CAP, USD_COMPUTED_MAJOR_UNIT
 from .tools.price_context import format_money
 
+THIS_COMPANY = "(this company)"
+DOES_NOT_APPLY = "does not apply"
 ONE_SYSTEM_MARK = "†"
 ONE_SYSTEM_NOTE = f"{ONE_SYSTEM_MARK} counted as a peer on one industry classification only"
 
@@ -53,9 +55,15 @@ class PeerRow:
     cap_local: Optional[float]
     local_currency: str            # the major-unit currency, or "" when the row states none
     one_system: bool = False       # admitted on ONE of the subject's two label systems -> dagger
+    # PEER-RANK-COLUMNS-1: this row is the company itself (first row, marked), and the value it holds
+    # under each rank column, ``((header, cell), ...)`` - cells are ranks (int) or words.
+    is_company: bool = False
+    ranks: tuple = ()
 
     @property
     def marked_ticker(self) -> str:
+        if self.is_company:
+            return f"{self.ticker} {THIS_COMPANY}"
         return f"{self.ticker} {ONE_SYSTEM_MARK}" if self.one_system else self.ticker
 
     @property
@@ -71,9 +79,72 @@ def has_one_system_peers(rows) -> bool:
     return any(r.one_system for r in rows)
 
 
-def peer_rows(group) -> list[PeerRow]:
+@dataclass(frozen=True)
+class RankColumn:
+    """One lens's column of the peers table: each company's rank under that lens, or - for a check
+    lens - its mark. ``values`` maps an upper-cased Yahoo ticker to a rank (int) or a word."""
+
+    header: str
+    kind: str                    # "rank" (a voting lens) | "mark" (a check lens: it does not vote)
+    values: dict
+
+
+def rank_columns(report) -> list[RankColumn]:
+    """The columns for a Company Report, built ONLY from the ranks the run already computed and saved
+    (``report.lens_ranks``): no new data, no request, no model call. One column per ticked lens that
+    ran, in the order they were ticked; none when no lens ran (no lens ticked, or no peer group).
+
+    A voting lens's column holds each company's cohort position and reads "Magic Formula RAW rank (of
+    14)"; a check lens's holds its mark (clean / no concern / doubted) and reads "Forensic mark". A
+    company the lens's rules exclude reads "does not apply" - not blank, not a number - and one it
+    could not read reads "no data" or "fetch failed"."""
+    from .report_language import verdict_word
+
+    ranks = getattr(report, "lens_ranks", None) or {}
+    columns: list[RankColumn] = []
+    for vote in getattr(report, "votes", ()) or ():
+        record = ranks.get(vote.strategy_id)
+        if not record:
+            continue
+        voter = vote.votes
+        ranked = record.get("ranked") or []
+        values: dict = {}
+        for entry in ranked:
+            values[str(entry["ticker"]).upper()] = (
+                entry.get("position") if voter else verdict_word(entry.get("verdict", ""), check=True))
+        for key, word in (("excluded", DOES_NOT_APPLY), ("unrateable", "no data"),
+                          ("fetch_errors", "fetch failed")):
+            for entry in record.get(key) or []:
+                values.setdefault(str(entry["ticker"]).upper(), word)
+        header = (f"{vote.label} rank (of {len(ranked)})" if voter
+                  else f"{vote.label} mark (check - does not vote)")
+        columns.append(RankColumn(header=header, kind="rank" if voter else "mark", values=values))
+    return columns
+
+
+def _yahoo_key(member) -> str:
+    from .cohorts.symbols import SymbolError, yahoo_symbol
+    symbol = (getattr(member, "yahoo_ticker", "") or "").strip()
+    if not symbol:
+        try:
+            symbol = yahoo_symbol(member.ticker)
+        except SymbolError:
+            symbol = ""
+    return symbol.upper()
+
+
+def peer_rows(group, columns=None, company_ticker: str = "") -> list[PeerRow]:
     """Members of ``group`` as rows, LARGEST USD cap first (a row with no USD cap last, then by
-    ticker, so the order never depends on the order the index returned them)."""
+    ticker, so the order never depends on the order the index returned them).
+
+    With ``columns`` and a ``company_ticker`` the COMPANY ITSELF is added as the FIRST row, marked
+    "(this company)", so its rank reads against the others, and every row carries its value under each
+    rank column (a peer the run did not rank reads "not in this run")."""
+    columns = list(columns or ())
+
+    def cells(key: str) -> tuple:
+        return tuple((c.header, c.values.get(key, "not in this run")) for c in columns)
+
     rows = []
     both_systems = len(getattr(group, "systems", ()) or ()) > 1
     for m in group.members:
@@ -83,18 +154,38 @@ def peer_rows(group) -> list[PeerRow]:
             sub_industry=getattr(m, "classification", "") or "",
             cap_usd=m.market_cap_usd, cap_local=m.market_cap,
             local_currency=local_cap_currency(m),
-            one_system=both_systems and bool(how) and "+" not in how))
-    return sorted(rows, key=lambda r: (r.cap_usd is None, -(r.cap_usd or 0.0), r.ticker))
+            one_system=both_systems and bool(how) and "+" not in how,
+            ranks=cells(_yahoo_key(m))))
+    rows.sort(key=lambda r: (r.cap_usd is None, -(r.cap_usd or 0.0), r.ticker))
+    subject = getattr(group, "subject", None)
+    if columns and company_ticker and subject is not None:
+        rows.insert(0, PeerRow(
+            ticker=company_ticker, name=subject.name or "", exchange=subject.exchange or "",
+            sub_industry=getattr(subject, "classification", "") or "",
+            cap_usd=subject.market_cap_usd, cap_local=subject.market_cap,
+            local_currency=local_cap_currency(subject), is_company=True,
+            ranks=cells(company_ticker.upper())))
+    return rows
 
 
-def peer_text_lines(group) -> list[str]:
+def _cell_text(value) -> str:
+    return str(value)
+
+
+def peer_text_lines(group, columns=None, company_ticker: str = "") -> list[str]:
     """The table as fixed-width text, for the ``.txt`` export and the CLI."""
-    rows = peer_rows(group)
-    out = [f"{'Ticker':<12} {'Name':<28} {'Exch':<7} {'Market cap (USD)':>17} {'Local':>15}  "
-           f"Sub-industry"]
+    columns = list(columns or ())
+    rows = peer_rows(group, columns, company_ticker)
+    widths = [max(len(c.header), *(len(_cell_text(r.ranks[i][1])) for r in rows))
+              for i, c in enumerate(columns)]
+    head = (f"{'Ticker':<26} {'Name':<28} {'Exch':<7} {'Market cap (USD)':>17} {'Local':>15}  "
+            + "".join(f"{c.header:>{w}}  " for c, w in zip(columns, widths)) + "Sub-industry")
+    out = [head]
     for r in rows:
-        out.append(f"{r.marked_ticker:<12} {r.name[:28]:<28} {r.exchange[:7]:<7} "
-                   f"{r.usd_text:>17} {r.local_text:>15}  {r.sub_industry}")
+        out.append(f"{r.marked_ticker:<26} {r.name[:28]:<28} {r.exchange[:7]:<7} "
+                   f"{r.usd_text:>17} {r.local_text:>15}  "
+                   + "".join(f"{_cell_text(cell):>{w}}  " for (_h, cell), w in zip(r.ranks, widths))
+                   + r.sub_industry)
     if has_one_system_peers(rows):
         out.append(ONE_SYSTEM_NOTE)
     return out
@@ -109,12 +200,42 @@ USD_FORMAT = "$%.1fbn"
 LOCAL_FORMAT = "%.1fbn"
 
 
-def peer_frame_records(group) -> list[dict]:
-    """Rows for ``st.dataframe``: numeric caps in BILLIONS, sorted by USD cap descending."""
-    return [{
-        "Ticker": r.marked_ticker, "Name": r.name, "Exchange": r.exchange,
-        USD_COLUMN: None if r.cap_usd is None else r.cap_usd / 1e9,
-        LOCAL_COLUMN: None if r.cap_local is None else r.cap_local / 1e9,
-        "Currency": r.local_currency or "not stated",
-        "Sub-industry": r.sub_industry,
-    } for r in peer_rows(group)]
+# A rank column holds NUMBERS so it sorts by rank, not alphabetically; a company the lens did not rank
+# is NaN (shown "does not apply", sorted last) or - for "no data" / "fetch failed" - a sentinel far above
+# any rank, shown in words. ``rank_display`` turns either back into the words the exports print.
+NO_DATA_SORT = 10 ** 6
+_SENTINELS = {"no data": NO_DATA_SORT, "fetch failed": NO_DATA_SORT + 1}
+
+
+def _rank_number(value):
+    """A rank column cell as a sortable number, or None ("does not apply" / not in this run)."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return float(_SENTINELS[value]) if value in _SENTINELS else None
+
+
+def rank_display(value) -> str:
+    """The words a rank column cell reads as: "3", "does not apply", "no data"."""
+    number = _rank_number(value)
+    if number is None:
+        return DOES_NOT_APPLY if value in (DOES_NOT_APPLY, None) else str(value)
+    if number >= NO_DATA_SORT:
+        return "no data" if number == NO_DATA_SORT else "fetch failed"
+    return f"{number:.0f}"
+
+
+def peer_frame_records(group, columns=None, company_ticker: str = "") -> list[dict]:
+    """Rows for ``st.dataframe``: numeric caps in BILLIONS, sorted by USD cap descending, the company
+    first when there are rank columns, and one numeric column per lens (a check lens's mark is text)."""
+    columns = list(columns or ())
+    out = []
+    for r in peer_rows(group, columns, company_ticker):
+        rec = {"Ticker": r.marked_ticker, "Name": r.name, "Exchange": r.exchange,
+               USD_COLUMN: None if r.cap_usd is None else r.cap_usd / 1e9,
+               LOCAL_COLUMN: None if r.cap_local is None else r.cap_local / 1e9,
+               "Currency": r.local_currency or "not stated"}
+        for column, (header, cell) in zip(columns, r.ranks):
+            rec[header] = _rank_number(cell) if column.kind == "rank" else str(cell)
+        rec["Sub-industry"] = r.sub_industry
+        out.append(rec)
+    return out
