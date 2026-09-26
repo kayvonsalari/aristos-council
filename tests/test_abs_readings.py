@@ -21,7 +21,7 @@ from aristos_council.data.adapter import Fundamentals
 
 def _f(**kw) -> Fundamentals:
     aligned = kw.pop("aligned", None)
-    base = dict(ticker="X", currency="USD")
+    base = dict(ticker="X", currency="USD", financial_currency="USD")
     base.update(kw)
     if aligned:
         base["aligned_annual"] = aligned
@@ -34,13 +34,13 @@ def _f(**kw) -> Fundamentals:
 def test_net_debt_is_debt_minus_cash_and_reads_as_a_sentence():
     out = debt_and_cash(_f(total_debt=50e9, total_cash=10e9))
     assert out.net_debt.value == pytest.approx(40e9)
-    assert out.net_debt.label == "owes 40.0bn USD net of cash"
+    assert out.net_debt.label == "owes $40.0bn net of cash"
 
 
 def test_more_cash_than_debt_is_said_the_other_way_round():
     out = debt_and_cash(_f(total_debt=5e9, total_cash=20e9))
     assert out.net_debt.value == pytest.approx(-15e9)
-    assert "holds 15.0bn USD more cash than debt" in out.net_debt.label
+    assert "holds $15.0bn more cash than debt" in out.net_debt.label
 
 
 def test_a_MISSING_cash_balance_is_disclosed_not_treated_as_zero():
@@ -191,7 +191,41 @@ def test_eps_is_derived_from_net_income_and_shares_when_the_line_is_missing_AND_
         "shares_outstanding": [100.0, 100, 100, 100, 100, 100.0]}))
     five = out.eps.cagr[5]
     assert five.available
-    assert "derived from net income and share count" in five.label
+    # said ONCE, as a note under the section - not on the three lines it used to be printed on
+    assert "derived" not in five.label
+    assert not any("derived" in line for line in out.lines())
+    assert out.notes().count("earnings per share is derived from net income and share count") == 1
+
+
+def test_the_accounts_currency_is_used_not_the_listings():
+    """AstraZeneca is quoted in pence and reports in dollars: 'owes 27.4bn GBp net of cash' put the
+    LISTING's currency on the ACCOUNTS' figure (same root cause as the NVO kroner-as-dollars bug)."""
+    out = debt_and_cash(_f(currency="GBp", financial_currency="USD",
+                           total_debt=30.0e9, total_cash=2.6e9))
+    assert out.net_debt.label == "owes $27.4bn net of cash"
+    assert "GBp" not in " ".join(out.lines())
+
+
+def test_an_unstated_accounts_currency_says_so_and_is_never_guessed_from_the_listing():
+    out = debt_and_cash(_f(currency="GBp", financial_currency=None,
+                           total_debt=30.0e9, total_cash=2.6e9))
+    assert out.net_debt.label == "owes 27.4bn (currency not stated by the source) net of cash"
+    assert "GBp" not in out.net_debt.label and "$" not in out.net_debt.label
+
+
+def test_money_uses_the_one_formatter_for_a_trillion_and_a_franc():
+    assert "owes $1.03tn net of cash" in debt_and_cash(
+        _f(total_debt=1.03e12, total_cash=0.0)).net_debt.label
+    assert "owes CHF 5.2bn net of cash" in debt_and_cash(
+        _f(financial_currency="CHF", total_debt=5.2e9, total_cash=0.0)).net_debt.label
+
+
+def test_the_growth_notes_say_how_much_history_stands_behind_the_record_once():
+    record = growth_record(_f(aligned={"total_revenue": [float(200 - 4 * i) for i in range(36)]}))
+    assert record.years_on_file == 36
+    assert record.notes()[0] == "36 years on file, last 10 used"
+    short = growth_record(_f(aligned={"total_revenue": [150.0, 130, 110, 100.0]}))
+    assert short.notes()[0] == "4 years on file, all used"
 
 
 def test_the_reported_eps_line_is_preferred_over_the_derivation():

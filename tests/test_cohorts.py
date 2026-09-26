@@ -351,7 +351,7 @@ def _ranked(order_values):
 def test_a_perfectly_ordered_cohort_never_moves_when_one_name_leaves():
     """Removing the name in 3rd place moves everyone below up a seat. That is bookkeeping,
     not instability, and the check must not report it as a shift."""
-    ranked, setup = _ranked([(f"T{i}", 1.0 - i * 0.01) for i in range(10)])
+    ranked, setup = _ranked([(f"T{i}", 1.0 - i * 0.01) for i in range(16)])
     check = quality.drop_one_stability(ranked, setup)
     assert check.figure == "0 place(s)"
     assert check.flagged is False
@@ -360,29 +360,52 @@ def test_a_perfectly_ordered_cohort_never_moves_when_one_name_leaves():
 def test_a_tie_that_breaks_differently_when_a_name_leaves_is_reported():
     """Ties are where drop-one earns its keep: the tied block is averaged, so removing a
     name outside it can still re-seat its members against each other."""
-    ranked, setup = _ranked([("A", 0.50), ("B", 0.30), ("C", 0.30), ("D", 0.30),
-                             ("E", 0.10), ("F", 0.05)])
+    values = [("A", 0.50), ("B", 0.30), ("C", 0.30), ("D", 0.30), ("E", 0.10), ("F", 0.05)]
+    values += [(f"Z{i}", 0.04 - i * 0.001) for i in range(10)]          # 16 ranked names
+    ranked, setup = _ranked(values)
     check = quality.drop_one_stability(ranked, setup)
     assert check.name == "drop-one stability"
     assert check.figure.endswith("place(s)")
 
 
 def test_the_flag_scales_with_the_cohort():
-    """"more than 3 places on a cohort of 30" is one tenth, so 22 names flag above 2.2."""
+    """"more than 3 places on a cohort of 30" is one tenth, so 45 names flag above 4.5."""
     assert quality.STABILITY_FLAG_FRACTION == pytest.approx(0.1)
-    assert 22 * quality.STABILITY_FLAG_FRACTION == pytest.approx(2.2)
+    assert 45 * quality.STABILITY_FLAG_FRACTION == pytest.approx(4.5)
+
+
+def test_the_stability_line_never_sits_below_two_places():
+    """COHORT-QC: a tenth of 6 ranked names is 0.6 of a place, so one company moving one seat
+    flagged a 6-name set (about 18 of the 40 warnings measured 2026-09-26). At 15-19 ranked
+    names a tenth is still under 2, so the floor is what sets the line."""
+    assert quality.STABILITY_MIN_LINE == 2.0
+    assert quality.STABILITY_MIN_RANKED == 15
+    ranked, setup = _ranked([(f"T{i}", 1.0 - i * 0.01) for i in range(15)])
+    check = quality.drop_one_stability(ranked, setup)
+    assert check.flagged is False and check.checked == 15
+    line = lambda n: max(n * quality.STABILITY_FLAG_FRACTION, quality.STABILITY_MIN_LINE)
+    assert line(6) == line(15) == line(19) == 2.0        # the floor sets it up to 20 names
+    assert line(30) == pytest.approx(3.0) and line(45) == pytest.approx(4.5)
+
+
+def test_drop_one_is_skipped_below_fifteen_ranked_names_and_says_why():
+    ranked, setup = _ranked([(f"T{i}", 1.0 - i * 0.01) for i in range(14)])
+    check = quality.drop_one_stability(ranked, setup, total=22)
+    assert check.figure == "n/a" and not check.flagged
+    assert "Too few ranked names for this check" in check.sentence
+    assert "(checked on 14 of 22 members)" in check.line()
 
 
 def test_drop_one_says_nothing_rather_than_something_wrong_on_a_tiny_cohort():
     ranked, setup = _ranked([("A", 0.5), ("B", 0.4)])
     check = quality.drop_one_stability(ranked, setup)
     assert check.figure == "n/a" and not check.flagged
-    assert "says nothing at this size" in check.sentence
+    assert "Too few ranked names" in check.sentence
 
 
 def test_drop_one_makes_no_call_of_any_kind():
     """N+1 rankings, one fetch. The re-rank reads factor_values the run already produced."""
-    ranked, setup = _ranked([(f"T{i}", 1.0 - i * 0.01) for i in range(12)])
+    ranked, setup = _ranked([(f"T{i}", 1.0 - i * 0.01) for i in range(16)])
     source = FakeSource()
     quality.drop_one_stability(ranked, setup)
     assert source.fundamentals_calls == 0 and source.constituent_pulls == 0
@@ -398,6 +421,47 @@ def test_abstention_counts_both_the_unreadable_and_the_partly_read():
     check = quality.abstention_rate(ranked, [("D", "no data")], len(members))
     assert check.figure == "50%"            # 1 hole + 1 unrateable out of 4
     assert check.flagged is True
+
+
+def test_a_lens_that_screened_out_everything_reads_n_a_not_zero_percent():
+    """COHORT-QC, measured 2026-09-26: the three utilities cohorts read "0% abstained, 0
+    flagged" with ZERO names ranked, because the lens excludes utilities by design. An empty
+    table must not read as a clean one."""
+    members = [Candidate(ticker=f"U{i}.US") for i in range(5)]
+    screened = [(m.ticker, "sector excluded (Utilities)") for m in members]
+    check = quality.abstention_rate([], [], len(members), screened)
+    assert check.figure == "n/a" and check.flagged is False
+    assert "screened out all 5" in check.sentence and "does not apply" in check.sentence
+    assert "(checked on 0 of 5 members)" in check.line()
+
+
+def test_names_the_lens_screened_out_are_their_own_category_and_leave_the_rate():
+    """22 members, 16 screened out by the size floor, 6 ranked, one of them with a hole: the
+    rate is 1 of the 6 the lens applied to, and the sentence says 16 were screened out."""
+    ranked, _setup = _ranked([(f"R{i}", 1.0 - i * 0.1) for i in range(6)])
+    ranked[0].factor_values["earnings_yield"] = None
+    screened = [(f"S{i}.US", "below min market cap ($5bn)") for i in range(16)]
+    check = quality.abstention_rate(ranked, [], 22, screened)
+    assert check.figure == "17%" and check.flagged is True          # 1 / 6, over the 15% line
+    assert "16 of 22 member(s) were screened out by the lens itself" in check.sentence
+    assert "(checked on 6 of 22 members)" in check.line()
+    assert any(d.startswith("screened out: S0.US") for d in check.detail)
+
+
+def test_every_check_prints_how_many_members_it_looked_at():
+    ranked, setup = _ranked([(f"T{i}", 1.0 - i * 0.01) for i in range(16)])
+    members = [Candidate(ticker=f"T{i}.US") for i in range(20)]
+    report = quality.run_checks(cohort="c", version=1, ranked=ranked, unrateable=[],
+                                members=members, setup=setup, anchors=(),
+                                screened_out=[(f"S{i}.US", "x") for i in range(4)],
+                                lens="magic_formula_raw_v1", lens_source="the default check lens")
+    assert [c.name for c in report.checks] == [
+        "abstention rate", "band spread", "drop-one stability", "anchor check",
+        "source summary"]
+    for check in report.checks:
+        assert " members)" in check.line() and "(checked on " in check.line(), check.name
+    assert "(checked on 16 of 20 members)" in report.checks[0].line()     # 20 - 4 screened
+    assert report.lens == "magic_formula_raw_v1"
 
 
 def test_band_spread_never_invents_a_percentile_for_an_abstained_band():
@@ -519,3 +583,90 @@ def test_the_universe_id_carries_the_SAME_version_as_the_frozen_cohort(tmp_path)
     assert second.universe_path.name == "cohort_chemicals_test_v2.yaml"
     # v1's list is left alone — a past run's list must stay what it was
     assert (universes / "local" / "cohort_chemicals_test_v1.yaml").exists()
+
+
+# =========================================================================== #
+# COHORT-QC (batch 8): the check lens is chosen per cohort
+# =========================================================================== #
+def test_check_lens_defaults_to_the_opinion_free_lens_and_can_be_set_per_cohort():
+    assert _defn().check_lens == "magic_formula_raw_v1"
+    assert _defn(check_lens="forensic_v1").check_lens == "forensic_v1"
+    with pytest.raises(definitions.DefinitionError, match="check_lens"):
+        _defn(check_lens="Not A Strategy!")
+
+
+def test_resolve_lens_says_where_the_choice_came_from():
+    from aristos_council.cohorts.builder import resolve_lens
+
+    assert resolve_lens(_defn()) == ("magic_formula_raw_v1", "the default check lens")
+    assert resolve_lens(_defn(check_lens="forensic_v1")) == (
+        "forensic_v1", "check_lens in the cohort definition")
+    assert resolve_lens(_defn(check_lens="forensic_v1"), "cyclical_income_v1") == (
+        "cyclical_income_v1", "chosen on the command line")
+
+
+def test_build_ranks_a_cohort_under_its_own_check_lens_and_the_report_prints_it(tmp_path):
+    seen = []
+
+    def spy(tickers, strategy_id, *, today=None):
+        seen.append(strategy_id)
+        return _fake_ranker(tickers, strategy_id, today=today)
+
+    outcome = build(_defn(check_lens="forensic_v1"), source=FakeSource(),
+                    probe=SourceProbe(False, note="403"), root=tmp_path,
+                    history_provider=_history(), ranker=spy, today=date(2026, 9, 18))
+    assert seen == ["forensic_v1"]
+    assert outcome.quality.lens == "forensic_v1"
+    report = (outcome.directory / freeze.REPORT_FILE).read_text(encoding="utf-8")
+    assert "Ranked under `forensic_v1` (check_lens in the cohort definition)." in report
+    snapshot = (outcome.directory / freeze.DEFINITION_FILE).read_text(encoding="utf-8")
+    assert "check_lens: forensic_v1" in snapshot
+
+
+def test_the_command_line_lens_overrides_the_cohorts_own(tmp_path):
+    seen = []
+
+    def spy(tickers, strategy_id, *, today=None):
+        seen.append(strategy_id)
+        return _fake_ranker(tickers, strategy_id, today=today)
+
+    build(_defn(check_lens="forensic_v1"), source=FakeSource(),
+          probe=SourceProbe(False, note="403"), root=tmp_path, history_provider=_history(),
+          ranker=spy, strategy_id="cyclical_income_v1", today=date(2026, 9, 18))
+    assert seen == ["cyclical_income_v1"]
+
+
+def test_names_the_lens_screened_out_flow_from_the_ranker_into_the_report(tmp_path):
+    """A four-tuple ranker reports its screened-out names; the abstention line counts them apart."""
+    def screening_ranker(tickers, strategy_id, *, today=None):
+        ranked, unrateable, setup = _fake_ranker(tickers[2:], strategy_id, today=today)
+        return ranked, unrateable, setup, [(t, "below min market cap ($5bn)")
+                                            for t in tickers[:2]]
+
+    outcome = build(_defn(), source=FakeSource(), probe=SourceProbe(False, note="403"),
+                    root=tmp_path, history_provider=_history(), ranker=screening_ranker,
+                    today=date(2026, 9, 18))
+    line = outcome.quality.checks[0].line()
+    assert "2 of " in line and "screened out by the lens itself" in line
+    assert f"(checked on {len(outcome.members) - 2} of {len(outcome.members)} members)" in line
+
+
+def test_every_shipped_check_lens_is_a_real_rank_strategy():
+    """A cohort naming a lens that does not exist would fail at BUILD time, not at load."""
+    from aristos_council.strategy.discovery import rank_strategies
+
+    ranks = {s.id for s in rank_strategies("strategies")}
+    for defn in definitions.load_definitions("data/cohort_definitions.yaml"):
+        assert defn.check_lens in ranks, (defn.name, defn.check_lens)
+
+
+def test_the_three_utilities_cohorts_are_not_checked_under_a_lens_that_excludes_utilities():
+    import yaml
+
+    excluded = set(yaml.safe_load(open("strategies/magic_formula_raw_v1.yaml",
+                                       encoding="utf-8"))["exclude_sectors"])
+    assert "Utilities" in excluded                       # the reason the default reads nothing
+    for defn in definitions.load_definitions("data/cohort_definitions.yaml"):
+        if defn.name.startswith("Utilities - "):
+            lens = yaml.safe_load(open(f"strategies/{defn.check_lens}.yaml", encoding="utf-8"))
+            assert "Utilities" not in (lens.get("exclude_sectors") or []), defn.name

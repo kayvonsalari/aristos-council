@@ -15,7 +15,7 @@ from pathlib import Path
 from collections import Counter
 
 from .cleanup import Removal, SizeVerdict, clean, size_verdict
-from .definitions import CohortDefinition, DefinitionError
+from .definitions import DEFAULT_CHECK_LENS, CohortDefinition, DefinitionError
 from .flags import excluded_for, legend_lines, symbols
 from .freeze import (DEFINITION_FILE, MEMBERS_FILE, REMOVALS_FILE, REPORT_FILE,
                      FrozenCohort, current_version, next_version, read_members,
@@ -35,10 +35,37 @@ DEFAULT_ROOT = Path("data/local/cohorts")
 DEFAULT_DEFINITIONS = DEFAULT_ROOT / "definitions.yaml"
 # COHORT-3: the list built from the market index, USD floors. The default.
 DEFAULT_INDEX_DEFINITIONS = Path("data/cohort_definitions.yaml")
-# The lens the quality report ranks under. Deterministic, no LLM, and already the repo's
-# most opinion-free rank strategy — the report is about the COHORT, so the lens should add
-# as little of its own as possible.
-DEFAULT_STRATEGY = "magic_formula_raw_v1"
+# The lens the quality report ranks under when a cohort names none (COHORT-QC: a cohort may set
+# its own ``check_lens``; the command line may override both). Deterministic, no LLM, and already
+# the repo's most opinion-free rank strategy — the report is about the COHORT, so the lens should
+# add as little of its own as possible.
+DEFAULT_STRATEGY = DEFAULT_CHECK_LENS
+
+
+def resolve_lens(defn: CohortDefinition, override: str | None = None) -> tuple[str, str]:
+    """``(lens id, where the choice came from)`` for a cohort's quality report.
+
+    An explicit ``override`` (the CLI's ``--strategy``) wins; otherwise the definition's own
+    ``check_lens``. The source is printed in the report, so a reader can tell a lens chosen for
+    this cohort from the default that happened to apply."""
+    if override:
+        return override, "chosen on the command line"
+    if defn.check_lens != DEFAULT_CHECK_LENS:
+        return defn.check_lens, "check_lens in the cohort definition"
+    return defn.check_lens, "the default check lens"
+
+
+def _unpack_ranked(result) -> tuple[list, list, object, list]:
+    """``(ranked, unreadable, setup, screened_out)`` from a ranker's return.
+
+    A ranker returns ``(ranked, unrateable, setup)`` or, since COHORT-QC, the same with a fourth
+    element - the names the lens's own gates screened out. A three-tuple means "none reported"."""
+    if len(result) == 4:
+        ranked, unrateable, setup, screened = result
+    else:
+        ranked, unrateable, setup = result
+        screened = ()
+    return ranked, unrateable, setup, list(screened)
 
 
 @dataclass
@@ -115,7 +142,11 @@ def default_history_provider(candidates: list[Candidate]) -> dict[str, float]:
 
 def default_ranker(tickers: list[str], strategy_id: str, *, today: date | None = None,
                    strategies_dir: str | None = None):
-    """``(ranked, unrateable, factors)`` from ONE ranker-only run. No LLM, by argument.
+    """``(ranked, unreadable, setup, screened_out)`` from ONE ranker-only run. No LLM, by argument.
+
+    ``unreadable`` is the names with no verdict for want of data (UNRATEABLE) plus those whose
+    fetch failed; ``screened_out`` is what the lens's own gates turned away (size floor, sector,
+    asset class, screen) - a different finding, kept apart (COHORT-QC).
 
     The pipeline is imported HERE rather than at module scope so that importing
     ``aristos_council.cohorts`` pulls in no graph, no runner and no langchain.
@@ -131,10 +162,12 @@ def default_ranker(tickers: list[str], strategy_id: str, *, today: date | None =
     # by construction the factors the run ranked with. Loading the file a second way is
     # how the two quietly diverge.
     strategy = load_rank_strategy_from_id(strategy_id, _Path(strategies_dir or "strategies"))
-    return result.ranked, result.unrateable, RankSetup(
+    setup = RankSetup(
         factors=tuple(FactorSpec(f.name, f.direction, f.missing) for f in strategy.factors),
         cut=strategy.cut, k=strategy.k, percentile=strategy.percentile,
         missing=strategy.missing)
+    return (result.ranked, list(result.unrateable) + list(result.fetch_errors), setup,
+            list(result.excluded))
 
 
 # --------------------------------------------------------------------------- #
@@ -143,10 +176,10 @@ def default_ranker(tickers: list[str], strategy_id: str, *, today: date | None =
 def default_index_pool():
     """The cleaned pool of the real market index, read once. No request is made."""
     from ..market_index import IndexStore, clean_pool, load_config
-    from .definitions import INDEX_EXCLUDED_MARKETS
+    from .definitions import index_excluded_markets
 
     return clean_pool(store=IndexStore(load_config()["root"]),
-                      exclude_markets=INDEX_EXCLUDED_MARKETS)
+                      exclude_markets=index_excluded_markets())
 
 
 def resolve_path(defn: CohortDefinition, *, constituents: bool | None = None) -> str:
@@ -196,7 +229,7 @@ def build(defn: CohortDefinition, *, source: EODHDSource | None = None,
           probe: SourceProbe | None = None,
           root: str | Path = DEFAULT_ROOT, universes_dir: str | Path | None = None,
           rebuild: bool = False, history_provider=None, ranker=None,
-          strategy_id: str = DEFAULT_STRATEGY, today: date | None = None,
+          strategy_id: str | None = None, today: date | None = None,
           progress=None, constituents: bool | None = None,
           index_pool=None) -> BuildOutcome:
     """Build one cohort from its rule, quality-check it, and freeze it if it is usable."""
@@ -253,12 +286,14 @@ def build(defn: CohortDefinition, *, source: EODHDSource | None = None,
     # 6. the ranker, once, ranker-only -------------------------------------- #
     rank = ranker if ranker is not None else default_ranker
     tickers = [yahoo_symbol(c.ticker) for c in members]
+    strategy_id, lens_source = resolve_lens(defn, strategy_id)
     say(f"{defn.name}: ranking {len(tickers)} name(s) under {strategy_id} (no LLM)…")
-    ranked, unrateable, setup = rank(tickers, strategy_id, today=today)
+    ranked, unrateable, setup, screened = _unpack_ranked(rank(tickers, strategy_id, today=today))
     version = next_version(root, defn.slug, rebuild=rebuild)
     out.quality = run_checks(
         cohort=defn.name, version=version, ranked=ranked, unrateable=unrateable,
-        members=members, setup=setup, anchors=defn.anchors, notes=log)
+        members=members, setup=setup, anchors=defn.anchors, notes=log,
+        screened_out=screened, lens=strategy_id, lens_source=lens_source)
 
     # 7. freeze ------------------------------------------------------------- #
     directory = version_dir(root, defn.slug, version)
@@ -319,7 +354,7 @@ def _other_exchange_counts(source: EODHDSource, defn: CohortDefinition,
 # check
 # --------------------------------------------------------------------------- #
 def check(defn: CohortDefinition, *, root: str | Path = DEFAULT_ROOT,
-          ranker=None, strategy_id: str = DEFAULT_STRATEGY,
+          ranker=None, strategy_id: str | None = None,
           today: date | None = None, progress=None) -> tuple[QualityReport | None, str]:
     """Re-run the quality checks over the CURRENT frozen membership. Writes nothing."""
     root, today = Path(root), (today or date.today())
@@ -330,13 +365,16 @@ def check(defn: CohortDefinition, *, root: str | Path = DEFAULT_ROOT,
 
     members = read_members(version_dir(root, defn.slug, version) / MEMBERS_FILE)
     rank = ranker if ranker is not None else default_ranker
+    strategy_id, lens_source = resolve_lens(defn, strategy_id)
     say(f"{defn.name}: ranking {len(members)} frozen member(s) under {strategy_id}…")
-    ranked, unrateable, setup = rank([yahoo_symbol(c.ticker) for c in members],
-                                     strategy_id, today=today)
+    ranked, unrateable, setup, screened = _unpack_ranked(
+        rank([yahoo_symbol(c.ticker) for c in members], strategy_id, today=today))
     report = run_checks(cohort=defn.name, version=version, ranked=ranked,
                         unrateable=unrateable, members=members, setup=setup,
-                        anchors=defn.anchors)
-    lines = [f"{defn.name} v{version} — {len(members)} member(s)"]
+                        anchors=defn.anchors, screened_out=screened, lens=strategy_id,
+                        lens_source=lens_source)
+    lines = [f"{defn.name} v{version} — {len(members)} member(s); lens {strategy_id} "
+             f"({lens_source})"]
     lines += [f"  {c.name}: {c.line()}" for c in report.checks]
     return report, "\n".join(lines)
 
@@ -459,7 +497,9 @@ def plan(defs: list[CohortDefinition], pool, *, root: str | Path = DEFAULT_ROOT
 
 
 def _bn(value: float | None) -> str:
-    return "?" if value is None else f"${value / 1e9:,.1f}bn"
+    from ..tools.price_context import format_money
+
+    return "?" if value is None else format_money(value, "USD", abbreviate=True)
 
 
 def format_plan(entries: list[PlanEntry], pool=None, *, all_members: bool = False) -> str:

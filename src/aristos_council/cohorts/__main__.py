@@ -143,8 +143,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "by default; it exists so old cohort versions can be reproduced")
     parser.add_argument("--root", default=str(DEFAULT_ROOT),
                         help=f"where frozen cohorts live (default {DEFAULT_ROOT})")
-    parser.add_argument("--strategy", default=DEFAULT_STRATEGY,
-                        help=f"rank strategy for the quality report (default {DEFAULT_STRATEGY})")
+    parser.add_argument("--strategy", default=None,
+                        help="rank strategy for the quality report; overrides each cohort's own "
+                             f"check_lens (default: the cohort's check_lens, else {DEFAULT_STRATEGY})")
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_selector(sp, *, allow_all: bool):

@@ -110,6 +110,10 @@ cohorts:
     exclude: [financials, reits]
     watch: false
     anchors: []
+    # COHORT-QC (2026-09-26): the default check lens (magic_formula_raw_v1) excludes Utilities by design, so it
+    # ranked NONE of this cohort. forensic_v1 (kind: check, no screen, equity only, financials out) ranked 40 of 43
+    # (cyclical_income_v1: 16 of 43; conservative_plus_v1: 13 of 43 on electric). Measured on the frozen v1 members.
+    check_lens: forensic_v1
 
   # guide: gas, water. MERGED: water alone has 11 companies above $1bn in the whole index, under the 20 floor at any size; gas has 27. Multi-utilities (diversified) share the same regulated-network economics and join them
   # n1 = 56 (Utilities - Regulated Gas 27, Utilities - Regulated Water 12, Utilities - Diversified 17) -> tier $2bn
@@ -124,6 +128,10 @@ cohorts:
     exclude: [financials, reits]
     watch: false
     anchors: []
+    # COHORT-QC (2026-09-26): the default check lens (magic_formula_raw_v1) excludes Utilities by design, so it
+    # ranked NONE of this cohort. forensic_v1 (kind: check, no screen, equity only, financials out) ranked 35 of 48
+    # (cyclical_income_v1: 10 of 48; conservative_plus_v1: 13 of 43 on electric). Measured on the frozen v1 members.
+    check_lens: forensic_v1
 
   # guide: renewable and independent power (one cohort; the two codes are 32 and 17)
   # n1 = 49 (Utilities - Renewable 32, Utilities - Independent Power Producers 17) -> tier $2bn
@@ -137,6 +145,10 @@ cohorts:
     exclude: [financials, reits]
     watch: false
     anchors: []
+    # COHORT-QC (2026-09-26): the default check lens (magic_formula_raw_v1) excludes Utilities by design, so it
+    # ranked NONE of this cohort. forensic_v1 (kind: check, no screen, equity only, financials out) ranked 28 of 34
+    # (cyclical_income_v1: 2 of 34; conservative_plus_v1: 13 of 43 on electric). Measured on the frozen v1 members.
+    check_lens: forensic_v1
 
   # guide: chemicals. Fertilisers and crop chemicals (Agricultural Inputs, 16) are commodity chemistry and join the 27 in Chemicals
   # n1 = 43 (Chemicals 27, Agricultural Inputs 16) -> tier $2bn

@@ -202,8 +202,11 @@ def test_an_empty_history_falls_back_rather_than_reporting_nothing():
     assert out.revenue.cagr[5].available
 
 
-def test_the_source_tag_is_the_LAST_line_on_the_page():
-    lines = growth_record(_four_period_fundamentals(),
-                          parse_growth_history(_payload())).lines()
-    assert lines[-1] == "source: EODHD, 41 annual reports"
-    assert sum(1 for l in lines if l.startswith("source:")) == 1
+def test_the_source_tag_is_not_a_line_of_the_record_it_moves_to_the_sources_block():
+    """Batch 8: 'source: EODHD, 41 annual reports' beside 'grew in 8 of the 10 years' read as a
+    contradiction, and a source is a Sources-block fact. The record keeps the tag for the footer and
+    says '41 years on file, last 10 used' once, as a note."""
+    record = growth_record(_four_period_fundamentals(), parse_growth_history(_payload()))
+    assert record.source_tag == "source: EODHD, 41 annual reports"
+    assert not any(l.startswith("source:") for l in record.lines())
+    assert record.notes()[0] == "41 years on file, last 10 used"

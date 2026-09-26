@@ -3582,6 +3582,8 @@ def render_company_check_tab(show_validation: bool = False) -> None:
             st.exception(exc)
             st.session_state.pop("cc_result", None)
         else:
+            from aristos_council.company_check import attach_peers
+            attach_peers(result)                     # the group is computed ONCE, held on the result
             st.session_state["cc_result"] = result
             st.session_state["cc_run_start"] = run_start
             # The friendly name for the HTML export's header (the result carries only the
@@ -3600,6 +3602,8 @@ def _render_absolute_readings(result) -> None:
     Beside the valuation band and the Forensic marks because they answer the same kind of
     question: not "how does this rank" but "what is this company like". They do not vote.
     """
+    from aristos_council.company_check import mixed_source_marker
+
     debt, growth = result.debt_and_cash, result.growth_record
     trend = getattr(result, "analyst_trend", None)
     if debt is None and growth is None and trend is None:
@@ -3612,29 +3616,40 @@ def _render_absolute_readings(result) -> None:
         for line in debt.lines():
             st.markdown(f"- {line}")
     if growth is not None:
-        st.markdown("**Growth record**")
+        st.markdown("**Growth record**" + mixed_source_marker(result, growth.source_tag))
         for line in growth.lines():
             st.markdown(f"- {line}")
+        for note in growth.notes():                  # said once, under the section
+            st.caption(note)
     if trend is not None:
         # ANALYST-TREND-1 - a mark, not a lens: it does not vote and changes no verdict. An
         # abstention is shown with its reason rather than left as an absent section.
-        st.markdown("**Analyst forecast direction**")
-        for line in trend.lines():
-            st.markdown(f"- {line}")
+        st.markdown("**Analyst forecast direction**"
+                    + mixed_source_marker(result, trend.source))
+        st.markdown(f"**{trend.headline}**")
+        if trend.rows:
+            import pandas as pd
+            from aristos_council.abs_readings import TABLE_COLUMNS
+            st.dataframe(pd.DataFrame(
+                [{"": row.label, **dict(zip(TABLE_COLUMNS, row.cells()))} for row in trend.rows]),
+                hide_index=True, width="stretch")
+            if trend.currency_note():
+                st.caption(trend.currency_note())
 
 
 def _render_peers(result) -> None:
-    """MARKET-INDEX-1 — who this company would be measured against. No verdicts yet."""
-    from aristos_council.market_index import IndexStore, load_config, peers
+    """MARKET-INDEX-1 — who this company would be measured against."""
+    from aristos_council.peer_table import (LOCAL_COLUMN, LOCAL_FORMAT, ONE_SYSTEM_NOTE,
+                                            USD_COLUMN, USD_FORMAT, has_one_system_peers,
+                                            peer_frame_records, peer_rows)
 
     st.subheader("Peers")
-    try:
-        store = IndexStore(load_config()["root"])
-        group = peers(result.ticker, store=store)
-    except Exception as exc:                 # a missing table must not take the tab down
+    group = getattr(result, "peer_group", None)
+    if group is None:
         st.info("The market index is not available — "
                 "`python -m aristos_council.market_index build`")
-        st.caption(f"({type(exc).__name__}: {exc})")
+        if getattr(result, "peer_error", ""):
+            st.caption(f"({result.peer_error})")
         return
 
     if not group.available:
@@ -3645,20 +3660,31 @@ def _render_peers(result) -> None:
 
     st.caption(group.sentence())
     import pandas as pd
-    st.dataframe(pd.DataFrame([{
-        "Ticker": r.ticker, "Name": r.name, "Exchange": r.exchange,
-        # MARKET-INDEX-3 - both figures. The bands compare USD; the local number is what
-        # the company actually reports, and a reader comparing a yen cap with a dollar one
-        # needs to see which is which.
-        "Market cap (local)": ("—" if r.market_cap is None
-                               else f"{r.market_cap:,.0f} {r.currency}"),
-        "Market cap (USD)": ("—" if r.market_cap_usd is None
-                             else f"{r.market_cap_usd:,.0f}"),
-        "Sub-industry": r.classification,
-        "Matched on": group.matched_on.get(r.ticker, ""),
-    } for r in group.members]), hide_index=True, width="stretch")
+    # Numbers stay numbers (sortable by size), largest USD cap first. The local column is in the
+    # MAJOR unit: a London cap is pounds although its quote code says GBX (INDEX-GBX-SCALE-1).
+    st.dataframe(
+        pd.DataFrame(peer_frame_records(group)), hide_index=True, width="stretch",
+        column_config={
+            USD_COLUMN: st.column_config.NumberColumn(USD_COLUMN, format=USD_FORMAT),
+            LOCAL_COLUMN: st.column_config.NumberColumn(LOCAL_COLUMN, format=LOCAL_FORMAT),
+        })
+    if has_one_system_peers(peer_rows(group)):
+        st.caption(ONE_SYSTEM_NOTE)
     for reason in group.reasons:
         st.caption(f"· {reason}")
+
+
+def _render_sources(result) -> None:
+    """ONE Sources block at the bottom (batch 8): every provider the page drew on with its as-of
+    date, and the correction files used. Nothing above it names a provider."""
+    from aristos_council.company_check import company_sources
+
+    sources = company_sources(result)
+    if not sources:
+        return
+    st.subheader("Sources")
+    for s in sources:
+        st.markdown(f"- **{s.topic}:** {s.text}")
 
 
 def _render_company_check(result) -> None:
@@ -3731,12 +3757,12 @@ def _render_company_check(result) -> None:
     else:
         st.caption("No reference run available — showing raw values. Run that list "
                    "once (the Run tab) to get cohort context.")
-    from aristos_council.company_check import format_factor_value
+    from aristos_council.company_check import factor_source_display, format_factor_value
 
     for fc in result.factors:
         st.markdown(f"- **{fc.label}** (`{fc.factor}`): "
                     f"{format_factor_value(fc.factor, fc.value)} "
-                    f"_[{fc.source}]_ — {fc.context}")
+                    f"_[{factor_source_display(fc.source)}]_ — {fc.context}")
 
     _render_absolute_readings(result)
     _render_peers(result)
@@ -3765,6 +3791,7 @@ def _render_company_check(result) -> None:
             st.markdown(f"- ⚠ {flag}")
 
     st.info(result.pointer)
+    _render_sources(result)
     # Unique, self-describing filenames: ticker + strategy + run-start (ITEM 6). A
     # single-name file ALWAYS carries the ticker. Two exports side by side
     # (REPORT-HTML-1): the text report stays canonical, the HTML is the shareable copy.

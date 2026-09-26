@@ -96,11 +96,15 @@ def test_the_recorded_apple_year_reads_flat_and_says_where_it_came_from():
     trend = analyst_trend(dataclasses.replace(
         parse_trend(_load("aapl_us.json"), today=TODAY), as_of="2026-09-25", units_charged=10))
     assert trend.mark == MARK_FLAT                        # +0.68% is inside the +/-2% band
-    text = trend.direction.text()
-    assert "fiscal year ending 2026-09-30" in text and "8.82" in text and "8.76" in text
-    assert "39 analysts" in text
-    assert f"source: {SOURCE_TAG}, as of 2026-09-25" in text          # the value carries its tags
-    assert "next year (fiscal year ending 2027-09-30)" in trend.next_year.text()
+    assert trend.headline == "Analysts are holding their profit forecasts steady"
+    this_year, next_year = trend.rows
+    assert this_year.label == "This year (to Sep 2026)"
+    assert this_year.cells() == ("8.82", "8.76", "+0.7%", "39")
+    assert next_year.label == "Next year (to Sep 2027)"
+    assert next_year.cells()[3] == "40"
+    # where it came from is a Sources-block fact: the reading keeps the tag, the lines do not
+    assert trend.tag() == f"source: {SOURCE_TAG}, as of 2026-09-25"
+    assert SOURCE_TAG not in " ".join(trend.lines())
 
 
 @pytest.mark.parametrize("now, mark", [
@@ -155,26 +159,56 @@ def test_a_missing_current_estimate_abstains():
 
 def test_no_current_year_at_all_abstains_with_the_providers_reason_and_still_carries_the_tags():
     trend = analyst_trend(dataclasses.replace(parse_trend({}, today=TODAY), as_of="2026-09-25"))
-    text = trend.direction.text()
-    assert trend.mark == "" and "no Earnings::Trend block" in text
-    assert f"source: {SOURCE_TAG}, as of 2026-09-25" in text
+    assert trend.mark == "" and "no Earnings::Trend block" in trend.headline
+    assert trend.rows == () and trend.tag() == f"source: {SOURCE_TAG}, as of 2026-09-25"
 
 
 def test_the_next_year_is_shown_even_when_the_mark_abstains():
     data = TrendData(current=TrendPeriod("2026-12-31", 5.0, 5.0, 1),
                      next_year=TrendPeriod("2027-12-31", 6.0, 5.0, 1), as_of="2026-09-25")
     trend = analyst_trend(data)
-    assert trend.mark == ""
-    assert "6.00" in trend.next_year.text() and "up 20.0%" in trend.next_year.text()
+    assert trend.mark == "" and "only 1 analyst(s)" in trend.headline
+    this_year, next_year = trend.rows
+    assert next_year.label == "Next year (to Dec 2027)"
+    assert next_year.cells() == ("6.00", "5.00", "+20.0%", "1")
 
 
-def test_the_cost_is_reported_beside_the_figures():
-    paid = analyst_trend(_data(units_charged=CHARGE_FUNDAMENTALS))
+def test_the_cost_is_logged_not_printed_on_the_page(caplog):
+    """Batch 8: '10 EODHD units charged' is for the log; the page carries the headline and table."""
+    import logging
+    with caplog.at_level(logging.INFO, logger="aristos_council.abs_readings"):
+        paid = analyst_trend(_data(units_charged=CHARGE_FUNDAMENTALS))
+    assert any("10 EODHD units charged" in r.getMessage() for r in caplog.records)
     cached = analyst_trend(_data(cached=True))
     none = analyst_trend(_data())
-    assert "10 EODHD units charged" in paid.lines()[-1]
-    assert "0 EODHD units (cached for today)" in cached.lines()[-1]
-    assert "0 EODHD units (no request made)" in none.lines()[-1]
+    assert "0 EODHD units (cached for today)" in cached.cost_line()
+    assert "0 EODHD units (no request made)" in none.cost_line()
+    for trend in (paid, cached, none):
+        assert "EODHD units" not in " ".join(trend.lines())
+
+
+def test_the_headline_is_one_sentence_for_each_mark_or_the_reason():
+    assert analyst_trend(_data(now=12.0, ago=10.0)).headline == (
+        "Analysts are raising their profit forecasts")
+    assert analyst_trend(_data(now=8.0, ago=10.0)).headline == (
+        "Analysts are cutting their profit forecasts")
+    assert analyst_trend(_data(now=10.1, ago=10.0)).headline == (
+        "Analysts are holding their profit forecasts steady")
+    assert "only 2 analyst(s)" in analyst_trend(_data(analysts=2)).headline
+
+
+def test_the_table_is_in_the_accounts_currency_and_says_so_when_it_is_unknown():
+    """'TWD 107.85' for a Taiwanese name; with no currency the bare figure and a stated note."""
+    data = TrendData(current=TrendPeriod("2026-12-31", 107.85, 98.58, 25),
+                     next_year=TrendPeriod("2027-12-31", 130.0, 120.0, 22), as_of="2026-09-25")
+    twd = analyst_trend(data, currency="TWD")
+    assert twd.rows[0].label == "This year (to Dec 2026)"
+    assert twd.rows[0].cells() == ("TWD 107.85", "TWD 98.58", "+9.4%", "25")
+    assert twd.currency_note() == ""
+    unknown = analyst_trend(data)
+    assert unknown.rows[0].cells()[0] == "107.85"
+    assert unknown.currency_note() == "(currency not stated by the source)"
+    assert "(currency not stated by the source)" in unknown.lines()[-1]
 
 
 # =========================================================================== #
@@ -305,12 +339,16 @@ def _mu_check(**kw):
 
 
 def _without_analyst_block(text: str) -> str:
+    """The export minus the analyst sub-block (a heading indented two, its lines indented four) and
+    the analyst line of the Sources block - the mark's own footprint, nothing else."""
     out, skipping = [], False
     for line in text.split("\n"):
-        if line.startswith("ANALYST FORECAST DIRECTION"):
+        if line.startswith("  Analyst forecasts:"):
+            continue
+        if line.startswith("  Analyst forecast direction"):
             skipping = True
             continue
-        if skipping and line.startswith("  "):
+        if skipping and line.startswith("    "):
             continue
         skipping = False
         out.append(line)
@@ -321,7 +359,7 @@ def test_off_by_default_nothing_is_fetched_and_the_output_is_untouched():
     fetch = _fetcher(_TRENDS["rising"])
     result = _mu_check(analyst_fetcher=fetch)                  # with_analyst_trend not asked for
     assert result.analyst_trend is None and fetch.calls == []
-    assert "ANALYST FORECAST" not in format_company_check(result)
+    assert "Analyst forecast direction" not in format_company_check(result)
 
 
 @pytest.mark.parametrize("which", sorted(_TRENDS))
@@ -333,16 +371,17 @@ def test_the_mark_changes_no_screen_gate_factor_or_verdict_whatever_it_says(whic
     assert on.analyst_trend is not None
     assert dataclasses.replace(on, analyst_trend=None) == off
     assert _without_analyst_block(format_company_check(on)) == format_company_check(off)
-    assert "ANALYST FORECAST DIRECTION" in format_company_check(on)
+    assert "Analyst forecast direction" in format_company_check(on)
 
 
-def test_the_mark_and_its_abstention_are_both_printed_with_their_source_tag():
+def test_the_headline_and_its_abstention_are_both_printed():
     rising = format_company_check(_mu_check(with_analyst_trend=True,
                                             analyst_fetcher=_fetcher(_TRENDS["rising"])))
-    assert "forecasts rising" in rising and f"source: {SOURCE_TAG}, as of 2026-09-25" in rising
+    assert "Analysts are raising their profit forecasts" in rising
+    assert "This year (to Dec 2026)" in rising
     quiet = format_company_check(_mu_check(with_analyst_trend=True,
                                            analyst_fetcher=_fetcher(_TRENDS["abstaining"])))
-    assert "not stated - EODHD has no Earnings::Trend block" in quiet.replace("\u2014", "-")
+    assert "EODHD has no Earnings::Trend block for this name" in quiet
     assert "does not vote and changes no verdict" in quiet
 
 

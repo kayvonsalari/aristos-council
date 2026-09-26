@@ -105,4 +105,12 @@ size_suspect_factor: 5.0
 empty_retry_after: 2
 empty_retry_days: 30
 
+# SAO PAULO IS NOT USED FOR PEERS OR COHORTS (2026-09-26). About half its rows (722 of 1,472) are
+# Brazilian depositary receipts of foreign companies, and its real companies stood as peers of
+# European and Asian names (PETR3 in Shell's group). Peer groups and cohorts read THIS list, so the
+# two can never disagree: `peers` drops these markets from its pool and says so in its reasons,
+# and `clean_pool` (cohorts) drops them BEFORE it picks one row per company. The rows stay in the
+# table. ONE LINE TO DELETE to allow Sao Paulo back: remove the `peer_exclude_markets` line below.
+peer_exclude_markets: [SA]
+
 root: data/local/market_index

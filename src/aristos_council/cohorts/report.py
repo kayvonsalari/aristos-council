@@ -12,7 +12,27 @@ from .cleanup import RULE_NAMES, Removal, SizeVerdict
 from .definitions import CohortDefinition
 from .quality import QualityReport
 from .flags import legend_lines, symbols
-from .source import Candidate
+from .source import PATH_INDEX, Candidate
+from ..market_index import MINOR_UNIT_MARKET_CAP
+from ..tools.price_context import format_money
+
+
+def cap_cell(cand: Candidate) -> str:
+    """A member's market cap through the ONE money formatter: the USD figure first, and the local
+    one beside it when the name is quoted in another currency ("$24.6bn (CHF 20.2bn)").
+
+    A London cap from the index is in POUNDS although its quote code says GBX (INDEX-GBX-SCALE-1),
+    so it reads "£76.5bn", never "76,547,235,840 GBX". No cap at all is a dash, never a zero."""
+    code = (cand.currency or "").strip()
+    if cand.source == PATH_INDEX and code.upper() in MINOR_UNIT_MARKET_CAP:
+        code = MINOR_UNIT_MARKET_CAP[code.upper()]
+    local = (None if cand.market_cap is None
+             else format_money(cand.market_cap, code or None, abbreviate=True))
+    usd = (None if cand.market_cap_usd is None
+           else format_money(cand.market_cap_usd, "USD", abbreviate=True))
+    if usd is None:
+        return local or "—"
+    return usd if (local is None or code.upper() == "USD") else f"{usd} ({local})"
 
 
 def render_report(*, defn: CohortDefinition, version: int, built_on: date,
@@ -63,6 +83,9 @@ def render_report(*, defn: CohortDefinition, version: int, built_on: date,
         add("Not run — the cohort did not reach a usable size, so ranking it would "
             "describe a list nobody should use.")
     else:
+        if quality.lens:
+            add(f"Ranked under `{quality.lens}` ({quality.lens_source or 'lens not attributed'}).")
+            add("")
         for check in quality.checks:
             add(f"**{check.name}** — {check.line()}")
             add("")
@@ -79,7 +102,7 @@ def render_report(*, defn: CohortDefinition, version: int, built_on: date,
     for cand in sorted(members, key=lambda c: c.ticker):
         anchor = " ⚓" if cand.code.upper() in {a.split(".")[0].upper()
                                                for a in defn.anchors} else ""
-        cap = "—" if cand.market_cap is None else f"{cand.market_cap:,.0f} {cand.currency}"
+        cap = cap_cell(cand)
         marks = f" {symbols(cand.flags)}" if cand.flags else ""      # COHORT-3: see the legend
         add(f"| {cand.ticker}{marks}{anchor} | {cand.name} | {cand.exchange} | {cand.industry} "
             f"| {cap} | {cand.source}"

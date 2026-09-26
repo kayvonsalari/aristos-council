@@ -13,6 +13,10 @@ Every function here is PURE: it takes a finished ranker-only result and returns 
 Nothing fetches, nothing ranks over the network, and no model is imported — drop-one
 re-ranks in memory from the factor values the run already produced, so N+1 rankings cost
 one fetch, not N+1.
+
+COHORT-QC (batch 8): every check prints "checked on N of M members"; a name the LENS screened
+out is its own category, beside "could not read" and "ranked with a hole"; and drop-one has a
+floor (2 places) and a minimum (15 ranked names).
 """
 from __future__ import annotations
 
@@ -25,6 +29,11 @@ ABSTENTION_FLAG = 0.15          # more than 15% unreadable
 BAND_CONCENTRATION_FLAG = 0.60  # more than 60% in one band
 # "> 3 places on a cohort of 30, scale proportionally" — i.e. one tenth of the cohort.
 STABILITY_FLAG_FRACTION = 3.0 / 30.0
+# COHORT-QC. A tenth of six ranked names is 0.6 of a place, so one company moving one seat
+# flagged a 6-name set (about 18 of the 40 warnings measured 2026-09-26). The line never sits
+# below 2 places, and a set under 15 ranked names is too small for a re-rank to mean anything.
+STABILITY_MIN_LINE = 2.0
+STABILITY_MIN_RANKED = 15
 
 BAND_LABELS = ("0–20 (cheapest vs own past)", "20–40", "40–60", "60–80",
                "80–100 (dearest vs own past)")
@@ -60,43 +69,73 @@ class Check:
     flagged: bool
     sentence: str
     detail: tuple[str, ...] = ()
+    # COHORT-QC: how many of the cohort's members this check actually looked at. Printed on
+    # every check, because "0% abstained" over zero ranked names reads as a clean bill of
+    # health when it is an empty one.
+    checked: int | None = None
+    of: int | None = None
+
+    def scope(self) -> str:
+        if self.checked is None or self.of is None:
+            return ""
+        return f"(checked on {self.checked} of {self.of} members)"
 
     def line(self) -> str:
-        return ("⚠ " if self.flagged else "") + self.sentence
+        tail = f" {self.scope()}" if self.scope() else ""
+        return ("⚠ " if self.flagged else "") + self.sentence + tail
 
 
 # --------------------------------------------------------------------------- #
 # 1. abstention rate
 # --------------------------------------------------------------------------- #
 def abstention_rate(ranked: list[RankedTicker], unrateable: list[tuple[str, str]],
-                    total: int) -> Check:
-    """Share of the cohort the ranker could not fully read.
+                    total: int, screened_out: list[tuple[str, str]] | tuple = ()) -> Check:
+    """Share of the names the lens applied to that the ranker could not fully read.
 
-    A name counts as an abstention when it produced NO verdict at all (it is UNRATEABLE —
-    no data, delisted) or when it was ranked with a hole: at least one factor value came
-    back None and had to be imputed or sent to the worst rank. Both are the same thing
-    from a reader's seat — a row whose position rests on something the data did not say.
-    Counting only the first would flatter the cohort; counting only the second would miss
-    the names that never made the table.
+    Three different things can keep a member out of the table, and they are not the same
+    finding, so each is its own category and its own count:
+
+    * SCREENED OUT by the lens (COHORT-QC) — the lens's own gates (a size floor, a sector it
+      excludes, an asset class) said it does not apply. That is a fact about the lens, not
+      about the data, so it is neither an abstention nor a pass: it is reported beside them
+      and taken out of the denominator. Folding it in as "0%" is how three utilities cohorts
+      read "0% abstained, 0 flagged" with not one name ranked.
+    * UNREADABLE — no verdict at all (no data, delisted, a fetch that failed).
+    * A HOLE — ranked, but at least one factor came back None and was imputed or sent to
+      the worst rank. The last two are, from a reader's seat, a row whose position rests on
+      something the data did not say; counting only the first would flatter the cohort,
+      counting only the second would miss the names that never made the table.
     """
-    total = total or (len(ranked) + len(unrateable))
+    total = total or (len(ranked) + len(unrateable) + len(screened_out))
+    screened = len(screened_out)
+    applicable = max(total - screened, 0)
     holes = [r for r in ranked if any(v is None for v in r.factor_values.values())]
     n_abstain = len(unrateable) + len(holes)
-    rate = (n_abstain / total) if total else 0.0
+    detail = tuple(sorted([t for t, _ in unrateable] + [r.ticker for r in holes])) + tuple(
+        f"screened out: {t} — {why}" for t, why in sorted(screened_out))
+    if applicable == 0:
+        sentence = (f"The lens screened out all {total} member(s), so there is nothing to read "
+                    f"and the abstention rate says nothing here — this lens does not apply to "
+                    f"this cohort." if total else
+                    "The cohort has no members, so there is nothing to check.")
+        return Check("abstention rate", "n/a", False, sentence, detail, checked=0, of=total)
+    rate = n_abstain / applicable
     flagged = rate > ABSTENTION_FLAG
-    detail = tuple(sorted([t for t, _ in unrateable] + [r.ticker for r in holes]))
+    screened_clause = (f" {screened} of {total} member(s) were screened out by the lens itself "
+                       f"and are not in the rate." if screened else "")
     return Check(
         "abstention rate", f"{rate:.0%}", flagged,
-        f"{rate:.0%} of the cohort abstained: {len(unrateable)} name(s) the ranker could "
-        f"not read at all and {len(holes)} ranked with at least one factor missing, out "
-        f"of {total}." + (f" Above the {ABSTENTION_FLAG:.0%} line." if flagged else ""),
-        detail)
+        f"{rate:.0%} of the {applicable} name(s) the lens applied to abstained: "
+        f"{len(unrateable)} name(s) the ranker could not read at all and {len(holes)} ranked "
+        f"with at least one factor missing." + screened_clause
+        + (f" Above the {ABSTENTION_FLAG:.0%} line." if flagged else ""),
+        detail, checked=applicable, of=total)
 
 
 # --------------------------------------------------------------------------- #
 # 2. band spread
 # --------------------------------------------------------------------------- #
-def band_spread(ranked: list[RankedTicker]) -> Check:
+def band_spread(ranked: list[RankedTicker], total: int | None = None) -> Check:
     """Share of names per valuation band, and whether one band holds the cohort.
 
     A cohort where four names in five sit in the dearest fifth of their own history is not
@@ -105,6 +144,7 @@ def band_spread(ranked: list[RankedTicker]) -> Check:
     separately and never folded into a bucket; a fabricated 50th percentile is exactly the
     lie the band was built to refuse.
     """
+    of = total if total is not None else len(ranked)
     buckets = [0] * 5
     abstained = 0
     for r in ranked:
@@ -118,7 +158,8 @@ def band_spread(ranked: list[RankedTicker]) -> Check:
     if not placed:
         return Check("band spread", "no bands", False,
                      f"No valuation band could be measured for any of the {len(ranked)} "
-                     f"ranked names, so the spread says nothing here.")
+                     f"ranked names, so the spread says nothing here.",
+                     checked=0, of=of)
     shares = [b / placed for b in buckets]
     top = max(range(5), key=lambda i: shares[i])
     flagged = shares[top] > BAND_CONCENTRATION_FLAG
@@ -129,7 +170,8 @@ def band_spread(ranked: list[RankedTicker]) -> Check:
         + (f"; {abstained} abstained." if abstained else ".")
         + (f" {shares[top]:.0%} sit in one band ({BAND_LABELS[top]}), above the "
            f"{BAND_CONCENTRATION_FLAG:.0%} line." if flagged else ""),
-        tuple(f"{BAND_LABELS[i]}: {buckets[i]}" for i in range(5)))
+        tuple(f"{BAND_LABELS[i]}: {buckets[i]}" for i in range(5)),
+        checked=placed, of=of)
 
 
 # --------------------------------------------------------------------------- #
@@ -142,7 +184,8 @@ def _positions(ranked: list[RankedTicker]) -> dict[str, int]:
     return {r.ticker: i for i, r in enumerate(kept, 1)}
 
 
-def drop_one_stability(ranked: list[RankedTicker], setup: RankSetup) -> Check:
+def drop_one_stability(ranked: list[RankedTicker], setup: RankSetup,
+                       total: int | None = None) -> Check:
     """Remove each name in turn, re-rank, and report the largest shift anyone suffers.
 
     The comparison is against the base order RESTRICTED to the surviving names, not
@@ -152,13 +195,17 @@ def drop_one_stability(ranked: list[RankedTicker], setup: RankSetup) -> Check:
 
     Re-ranking happens in memory from ``factor_values`` the run already produced, so this
     costs no fetches. The threshold scales with the cohort: more than 3 places on 30 names
-    is one tenth, so a 45-name cohort is flagged above 4.5.
+    is one tenth, so a 45-name cohort is flagged above 4.5 — but never below 2 places, and
+    a set of fewer than 15 ranked names is skipped (COHORT-QC): a tenth of six names is 0.6
+    of a place, so one company moving one seat flagged nearly half of all cohorts.
     """
     kept = [r for r in ranked if not r.excluded]
     n = len(kept)
-    if n < 3:
+    of = total if total is not None else n
+    if n < STABILITY_MIN_RANKED:
         return Check("drop-one stability", "n/a", False,
-                     f"Only {n} ranked name(s) — drop-one says nothing at this size.")
+                     f"Too few ranked names for this check ({n} ranked; it needs "
+                     f"{STABILITY_MIN_RANKED}).", checked=n, of=of)
 
     base = _positions(kept)
     order = sorted(base, key=lambda t: base[t])
@@ -178,7 +225,7 @@ def drop_one_stability(ranked: list[RankedTicker], setup: RankSetup) -> Check:
                 worst_note = (f"{ticker} moved {shift} place(s) when {removed} was "
                               f"removed (seat {expected.get(ticker)} → {seat})")
 
-    threshold = n * STABILITY_FLAG_FRACTION
+    threshold = max(n * STABILITY_FLAG_FRACTION, STABILITY_MIN_LINE)
     flagged = worst_shift > threshold
     return Check(
         "drop-one stability", f"{worst_shift} place(s)", flagged,
@@ -187,7 +234,7 @@ def drop_one_stability(ranked: list[RankedTicker], setup: RankSetup) -> Check:
         + (f" {worst_note}." if worst_note else "")
         + (f" Above the {threshold:.1f}-place line for a cohort of {n}."
            if flagged else ""),
-        (worst_note,) if worst_note else ())
+        (worst_note,) if worst_note else (), checked=n, of=of)
 
 
 # --------------------------------------------------------------------------- #
@@ -202,7 +249,8 @@ def anchor_check(ranked: list[RankedTicker], anchors: tuple[str, ...],
     """
     if not anchors:
         return Check("anchor check", "none named", False,
-                     "No anchors are named for this cohort.")
+                     "No anchors are named for this cohort.",
+                     checked=len(ranked), of=len(members))
     by_ticker = {r.ticker: r for r in ranked}
     by_code = {r.ticker.split(".")[0].upper(): r for r in ranked}
     member_codes = {c.code.upper() for c in members}
@@ -220,7 +268,8 @@ def anchor_check(ranked: list[RankedTicker], anchors: tuple[str, ...],
         else:
             lines.append(f"{anchor}: NOT in the cohort — it did not pass the rules")
     return Check("anchor check", "; ".join(positions) or "not ranked", False,
-                 "Anchors — " + "; ".join(lines) + ".", tuple(lines))
+                 "Anchors — " + "; ".join(lines) + ".", tuple(lines),
+                 checked=len(ranked), of=len(members))
 
 
 # --------------------------------------------------------------------------- #
@@ -243,7 +292,8 @@ def source_summary(members: list[Candidate]) -> Check:
                  f"Built from {', '.join(parts) or 'no source'}{fill}.",
                  tuple(f"{c.ticker}: {c.source}"
                        + (f" (+{'/'.join(c.filled)} from {PATH_YFINANCE})" if c.filled else "")
-                       for c in members))
+                       for c in members),
+                 checked=len(members), of=len(members))
 
 
 @dataclass
@@ -252,6 +302,10 @@ class QualityReport:
     version: int
     checks: list[Check] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # COHORT-QC: the lens the ranker-only run used and where that choice came from, so the
+    # report can print it — a check is only as readable as the lens that produced it.
+    lens: str = ""
+    lens_source: str = ""
 
     @property
     def flags(self) -> list[Check]:
@@ -261,15 +315,22 @@ class QualityReport:
 def run_checks(*, cohort: str, version: int, ranked: list[RankedTicker],
                unrateable: list[tuple[str, str]], members: list[Candidate],
                setup: RankSetup, anchors: tuple[str, ...],
-               notes: list[str] | None = None) -> QualityReport:
-    """All four checks plus the source summary, in the order the report prints them."""
+               notes: list[str] | None = None,
+               screened_out: list[tuple[str, str]] | tuple = (),
+               lens: str = "", lens_source: str = "") -> QualityReport:
+    """All four checks plus the source summary, in the order the report prints them.
+
+    ``unrateable`` is every name the ranker could not read (no data, delisted, a failed
+    fetch); ``screened_out`` is every name the lens's own gates turned away. They are
+    separate on purpose — see ``abstention_rate``."""
+    total = len(members)
     return QualityReport(
         cohort=cohort, version=version,
         checks=[
-            abstention_rate(ranked, unrateable, len(members)),
-            band_spread(ranked),
-            drop_one_stability(ranked, setup),
+            abstention_rate(ranked, unrateable, total, screened_out),
+            band_spread(ranked, total),
+            drop_one_stability(ranked, setup, total),
             anchor_check(ranked, anchors, members),
             source_summary(members),
         ],
-        notes=list(notes or ()))
+        notes=list(notes or ()), lens=lens, lens_source=lens_source)

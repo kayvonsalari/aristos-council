@@ -74,6 +74,7 @@ What costs money, and what does not:
 | [docs/SCOREBOARD.md](docs/SCOREBOARD.md) | The prospective test of whether the verdicts were also *good* |
 | [docs/MARKET_INDEX.md](docs/MARKET_INDEX.md) | The local company table: coverage, cost, peer rules, corrections |
 | [docs/COHORTS.md](docs/COHORTS.md) | The 57 cohorts: rules, floors, cleanup, quality checks, correction symbols |
+| [docs/CLASSIFICATION.md](docs/CLASSIFICATION.md) | How companies are classified (GICS and EODHD's own labels), how peer groups are chosen, and the dated correction files |
 | [docs/GAP_LEDGER.md](docs/GAP_LEDGER.md) | The pre-market experiment: pipeline, schedule, freeze, verdict criteria |
 | [docs/TESTING.md](docs/TESTING.md) | How the suite is isolated from the network and from real providers |
 | [CLAUDE.md](CLAUDE.md) | The contributor's working agreement: architecture in reading order, hard rules, sprint history |
@@ -742,7 +743,7 @@ verdicts, only of *comparison sets*.
   bottom explains each symbol per company. Companies excluded for their size are listed under the
   legend with the reason, not silently dropped.
 
-Details: **[docs/MARKET_INDEX.md](docs/MARKET_INDEX.md)** (coverage, cost, peer rules) and
+Details: **[docs/MARKET_INDEX.md](docs/MARKET_INDEX.md)** (coverage, cost, peer rules), **[docs/CLASSIFICATION.md](docs/CLASSIFICATION.md)** (how a peer group is chosen, in plain English) and
 **[docs/COHORTS.md](docs/COHORTS.md)** (the 57 cohorts with their floors, cleanup rules, quality
 checks, versioning).
 

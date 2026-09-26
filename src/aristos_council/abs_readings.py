@@ -17,8 +17,18 @@ many years it actually used rather than how many it wanted.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
+
+from .tools.price_context import format_money
+
+_log = logging.getLogger(__name__)
+
+# Batch 8 - a statement that names no currency is said to, never assumed. "owes 27.4bn GBp net of
+# cash" printed the LISTING's currency (pence) beside AstraZeneca's dollar accounts; the accounts'
+# currency is the one the figure is in.
+CURRENCY_NOT_STATED = "currency not stated by the source"
 
 # A reading needs at least this many years before a compound rate means anything. Two
 # points is a line, not a trend.
@@ -128,13 +138,10 @@ class DebtAndCash:
 
 
 def _money(value: float, currency: str) -> str:
-    unit, scaled = "", value
-    for cut, suffix in ((1e12, "tn"), (1e9, "bn"), (1e6, "m")):
-        if abs(value) >= cut:
-            unit, scaled = suffix, value / cut
-            break
-    body = f"{scaled:,.1f}{unit}" if unit else f"{scaled:,.0f}"
-    return f"{body} {currency}".strip()
+    """One amount through the repo's ONE money formatter (``$27.4bn``, ``CHF 5.2bn``). With no
+    currency it says so in words rather than printing a bare number that reads as dollars."""
+    text = format_money(value, currency or None, abbreviate=True)
+    return text if currency else f"{text} ({CURRENCY_NOT_STATED})"
 
 
 def debt_and_cash(f) -> DebtAndCash:
@@ -145,7 +152,10 @@ def debt_and_cash(f) -> DebtAndCash:
                            interest_cover=_abstain("no fundamentals"),
                            years_to_repay=_abstain("no fundamentals"))
 
-    currency = str(getattr(f, "currency", "") or "")
+    # The currency of the ACCOUNTS, never the listing's: AstraZeneca is quoted in pence and reports
+    # in dollars, and Novo's kroner reached a report as "USD 128.3bn" the same way. Absent ->
+    # "currency not stated by the source"; it is never guessed from the quote currency.
+    currency = str(getattr(f, "financial_currency", "") or "").strip()
     debt, cash = _num(getattr(f, "total_debt", None)), _num(getattr(f, "total_cash", None))
 
     # -- net debt ---------------------------------------------------------- #
@@ -300,11 +310,32 @@ class GrowthLeg:
 class GrowthRecord:
     revenue: GrowthLeg = field(default_factory=GrowthLeg)
     eps: GrowthLeg = field(default_factory=GrowthLeg)
+    # Where the series came from ("source: EODHD, 36 annual reports"). Batch 8: this is a SOURCE,
+    # so it lives in the page's one Sources block, not beside the figures it describes.
     source_tag: str = ""
+    # Reports on file / the window the record uses, and how EPS was obtained.
+    years_on_file: int = 0
+    eps_derived: bool = False
 
     def lines(self) -> list[str]:
-        out = dedupe_lines(self.revenue.lines() + self.eps.lines())
-        return out + ([self.source_tag] if self.source_tag else [])
+        return dedupe_lines(self.revenue.lines() + self.eps.lines())
+
+    def notes(self) -> list[str]:
+        """The two things a reader needs to know about the lines above, said ONCE under them:
+        how much history stands behind the record and how EPS was obtained. (Before, "source:
+        EODHD, 36 annual reports" sat beside "grew in 8 of the 10 years", which read as a
+        contradiction, and "(derived from net income and share count)" was printed on three
+        lines.)"""
+        out: list[str] = []
+        if self.years_on_file:
+            used = max(GROWTH_WINDOWS)
+            out.append(f"{self.years_on_file} years on file, last {used} used"
+                       if self.years_on_file > used
+                       else f"{self.years_on_file} year{'s' if self.years_on_file != 1 else ''} "
+                            f"on file, all used")
+        if self.eps_derived:
+            out.append("earnings per share is derived from net income and share count")
+        return out
 
 
 def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading:
@@ -387,11 +418,13 @@ def growth_record(f, history=None) -> GrowthRecord:
         reports = len([v for v in revenue if v is not None])
         tag = (f"source: yfinance, {reports} annual report"
                f"{'s' if reports != 1 else ''}") if reports else ""
-    eps_label = "earnings per share" + ("" if eps_source in ("reported", "unavailable")
-                                        else f" ({eps_source})")
+    eps_derived = eps_source not in ("reported", "unavailable")
+    eps_label = "earnings per share"           # how it was derived is said once, in ``notes()``
 
     return GrowthRecord(
         source_tag=tag,
+        years_on_file=len([v for v in revenue if v is not None]),
+        eps_derived=eps_derived,
         revenue=GrowthLeg(
             name="revenue",
             cagr={w: _cagr(revenue, w, "revenue") for w in GROWTH_WINDOWS},
@@ -438,17 +471,65 @@ def _eps(value: float) -> str:
     return f"{value:.2f}"
 
 
+HEADLINES = {
+    MARK_RISING: "Analysts are raising their profit forecasts",
+    MARK_FLAT: "Analysts are holding their profit forecasts steady",
+    MARK_FALLING: "Analysts are cutting their profit forecasts",
+}
+
+TABLE_COLUMNS = ("Profit per share expected now", "Three months ago", "Change", "Analysts")
+
+
+@dataclass(frozen=True)
+class ForecastRow:
+    """One fiscal year of the analyst table: ``label`` is "This year (to Dec 2026)"."""
+
+    label: str
+    now: Optional[float] = None
+    ago_90d: Optional[float] = None
+    analysts: Optional[int] = None
+    currency: str = ""
+
+    @property
+    def change(self) -> Optional[float]:
+        if self.now is None or self.ago_90d is None or abs(self.ago_90d) < ANALYST_MIN_BASE:
+            return None
+        return (self.now - self.ago_90d) / abs(self.ago_90d)
+
+    def cells(self) -> tuple[str, str, str, str]:
+        def eps(v):
+            return "—" if v is None else format_money(v, self.currency or None)
+        change = "—" if self.change is None else f"{self.change:+.1%}"
+        return (eps(self.now), eps(self.ago_90d), change,
+                "—" if self.analysts is None else str(self.analysts))
+
+
+def _period_label(prefix: str, period_end: str) -> str:
+    """"This year (to Dec 2026)" from a fiscal year-end date. Unparseable -> the bare prefix."""
+    try:
+        from datetime import date
+        end = date.fromisoformat(str(period_end)[:10])
+    except ValueError:
+        return prefix
+    return f"{prefix} (to {end.strftime('%b %Y')})"
+
+
 @dataclass(frozen=True)
 class AnalystTrend:
-    """The mark for the current fiscal year, the next year beside it, and where both came from."""
+    """The mark for the current fiscal year, the next year beside it, and where both came from.
+
+    Batch 8: the page shows ONE sentence (``headline``) and a small table (``rows``) in the
+    accounts' currency. The mark, its rule (rising/flat/falling, a +/-2% band) and the abstentions
+    are unchanged; how many units the request cost is logged, not printed."""
 
     mark: str = ""                                    # one of MARK_*, or "" when abstaining
     direction: Reading = field(default_factory=Reading)
-    next_year: Reading = field(default_factory=Reading)
     source: str = ""
     as_of: str = ""
     units_charged: int = 0
     cached: bool = False
+    rows: tuple = ()                                  # ForecastRow, this year then next year
+    currency: str = ""
 
     @property
     def available(self) -> bool:
@@ -463,75 +544,84 @@ class AnalystTrend:
         stamp = f", as of {self.as_of}" if self.as_of else ""
         return f"source: {self.source}{stamp}"
 
+    @property
+    def headline(self) -> str:
+        """One sentence: what the analysts are doing, or WHY we cannot say."""
+        if self.mark:
+            return HEADLINES[self.mark]
+        return self.direction.note or self.direction.label or "no analyst estimate is available"
+
+    def currency_note(self) -> str:
+        """Said once under the table when the accounts' currency is unknown - never a guess."""
+        return "" if self.currency else f"({CURRENCY_NOT_STATED})"
+
     def lines(self) -> list[str]:
-        return [self.direction.text(), self.next_year.text(),
-                f"{self.tag()} - {self.cost_line()}"]
+        """The headline, then one line per fiscal year with the same figures the table shows. The
+        cost line is deliberately absent (see the class docstring)."""
+        out = [self.headline]
+        for row in self.rows:
+            now, ago, change, analysts = row.cells()
+            out.append(f"{row.label}: expected now {now}, three months ago {ago}, change "
+                       f"{change}, {analysts} analysts")
+        if self.rows and self.currency_note():
+            out.append(self.currency_note())
+        return out
 
 
-def _change_text(now: float, ago: float) -> str:
-    change = (now - ago) / abs(ago)
-    verb = "up" if change > 0 else "down" if change < 0 else "unchanged"
-    return "unchanged" if verb == "unchanged" else f"{verb} {abs(change):.1%}"
-
-
-def analyst_trend(data) -> AnalystTrend:
+def analyst_trend(data, currency: Optional[str] = None) -> AnalystTrend:
     """The analyst forecast direction from a ``data.analyst_trend.TrendData``.
+
+    ``currency`` is the currency of the ACCOUNTS (``Fundamentals.financial_currency``): the estimates
+    are per-share profits in the statement currency, so the table prints "TWD 107.85", and with no
+    currency it prints the bare figure and says the currency is not stated - never a guess.
 
     Abstains, with the reason shown, when: there is no current-year estimate (no block, or a
     stale one - expect gaps outside the US); fewer than ``ANALYST_MIN_ANALYSTS`` analysts, or an
     unstated count; the current or the 90-days-ago estimate is missing; or the 90-days-ago figure
     is within ``ANALYST_MIN_BASE`` of zero, where a percentage change means nothing. A missing
-    input is never treated as a zero.
+    input is never treated as a zero. The next year is shown whenever it exists.
     """
-    tag_kwargs = dict(source=getattr(data, "source", ""), as_of=getattr(data, "as_of", ""),
-                      units_charged=getattr(data, "units_charged", 0),
-                      cached=getattr(data, "cached", False))
-    stamp = (f" (source: {tag_kwargs['source']}"
-             + (f", as of {tag_kwargs['as_of']}" if tag_kwargs["as_of"] else "") + ")")
-
-    def abstain(reason: str, next_year: Optional[Reading] = None) -> AnalystTrend:
-        return AnalystTrend(direction=_abstain(reason + stamp),
-                            next_year=next_year or _abstain("no next-year estimate to show"),
-                            **tag_kwargs)
+    ccy = (currency or "").strip()
+    base = dict(source=getattr(data, "source", ""), as_of=getattr(data, "as_of", ""),
+                units_charged=getattr(data, "units_charged", 0),
+                cached=getattr(data, "cached", False), currency=ccy)
+    # What the request cost is for the LOG, not the page.
+    _log.info("analyst trend: %s", AnalystTrend(**{k: v for k, v in base.items()
+                                                    if k != "currency"}).cost_line())
 
     current = getattr(data, "current", None)
+    following = getattr(data, "next_year", None)
+
+    def row(label: str, period) -> ForecastRow:
+        return ForecastRow(label=_period_label(label, period.period_end), now=period.now,
+                           ago_90d=period.ago_90d, analysts=period.analysts, currency=ccy)
+
+    rows: list[ForecastRow] = []
+    if current is not None and current.now is not None:
+        rows.append(row("This year", current))
+    if following is not None and following.now is not None:
+        rows.append(row("Next year", following))
+    table = tuple(rows)
+
+    def abstain(reason: str) -> AnalystTrend:
+        return AnalystTrend(direction=_abstain(reason), rows=table, **base)
+
     if current is None:
         return abstain(getattr(data, "note", "") or "no analyst estimate is available")
-
-    # The next year is shown whenever it exists, whether or not the mark can be given.
-    following = getattr(data, "next_year", None)
-    if following is not None and following.now is not None:
-        if following.ago_90d is not None and abs(following.ago_90d) >= ANALYST_MIN_BASE:
-            ny = Reading(
-                value=(following.now - following.ago_90d) / abs(following.ago_90d), unit="fraction",
-                label=(f"next year (fiscal year ending {following.period_end}): consensus EPS "
-                       f"{_eps(following.now)}, {_change_text(following.now, following.ago_90d)} "
-                       f"from {_eps(following.ago_90d)} about 90 days ago"
-                       + (f" ({following.analysts} analysts)" if following.analysts else "")))
-        else:
-            ny = Reading(value=following.now, unit="eps",
-                         label=(f"next year (fiscal year ending {following.period_end}): "
-                                f"consensus EPS {_eps(following.now)}; no usable 90-days-ago "
-                                f"figure to compare with"))
-    else:
-        ny = _abstain("the provider has no next-year (+1y) estimate")
-
     if current.analysts is None:
-        return abstain("the number of analysts is not stated, so there is no consensus to read", ny)
+        return abstain("the number of analysts is not stated, so there is no consensus to read")
     if current.analysts < ANALYST_MIN_ANALYSTS:
         return abstain(f"only {current.analysts} analyst(s) cover the current year; a consensus "
-                       f"needs at least {ANALYST_MIN_ANALYSTS}", ny)
+                       f"needs at least {ANALYST_MIN_ANALYSTS}")
     if current.now is None:
-        return abstain("no current consensus EPS estimate", ny)
+        return abstain("no current consensus EPS estimate")
     if current.ago_90d is None:
-        return abstain("no 90-days-ago estimate to compare with", ny)
+        return abstain("no 90-days-ago estimate to compare with")
     if abs(current.ago_90d) < ANALYST_MIN_BASE:
         return abstain(f"the estimate 90 days ago was {_eps(current.ago_90d)}, within one cent of "
-                       f"zero, so a percentage change means nothing", ny)
+                       f"zero, so a percentage change means nothing")
 
     mark, change = _direction(current.now, current.ago_90d)
-    label = (f"{mark} - consensus EPS for the fiscal year ending {current.period_end} is "
-             f"{_eps(current.now)}, {_change_text(current.now, current.ago_90d)} from "
-             f"{_eps(current.ago_90d)} about 90 days ago ({current.analysts} analysts)" + stamp)
-    return AnalystTrend(mark=mark, direction=Reading(value=change, unit="fraction", label=label),
-                        next_year=ny, **tag_kwargs)
+    return AnalystTrend(
+        mark=mark, direction=Reading(value=change, unit="fraction", label=HEADLINES[mark]),
+        rows=table, **base)

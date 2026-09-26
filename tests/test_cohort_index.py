@@ -873,7 +873,9 @@ def test_the_shipped_alias_file_carries_the_cohort_findings_each_with_its_eviden
                 "QSP-UN.TO": "QSR.TO", "CSC.AU": "CS.TO", "CKI.LSE": "1038.HK",
                 "ALI1.XETRA": "AII.AU", "GSK.US": "GSK.LSE", "SKHY.US": "000660.KO"}
     assert {t: shipped[t].primary for t in expected} == expected
-    assert all(len(a.reason) > 40 and a.date == "2026-09-25" for a in shipped.values())
+    # the cohort findings are each dated 2026-09-25; later batches add their own dated entries
+    assert all(len(a.reason) > 40 and a.date for a in shipped.values())
+    assert all(shipped[t].date == "2026-09-25" for t in expected)
 
 
 def test_integrated_oil_and_refining_is_one_cohort_because_integrated_alone_came_out_thin():

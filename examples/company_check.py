@@ -20,7 +20,7 @@ from datetime import date
 from pathlib import Path
 
 from aristos_council.cli_guards import force_utf8_stdout, implausible_ticker_reason
-from aristos_council.company_check import format_company_check, run_company_check
+from aristos_council.company_check import attach_peers, format_company_check, run_company_check
 from aristos_council.data.adapter import normalize_ticker
 from aristos_council.data.cache import DEFAULT_CACHE_DIR, CachingAdapter
 from aristos_council.data.provider import select_market_adapter
@@ -68,6 +68,7 @@ def main() -> None:
         ticker, args.strategy, args.reference, adapter=adapter,
         strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR, runs_dir=RUNS_DIR,
         today=today, with_analyst_trend=args.analyst_trend)
+    attach_peers(result)          # the peer group, from the LOCAL market index (no network)
     print(format_company_check(result))
 
 
