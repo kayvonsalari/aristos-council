@@ -43,3 +43,16 @@ corrections:
       Metals & Mining, which put it in BHP's peer group, and it has no home line in the index (India
       is not a covered market), so its size cannot be checked against a second line. The company is
       excluded rather than given a figure or a peer group it does not belong in.
+  - ticker: CCZ.US
+    action: exclude
+    date: 2026-09-26
+    reason: >-
+      CCZ is not a share. It is "Comcast Holdings Corp. 2.0% Exchangeable Subordinated Debentures due
+      October 15, 2029" (Comcast's ZONES), a bond-like security issued by Comcast Holdings and
+      guaranteed by Comcast Corporation, whose exchange value follows other companies' shares; it
+      trades on the NYSE under CCZ. The index reads it as a company with a $61.1bn market cap, files it
+      under REIT - Residential (EODHD's industry) and Integrated Telecommunication Services (its GICS
+      copy, inherited from Comcast), and it stood in Tencent's step-4 sector group beside CMCSA.US.
+      Public sources: Comcast Corporation's shareholder FAQ and its Form 10-Q filed 2026-04-23 (both at
+      cmcsa.com) describe the exchangeable subordinated debt; the security's listing title is quoted at
+      upstox.com/us-stocks/ccz-share-price/. It is excluded rather than given a figure.
