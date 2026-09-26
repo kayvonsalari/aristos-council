@@ -174,6 +174,11 @@ class CachingAdapter(MarketDataAdapter):
         self._dir = Path(cache_dir)
         self._today = today
         self._refresh = refresh
+        # How often a fetch was served from the day's files and how often it went to the provider,
+        # so a run can say what it cost ("142 cache hits, 38 fetched"). Counting changes nothing
+        # about what is cached or returned.
+        self.hits = 0
+        self.misses = 0
         # Mirror the inner adapter's identity so downstream code is none the wiser.
         self.name = inner.name
         self.dividend_streak_method = inner.dividend_streak_method
@@ -202,6 +207,7 @@ class CachingAdapter(MarketDataAdapter):
             try:
                 doc = json.loads(path.read_text(encoding="utf-8"))
                 if isinstance(doc, dict) and doc.get("_schema") == schema:
+                    self.hits += 1
                     return deser(doc["data"])          # HIT: shape matches
                 # marker mismatch (schema drift), a pre-marker file, or a corrupted
                 # marker -> treat as MISS. Logged once so the event is VISIBLE, then
@@ -210,6 +216,7 @@ class CachingAdapter(MarketDataAdapter):
             except Exception:
                 pass   # corrupt/unparseable cache -> fall through and refetch (no crash)
         obj = fetch()
+        self.misses += 1
         self._dir.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"_schema": schema, "data": ser(obj)}),
                         encoding="utf-8")

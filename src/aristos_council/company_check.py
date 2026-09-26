@@ -159,6 +159,10 @@ class CompanyCheckResult:
     # currency-rate clause, lifted out of the band sentence.
     providers: dict = field(default_factory=dict)
     fx_source: str = ""
+    # Company Report (Part B) - the band's percentile (None when not computed or abstained), so the
+    # agreement row can carry the SAME "priced high" mark the Run tab's table does.
+    band_percentile: Optional[float] = None
+    band_requested: bool = True
 
     @property
     def display(self) -> str:
@@ -268,6 +272,7 @@ def run_company_check(
     strategies_dir: str | Path | None = None, universes_dir: str | Path | None = None,
     runs_dir: str | Path | None = None, screen_strategy_id: Optional[str] = None,
     today: Optional[date] = None, with_analyst_trend: bool = False, analyst_fetcher=None,
+    with_valuation_band: bool = True,
 ) -> CompanyCheckResult:
     """Diagnose ONE ticker under ``rank_strategy_id``'s lens screen + factors, with
     cohort context from the latest frozen run of ``reference_universe_id``. NEVER emits
@@ -292,11 +297,12 @@ def run_company_check(
     screen_criteria = list(screen_strategy.criteria) if screen_strategy else []
     screen_strategy_id_str = screen_strategy.id if screen_strategy else ""
 
-    # VALBAND-1: gather_factor_inputs now gates the absolute band (an extra 5-year fetch)
-    # behind with_valuation_band, default OFF. Company Check has shown the band since it
-    # shipped, so pass True to keep its output byte-unchanged in this PR; the opt-in
-    # checkbox that will gate it here lands with the multi-lens Company Check work (Part B).
-    fi = gather_factor_inputs(adapter, ticker, today=today, with_valuation_band=True)
+    # VALBAND-1: gather_factor_inputs gates the absolute band (an extra 5-year fetch) behind
+    # with_valuation_band. Company Check has always shown it, so the default stays True and every
+    # existing caller is byte-unchanged; the Company Check tab's "Valuation band" tick box
+    # (Company Report, Part B) is what passes False. An unticked band is "—", never a guess.
+    fi = gather_factor_inputs(adapter, ticker, today=today,
+                              with_valuation_band=with_valuation_band)
     f = fi.fundamentals
     company_name = getattr(f, "company_name", None) if f is not None else None
     # ABS-READINGS-1 — pure functions over the fundamentals already fetched. No extra
@@ -459,6 +465,9 @@ def run_company_check(
         verdict_of_record=verdict_of_record, valuation_band=band_text,
         market_cap_in_gates=market_cap_in_gates, screen_less=screen_less,
         providers=providers, fx_source=fx_source,
+        band_percentile=(getattr(getattr(fi, "valuation_band", None), "percentile", None)
+                         if with_valuation_band else None),
+        band_requested=with_valuation_band,
         **readings)
 
 
@@ -814,6 +823,49 @@ def _expense_ratio_gloss(value: Optional[float]) -> str:
             "charged every year")
 
 
+def absolute_reading_lines(result) -> list[str]:
+    """Debt and cash, then the growth record with its notes - the text export's absolute-readings
+    body, shared by the single-lens check and the Company Report so they cannot drift."""
+    lines: list[str] = []
+    if result.debt_and_cash is not None:
+        lines.append("  Debt and cash")
+        lines.extend(f"    - {ln}" for ln in result.debt_and_cash.lines())
+    if result.growth_record is not None:
+        lines.append("  Growth record"
+                     + mixed_source_marker(result, result.growth_record.source_tag))
+        lines.extend(f"    - {ln}" for ln in result.growth_record.lines())
+        lines.extend(f"    ({ln})" for ln in result.growth_record.notes())
+    return lines
+
+
+def analyst_forecast_lines(result) -> list[str]:
+    """The analyst forecast direction: its heading, the headline sentence and one line per fiscal
+    year. Empty when it was not asked for."""
+    if getattr(result, "analyst_trend", None) is None:
+        return []
+    return ["  Analyst forecast direction (a mark: it does not vote and changes no verdict)"
+            + mixed_source_marker(result, result.analyst_trend.source),
+            *(f"    {ln}" for ln in result.analyst_trend.lines())]
+
+
+def peers_lines(result) -> list[str]:
+    """The PEERS block as text, or [] when there is neither a group nor a reason to give."""
+    group = getattr(result, "peer_group", None)
+    if group is not None:
+        from .peer_table import peer_text_lines
+        lines = ["PEERS (who this company would be measured against):"]
+        if group.available:
+            lines.append(f"  {group.sentence()}")
+            lines.extend(f"  {ln}" for ln in peer_text_lines(group))
+        else:
+            lines.append("  No peer group for this name.")
+        lines.extend(f"  · {reason}" for reason in group.reasons)
+        return lines
+    if getattr(result, "peer_error", ""):
+        return [f"PEERS: the market index is not available ({result.peer_error})"]
+    return []
+
+
 def format_company_check(result: CompanyCheckResult) -> str:
     """The text report the CLI prints — the SAME content the UI renders."""
     lines = [
@@ -895,35 +947,15 @@ def format_company_check(result: CompanyCheckResult) -> str:
             or result.analyst_trend is not None):
         lines.append("")
         lines.append("ABSOLUTE READINGS (no comparison group; they do not vote):")
-        if result.debt_and_cash is not None:
-            lines.append("  Debt and cash")
-            lines.extend(f"    - {ln}" for ln in result.debt_and_cash.lines())
-        if result.growth_record is not None:
-            lines.append("  Growth record"
-                         + mixed_source_marker(result, result.growth_record.source_tag))
-            lines.extend(f"    - {ln}" for ln in result.growth_record.lines())
-            lines.extend(f"    ({ln})" for ln in result.growth_record.notes())
+        lines.extend(absolute_reading_lines(result))
         # ANALYST FORECAST DIRECTION (ANALYST-TREND-1) - a mark only, and only when asked for.
-        if result.analyst_trend is not None:
-            lines.append("  Analyst forecast direction (a mark: it does not vote and changes no "
-                         "verdict)" + mixed_source_marker(result, result.analyst_trend.source))
-            lines.extend(f"    {ln}" for ln in result.analyst_trend.lines())
+        lines.extend(analyst_forecast_lines(result))
 
     # PEERS (MARKET-INDEX-1) - who this company would be measured against.
-    if result.peer_group is not None:
-        from .peer_table import peer_text_lines
-        group = result.peer_group
+    peers_block = peers_lines(result)
+    if peers_block:
         lines.append("")
-        lines.append("PEERS (who this company would be measured against):")
-        if group.available:
-            lines.append(f"  {group.sentence()}")
-            lines.extend(f"  {ln}" for ln in peer_text_lines(group))
-        else:
-            lines.append("  No peer group for this name.")
-        lines.extend(f"  · {reason}" for reason in group.reasons)
-    elif result.peer_error:
-        lines.append("")
-        lines.append(f"PEERS: the market index is not available ({result.peer_error})")
+        lines.extend(peers_block)
 
     # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen run, right after the
     # factor block. Renders only when the checked name had a recorded outcome; otherwise
