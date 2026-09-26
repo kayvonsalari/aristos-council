@@ -27,7 +27,8 @@ SNAPSHOT = "2026-09-25"
 
 def _row(ticker, name="", *, cap_bn=100.0, sub="Semiconductors",
          industry="Semiconductors & Semiconductor Equipment", eodhd="Semiconductors",
-         primary=None, isin=None, market="", currency="USD", country="") -> IndexRow:
+         primary=None, isin=None, market="", currency="USD", country="",
+         sector="Technology") -> IndexRow:
     """A fabricated index row. ``primary`` / ``isin`` default to the row's own ticker / a unique
     ISIN; pass ``""`` for the no-identity rows the provider serves for receipts."""
     cap = None if cap_bn is None else cap_bn * 1e9
@@ -35,7 +36,7 @@ def _row(ticker, name="", *, cap_bn=100.0, sub="Semiconductors",
     return IndexRow(
         ticker=ticker, yahoo_ticker=code, name=name or ticker,
         exchange=market or ticker.rpartition(".")[2], market=market, country=country,
-        currency=currency, sector="Technology", industry=eodhd, gics_industry=industry,
+        currency=currency, sector=sector, industry=eodhd, gics_industry=industry,
         gics_subindustry=sub, market_cap=cap, market_cap_usd=cap,
         market_cap_usd_source="computed" if cap is not None else "abstained",
         primary_ticker=ticker if primary is None else primary,
@@ -383,17 +384,19 @@ def test_status_counts_size_suspect_rows_and_undecidable_companies(tmp_path):
 # =========================================================================== #
 # PEER-LABEL-MATCH-1
 # =========================================================================== #
-def _no_gics(ticker, name="", *, eodhd="Semiconductors", cap_bn=100.0):
+def _no_gics(ticker, name="", *, eodhd="Semiconductors", cap_bn=100.0, sector="Technology"):
     """A row with an EODHD industry and NO GICS label - what the provider serves for many
     secondary and thinly-covered lines (NVDA.SW read 'Semiconductors' and no GICS at all)."""
-    return _row(ticker, name, sub="", industry="", eodhd=eodhd, cap_bn=cap_bn)
+    return _row(ticker, name, sub="", industry="", eodhd=eodhd, cap_bn=cap_bn, sector=sector)
 
 
 def test_a_row_with_no_gics_label_is_not_matched_against_gics_names_by_wording():
     """'Semiconductors' is BOTH an EODHD industry and a GICS sub-industry. The ladder used to fall
     back from one to the other, so these 14 GICS-less rows counted as GICS semiconductors."""
     subject = _row("SUBJ.US", "Subject", sub="Semiconductors", eodhd="Chip Design")
-    look_alikes = [_no_gics(f"LOOK{i:02d}.US") for i in range(14)]
+    # a DIFFERENT sector: step 4 would (rightly) match them on a shared sector, which is not the
+    # question here - whether their industry wording is mistaken for a GICS label
+    look_alikes = [_no_gics(f"LOOK{i:02d}.US", sector="Industrials") for i in range(14)]
     group = peers("SUBJ.US", rows=[subject, *look_alikes])
     assert not group.available
     assert all(m.ticker not in _tickers(group) for m in look_alikes)
@@ -420,7 +423,8 @@ def test_a_member_matched_on_gics_alone_says_so():
 def test_the_providers_other_is_not_a_label():
     """EODHD files 1,400-odd unrelated rows under industry 'Other'; two of them are not peers."""
     subject = _no_gics("SUBJ.US", "Subject", eodhd="Other")
-    others = [_no_gics(f"OTH{i:02d}.US", eodhd="Other") for i in range(14)]
+    others = [_no_gics(f"OTH{i:02d}.US", eodhd="Other", sector="Industrials")
+              for i in range(14)]
     group = peers("SUBJ.US", rows=[subject, *others])
     assert not group.available
 
@@ -430,14 +434,14 @@ def test_the_report_states_the_step_and_the_distinct_company_count():
     group = peers("SUBJ.US", rows=[subject, *_fillers(13)])
     assert group.step == 1 and group.distinct_companies == 13
     sentence = group.sentence()
-    assert "found at step 1 of 3" in sentence and "13 distinct companies" in sentence
+    assert "found at step 1 of 4" in sentence and "13 distinct companies" in sentence
 
 
 def test_a_cohort_found_by_a_wider_rung_names_that_step():
     """Fillers at 8x the subject's size: outside the tight band (step 1), inside the wide one."""
     subject = _row("SUBJ.US", "Subject", cap_bn=10.0)
     group = peers("SUBJ.US", rows=[subject, *_fillers(13, cap_bn=80.0)])
-    assert group.step == 2 and "found at step 2 of 3" in group.sentence()
+    assert group.step == 2 and "found at step 2 of 4" in group.sentence()
 
 
 def test_the_industry_rung_is_step_three():

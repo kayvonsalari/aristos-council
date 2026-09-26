@@ -69,11 +69,20 @@ far it went. It stops at the first step that finds at least **12** companies, an
 | 1 | same GICS sub-industry, or same EODHD industry | ¼× – 4× |
 | 2 | the same | ⅒× – 10× |
 | 3 | same GICS industry, or same EODHD industry | ⅒× – 10× |
+| 4 | same GICS **sector**, or same EODHD **sector** | ⅒× – 10× |
 
 It widens the size band before the classification because keeping the industry is the cheaper
-concession. If step 3 also falls under 12, it abstains and names the widest step it tried and how
-many companies it found. **Sizes are compared in USD**, never in local currency: a 900bn-yen company
-is about 6bn dollars.
+concession.
+
+**Step 4 is a broad group, and says so.** Some companies sit in an industry with almost no
+comparable company at any size: Nestlé's "Packaged Foods & Meats" has one, four and six comparable
+companies at steps 1–3, while its sector holds 45. Rather than give such a company no peers, the
+ladder tries the whole sector (the same ⅒×–10× band, the same floor of 12 and cap of 40 nearest in
+size), and the page then reads "found at step 4 of 4 … **broad sector group - wider than a normal
+peer group**". It only fires when steps 1–3 have all fallen under the floor, and financials still
+meet only financials. Only if the sector also has fewer than 12 comparable companies does the ladder
+abstain, naming the widest step it tried and how many companies it found. **Sizes are compared in
+USD**, never in local currency: a 900bn-yen company is about 6bn dollars.
 
 **One row per company.** A company listed on several exchanges, as an ADR, with several share classes
 or with a preference line is one company, grouped by the identity handles the provider gives
