@@ -25,7 +25,8 @@ version: 1
 # CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
 # meeting a verdict without having read the YAML.
 asks: >-
-  Banks and insurers on their own terms: return on equity against price-to-book.
+  Banks and insurers on their own terms: return on equity against price-to-book, for financial
+  companies worth at least $5bn.
 
 # KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting a
 # value cohort. The thesis only drives a caption when a list says it was built

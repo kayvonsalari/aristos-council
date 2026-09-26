@@ -31,7 +31,9 @@ version: 2
 # CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
 # meeting a verdict without having read the YAML.
 asks: >-
-  Growing fast at a fair price: sales up at least 10% a year, and not overpaying for that growth.
+  Growing fast at a fair price: sales up at least 10% a year, earning at least 12% on its
+  capital, and not overpaying for that growth (its price no more than twice its growth rate),
+  for companies worth at least $5bn.
 
 # KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting a
 # growth cohort. The thesis only drives a caption when a list says it was built

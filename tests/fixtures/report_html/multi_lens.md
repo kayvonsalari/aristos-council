@@ -96,7 +96,7 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 ### Magic Formula RAW (magic_formula_raw_v1)
 
-_Cheap and good: high profit on the money invested, a low price for that profit, and a rising share._
+_Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities)._
 **Screen: none**
 
 This strategy screens nothing: no rule filtered the cohort, and quality enters only through the ranking below.
@@ -110,7 +110,7 @@ This strategy screens nothing: no rule filtered the cohort, and quality enters o
 
 ### Value + Momentum (magic_formula_momentum_v1)
 
-_The same as Magic Formula RAW, but only for companies earning at least 12% on their capital._
+_The same as Magic Formula RAW (companies worth at least $5bn, not banks, insurers or utilities), but only for companies earning at least 12% on their capital._
 **Screen: Quality-value screen (magic_value_screen_v1)**
 
 Used as a prefilter — names failing any rule below were never ranked.
@@ -152,7 +152,7 @@ _A business that earns less on the capital it employs than that capital costs de
 
 ## Magic Formula RAW (magic_formula_raw_v1) — detail
 
-_Cheap and good: high profit on the money invested, a low price for that profit, and a rising share._
+_Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities)._
 
 **Ranked 3 of 4 names.**
 
@@ -170,7 +170,7 @@ _Cheap and good: high profit on the money invested, a low price for that profit,
 
 ## Value + Momentum (magic_formula_momentum_v1) — detail
 
-_The same as Magic Formula RAW, but only for companies earning at least 12% on their capital._
+_The same as Magic Formula RAW (companies worth at least $5bn, not banks, insurers or utilities), but only for companies earning at least 12% on their capital._
 
 **Ranked 2 of 4 names. Excluded 1: by rule below, worst miss first.**
 

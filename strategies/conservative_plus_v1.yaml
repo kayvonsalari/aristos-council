@@ -22,7 +22,10 @@ version: 1
 # CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
 # meeting a verdict without having read the YAML.
 asks: >-
-  Steady income with the trend intact: a calm share, a covered dividend raised for 10 years, and no recent fall.
+  Steady income with the trend intact: a yield of at least 1.5%, paid from cash (no more than
+  80% of free cash flow) and raised for 10 years, from a company worth at least $5bn with debt
+  no bigger than its market value and a share price not down more than 10%; the calmest share
+  ranks best.
 
 # KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting a
 # income cohort. The thesis only drives a caption when a list says it was built

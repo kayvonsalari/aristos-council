@@ -26,8 +26,9 @@ role: income through the cycle — screened
 # CAPTION-1 — what this lens asks of a company, in one sentence, for a reader
 # meeting a verdict without having read the YAML.
 asks: >-
-  Income that survives the cycle: a covered dividend not cut in five years, with
-  manageable debt.
+  Income that survives the cycle: a yield of at least 1.5%, paid from cash (no more than 80% of
+  free cash flow), not cut in five years, with debt no bigger than the company's market value,
+  from a company worth at least $5bn (not a bank or insurer).
 
 # KIND-1 / THESIS-1 — a SELECTOR lens (it decides "worth owning"), fitting an
 # income cohort. The thesis only drives a caption when a list says it was built
