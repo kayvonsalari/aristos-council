@@ -2168,6 +2168,13 @@ class PeerGroup:
     # (the line the reader looked up, another line of the subject, a duplicate collapsed into its
     # home, or a member).
     aliased: list = field(default_factory=list)
+    # Batch 8 - the label systems the subject could be matched in at the rung that found the group
+    # (("GICS", "EODHD") when it carries both). A peer matched in ONE of two is marked with a dagger
+    # on the page; with a single system every peer is one-system by construction and nothing is marked.
+    systems: tuple = ()
+    # Batch 8 - every size correction this group actually used (the subject's or a member's), so the
+    # page's Sources block can name the correction file it drew on.
+    size_corrected: list = field(default_factory=list)
 
     @property
     def available(self) -> bool:
@@ -2906,6 +2913,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             group.members = sorted(trimmed, key=lambda r: r.ticker)
             group.rung, group.band = rung, f"{low:g}x-{high:g}x market cap (USD)"
             group.step = step
+            group.systems = tuple(systems)
             group.matched_on = {r.ticker: how[r.ticker] for r in group.members}
             tally = {}
             for how_matched in group.matched_on.values():
@@ -2920,6 +2928,20 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
                     f"{shared} member(s) share a company name with another member: counted "
                     f"once, listed twice")
             report_aliases(group.members)
+            for member in [subject] + list(group.members):
+                key = normalise_symbol(member.ticker)
+                if key in size_applied and size_applied[key][1].action == SIZE_SET:
+                    reported, correction = size_applied[key]
+                    group.size_corrected.append({
+                        "ticker": member.ticker, "reported_usd": reported,
+                        "now_usd": correction.market_cap_usd, "date": correction.date,
+                        "reason": correction.reason})
+                    from .tools.price_context import format_money
+                    group.reasons.append(
+                        f"size corrected: {member.ticker} "
+                        f"{format_money(reported, 'USD', abbreviate=True)} -> "
+                        f"{format_money(correction.market_cap_usd, 'USD', abbreviate=True)} "
+                        f"({correction.date}: {correction.reason})")
             for member in group.members:
                 if normalise_symbol(member.ticker) in applied:
                     was, override = applied[normalise_symbol(member.ticker)]
@@ -3172,6 +3194,11 @@ def peer_snapshot(group: PeerGroup) -> dict:
         "distinct_companies": group.distinct_companies,
         "label_overrides": list(group.overridden),
         "identity_aliases": list(group.aliased),
+        "size_corrections": list(group.size_corrected),
+        # per peer: which label system(s) admitted it ("GICS", "EODHD" or "GICS+EODHD") - the page
+        # marks a one-system peer with a dagger, and this is where the detail stays
+        "matched_on": dict(group.matched_on),
+        "systems": list(group.systems),
         "band": group.band,
         "members": [r.ticker for r in group.members],
         "yahoo_members": [r.yahoo_ticker for r in group.members if r.yahoo_ticker],

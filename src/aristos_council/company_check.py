@@ -21,6 +21,7 @@ HARD CONSTRAINTS (by construction, not convention):
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -152,6 +153,12 @@ class CompanyCheckResult:
     # Held on the result so the page, both exports and the saved run all render ONE group.
     peer_group: object = None
     peer_error: str = ""
+    # Batch 8 - where the numbers came from, gathered ONCE so the page, both exports and the saved run
+    # print them in ONE Sources block instead of a tag beside every line: ``providers`` is
+    # {"fundamentals", "prices", "as_of", "price_as_of"}; ``fx_source`` is the valuation band's
+    # currency-rate clause, lifted out of the band sentence.
+    providers: dict = field(default_factory=dict)
+    fx_source: str = ""
 
     @property
     def display(self) -> str:
@@ -305,6 +312,7 @@ def run_company_check(
     readings = {"debt_and_cash": _debt_and_cash(f),
                 "growth_record": _growth_record(f, _history)}
 
+    providers = _providers_used(adapter, fi, today)
     di = DataIntegrity(
         fundamentals_ok=f is not None,
         price_ok=(fi.last_close is not None or fi.return_12m is not None),
@@ -418,6 +426,10 @@ def run_company_check(
     verdict_of_record = _verdict_of_record(
         ticker, cohort, cohort_result, cohort_n, reference_universe_id, ref_run_date)
 
+    # The band's sentence used to carry its own provenance ("..., monthly FX, source yfinance
+    # USDGBp=X"); a source is a Sources-block fact, so it is lifted out and kept for the footer.
+    band_text, fx_source = split_fx_source(valuation_band_display(fi))
+
     divergence = price_divergence_flag(fi, screen_criteria)
     pointer = _pointer(screen_cells, gates, screen_less=screen_less,
                        has_record=verdict_of_record is not None)
@@ -444,9 +456,130 @@ def run_company_check(
         divergence_flag=divergence, reference_available=cohort is not None,
         reference_run_id=ref_run_id, reference_run_date=ref_run_date,
         reference_cohort_n=cohort_n, data_integrity=di, pointer=pointer,
-        verdict_of_record=verdict_of_record, valuation_band=valuation_band_display(fi),
+        verdict_of_record=verdict_of_record, valuation_band=band_text,
         market_cap_in_gates=market_cap_in_gates, screen_less=screen_less,
+        providers=providers, fx_source=fx_source,
         **readings)
+
+
+_FX_SOURCE = re.compile(r", source (?P<provider>\S+) (?P<pair>[^;)]*)")
+
+
+def split_fx_source(band_text: str) -> tuple[str, str]:
+    """``(band sentence without its rate provenance, "yfinance USDGBp=X inverted")``.
+
+    The band says which currency it converted ("USD accounts converted to GBp, monthly FX") and
+    keeps saying it; WHERE the rates came from moves to the Sources block."""
+    match = _FX_SOURCE.search(band_text or "")
+    if not match:
+        return band_text, ""
+    return (band_text[:match.start()] + band_text[match.end():],
+            f"{match.group('provider')} {match.group('pair').strip()}")
+
+
+def _providers_used(adapter, fi, today) -> dict:
+    """Which provider served the fundamentals and the prices, and as of when. An adapter that does
+    not say (a test double) is named as such rather than guessed."""
+    def provider(kind: str) -> str:
+        ask = getattr(adapter, "provider_for", None)
+        try:
+            return str(ask(kind)) if ask else str(getattr(adapter, "name", "") or "")
+        except Exception:
+            return str(getattr(adapter, "name", "") or "")
+
+    context = getattr(fi, "price_context", None)
+    as_of = getattr(context, "as_of", None)
+    return {"fundamentals": provider("fundamentals"), "prices": provider("prices"),
+            "as_of": today.isoformat(), "price_as_of": as_of.isoformat() if as_of else ""}
+
+
+# --------------------------------------------------------------------------- #
+# SOURCES (batch 8) - ONE block at the bottom, not a tag beside every line
+# --------------------------------------------------------------------------- #
+DOCS_CLASSIFICATION = "docs/CLASSIFICATION.md"
+SEE_SOURCES = "a different source from the rest of this section - see Sources"
+
+
+@dataclass(frozen=True)
+class SourceLine:
+    topic: str
+    text: str
+
+
+def provider_of(tag: str) -> str:
+    """"source: EODHD, 36 annual reports" -> "EODHD"; "EODHD Earnings::Trend" -> "EODHD"."""
+    body = (tag or "").strip()
+    if body.lower().startswith("source:"):
+        body = body[len("source:"):].strip()
+    return re.split(r"[\s,]+", body, maxsplit=1)[0] if body else ""
+
+
+def mixed_source_marker(result: "CompanyCheckResult", tag: str) -> str:
+    """The short marker a value keeps when it came from a DIFFERENT provider than the rest of its
+    section: " (see Sources)". Empty when it is the same provider, or when either is unknown -
+    an unknown source is never assumed to be a different one."""
+    theirs = provider_of(tag).lower()
+    ours = str((getattr(result, "providers", None) or {}).get("fundamentals", "")).strip().lower()
+    return " (see Sources)" if theirs and ours and theirs != ours else ""
+
+
+def factor_source_display(source: str) -> str:
+    """A factor's basis tag for display. A ``static: <date>, <provider>`` receipt is a value from a
+    DIFFERENT source than the run's (a hand-checked fund row), so it keeps a short marker that points
+    to the Sources block instead of naming the provider beside the figure. Every other tag
+    (``computed``, ``ev``, an FX conversion with its rate and date) is a calculation fact and stays."""
+    if (source or "").startswith("static:"):
+        return "static — see Sources"
+    return source
+
+
+def company_sources(result: "CompanyCheckResult") -> list[SourceLine]:
+    """Every provider this page drew on, with its as-of date, plus the correction files used.
+    Built from the result, so the page, both exports and the saved run print the same block."""
+    out: list[SourceLine] = []
+    p = getattr(result, "providers", None) or {}
+    if p.get("fundamentals"):
+        out.append(SourceLine("Fundamentals and accounts",
+                              f"{p['fundamentals']}, fetched {p.get('as_of', '')}".rstrip(", ")))
+    if p.get("prices"):
+        latest = p.get("price_as_of") or p.get("as_of", "")
+        out.append(SourceLine("Prices", f"{p['prices']}, latest close {latest}" if latest
+                              else str(p["prices"])))
+    growth = getattr(result, "growth_record", None)
+    if growth is not None and getattr(growth, "source_tag", ""):
+        out.append(SourceLine("Growth record", growth.source_tag.split("source:", 1)[-1].strip()))
+    trend = getattr(result, "analyst_trend", None)
+    if trend is not None and getattr(trend, "source", ""):
+        out.append(SourceLine("Analyst forecasts",
+                              f"{trend.source}" + (f", as of {trend.as_of}" if trend.as_of else "")))
+    if getattr(result, "fx_source", ""):
+        out.append(SourceLine("Currency rates in the valuation band",
+                              f"{result.fx_source}, monthly"))
+    statics = sorted({fc.source for fc in getattr(result, "factors", ())
+                      if (fc.source or "").startswith("static:")})
+    for tag in statics:
+        out.append(SourceLine("Fund figures marked static", tag.split("static:", 1)[-1].strip()))
+    group = getattr(result, "peer_group", None)
+    if group is not None:
+        out.append(SourceLine(
+            "Market index",
+            f"local table of listed companies built from EODHD, snapshot "
+            f"{group.snapshot or 'unknown'}; classification is EODHD's copy of GICS and its own "
+            f"industry labels"))
+        used = []
+        if group.overridden:
+            used.append("data/label_overrides.yaml ("
+                        + ", ".join(sorted({o["ticker"] for o in group.overridden})) + ")")
+        if group.aliased:
+            used.append("data/identity_aliases.yaml ("
+                        + ", ".join(sorted({a["ticker"] for a in group.aliased})) + ")")
+        if getattr(group, "size_corrected", None):
+            used.append("data/size_corrections.yaml ("
+                        + ", ".join(sorted({c["ticker"] for c in group.size_corrected})) + ")")
+        if used:
+            out.append(SourceLine("Correction files used", "; ".join(used)))
+        out.append(SourceLine("How peers are chosen", DOCS_CLASSIFICATION))
+    return out
 
 
 def attach_peers(result: CompanyCheckResult, *, store=None) -> CompanyCheckResult:
@@ -748,7 +881,7 @@ def format_company_check(result: CompanyCheckResult) -> str:
         gloss = _expense_ratio_gloss(fc.value) if fc.factor == "expense_ratio" else ""
         lines.append(f"  {fc.label} ({fc.factor}): "
                      f"{format_factor_value(fc.factor, fc.value)}{gloss} "
-                     f"[{fc.source}] — {fc.context}")
+                     f"[{factor_source_display(fc.source)}] — {fc.context}")
 
     # ABSOLUTE VALUATION (VALBAND-1) — deliberately printed right after the cohort-
     # relative factor block, because it answers the question that block CANNOT: the
@@ -766,13 +899,14 @@ def format_company_check(result: CompanyCheckResult) -> str:
             lines.append("  Debt and cash")
             lines.extend(f"    - {ln}" for ln in result.debt_and_cash.lines())
         if result.growth_record is not None:
-            lines.append("  Growth record")
+            lines.append("  Growth record"
+                         + mixed_source_marker(result, result.growth_record.source_tag))
             lines.extend(f"    - {ln}" for ln in result.growth_record.lines())
             lines.extend(f"    ({ln})" for ln in result.growth_record.notes())
         # ANALYST FORECAST DIRECTION (ANALYST-TREND-1) - a mark only, and only when asked for.
         if result.analyst_trend is not None:
             lines.append("  Analyst forecast direction (a mark: it does not vote and changes no "
-                         "verdict)")
+                         "verdict)" + mixed_source_marker(result, result.analyst_trend.source))
             lines.extend(f"    {ln}" for ln in result.analyst_trend.lines())
 
     # PEERS (MARKET-INDEX-1) - who this company would be measured against.
@@ -816,4 +950,10 @@ def format_company_check(result: CompanyCheckResult) -> str:
 
     lines.append("")
     lines.append(result.pointer)
+    # SOURCES - the ONE place a provider is named (batch 8).
+    sources = company_sources(result)
+    if sources:
+        lines.append("")
+        lines.append("SOURCES:")
+        lines.extend(f"  {s.topic}: {s.text}" for s in sources)
     return "\n".join(lines)

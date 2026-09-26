@@ -1462,6 +1462,8 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
     from ..company_check import (
         # The SAME gloss the .txt renders, so the two cannot drift.
         _expense_ratio_gloss,
+        company_sources,
+        factor_source_display,
         format_factor_value,
     )
 
@@ -1554,7 +1556,8 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
             f"<strong>{_esc(fc.label)}</strong> "
             f'<span class="mono">({_esc(fc.factor)})</span>: '
             f"{_esc(format_factor_value(fc.factor, fc.value))}{_esc(gloss)} "
-            f'<span class="badge">[{_esc(fc.source)}]</span> — {_inline(fc.context)}')
+            f'<span class="badge">[{_esc(factor_source_display(fc.source))}]</span> '
+            f"— {_inline(fc.context)}")
     parts.append('<section class="section"><h2>Factor values + cohort context</h2>'
                  f'<p class="note">{_esc(ref)}</p>' + _bullets(items))
     if result.verdict_of_record:
@@ -1586,6 +1589,11 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
     parts.append("</section>")
 
     parts.append(f'<p class="note">{_inline(result.pointer)}</p>')
+    sources = company_sources(result)
+    if sources:
+        parts.append('<section class="section"><h2>Sources</h2>'
+                     + _bullets(f"<strong>{_esc(s.topic)}:</strong> {_esc(s.text)}"
+                                for s in sources) + "</section>")
     parts.append(_footer())
     title = f"Company Check — {result.display}" + (f" — {stamp}" if stamp else "")
     return _document(title=title, body="\n".join(parts))
@@ -1594,6 +1602,8 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
 def _company_readings_html(result) -> str:
     """Absolute readings (debt and cash, growth record, analyst forecasts) - the same sentences the
     page and the text export print, from the same objects."""
+    from ..company_check import mixed_source_marker
+
     debt, growth, trend = result.debt_and_cash, result.growth_record, result.analyst_trend
     if debt is None and growth is None and trend is None:
         return ""
@@ -1603,10 +1613,12 @@ def _company_readings_html(result) -> str:
     if debt is not None:
         out.append("<h3>Debt and cash</h3>" + _bullets(_esc(ln) for ln in debt.lines()))
     if growth is not None:
-        out.append("<h3>Growth record</h3>" + _bullets(_esc(ln) for ln in growth.lines()))
+        out.append("<h3>Growth record" + _esc(mixed_source_marker(result, growth.source_tag))
+                   + "</h3>" + _bullets(_esc(ln) for ln in growth.lines()))
         out.extend(f'<p class="note">{_esc(ln)}</p>' for ln in growth.notes())
     if trend is not None:
-        out.append("<h3>Analyst forecast direction</h3>"
+        out.append("<h3>Analyst forecast direction"
+                   + _esc(mixed_source_marker(result, trend.source)) + "</h3>"
                    f"<p><strong>{_esc(trend.headline)}</strong></p>" + _analyst_table_html(trend))
     out.append("</section>")
     return "".join(out)
@@ -1625,7 +1637,7 @@ def _analyst_table_html(trend) -> str:
 
 def _company_peers_html(result) -> str:
     """The peers table, market caps through the one money formatter."""
-    from ..peer_table import peer_rows
+    from ..peer_table import ONE_SYSTEM_NOTE, has_one_system_peers, peer_rows
     group = result.peer_group
     if group is None:
         return (f'<section class="section"><h2>Peers</h2><p class="note">The market index is '
@@ -1634,12 +1646,16 @@ def _company_peers_html(result) -> str:
     out = ['<section class="section"><h2>Peers</h2>']
     if group.available:
         out.append(f'<p class="note">{_esc(group.sentence())}</p>')
-        body = [[f'<span class="mono">{_esc(r.ticker)}</span>', _esc(r.name), _esc(r.exchange),
+        rows = peer_rows(group)
+        body = [[f'<span class="mono">{_esc(r.marked_ticker)}</span>', _esc(r.name),
+                 _esc(r.exchange),
                  f'<span class="mono">{_esc(r.usd_text)}</span>',
                  f'<span class="mono">{_esc(r.local_text)}</span>', _esc(r.sub_industry)]
-                for r in peer_rows(group)]
+                for r in rows]
         out.append(_table(["Ticker", "Name", "Exchange", "Market cap (USD)", "Market cap (local)",
                            "Sub-industry"], body))
+        if has_one_system_peers(rows):
+            out.append(f'<p class="note">{_esc(ONE_SYSTEM_NOTE)}</p>')
     else:
         out.append('<p class="note">No peer group for this name.</p>')
     out.append(_bullets(_esc(reason) for reason in group.reasons))

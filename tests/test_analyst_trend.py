@@ -339,9 +339,12 @@ def _mu_check(**kw):
 
 
 def _without_analyst_block(text: str) -> str:
-    """The export minus the analyst sub-block (a heading indented two, its lines indented four)."""
+    """The export minus the analyst sub-block (a heading indented two, its lines indented four) and
+    the analyst line of the Sources block - the mark's own footprint, nothing else."""
     out, skipping = [], False
     for line in text.split("\n"):
+        if line.startswith("  Analyst forecasts:"):
+            continue
         if line.startswith("  Analyst forecast direction"):
             skipping = True
             continue

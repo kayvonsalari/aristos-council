@@ -474,8 +474,13 @@ def test_company_check_html_renders_the_whole_diagnostic():
     assert _squash("fails closed by design") in visible or "fails closed" in doc
     # gates + rationale
     assert "min_market_cap" in doc and "keeps micro caps out" in doc
-    # factors: value, source badge, cohort context
-    assert '<span class="badge">[static: 2026-07-21, EODHD]</span>' in doc
+    # factors: value, source badge, cohort context. A static receipt is a value from a different
+    # source than the run's: it keeps a short marker that points to the Sources block, and the
+    # provider is named there once (batch 8)
+    assert '<span class="badge">[static — see Sources]</span>' in doc
+    assert "<h2>Sources</h2>" in doc
+    assert "Fund figures marked static:</strong> 2026-07-21, EODHD" in doc
+    assert "[static: 2026-07-21, EODHD]" not in doc
     assert _squash("#2 of 5 in growth_40_v1") in visible
     # the verdict OF RECORD is quoted, never recomputed
     assert "VERDICT OF RECORD" in doc and "SELL, rank 12 of 16" in doc

@@ -3602,6 +3602,8 @@ def _render_absolute_readings(result) -> None:
     Beside the valuation band and the Forensic marks because they answer the same kind of
     question: not "how does this rank" but "what is this company like". They do not vote.
     """
+    from aristos_council.company_check import mixed_source_marker
+
     debt, growth = result.debt_and_cash, result.growth_record
     trend = getattr(result, "analyst_trend", None)
     if debt is None and growth is None and trend is None:
@@ -3614,7 +3616,7 @@ def _render_absolute_readings(result) -> None:
         for line in debt.lines():
             st.markdown(f"- {line}")
     if growth is not None:
-        st.markdown("**Growth record**")
+        st.markdown("**Growth record**" + mixed_source_marker(result, growth.source_tag))
         for line in growth.lines():
             st.markdown(f"- {line}")
         for note in growth.notes():                  # said once, under the section
@@ -3622,7 +3624,8 @@ def _render_absolute_readings(result) -> None:
     if trend is not None:
         # ANALYST-TREND-1 - a mark, not a lens: it does not vote and changes no verdict. An
         # abstention is shown with its reason rather than left as an absent section.
-        st.markdown("**Analyst forecast direction**")
+        st.markdown("**Analyst forecast direction**"
+                    + mixed_source_marker(result, trend.source))
         st.markdown(f"**{trend.headline}**")
         if trend.rows:
             import pandas as pd
@@ -3636,8 +3639,9 @@ def _render_absolute_readings(result) -> None:
 
 def _render_peers(result) -> None:
     """MARKET-INDEX-1 — who this company would be measured against."""
-    from aristos_council.peer_table import (LOCAL_COLUMN, LOCAL_FORMAT, USD_COLUMN, USD_FORMAT,
-                                            peer_frame_records)
+    from aristos_council.peer_table import (LOCAL_COLUMN, LOCAL_FORMAT, ONE_SYSTEM_NOTE,
+                                            USD_COLUMN, USD_FORMAT, has_one_system_peers,
+                                            peer_frame_records, peer_rows)
 
     st.subheader("Peers")
     group = getattr(result, "peer_group", None)
@@ -3664,8 +3668,23 @@ def _render_peers(result) -> None:
             USD_COLUMN: st.column_config.NumberColumn(USD_COLUMN, format=USD_FORMAT),
             LOCAL_COLUMN: st.column_config.NumberColumn(LOCAL_COLUMN, format=LOCAL_FORMAT),
         })
+    if has_one_system_peers(peer_rows(group)):
+        st.caption(ONE_SYSTEM_NOTE)
     for reason in group.reasons:
         st.caption(f"· {reason}")
+
+
+def _render_sources(result) -> None:
+    """ONE Sources block at the bottom (batch 8): every provider the page drew on with its as-of
+    date, and the correction files used. Nothing above it names a provider."""
+    from aristos_council.company_check import company_sources
+
+    sources = company_sources(result)
+    if not sources:
+        return
+    st.subheader("Sources")
+    for s in sources:
+        st.markdown(f"- **{s.topic}:** {s.text}")
 
 
 def _render_company_check(result) -> None:
@@ -3738,12 +3757,12 @@ def _render_company_check(result) -> None:
     else:
         st.caption("No reference run available — showing raw values. Run that list "
                    "once (the Run tab) to get cohort context.")
-    from aristos_council.company_check import format_factor_value
+    from aristos_council.company_check import factor_source_display, format_factor_value
 
     for fc in result.factors:
         st.markdown(f"- **{fc.label}** (`{fc.factor}`): "
                     f"{format_factor_value(fc.factor, fc.value)} "
-                    f"_[{fc.source}]_ — {fc.context}")
+                    f"_[{factor_source_display(fc.source)}]_ — {fc.context}")
 
     _render_absolute_readings(result)
     _render_peers(result)
@@ -3772,6 +3791,7 @@ def _render_company_check(result) -> None:
             st.markdown(f"- ⚠ {flag}")
 
     st.info(result.pointer)
+    _render_sources(result)
     # Unique, self-describing filenames: ticker + strategy + run-start (ITEM 6). A
     # single-name file ALWAYS carries the ticker. Two exports side by side
     # (REPORT-HTML-1): the text report stays canonical, the HTML is the shareable copy.
