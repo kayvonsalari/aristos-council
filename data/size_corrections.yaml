@@ -21,3 +21,25 @@ corrections:
       is many ordinary shares, so the figure is overstated by that ratio. Annual revenue is $2.5bn,
       which makes the stated cap 136 times revenue for a gig-logistics business. The true cap cannot
       be established from either source, so the company is excluded instead of being given a figure.
+  - ticker: LISN.SW
+    action: set
+    market_cap_usd: 24560000000
+    date: 2026-09-26
+    reason: >-
+      Lindt & Spruengli's registered shares (LISN.SW) read USD 118.4bn (CHF 97.2bn) in the index,
+      five times its participation certificate line LISP.SW (CHF 19.7bn). One registered share is worth
+      ten participation certificates (nominal CHF 100 against CHF 10), and the two lines are one
+      company, so a CHF 97.2bn figure for one class cannot be the company's capitalisation.
+      Lindt's total market capitalisation is about CHF 20.2bn:
+      stockanalysis.com/quote/swx/LISN/market-cap/ gives CHF 20.16bn on 2026-09-25, and EODHD's own
+      LISP.SW row (CHF 19.72bn) agrees. Converted at the index's own CHF rate (1.2183 USD per CHF,
+      LISP.SW's USD / local figure): 20.16bn x 1.2183 = USD 24.56bn.
+  - ticker: LTOD.LSE
+    action: exclude
+    date: 2026-09-26
+    reason: >-
+      Larsen & Toubro's London line (USD 30.5bn, ISIN USY5217N1183, no PrimaryTicker) is a Regulation S
+      global depositary receipt for an Indian company: it is filed by the provider as Diversified
+      Metals & Mining, which put it in BHP's peer group, and it has no home line in the index (India
+      is not a covered market), so its size cannot be checked against a second line. The company is
+      excluded rather than given a figure or a peer group it does not belong in.

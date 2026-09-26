@@ -176,10 +176,10 @@ def default_ranker(tickers: list[str], strategy_id: str, *, today: date | None =
 def default_index_pool():
     """The cleaned pool of the real market index, read once. No request is made."""
     from ..market_index import IndexStore, clean_pool, load_config
-    from .definitions import INDEX_EXCLUDED_MARKETS
+    from .definitions import index_excluded_markets
 
     return clean_pool(store=IndexStore(load_config()["root"]),
-                      exclude_markets=INDEX_EXCLUDED_MARKETS)
+                      exclude_markets=index_excluded_markets())
 
 
 def resolve_path(defn: CohortDefinition, *, constituents: bool | None = None) -> str:

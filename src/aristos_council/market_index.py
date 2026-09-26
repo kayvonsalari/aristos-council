@@ -361,7 +361,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
                 "max_age_days": DEFAULT_MAX_AGE_DAYS, "root": str(DEFAULT_ROOT),
                 "empty_retry_after": DEFAULT_EMPTY_RETRY_AFTER,
                 "empty_retry_days": DEFAULT_EMPTY_RETRY_DAYS,
-                "size_suspect_factor": DEFAULT_SIZE_FACTOR}
+                "size_suspect_factor": DEFAULT_SIZE_FACTOR,
+                "peer_exclude_markets": []}
     doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(doc, dict):
         raise MarketIndexError(f"{path}: expected a mapping, got {type(doc).__name__}")
@@ -383,10 +384,30 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> dict:
         "empty_retry_days": int(doc.get("empty_retry_days", DEFAULT_EMPTY_RETRY_DAYS)),
         # PEER-SIZE-SANITY-1 - how far a row's size may be from the company's other listings.
         "size_suspect_factor": float(doc.get("size_suspect_factor", DEFAULT_SIZE_FACTOR)),
+        # 2026-09-26 - markets that stay in the table but are never a peer or a cohort member
+        # (Sao Paulo). Absent means none: deleting the line is what allows a market back.
+        "peer_exclude_markets": _market_codes(doc.get("peer_exclude_markets"), path),
         # MARKET-INDEX-2 - per exchange, and an exchange that is absent is unrestricted.
         "venues": {str(k).strip().upper(): [str(v).strip().upper() for v in (vals or [])]
                    for k, vals in venues.items()},
     }
+
+
+def _market_codes(raw, path) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        raise MarketIndexError(f"{path}: 'peer_exclude_markets' must be a list of market codes")
+    return [x.strip().upper() for x in raw if x.strip()]
+
+
+def excluded_markets(config: Optional[dict] = None) -> tuple[str, ...]:
+    """The market codes peer groups AND cohorts never draw from (``peer_exclude_markets`` in
+    ``market_index.yaml``). ONE reader for both, so the two can never disagree."""
+    config = config if config is not None else load_config()
+    return tuple(config.get("peer_exclude_markets") or ())
 
 
 def allowed_venues(config: dict, exchange: str) -> list[str]:
@@ -1203,6 +1224,9 @@ class IndexStatus:
     aliased_examples: list = field(default_factory=list)
     orphan_adrs: int = 0
     orphan_adr_examples: list = field(default_factory=list)
+    # Identity-less Toronto rows whose cleaned name also belongs to a row WITH an identity: probably
+    # a foreign company's line, REPORT ONLY - nothing is excluded or merged on this evidence.
+    possible_foreign: list = field(default_factory=list)
 
     def lines(self) -> list[str]:
         if not self.rows:
@@ -1236,6 +1260,11 @@ class IndexStatus:
                 f"no other row - unlinked, may count a company twice"
                 + (f" (e.g. {', '.join(self.orphan_adr_examples)})"
                    if self.orphan_adr_examples else "")))
+        if self.possible_foreign:
+            out.insert(out.index("  per exchange:"), (
+                f"  {len(self.possible_foreign)} Toronto row(s) with no identity share a cleaned "
+                f"name with a row that has one - possible foreign lines (report only, nothing "
+                f"excluded): {', '.join(self.possible_foreign)}"))
         if self.size_disputed:
             out.insert(out.index("  per exchange:"),
                        f"  {self.size_disputed} company(ies) whose lines differ in size by more "
@@ -1273,6 +1302,30 @@ class IndexStatus:
         for exchange, n in sorted(self.per_exchange.items(), key=lambda kv: -kv[1]):
             out.append(f"    {exchange:8s} {n:6d}")
         return out
+
+
+def possible_foreign_lines(rows, secondary: Optional[dict] = None) -> list["IndexRow"]:
+    """Toronto rows with neither PrimaryTicker nor ISIN whose cleaned company name is also the name
+    of a row ELSEWHERE (another market) that has an identity - Coeur, Teck A, Paladin ...: probably a
+    foreign company's Canadian line. Report only: the evidence is a name, and a name is not an
+    identity. Rows already counted as secondary trading lines (the CDRs) are left to that count, and
+    ``rows`` should have the identity aliases applied, so a line the alias file already resolves
+    (ROG.TO) is not reported as a suspicion."""
+    secondary = secondary if secondary is not None else secondary_lines(rows)
+    elsewhere: dict[str, set] = {}
+    for r in rows:
+        if _has_identity(r) and _name_key(r.name):
+            elsewhere.setdefault(_name_key(r.name), set()).add((r.market or "").upper())
+    out = []
+    for r in rows:
+        if (r.market or "").upper() != "TO" or _has_identity(r):
+            continue
+        if normalise_symbol(r.ticker) in secondary:
+            continue
+        key = _name_key(r.name)
+        if key and (elsewhere.get(key, set()) - {"TO"}):
+            out.append(r)
+    return sorted(out, key=lambda r: r.ticker)
 
 
 def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
@@ -1355,6 +1408,8 @@ def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
     aliased = [a.ticker for a in aliases or () if a.ticker in present]
     out.aliased = len(aliased)
     out.aliased_examples = aliased[:EXAMPLES]
+    aliased_rows, _applied = apply_identity_aliases(rows, aliases)
+    out.possible_foreign = [r.ticker for r in possible_foreign_lines(aliased_rows, secondary)]
     orphans = orphan_depositary_rows(rows, aliased)
     out.orphan_adrs = len(orphans)
     out.orphan_adr_examples = [r.ticker for r in orphans[:EXAMPLES]]
@@ -2568,7 +2623,7 @@ def _log_distance(cap: Optional[float], subject: float) -> float:
 def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
           store: Optional[IndexStore] = None, rows: Optional[list[IndexRow]] = None,
           size_factor: float = DEFAULT_SIZE_FACTOR, overrides=..., aliases=...,
-          size_corrections=...) -> PeerGroup:
+          size_corrections=..., exclude_markets=...) -> PeerGroup:
     """The peer group for one company, by ladder, from the local table only.
 
     Deterministic for a given snapshot: every rung is a filter over the same rows and the
@@ -2600,6 +2655,11 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         size_corrections = load_size_corrections() if rows is None else []
     universe, size_applied = apply_size_corrections(universe, size_corrections)
     size_refused = {k for k, (_rep, c) in size_applied.items() if c.action == SIZE_EXCLUDE}
+    # The same rule for the excluded-markets setting: read with the real index, never applied to
+    # rows handed in directly.
+    if exclude_markets is ...:
+        exclude_markets = excluded_markets() if rows is None else ()
+    market_excluded = {str(m).upper() for m in exclude_markets}
 
     wanted = (ticker or "").strip().upper()
     by_ticker = {r.ticker.upper(): r for r in universe}
@@ -2716,6 +2776,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
     candidates, no_cap, no_usd, funds, suspect, own_lines = [], 0, 0, 0, 0, 0
     receipts: dict[str, int] = {}
     size_suspect = 0
+    by_market: dict[str, int] = {}
     for row in universe:
         if normalise_symbol(row.ticker) == normalise_symbol(subject.ticker):
             continue                                   # never its own peer
@@ -2728,6 +2789,11 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         kind = secondary.get(normalise_symbol(row.ticker))
         if kind:
             receipts[kind] = receipts.get(kind, 0) + 1   # kept in the table, never a peer
+            continue
+        if (row.market or "").upper() in market_excluded:
+            # Dropped BEFORE the one-row-per-company step, as a cohort's pool does it: a company
+            # whose only other line is on an excluded market keeps its seat.
+            by_market[row.market.upper()] = by_market.get(row.market.upper(), 0) + 1
             continue
         if is_fund(row):
             funds += 1
@@ -2786,6 +2852,10 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             f"{sum(receipts.values())} candidate(s) skipped: secondary trading line, not a "
             f"company (" + ", ".join(f"{kind} {n}" for kind, n in sorted(receipts.items()))
             + ")")
+    if by_market:
+        group.reasons.append(
+            f"{sum(by_market.values())} candidate(s) skipped: market excluded by setting "
+            f"({', '.join(sorted(by_market))})")
     if size_suspect:
         group.reasons.append(f"{size_suspect} candidate(s) skipped: {SIZE_SUSPECT} (a market "
                              f"cap more than {size_factor:g}x from the same company's other "

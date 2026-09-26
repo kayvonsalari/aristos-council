@@ -115,3 +115,19 @@ aliases:
       $0.27bn), a separate company that trades on its own (Yahoo shows both live, with different
       names and market caps). Read as one company, the two-line size rule refused the larger,
       correct row as a size outlier.
+  - ticker: LISP.SW
+    primary: LISN.SW
+    date: 2026-09-26
+    reason: >-
+      LISP.SW is the participation certificate (Partizipationsschein, ISIN CH0010570767) of
+      Chocoladefabriken Lindt & Spruengli AG; LISN.SW is its registered share (CH0010570759). They are
+      one company with two ISINs, each its own primary in the index, so nothing linked them and both
+      sat in the Packaged Foods & Confectionery cohort (USD 24.0bn and USD 118.4bn). Lindt's own
+      share-capital table lists both classes under one issuer.
+  - ticker: ROG.TO
+    primary: RO.SW
+    date: 2026-09-26
+    reason: >-
+      Roche Holding AG's Toronto line (a Canadian depositary receipt, CAD 257.8bn / USD 184.3bn) has
+      no ISIN or PrimaryTicker and its name carries no "CDR", so nothing marks it as a receipt; the
+      company's home line RO.SW reads USD 361.1bn. Same name, same company.

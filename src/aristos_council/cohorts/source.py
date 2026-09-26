@@ -327,7 +327,7 @@ def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], s
     matched on the code.
     """
     from ..market_index import CleanPool  # noqa: F401  (documented type; import is lazy)
-    from .definitions import INDEX_EXCLUDED_MARKETS
+    from .definitions import index_excluded_markets
 
     log: list[str] = [
         f"Source: the local market index, through the same cleaned pool the peer groups use "
@@ -341,10 +341,12 @@ def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], s
                    f"(data/identity_aliases.yaml): {', '.join(sorted(pool.aliased))}.")
 
     rows = list(pool.rows)
-    left_out = [r for r in rows if r.market in INDEX_EXCLUDED_MARKETS]
-    rows = [r for r in rows if r.market not in INDEX_EXCLUDED_MARKETS]
-    log.append(f"{len(left_out)} company(ies) on {', '.join(INDEX_EXCLUDED_MARKETS)} (Sao Paulo) "
-               f"left out by decision" + (" - a pool not built with exclude_markets, so they were "
+    markets = index_excluded_markets()
+    left_out = [r for r in rows if r.market in markets]
+    rows = [r for r in rows if r.market not in markets]
+    named = ", ".join(f"{m} (Sao Paulo)" if m == "SA" else m for m in markets) or "no excluded market"
+    log.append(f"{len(left_out)} company(ies) on {named} left out by the "
+               f"peer_exclude_markets setting" + (" - a pool not built with exclude_markets, so they were "
                                            "still in it" if left_out else "") + ".")
     if not defn.all_index_exchanges:
         codes = set(defn.exchange_codes)

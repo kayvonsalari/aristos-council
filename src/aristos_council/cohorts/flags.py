@@ -87,14 +87,15 @@ def excluded_for(defn, pool) -> list:
     """The companies refused for their SIZE that this cohort would otherwise have considered:
     the same code, the same exchanges, not a financial or a REIT, and - for a cohort narrowed to a
     GICS sub-industry - the same sub-industry. Sorted by ticker."""
-    from .definitions import INDEX_EXCLUDED_MARKETS, excluded_by
+    from .definitions import excluded_by, index_excluded_markets
 
     wanted_sub = {s.lower() for s in defn.gics_subindustry}
     codes = set(defn.industry)
     allowed = set(defn.exchange_codes)
     out = []
+    left_out = index_excluded_markets()
     for e in pool.size_excluded:
-        if e.market in INDEX_EXCLUDED_MARKETS:
+        if e.market in left_out:
             continue
         if not defn.all_index_exchanges and e.market not in allowed:
             continue

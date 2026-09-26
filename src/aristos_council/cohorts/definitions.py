@@ -322,14 +322,22 @@ EXCHANGE_CODES: dict[str, tuple[str, ...]] = {
     "TAIWAN": ("TW",),
     "AUSTRALIA": ("AU",),
     "KOREA": ("KO", "KQ"),
-    # Every market the index carries EXCEPT Sao Paulo (see ``INDEX_EXCLUDED_MARKETS``). It names
+    # Every market the index carries EXCEPT Sao Paulo (see ``index_excluded_markets``). It names
     # no suffix of its own, so it can only be read from the index, never from a constituent list.
     "ALL": (),
 }
 
-# COHORT-3 - markets the index tracks and a cohort never draws from. Sao Paulo's real companies
-# are excluded by decision (its receipts are already secondary lines in the cleaned pool).
-INDEX_EXCLUDED_MARKETS: tuple[str, ...] = ("SA",)
+
+def index_excluded_markets() -> tuple[str, ...]:
+    """Markets the index tracks and a cohort never draws from (Sao Paulo, by decision).
+
+    Read from ``peer_exclude_markets`` in ``market_index.yaml`` - the SAME setting ``peers`` reads,
+    so peer groups and cohorts can never disagree about which markets are out. Imported lazily:
+    ``market_index`` imports this package for its symbol table."""
+    from ..market_index import excluded_markets
+
+    return excluded_markets()
+
 
 # COHORT-3 - the per-cohort USD floor. Below $1bn is a micro-cap cohort; above $10bn is no longer a
 # size FLOOR but a large-cap-only cohort, which is a different thing to ask for.
