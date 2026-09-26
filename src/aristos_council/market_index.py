@@ -2122,9 +2122,11 @@ def size_disputes(rows, factor: float = DEFAULT_SIZE_FACTOR) -> list[list[str]]:
 def _size_reason(row: "IndexRow", others: list, factor: float) -> str:
     reference = sorted(others)[len(others) // 2]
     ratio = max(row.market_cap_usd, reference) / min(row.market_cap_usd, reference)
-    return (f"{SIZE_SUSPECT} (${row.market_cap_usd / 1e9:,.1f}bn here against "
-            f"${reference / 1e9:,.1f}bn on the company's other listings, {ratio:.1f}x apart; "
-            f"the limit is {factor:g}x)")
+    from .tools.price_context import format_money
+
+    return (f"{SIZE_SUSPECT} ({format_money(row.market_cap_usd, 'USD', abbreviate=True)} here "
+            f"against {format_money(reference, 'USD', abbreviate=True)} on the company's other "
+            f"listings, {ratio:.1f}x apart; the limit is {factor:g}x)")
 
 
 # --------------------------------------------------------------------------- #

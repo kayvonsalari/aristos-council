@@ -1562,6 +1562,9 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
                      f"{_inline(result.verdict_of_record)}</p>")
     parts.append("</section>")
 
+    parts.append(_company_readings_html(result))
+    parts.append(_company_peers_html(result))
+
     if result.divergence_flag:
         parts.append(_callout(f"Price/fundamentals divergence — {result.divergence_flag}",
                               kind="alert", label="divergence"))
@@ -1586,6 +1589,62 @@ def company_check_html(result, *, run_start: Optional[datetime] = None,
     parts.append(_footer())
     title = f"Company Check — {result.display}" + (f" — {stamp}" if stamp else "")
     return _document(title=title, body="\n".join(parts))
+
+
+def _company_readings_html(result) -> str:
+    """Absolute readings (debt and cash, growth record, analyst forecasts) - the same sentences the
+    page and the text export print, from the same objects."""
+    debt, growth, trend = result.debt_and_cash, result.growth_record, result.analyst_trend
+    if debt is None and growth is None and trend is None:
+        return ""
+    out = ['<section class="section"><h2>Absolute readings</h2>'
+           '<p class="note">No comparison group. These are facts about this company\'s own '
+           "accounts - they are not lenses, they do not vote, and nothing here is ranked.</p>"]
+    if debt is not None:
+        out.append("<h3>Debt and cash</h3>" + _bullets(_esc(ln) for ln in debt.lines()))
+    if growth is not None:
+        out.append("<h3>Growth record</h3>" + _bullets(_esc(ln) for ln in growth.lines()))
+        out.extend(f'<p class="note">{_esc(ln)}</p>' for ln in growth.notes())
+    if trend is not None:
+        out.append("<h3>Analyst forecast direction</h3>"
+                   f"<p><strong>{_esc(trend.headline)}</strong></p>" + _analyst_table_html(trend))
+    out.append("</section>")
+    return "".join(out)
+
+
+def _analyst_table_html(trend) -> str:
+    from ..abs_readings import TABLE_COLUMNS
+    if not trend.rows:
+        return ""
+    body = [[_esc(row.label)] + [f'<span class="mono">{_esc(c)}</span>' for c in row.cells()]
+            for row in trend.rows]
+    note = trend.currency_note()
+    return (_table(["", *TABLE_COLUMNS], body)
+            + (f'<p class="note">{_esc(note)}</p>' if note else ""))
+
+
+def _company_peers_html(result) -> str:
+    """The peers table, market caps through the one money formatter."""
+    from ..peer_table import peer_rows
+    group = result.peer_group
+    if group is None:
+        return (f'<section class="section"><h2>Peers</h2><p class="note">The market index is '
+                f"not available ({_esc(result.peer_error)}).</p></section>"
+                if result.peer_error else "")
+    out = ['<section class="section"><h2>Peers</h2>']
+    if group.available:
+        out.append(f'<p class="note">{_esc(group.sentence())}</p>')
+        body = [[f'<span class="mono">{_esc(r.ticker)}</span>', _esc(r.name), _esc(r.exchange),
+                 f'<span class="mono">{_esc(r.usd_text)}</span>',
+                 f'<span class="mono">{_esc(r.local_text)}</span>', _esc(r.sub_industry)]
+                for r in peer_rows(group)]
+        out.append(_table(["Ticker", "Name", "Exchange", "Market cap (USD)", "Market cap (local)",
+                           "Sub-industry"], body))
+    else:
+        out.append('<p class="note">No peer group for this name.</p>')
+    out.append(_bullets(_esc(reason) for reason in group.reasons))
+    out.append("</section>")
+    return "".join(out)
 
 
 def _num(value) -> str:

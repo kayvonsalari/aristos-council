@@ -158,7 +158,11 @@ def test_the_compact_line_links_to_the_full_section_that_exists():
     (69_659_000_000, "USD", "$69.7bn"),
     (28_989_000, "USD", "$29.0m"),
     (950_000, "USD", "$950,000"),
-    (24_793_783_000_000, "KRW", "KRW 24.8tn"),
+    (24_793_783_000_000, "KRW", "KRW 24.79tn"),
+    (1_030_000_000_000, "USD", "$1.03tn"),          # a trillion reads with TWO decimals
+    (466_448_285_696, "USD", "$466.4bn"),
+    (221_400_000_000, "CHF", "CHF 221.4bn"),
+    (76_547_235_840, "GBP", "£76.5bn"),
 ])
 def test_the_shared_helper_abbreviates_by_magnitude(value, currency, expected):
     assert format_money(value, currency, abbreviate=True) == expected

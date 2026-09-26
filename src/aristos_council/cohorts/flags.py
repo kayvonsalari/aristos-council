@@ -39,7 +39,10 @@ class Flag:
 
 
 def money(value) -> str:
-    return "n/a" if value is None else f"${value / 1e9:,.1f}bn"
+    """A USD amount through the repo's one money formatter ("$24.6bn", "$1.03tn")."""
+    from ..tools.price_context import format_money
+
+    return "n/a" if value is None else format_money(value, "USD", abbreviate=True)
 
 
 def _norm(ticker: str) -> str:

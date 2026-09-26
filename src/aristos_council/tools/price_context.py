@@ -69,6 +69,12 @@ def currency_note(currency: Optional[str]) -> str:
 
 
 # MONEY-ABBREV-1 — magnitude abbreviation, in the ONE helper every surface reads.
+# (Batch 8: the ONE money formatter for the Company Check page, its exports, the peers table and
+# the cohort reports. A trillion reads with TWO decimals - "$1.03tn" - because one decimal loses
+# a 10% difference at that size ("$1.0tn" against "$1.1tn"); billions and millions keep one.)
+# (Batch 8: the ONE money formatter for the Company Check page, its exports, the peers table and
+# the cohort reports. A trillion reads with TWO decimals - "$1.03tn" - because one decimal loses
+# a 10% difference at that size ("$1.0tn" against "$1.1tn"); billions and millions keep one.)
 # "USD 69,659,000,000" is thirteen digits a reader has to COUNT to understand, and the
 # 2026-08-26 12:33 run put four of them in a single sentence next to a
 # "KRW 24,793,783,000,000". Abbreviating is display-only: the ledger, the records and the
@@ -87,7 +93,7 @@ def format_money(value: Optional[float], currency: Optional[str], *,
     is stated ONCE per rendered line via ``currency_note`` rather than repeated after
     every amount — never silently defaulted to dollars.
 
-    ``abbreviate=True`` collapses large magnitudes (``$69.7bn``, ``KRW 24.8tn``). The
+    ``abbreviate=True`` collapses large magnitudes (``$69.7bn``, ``KRW 24.79tn``). The
     thresholds are ABSOLUTE, so a negative free-cash-flow year abbreviates the same way a
     positive one does — ``-$4.5bn``, never ``-4,501,657,000``. Default off, so every
     existing caller is byte-unchanged.
@@ -98,7 +104,8 @@ def format_money(value: Optional[float], currency: Optional[str], *,
         size = abs(value)
         for cut, suffix in _MAGNITUDES:
             if size >= cut:
-                amount = f"{value / cut:,.1f}{suffix}"
+                places = 2 if suffix == "tn" else 1
+                amount = f"{value / cut:,.{places}f}{suffix}"
                 if not currency:
                     return amount
                 sym = _SYMBOLS.get(currency)

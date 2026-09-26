@@ -147,6 +147,11 @@ class CompanyCheckResult:
     # asked for it (the Company Check tab does; it costs one EODHD /fundamentals request, 10 units,
     # cached for the day). It never removes a name and changes no screen, gate, factor or verdict.
     analyst_trend: object = None
+    # MARKET-INDEX-1 - the peer group this name is measured against (a ``market_index.PeerGroup``),
+    # or None when it was not computed; ``peer_error`` says why when the index was unavailable.
+    # Held on the result so the page, both exports and the saved run all render ONE group.
+    peer_group: object = None
+    peer_error: str = ""
 
     @property
     def display(self) -> str:
@@ -426,7 +431,10 @@ def run_company_check(
         from .abs_readings import analyst_trend as _analyst_trend
         from .data.analyst_trend import fetch_analyst_trend
         readings["analyst_trend"] = _analyst_trend(
-            (analyst_fetcher or fetch_analyst_trend)(ticker, today=today))
+            (analyst_fetcher or fetch_analyst_trend)(ticker, today=today),
+            # the ACCOUNTS' currency (the estimates are per-share profits in it); None -> stated
+            # as "currency not stated by the source", never guessed from the quote currency
+            currency=getattr(f, "financial_currency", None))
 
     return CompanyCheckResult(
         ticker=ticker, company_name=company_name,
@@ -439,6 +447,21 @@ def run_company_check(
         verdict_of_record=verdict_of_record, valuation_band=valuation_band_display(fi),
         market_cap_in_gates=market_cap_in_gates, screen_less=screen_less,
         **readings)
+
+
+def attach_peers(result: CompanyCheckResult, *, store=None) -> CompanyCheckResult:
+    """Compute the peer group for ``result.ticker`` from the LOCAL market index and hold it on the
+    result, so the page, both exports and the saved run render the same group. Never raises: an
+    absent index is a stated reason (``peer_error``), not a broken page."""
+    from .market_index import IndexStore, load_config, peers
+
+    try:
+        result.peer_group = peers(result.ticker, store=store or IndexStore(load_config()["root"]))
+        result.peer_error = ""
+    except Exception as exc:                 # a missing table must not take the page down
+        result.peer_group = None
+        result.peer_error = f"{type(exc).__name__}: {exc}"
+    return result
 
 
 def _universe_tickers(universe_id: str, universes_dir: Path) -> list[str]:
@@ -733,12 +756,40 @@ def format_company_check(result: CompanyCheckResult) -> str:
     # against its own past. Display only; it decides nothing.
     lines.append(f"VALUATION BAND (absolute; vs own history): {result.valuation_band}")
 
-    # ANALYST FORECAST DIRECTION (ANALYST-TREND-1) - a mark only, and only when it was asked for.
-    if result.analyst_trend is not None:
-        lines.append("ANALYST FORECAST DIRECTION (a mark: it does not vote and changes no "
-                     "verdict):")
-        for line in result.analyst_trend.lines():
-            lines.append(f"  {line}")
+    # ABSOLUTE READINGS (ABS-READINGS-1) - facts about this company's own accounts; no comparison
+    # group, no vote. Batch 8: the export carries them too, so it says what the page says.
+    if (result.debt_and_cash is not None or result.growth_record is not None
+            or result.analyst_trend is not None):
+        lines.append("")
+        lines.append("ABSOLUTE READINGS (no comparison group; they do not vote):")
+        if result.debt_and_cash is not None:
+            lines.append("  Debt and cash")
+            lines.extend(f"    - {ln}" for ln in result.debt_and_cash.lines())
+        if result.growth_record is not None:
+            lines.append("  Growth record")
+            lines.extend(f"    - {ln}" for ln in result.growth_record.lines())
+            lines.extend(f"    ({ln})" for ln in result.growth_record.notes())
+        # ANALYST FORECAST DIRECTION (ANALYST-TREND-1) - a mark only, and only when asked for.
+        if result.analyst_trend is not None:
+            lines.append("  Analyst forecast direction (a mark: it does not vote and changes no "
+                         "verdict)")
+            lines.extend(f"    {ln}" for ln in result.analyst_trend.lines())
+
+    # PEERS (MARKET-INDEX-1) - who this company would be measured against.
+    if result.peer_group is not None:
+        from .peer_table import peer_text_lines
+        group = result.peer_group
+        lines.append("")
+        lines.append("PEERS (who this company would be measured against):")
+        if group.available:
+            lines.append(f"  {group.sentence()}")
+            lines.extend(f"  {ln}" for ln in peer_text_lines(group))
+        else:
+            lines.append("  No peer group for this name.")
+        lines.extend(f"  · {reason}" for reason in group.reasons)
+    elif result.peer_error:
+        lines.append("")
+        lines.append(f"PEERS: the market index is not available ({result.peer_error})")
 
     # VERDICT OF RECORD (Spec 4D) — quoted verbatim from the frozen run, right after the
     # factor block. Renders only when the checked name had a recorded outcome; otherwise

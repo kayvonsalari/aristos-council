@@ -497,7 +497,9 @@ def plan(defs: list[CohortDefinition], pool, *, root: str | Path = DEFAULT_ROOT
 
 
 def _bn(value: float | None) -> str:
-    return "?" if value is None else f"${value / 1e9:,.1f}bn"
+    from ..tools.price_context import format_money
+
+    return "?" if value is None else format_money(value, "USD", abbreviate=True)
 
 
 def format_plan(entries: list[PlanEntry], pool=None, *, all_members: bool = False) -> str:
