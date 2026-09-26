@@ -1,15 +1,30 @@
 # Aristos Council
 
-Multi-agent equity research system: specialist agents (Fundamental, Technical,
-Sentiment, Risk) deliberate on a ticker under a YAML-defined strategy, an
-adversarial Critic attacks the consensus, a Decision agent issues
-BUY/HOLD/SELL with confidence, and a veto layer escalates to human review.
-LangGraph orchestration, Anthropic models, pydantic state.
+Equity research where **the math judges and the LLM writes** (v2). A deterministic core — screen,
+multi-factor rank-sum, hard gates — issues the BUY/HOLD/SELL verdict of record for a universe of
+tickers under a versioned YAML strategy ("lens"); LLM specialists (Fundamental, Technical, Sentiment,
+Risk) and an adversarial Critic then NARRATE that verdict and never change it; a veto layer escalates
+contested runs to a human. The original v1 council (LLM Decision agent issues the verdict) is kept
+behind `council_mode: second_opinion` and `examples/run_council.py`: a pre-registered experiment
+showed it flipped on identical inputs, which is why it was demoted. LangGraph orchestration,
+Anthropic models, pydantic state. Three parts live in this repo: **Council Station** (the ranker +
+narrator + Streamlit UI), the **market index and cohorts** (a local table of listed companies, peer
+groups and rule-defined cohorts), and **Gap Ledger** (a separate pre-market experiment).
+Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.md`,
+`docs/MARKET_INDEX.md`, `docs/COHORTS.md`, `docs/GAP_LEDGER.md`, `docs/SCOREBOARD.md`,
+`docs/REPORT_MARKS.md`, `docs/TESTING.md`.
 
 ## Architecture (read in this order when orienting)
 
+- **The v2 decision core** (where the verdict comes from): `rank_engine.py` (rank-sum + quintile
+  verdict cuts, no weights) + `factors.py` (the factor registry: value, quality, momentum, low-vol,
+  Piotroski, ETF factors; asset-kind gate) + `strategy/rank_loader.py` (a rank strategy = a `factors:`
+  list, an optional screen lens, a verdict cut) + `tools/` (all arithmetic) + `agents/disposition.py`
+  (the gate cap). `ranking.py` is the fast screen-only path; `company_check.py` diagnoses ONE name
+  and issues no verdict; `scoreboard.py` freezes verdicts + street consensus for prospective grading.
 - `src/aristos_council/state.py` — ResearchState, Figure/Provenance, ToolCall
-  ledger, VetoTrigger. The schema is the contract; change it last.
+  ledger, VetoTrigger (seven triggers, fired by `agents/veto.py`). The schema is the contract;
+  change it last.
 - `src/aristos_council/graph.py` — node wiring:
   gather → specialists → critic → decision → audit → veto.
 - `src/aristos_council/agents/nodes.py` — gather (tool calls + evidence
@@ -45,7 +60,15 @@ LangGraph orchestration, Anthropic models, pydantic state.
   report/verdict/PDF. Strategy FILES stay immutable — this is the throwaway path
   that replaces "Save new version just to test a setting". An override run does
   NOT fire recommendation_flip and is NOT the flip baseline (it's an experiment).
-- `strategies/dividend_aristocrats_v1.yaml` — the active strategy.
+- `strategies/*.yaml` — every strategy, versioned and immutable (rule 7). The ten visible lenses are
+  seven over stocks (`conservative_plus_v1` Defensive Income, `cyclical_income_v1`,
+  `magic_formula_momentum_v1` Value + Momentum — the flagship, `growth_garp_v2`, `magic_formula_raw_v1`,
+  `financials_v1`, `forensic_v1` — a CHECK lens that marks but does not vote) and three over ETFs
+  (`etf_dividend_v1`, `etf_growth_v1`, `etf_core_v1`); `ui: hidden` marks the superseded/legacy ones
+  (`growth_garp_v1`, `magic_formula_v1`, `dividend_aristocrats_v1`), and the `criteria:`-shaped
+  `*_screen_*` files are screen LENSES that rank strategies reference. `growth_v1.yaml` and
+  `dividend_aristocrats_v1.yaml` are COUNCIL-kind (single-ticker) strategies; `growth_v1` is also
+  `pipeline.py`'s default screen.
 - `src/aristos_council/persistence/` — IO-at-the-edge sinks: verdicts.py (thin
   append-only log for the next run's vetoes) and reports.py (full per-run
   deliberation for the UI to re-render). `load_latest` takes a `strategy_id` so
@@ -77,6 +100,27 @@ LangGraph orchestration, Anthropic models, pydantic state.
   lens set is DERIVED (union of rank strategies' `council_screen_strategy`), never
   hardcoded. Drives both dropdowns: single-ticker page → COUNCIL only, Run
   tab → RANK only.
+- **Data:** `data/adapter.py` (provider-agnostic `MarketDataAdapter`), `yfinance_adapter.py`,
+  `eodhd_adapter.py`, `hybrid_adapter.py`, picked by `provider.py` from `ARISTOS_MARKET_PROVIDER`
+  (default yfinance), wrapped by `cache.py` (`CachingAdapter`, daily JSON cache) and `retry.py`;
+  sentiment behind `sentiment.py` / `finnhub_adapter.py` (US-only on the current plan);
+  `analyst_trend.py` (EODHD analyst-revision direction, Company Check only). `persistence/replay.py`
+  freezes the raw payloads of a run under `runs/<run_id>/` so it replays offline.
+- **Narration and reports:** `narration_schema.py` / `narration_render.py` / `narration_check.py`
+  (structure, rendering in code, and the rank-claim post-check — annotates, never rewrites),
+  `reader*.py` + `agents/prompts/reader_v*.md` (the optional one-call plain-English summary and its
+  deterministic check), `report_language.py` + `glossary.py` + `presentation.py` (numbers → English),
+  `export/` (HTML and PDF), `costs.py`, `coverage.py` (evidence coverage → LOW_CONFIDENCE veto),
+  `agents/matrix.py` (a deterministic decision matrix run alongside the LLM), `backtest.py`,
+  `reproducibility.py`.
+- `src/aristos_council/market_index.py` — **the market index** (MARKET-INDEX-1): a local parquet table
+  of ~25,000 listed common stocks over 18 exchange codes (Tokyo and Milan are NOT covered — their
+  codes 404 on this plan), and everything derived from it: `clean_pool` (one row per company;
+  receipts, funds, suspects, size-suspects out; label overrides `data/label_overrides.yaml`, identity
+  aliases `data/identity_aliases.yaml` and size corrections `data/size_corrections.yaml` applied to
+  copies), the `peers()` ladder (floor 12, cap 40, size bands), and the CLI
+  (`python -m aristos_council.market_index status|build|refresh|peers|fix-gbx-scale`; `build` and
+  `refresh` spend EODHD units). `docs/MARKET_INDEX.md`.
 - `src/aristos_council/cohorts/` + `data/cohort_definitions.yaml` — **cohorts (COHORT-3).**
   Built by default from the MARKET INDEX through the same `clean_pool` the peer groups use (all
   markets except `SA`, which is removed BEFORE one-row-per-company dedup); `--constituents` keeps the
@@ -92,9 +136,13 @@ LangGraph orchestration, Anthropic models, pydantic state.
   (a self-alias in `data/identity_aliases.yaml`); each company once, a per-company legend at the bottom
   of `report.md`/`plan`, and excluded companies listed under it with their reason. See
   `docs/COHORTS.md` and `docs/MARKET_INDEX.md`.
-- `examples/run_council.py` — the single-ticker demo entrypoint (run in Colab, not
-  here). `examples/run_pipeline.py` — the v2 universe CLI, now a THIN wrapper over
-  `run_rank_pipeline` (`--ranker-only` for a free, no-LLM deterministic ranking).
+- `examples/` — CLIs: `run_pipeline.py` is the v2 universe CLI, a THIN wrapper over
+  `run_rank_pipeline` (`--ranker-only` for a free, no-LLM deterministic ranking); `run_council.py` is
+  the single-ticker v1 council demo (run in Colab, not here; bills API credits);
+  `company_check.py`, `rank_factors.py`, `rank_screen.py`, `backtest.py`, `snapshot_consensus.py` /
+  `score_snapshot.py` (the scoreboard), the ETF and Piotroski probes, and `grade_holdings.py` (grades a
+  private CSV outside the repo — never commit its input or output). `scripts/` holds the weekly scout
+  job (`scout_verdicts.py`, `publish_verdicts.py`, `sweep_staging.py`) and ETF static-row generation.
 - `app.py` — Council Station, the local Streamlit UI (`streamlit run app.py`).
   Tabs: **Run** (the ONE run flow over the v2 rank pipeline — see below), Company Check,
   Scoreboard, then the legacy single-ticker Report / History / Strategy behind the
@@ -116,6 +164,10 @@ LangGraph orchestration, Anthropic models, pydantic state.
   call (`--explain`, off by default) may only write one line of prose about headlines it was
   handed — it cannot select a name or produce a number, enforced structurally.
   Times are **New York**, not Berlin: a session has one clock.
+  **It is a running experiment under a FEATURE FREEZE** until 40 scored days exist (three Windows
+  scheduled tasks: run 15:00 Berlin, outcomes 22:30, backup 23:00): no new filters, thresholds or
+  checkpoints, only bug fixes — a test that changes its own rules measures nothing. Verdict criteria
+  and the schedule are in `docs/GAP_LEDGER.md`.
   **GAP-IBKR-1 licence boundary:** `gap_ledger/ibkr.py` reads the owner's local IB Gateway
   (read-only) for the real pre-market VOLUME yfinance does not publish. That data is licensed
   for the owner's PERSONAL, NON-PROFESSIONAL use, so it stays inside `gap_ledger/` — **nothing
@@ -173,8 +225,8 @@ LangGraph orchestration, Anthropic models, pydantic state.
    genuine cutters still break (T 2022 cut, INTC suspension -> streak 0). The
    remaining undercount is DATA DEPTH only (the parked EODHD adapter), not the
    method.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 294 tests
-   green as of 2026-06-16. New behavior ships with regression tests, ideally
+6. Tests run with `python -m pytest` (pythonpath=src configured). 3,625 tests
+   green as of 2026-09-26 (about six minutes). New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
    - **Run the full pytest suite before EVERY commit. A commit with a red suite
      is forbidden, including docs-only commits (imports break through refactors
@@ -338,6 +390,12 @@ equivalence test must be updated deliberately.
   a council from the UI bills credits and needs the runtime extras + keys
   (ANTHROPIC_API_KEY, optionally FINNHUB_API_KEY) in the environment or a local
   `.env` (gitignored). Do NOT launch runs from the Claude Code dev environment.
+
+## Sprint log (history)
+
+Everything from here to "Sprint 4F" is a dated record of how the code got here, kept for the reasons
+behind each decision. Where it disagrees with the Architecture section above, the Architecture
+section and the code win (e.g. the decision core is now the v2 rank engine, not the Decision agent).
 
 ## Current state (2026-06-12, end of Sprint 3)
 

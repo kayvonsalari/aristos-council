@@ -11,6 +11,74 @@ panel of specialist LLM agents then writes the narrative around that verdict —
 story, the strategy fit, the open questions worth a human's attention — under a hard rule:
 **the language models explain; they do not judge, and they never do arithmetic.**
 
+> **For a first-time reviewer:** read this page top to bottom (about ten minutes), then
+> [How a verdict is reached](docs/COUNCIL_EXPLAINER.md). Every term of art is glossed where it first
+> appears. Aristos is a research prototype — not investment advice, not production infrastructure.
+
+## The three parts
+
+This repository holds three things that share data adapters and a `.env` but are otherwise
+independent. Only the first is "the product".
+
+| Part | What it is | Start with |
+|---|---|---|
+| **1. Council Station** — the ranker and its narrator | Takes a list of tickers and a *lens* (a versioned YAML strategy: which companies qualify, which factors rank them). A deterministic engine screens, ranks and gates; LLM agents then write the story of the result. A local Streamlit app (the **Run** tab, **Company Check**, **Scoreboard**) and a CLI drive it. | [How a verdict is reached](#how-a-verdict-is-reached) · [docs/COUNCIL_EXPLAINER.md](docs/COUNCIL_EXPLAINER.md) |
+| **2. Market index and cohorts** | A local table of ~25,000 listed companies over 18 exchange codes, with industry and size (`market_index`), from which come **peer groups** (Company Check's "who is this company compared with?") and **57 rule-defined cohorts** — frozen, versioned peer sets of 20–60 companies to rank within. Deterministic; no LLM. | [Market index and cohorts](#market-index-and-cohorts) · [docs/MARKET_INDEX.md](docs/MARKET_INDEX.md) · [docs/COHORTS.md](docs/COHORTS.md) |
+| **3. Gap Ledger** — a separate experiment | A daily pre-market screen for US stocks gapping on news, logged with a control group and graded after the close. It answers "what moved this morning?", not "is this a good business?". **Nothing in parts 1–2 imports it**, and it is under a feature freeze until 40 trading days are scored. | [Gap Ledger](#gap-ledger--a-separate-experiment-in-the-same-repo) · [docs/GAP_LEDGER.md](docs/GAP_LEDGER.md) |
+
+## Quick start
+
+Python 3.11 or newer.
+
+```bash
+# run the test suite (no network, no API keys needed)
+pip install -e ".[dev]"
+python -m pytest
+
+# Council Station, the local UI
+pip install -e ".[ui,yfinance,llm]"
+streamlit run app.py
+
+# a free, no-LLM deterministic ranking of a ticker list, from the command line
+python examples/run_pipeline.py KO PEP PG JNJ MO --rank-strategy magic_formula_raw_v1 --ranker-only
+
+# the market index and cohorts (read-only, local; no network)
+python -m aristos_council.market_index status
+python -m aristos_council.market_index peers SAP.XETRA
+python -m aristos_council.cohorts plan
+
+# Gap Ledger (separate; optional IB Gateway extra: pip install -e ".[ibkr]")
+python -m aristos_council.gap_ledger score
+streamlit run gap_ledger_app.py
+```
+
+What costs money, and what does not:
+
+- **Free and deterministic:** the ranker, the screen, Company Check, `--ranker-only`, every
+  multi-lens run, the market index queries (`status`, `peers`), `cohorts plan`, the whole test suite.
+- **Bills LLM credits (`ANTHROPIC_API_KEY`):** narrating a run (one model call per explained name), the
+  optional plain-English summary (about a cent), the single-ticker council (`examples/run_council.py`).
+  Never set this key in a development shell — the Run tab shows a cost estimate before it spends.
+- **Bills data credits (`EODHD_API_KEY`):** `market_index build` / `refresh` (a `/fundamentals` call costs
+  10 units of a daily allowance), Gap Ledger's news call, and the EODHD-backed data providers.
+  `FINNHUB_API_KEY` (sentiment, US-only), `TODOIST_API_TOKEN` (Gap Ledger delivery) and the IBKR
+  settings are optional. Keys go in the environment or a git-ignored local `.env`.
+
+## Documentation map
+
+| Document | What is in it |
+|---|---|
+| [docs/COUNCIL_EXPLAINER.md](docs/COUNCIL_EXPLAINER.md) | The plain-language walkthrough of how a verdict is reached |
+| [docs/CALCULATIONS.md](docs/CALCULATIONS.md) | Every factor, criterion and guard, with the formula and known limitations |
+| [docs/REPORT_MARKS.md](docs/REPORT_MARKS.md) | Every flag or annotation that can appear on a report, and what it does *not* mean |
+| [docs/SCOREBOARD.md](docs/SCOREBOARD.md) | The prospective test of whether the verdicts were also *good* |
+| [docs/MARKET_INDEX.md](docs/MARKET_INDEX.md) | The local company table: coverage, cost, peer rules, corrections |
+| [docs/COHORTS.md](docs/COHORTS.md) | The 57 cohorts: rules, floors, cleanup, quality checks, correction symbols |
+| [docs/GAP_LEDGER.md](docs/GAP_LEDGER.md) | The pre-market experiment: pipeline, schedule, freeze, verdict criteria |
+| [docs/TESTING.md](docs/TESTING.md) | How the suite is isolated from the network and from real providers |
+| [CLAUDE.md](CLAUDE.md) | The contributor's working agreement: architecture in reading order, hard rules, sprint history |
+| `docs/diagnosis_*.md` | Two dated post-mortems of specific data defects (kept as case studies) |
+
 ## Why this is different — four promises you can check
 
 Most screeners tell you what to buy. Aristos shows its work so thoroughly you could catch it lying — and it never has to lie, because it is allowed to say "I don't know."
@@ -35,14 +103,15 @@ built to demonstrate that architecture; it is also the foundation the author int
 personal analysis platform, sequenced by evidence and feedback rather than coverage ambition.
 
 What it demonstrably does today — each point verifiable in this repo:
-- **Eight lenses (rank strategies) on free market data — five over stocks, three over ETFs.**
+- **Ten lenses (rank strategies) on free market data — seven over stocks, three over ETFs.**
   The stock lenses: three validated (defensive income, value + momentum,
-  growth-at-a-reasonable-price) plus two exploratory (a no-screen Greenblatt baseline and a
-  financials P/B+ROE lens). The three ETF lenses (dividend, growth, index tracker) are exploratory
-  and rank funds on fund attributes — see [ETF lenses](#etf-lenses). Every verdict is reproducible
-  offline (`--replay` re-runs a past verdict against its *frozen* inputs — the exact data snapshot
-  saved at run time, so the result is bit-for-bit repeatable without the network) and every cited
-  figure traces to its source tool call.
+  growth-at-a-reasonable-price) plus exploratory ones (cyclical income, a no-screen Greenblatt
+  baseline, a financials P/B+ROE lens, and a forensic *check* lens that marks doubts but does not
+  vote). The three ETF lenses (dividend, growth, index tracker) are exploratory and rank funds on
+  fund attributes — see [ETF lenses](#etf-lenses). Every verdict is reproducible offline (`--replay`
+  re-runs a past verdict against its *frozen* inputs — the exact data snapshot saved at run time, so
+  the result is bit-for-bit repeatable without the network) and every cited figure traces to its
+  source tool call.
 - **An LLM layer that explains but never judges** — demoted from judging by a pre-registered
   controlled experiment (0 agreements in 17 councils; dissent shown to be pick-independent), its
   valid insights hardened into deterministic rules instead.
@@ -186,7 +255,7 @@ a contradiction — it is two questions answered. Three things make that readabl
 **A mark is a caution, never a rejection.** A row may read *doubted by Forensic*, *priced
 high: 99th percentile of its own 5-year range*, *band not evaluated*, or *ranked on 2 of 3
 factors*. None of them removed the name from the table. What to do about a mark is the
-reader's call; earlier versions made that call for you, and the owner's decision is that
+reader's call; earlier versions made that call for you, and the design decision is that
 they should not have.
 
 **Two lenses ranking on the same factors are one view counted twice.** When that happens
@@ -416,7 +485,7 @@ The full sector-scope tier table (excluded-by-design / supported-with-disclosed-
 
 ## ETF lenses
 
-Three of the eight lenses rank **funds**, not companies. A fund has no ROIC and no earnings
+Three of the ten lenses rank **funds**, not companies. A fund has no ROIC and no earnings
 yield; what it has is a fee, a size, a distribution policy, and a price series. So the ETF
 lenses rank exactly those attributes — and nothing they cannot measure.
 
@@ -447,7 +516,7 @@ unit conventions are in **[The Calculations §2.1](docs/CALCULATIONS.md#21-etf-f
 ### The ETF universes
 
 The five manifests under `universes/` — and, since FUND-UI-2, the **only** lists the app ships
-(see [Universes](#universes)). They stay because they are the sole carrier of the UCITS/US fund
+(see [Architecture](#architecture)). They stay because they are the sole carrier of the UCITS/US fund
 tickers these lenses rank, and nobody retypes `SXR8.DE` from memory. There is no US core cohort —
 the index tracker ships with the UCITS one only.
 
@@ -528,69 +597,60 @@ tools" toggle. The ETF universes are front-stage.)
   same list under several lenses and report one combined grid, deterministically and for
   free). Plus Company Check, the Scoreboard, and strategy editing (edit-as-new-version;
   published files are never mutated).
+- **Market index and cohorts:** `market_index.py` (a local parquet table of ~25,000 listed companies;
+  `clean_pool` gives one row per company; `peers()` is the peer ladder) and `cohorts/` (57 cohort
+  rules → frozen, versioned member lists with quality checks and correction flags). Deterministic,
+  no LLM; corrections live in three dated, reasoned data files. See
+  [Market index and cohorts](#market-index-and-cohorts).
+- **Gap Ledger:** `gap_ledger/` + `gap_ledger_app.py`, a separate experiment. It reuses the data adapters,
+  the market index (read-only) and the `.env`, and nothing else; nothing in Aristos imports it (enforced
+  by tests), because it uses personally-licensed broker data. See [Gap Ledger](#gap-ledger--a-separate-experiment-in-the-same-repo).
 
 ## Project structure
 
 ```
 aristos-council/
-├── app.py                        # Council Station — local Streamlit UI (Sprint 3)
+├── app.py                        # Council Station — local Streamlit UI (Run, Company Check, Scoreboard)
 ├── gap_ledger_app.py             # Gap Ledger — separate read-only viewer (GAP-LEDGER-1)
 ├── src/aristos_council/
-│   ├── state.py                  # ResearchState + Figure/Provenance/veto types — the schema contract
-│   ├── rank_engine.py            # the decision core: rank-sum, verdict cuts, cohort-position display
+│   │  ── the decision core (deterministic) ─────────────────────────────────────────
+│   ├── rank_engine.py            # rank-sum, verdict cuts, cohort-position display
 │   ├── factors.py                # factor registry (stock + ETF), asset-kind gate, disclosure flags
-│   ├── etf_static.py             # committed ETF static layer: vendor precedence, receipts, staleness
+│   ├── ranking.py                # fast screen-only ranking, no council
 │   ├── pipeline.py               # universe run: screen → rank → narrate; the shared CLI/UI entrypoint
-│   ├── narration_check.py        # rank-semantics post-check on the narrative (annotates, never rewrites)
-│   ├── graph.py                  # LangGraph wiring: gather → specialists → critic → decision → audit → veto
-│   ├── agents/                   # the deliberators (LLM-backed, behind a Runner seam)
-│   │   ├── nodes.py              # gather + specialist/critic/decision nodes, prompts, figure validation
-│   │   ├── runners.py            # model seam: tiered Runner protocol + LangChain impl
-│   │   ├── schemas.py            # structured-output schemas (tolerant parsing)
-│   │   └── veto.py               # deterministic seven-trigger human-veto gate
-│   ├── audit/                    # deep provenance audit (Sprint 1)
-│   │   └── provenance.py         # resolve every cited figure's field_path against the ledger
-│   ├── data/                     # provider-agnostic market & sentiment data
-│   │   ├── adapter.py            # MarketDataAdapter interface + DTOs + DataUnavailable
-│   │   ├── yfinance_adapter.py   # yfinance provider (fundamentals, prices, dividends)
-│   │   ├── eodhd_adapter.py      # EODHD provider — dividend history (live) + fundamentals (paid tier)
-│   │   ├── hybrid_adapter.py     # EODHD dividends + yfinance fundamentals/prices
-│   │   ├── provider.py           # ARISTOS_MARKET_PROVIDER selection (yfinance | eodhd | hybrid)
-│   │   ├── sentiment.py          # SentimentAdapter interface + DTOs
-│   │   └── finnhub_adapter.py    # sentiment provider (news + analyst trends)
-│   ├── persistence/              # IO-at-the-edge sinks (Sprint 2–3)
-│   │   ├── verdicts.py           # append-only verdict log feeding the vetoes (Sprint 2)
-│   │   └── reports.py            # full per-run deliberation for the UI (Sprint 3)
-│   ├── gap_ledger/               # the pre-market movers screener — its own tool (GAP-LEDGER-1)
-│   │   ├── universe.py           # the pool (market index, read-only) + liquidity pre-filter
-│   │   ├── screen.py             # gap, relative pre-market volume, spread — ALL the arithmetic
-│   │   ├── news.py               # EODHD headlines for the candidates, 18h back
-│   │   ├── explain.py            # the optional one-line reason, and the fence around the model
-│   │   ├── ledger.py             # the day's CSV + the date-seeded control group
-│   │   ├── outcomes.py           # the four after-the-close readings
-│   │   ├── score.py              # candidates vs control group per checkpoint, with a day floor
-│   │   └── run.py                # the one run entry the CLI and the tests share
-│   ├── strategy/                 # strategy config
-│   │   ├── loader.py             # validated strategy YAML loader
-│   │   ├── picker.py             # THE strategy picker — one implementation, every surface
-│   │   └── versioning.py         # edit-as-new-version; never mutates published files (Sprint 3)
-│   └── tools/                    # deterministic tools — ALL arithmetic lives here
-│       ├── screening.py          # screen-criterion math (registry primitives, three-state)
-│       ├── technical.py          # price / technical snapshot
-│       └── sentiment_tools.py    # sentiment aggregation
-├── strategies/                   # versioned strategy YAMLs — 8 visible lenses + legacy/lens screens
+│   ├── company_check.py          # single-name diagnostic — every criterion, no verdict
+│   ├── scoreboard.py             # prospective scoreboard: freeze verdicts, grade on forward returns
+│   ├── tools/                    # ALL arithmetic lives here (screening, technical, valuation band, fx …)
+│   │   └── criteria/registry.py  # named, pure screen criteria that strategies select by name
+│   ├── strategy/                 # loaders, picker, discovery, applicability, versioning, overrides
+│   │  ── the narrator and the council (LLM, behind a Runner seam) ─────────────────────
+│   ├── graph.py                  # LangGraph: gather → specialists → critic → decision → audit → veto
+│   ├── agents/                   # nodes, prompts, runners, schemas, veto (7 triggers), disposition (gate cap)
+│   ├── audit/provenance.py       # resolve every cited figure against the tool-call ledger
+│   ├── narration_*.py            # narration schema, renderer, and the rank-claim post-check
+│   ├── reader*.py                # the optional plain-English summary and its deterministic check
+│   │  ── data ─────────────────────────────────────────────────────────────────────────
+│   ├── data/                     # provider-agnostic adapters: yfinance, EODHD, hybrid, Finnhub; cache, retry
+│   ├── etf_static.py             # committed ETF static layer: vendor precedence, receipts, staleness
+│   ├── persistence/              # verdict log, run reports, offline replay of frozen inputs
+│   ├── export/                   # HTML and PDF report export
+│   │  ── market index and cohorts ──────────────────────────────────────────────────────
+│   ├── market_index.py           # the local company table, clean_pool, peers(), the index CLI
+│   ├── cohorts/                  # the 57 rule-defined cohorts: definitions, cleanup, quality, freeze, flags
+│   │  ── Gap Ledger (its own tool; nothing above imports it) ──────────────────────────────
+│   └── gap_ledger/               # screen, IBKR verification, news, control group, outcomes, score, todoist
+├── strategies/                   # versioned strategy YAMLs — 10 visible lenses + legacy configs and screens
 ├── universes/                    # the 5 shipped ETF lists + local/ (your own lists, gitignored)
-├── data/etf_static.csv           # committed, dated ETF static layer (fee / size / distribution)
-├── scripts/                      # generate_etf_static_rows.py (static rows for review), diagnostics
+├── data/                         # tracked: cohort_definitions.yaml, label_overrides.yaml, identity_aliases.yaml,
+│                                 #   size_corrections.yaml, etf_static.csv;  local/ (gitignored): market index, cohorts, gap ledger
+├── market_index.yaml             # which exchange codes the index fetches, and why some are absent
+├── docs/                         # the documents listed above
+├── examples/                     # CLIs: run_pipeline, run_council, company_check, rank_*, backtest, scoreboard tools
+├── scripts/                      # weekly scout job, ETF static-row generator, diagnostics
 ├── snapshots/                    # prospective-scoreboard freezes (verdict_consensus.csv)
-├── verdicts/                     # committed run data — append-only verdict history per ticker
-├── reports/                      # committed run data — full per-run reports (<TICKER>/<run_at>.json)
-├── assets/                       # brand mark (SVG logo)
-├── .streamlit/                   # Council Station theme (config.toml)
-├── examples/run_council.py       # CLI entrypoint (single council run)
-├── tests/                        # pytest suite
-│   └── fixtures/universes/       # the five former demo cohorts, kept for tests & scripts
-└── CLAUDE.md                     # working agreement + sprint log for contributors
+├── verdicts/  reports/           # committed run data: append-only verdict history; full per-run reports
+├── tests/                        # pytest suite (no network, no API keys); fixtures/ holds the former demo cohorts
+└── CLAUDE.md                     # contributor working agreement, architecture in reading order, sprint history
 ```
 
 Run artifacts under `verdicts/` and `reports/` are checked in as project data: the
@@ -626,65 +686,123 @@ Set **`FINNHUB_NON_US=1`** in the environment (or your local `.env`) to turn the
 
 **Phase 4 — audit, persistence & Council Station (complete):** a deep post-run **provenance audit** that resolves every cited figure's `field_path` against the tool-call ledger and feeds the data-quality veto; an append-only **verdict history** (`verdicts/`) powering the recommendation-flip and majority-override vetoes; full per-run **reports** (`reports/`); **strategy versioning** (edit-as-new-version, never mutating a published file); and **Council Station** — a local Streamlit UI to run the council, read the full deliberation, browse past runs across tickers, chart verdict/confidence history, and edit strategies. See `CLAUDE.md` for the sprint log.
 
-**Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator` by default; `second_opinion` survives behind the flag). Eight lenses are now visible — five over stocks (Conservative Formula (defensive income), value+momentum (the flagship), GARP, a no-screen Greenblatt baseline, and a financials P/B+ROE lens) and three over ETFs (dividend, growth, index tracker — see [ETF lenses](#etf-lenses)) — each running the same rank-sum engine with **no tuned weights**, an optional absolute-floor **screen-as-prefilter** (one definition per strategy), a confirmed-only **asset-kind** gate walling the classes apart, and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
+**Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator` by default; `second_opinion` survives behind the flag). Ten lenses are now visible — seven over stocks (defensive income, cyclical income, value+momentum (the flagship), growth at a reasonable price, a no-screen Greenblatt baseline, a financials P/B+ROE lens, and a forensic check lens) and three over ETFs (dividend, growth, index tracker — see [ETF lenses](#etf-lenses)) — each running the same rank-sum engine with **no tuned weights**, an optional absolute-floor **screen-as-prefilter** (one definition per strategy), a confirmed-only **asset-kind** gate walling the classes apart, and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
 
 **Phase 6 — Prospective evaluation (running).** Verdicts and street consensus are frozen in quarterly snapshots (first freeze: 2026-07-05, growth_40; defensive follows the FCF payout fix) and scored on 6- and 12-month forward total returns. The pre-committed test is bucket ordering — BUY > HOLD > SELL, and street most-loved > least-loved — against the equal-weight universe. Standing caveat: single snapshots are anecdotes; the evidence is the ordering across repeated freezes. Next scoring: January 2027. Methodology: **[The Scoreboard](docs/SCOREBOARD.md)**.
 
-**927 unit tests passing** (6 skipped, as of 2026-07-28), green on Python 3.11+, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
+**3,625 tests passing** (1 skipped, as of 2026-09-26), green on Python 3.11 and 3.12 in CI, run end-to-end with fakes — no API keys in CI. Try it live: **Council Station** via `pip install -e ".[ui,yfinance,llm]"` then `streamlit run app.py`, or a single run with `python examples/run_council.py JNJ` (both need an Anthropic API key for live runs).
+
+**Phase 7 — Market index, cohorts, Gap Ledger (2026-09, current):** the local market index and its peer groups, the 57 rule-defined cohorts with flagged corrections, and the separate Gap Ledger experiment (now feature-frozen and accumulating its 40-day record) — see the three sections below.
 
 **Next:** SEC EDGAR filings RAG for the Fundamental specialist, nightly watchlist runs via GitHub Actions cron.
 
-### What changed (week of 2026-07-11)
+## Market index and cohorts
 
-A **financials capability** landed end-to-end: two new factors — price-to-book and
-return-on-equity (vendor value with a derived fallback, abstaining on non-positive book) —
-plus an `include_sectors` gate that **inverts** the value lenses' financials exclusion, the
-`financials_v1` lens over a new all-US `financials_16_v1` universe, and a committed
-ranker-only baseline with GS/DUK worked examples. Data-integrity hardening shipped
-alongside it: currency-consistent enterprise value for foreign listings (convert, never
-mix; abstain on a failed FX fetch), loss-mixed ROIC abstention instead of a "−0" artifact,
-the vendor headline (TTM) free-cash-flow field quarantined from narration in favour of the
-annual series, and cheap vendor-sanity flags that withhold absurd values from the narrator.
-Selection got **strategy-aware**: both universe selectors now discover manifests dynamically
-(front-stage unless a `role:` marks them observational) and surface a strategy's
-`suggested_universes` first — a hierarchy, never a lock. Docs caught up: this README's plain-
-English glosses, the *Which lens for which company* section, and the new
-[Marks on a Report](docs/REPORT_MARKS.md) flags catalog.
+**Why it exists.** "Who is this company compared with?" needs a list of comparable companies, and
+no free source supplies one that works worldwide (Finnhub's peer endpoint refuses every non-US
+symbol; S&P 500 + STOXX 600 leave a median of six companies per industry). So the repo builds its
+own: the **market index** is a local table of ~25,000 listed common stocks — name, exchange, industry
+(the provider's and GICS), market cap in local currency and USD — fetched once from EODHD and queried
+with no network. It is not tracked in git (it is rebuildable data) and it is never a source of
+verdicts, only of *comparison sets*.
 
-## Gap Ledger — a separate tool in the same repo
+- **Coverage:** 18 exchange codes — US (NYSE / NASDAQ / NYSE ARCA / AMEX only, not OTC), Toronto,
+  London, Xetra, Paris, Amsterdam, Madrid, SIX Swiss, Stockholm, Copenhagen, Oslo, Helsinki, Hong Kong,
+  Korea (KOSPI and KOSDAQ), Australia, Taiwan and São Paulo. **Missing: Tokyo and Milan** — their
+  listing codes answer HTTP 404 on this data plan — so Japanese and Italian companies have no home
+  line here, and any peer group or cohort they belong to is missing them. São Paulo is indexed but
+  excluded from peers and cohorts (about half its rows are depositary receipts of foreign companies).
+- **Peer groups** (Company Check, `market_index peers TICKER`): a **ladder** that widens only as far as
+  it must — same GICS sub-industry within ¼×–4× market cap, then ⅒×–10×, then the wider industry — with
+  a **floor of 12** peers and a **cap of 40**, or an honest abstention naming how far it looked.
+- **One row per company.** Peer groups and cohorts read the same cleaned pool: depositary receipts,
+  cross-listings and secondary lines are counted once under the home listing (*dedup*); Brazilian
+  BDRs, Canadian CDRs, London `0xxx` lines and Korean preference shares are **receipts, excluded**;
+  funds and mislabelled rows are out; a market cap that another listing of the same company refutes
+  by more than 5× is *size suspect* and out.
+- **Corrections are data, dated and reasoned, never silent.** Three small files fix what no rule can:
+  `data/label_overrides.yaml` (a plainly wrong industry label), `data/identity_aliases.yaml` (which
+  company a line belongs to) and `data/size_corrections.yaml` (a market cap that is wrong with no
+  second listing to refute it). They are applied to copies of the rows, each carries its evidence,
+  and every use is flagged wherever a list is shown.
+- **Cohorts** are *rules, not lists*: a cohort is a set of industry codes plus a USD market-cap floor,
+  and the builder derives the membership mechanically. There are **57 cohorts** in eight sectors
+  (Energy, Utilities, Materials, Industrials, Consumer, Health, Tech, Comms — for example "Tech -
+  Semiconductors", "Materials - Steel"). Each is frozen and versioned with four quality checks
+  (abstention rate, valuation-band spread, drop-one stability, anchor check), from a ranker-only run
+  that calls no LLM. The floor is one of $1bn / $2bn / $3bn / $5bn / $10bn, set by **one stated
+  rule** on how crowded the industry is and never tuned to hit a count; a cohort must land between
+  **20 and 60** names after a 5-year price-history test — under 20 it is reported *too thin*, over 60
+  *too wide*, and it is never padded or truncated. All 57 froze inside the band (smallest 21,
+  largest 58; 2,023 members in all).
+- **Every correction is flagged, never hidden.** In a cohort's member list and report, each company
+  a correction touched appears once with a symbol — **†** counted once, also listed as another line
+  (with the evidence), **‡** industry label corrected (old → new, reason, date), **§** size corrected
+  or excluded (the reported figure, reason, date), **¶** identity corrected — and a legend at the
+  bottom explains each symbol per company. Companies excluded for their size are listed under the
+  legend with the reason, not silently dropped.
 
-**[Gap Ledger](docs/GAP_LEDGER.md)** is a pre-market news-movers screener that keeps score of
-itself: a daily shortlist of US stocks moving before the open, with every pick logged and
-graded after the close. It answers a different question from the council — *what moved this
-morning?* rather than *is this a good business at this price?* — so it is a separate package
-with its own entry point. Nothing in Council Station imports or links to it, no council is
-convened, no strategy is loaded and no verdict is written.
-
-**Maths picks the names.** An LLM may write one optional line of prose about headlines it was
-handed, and nothing else: it never selects a name, never produces a number, and every line
-cites the link it rests on. No trading, no recommendations.
+Details: **[docs/MARKET_INDEX.md](docs/MARKET_INDEX.md)** (coverage, cost, peer rules) and
+**[docs/COHORTS.md](docs/COHORTS.md)** (the 57 cohorts with their floors, cleanup rules, quality
+checks, versioning).
 
 ```bash
-python -m aristos_council.gap_ledger run        # the pre-market screen (09:00 New York)
-python -m aristos_council.gap_ledger outcomes   # after the close, fill open/10:00/11:30/close
+python -m aristos_council.market_index status           # what the table holds (local)
+python -m aristos_council.market_index peers SAP.XETRA  # a peer group (local)
+python -m aristos_council.cohorts plan                  # every cohort, dry run: floor, size, band, legend
+python -m aristos_council.cohorts plan --name "Tech - Semiconductors" --members   # every member
+```
+
+`market_index build`/`refresh` spend EODHD units and `cohorts build` fetches price history over the
+network; neither is needed to read anything above.
+
+## Gap Ledger — a separate experiment in the same repo
+
+**[Gap Ledger](docs/GAP_LEDGER.md)** is a pre-market news-movers screener that keeps score of
+itself: a daily shortlist of US stocks gapping 3% or more before the open, with every pick logged and
+graded after the close. It answers a different question from the council — *what moved this
+morning?* rather than *is this a good business at this price?* — so it is a separate package with
+its own entry point. Nothing in Council Station imports or links to it, no council is convened, no
+strategy is loaded and no verdict is written.
+
+**Maths picks the names.** An LLM may write one optional line of prose about headlines it was
+handed, and nothing else: it never selects a name, never produces a number, and every line cites the
+link it rests on. No trading, no recommendations.
+
+**The daily pipeline:** a wide yfinance pass over ~5,800 US stocks (price ≥ $10, liquid, ≥ 250 days of
+history) finds the gappers → **Interactive Brokers** re-checks each against real pre-market volume,
+which yfinance does not publish → EODHD news headlines are attached, only on positive evidence → an
+equal-size **control group** of comparable non-gappers is drawn by a date-seeded random sample →
+after the close, `outcomes` records open / 10:00 / 11:30 / close for everyone plus **SPY** as a market
+benchmark, and an **early-checkpoint** log asks whether acting earlier in the pre-market would have
+paid. It runs unattended through three Windows scheduled tasks (run 15:00 Berlin = 09:00 New York,
+outcomes 22:30, backup 23:00).
+
+**The test, and the freeze.** The screen is under a **feature freeze** until **40 trading days**
+have filled outcomes — a test that changes its own rules measures nothing. The verdict is "worth
+pursuing" only if the candidates **clearly beat the control group**, **survive the SPY benchmark**
+(beyond the market's own move), and **cover trading costs** — the code computes the first two
+comparisons and the day count; "clearly" and the costs are judged by hand on the scorecard's numbers.
+Below 40 days the scorecard says "not enough days" and presents no rate as a finding.
+
+**Licence boundary.** Interactive Brokers data is licensed for personal, non-professional use, so it
+stays inside `gap_ledger/`: **nothing in Aristos imports it** (a test asserts this), and it never
+feeds a lens or a cohort.
+
+```bash
+python -m aristos_council.gap_ledger run        # the pre-market screen, stamped 09:00 New York
+python -m aristos_council.gap_ledger outcomes   # after the close, fill open/10:00/11:30/close + SPY
 python -m aristos_council.gap_ledger score      # candidates vs control group, over all days
 streamlit run gap_ledger_app.py                 # the read-only viewer — never starts a screen
 ```
 
-Names come from the local market index (read-only), thinned by price, liquidity and history,
-then screened on the gap and on relative pre-market volume. Every day's picks are logged with
-an **equal-size control group** drawn from names that passed the liquidity filter but not the
-screen — because "gapping names carried on 58% of the time" is a fact about the market that
-week, and only the *difference* against comparable non-qualifiers is a fact about the screen.
-Below 40 scored days the scorecard says "not enough days" and presents no rate as a finding.
-
 One honesty note that shapes the whole tool: **yfinance publishes pre-market prices but not
-pre-market volume** (probed 2026-09-22 — every extended-hours bar carries `Volume == 0`). The
-relative-volume leg is therefore a NOT-EVALUATED reading on this provider, so a name is kept
-and **marked** rather than failed — a missing number may never act as a confirmed failure —
-while a ratio that *can* be computed and falls short still drops the name. The absence is
-stated on every surface: the report, the CSV, the Todoist task and the viewer. Details and the
-setting that restores the literal filter: **[docs/GAP_LEDGER.md](docs/GAP_LEDGER.md)**.
+pre-market volume** (probed 2026-09-22 — every extended-hours bar carries `Volume == 0`). Where
+Interactive Brokers is unavailable the relative-volume leg is therefore a NOT-EVALUATED reading, so a
+name is kept and **marked** rather than failed — a missing number may never act as a confirmed
+failure — while a ratio that *can* be computed and falls short still drops the name. The absence is
+stated on every surface: the report, the CSV, the Todoist task and the viewer. Full detail, the
+schedule, the thresholds and the verdict criteria: **[docs/GAP_LEDGER.md](docs/GAP_LEDGER.md)**.
 
 ## A note on honesty
 
@@ -696,7 +814,7 @@ Run the tests:
 
 ```bash
 pip install -e ".[dev]"
-pytest
+python -m pytest
 ```
 
 Launch **Council Station** (the local Streamlit UI):
@@ -713,23 +831,19 @@ list under a name to reuse it (it lands in `universes/local/`, gitignored); "Sav
 updates one of your own lists in place. Ranker-only, and any multi-strategy run, are
 deterministic — no key needed and nothing billed.
 
-Or run a single council from the CLI:
+From the command line:
 
 ```bash
-python examples/run_council.py JNJ
+python examples/run_pipeline.py KO PEP PG --rank-strategy magic_formula_raw_v1 --ranker-only   # free, no LLM
+python examples/company_check.py KO --strategy magic_formula_momentum_v1                        # one name, no verdict
+python examples/run_council.py JNJ                                                              # v1 council; bills credits
 ```
 
-**[Gap Ledger](docs/GAP_LEDGER.md)** is launched separately, and its viewer is read-only —
-the screen is a deliberate command, because it makes news calls and posts a Todoist task:
-
-```bash
-python -m aristos_council.gap_ledger run
-streamlit run gap_ledger_app.py
-```
-
-Add `--no-news --no-todoist` for a free, side-effect-free run; `--explain` (off by default)
-adds one cheap LLM call. The day's record lands in `data/local/gap_ledger/` (gitignored).
+The market index, cohorts and Gap Ledger commands are in their own sections above; Gap Ledger's
+`run` posts to Todoist and makes charged news calls, so it is a deliberate command — `--no-news
+--no-todoist --no-ibkr --dry-run` gives a free, side-effect-free run. The day's record lands in
+`data/local/gap_ledger/` (gitignored).
 
 ---
 
-*Portfolio project by Kayvon Salari.*
+*A portfolio and research project.*

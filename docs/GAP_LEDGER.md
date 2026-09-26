@@ -1,38 +1,131 @@
 # Gap Ledger (GAP-LEDGER-1)
 
-A daily pre-market shortlist of US stocks moving on news, with every pick logged and scored
-afterwards. **Maths picks the names.** An LLM may write one optional line of prose about
-headlines it was handed, and nothing else. No trading, no recommendations, no verdicts — the
-output is a list and a record.
+## Purpose
 
-It lives beside Aristos and shares its adapters, its market index and its `.env`. It shares
-nothing else: no Aristos surface imports it, no council is convened, no strategy is loaded,
-and no verdict is written. A gap is a fact about a morning, not a thesis.
+Every trading morning, before the US market opens, some stocks are already moving on news. Gap
+Ledger writes down which ones, then checks after the close whether they kept going. It is an
+**experiment with a pre-declared test**, not a product: it exists to find out, over at least 40
+trading days, whether "a US stock that gapped 3% or more before the open, on real volume" carries
+on in the same direction more often than a comparable stock that did not, and whether that is
+worth acting on.
+
+**Maths picks the names.** An LLM may write one optional line of prose about headlines it was
+handed, and nothing else. No trading, no recommendations, no verdicts about companies — the output
+is a list and a record.
+
+It is a **separate tool that happens to live in this repository** (a different question from the
+council's "is this a good business at this price?"). It shares Aristos's data adapters, its market
+index (read-only) and its `.env`, and nothing else: no Aristos surface imports it or links to it,
+no council is convened, no strategy is loaded, and no verdict is written. Tests enforce that
+boundary in both directions. A gap is a fact about a morning, not a thesis.
 
 ```
-src/aristos_council/gap_ledger/     the package
-gap_ledger_app.py                   the read-only viewer (streamlit run gap_ledger_app.py)
-start_gap_ledger.bat                the Windows launcher
+src/aristos_council/gap_ledger/       the package
+gap_ledger_app.py                     the read-only viewer (streamlit run gap_ledger_app.py)
+start_gap_ledger.bat                  the Windows launcher for the viewer
 data/local/gap_ledger/YYYY-MM-DD.csv  one record per trading day (gitignored)
 ```
 
-## The three commands
+## The daily pipeline at a glance
+
+| # | Stage | What it does | Detail |
+|---|---|---|---|
+| 1 | **Wide pass (yfinance)** | Every US common stock in the market index, thinned to previous close ≥ $10, 20-day average volume ≥ 1M shares and ≥ 250 days of history (about 1,300 of ~5,800 names survive); today's pre-market prices give each name's gap against the previous close. Keep a gap of 3% or more, up or down. | [What the screen does](#what-the-screen-does) |
+| 2 | **Verification (Interactive Brokers)** | Every name yfinance says gapped is re-checked against a local IB Gateway, which — unlike yfinance — publishes pre-market **volume**. No real move, or volume under 3× its 20-session norm, and the name is rejected. IB's numbers override yfinance's. | [IBKR](#interactive-brokers-verifies-the-gap-gap-ibkr-1) |
+| 3 | **News** | EODHD headlines from the last 18 hours, attributed to a name only on positive evidence. "No news" is a mark, never a drop. An optional one-line reason (`--explain`, off by default) is written by an LLM that can only summarise headlines it was handed. | [News](#news-and-the-optional-reason-line) |
+| 4 | **Control group** | An equal-size random sample (seeded by the date) of names that passed the liquidity filter but did **not** gap. Logged on the same days, from the same pool. | [The record](#the-record-and-the-control-group) |
+| 5 | **Delivery** | The day's CSV, plus one Todoist task if there are candidates (retried on a transient failure). | [Delivery](#delivery) |
+| 6 | **Outcomes (after the close)** | Open, 10:00, 11:30 and close prices for every logged name, and the same three SPY moves as a market benchmark. | [Scoring](#scoring) |
+| 7 | **Early checkpoint** | For IB-verified candidates, when the move first showed in the pre-market and the prices at 04:00 / 06:00 / 07:00 / 08:00 / 09:00, to test whether acting earlier would have been worth anything. | [Scoring](#scoring) |
+| 8 | **Scorecard** | Candidates against control, raw and relative to SPY, at each checkpoint. "Not enough days" until 40 scored days exist. | [Scoring](#scoring) |
+
+## The commands
 
 ```bash
-python -m aristos_council.gap_ledger run        # the pre-market screen, 09:00 ET
-python -m aristos_council.gap_ledger outcomes   # after the close, fill the four readings
+python -m aristos_council.gap_ledger run        # the pre-market screen, stamped 09:00 New York
+python -m aristos_council.gap_ledger outcomes   # after the close, fill the readings
 python -m aristos_council.gap_ledger score      # candidates vs control group, all days
+streamlit run gap_ledger_app.py                 # the read-only viewer (never starts a screen)
 ```
 
-`run` writes the day's CSV and posts one Todoist task. `--explain` (off by default) adds one
-cheap LLM call. `--no-news` skips the charged EODHD calls, `--no-todoist` skips the task,
-`--dry-run` writes nothing, `--tickers <file>` screens a hand-written list instead of the
-index, `--limit N` takes the first N names for a smoke test, `--date` / `--at` screen a past
-morning.
+`run` writes the day's CSV and posts one Todoist task. Options: `--explain` (off by default) adds
+one cheap LLM call; `--no-news` skips the charged EODHD calls; `--no-todoist` skips the task;
+`--no-ibkr` skips Interactive Brokers and screens on yfinance alone; `--dry-run` writes nothing;
+`--tickers <file>` screens a hand-written list instead of the index; `--limit N` takes the first
+N names for a smoke test; `--date` / `--at` screen a past morning; `--refresh` ignores the cached
+daily bars. `outcomes --date D` fills one day (default: every unfilled day). A run with no cost
+and no side effects is `run --no-news --no-todoist --no-ibkr --dry-run`.
 
-Everything runs on **New York time**. The rest of this repo displays Europe/Berlin because
-that is where the owner reads reports; a pre-market screen is a statement about a session,
-and a session has one clock.
+Everything runs on **New York time**. The rest of this repo displays Europe/Berlin because that
+is where the developer reads reports; a pre-market screen is a statement about a session, and a
+session has one clock. The run is always stamped **09:00 ET** (`--at` overrides), whatever the
+wall-clock time the process actually started.
+
+## The Windows schedule
+
+The experiment runs unattended on a Windows machine through three Task Scheduler tasks, Monday to
+Friday, on the machine's local (Berlin) clock. The tasks are configured on the machine, not in the
+repository; this is what they do:
+
+| Task | Local time | New York | Action |
+|---|---|---|---|
+| **Gap Ledger run** | 15:00 | 09:00 | `python -m aristos_council.gap_ledger run`, appending its report to `data/local/gap_ledger_run.log` |
+| **Gap Ledger outcomes** | 22:30 | 16:30 (after the close) | `python -m aristos_council.gap_ledger outcomes`, logging to `data/local/gap_ledger_outcomes.log` — one line per day: "filled outcomes for N of N logged names" |
+| **Gap Ledger backup** | 23:00 | 17:00 | `robocopy` of `data/local/gap_ledger` to a cloud-synced folder. `robocopy` exit codes below 8 are success, so a "last result" of 3 (files copied, extras present) is normal. |
+
+Settings worth knowing: the tasks wake the machine, have a one-hour execution limit, and do **not**
+catch up a missed run — a day the machine was off is a day not logged, and the scorecard simply has
+one fewer day. The IB Gateway must be running and logged in at 09:00 ET for stage 2 to happen; if it
+is not, the run proceeds on yfinance alone and says so.
+
+> **Daylight-saving caveat.** The tasks are on the Berlin clock and the screen is stamped 09:00 New
+> York. Europe and the US change clocks on different dates, so for about three weeks each spring
+> (the US changes second: 8–29 March 2027) and one week each autumn (in 2026: 25 October – 1 November)
+> "15:00 Berlin" is **10:00 ET, after the open**. The
+> screen's window is fixed at 04:00–09:00 ET regardless, so the pre-market data is unaffected;
+> only readings taken live at run time (the bid/ask spread, which this IB subscription does not
+> serve anyway) would be late. A task that starts late for any other reason is invisible in the CSV
+> for the same reason, so check the run log's file times if it matters.
+
+## Feature freeze and the verdict
+
+**The screen is frozen for the duration of the test.** Every threshold lives in `GapConfig` and is
+stamped into every CSV row (`cfg_*` columns), so a change can never silently reinterpret an earlier
+day — but a test that changes its own rules half-way measures nothing. Until the verdict, therefore:
+no new filters, no threshold changes, no new checkpoints; only bug fixes and documentation. A bug fix
+that changes which names are selected is to be noted in this file with its date so the days before and
+after it can be told apart. (The freeze is stated here from 2026-09-26, three logged days in; the
+first day, 2026-09-22, predates IBKR verification and is a yfinance-only record.)
+
+**The verdict is made after 40 trading days with filled outcomes** (`min_days_to_score`), never
+before; below that the scorecard says "not enough days" and presents no rate as a finding. A day
+counts only if it was logged *and* its outcomes were filled — a day the machine was off, or whose
+outcomes never ran, does not count. The screen has earned "worth pursuing" only if **all three**
+hold:
+
+1. **It clearly beats the control group.** Candidates carry on in the gap's direction more often
+   than the equal-size control group at 10:00, 11:30 and the close, by a margin that is not noise.
+   The scorecard prints both rates and the edge in points; "clearly" is a judgement made on those
+   numbers, not a threshold coded anywhere.
+2. **It survives the market benchmark.** The candidates' average move from the open, *beyond SPY's
+   move over the same span*, is positive. A screen that only rides a rising market fails here.
+3. **It covers costs.** The average gain per name has to exceed what trading it would cost (spread,
+   commission and slippage on a fast open). **The code does not model costs** — this criterion is
+   applied by hand against the raw and beyond-SPY averages, and the bid/ask spread that would
+   inform it is not available on the current IB subscription.
+
+If any one fails, the answer is no: the list is a fact about mornings and nothing more. What the
+code computes — and all it computes — is the two-group comparison, the SPY-relative moves, the
+early-checkpoint comparison and the "not enough days" gate.
+
+## Data licence: IBKR is personal-use only, and never reaches Aristos
+
+Interactive Brokers market data is licensed for the developer's **personal, non-professional
+use**. It therefore stays inside `gap_ledger/`: **nothing in Aristos may import
+`gap_ledger.ibkr`**, and a test asserts it (`test_gap_ledger_verify.py`). A council lens or a cohort
+that ranked on it would be redistributing it. Two further consequences: IB volume is a *partial*
+tape (0.34–0.67× of consolidated volume, varying by day), so an IB figure is only ever compared with
+another IB figure; and the connection is read-only — it never places or modifies an order.
 
 ## What the screen does
 
@@ -124,14 +217,6 @@ the control group: an unbelievable price is a missing reading about a name, not 
 > genuine VKTX scored 2.797% and ONON 1.128%. Applied as written it kept all seven junk names and
 > rejected all five real ones. Density is what separates them (junk 1–3 prints in the final half
 > hour, genuine 6 of a possible 6), so density is the decisive test and drift is a loose backstop.
->
-> Two thresholds are **deliberately not** what the brief sketched, because the live tape
-> contradicted it. Counting *distinct prices* rather than prints does not catch a sparse tape at
-> all (XEL's five bars carried five different prices), and a **1%** drift limit rejects genuine
-> movers while passing strays — five of the seven junk names scored 0.000% drift, since a
-> one-bar window agrees with itself perfectly, whereas VKTX scored 2.797% and ONON 1.128%. On
-> the twelve cited names the shipped gate keeps all five genuine movers and abstains on all
-> seven junk ones.
 
 `outcomes` fills a `premarket_vs_open` column — the pre-market price against the 09:30 open, as
 a signed fraction. That is how these thresholds get tuned, and old CSVs written before the
@@ -222,7 +307,7 @@ EODHD intraday is explicitly not on the current plan.
 
 ## The record and the control group
 
-`data/local/gap_ledger/YYYY-MM-DD.csv`, 42 columns, one row per name per day, gitignored.
+`data/local/gap_ledger/YYYY-MM-DD.csv`, 85 columns (2026-09-26; new columns are added at the end and old files still load), one row per name per day, gitignored.
 Every candidate with all its numbers, flags and links — plus an **equal-size control group**.
 
 The control group is the point of the file. "Gapping names carried on 58% of the time" is not
@@ -326,7 +411,11 @@ retired and answered the first live run with HTTP 410 (GAP-TODOIST-1); list endp
 are paginated (`{"results": …, "next_cursor": …}`) and the project lookup follows the cursor,
 because a "Gap Ledger" on page two would read as absent and create a second one every morning. **Nothing on an empty day** — a daily "no candidates" task trains you to ignore the
 project. The project is created when it does not exist, and the outcome says so. A delivery
-failure is reported and never fatal: the CSV is the record, Todoist is a convenience.
+failure is reported and never fatal: the CSV is the record, Todoist is a convenience. A **transient**
+failure (a dropped connection, a 5xx) is retried with backoff — three tries over about a minute
+(`DELIVERY_BACKOFF`, GAP-TODOIST-RETRY-1) — and the report says how many tries it took; a permanent
+one (bad token, 4xx) is not retried. If every try fails the report ends "Todoist: NOT sent" with the
+reason, and the day's CSV is unaffected.
 
 ## The viewer
 
@@ -352,6 +441,10 @@ threshold change can never silently reinterpret yesterday's record.
 | `min_relative_volume` / `relative_volume_days` | 3× / 20 sessions |
 | `require_relative_volume` | `False` — see the yfinance section above |
 | `wide_spread` | 0.1% (marked, never dropped) |
+| `max_trusted_spread` | 10% (a loose backstop; abstains, never rejects) |
+| `min_premarket_prints` | 2 |
+| `min_confirm_prints` / `confirm_window_minutes` | 4 of the final 6 five-minute slots / 30 |
+| `max_confirm_drift` | 5% |
 | `news_lookback_hours` | 18 |
 | `chunk_size` / `chunk_pause_seconds` | 40 tickers / 1.0s |
 | `early_volume_multiple` | 3× the usual volume for that time of day |

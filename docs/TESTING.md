@@ -8,16 +8,16 @@ was not in someone's shell — and a suite like that reports the weather rather 
 code. So `tests/conftest.py` replaces, for the whole session, every factory that could put
 a live provider in a test's hands (`data.provider.select_market_adapter`,
 `pipeline._build_adapter`, `data.sentiment.build_sentiment_adapter`,
-`gap_ledger.bars.YFinanceBars`) with one that raises
+`gap_ledger.bars.YFinanceBars`, `gap_ledger.ibkr.IBKRBars`) with one that raises
 `test reached the real data adapter; inject a fake`, naming the factory and the test that
 tripped it. A test that needs data **injects a fake adapter**; a test that genuinely
 exercises the provider **says so in writing** with `@pytest.mark.real_adapter`; and
 nothing else is an acceptable way past the guard — loosening an assertion, or marking a
 test that is not actually about the adapter, converts a real finding into a hidden one.
 
-The last of those four is not a `MarketDataAdapter` at all: Gap Ledger needs 5-minute
-pre/post-market bars, which that contract does not carry, so it reaches yfinance by its own
-route and needs its own guard (GAP-LEDGER-1). The lesson generalises — the guard belongs on
+The last two are not a `MarketDataAdapter` at all: Gap Ledger needs 5-minute
+pre/post-market bars, which that contract does not carry, so it reaches yfinance — and a local
+Interactive Brokers gateway socket — by its own routes and needs its own guards (GAP-LEDGER-1, GAP-IBKR-1). The lesson generalises — the guard belongs on
 every factory that can open a connection, not only on the ones behind the adapter interface.
 
 ## Opting out
@@ -78,4 +78,12 @@ suppresses the summary line. **Run the full suite before every commit, including
 commits** (CLAUDE.md rule 6; imports break through refactors and this repo has the scar).
 
 The guard is also why the suite got faster: 106s before it, 57s after. Half the wall clock
-was a live Finnhub client nobody had asked for.
+was a live Finnhub client nobody had asked for. (Historical figures: the suite then had a few hundred tests. As of 2026-09-26 it has
+3,625 passing and 1 skipped and takes about six minutes on a laptop; the one skip is a test
+guarded by `pytest.importorskip` for an optional dependency that is not installed locally; a clean
+checkout without the `ibkr` extra skips `test_gap_ledger_ibkr.py` the same way, and CI installs it.)
+
+One more rule learned in September 2026: **a test must not read the developer's own `data/local/`.**
+A guard that looked for frozen cohorts there passed on every clean checkout and went red on the one
+machine that had done the thing it guarded against. Tests build their own pool, definitions and
+directories in `tmp_path`.
