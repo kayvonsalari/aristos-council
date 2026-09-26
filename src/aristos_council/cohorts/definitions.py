@@ -339,6 +339,11 @@ MAX_USD_FLOOR = 10_000_000_000.0
 MIN_MEMBERS = 20
 MAX_MEMBERS = 60
 
+# COHORT-QC - the lens the quality report ranks a cohort under when the definition names none.
+# Deterministic, no LLM, and the repo's most opinion-free stock lens: the report is about the
+# COHORT, so the lens should add as little of its own as possible.
+DEFAULT_CHECK_LENS = "magic_formula_raw_v1"
+
 
 class DefinitionError(ValueError):
     """A definition file that cannot be trusted to build the same cohort twice."""
@@ -375,6 +380,11 @@ class CohortDefinition:
     # absence cannot be shown to belong, and it is not a contradiction either, so it is never
     # counted as either.
     gics_subindustry: tuple[str, ...] = ()
+    # COHORT-QC. The rank strategy the quality report ranks THIS cohort under. Chosen per cohort:
+    # a lens whose own gates screen out most of a cohort (the default's sector gate removes every
+    # utility; its size floor removes most of a $1bn cohort) checks nothing about it. Only the
+    # report reads it - it never changes who is a member.
+    check_lens: str = DEFAULT_CHECK_LENS
 
     @property
     def uses_index(self) -> bool:
@@ -517,11 +527,21 @@ def definition_from_mapping(raw: dict) -> CohortDefinition:
             f"{name}: at most 2 anchors ({len(anchors)} given). An anchor is a name to "
             f"look at in the report, not a way to hand-pick membership.")
 
+    lens_raw = raw.get("check_lens")
+    if lens_raw is None:
+        check_lens = DEFAULT_CHECK_LENS
+    else:
+        check_lens = str(lens_raw).strip()
+        if not check_lens or not re.fullmatch(r"[a-z0-9_]+", check_lens):
+            raise DefinitionError(
+                f"{name}: check_lens must be a rank strategy id (lowercase letters, digits and "
+                f"underscores), got {lens_raw!r} - leave it out for {DEFAULT_CHECK_LENS}")
+
     return CohortDefinition(
         name=name, industry=industry, exchanges=exchanges, min_market_cap=min_cap,
         min_history_years=min_hist, exclude=exclude, anchors=anchors,
         industry_as_written=as_written, min_market_cap_usd=min_usd, watch=watch,
-        gics_subindustry=subs)
+        gics_subindustry=subs, check_lens=check_lens)
 
 
 def load_definitions(path: str | Path) -> list[CohortDefinition]:

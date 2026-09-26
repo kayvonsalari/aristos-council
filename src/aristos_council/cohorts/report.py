@@ -63,6 +63,9 @@ def render_report(*, defn: CohortDefinition, version: int, built_on: date,
         add("Not run — the cohort did not reach a usable size, so ranking it would "
             "describe a list nobody should use.")
     else:
+        if quality.lens:
+            add(f"Ranked under `{quality.lens}` ({quality.lens_source or 'lens not attributed'}).")
+            add("")
         for check in quality.checks:
             add(f"**{check.name}** — {check.line()}")
             add("")

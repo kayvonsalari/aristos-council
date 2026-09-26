@@ -176,6 +176,7 @@ def write_definition_snapshot(path: Path, defn: CohortDefinition, *, version: in
         "min_history_years": defn.min_history_years,
         "exclude": list(defn.exclude),
         "anchors": list(defn.anchors),
+        "check_lens": defn.check_lens,
     }
     path.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True),
                     encoding="utf-8")
