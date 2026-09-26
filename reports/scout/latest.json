@@ -1,5 +1,5 @@
 {
-  "run_date": "2026-09-19",
+  "run_date": "2026-09-26",
   "base_universe": "growth_40_v1",
   "lenses": [
     "conservative_plus_v1",
@@ -14,32 +14,32 @@
       "skipped": 1,
       "cohort": "combined",
       "cohort_size": 89,
-      "json": "reports/scout/ft/2026-09-19_verdicts.json",
-      "md": "reports/scout/ft/2026-09-19_verdicts.md"
+      "json": "reports/scout/ft/2026-09-26_verdicts.json",
+      "md": "reports/scout/ft/2026-09-26_verdicts.md"
     },
     "economist": {
       "scouted": 0,
       "skipped": 1,
       "cohort": "combined",
       "cohort_size": 89,
-      "json": "reports/scout/economist/2026-09-19_verdicts.json",
-      "md": "reports/scout/economist/2026-09-19_verdicts.md"
+      "json": "reports/scout/economist/2026-09-26_verdicts.json",
+      "md": "reports/scout/economist/2026-09-26_verdicts.md"
     },
     "growth-scanner": {
       "scouted": 50,
       "skipped": 0,
       "cohort": "combined",
       "cohort_size": 89,
-      "json": "reports/scout/growth-scanner/2026-09-19_verdicts.json",
-      "md": "reports/scout/growth-scanner/2026-09-19_verdicts.md"
+      "json": "reports/scout/growth-scanner/2026-09-26_verdicts.json",
+      "md": "reports/scout/growth-scanner/2026-09-26_verdicts.md"
     },
     "holdings": {
       "scouted": 0,
       "skipped": 1,
       "cohort": "combined",
       "cohort_size": 89,
-      "json": "reports/scout/holdings/2026-09-19_verdicts.json",
-      "md": "reports/scout/holdings/2026-09-19_verdicts.md"
+      "json": "reports/scout/holdings/2026-09-26_verdicts.json",
+      "md": "reports/scout/holdings/2026-09-26_verdicts.md"
     }
   }
 }
