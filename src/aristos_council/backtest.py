@@ -225,6 +225,10 @@ PROOF_MIN_YEARS = 6
 PROOF_OF_YEARS = 10
 INSUFFICIENT_BELOW_YEARS = 6
 INSUFFICIENT_BELOW_ROUNDS = 60
+# A mean of exactly the bar (e.g. ten years at precisely 0.02) can land a float epsilon under it
+# (0.019999999999999997) — the bar is inclusive by ruling, so the comparison tolerates that noise
+# without softening the bar itself. The year test is an integer ratio, so it needs no tolerance.
+PROOF_TOLERANCE = 1e-9
 
 AS_OF_RULE = ("each round ranks on accounts whose fiscal period ended on or before the round date "
               "minus the filing lag, and on closes up to the round date; nothing later is read")
@@ -402,7 +406,8 @@ def verdict(result: BacktestResult, min_excess: float = PROOF_MIN_EXCESS,
     s = result.summary
     if s.years_measured < INSUFFICIENT_BELOW_YEARS or s.n_positions < INSUFFICIENT_BELOW_ROUNDS:
         return "insufficient"
-    beats_by_enough = s.mean_annual_excess is not None and s.mean_annual_excess >= min_excess
+    beats_by_enough = (s.mean_annual_excess is not None
+                      and s.mean_annual_excess >= min_excess - PROOF_TOLERANCE)
     positive_enough = s.years_positive * of_years >= min_years * s.years_measured
     return "proven" if (beats_by_enough and positive_enough) else "not proven"
 
