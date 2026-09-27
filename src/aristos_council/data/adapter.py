@@ -344,6 +344,22 @@ class Fundamentals:
     # field-name set into the marker, so pre-existing entries refetch.
     aligned_annual: dict[str, list[float | None]] = field(default_factory=dict)
     aligned_period_ends: dict[str, list[str]] = field(default_factory=dict)
+    # --- Dated periods, for point-in-time reads (BACKTEST-1) ----------------- #
+    # ``period_ends`` maps a positional annual field's NAME ("total_revenue", "ebit",
+    # "free_cash_flow_annual", ...) to the fiscal-period END dates (ISO strings) of that list's
+    # values, NEWEST-FIRST and index-PARALLEL to the list itself (a cell the adapter dropped is
+    # dropped from both). ``period_scalars`` maps a period-end ISO date to the single-period scalars
+    # that the current-value fields above are derived from ({"eps", "free_cash_flow", "total_debt",
+    # "total_cash", "dividends_paid", "operating_cash_flow", "capital_expenditure",
+    # "shares_outstanding"}). Together they let ``data.asof_adapter.AsOfAdapter`` cut a company's
+    # accounts to what had been REPORTED by a past date without ever guessing a date. Both are empty
+    # unless the adapter was asked for them (only the EODHD mapper with ``with_periods=True`` fills
+    # them today), and nothing that ranks a name reads them - a normal run is byte-identical.
+    period_ends: dict[str, list[str]] = field(default_factory=dict)
+    period_scalars: dict[str, dict[str, float | None]] = field(default_factory=dict)
+    # Where the figures stand in time, in words a report can print: an as-of read says
+    # "as-of 2019-06-28, lag 90 days, restated accounts". None for an ordinary current read.
+    provenance: str | None = None
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,37 @@
+# aristos-council lens backtest (BACKTEST-1) - see docs/BACKTEST.md
+# cohort: Tech: Semiconductor Equipment
+# cohort_slug: tech_semiconductor_equipment
+# cohort_version: 1
+# cohort_members: 40
+# lens: magic_formula_momentum_v1
+# lens_commit: 44daf97
+# start: 2024-08-01
+# end: 2026-08-31
+# hold_months: 12
+# step_months: 1
+# cost_bps: 50.0
+# lag_days: 90
+# as_of_rule: each round ranks on accounts whose fiscal period ended on or before the round date minus the filing lag, and on closes up to the round date; nothing later is read
+# benchmark: equal-weight return of every ranked member of the cohort over the same window
+# costs: cost_bps deducted once per round trip from the BUY basket; the benchmark pays none
+# returns: closes on or before the round date and the exit date; adjusted close, so dividends are reinvested (total return)
+# verdict: insufficient
+# caveat: RESTATED ACCOUNTS: statements are the ones EODHD carries today (restated), dated by fiscal-period end plus a 90-day filing lag; a reader on the day saw the original figures, so a lens may look better here than it would have then.
+# caveat: SURVIVORSHIP: the members are today's frozen cohort (v1); companies delisted, merged or dropped over the window are absent. The benchmark shares the bias, so the excess suffers less than the absolute returns, but is not immune.
+# caveat: Prices are ADJUSTED closes (dividends reinvested), so returns are total returns; 50 bps is deducted once per round trip from the BUY basket, none from the benchmark.
+# caveat: Rounds are 1 month(s) apart with 12-month holds, so they overlap and are not independent; read the calendar years, not the round count.
+# caveat: Max drawdown is measured at round ends over non-overlapping chains of rounds (worst chain, no-position rounds as cash), so it understates a dip inside a hold.
+date,exit_date,n_ranked,n_buys,buy_return,bench_return,excess,tickers
+2024-08-31,2025-08-31,14,3,0.03898114105470356,-0.016790004782938257,0.05577114583764181,AMAT KLAC LRCX
+2024-09-30,2025-09-30,14,3,0.3577510737892186,0.267567224261528,0.0901838495276906,AMAT KLAC LRCX
+2024-10-31,2025-10-31,14,3,0.751384292015465,0.6756376822213866,0.07574660979407832,AMAT LRCX KLAC
+2024-11-30,2025-11-30,14,3,0.8031395741408519,0.8167116397477125,-0.01357206560686064,AMAT KLAC LRCX
+2024-12-31,2025-12-31,14,3,0.6322199324475327,0.761187802714596,-0.12896787026706324,AMAT KLAC ASML.AS
+2025-01-31,2026-01-31,14,3,1.2158958198879175,1.1170595298432928,0.09883629004462469,KLAC LRCX AMAT
+2025-02-28,2026-02-28,14,3,1.2656902147491873,1.3966820849978083,-0.13099187024862102,KLAC LRCX 2441.TW
+2025-03-31,2026-03-31,14,3,1.3438697615977209,1.7414697559544092,-0.39759999435668836,LRCX 058470.KQ 2441.TW
+2025-04-30,2026-04-30,14,3,1.9200050768922259,2.6811132664953528,-0.7611081896031269,LRCX AMAT KLAC
+2025-05-31,2026-05-31,14,3,2.02033633824368,2.503037103101974,-0.48270076485829394,LRCX 058470.KQ 2441.TW
+2025-06-30,2026-06-30,14,3,1.8947012936292007,2.264410075415529,-0.3697087817863285,058470.KQ LRCX 3450.TW
+2025-07-31,2026-07-31,14,3,1.4311667743603051,1.4588120203209454,-0.02764524596064022,058470.KQ LRCX AMAT
+2025-08-31,2026-08-31,14,3,1.5302159624744236,1.6068154463364481,-0.07659948386202453,LRCX 058470.KQ 3450.TW
