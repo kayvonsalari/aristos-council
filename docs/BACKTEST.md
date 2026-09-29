@@ -32,6 +32,45 @@ Because a new 12-month hold starts every month, holds overlap. Months are theref
 evidence**; the honest unit is the **calendar year**. Each year's excess is the average of the months
 that started in it, and the pass bar below is about years, not months.
 
+## How to read the results
+
+Three verdicts, in one line each:
+
+- **proven** — mean excess at least +2%/yr over the equal-weight cohort, after the 0.5% round-trip
+  cost, AND positive in at least 6 of 10 measured years.
+- **not proven** — enough data to judge, and the bar above was not met.
+- **insufficient** — fewer than 6 measured calendar years, or fewer than 60 rounds that held a
+  position.
+
+**"Insufficient" means the lens could not be tested on that cohort — it is not a failing grade.** The
+typical cause is a small cohort (15–20 names, even with a full 10 years of history) paired with a
+selective lens (`growth_garp_v2`, `conservative_plus_v1`): most months, fewer than **`MIN_BUYS` = 3**
+names clear the screen (`backtest.py`), so the round holds no position and is excluded from every
+average. A cohort that reads "insufficient" for a strict lens may read "proven" or "not proven" for a
+looser one over the same names and years — that is the cohort telling you it is too thin for a
+selective lens, not the lens telling you anything about itself.
+
+`magic_formula_momentum_v1` and `magic_formula_raw_v1` produce **the same BUY names for the first ~18
+months of any window** — momentum needs about that much price history to compute before it starts
+reordering the value+quality rank. This is expected, not a bug in either lens or in the loop.
+
+**A verdict is per cohort.** A lens "proven" on one cohort is not proven on another; nothing carries
+across. An untested cohort — one with no CSV under `backtests/` for that lens — stays ungated: it is
+read as "no evidence either way," never as a silent pass or fail.
+
+**Known open check (not fixed here):** a small number of single rounds show excess beyond ±100% —
+seen so far in `comms_media_entertainment` × `conservative_plus_v1` (round 2023-12-31) and
+`tech_semiconductor_equipment` × `magic_formula_raw_v1` (round 2025-04-30). The likely cause is an
+unadjusted split or a currency mix inside one name's price series, not yet confirmed. This needs to be
+investigated from the CSVs before BACKTEST-2 gates any vote on these results; it is documented here,
+deliberately left unfixed, so it is not lost.
+
+**First run scope:** the 13 locally watched cohorts (`data/local/cohorts/watch.yaml`, personal, not in
+the repo — see `docs/COHORTS.md`) × the 5 voting stock lenses (`magic_formula_raw_v1`,
+`magic_formula_momentum_v1`, `growth_garp_v2`, `conservative_plus_v1`, `cyclical_income_v1`),
+2016-09 to 2026-09, 12-month holds, monthly steps. Results land in
+`backtests/<cohort_slug>/<lens_id>.csv`; once committed, BACKTEST-2 will read them.
+
 ## The pass bar (the owner's ruling, 2026-09-26)
 
 A lens is **proven** on a cohort when both hold:
@@ -132,3 +171,8 @@ Later (BACKTEST-2, **not in this build**), a lens's vote in a cohort will depend
 that is "not proven" there will be shown as a vote without the weight of a proven one. Nothing does
 that today. Until then this is a measurement you read, not a rule the system applies — and it ships
 as such, deliberately: no strategy, screen or verdict reads a `backtests/` file.
+
+Further out, and also not built, this backtest-gated vote is planned to be one of four quantitative
+methods (alongside fair-multiple valuation, a composite score, and Gap Ledger's earnings drift) that
+converge on one shared engine called from both the Run tab and Company Check — see
+[docs/GAP_LEDGER.md § Relationship to Aristos Council](GAP_LEDGER.md#relationship-to-aristos-council).
