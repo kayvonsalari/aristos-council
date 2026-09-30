@@ -56,3 +56,16 @@ corrections:
       Public sources: Comcast Corporation's shareholder FAQ and its Form 10-Q filed 2026-04-23 (both at
       cmcsa.com) describe the exchangeable subordinated debt; the security's listing title is quoted at
       upstox.com/us-stocks/ccz-share-price/. It is excluded rather than given a figure.
+  - ticker: TYT.LSE
+    action: exclude
+    date: 2026-09-30
+    reason: >-
+      BACKTEST-1B's price-sanity check flagged TYT.LSE (Toyota Motor Corporation's London line, priced
+      in JPY) for a one-day adjusted-close ratio of x9.9 on 2017-04-28 in yfinance's series: close
+      1224.83 on 2017-04-27, 12120.11 on 2017-04-28, back to 1228.75 on 2017-05-02, the very next
+      session. A company the size of Toyota moving 10x in a day and giving all of it back by the next
+      print is a bad tick, not a trade; yfinance's own split/action history records nothing on or near
+      that date (its one recorded split is 2021-09-29, unrelated). EODHD's own /eod endpoint 403s on
+      the current plan, so a second-source cross-check was not available; the reversion pattern alone
+      is conclusive. Excluded from cohort/peer market-cap use rather than given a figure; the backtest
+      package independently flags this series with a price_warning rather than silently trusting it.

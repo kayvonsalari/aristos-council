@@ -250,6 +250,13 @@ class Round:
     tickers: tuple = ()
     exit_date: Optional[date] = None
     n_ranked: int = 0
+    # BACKTEST-1B — the universe the lens was actually offered THIS round, after the as-of size
+    # floor (below); n_ranked (>= 0, <= n_eligible) is how many of those the lens's own screen kept.
+    n_eligible: int = 0
+    # BACKTEST-1B — ``excess`` recomputed with the single best-returning BUY name removed (robustness
+    # against "the lens is proven on one stock"). None when the round held no position or n_buys < 4
+    # (see run_lens_backtest); NOT read by verdict().
+    excess_drop_best: Optional[float] = None
 
     @property
     def has_position(self) -> bool:
@@ -269,6 +276,9 @@ class Summary:
     worst_round_date: Optional[date]
     max_drawdown: Optional[float]
     caveats: tuple = ()
+    # BACKTEST-1B — the same yearly averaging as mean_annual_excess, over excess_drop_best instead of
+    # excess. Reading, not gating: verdict() never looks at this field.
+    mean_annual_excess_drop_best: Optional[float] = None
 
 
 @dataclass
@@ -288,6 +298,11 @@ class BacktestResult:
     lens_commit: str = ""
     cohort_version: Optional[int] = None
     n_members: int = 0
+    # BACKTEST-1B — the as-of size floor applied this run (USD, or None when there was no
+    # market-cap data to compute one) and one line per flagged price jump; both read by to_csv.
+    size_floor: Optional[float] = None
+    size_floor_note: str = ""
+    price_warnings: list = field(default_factory=list)
 
     @property
     def cohort_slug(self) -> str:
@@ -297,16 +312,13 @@ class BacktestResult:
     def year_excess(self) -> dict:
         """{calendar year of entry: mean excess of that year's positioned rounds}. Overlapping holds
         that start in one year are averaged, so a year counts once however many rounds it holds."""
-        by_year: dict[int, list[float]] = {}
-        for r in self.rounds:
-            if r.has_position:
-                by_year.setdefault(r.date.year, []).append(r.excess)
-        return {y: sum(v) / len(v) for y, v in sorted(by_year.items())}
+        return _year_average(self.rounds, "excess")
 
     @property
     def summary(self) -> Summary:
         held = [r for r in self.rounds if r.has_position]
         years = self.year_excess
+        drop_best_years = _year_average(self.rounds, "excess_drop_best")
         worst = min(held, key=lambda r: (r.excess, r.date)) if held else None
         return Summary(
             n_rounds=len(self.rounds), n_positions=len(held),
@@ -317,13 +329,27 @@ class BacktestResult:
             worst_round_excess=worst.excess if worst else None,
             worst_round_date=worst.date if worst else None,
             max_drawdown=_buy_drawdown(self.rounds, self.hold_months, self.step_months),
-            caveats=tuple(self.caveats))
+            caveats=tuple(self.caveats),
+            mean_annual_excess_drop_best=((sum(drop_best_years.values()) / len(drop_best_years))
+                                          if drop_best_years else None))
 
 
 def cohort_slug(name: str) -> str:
     """The directory name a cohort lives under - the same rule ``CohortDefinition.slug`` uses."""
     import re
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def _year_average(rounds, field_name: str) -> dict:
+    """{calendar year of entry: mean of ``field_name`` over that year's rounds where it is not
+    None}. Shared by ``year_excess`` and the drop-best summary figure so the two can never diverge
+    in how a year is averaged."""
+    by_year: dict[int, list[float]] = {}
+    for r in rounds:
+        v = getattr(r, field_name)
+        if v is not None:
+            by_year.setdefault(r.date.year, []).append(v)
+    return {y: sum(v) / len(v) for y, v in sorted(by_year.items())}
 
 
 # --------------------------------------------------------------------------- #
@@ -371,6 +397,29 @@ class _Closes:
             return None
         return self._vals[i - 1]
 
+    def latest(self) -> Optional[float]:
+        """The most recent cached close - the "today" side of the as-of size-floor ratio
+        (BACKTEST-1B): ``member_caps`` is a snapshot as of roughly now, so it is scaled against
+        the price at roughly now, not against an arbitrary date."""
+        return self._vals[-1] if self._vals else None
+
+
+PRICE_JUMP_RATIO = 3.0             # a one-day adjusted-close move beyond this, either way, is flagged
+
+
+def _price_jump_warnings(ticker: str, bars) -> list:
+    """BACKTEST-1B price sanity: one bare string per adjacent-day adjusted-close ratio beyond
+    ``PRICE_JUMP_RATIO`` (either way) in ``bars``, e.g. ``"TYT.LSE 2017-04-28 x9.9"``. A flag, never
+    an exclusion — the series is still used; see docs/BACKTEST.md and data/size_corrections.yaml for
+    names run down by hand."""
+    pts = sorted((b.day, b.adj_close) for b in bars if b.adj_close is not None and b.adj_close > 0)
+    out = []
+    for (_, p0), (d1, p1) in zip(pts, pts[1:]):
+        ratio = p1 / p0
+        if ratio > PRICE_JUMP_RATIO or ratio < 1.0 / PRICE_JUMP_RATIO:
+            out.append(f"{ticker} {d1.isoformat()} x{ratio:.3g}")
+    return out
+
 
 def _window_return(closes: Optional[_Closes], d0: date, d1: date) -> Optional[float]:
     if closes is None:
@@ -416,9 +465,11 @@ def verdict(result: BacktestResult, min_excess: float = PROOF_MIN_EXCESS,
 # the cohort and the lens
 # --------------------------------------------------------------------------- #
 def load_cohort_members(cohort: str, cohorts_root=None) -> tuple:
-    """``(yahoo tickers, version)`` of the cohort's CURRENT frozen ``members.csv``. ``cohort`` is the
-    display name or the slug. A cohort that is not built, or a name with no Yahoo symbol, is named
-    - never skipped silently."""
+    """``(yahoo tickers, version, market_caps)`` of the cohort's CURRENT frozen ``members.csv``.
+    ``cohort`` is the display name or the slug. A cohort that is not built, or a name with no Yahoo
+    symbol, is named - never skipped silently. ``market_caps`` is ``{yahoo ticker: market_cap_usd}``
+    from the same file (BACKTEST-1B) - the frozen "today" snapshot the as-of size floor scales by
+    price against; a member the index gave no USD figure to is simply absent from it."""
     from .cohorts.builder import DEFAULT_ROOT
     from .cohorts.freeze import MEMBERS_FILE, current_version, read_members, version_dir
     root = Path(cohorts_root) if cohorts_root else DEFAULT_ROOT
@@ -429,11 +480,40 @@ def load_cohort_members(cohort: str, cohorts_root=None) -> tuple:
                                 f"it first, or pass members=[...] explicitly")
     from .cohorts.freeze import _safe_yahoo
     tickers = []
+    market_caps: dict[str, float] = {}
     for cand in read_members(version_dir(root, slug, version) / MEMBERS_FILE):
         symbol = _safe_yahoo(cand.ticker)
         if symbol:
             tickers.append(symbol)
-    return sorted(set(tickers)), version
+            if cand.market_cap_usd is not None:
+                market_caps[symbol] = cand.market_cap_usd
+    return sorted(set(tickers)), version, market_caps
+
+
+def _size_floor(cohort: str, cohorts_root, version: Optional[int],
+                member_caps: dict) -> tuple:
+    """``(floor USD or None, one-line note)`` for the as-of size floor (BACKTEST-1B): the cohort
+    definition's own ``min_market_cap_usd`` when there is a built cohort to read it from, else the
+    smallest ``market_cap_usd`` among today's members. Neither exists -> ``(None, "")`` and the floor
+    is not applied that run (see run_lens_backtest)."""
+    if version is not None:
+        from .cohorts.builder import DEFAULT_ROOT
+        from .cohorts.freeze import DEFINITION_FILE, version_dir
+        root = Path(cohorts_root) if cohorts_root else DEFAULT_ROOT
+        defn_path = version_dir(root, cohort_slug(cohort), version) / DEFINITION_FILE
+        if defn_path.exists():
+            import yaml
+            try:
+                doc = yaml.safe_load(defn_path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                doc = {}
+            raw = doc.get("min_market_cap_usd")
+            if raw not in (None, ""):
+                return float(raw), "the cohort definition's min_market_cap_usd"
+    caps = [v for v in member_caps.values() if v is not None]
+    if caps:
+        return min(caps), "the smallest market_cap_usd among today's members (no floor on file)"
+    return None, ""
 
 
 def lens_commit(lens_id: str, strategies_dir=None) -> str:
@@ -480,31 +560,49 @@ def _default_feed():
 def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold_months: int = 12,
                       step_months: int = 1, cost_bps: float = 50, lag_days: int = 90,
                       adapter=None, progress=None, cohorts_root=None, members=None,
-                      strategies_dir=None) -> BacktestResult:
-    """Backtest one lens on one cohort. The first eight parameters are the contract; the last three
-    keywords only say WHERE things live (a cohort directory, an explicit member list for a machine
-    with no built cohorts, a strategies directory) and change no rule.
+                      strategies_dir=None, member_caps=None) -> BacktestResult:
+    """Backtest one lens on one cohort. The first eight parameters are the contract; the rest of the
+    keywords only say WHERE things live (a cohort directory, an explicit member list and its market
+    caps for a machine with no built cohorts, a strategies directory) and change no rule.
 
-    At each month end ``d`` from ``start`` to ``end - hold_months`` the lens ranks the cohort with
-    ``run_rank_pipeline(..., ranker_only=True)`` behind an ``AsOfAdapter`` (accounts as of ``d`` less
-    ``lag_days``), the BUY names are held equal-weight from ``d`` to ``d + hold_months`` less
-    ``cost_bps`` once, and the excess is that minus the equal-weight return of every ranked member.
-    Fewer than MIN_BUYS priced BUY names -> "no position": counted, kept in the file, excluded from
-    every average. No LLM is called; ``adapter`` (default: EODHD accounts + yfinance prices) is the
-    inner data source."""
+    At each month end ``d`` from ``start`` to ``end - hold_months``:
+
+    1. **As-of size floor (BACKTEST-1B).** Each member's market cap AT ``d`` is estimated as
+       ``member_caps[ticker] x (adjusted close on d / the latest cached adjusted close)`` - scaling
+       today's known cap by how much the price has moved since, so a member that was a micro-cap at
+       ``d`` and is a giant today is not counted as if it always had today's size. A member is
+       ELIGIBLE this round only if that estimate clears the cohort's USD floor (its definition's
+       ``min_market_cap_usd``, else the smallest ``member_caps`` value) AND it has a price at ``d``.
+       The SAME eligible set is what the lens ranks/can buy and what the benchmark is built from.
+       When ``member_caps`` is empty (no cap data at all - the common case for an explicit
+       ``members=`` list with no cohort behind it) this step is a no-op: every member is eligible,
+       exactly as before BACKTEST-1B.
+    2. The lens ranks the eligible set with ``run_rank_pipeline(..., ranker_only=True)`` behind an
+       ``AsOfAdapter`` (accounts as of ``d`` less ``lag_days``).
+    3. The BUY names are held equal-weight from ``d`` to ``d + hold_months`` less ``cost_bps`` once,
+       and the excess is that minus the equal-weight return of every ranked (eligible, un-excluded)
+       member. Fewer than MIN_BUYS priced BUY names -> "no position": counted, kept in the file,
+       excluded from every average.
+
+    No LLM is called; ``adapter`` (default: EODHD accounts + yfinance prices) is the inner data
+    source."""
     from .data.asof_adapter import AsOfAdapter
     from .data.backtest_feed import MemoAdapter, lookback_start
     from .pipeline import run_rank_pipeline
 
     version: Optional[int] = None
     if members is None:
-        members, version = load_cohort_members(cohort, cohorts_root)
+        members, version, member_caps = load_cohort_members(cohort, cohorts_root)
     members = list(members)
+    member_caps = dict(member_caps) if member_caps else {}
+    size_floor, size_floor_note = (_size_floor(cohort, cohorts_root, version, member_caps)
+                                   if member_caps else (None, ""))
     dates = round_dates(start, end, hold_months, step_months)
     result = BacktestResult(cohort=cohort, lens_id=lens_id, start=start, end=end,
                             hold_months=hold_months, step_months=step_months,
                             cost_bps=float(cost_bps), lag_days=lag_days, cohort_version=version,
-                            n_members=len(members),
+                            n_members=len(members), size_floor=size_floor,
+                            size_floor_note=size_floor_note,
                             lens_commit=lens_commit(lens_id, strategies_dir))
     if not dates:
         result.caveats = _caveats(result, 0)
@@ -516,22 +614,47 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
     memo = MemoAdapter(adapter if adapter is not None else _default_feed(),
                        start=lookback_start(dates[0]), end=exit_of_last)
     closes: dict[str, Optional[_Closes]] = {}
+    price_warnings: list = []
 
     def series(ticker: str) -> Optional[_Closes]:
         if ticker not in closes:
             try:
-                closes[ticker] = _Closes(memo.get_price_history(
-                    ticker, start=lookback_start(dates[0]), end=exit_of_last).bars)
+                bars = memo.get_price_history(ticker, start=lookback_start(dates[0]),
+                                              end=exit_of_last).bars
+                closes[ticker] = _Closes(bars)
+                price_warnings.extend(_price_jump_warnings(ticker, bars))
             except Exception:
                 closes[ticker] = None                    # no series -> unpriced, counted below
         return closes[ticker]
+
+    def eligible_at(d: date) -> list:
+        """The as-of-size-floor-eligible universe for round ``d`` (step 1 above); ``members``
+        unchanged when there is no cap data to apply a floor with."""
+        if not member_caps:
+            return members
+        out = []
+        for t in members:
+            cap_today = member_caps.get(t)
+            if cap_today is None:
+                continue                                  # no cap snapshot -> can't confirm eligible
+            cl = series(t)
+            p_d = cl.on_or_before(d) if cl else None
+            p_latest = cl.latest() if cl else None
+            if p_d is None or not p_latest:
+                continue                                  # no price on d, or ever -> excluded, as now
+            estimate = cap_today * (p_d / p_latest)
+            if size_floor is not None and estimate < size_floor:
+                continue
+            out.append(t)
+        return out
 
     cost = float(cost_bps) / 10_000.0
     unpriced = 0
     for i, d in enumerate(dates, 1):
         exit_date = add_months(d, hold_months)
+        eligible = eligible_at(d)
         ranked = run_rank_pipeline(
-            members, lens_id, ranker_only=True, adapter=AsOfAdapter(memo, d, lag_days), today=d,
+            eligible, lens_id, ranker_only=True, adapter=AsOfAdapter(memo, d, lag_days), today=d,
             use_cache=True, strategies_dir=strategies_dir).ranked
         live = [r for r in ranked if not r.excluded]
         buys = sorted(r.ticker for r in live if r.verdict == "buy")
@@ -547,17 +670,31 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
         bench_ret = (sum(bench) / len(bench)) if bench else None
         if len(held) >= MIN_BUYS and bench_ret is not None:
             buy_ret = sum(v for _, v in held) / len(held) - cost
+            drop_best = _drop_best_excess(held, len(buys), bench_ret, cost)
             result.rounds.append(Round(d, len(buys), buy_ret, bench_ret, buy_ret - bench_ret,
-                                       tuple(t for t, _ in held), exit_date, len(live)))
+                                       tuple(t for t, _ in held), exit_date, len(live),
+                                       n_eligible=len(eligible), excess_drop_best=drop_best))
         else:
             result.rounds.append(Round(d, len(buys), None, bench_ret, None, (), exit_date,
-                                       len(live)))
+                                       len(live), n_eligible=len(eligible)))
         if progress is not None:
             last = result.rounds[-1]
-            progress(f"{d} ({i}/{len(dates)}): {len(live)} ranked, {len(buys)} BUY, "
+            progress(f"{d} ({i}/{len(dates)}): {len(eligible)} eligible, {len(live)} ranked, "
+                     f"{len(buys)} BUY, "
                      + (f"excess {last.excess:+.1%}" if last.has_position else "no position"))
+    result.price_warnings = sorted(set(price_warnings))
     result.caveats = _caveats(result, unpriced)
     return result
+
+
+def _drop_best_excess(held: list, n_buys: int, bench_ret: float, cost: float) -> Optional[float]:
+    """``excess`` with the single best-returning BUY name dropped - None when there are fewer than
+    4 BUY names (a robustness check on 3 needs at least 4 to have anything left to drop from)."""
+    if n_buys < 4 or len(held) < 2:
+        return None
+    best_ticker = max(held, key=lambda kv: kv[1])[0]
+    rest = [ret for t, ret in held if t != best_ticker]
+    return sum(rest) / len(rest) - cost - bench_ret
 
 
 def _caveats(result: BacktestResult, unpriced: int) -> list:
@@ -565,10 +702,11 @@ def _caveats(result: BacktestResult, unpriced: int) -> list:
         "RESTATED ACCOUNTS: statements are the ones EODHD carries today (restated), dated by "
         f"fiscal-period end plus a {result.lag_days}-day filing lag; a reader on the day saw the "
         "original figures, so a lens may look better here than it would have then.",
-        "SURVIVORSHIP: the members are today's frozen cohort"
+        "SURVIVORSHIP: a company delisted, merged, or acquired out of today's frozen cohort"
         + (f" (v{result.cohort_version})" if result.cohort_version else "")
-        + "; companies delisted, merged or dropped over the window are absent. The benchmark shares "
-          "the bias, so the excess suffers less than the absolute returns, but is not immune.",
+        + " is still absent from every round, including ones it would have qualified for. This "
+          "file's as_of_size_floor line corrects a SURVIVOR's own past size; it cannot resurrect a "
+          "name that did not survive to be in today's membership at all.",
         f"Prices are ADJUSTED closes (dividends reinvested), so returns are total returns; "
         f"{result.cost_bps:g} bps is deducted once per round trip from the BUY basket, none from the "
         "benchmark.",
@@ -592,8 +730,8 @@ def _caveats(result: BacktestResult, unpriced: int) -> list:
 # --------------------------------------------------------------------------- #
 # the file
 # --------------------------------------------------------------------------- #
-_ROUND_COLUMNS = ("date", "exit_date", "n_ranked", "n_buys", "buy_return", "bench_return", "excess",
-                  "tickers")
+_ROUND_COLUMNS = ("date", "exit_date", "n_eligible", "n_ranked", "n_buys", "buy_return",
+                  "bench_return", "excess", "excess_drop_best", "tickers")
 
 
 def _num(x: Optional[float]) -> str:
@@ -625,7 +763,11 @@ def to_csv(result: BacktestResult, path) -> Path:
         ("hold_months", result.hold_months), ("step_months", result.step_months),
         ("cost_bps", repr(float(result.cost_bps))), ("lag_days", result.lag_days),
         ("as_of_rule", AS_OF_RULE), ("benchmark", BENCHMARK_RULE), ("costs", COST_RULE),
-        ("returns", RETURN_RULE), ("verdict", verdict(result)),
+        ("returns", RETURN_RULE),
+        ("as_of_size_floor", (f"{result.size_floor:,.0f} USD, estimated from today's cap and price "
+                              f"ratio ({result.size_floor_note})") if result.size_floor is not None
+         else "n/a - no market-cap data for this run"),
+        ("verdict", verdict(result)),
     ]
     with target.open("w", newline="", encoding="utf-8") as fh:
         fh.write("# aristos-council lens backtest (BACKTEST-1) - see docs/BACKTEST.md\n")
@@ -633,13 +775,26 @@ def to_csv(result: BacktestResult, path) -> Path:
             fh.write(f"# {key}: {value}\n")
         for text in result.caveats:
             fh.write(f"# caveat: {' '.join(str(text).split())}\n")
+        for text in result.price_warnings:
+            fh.write(f"# price_warning: {text}\n")
         writer = csv.writer(fh, lineterminator="\n")
         writer.writerow(_ROUND_COLUMNS)
         for r in sorted(result.rounds, key=lambda r: r.date):
             writer.writerow([r.date.isoformat(), r.exit_date.isoformat() if r.exit_date else "",
-                             r.n_ranked, r.n_buys, _num(r.buy_return), _num(r.bench_return),
-                             _num(r.excess), " ".join(r.tickers)])
+                             r.n_eligible, r.n_ranked, r.n_buys, _num(r.buy_return),
+                             _num(r.bench_return), _num(r.excess), _num(r.excess_drop_best),
+                             " ".join(r.tickers)])
     return target
+
+
+def _parse_size_floor(text: str) -> tuple:
+    """The ``as_of_size_floor`` header value back into ``(floor, note)`` - the inverse of the
+    f-string ``to_csv`` writes. ``"n/a - ..."`` (or anything unparseable, e.g. an older file with no
+    such line) -> ``(None, "")``."""
+    import re
+    m = re.match(r"^([\d,]+(?:\.\d+)?) USD, estimated from today's cap and price ratio \((.*)\)$",
+                text)
+    return (float(m.group(1).replace(",", "")), m.group(2)) if m else (None, "")
 
 
 def from_csv(path) -> BacktestResult:
@@ -647,13 +802,19 @@ def from_csv(path) -> BacktestResult:
     (the header's verdict line is informational), so they cannot drift from the data."""
     meta: dict[str, str] = {}
     caveats: list[str] = []
+    price_warnings: list[str] = []
     body: list[str] = []
     for line in Path(path).read_text(encoding="utf-8").splitlines():
         if line.startswith("# "):
             key, sep, value = line[2:].partition(": ")
             if not sep:
                 continue
-            (caveats.append(value) if key == "caveat" else meta.__setitem__(key, value))
+            if key == "caveat":
+                caveats.append(value)
+            elif key == "price_warning":
+                price_warnings.append(value)
+            else:
+                meta[key] = value
         elif line.strip():
             body.append(line)
     rounds = []
@@ -663,7 +824,10 @@ def from_csv(path) -> BacktestResult:
             buy_return=_unnum(row["buy_return"]), bench_return=_unnum(row["bench_return"]),
             excess=_unnum(row["excess"]), tickers=tuple(row["tickers"].split()),
             exit_date=date.fromisoformat(row["exit_date"]) if row["exit_date"] else None,
-            n_ranked=int(row["n_ranked"])))
+            n_ranked=int(row["n_ranked"]),
+            n_eligible=int(row["n_eligible"]) if row.get("n_eligible") not in (None, "") else 0,
+            excess_drop_best=_unnum(row.get("excess_drop_best") or "")))
+    size_floor, size_floor_note = _parse_size_floor(meta.get("as_of_size_floor", ""))
     return BacktestResult(
         cohort=meta["cohort"], lens_id=meta["lens"], start=date.fromisoformat(meta["start"]),
         end=date.fromisoformat(meta["end"]), hold_months=int(meta["hold_months"]),
@@ -671,7 +835,8 @@ def from_csv(path) -> BacktestResult:
         lag_days=int(meta["lag_days"]), rounds=rounds, caveats=caveats,
         lens_commit=meta.get("lens_commit", ""),
         cohort_version=int(meta["cohort_version"]) if meta.get("cohort_version") else None,
-        n_members=int(meta.get("cohort_members") or 0))
+        n_members=int(meta.get("cohort_members") or 0),
+        size_floor=size_floor, size_floor_note=size_floor_note, price_warnings=price_warnings)
 
 
 def _pct(x: Optional[float], signed: bool = True) -> str:
