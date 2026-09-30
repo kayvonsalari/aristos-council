@@ -34,11 +34,15 @@ that started in it, and the pass bar below is about years, not months.
 
 ## How to read the results
 
-Three verdicts, in one line each:
+Four verdicts, in one line each:
 
 - **proven** — mean excess at least +2%/yr over the equal-weight cohort, after the 0.5% round-trip
-  cost, AND positive in at least 6 of 10 measured years.
-- **not proven** — enough data to judge, and the bar above was not met.
+  cost, AND positive in at least 6 of 10 measured years, AND beats a random-basket luck baseline
+  (BACKTEST-1C — see "Skill versus luck" below).
+- **not beyond luck** — the excess/years bar above is met, but not the luck test: too many random
+  pickers, drawing the same-size basket from the same names, would have done about as well.
+- **not proven** — enough data to judge, and the excess/years bar was not met (luck is not even
+  asked in this case).
 - **insufficient** — fewer than 6 measured calendar years, or fewer than 60 rounds that held a
   position.
 
@@ -82,23 +86,27 @@ A lens is **proven** on a cohort when both hold:
 The numbers live as named constants in `backtest.py` with the date of the ruling. Changing them is a
 new ruling, not a tuning.
 
-## How to read the three answers
+## How to read the four answers
 
 | Answer | Meaning |
 |---|---|
-| **proven** | Cleared both tests over enough history. The lens has earned a vote in this cohort — subject to the two limits below. |
-| **not proven** | Enough history, and it did not clear the bar. This is **not** "the lens is bad": it may have missed by a hair or won in some years. Read the numbers on the summary line. It means the lens has not shown it beats simply holding the cohort. |
+| **proven** | Cleared the excess/years bar AND the luck test over enough history. The lens has earned a vote in this cohort — subject to the two limits below. |
+| **not beyond luck** | Cleared the excess/years bar, but too many random pickers drawing the same-size basket from the same names would have done about as well. Read as "not distinguishable from chance," not "the lens is bad." |
+| **not proven** | Enough history, and it did not even clear the excess/years bar. This is **not** "the lens is bad": it may have missed by a hair or won in some years. Read the numbers on the summary line. It means the lens has not shown it beats simply holding the cohort. |
 | **insufficient** | Fewer than 6 measured calendar years, or fewer than 60 months with a position. There is not enough evidence to say either way. A two-year sample run always reads this. |
 
 The summary line for each run looks like:
 
 ```
 tech_semiconductor_equipment x magic_formula_momentum_v1: insufficient - mean annual excess +3.1%,
-1 of 2 years positive, hit rate 58%, 10 of 12 rounds held a position, worst round -9.4%, max drawdown -6.2%
+1 of 2 years positive, hit rate 58%, 10 of 12 rounds held a position, worst round -9.4%, max drawdown
+-6.2%, luck 12%
 ```
 
 - **mean annual excess** — the average of the yearly excess figures.
 - **years positive** — years where the BUY basket beat the benchmark.
+- **luck** — `luck_pct_mean` (BACKTEST-1C): the share of the 500 random baskets that did as well or
+  better. Low is good — see "Skill versus luck" below. Absent when `random_baskets=0`.
 - **hit rate** — the share of months (with a position) that beat it. Overlapping months, so read it
   lightly.
 - **worst round** — the single worst month's excess.
@@ -114,6 +122,58 @@ the best pick is dropped, the lens is not really "proven" on a basket — it is 
 that happened to be in the basket. Read `mean_annual_excess` against `mean_annual_excess_drop_best`
 together: a small gap between them is a lens spreading its edge across names; a large one is a lens
 riding a single winner.
+
+## Skill versus luck (BACKTEST-1C)
+
+The first watched-cohort run (13 cohorts × 5 lenses = 65 tests) gave 7 proven, 32 not proven, 26
+insufficient. Proven verdicts changed a lot between runs, hit rates sit near 50%, and **with 65
+tests against a modest bar (2%/yr, 6 of 10 years), some passes are expected by chance alone** — a
+coin flipped 65 times is not surprising if a few runs come up heads eight times running. Beating the
+bar is not the same question as beating chance, so this build adds the second question.
+
+**What a random basket is.** At every round the lens *held a position*, alongside its own BUY
+basket, 500 random baskets are also drawn — each the same size as the lens's own basket that round,
+picked without replacement from the exact same priced names the lens could actually have bought (the
+same eligible, as-of-sized pool its own benchmark is built from). Each random basket is scored
+exactly like the lens's: same entry and exit dates, same round-trip cost, same benchmark. The draw is
+seeded from a hash of the cohort, the lens and the round date, so a re-run draws the *identical* 500
+baskets — reproducible, not re-rolled.
+
+**The luck score.** Take random basket *i* from every round the lens held a position, and you have a
+random "lens" — summarised the same way the real one is (mean annual excess, years positive). Doing
+that 500 times gives 500 random performance records to compare the real one against:
+
+- **`luck_pct_mean`** — the share of the 500 random records whose own mean annual excess is at
+  least as good as this lens's. Low is good: **"luck 3%" means only 3 of 100 random pickers did as
+  well or better** — this lens's edge looks real. "Luck 40%" means two in five random pickers would
+  have matched it — this is not evidence of skill.
+- **`luck_pct_pass`** — the share of the 500 random records that would themselves clear the plain
+  excess/years bar. This is the cohort's own **chance pass rate**: how often a random picker, with
+  no skill at all, "proves" itself on names this thin or this volatile, just by the bar being loose
+  relative to the noise.
+
+**The new verdict.** "Proven" now additionally requires `luck_pct_mean <= 5%` (`max_luck`, a
+parameter). A lens that clears the excess/years bar but not the luck test reads **"not beyond
+luck"** instead — the bar alone was never enough to call something skill.
+
+**`drop_best_vs_random` — why drop-best needs a random comparison.** BACKTEST-1B's
+`excess_drop_best` (the lens's excess with its single best pick removed) cannot be read on its own:
+removing the best of ANY 4–5 stock basket lowers its return by roughly 10%/yr even for *random*
+picks, purely from basket arithmetic — a small basket's mean is sensitive to its single best member
+whoever picked it. `drop_best_vs_random` is this lens's `mean_annual_excess_drop_best` minus the
+*median* of the 500 random records' own drop-best figure (computed the identical way). Positive means
+the lens depends on its single best pick **less** than random picking does — the more meaningful
+reading `excess_drop_best` was always trying to give.
+
+**The multiple-testing line.** `python -m aristos_council.backtest summary` prints, after the
+per-file lines, one more: how many tests were even measurable (insufficient ones excluded), how many
+came out "proven", and how many "proven"s chance alone would be expected to produce at this sample
+size — the sum of every measured test's own `luck_pct_pass`. A proven count noticeably above the
+expected-by-chance number is the first real evidence that something here beats a random picker; a
+proven count close to it is not.
+
+**BACKTEST-2 (the vote gate, not yet built) must read this verdict**, not the plain excess/years bar
+— a lens "not beyond luck" is exactly the case gating exists to catch.
 
 ## How the universe is chosen per round (BACKTEST-1B)
 
@@ -182,19 +242,28 @@ for the whole ten years. Prices and dividends come from yfinance (free). The who
 and day-cached, so re-running on the same day makes no new requests. A **40-company cohort costs 40
 EODHD requests (400 units) and 80 yfinance requests**, however many years or months are tested.
 
+The 500 random baskets per round (BACKTEST-1C) cost no extra requests at all — they are drawn from
+prices already fetched for the lens's own scoring, in memory, with `numpy`. Measured on a warm cache,
+`Tech: Semiconductor Equipment` × `magic_formula_raw_v1`, 10 years (108 rounds, 55 of them holding a
+position and so drawing baskets): **15.4 seconds** end to end, well inside the 60-seconds-per-run
+target this was built to. `--random-baskets 0` turns the whole thing off if you ever need the plain
+excess/years engine alone.
+
 ## How to run it
 
 ```
 python -m aristos_council.backtest run --cohort "Tech: Semiconductor Equipment" \
-    --lens magic_formula_momentum_v1 --years 10 [--hold 12 --step 1 --cost-bps 50 --lag-days 90 --out backtests/]
+    --lens magic_formula_momentum_v1 --years 10 [--hold 12 --step 1 --cost-bps 50 --lag-days 90 \
+    --random-baskets 500 --max-luck 0.05 --out backtests/]
 python -m aristos_council.backtest summary backtests/
 ```
 
 `run` writes `backtests/<cohort>/<lens>.csv`: a header block (the as-of rule, lag, costs, benchmark,
-the as-of size floor, caveats, any price warnings, verdict, and the git commit of the lens files
-used), then one row per month. The file is
-deterministic — no timestamps — so re-running the same window on the same data gives the same bytes.
-`summary` prints one line per cohort × lens with its verdict.
+the as-of size floor, the luck baseline's own settings and results, caveats, any price warnings,
+verdict, and the git commit of the lens files used), then one row per month. The file is
+deterministic — no timestamps — so re-running the same window on the same data gives the same bytes
+(the random baskets are seeded, not re-rolled). `summary` prints one line per cohort × lens with its
+verdict, followed by the multiple-testing line (see "Skill versus luck").
 
 From Python (for example in Colab):
 
@@ -218,9 +287,12 @@ and a rebuilt cohort should be re-run rather than compared with the old file.
 ## What it will be used for
 
 Later (BACKTEST-2, **not in this build**), a lens's vote in a cohort will depend on this file: a lens
-that is "not proven" there will be shown as a vote without the weight of a proven one. Nothing does
-that today. Until then this is a measurement you read, not a rule the system applies — and it ships
-as such, deliberately: no strategy, screen or verdict reads a `backtests/` file.
+that is not "proven" there — "not beyond luck", "not proven" or "insufficient" alike — will be shown
+as a vote without the weight of a proven one. Nothing does that today. Until then this is a
+measurement you read, not a rule the system applies — and it ships as such, deliberately: no
+strategy, screen or verdict reads a `backtests/` file. **BACKTEST-2 must gate on the full verdict**
+(the one `luck_pct_mean` already gates INTO "proven"), never on the plain excess/years bar alone —
+see "Skill versus luck" above for why the bar by itself is not enough.
 
 Further out, and also not built, this backtest-gated vote is planned to be one of four quantitative
 methods (alongside fair-multiple valuation, a composite score, and Gap Ledger's earnings drift) that

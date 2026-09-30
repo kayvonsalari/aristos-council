@@ -208,9 +208,12 @@ def _summarize(periods, dates, extra_caveats) -> PriceBacktestResult:
 import bisect
 import calendar
 import csv
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
+
+import numpy as np
 
 MIN_BUYS = 3                      # fewer BUY names than this is "no position", not a 1-stock bet
 PRICE_TOLERANCE_DAYS = 10         # a close older than this (before a date) is "no price", not stale
@@ -229,6 +232,16 @@ INSUFFICIENT_BELOW_ROUNDS = 60
 # (0.019999999999999997) — the bar is inclusive by ruling, so the comparison tolerates that noise
 # without softening the bar itself. The year test is an integer ratio, so it needs no tolerance.
 PROOF_TOLERANCE = 1e-9
+
+# BACKTEST-1C — skill versus luck. With 65 tests against a modest bar (2%/yr, 6 of 10 years),
+# some passes are expected by chance alone; this asks not just "did the lens beat the bar" but
+# "would a random stock-picker, drawing the same size basket from the same eligible names the
+# lens actually had to choose from, have beaten it about as often." See docs/BACKTEST.md.
+RANDOM_BASKETS_DEFAULT = 500       # random baskets drawn per round
+MAX_LUCK = 0.05                    # "proven" needs luck_pct_mean <= this (5% of random pickers
+                                   # as-good-or-better)
+SEED_RULE = ("each round's random draw is seeded from a hash of cohort slug + lens id + round "
+            "date, so a re-run draws the SAME baskets")
 
 AS_OF_RULE = ("each round ranks on accounts whose fiscal period ended on or before the round date "
               "minus the filing lag, and on closes up to the round date; nothing later is read")
@@ -257,6 +270,10 @@ class Round:
     # against "the lens is proven on one stock"). None when the round held no position or n_buys < 4
     # (see run_lens_backtest); NOT read by verdict().
     excess_drop_best: Optional[float] = None
+    # BACKTEST-1C — the mean excess of this round's RANDOM_BASKETS_DEFAULT random baskets (same
+    # size as this round's BUY basket, drawn from the same priced eligible names). None when the
+    # round held no position (no random baskets are drawn for a no-position round).
+    random_mean_excess: Optional[float] = None
 
     @property
     def has_position(self) -> bool:
@@ -279,6 +296,11 @@ class Summary:
     # BACKTEST-1B — the same yearly averaging as mean_annual_excess, over excess_drop_best instead of
     # excess. Reading, not gating: verdict() never looks at this field.
     mean_annual_excess_drop_best: Optional[float] = None
+    # BACKTEST-1C — copied from the BacktestResult (see there for what each means); kept here too
+    # because Summary is the object verdict() reads. None when random_baskets=0 (opted out).
+    luck_pct_mean: Optional[float] = None
+    luck_pct_pass: Optional[float] = None
+    drop_best_vs_random: Optional[float] = None
 
 
 @dataclass
@@ -303,6 +325,23 @@ class BacktestResult:
     size_floor: Optional[float] = None
     size_floor_note: str = ""
     price_warnings: list = field(default_factory=list)
+    # BACKTEST-1C — the random-basket luck baseline. These three cannot be recomputed from
+    # ``rounds`` alone (only each round's MEAN random excess is persisted, not the underlying
+    # draws), so they are set ONCE by run_lens_backtest and carried as plain fields, read straight
+    # back by from_csv rather than re-derived.
+    random_baskets: int = 0                    # 0 -> opted out; no luck fields below are set
+    seed_rule: str = ""
+    max_luck: float = MAX_LUCK
+    # Share of the random_baskets random series whose OWN mean annual excess is >= this lens's.
+    # Low is good: "luck 3%" means only 3 of 100 random pickers did as well or better.
+    luck_pct_mean: Optional[float] = None
+    # Share of the random series that would themselves clear the plain excess/years bar (the
+    # cohort's OWN chance pass rate under the current bar) — feeds multiple_testing().
+    luck_pct_pass: Optional[float] = None
+    # This lens's mean_annual_excess_drop_best minus the MEDIAN of the random series' own
+    # drop-best figure. Positive: the lens depends on its best pick LESS than random picking
+    # does. None when there is no drop-best figure to compare (no round ever had 4+ BUYs).
+    drop_best_vs_random: Optional[float] = None
 
     @property
     def cohort_slug(self) -> str:
@@ -331,7 +370,9 @@ class BacktestResult:
             max_drawdown=_buy_drawdown(self.rounds, self.hold_months, self.step_months),
             caveats=tuple(self.caveats),
             mean_annual_excess_drop_best=((sum(drop_best_years.values()) / len(drop_best_years))
-                                          if drop_best_years else None))
+                                          if drop_best_years else None),
+            luck_pct_mean=self.luck_pct_mean, luck_pct_pass=self.luck_pct_pass,
+            drop_best_vs_random=self.drop_best_vs_random)
 
 
 def cohort_slug(name: str) -> str:
@@ -449,16 +490,32 @@ def _buy_drawdown(rounds, hold_months: int, step_months: int) -> Optional[float]
     return worst
 
 
-def verdict(result: BacktestResult, min_excess: float = PROOF_MIN_EXCESS,
-            min_years: int = PROOF_MIN_YEARS, of_years: int = PROOF_OF_YEARS) -> str:
-    """"proven" | "not proven" | "insufficient" - the owner's pass bar (see PROOF_* above)."""
-    s = result.summary
-    if s.years_measured < INSUFFICIENT_BELOW_YEARS or s.n_positions < INSUFFICIENT_BELOW_ROUNDS:
-        return "insufficient"
+def _passes_bar(s: Summary, min_excess: float, min_years: int, of_years: int) -> bool:
+    """The plain excess/years bar, with no opinion about luck. Shared by ``verdict()`` and the
+    random series' own pass/fail test (``luck_pct_pass``), so the two can never quietly diverge."""
     beats_by_enough = (s.mean_annual_excess is not None
                       and s.mean_annual_excess >= min_excess - PROOF_TOLERANCE)
     positive_enough = s.years_positive * of_years >= min_years * s.years_measured
-    return "proven" if (beats_by_enough and positive_enough) else "not proven"
+    return beats_by_enough and positive_enough
+
+
+def verdict(result: BacktestResult, min_excess: float = PROOF_MIN_EXCESS,
+            min_years: int = PROOF_MIN_YEARS, of_years: int = PROOF_OF_YEARS,
+            max_luck: float = MAX_LUCK) -> str:
+    """"proven" | "not proven" | "not beyond luck" | "insufficient" - the owner's pass bar (see
+    PROOF_* above), plus the BACKTEST-1C skill condition: even a lens that clears the excess/years
+    bar is "not beyond luck" unless ``luck_pct_mean <= max_luck`` — at most ``max_luck`` of random
+    stock-pickers, drawing the same-size basket from the same eligible names, would have done as
+    well or better. Luck stats unmeasured (``luck_pct_mean is None`` — random_baskets=0) is treated
+    the same as failing the luck test: never silently promoted to "proven" without the evidence."""
+    s = result.summary
+    if s.years_measured < INSUFFICIENT_BELOW_YEARS or s.n_positions < INSUFFICIENT_BELOW_ROUNDS:
+        return "insufficient"
+    if not _passes_bar(s, min_excess, min_years, of_years):
+        return "not proven"
+    if s.luck_pct_mean is None or s.luck_pct_mean > max_luck:
+        return "not beyond luck"
+    return "proven"
 
 
 # --------------------------------------------------------------------------- #
@@ -560,10 +617,14 @@ def _default_feed():
 def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold_months: int = 12,
                       step_months: int = 1, cost_bps: float = 50, lag_days: int = 90,
                       adapter=None, progress=None, cohorts_root=None, members=None,
-                      strategies_dir=None, member_caps=None) -> BacktestResult:
+                      strategies_dir=None, member_caps=None,
+                      random_baskets: int = RANDOM_BASKETS_DEFAULT,
+                      max_luck: float = MAX_LUCK) -> BacktestResult:
     """Backtest one lens on one cohort. The first eight parameters are the contract; the rest of the
     keywords only say WHERE things live (a cohort directory, an explicit member list and its market
     caps for a machine with no built cohorts, a strategies directory) and change no rule.
+    ``random_baskets`` (BACKTEST-1C, default 500; 0 opts out) and ``max_luck`` (default 0.05) are
+    the luck baseline's own contract — see step 4 below and docs/BACKTEST.md "Skill versus luck".
 
     At each month end ``d`` from ``start`` to ``end - hold_months``:
 
@@ -583,6 +644,17 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
        and the excess is that minus the equal-weight return of every ranked (eligible, un-excluded)
        member. Fewer than MIN_BUYS priced BUY names -> "no position": counted, kept in the file,
        excluded from every average.
+    4. **Random-basket luck baseline (BACKTEST-1C).** Every POSITIONED round also draws
+       ``random_baskets`` random baskets, each the same size as that round's own BUY basket
+       (``n_buys``), sampled without replacement from the SAME priced names the lens's benchmark is
+       built from (the names it could actually have bought) — seeded from a hash of cohort + lens +
+       round date, so a re-run draws the identical baskets. Scored exactly like the lens's own
+       basket (same dates, same cost, same benchmark). After the loop, the ``random_baskets`` random
+       "lenses" (basket i of every round) are each summarised the same way the real lens is, giving
+       ``luck_pct_mean`` (share of them that beat this lens's own mean annual excess),
+       ``luck_pct_pass`` (share that would themselves clear the plain bar - the cohort's own chance
+       pass rate) and ``drop_best_vs_random`` (this lens's drop-best figure against the random
+       series' median). ``verdict()`` reads ``luck_pct_mean``; ``0`` opts out (no luck fields set).
 
     No LLM is called; ``adapter`` (default: EODHD accounts + yfinance prices) is the inner data
     source."""
@@ -603,7 +675,10 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                             cost_bps=float(cost_bps), lag_days=lag_days, cohort_version=version,
                             n_members=len(members), size_floor=size_floor,
                             size_floor_note=size_floor_note,
-                            lens_commit=lens_commit(lens_id, strategies_dir))
+                            lens_commit=lens_commit(lens_id, strategies_dir),
+                            random_baskets=max(0, int(random_baskets)),
+                            seed_rule=(SEED_RULE if random_baskets > 0 else ""),
+                            max_luck=float(max_luck))
     if not dates:
         result.caveats = _caveats(result, 0)
         result.caveats.append(f"the window {start} to {end} is shorter than one {hold_months}-month "
@@ -649,7 +724,13 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
         return out
 
     cost = float(cost_bps) / 10_000.0
+    random_baskets = max(0, int(random_baskets))
     unpriced = 0
+    undersized_rounds = 0                                  # pool smaller than n_buys (rare)
+    pos_dates: list = []
+    pos_excess_cols: list = []                              # each shape (random_baskets,)
+    dropbest_dates: list = []
+    dropbest_cols: list = []                                # each shape (random_baskets,)
     for i, d in enumerate(dates, 1):
         exit_date = add_months(d, hold_months)
         eligible = eligible_at(d)
@@ -669,11 +750,32 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                 held.append((r.ticker, ret))
         bench_ret = (sum(bench) / len(bench)) if bench else None
         if len(held) >= MIN_BUYS and bench_ret is not None:
+            n_buys = len(buys)
             buy_ret = sum(v for _, v in held) / len(held) - cost
-            drop_best = _drop_best_excess(held, len(buys), bench_ret, cost)
-            result.rounds.append(Round(d, len(buys), buy_ret, bench_ret, buy_ret - bench_ret,
+            drop_best = _drop_best_excess(held, n_buys, bench_ret, cost)
+            random_mean_excess = None
+            if random_baskets > 0:
+                pool = np.asarray(bench, dtype=float)
+                k = min(n_buys, pool.size)
+                if k < n_buys:
+                    undersized_rounds += 1
+                if k > 0:
+                    rng = np.random.default_rng(_round_seed(result.cohort_slug, lens_id, d))
+                    idx = _sample_baskets(rng, pool.size, k, random_baskets)     # (N, k)
+                    basket_returns = pool[idx]                                  # (N, k)
+                    basket_excess = (basket_returns.mean(axis=1) - cost) - bench_ret   # (N,)
+                    random_mean_excess = float(basket_excess.mean())
+                    pos_dates.append(d)
+                    pos_excess_cols.append(basket_excess)
+                    if n_buys >= 4 and k >= 2:
+                        best = basket_returns.max(axis=1)
+                        rest_mean = (basket_returns.sum(axis=1) - best) / (k - 1)
+                        dropbest_dates.append(d)
+                        dropbest_cols.append((rest_mean - cost) - bench_ret)
+            result.rounds.append(Round(d, n_buys, buy_ret, bench_ret, buy_ret - bench_ret,
                                        tuple(t for t, _ in held), exit_date, len(live),
-                                       n_eligible=len(eligible), excess_drop_best=drop_best))
+                                       n_eligible=len(eligible), excess_drop_best=drop_best,
+                                       random_mean_excess=random_mean_excess))
         else:
             result.rounds.append(Round(d, len(buys), None, bench_ret, None, (), exit_date,
                                        len(live), n_eligible=len(eligible)))
@@ -683,8 +785,63 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                      f"{len(buys)} BUY, "
                      + (f"excess {last.excess:+.1%}" if last.has_position else "no position"))
     result.price_warnings = sorted(set(price_warnings))
-    result.caveats = _caveats(result, unpriced)
+    if random_baskets > 0 and pos_excess_cols:
+        _apply_luck_stats(result, pos_dates=pos_dates, pos_excess_cols=pos_excess_cols,
+                          dropbest_dates=dropbest_dates, dropbest_cols=dropbest_cols)
+    result.caveats = _caveats(result, unpriced, undersized_rounds)
     return result
+
+
+def _round_seed(cohort_slug_: str, lens_id: str, round_date: date) -> int:
+    """A seed fixed by cohort + lens + round date (SEED_RULE) - the same round always draws the
+    same random baskets, and a different round never repeats another round's draw."""
+    key = f"{cohort_slug_}|{lens_id}|{round_date.isoformat()}"
+    return int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:8], 16)
+
+
+def _sample_baskets(rng: "np.random.Generator", pool_size: int, k: int, n: int) -> "np.ndarray":
+    """``n`` independent random index combinations of size ``k``, without replacement, from
+    ``range(pool_size)`` - vectorised (one call, no Python loop over ``n``): one random float per
+    (basket, pool member), argsort each basket's row, keep the first ``k`` columns. Shape (n, k)."""
+    return np.argsort(rng.random((n, pool_size)), axis=1)[:, :k]
+
+
+def _year_group_means(matrix: "np.ndarray", dates: list) -> "np.ndarray":
+    """``matrix`` is (random_baskets, len(dates)); group columns by ``dates[i].year`` and mean
+    within each group, per row. Returns (n_years, random_baskets) - the per-series yearly means
+    the real lens's ``year_excess`` computes one series (itself) of."""
+    groups: dict = {}
+    for col, d in enumerate(dates):
+        groups.setdefault(d.year, []).append(col)
+    return np.stack([matrix[:, idx].mean(axis=1) for idx in groups.values()], axis=0)
+
+
+def _apply_luck_stats(result: BacktestResult, *, pos_dates: list, pos_excess_cols: list,
+                      dropbest_dates: list, dropbest_cols: list) -> None:
+    """Sets ``luck_pct_mean`` / ``luck_pct_pass`` / ``drop_best_vs_random`` on ``result`` from the
+    accumulated per-round random-basket columns. Every random series shares the SAME positioned
+    rounds (and so the same years_measured/n_positions) as the real lens - a round holds a
+    position, or does not, independent of which basket is drawn - which is what lets this be a
+    handful of vectorised numpy calls instead of ``random_baskets`` separate Summary objects."""
+    lens_summary = result.summary
+    all_excess = np.column_stack(pos_excess_cols)                  # (N, n_positioned_rounds)
+    year_means = _year_group_means(all_excess, pos_dates)           # (n_years, N)
+    mean_annual_excess_series = year_means.mean(axis=0)              # (N,)
+    years_positive_series = (year_means > 0).sum(axis=0)             # (N,)
+    n_years = year_means.shape[0]
+
+    result.luck_pct_mean = float(np.mean(
+        mean_annual_excess_series >= lens_summary.mean_annual_excess))
+    beats = mean_annual_excess_series >= (PROOF_MIN_EXCESS - PROOF_TOLERANCE)
+    positive_enough = (years_positive_series * PROOF_OF_YEARS) >= (PROOF_MIN_YEARS * n_years)
+    result.luck_pct_pass = float(np.mean(beats & positive_enough))
+
+    if dropbest_cols and lens_summary.mean_annual_excess_drop_best is not None:
+        dropbest_matrix = np.column_stack(dropbest_cols)
+        db_year_means = _year_group_means(dropbest_matrix, dropbest_dates)
+        mean_annual_drop_best_series = db_year_means.mean(axis=0)
+        result.drop_best_vs_random = float(lens_summary.mean_annual_excess_drop_best
+                                           - np.median(mean_annual_drop_best_series))
 
 
 def _drop_best_excess(held: list, n_buys: int, bench_ret: float, cost: float) -> Optional[float]:
@@ -697,7 +854,7 @@ def _drop_best_excess(held: list, n_buys: int, bench_ret: float, cost: float) ->
     return sum(rest) / len(rest) - cost - bench_ret
 
 
-def _caveats(result: BacktestResult, unpriced: int) -> list:
+def _caveats(result: BacktestResult, unpriced: int, undersized_rounds: int = 0) -> list:
     out = [
         "RESTATED ACCOUNTS: statements are the ones EODHD carries today (restated), dated by "
         f"fiscal-period end plus a {result.lag_days}-day filing lag; a reader on the day saw the "
@@ -724,6 +881,17 @@ def _caveats(result: BacktestResult, unpriced: int) -> list:
     if unpriced:
         out.append(f"{unpriced} name-round(s) had no usable price at the entry or exit date and were "
                    "left out of both the BUY basket and the benchmark.")
+    if result.random_baskets:
+        out.append(f"RANDOM-BASKET LUCK BASELINE: {result.random_baskets} random baskets per "
+                   "positioned round, each the same size as that round's own BUY basket, drawn "
+                   "without replacement from the same priced names the benchmark is built from "
+                   f"({SEED_RULE}). luck_pct_mean <= {result.max_luck:.0%} is required for "
+                   "\"proven\"; below that a lens that clears the excess/years bar reads "
+                   "\"not beyond luck\" instead. See docs/BACKTEST.md, Skill versus luck.")
+    if undersized_rounds:
+        out.append(f"{undersized_rounds} round(s) had fewer priced eligible names than the lens's "
+                   "own BUY basket size, so that round's random baskets were drawn smaller than "
+                   "n_buys (the largest basket the priced pool could support).")
     return out
 
 
@@ -731,7 +899,7 @@ def _caveats(result: BacktestResult, unpriced: int) -> list:
 # the file
 # --------------------------------------------------------------------------- #
 _ROUND_COLUMNS = ("date", "exit_date", "n_eligible", "n_ranked", "n_buys", "buy_return",
-                  "bench_return", "excess", "excess_drop_best", "tickers")
+                  "bench_return", "excess", "excess_drop_best", "random_mean_excess", "tickers")
 
 
 def _num(x: Optional[float]) -> str:
@@ -767,7 +935,13 @@ def to_csv(result: BacktestResult, path) -> Path:
         ("as_of_size_floor", (f"{result.size_floor:,.0f} USD, estimated from today's cap and price "
                               f"ratio ({result.size_floor_note})") if result.size_floor is not None
          else "n/a - no market-cap data for this run"),
-        ("verdict", verdict(result)),
+        ("random_baskets", result.random_baskets),
+        ("seed_rule", result.seed_rule or "n/a - random_baskets=0"),
+        ("max_luck", repr(float(result.max_luck))),
+        ("luck_pct_mean", _num(result.luck_pct_mean) or "n/a"),
+        ("luck_pct_pass", _num(result.luck_pct_pass) or "n/a"),
+        ("drop_best_vs_random", _num(result.drop_best_vs_random) or "n/a"),
+        ("verdict", verdict(result, max_luck=result.max_luck)),
     ]
     with target.open("w", newline="", encoding="utf-8") as fh:
         fh.write("# aristos-council lens backtest (BACKTEST-1) - see docs/BACKTEST.md\n")
@@ -783,7 +957,7 @@ def to_csv(result: BacktestResult, path) -> Path:
             writer.writerow([r.date.isoformat(), r.exit_date.isoformat() if r.exit_date else "",
                              r.n_eligible, r.n_ranked, r.n_buys, _num(r.buy_return),
                              _num(r.bench_return), _num(r.excess), _num(r.excess_drop_best),
-                             " ".join(r.tickers)])
+                             _num(r.random_mean_excess), " ".join(r.tickers)])
     return target
 
 
@@ -826,8 +1000,14 @@ def from_csv(path) -> BacktestResult:
             exit_date=date.fromisoformat(row["exit_date"]) if row["exit_date"] else None,
             n_ranked=int(row["n_ranked"]),
             n_eligible=int(row["n_eligible"]) if row.get("n_eligible") not in (None, "") else 0,
-            excess_drop_best=_unnum(row.get("excess_drop_best") or "")))
+            excess_drop_best=_unnum(row.get("excess_drop_best") or ""),
+            random_mean_excess=_unnum(row.get("random_mean_excess") or "")))
     size_floor, size_floor_note = _parse_size_floor(meta.get("as_of_size_floor", ""))
+
+    def _meta_num(key: str) -> Optional[float]:
+        text = meta.get(key, "")
+        return None if text in ("", "n/a") else float(text)
+
     return BacktestResult(
         cohort=meta["cohort"], lens_id=meta["lens"], start=date.fromisoformat(meta["start"]),
         end=date.fromisoformat(meta["end"]), hold_months=int(meta["hold_months"]),
@@ -836,7 +1016,12 @@ def from_csv(path) -> BacktestResult:
         lens_commit=meta.get("lens_commit", ""),
         cohort_version=int(meta["cohort_version"]) if meta.get("cohort_version") else None,
         n_members=int(meta.get("cohort_members") or 0),
-        size_floor=size_floor, size_floor_note=size_floor_note, price_warnings=price_warnings)
+        size_floor=size_floor, size_floor_note=size_floor_note, price_warnings=price_warnings,
+        random_baskets=int(meta.get("random_baskets") or 0),
+        seed_rule=(meta.get("seed_rule", "") if int(meta.get("random_baskets") or 0) else ""),
+        max_luck=float(meta["max_luck"]) if meta.get("max_luck") else MAX_LUCK,
+        luck_pct_mean=_meta_num("luck_pct_mean"), luck_pct_pass=_meta_num("luck_pct_pass"),
+        drop_best_vs_random=_meta_num("drop_best_vs_random"))
 
 
 def _pct(x: Optional[float], signed: bool = True) -> str:
@@ -846,11 +1031,12 @@ def _pct(x: Optional[float], signed: bool = True) -> str:
 def summary_line(result: BacktestResult) -> str:
     """One line: cohort x lens, the verdict, and the numbers it rests on."""
     s = result.summary
-    return (f"{result.cohort_slug} x {result.lens_id}: {verdict(result)} - mean annual excess "
-            f"{_pct(s.mean_annual_excess)}, {s.years_positive} of {s.years_measured} years positive, "
-            f"hit rate {_pct(s.hit_rate, False)}, {s.n_positions} of {s.n_rounds} rounds held a "
-            f"position, worst round {_pct(s.worst_round_excess)}, max drawdown "
-            f"{_pct(s.max_drawdown, False)}")
+    luck = (f", luck {s.luck_pct_mean:.0%}" if s.luck_pct_mean is not None else "")
+    return (f"{result.cohort_slug} x {result.lens_id}: {verdict(result, max_luck=result.max_luck)} "
+            f"- mean annual excess {_pct(s.mean_annual_excess)}, {s.years_positive} of "
+            f"{s.years_measured} years positive, hit rate {_pct(s.hit_rate, False)}, "
+            f"{s.n_positions} of {s.n_rounds} rounds held a position, worst round "
+            f"{_pct(s.worst_round_excess)}, max drawdown {_pct(s.max_drawdown, False)}{luck}")
 
 
 def summarize_directory(root) -> list:
@@ -863,6 +1049,45 @@ def summarize_directory(root) -> list:
         except Exception as exc:                              # noqa: BLE001 - named, not hidden
             lines.append(f"{path.parent.name} x {path.stem}: UNREADABLE ({exc})")
     return lines
+
+
+# --------------------------------------------------------------------------- #
+# BACKTEST-1C — the multiple-testing line
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class MultipleTestingStats:
+    """Over a set of cohort x lens results: how many were even testable, how many came out
+    "proven", and how many "proven"s chance alone would produce at this sample size."""
+    tests_run: int                     # non-"insufficient" results
+    proven: int
+    expected_by_chance: float          # sum of each test's OWN luck_pct_pass
+
+    def sentence(self) -> str:
+        return (f"Multiple testing: {self.tests_run} test(s) run (insufficient excluded), "
+               f"{self.proven} proven, {self.expected_by_chance:.1f} expected to pass by chance "
+               f"alone (sum of each test's own chance pass rate).")
+
+
+def multiple_testing(results) -> MultipleTestingStats:
+    """``results`` is any iterable of ``BacktestResult``. A result with no measured
+    ``luck_pct_pass`` (random_baskets=0) contributes 0 to the chance total - it is still counted
+    in ``tests_run`` if not insufficient, but honestly cannot say how much of its own pass, if
+    any, chance would explain."""
+    tested = [r for r in results if verdict(r, max_luck=r.max_luck) != "insufficient"]
+    proven = sum(1 for r in tested if verdict(r, max_luck=r.max_luck) == "proven")
+    expected = sum((r.luck_pct_pass or 0.0) for r in tested)
+    return MultipleTestingStats(tests_run=len(tested), proven=proven, expected_by_chance=expected)
+
+
+def multiple_testing_for_directory(root) -> MultipleTestingStats:
+    """``multiple_testing`` over every readable ``<root>/<cohort>/<lens>.csv``."""
+    results = []
+    for path in sorted(Path(root).glob("*/*.csv")):
+        try:
+            results.append(from_csv(path))
+        except Exception:                                      # noqa: BLE001 - just left out
+            continue
+    return multiple_testing(results)
 
 
 # --------------------------------------------------------------------------- #
@@ -886,6 +1111,11 @@ def _build_parser():
     run.add_argument("--lag-days", type=int, default=90, help="filing lag (default 90)")
     run.add_argument("--out", default="backtests", help="output root (default backtests/)")
     run.add_argument("--cohorts-root", default=None, help="where frozen cohorts live")
+    run.add_argument("--random-baskets", type=int, default=RANDOM_BASKETS_DEFAULT,
+                     help=f"random baskets per round for the luck baseline (default "
+                          f"{RANDOM_BASKETS_DEFAULT}; 0 opts out) - BACKTEST-1C")
+    run.add_argument("--max-luck", type=float, default=MAX_LUCK,
+                     help=f"\"proven\" needs luck_pct_mean <= this (default {MAX_LUCK:g})")
     summ = sub.add_parser("summary", help="one line per cohort x lens under a backtests directory")
     summ.add_argument("root", nargs="?", default="backtests")
     return p
@@ -909,6 +1139,8 @@ def main(argv=None) -> int:
     if args.cmd == "summary":
         lines = summarize_directory(args.root)
         print("\n".join(lines) if lines else f"no backtests under {args.root}")
+        if lines:
+            print(multiple_testing_for_directory(args.root).sentence())
         return 0
     _load_env()
     end = args.end or month_end(date.today().replace(day=1) - timedelta(days=1))
@@ -916,6 +1148,7 @@ def main(argv=None) -> int:
     result = run_lens_backtest(
         args.cohort, args.lens, start=start, end=end, hold_months=args.hold, step_months=args.step,
         cost_bps=args.cost_bps, lag_days=args.lag_days, cohorts_root=args.cohorts_root,
+        random_baskets=args.random_baskets, max_luck=args.max_luck,
         progress=lambda msg: print(msg, flush=True))
     path = to_csv(result, args.out)
     print(f"wrote {path}")
