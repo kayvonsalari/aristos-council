@@ -26,6 +26,37 @@ start_gap_ledger.bat                  the Windows launcher for the viewer
 data/local/gap_ledger/YYYY-MM-DD.csv  one record per trading day (gitignored)
 ```
 
+## Relationship to Aristos Council
+
+**Today.** Gap Ledger is a separate package and a separate app living in this same repository. It is
+**not** part of Company Check or the Run tab — no council surface imports it, links to it, or reads
+its output, and it imports nothing from `app.py` (both asserted by tests; see "Purpose" above). It
+answers "what moved this morning?", which is a different question from anything the council asks.
+
+Its market data — real pre-market volume from a local IBKR Gateway — is licensed for the owner's
+**personal, non-professional use only** and must stay inside `gap_ledger/` (see "Data licence"
+below). It is never shown in client-facing Aristos output and never enters any of the public data
+files (the market index, a cohort's `members.csv`, a strategy YAML, a verdict or a report).
+
+**Planned direction (not built).** The current thinking, none of it implemented yet:
+
+- a **read-only Gap Ledger results tab** inside the main Aristos app (`app.py`), alongside Run and
+  Company Check — still read-only, still no council convened from it;
+- the four quantitative methods across the project — **backtest-gated votes** ([BACKTEST-1](BACKTEST.md)
+  today, BACKTEST-2 to follow), **fair-multiple valuation**, a **composite score**, and **earnings
+  drift** — converging on **one shared engine** that both the Run tab and Company Check call, rather
+  than each surface computing its own version;
+- **earnings drift stays a Gap Ledger-only method** — it is not planned to feed the council's rank or
+  verdict;
+- with a shared engine in place, the Run tab and a Gap Ledger results tab **may be merged later** into
+  one surface. Nothing about this changes the licence boundary above: a shared engine reads Gap
+  Ledger's OWN outputs (CSVs, scores), never `gap_ledger.ibkr` directly.
+
+**Feature freeze.** Gap Ledger is under a feature freeze until it has a verdict from 40 scored trading
+days (see "Feature freeze and the verdict" below) — expected around late November 2026 at the current
+pace. Until then, only bug fixes land on it; no new filters, thresholds, checkpoints, or surfaces
+(including the planned tab above).
+
 ## The daily pipeline at a glance
 
 | # | Stage | What it does | Detail |
