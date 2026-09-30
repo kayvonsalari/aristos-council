@@ -50,6 +50,16 @@ lenses are deliberately NOT wired into this job (examples/grade_holdings.py
 covers ETFs on demand). The scanner itself is NEVER modified or re-run here —
 this only reads its frozen output.
 
+SCOUT-HOLDINGS-401 (2026-09-30): a genuinely FAILED live fetch of the Holdings tab (a
+network/HTTP error — seen since 2026-08-22 as an HTTP 401, most likely the spreadsheet's
+sharing settings changed) is NOT absorbed silently. It writes NO holdings report this run
+(last week's stays the committed one), posts one Todoist task naming the failure (project
+"Aristos Scout", three tries with backoff — TODOIST_API_TOKEN must be set, or the task is
+skipped and only the exit code / stderr carry the signal), and exits 1 so the scheduled
+workflow shows red. Every OTHER source still writes and commits normally. A merely EMPTY
+tab (the owner holds nothing this week), an unconfigured URL, or a malformed sheet are each
+a different, non-fatal condition (see ``holdings_fetch_failure``) and do not trip this.
+
 Usage (from repo root):
     python scripts/scout_verdicts.py                     # live: fetch all, run
     python scripts/scout_verdicts.py --dry-run           # parse + print only
@@ -66,6 +76,9 @@ Env:
                              (default built in; folder must be link-viewable)
     SCOUT_SCANNER_CSV        optional direct CSV URL — overrides folder lookup
     SCOUT_WINDOW_DAYS        news lookback window in days (default 8)
+    TODOIST_API_TOKEN        posts the SCOUT-HOLDINGS-401 failure alert when set; unset ->
+                             the alert is skipped (reported, not a crash) and only the
+                             non-zero exit / stderr message carry the failure
 """
 
 from __future__ import annotations
@@ -136,6 +149,18 @@ STOCK_LENSES = [
 ]
 
 BASE_UNIVERSE = "growth_40_v1"
+
+# --- SCOUT-HOLDINGS-401: a failed Holdings-tab fetch fails LOUDLY --------------
+# Since 2026-08-22 the Holdings tab (and, it turns out, the FT news sheet on the same
+# spreadsheet) has been returning HTTP 401 - the document's public/link sharing was
+# narrowed or revoked, not a code or credential problem this script can fix. Silently
+# writing an empty "0 holdings" report every week (the old behaviour: a fetch failure was
+# absorbed into ONE skipped entry and the run continued as if nothing were wrong) meant six
+# weeks of committed reports said nothing was watched, with no signal anywhere that the FETCH
+# itself, not just this week's list, was broken. A genuinely empty holdings tab (the owner
+# really does hold nothing this week) is NOT this case and must never be treated as one - only
+# an actual fetch failure (a network/HTTP error) trips this.
+TODOIST_PROJECT = "Aristos Scout"
 
 # Venue text (as it appears in a "Ticker & listing" cell) → yfinance suffix.
 VENUE_SUFFIX = {
@@ -362,18 +387,51 @@ def read_holdings_tab(text: str, *, label: str = "Holdings tab") -> HoldingsTabR
 
 
 def load_holdings_tab(url: str, *, fetch=None) -> HoldingsTabRead:
-    """Fetch + parse the Holdings tab, degrading EXACTLY like a news sheet: a fetch
-    failure becomes ONE ``skipped`` entry naming the reason and the run continues on
-    the other sources — an unreachable tab must never take the whole scout down."""
+    """Fetch + parse the Holdings tab. A fetch failure becomes ONE ``skipped`` entry naming
+    the reason rather than raising — ``main`` (SCOUT-HOLDINGS-401) is what decides how loudly
+    to treat that entry, this function just reports it honestly either way."""
     if not url:
         return HoldingsTabRead([], [{"source": HOLDINGS_SOURCE, "cell": "-",
                                      "reason": "no Holdings tab configured "
                                                "(SCOUT_SHEET_HOLDINGS empty)"}])
     try:
         return read_holdings_tab((fetch or _fetch)(url), label=url)
-    except Exception as e:                        # noqa: BLE001 — never fatal
+    except Exception as e:                        # noqa: BLE001 — reported, not raised
         return HoldingsTabRead([], [{"source": HOLDINGS_SOURCE, "cell": url,
                                      "reason": f"fetch failed: {e}"}])
+
+
+def holdings_fetch_failure(tab: HoldingsTabRead) -> str | None:
+    """SCOUT-HOLDINGS-401 — the reason the Holdings TAB fetch itself failed (a network/HTTP
+    error, e.g. "fetch failed: HTTP Error 401: Unauthorized"), or None. Deliberately narrow:
+    an EMPTY tab (the owner holds nothing this week), an unconfigured URL, or a malformed
+    sheet (no 'Ticker' header) are each a different, non-fatal condition and must not trip
+    this — only an actual fetch failure does."""
+    for row in tab.skipped:
+        if str(row.get("reason", "")).startswith("fetch failed"):
+            return row["reason"]
+    return None
+
+
+def alert_holdings_fetch_failed(today: date, reason: str, *, client=None) -> "DeliveryOutcome":
+    """Post (or update) ONE Todoist task naming today's holdings-fetch failure, using the
+    SAME generic delivery — three tries with backoff — Gap Ledger's own alerts use
+    (``aristos_council.todoist_client``; GAP-LEDGER-1's boundary means this imports the
+    shared module, never ``gap_ledger`` itself). Never raises; a missing
+    ``TODOIST_API_TOKEN`` is reported in the returned outcome, not a crash — the run's own
+    non-zero exit and stderr message are the failure signal that never depends on Todoist."""
+    from aristos_council.todoist_client import DeliveryOutcome, RestTodoist, deliver_alert
+    day = today.isoformat()
+    outcome = deliver_alert(
+        project_name=TODOIST_PROJECT, title_prefix=f"Scout holdings fetch failed {day}",
+        content=f"Scout holdings fetch failed {day}",
+        description=(f"The weekly scout could not read the Holdings tab: {reason}\n\n"
+                     f"No holdings report was written this run; last week's committed report "
+                     f"is still the current one. Likely cause: the spreadsheet's sharing "
+                     f"settings changed (see scripts/scout_verdicts.py's module docstring, "
+                     f"SCOUT-HOLDINGS-401)."),
+        client=client if client is not None else RestTodoist())
+    return outcome
 
 
 # --- growth-scanner reading ------------------------------------------------
@@ -618,6 +676,9 @@ def main() -> None:
             news[source] = read_scouted(text, source, args.window_days, today)
 
     # ---- holdings: the dedicated Holdings TAB (primary) + the HOLDING flags ----
+    # SCOUT-HOLDINGS-401: only the LIVE fetch path (no local override, no deliberate skip) can
+    # trip the loud-failure path below — a local test run must behave exactly as it always has.
+    holdings_failure: str | None = None
     if args.holdings_csv:
         tab = read_holdings_tab(Path(args.holdings_csv).read_text(encoding="utf-8"),
                                 label=Path(args.holdings_csv).name)
@@ -630,6 +691,7 @@ def main() -> None:
             if row["reason"].startswith(("fetch failed", "no Holdings tab",
                                          "no 'Ticker' header")):
                 print(f"WARN: Holdings tab: {row['reason']}", file=sys.stderr)
+        holdings_failure = holdings_fetch_failure(tab)
 
     # ONE holdings source out of both inputs, assembled ACROSS the tab and every
     # news sheet (any date — the news window does not apply to a continuously
@@ -750,11 +812,24 @@ def main() -> None:
         "cohort_size": len(cohort), "cohort": "combined",
         "also_found_by": also.get(SCANNER_SOURCE, {}),
         "scan_file": scan_label, "scan_header": scan_header}
-    per_source[HOLDINGS_SOURCE] = {
-        "scouted": holdings_rows, "skipped": holdings_skipped, "result": result,
-        "cohort_size": len(cohort), "cohort": "combined",
-        "also_found_by": also.get(HOLDINGS_SOURCE, {})}
+    # SCOUT-HOLDINGS-401: a genuinely FAILED fetch writes NOTHING for holdings this run — no
+    # {stamp}_verdicts.{json,md} and no latest.json overwrite — so last week's committed report
+    # (last known good) stays the current one rather than being replaced by an empty one. Every
+    # other source still writes normally: one broken sheet must not cost the others their week.
+    if holdings_failure is None:
+        per_source[HOLDINGS_SOURCE] = {
+            "scouted": holdings_rows, "skipped": holdings_skipped, "result": result,
+            "cohort_size": len(cohort), "cohort": "combined",
+            "also_found_by": also.get(HOLDINGS_SOURCE, {})}
     _write_outputs(today, per_source, f_scores)
+
+    if holdings_failure is not None:
+        print(f"ERROR: Holdings tab fetch failed: {holdings_failure}", file=sys.stderr)
+        print("No holdings report was written this run — last week's stays committed.",
+              file=sys.stderr)
+        outcome = alert_holdings_fetch_failed(today, holdings_failure)
+        print(outcome.sentence(project_name=TODOIST_PROJECT), file=sys.stderr)
+        sys.exit(1)
 
 
 def _entry_for(row, meta: dict, also: dict | None = None,

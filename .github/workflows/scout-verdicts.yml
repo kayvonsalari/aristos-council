@@ -50,22 +50,35 @@ jobs:
       - name: Install (yfinance extra — deterministic ranker only, no LLM)
         run: pip install -e ".[yfinance]"
 
+      # SCOUT-HOLDINGS-401: this step now EXITS 1 when the Holdings tab fetch itself fails (a
+      # network/HTTP error, not merely an empty tab) — visible as this step failing red. The
+      # steps below all carry `if: always()` (or fold it into their existing `if:`) so a
+      # holdings-only failure still lets the OTHER sources' fresh reports build, publish and
+      # commit; the job's own conclusion still reads "failure" because this step did.
       - name: Run scout verdicts
+        id: run_scout
         env:
           SCOUT_WINDOW_DAYS: ${{ github.event.inputs.window_days || '8' }}
           # Optional: set the Economist sheet CSV export URL as a repo variable
           # (Settings → Secrets and variables → Actions → Variables) once the
           # sheet exists. Leave unset until then — the script skips it cleanly.
           SCOUT_SHEET_ECONOMIST: ${{ vars.SCOUT_SHEET_ECONOMIST }}
+          # SCOUT-HOLDINGS-401: posts the "Holdings tab fetch failed" alert task. Add this as
+          # a repository secret (Settings → Secrets and variables → Actions → New repository
+          # secret → TODOIST_API_TOKEN) to receive it; unset, the script still exits 1 and
+          # prints the reason, it just cannot post to Todoist.
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
         run: python scripts/scout_verdicts.py
 
       - name: Install publisher deps
+        if: always()
         run: pip install --quiet openpyxl google-auth google-api-python-client
 
       # Always produced, credentials or not: dist/aristos_verdicts_<run_date>.xlsx
       # (three named tabs) and dist/summary.json (digest for the notification).
       # --max-age-days 3 exits 3 if the grader did not actually refresh the reports.
       - name: Build verdict workbook
+        if: always()
         run: |
           python scripts/publish_verdicts.py \
             --reports reports/scout \
@@ -75,7 +88,7 @@ jobs:
       # Appends this week's rows to the master sheet and creates "Holdings
       # Verdicts" on first run. Skipped cleanly until the secret exists.
       - name: Push tabs into master spreadsheet
-        if: ${{ env.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
+        if: ${{ always() && env.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
         run: |
           python scripts/publish_verdicts.py \
             --reports reports/scout \
@@ -84,6 +97,7 @@ jobs:
             --append
 
       - name: Commit results
+        if: always()
         run: |
           git config user.name "aristos-scout[bot]"
           git config user.email "actions@users.noreply.github.com"
