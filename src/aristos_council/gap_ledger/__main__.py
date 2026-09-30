@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Optional
 
 from .. import market_index
+from .backfill import (BACKFILL_MAX_DEFAULT, GATEWAY_RETRY_TIMEOUT_SECONDS, ensure_gateway,
+                       missing_days, run_backfill, within_live_window, write_gateway_down_stub)
 from .bars import YFinanceBars
 from .ibkr import IBKRBars, IBKRUnavailable
 from .config import DEFAULT_CONFIG, DEFAULT_ROOT, DEFAULT_RUN_TIME, GapConfig, at_ny, now_ny
@@ -114,6 +116,11 @@ def _config(args) -> GapConfig:
 # --------------------------------------------------------------------------- #
 def cmd_run(args) -> int:
     config = _config(args)
+    # GAP-BACKFILL-1 — the automatic catch-up-then-live-window-gate path applies ONLY to the
+    # ORDINARY scheduled/no-argument invocation. An explicit --date is a direct, targeted run
+    # (testing, a manual re-screen of one day) and is untouched by any of this, exactly as
+    # before this change.
+    is_scheduled_today = args.date is None
     day = _parse_date(args.date) if args.date else now_ny().date()
     run_at = at_ny(day, _parse_time(args.at) if args.at else DEFAULT_RUN_TIME)
 
@@ -146,6 +153,28 @@ def cmd_run(args) -> int:
     client = None if args.no_todoist else RestTodoist()
 
     try:
+        if is_scheduled_today and not args.no_backfill:
+            # GAP-BACKFILL-1 7a — a gateway that never answers is not a degraded live scan; it
+            # is no scan at all, with the day left for the next run to pick up.
+            if ibkr is not None and not ensure_gateway(ibkr, progress=_say):
+                write_gateway_down_stub(day, root=args.root, run_at=run_at, todoist=client)
+                _say(f"Gap Ledger {day.isoformat()} NOT RUN: IB Gateway unreachable after "
+                    f"retrying for {int(GATEWAY_RETRY_TIMEOUT_SECONDS // 60)} minutes.")
+                return 3
+            # GAP-BACKFILL-1 1-3 — before anything else, catch up any missing/partial day.
+            report = run_backfill(root=args.root, config=config, pool=pool,
+                                  pool_source=pool_source, daily=bars, intraday=bars, ibkr=ibkr,
+                                  news_source=news_source, company_names=company_names,
+                                  todoist=client, max_days=args.backfill_max, progress=_say)
+            for line in report.lines():
+                _say(line)
+            _say("")
+            # GAP-BACKFILL-1 4 — outside the live window, stop here: safe to fire whenever the
+            # laptop switches on, never mistaking a late catch-up for a fresh pre-market read.
+            if not within_live_window(now_ny()):
+                _say("outside live window, backfill only")
+                return 0
+
         result = run_screen(pool=pool, pool_source=pool_source, daily=bars, intraday=bars,
                             day=day, run_at=run_at, config=config, root=args.root,
                             news_source=news_source, company_names=company_names,
@@ -158,6 +187,51 @@ def cmd_run(args) -> int:
             ibkr.disconnect()
     _say("")
     _say(format_report(result))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# catch-up (GAP-BACKFILL-1 5 — the manual entry point)
+# --------------------------------------------------------------------------- #
+def cmd_catch_up(args) -> int:
+    if args.dry_run:
+        missing = missing_days(args.root)
+        if not missing:
+            _say(f"catch-up: nothing missing under {args.root}")
+        else:
+            _say(f"{len(missing)} day(s) missing:")
+            for day in missing:
+                _say(f"  {day.isoformat()}")
+        return 0
+
+    config = _config(args)
+    try:
+        if args.tickers:
+            pool = read_ticker_file(args.tickers)
+            pool_source = f"{args.tickers} ({len(pool)} tickers)"
+        else:
+            pool = pool_from_index(config_path=args.index_config)
+            pool_source = f"the market index at {args.index_config}"
+    except UniverseUnavailable as exc:
+        _say(f"error: {exc}")
+        return 2
+
+    company_names = names_from_index(config_path=args.index_config)
+    bars = YFinanceBars(config)
+    ibkr = None if args.no_ibkr else IBKRBars()
+    news_source = None if args.no_news else EODHDNews()
+    client = None if args.no_todoist else RestTodoist()
+    try:
+        report = run_backfill(root=args.root, config=config, pool=pool, pool_source=pool_source,
+                              daily=bars, intraday=bars, ibkr=ibkr, news_source=news_source,
+                              company_names=company_names, todoist=client, max_days=args.max,
+                              progress=_say)
+    finally:
+        if ibkr is not None:
+            ibkr.disconnect()
+    _say("")
+    for line in report.lines():
+        _say(line)
     return 0
 
 
@@ -202,11 +276,24 @@ def cmd_score(args) -> int:
     if not days:
         _say(f"No days logged under {args.root} yet — run the screen first.")
         return 0
-    card = score(days, config=_config(args))
+    cfg = _config(args)
+    card = score(days, config=cfg)
     _say(f"Gap Ledger scorecard — {args.root}")
     _say("")
     for line in card.lines():
         _say(line)
+    # GAP-BACKFILL-1 3 — split out once ANY day was backfilled; silent otherwise, so a record
+    # with no backfilled day (the common case today) reads exactly as it always has.
+    has_backfilled = any(row.backfilled == "true" for rows in days.values() for row in rows)
+    if has_backfilled:
+        _say("")
+        _say("Live days only:")
+        for line in score(days, config=cfg, origin="live").lines():
+            _say(f"  {line}")
+        _say("")
+        _say("Backfilled days only:")
+        for line in score(days, config=cfg, origin="backfilled").lines():
+            _say(f"  {line}")
     return 0
 
 
@@ -251,7 +338,30 @@ def build_parser() -> argparse.ArgumentParser:
                        help="ignore the cached daily bars and refetch them")
     p_run.add_argument("--dry-run", action="store_true",
                        help="screen and print, but write no CSV")
+    p_run.add_argument("--no-backfill", action="store_true",
+                       help="skip the automatic catch-up this run does before screening "
+                            "(GAP-BACKFILL-1); has no effect together with --date")
+    p_run.add_argument("--backfill-max", type=int, default=BACKFILL_MAX_DEFAULT,
+                       help=f"cap on days caught up per run (default {BACKFILL_MAX_DEFAULT})")
     p_run.set_defaults(func=cmd_run)
+
+    p_catchup = sub.add_parser("catch-up", help="fill missing/partial days from historical "
+                                                "data only (GAP-BACKFILL-1)")
+    p_catchup.add_argument("--max", type=int, default=BACKFILL_MAX_DEFAULT,
+                           help=f"cap on days filled this call (default {BACKFILL_MAX_DEFAULT})")
+    p_catchup.add_argument("--dry-run", action="store_true",
+                           help="list the missing days without fetching anything")
+    p_catchup.add_argument("--tickers", help="screen this file (one ticker per line) instead "
+                                             "of the market index")
+    p_catchup.add_argument("--index-config", default=str(market_index.DEFAULT_CONFIG),
+                           help="where to read the market index location from")
+    p_catchup.add_argument("--no-news", action="store_true",
+                           help="skip EODHD news for backfilled days")
+    p_catchup.add_argument("--no-todoist", action="store_true",
+                           help="do not post or update a Todoist task for a backfilled day")
+    p_catchup.add_argument("--no-ibkr", action="store_true",
+                           help="backfill on yfinance only (no IBKR history)")
+    p_catchup.set_defaults(func=cmd_catch_up)
 
     p_out = sub.add_parser("outcomes", help="after the close, fill open/10:00/11:30/close")
     p_out.add_argument("--date", help="one market date (default: every unfilled day)")

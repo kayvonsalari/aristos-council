@@ -397,6 +397,13 @@ class IBKRBars:
     def connected(self) -> bool:
         return bool(self._ib is not None and getattr(self._ib, "isConnected", bool)())
 
+    def ping(self) -> None:
+        """GAP-BACKFILL-1 — a bare connectivity probe: connect (or reuse the connection) and
+        return. Raises ``IBKRUnavailable`` exactly as ``bars_for``/``quote_for`` would, but
+        asks for no market data, so a pre-flight gateway check costs nothing beyond the
+        connection handshake itself and never counts against the pacer."""
+        self._client()
+
     def disconnect(self) -> None:
         """Hang up if we ever picked up. Never raises — a failed disconnect must not be the
         thing that ends a run that already has its answers."""

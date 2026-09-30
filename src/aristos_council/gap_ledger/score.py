@@ -312,8 +312,21 @@ def _vs_market(rows: Iterable[LedgerRow], column: str) -> MoveStats:
 
 
 def score(days: dict[date, Sequence[LedgerRow]], *,
-          config: GapConfig = DEFAULT_CONFIG) -> Scorecard:
-    """Score every logged day. ``days`` maps a market date to that day's rows."""
+          config: GapConfig = DEFAULT_CONFIG, origin: str = "all") -> Scorecard:
+    """Score every logged day. ``days`` maps a market date to that day's rows.
+
+    ``origin`` (GAP-BACKFILL-1) — "all" (default, unchanged behaviour), "live" or "backfilled":
+    scores only days matching that origin, so the November verdict can report the combined
+    record AND the two split out, never conflating a same-morning read with an after-the-fact
+    reconstruction. A day is "backfilled" when ANY of its rows carries ``backfilled == "true"``
+    (every row of one day is stamped together — see ``ledger.stamp_backfill``).
+    """
+    if origin not in ("all", "live", "backfilled"):
+        raise ValueError(f"origin must be 'all', 'live' or 'backfilled', got {origin!r}")
+    if origin != "all":
+        wants_backfilled = origin == "backfilled"
+        days = {d: rows for d, rows in days.items()
+               if any(r.backfilled == "true" for r in rows) == wants_backfilled}
     candidates = [r for rows in days.values() for r in rows if r.group == GROUP_CANDIDATE]
     baseline = [r for rows in days.values() for r in rows if r.group == GROUP_BASELINE]
 

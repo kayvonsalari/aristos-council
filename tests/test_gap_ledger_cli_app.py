@@ -45,11 +45,13 @@ def _control(ticker="BBB", **kwargs) -> LedgerRow:
 # --------------------------------------------------------------------------- #
 # the CLI
 # --------------------------------------------------------------------------- #
-def test_the_parser_offers_exactly_the_three_verbs():
+def test_the_parser_offers_exactly_the_four_verbs():
+    # GAP-BACKFILL-1 added "catch-up" (the manual backfill entry point) alongside the
+    # original three.
     parser = cli.build_parser()
     actions = [a for a in parser._actions if getattr(a, "choices", None)
                and "run" in getattr(a, "choices", {})]
-    assert sorted(actions[0].choices) == ["outcomes", "run", "score"]
+    assert sorted(actions[0].choices) == ["catch-up", "outcomes", "run", "score"]
 
 
 def test_a_verb_is_required():
