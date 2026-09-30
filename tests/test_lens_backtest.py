@@ -346,9 +346,11 @@ def test_csv_header_states_the_rules_and_rows_carry_no_timestamps(monkeypatch, t
     for needle in ("# as_of_rule:", "# lag_days: 90", "# costs:", "# benchmark:", "# caveat:",
                    "# verdict: insufficient", "# lens_commit: abc1234", "# cohort: Test Cohort"):
         assert needle in joined, needle
+    assert "# as_of_size_floor: n/a - no market-cap data for this run" in joined
     rows = [l for l in text.splitlines() if not l.startswith("#")]
-    assert rows[0] == "date,exit_date,n_ranked,n_buys,buy_return,bench_return,excess,tickers"
-    assert len(rows) == 1 + 6 and rows[1].startswith("2019-01-31,2020-01-31,5,3,")
+    assert rows[0] == ("date,exit_date,n_eligible,n_ranked,n_buys,buy_return,bench_return,excess,"
+                       "excess_drop_best,tickers")
+    assert len(rows) == 1 + 6 and rows[1].startswith("2019-01-31,2020-01-31,5,5,3,")
     assert not any("T" in r.split(",")[0] or ":" in r for r in rows[1:])            # dates only, no clock
 
 
@@ -392,24 +394,36 @@ def test_summary_line_of_an_empty_result_says_n_a():
 # --------------------------------------------------------------------------- #
 # the cohort, the lens, the feed
 # --------------------------------------------------------------------------- #
-def _write_cohort(root: Path, slug: str, versions=(1, 2)):
+def _write_cohort(root: Path, slug: str, versions=(1, 2), caps=None, min_market_cap_usd=None,
+                  members=None):
     from aristos_council.cohorts.freeze import MEMBER_COLUMNS
+    caps = caps or {}
     for v in versions:
         d = root / slug / f"v{v}"
         d.mkdir(parents=True)
-        rows = ["AAA.US", "BBB.US"] if v == 1 else ["AAA.US", "BBB.US", "CCC.LSE"]
+        if members is not None:
+            rows = members
+        else:
+            rows = ["AAA.US", "BBB.US"] if v == 1 else ["AAA.US", "BBB.US", "CCC.LSE"]
         lines = [",".join(MEMBER_COLUMNS)]
         for t in rows:
             cells = {c: "" for c in MEMBER_COLUMNS}
             cells.update(ticker=t, exchange=t.split(".")[1], name=t, source="test")
+            if t in caps:
+                cells["market_cap_usd"] = repr(float(caps[t]))
             lines.append(",".join(cells[c] for c in MEMBER_COLUMNS))
         (d / "members.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        if min_market_cap_usd is not None:
+            (d / "definition.yaml").write_text(
+                f"name: Test\nslug: {slug}\nmin_market_cap_usd: {min_market_cap_usd}\n",
+                encoding="utf-8")
 
 
 def test_members_come_from_the_current_frozen_version_as_yahoo_symbols(tmp_path):
-    _write_cohort(tmp_path, "tech_semiconductors")
-    tickers, version = bt.load_cohort_members("Tech: Semiconductors", tmp_path)
+    _write_cohort(tmp_path, "tech_semiconductors", caps={"AAA.US": 5e9})
+    tickers, version, caps = bt.load_cohort_members("Tech: Semiconductors", tmp_path)
     assert version == 2 and tickers == ["AAA", "BBB", "CCC.L"]
+    assert caps == {"AAA": 5e9}                        # BBB/CCC had no market_cap_usd cell -> absent
     assert bt.load_cohort_members("tech_semiconductors", tmp_path)[1] == 2     # the slug works too
 
 
@@ -497,3 +511,222 @@ def test_the_price_only_engine_is_still_there_under_its_new_result_name():
     assert PriceBacktestResult.__name__ == "PriceBacktestResult" and callable(run_backtest)
     assert BacktestResult.__module__ == "aristos_council.backtest" and "rounds" in {
         f for f in BacktestResult.__dataclass_fields__}
+
+
+# =========================================================================== #
+# BACKTEST-1B - the as-of size floor, the drop-best robustness figure, price sanity
+# =========================================================================== #
+def test_the_as_of_floor_excludes_an_early_micro_cap_and_includes_it_once_it_grows(monkeypatch,
+                                                                                   tmp_path):
+    # AAA rises fast (base x2.5^t); BBB is flat. Both start at the same base price, so their
+    # ESTIMATED cap ratio depends only on growth, not on an arbitrary starting price.
+    _write_cohort(tmp_path, "riser_cohort", versions=(1,),
+                 caps={"AAA.US": 8e9, "BBB.US": 4e9}, min_market_cap_usd=1.5e9)
+    calls = []
+    _stub_pipeline(monkeypatch, lambda d: (), calls)          # verdicts don't matter for this test
+    feed = _Feed({"AAA": 2.5, "BBB": 0.0})
+    result = run_lens_backtest("Riser Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path)
+    assert result.size_floor == 1.5e9
+    assert "cohort definition's min_market_cap_usd" in result.size_floor_note
+    universes = [set(c[0]) for c in calls]
+    assert len(universes) == 6
+    # early rounds: AAA's estimated cap (8e9 x price ratio) has not yet cleared 1.5e9
+    assert "AAA" not in universes[0] and "AAA" not in universes[1]
+    assert universes[0] == universes[1] == {"BBB"}
+    # later rounds: it has
+    assert all("AAA" in u for u in universes[2:])
+    # BBB is flat -> its estimate is a constant 4e9, always eligible
+    assert all("BBB" in u for u in universes)
+    assert [r.n_eligible for r in result.rounds] == [len(u) for u in universes]
+
+
+def test_benchmark_uses_the_same_as_of_eligible_set_as_the_universe(monkeypatch, tmp_path):
+    _write_cohort(tmp_path, "riser_cohort2", versions=(1,),
+                 caps={"AAA.US": 8e9, "BBB.US": 4e9}, min_market_cap_usd=1.5e9)
+    _stub_pipeline(monkeypatch, lambda d: ())                 # nobody flagged BUY - isolates bench
+    feed = _Feed({"AAA": 2.5, "BBB": 0.0})
+    result = run_lens_backtest("Riser Cohort2", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path)
+    early, late = result.rounds[0], result.rounds[-1]
+    # early: only BBB (flat, 0%) is eligible -> the benchmark IS BBB alone
+    assert early.n_eligible == 1 and early.bench_return == pytest.approx(0.0)
+    # late: AAA has crossed the floor and joined the SAME eligible set the universe used -> the
+    # benchmark is no longer pure BBB
+    assert late.n_eligible == 2 and late.bench_return != pytest.approx(0.0)
+
+
+def test_a_member_with_no_cap_snapshot_is_not_eligible_when_the_floor_is_active(monkeypatch,
+                                                                                tmp_path):
+    _write_cohort(tmp_path, "no_cap_cohort", versions=(1,), caps={"AAA.US": 8e9},
+                 min_market_cap_usd=1.0e9)                     # BBB gets no market_cap_usd cell
+    calls = []
+    _stub_pipeline(monkeypatch, lambda d: (), calls)
+    feed = _Feed({"AAA": 0.0, "BBB": 0.0})
+    run_lens_backtest("No Cap Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                      end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path)
+    assert all("BBB" not in set(c[0]) for c in calls)          # abstains, never assumed eligible
+
+
+def test_the_floor_falls_back_to_the_smallest_member_cap_with_no_definition_floor(tmp_path):
+    _write_cohort(tmp_path, "no_defn_cohort", versions=(1,),
+                 caps={"AAA.US": 8e9, "BBB.US": 3e9})           # no min_market_cap_usd written
+    tickers, version, caps = bt.load_cohort_members("No Defn Cohort", tmp_path)
+    floor, note = bt._size_floor("No Defn Cohort", tmp_path, version, caps)
+    assert floor == 3e9 and "smallest market_cap_usd" in note
+
+
+def test_no_cap_data_at_all_leaves_the_floor_inactive_and_every_member_eligible(monkeypatch):
+    calls = []
+    _stub_pipeline(monkeypatch, lambda d: (), calls)
+    result = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed(GROWTH), members=sorted(GROWTH))
+    assert result.size_floor is None and result.size_floor_note == ""
+    assert all(set(c[0]) == set(GROWTH) for c in calls)        # unchanged from pre-1B behaviour
+    assert all(r.n_eligible == len(GROWTH) for r in result.rounds)
+
+
+# --- excess_drop_best --------------------------------------------------------------------- #
+def test_drop_best_excess_removes_the_single_best_returning_buy_name():
+    held = [("A", 0.50), ("B", 0.10), ("C", 0.05), ("D", 0.00)]
+    got = bt._drop_best_excess(held, n_buys=4, bench_ret=0.02, cost=0.01)
+    assert got == pytest.approx((0.10 + 0.05 + 0.00) / 3 - 0.01 - 0.02)
+
+
+def test_drop_best_excess_is_none_below_four_buys():
+    held = [("A", 0.50), ("B", 0.10), ("C", 0.05)]
+    assert bt._drop_best_excess(held, n_buys=3, bench_ret=0.02, cost=0.01) is None
+    assert bt._drop_best_excess([], n_buys=4, bench_ret=0.0, cost=0.0) is None
+
+
+def test_a_round_with_four_or_more_buys_carries_a_drop_best_excess(monkeypatch):
+    growth5 = {"A": 0.5, "B": 0.3, "C": 0.2, "D": 0.1, "E": 0.0}
+    _stub_pipeline(monkeypatch, lambda d: ("A", "B", "C", "D"))     # 4 BUYs -> drop-best applies
+    result = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed(growth5),
+                               members=sorted(growth5))
+    r = result.rounds[0]
+    assert r.n_buys == 4 and r.excess_drop_best is not None
+    # A (fastest riser) is the best return and should be the one dropped: without it the
+    # remaining basket (B, C, D) returns less, so the drop-best excess is WORSE than the plain one
+    assert r.excess_drop_best < r.excess
+
+
+def test_a_round_with_three_buys_has_no_drop_best_excess(monkeypatch):
+    result = _run(monkeypatch, buys=("A", "B", "C"))               # the plain 3-BUY fixture
+    assert all(r.excess_drop_best is None for r in result.rounds)
+
+
+def test_mean_annual_excess_drop_best_averages_by_year_like_the_plain_figure():
+    rounds = [Round(date(2019, 1, 31), 4, 0.10, 0.0, 0.10, ("A",), None, 9, n_eligible=9,
+                    excess_drop_best=0.04),
+              Round(date(2019, 6, 30), 4, 0.10, 0.0, 0.20, ("A",), None, 9, n_eligible=9,
+                    excess_drop_best=0.08),
+              Round(date(2020, 1, 31), 4, 0.10, 0.0, -0.06, ("A",), None, 9, n_eligible=9,
+                    excess_drop_best=None)]                        # a no-drop-best round
+    s = _result(rounds).summary
+    assert s.mean_annual_excess == pytest.approx(((0.10 + 0.20) / 2 + (-0.06)) / 2)   # unchanged
+    # 2020's round has no drop-best figure, so that year is simply absent from this average -
+    # NOT treated as 0 - leaving only 2019's (0.04 + 0.08) / 2
+    assert s.mean_annual_excess_drop_best == pytest.approx((0.04 + 0.08) / 2)
+
+
+def test_verdict_is_unchanged_by_the_drop_best_column():
+    good = {y: 0.05 for y in range(2010, 2020)}
+    plain = _result(_rounds(good))
+    with_drop_best = BacktestResult(**{**plain.__dict__,
+                                       "rounds": [r.__class__(**{**r.__dict__,
+                                                                 "excess_drop_best": -0.5})
+                                                 for r in plain.rounds]})
+    assert verdict(plain) == verdict(with_drop_best) == "proven"
+    assert with_drop_best.summary.mean_annual_excess_drop_best == pytest.approx(-0.5)
+    assert with_drop_best.summary.mean_annual_excess == plain.summary.mean_annual_excess
+
+
+# --- price sanity -------------------------------------------------------------------------- #
+def test_a_one_day_price_jump_beyond_3x_is_flagged_not_excluded(monkeypatch):
+    def bars_with_a_spike(base_bars):
+        # replace ONE day's close with a 10x spike that reverts the next bar - TYT.L-style: a bad
+        # tick, not a second date.
+        spike_day = date(2019, 3, 15)
+        out = []
+        for b in base_bars:
+            if b.day == spike_day:
+                b = PriceBar(day=b.day, open=1000, high=1000, low=1000, close=1000,
+                            adj_close=1000, volume=1)
+            out.append(b)
+        return out
+
+    class _SpikedFeed(_Feed):
+        def get_price_history(self, ticker, *, start, end):
+            history = super().get_price_history(ticker, start=start, end=end)
+            if ticker != "A":
+                return history
+            return PriceHistory(ticker, bars_with_a_spike(history.bars))
+
+    result = _run(monkeypatch, feed=_SpikedFeed(GROWTH))
+    assert any(w.startswith("A 2019-03-15 x") for w in result.price_warnings)
+    # not excluded: A still appears among the round's tickers/eligible set as usual
+    assert result.rounds[0].n_eligible == len(GROWTH)
+
+
+def test_no_price_jump_means_no_price_warnings(monkeypatch):
+    result = _run(monkeypatch)
+    assert result.price_warnings == []
+
+
+# --- CSV -------------------------------------------------------------------------------------- #
+def test_the_csv_header_carries_the_size_floor_line_and_price_warnings(monkeypatch, tmp_path):
+    _write_cohort(tmp_path, "riser_cohort3", versions=(1,),
+                 caps={"AAA.US": 8e9, "BBB.US": 4e9}, min_market_cap_usd=1.5e9)
+    _stub_pipeline(monkeypatch, lambda d: ())
+    feed = _Feed({"AAA": 2.5, "BBB": 0.0})
+    result = run_lens_backtest("Riser Cohort3", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path)
+    result.price_warnings = ["AAA 2019-02-15 x9.9"]             # exercise the header line directly
+    text = to_csv(result, tmp_path).read_text(encoding="utf-8")
+    assert "# as_of_size_floor: 1,500,000,000 USD, estimated from today's cap and price ratio" in text
+    assert "# price_warning: AAA 2019-02-15 x9.9" in text
+    rows = [l for l in text.splitlines() if not l.startswith("#")]
+    assert rows[0].split(",")[2] == "n_eligible"
+
+
+def test_round_trip_preserves_n_eligible_excess_drop_best_size_floor_and_price_warnings(
+        monkeypatch, tmp_path):
+    _write_cohort(tmp_path, "riser_cohort4", versions=(1,),
+                 members=["A.US", "B.US", "C.US", "D.US"],
+                 caps={"A.US": 8e9, "B.US": 4e9, "C.US": 3e9, "D.US": 2e9}, min_market_cap_usd=1e9)
+    growth4 = {"A": 0.5, "B": 0.3, "C": 0.2, "D": 0.1}
+    _stub_pipeline(monkeypatch, lambda d: ("A", "B", "C", "D"))
+    result = run_lens_backtest("Riser Cohort4", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed(growth4), cohorts_root=tmp_path)
+    back = from_csv(to_csv(result, tmp_path))
+    assert back.rounds == result.rounds
+    assert back.size_floor == result.size_floor == 1e9
+    assert back.price_warnings == result.price_warnings
+    assert back.summary.mean_annual_excess_drop_best == result.summary.mean_annual_excess_drop_best
+
+
+def test_an_old_csv_with_no_new_columns_still_loads(tmp_path):
+    old = (
+        "# aristos-council lens backtest (BACKTEST-1) - see docs/BACKTEST.md\n"
+        "# cohort: Old Cohort\n# cohort_slug: old_cohort\n# cohort_members: 5\n"
+        "# lens: some_lens_v1\n# lens_commit: abc1234\n# start: 2019-01-31\n# end: 2020-06-30\n"
+        "# hold_months: 12\n# step_months: 1\n# cost_bps: 50.0\n# lag_days: 90\n"
+        "# verdict: insufficient\n"
+        "date,exit_date,n_ranked,n_buys,buy_return,bench_return,excess,tickers\n"
+        "2019-01-31,2020-01-31,5,3,0.1,0.05,0.05,A B C\n"
+    )
+    path = tmp_path / "old_cohort" / "some_lens_v1.csv"
+    path.parent.mkdir(parents=True)
+    path.write_text(old, encoding="utf-8")
+    back = from_csv(path)
+    assert back.rounds[0].n_eligible == 0 and back.rounds[0].excess_drop_best is None
+    assert back.size_floor is None and back.price_warnings == []
+    assert back.rounds[0].n_ranked == 5 and back.rounds[0].n_buys == 3    # old columns still read
+
+
+def test_no_llm_anywhere_in_the_backtest_1b_additions():
+    source = inspect.getsource(bt).lower()
+    for banned in ("anthropic", "langchain", "init_chat_model"):
+        assert banned not in source

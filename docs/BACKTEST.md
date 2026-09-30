@@ -67,6 +67,44 @@ tech_semiconductor_equipment x magic_formula_momentum_v1: insufficient - mean an
   end of each hold, over non-overlapping chains of holds (worst chain, no-position months as cash),
   so it understates a dip *inside* a hold.
 
+**Reading `excess_drop_best` (BACKTEST-1B).** Each round with 4 or more BUY names also carries
+`excess_drop_best` — the excess recomputed with the single best-returning BUY name removed (`None`
+below 4 names, or when the round held no position). `verdict()` never reads this column; it is for
+you. If a lens's mean yearly excess (`mean_annual_excess_drop_best` in the summary) collapses once
+the best pick is dropped, the lens is not really "proven" on a basket — it is proven on one stock
+that happened to be in the basket. Read `mean_annual_excess` against `mean_annual_excess_drop_best`
+together: a small gap between them is a lens spreading its edge across names; a large one is a lens
+riding a single winner.
+
+## How the universe is chosen per round (BACKTEST-1B)
+
+The cohort's *membership* is fixed — today's frozen `members.csv` — but a fixed membership is not
+the same as a fixed *universe to rank each month*. Several members were micro-caps years ago and are
+giants today (some by 10–50×, e.g. names that returned +700% to +5,500% over the window), so a rank
+computed as if they had always been today's size would let the benchmark (and the lens) hold
+companies that were, in truth, far too small to be candidates at the time.
+
+Each round therefore estimates every member's market cap **as of that round's date**:
+
+```
+estimated cap at d  =  market_cap_usd (today's snapshot, from members.csv)
+                        × (adjusted close at d ÷ the latest cached adjusted close)
+```
+
+A member is **eligible** that round only if the estimate clears the cohort's USD floor — its
+definition's `min_market_cap_usd` when there is one, else the smallest `market_cap_usd` among
+today's members — **and** it has a price on that date. **The lens's ranking universe (what it can
+rank and buy) and the benchmark are built from exactly the same eligible set**, every round; neither
+ever sees a name the other does not. A member with no cap snapshot, or no price that day, is simply
+excluded from that round, never assumed eligible.
+
+This is an *estimate*, not a measurement — it scales today's known cap by a price ratio, holding the
+share count fixed, because that is what a members.csv snapshot and a price series can support without
+guessing. The CSV records the floor used on its `as_of_size_floor` header line, and each round's
+`n_eligible` column (the as-of-floor-eligible count) alongside `n_ranked` (how many of those the
+lens's own screen kept) shows the effect directly — a strategy over a small cohort with a steep
+floor may see `n_eligible` shrink to almost nothing in its earliest rounds.
+
 ## The two honesty limits
 
 These are stamped into every result and every CSV. Both **flatter** the lens, and neither can be
@@ -76,16 +114,27 @@ removed with the data available.
    corrected, re-cut for later accounting changes. A reader on the day saw the *original* figures. The
    90-day lag keeps a year's accounts from being used before it could have been filed, but it cannot
    bring back the numbers as first printed. A lens may look better here than it would have then.
-2. **Survivorship.** The members are today's frozen cohort (the current `members.csv`). Companies that
-   were delisted, taken over, or fell out of the cohort's size band during the ten years are absent.
-   The benchmark is built from the same survivors, so the *excess* suffers less than the absolute
-   returns — but it is not immune.
+2. **Survivorship.** A company delisted, merged, or acquired out of today's cohort is still absent
+   from every round, including ones it would have qualified for — the as-of size floor above corrects
+   a *survivor's* own past size, it cannot resurrect a name that did not survive to be in today's
+   membership at all.
 
 Two smaller things, also stated in the file: a company whose accounts cannot be dated, or whose price
 is missing at the entry or exit day, is left out of the basket **and** the benchmark that month (never
 counted as zero); and a company whose share count jumps by a split-like factor after its accounts'
 date has its market cap withheld for that month, because today's split-adjusted price times an old
 share count would be wrong.
+
+**Price sanity (flagged, never auto-excluded).** Every cached price series is scanned for a one-day
+adjusted-close move beyond 3× either way; each one is written to the CSV as its own
+`price_warning: <ticker> <date> x<ratio>` header line. This is a flag, not a fix — the series is still
+used exactly as fetched. Two were run down by hand from the first watched-cohort pass: **TYT.LSE**
+(Toyota's London line) spiked ×9.9 on 2017-04-28 and gave all of it back the very next session — a bad
+tick, confirmed against yfinance's own split history (nothing recorded near that date) and excluded via
+`data/size_corrections.yaml`. **1396.HK** spiked ×4.15 on 2024-05-14 and *stayed* there, on rising
+volume over the following days — a real move, left alone. EODHD's own `/eod` endpoint 403s on the
+current plan, so this check relies on yfinance's series and action history alone; a warning that has
+not yet been run down by hand should be treated as unverified, not as an error.
 
 ## What it costs to run
 
@@ -103,7 +152,8 @@ python -m aristos_council.backtest summary backtests/
 ```
 
 `run` writes `backtests/<cohort>/<lens>.csv`: a header block (the as-of rule, lag, costs, benchmark,
-caveats, verdict, and the git commit of the lens files used), then one row per month. The file is
+the as-of size floor, caveats, any price warnings, verdict, and the git commit of the lens files
+used), then one row per month. The file is
 deterministic — no timestamps — so re-running the same window on the same data gives the same bytes.
 `summary` prints one line per cohort × lens with its verdict.
 

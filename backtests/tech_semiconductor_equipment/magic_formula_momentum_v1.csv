@@ -15,23 +15,25 @@
 # benchmark: equal-weight return of every ranked member of the cohort over the same window
 # costs: cost_bps deducted once per round trip from the BUY basket; the benchmark pays none
 # returns: closes on or before the round date and the exit date; adjusted close, so dividends are reinvested (total return)
+# as_of_size_floor: 2,000,000,000 USD, estimated from today's cap and price ratio (the cohort definition's min_market_cap_usd)
 # verdict: insufficient
 # caveat: RESTATED ACCOUNTS: statements are the ones EODHD carries today (restated), dated by fiscal-period end plus a 90-day filing lag; a reader on the day saw the original figures, so a lens may look better here than it would have then.
-# caveat: SURVIVORSHIP: the members are today's frozen cohort (v1); companies delisted, merged or dropped over the window are absent. The benchmark shares the bias, so the excess suffers less than the absolute returns, but is not immune.
+# caveat: SURVIVORSHIP: a company delisted, merged, or acquired out of today's frozen cohort (v1) is still absent from every round, including ones it would have qualified for. This file's as_of_size_floor line corrects a SURVIVOR's own past size; it cannot resurrect a name that did not survive to be in today's membership at all.
 # caveat: Prices are ADJUSTED closes (dividends reinvested), so returns are total returns; 50 bps is deducted once per round trip from the BUY basket, none from the benchmark.
 # caveat: Rounds are 1 month(s) apart with 12-month holds, so they overlap and are not independent; read the calendar years, not the round count.
 # caveat: Max drawdown is measured at round ends over non-overlapping chains of rounds (worst chain, no-position rounds as cash), so it understates a dip inside a hold.
-date,exit_date,n_ranked,n_buys,buy_return,bench_return,excess,tickers
-2024-08-31,2025-08-31,14,3,0.03898114105470356,-0.016790004782938257,0.05577114583764181,AMAT KLAC LRCX
-2024-09-30,2025-09-30,14,3,0.3577510737892186,0.267567224261528,0.0901838495276906,AMAT KLAC LRCX
-2024-10-31,2025-10-31,14,3,0.751384292015465,0.6756376822213866,0.07574660979407832,AMAT LRCX KLAC
-2024-11-30,2025-11-30,14,3,0.8031395741408519,0.8167116397477125,-0.01357206560686064,AMAT KLAC LRCX
-2024-12-31,2025-12-31,14,3,0.6322199324475327,0.761187802714596,-0.12896787026706324,AMAT KLAC ASML.AS
-2025-01-31,2026-01-31,14,3,1.2158958198879175,1.1170595298432928,0.09883629004462469,KLAC LRCX AMAT
-2025-02-28,2026-02-28,14,3,1.2656902147491873,1.3966820849978083,-0.13099187024862102,KLAC LRCX 2441.TW
-2025-03-31,2026-03-31,14,3,1.3438697615977209,1.7414697559544092,-0.39759999435668836,LRCX 058470.KQ 2441.TW
-2025-04-30,2026-04-30,14,3,1.9200050768922259,2.6811132664953528,-0.7611081896031269,LRCX AMAT KLAC
-2025-05-31,2026-05-31,14,3,2.02033633824368,2.503037103101974,-0.48270076485829394,LRCX 058470.KQ 2441.TW
-2025-06-30,2026-06-30,14,3,1.8947012936292007,2.264410075415529,-0.3697087817863285,058470.KQ LRCX 3450.TW
-2025-07-31,2026-07-31,14,3,1.4311667743603051,1.4588120203209454,-0.02764524596064022,058470.KQ LRCX AMAT
-2025-08-31,2026-08-31,14,3,1.5302159624744236,1.6068154463364481,-0.07659948386202453,LRCX 058470.KQ 3450.TW
+# caveat: 13 of 13 rounds had fewer than 3 priced BUY names (no position); they are excluded from every average.
+date,exit_date,n_eligible,n_ranked,n_buys,buy_return,bench_return,excess,excess_drop_best,tickers
+2024-08-31,2025-08-31,25,10,2,,-0.08148649018127911,,,
+2024-09-30,2025-09-30,21,9,2,,0.17108874149120712,,,
+2024-10-31,2025-10-31,21,9,2,,0.5895505439001777,,,
+2024-11-30,2025-11-30,20,8,2,,0.5312848796670768,,,
+2024-12-31,2025-12-31,21,9,2,,0.5516169565659195,,,
+2025-01-31,2026-01-31,20,9,2,,0.9379282989988845,,,
+2025-02-28,2026-02-28,20,9,2,,1.4073813906835986,,,
+2025-03-31,2026-03-31,19,9,2,,1.5205583420648356,,,
+2025-04-30,2026-04-30,18,9,2,,2.148833008095725,,,
+2025-05-31,2026-05-31,19,9,2,,1.9889990948848038,,,
+2025-06-30,2026-06-30,20,9,2,,2.124105414721907,,,
+2025-07-31,2026-07-31,20,9,2,,1.3428238959718248,,,
+2025-08-31,2026-08-31,23,9,2,,1.3368434800240796,,,
