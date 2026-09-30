@@ -788,7 +788,9 @@ Below 40 days the scorecard says "not enough days" and presents no rate as a fin
 
 **Licence boundary.** Interactive Brokers data is licensed for personal, non-professional use, so it
 stays inside `gap_ledger/`: **nothing in Aristos imports it** (a test asserts this), and it never
-feeds a lens or a cohort.
+feeds a lens or a cohort. Today's boundary and the planned (not built) direction — a read-only results
+tab, one shared quant engine across Run/Company Check/Gap Ledger — are in
+[docs/GAP_LEDGER.md § Relationship to Aristos Council](docs/GAP_LEDGER.md#relationship-to-aristos-council).
 
 ```bash
 python -m aristos_council.gap_ledger run        # the pre-market screen, stamped 09:00 New York
