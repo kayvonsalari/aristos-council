@@ -17,7 +17,8 @@
 # returns: closes on or before the round date and the exit date; adjusted close, so dividends are reinvested (total return)
 # as_of_size_floor: 2,000,000,000 USD, estimated from today's cap and price ratio (the cohort definition's min_market_cap_usd)
 # random_baskets: 500
-# seed_rule: each round's random draw is seeded from a hash of cohort slug + lens id + round date, so a re-run draws the SAME baskets
+# random_mode: turnover
+# seed_rule: each random series is seeded from a hash of cohort slug + lens id + series index, then persists and evolves round to round - not re-seeded per round
 # max_luck: 0.05
 # luck_pct_mean: n/a
 # luck_pct_pass: n/a
@@ -29,18 +30,18 @@
 # caveat: Rounds are 1 month(s) apart with 12-month holds, so they overlap and are not independent; read the calendar years, not the round count.
 # caveat: Max drawdown is measured at round ends over non-overlapping chains of rounds (worst chain, no-position rounds as cash), so it understates a dip inside a hold.
 # caveat: 13 of 13 rounds had fewer than 3 priced BUY names (no position); they are excluded from every average.
-# caveat: RANDOM-BASKET LUCK BASELINE: 500 random baskets per positioned round, each the same size as that round's own BUY basket, drawn without replacement from the same priced names the benchmark is built from (each round's random draw is seeded from a hash of cohort slug + lens id + round date, so a re-run draws the SAME baskets). luck_pct_mean <= 5% is required for "proven"; below that a lens that clears the excess/years bar reads "not beyond luck" instead. See docs/BACKTEST.md, Skill versus luck.
-date,exit_date,n_eligible,n_ranked,n_buys,buy_return,bench_return,excess,excess_drop_best,random_mean_excess,tickers
-2024-08-31,2025-08-31,25,10,2,,-0.08148649018127911,,,,
-2024-09-30,2025-09-30,21,9,2,,0.17108874149120712,,,,
-2024-10-31,2025-10-31,21,9,2,,0.5895505439001777,,,,
-2024-11-30,2025-11-30,20,8,2,,0.5312848796670768,,,,
-2024-12-31,2025-12-31,21,9,2,,0.5516169565659195,,,,
-2025-01-31,2026-01-31,20,9,2,,0.9379282989988845,,,,
-2025-02-28,2026-02-28,20,9,2,,1.4073813906835986,,,,
-2025-03-31,2026-03-31,19,9,2,,1.5205583420648356,,,,
-2025-04-30,2026-04-30,18,9,2,,2.148833008095725,,,,
-2025-05-31,2026-05-31,19,9,2,,1.9889990948848038,,,,
-2025-06-30,2026-06-30,20,9,2,,2.124105414721907,,,,
-2025-07-31,2026-07-31,20,9,2,,1.3428238959718248,,,,
-2025-08-31,2026-08-31,23,9,2,,1.3368434800240796,,,,
+# caveat: RANDOM-BASKET LUCK BASELINE: 500 random baskets per positioned round, each the same size as that round's own BUY basket, drawn without replacement from the same priced names the benchmark is built from - a PERSISTENT basket evolving with the lens's own turnover each round (turnover mode, BACKTEST-1D) (each random series is seeded from a hash of cohort slug + lens id + series index, then persists and evolves round to round - not re-seeded per round). luck_pct_mean <= 5% is required for "proven"; below that a lens that clears the excess/years bar reads "not beyond luck" instead. See docs/BACKTEST.md, Skill versus luck.
+date,exit_date,n_eligible,n_ranked,n_buys,n_new,buy_return,bench_return,excess,excess_drop_best,random_mean_excess,tickers
+2024-08-31,2025-08-31,25,10,2,2,,-0.08148649018127911,,,,
+2024-09-30,2025-09-30,21,9,2,0,,0.17108874149120712,,,,
+2024-10-31,2025-10-31,21,9,2,1,,0.5895505439001777,,,,
+2024-11-30,2025-11-30,20,8,2,1,,0.5312848796670768,,,,
+2024-12-31,2025-12-31,21,9,2,0,,0.5516169565659195,,,,
+2025-01-31,2026-01-31,20,9,2,1,,0.9379282989988845,,,,
+2025-02-28,2026-02-28,20,9,2,0,,1.4073813906835986,,,,
+2025-03-31,2026-03-31,19,9,2,1,,1.5205583420648356,,,,
+2025-04-30,2026-04-30,18,9,2,1,,2.148833008095725,,,,
+2025-05-31,2026-05-31,19,9,2,1,,1.9889990948848038,,,,
+2025-06-30,2026-06-30,20,9,2,1,,2.124105414721907,,,,
+2025-07-31,2026-07-31,20,9,2,1,,1.3428238959718248,,,,
+2025-08-31,2026-08-31,23,9,2,1,,1.3368434800240796,,,,

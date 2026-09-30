@@ -209,6 +209,7 @@ import bisect
 import calendar
 import csv
 import hashlib
+import random
 import subprocess
 import sys
 from pathlib import Path
@@ -243,6 +244,29 @@ MAX_LUCK = 0.05                    # "proven" needs luck_pct_mean <= this (5% of
 SEED_RULE = ("each round's random draw is seeded from a hash of cohort slug + lens id + round "
             "date, so a re-run draws the SAME baskets")
 
+# BACKTEST-1D — a random basket redrawn from scratch every round has none of a real lens's
+# STICKINESS (it holds most of the same names month to month, and its results come in streaks), so
+# its ten-year average bunches far tighter around the mean than a real lens's does. Measured against
+# that too-tight bunch, ANY persistent strategy reads as extreme luck in one direction or the other —
+# the 1C watched-cohort run put 7 of 39 testable pairs at luck <= 2% and 14 at luck >= 95%, against
+# an expected ~2 of 39 in each tail. "turnover" mode makes each random series persist and evolve with
+# the SAME turnover the lens itself has, so the comparison is basket-composition-fair, not just
+# basket-SIZE-fair. "independent" (the 1C behaviour) is kept available for comparison.
+RANDOM_MODE_INDEPENDENT = "independent"
+RANDOM_MODE_TURNOVER = "turnover"
+RANDOM_MODE_DEFAULT = RANDOM_MODE_TURNOVER
+RANDOM_MODES = (RANDOM_MODE_INDEPENDENT, RANDOM_MODE_TURNOVER)
+TURNOVER_SEED_RULE = ("each random series is seeded from a hash of cohort slug + lens id + series "
+                     "index, then persists and evolves round to round - not re-seeded per round")
+
+# BACKTEST-1D — the calibration check. Bin luck_pct_mean into fifths of decreasing rarity; under a
+# CALIBRATED (fair) test the bins hold 5% / 20% / 50% / 20% / 5% of the testable results. A tail
+# holding much more than its expected share says the luck test itself is still not trustworthy.
+CALIBRATION_BINS = ((0.0, 5.0), (5.0, 25.0), (25.0, 75.0), (75.0, 95.0), (95.0, 100.0))
+CALIBRATION_LABELS = ("0-5%", "5-25%", "25-75%", "75-95%", "95-100%")
+CALIBRATION_EXPECTED_SHARE = (0.05, 0.20, 0.50, 0.20, 0.05)
+CALIBRATION_WARNING_FACTOR = 2.0   # a tail over ~2x its expected share triggers the warning
+
 AS_OF_RULE = ("each round ranks on accounts whose fiscal period ended on or before the round date "
               "minus the filing lag, and on closes up to the round date; nothing later is read")
 BENCHMARK_RULE = "equal-weight return of every ranked member of the cohort over the same window"
@@ -274,6 +298,11 @@ class Round:
     # size as this round's BUY basket, drawn from the same priced eligible names). None when the
     # round held no position (no random baskets are drawn for a no-position round).
     random_mean_excess: Optional[float] = None
+    # BACKTEST-1D — names in the lens's BUY basket this round that were NOT in it last round (all
+    # of them, on the very first round). Measured for EVERY round, positioned or not, off the
+    # lens's own raw BUY list (not the priced subset) - a fact about the lens's turnover, not about
+    # what could be scored. Drives the turnover-matched random baskets; not read by verdict().
+    n_new: int = 0
 
     @property
     def has_position(self) -> bool:
@@ -342,6 +371,11 @@ class BacktestResult:
     # drop-best figure. Positive: the lens depends on its best pick LESS than random picking
     # does. None when there is no drop-best figure to compare (no round ever had 4+ BUYs).
     drop_best_vs_random: Optional[float] = None
+    # BACKTEST-1D — "independent" (1C: redrawn from scratch every round) or "turnover" (default:
+    # persists and evolves with the lens's own turnover). Stamped so a file can be read for what it
+    # actually measured; an older (1C) file with no such line is "independent" on read (see
+    # from_csv), never silently reinterpreted as the new default.
+    random_mode: str = RANDOM_MODE_DEFAULT
 
     @property
     def cohort_slug(self) -> str:
@@ -619,7 +653,8 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                       adapter=None, progress=None, cohorts_root=None, members=None,
                       strategies_dir=None, member_caps=None,
                       random_baskets: int = RANDOM_BASKETS_DEFAULT,
-                      max_luck: float = MAX_LUCK) -> BacktestResult:
+                      max_luck: float = MAX_LUCK,
+                      random_mode: str = RANDOM_MODE_DEFAULT) -> BacktestResult:
     """Backtest one lens on one cohort. The first eight parameters are the contract; the rest of the
     keywords only say WHERE things live (a cohort directory, an explicit member list and its market
     caps for a machine with no built cohorts, a strategies directory) and change no rule.
@@ -655,9 +690,20 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
        ``luck_pct_pass`` (share that would themselves clear the plain bar - the cohort's own chance
        pass rate) and ``drop_best_vs_random`` (this lens's drop-best figure against the random
        series' median). ``verdict()`` reads ``luck_pct_mean``; ``0`` opts out (no luck fields set).
+    5. **Turnover matching (BACKTEST-1D, ``random_mode``).** A random basket redrawn from scratch
+       every round has none of a real lens's stickiness, so its multi-year average bunches too
+       tightly around the mean and makes any persistent lens look extreme in the luck score, in
+       either direction. ``"turnover"`` (the default) makes each of the ``random_baskets`` series a
+       PERSISTENT basket: it keeps whatever it holds that is still eligible, then replaces exactly
+       ``n_new`` names (the lens's OWN turnover that round, plus any of its own that fell out of
+       eligibility) with fresh random draws, so its size still matches ``n_buys``. ``"independent"``
+       is the 1C behaviour (redrawn from scratch every round) kept for comparison. Seeding changes
+       accordingly: one seed per SERIES (persists across rounds), not per round.
 
     No LLM is called; ``adapter`` (default: EODHD accounts + yfinance prices) is the inner data
     source."""
+    if random_mode not in RANDOM_MODES:
+        raise ValueError(f"random_mode must be one of {RANDOM_MODES}, got {random_mode!r}")
     from .data.asof_adapter import AsOfAdapter
     from .data.backtest_feed import MemoAdapter, lookback_start
     from .pipeline import run_rank_pipeline
@@ -677,8 +723,9 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                             size_floor_note=size_floor_note,
                             lens_commit=lens_commit(lens_id, strategies_dir),
                             random_baskets=max(0, int(random_baskets)),
-                            seed_rule=(SEED_RULE if random_baskets > 0 else ""),
-                            max_luck=float(max_luck))
+                            seed_rule=((TURNOVER_SEED_RULE if random_mode == RANDOM_MODE_TURNOVER
+                                       else SEED_RULE) if random_baskets > 0 else ""),
+                            max_luck=float(max_luck), random_mode=random_mode)
     if not dates:
         result.caveats = _caveats(result, 0)
         result.caveats.append(f"the window {start} to {end} is shorter than one {hold_months}-month "
@@ -731,6 +778,8 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
     pos_excess_cols: list = []                              # each shape (random_baskets,)
     dropbest_dates: list = []
     dropbest_cols: list = []                                # each shape (random_baskets,)
+    previous_buys: Optional[set] = None                     # for n_new - tracked EVERY round
+    turnover_baskets: Optional[_TurnoverBaskets] = None      # built lazily, on first use
     for i, d in enumerate(dates, 1):
         exit_date = add_months(d, hold_months)
         eligible = eligible_at(d)
@@ -739,15 +788,21 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
             use_cache=True, strategies_dir=strategies_dir).ranked
         live = [r for r in ranked if not r.excluded]
         buys = sorted(r.ticker for r in live if r.verdict == "buy")
-        bench, held = [], []
+        # BACKTEST-1D — a fact about the LENS's own basket sequence, measured every round whether
+        # or not it counts as positioned (rule 1): all new on the very first round.
+        buys_set = set(buys)
+        n_new = len(buys_set) if previous_buys is None else len(buys_set - previous_buys)
+        previous_buys = buys_set
+        bench_pairs, held = [], []
         for r in live:
             ret = _window_return(series(r.ticker), d, exit_date)
             if ret is None:
                 unpriced += 1
                 continue
-            bench.append(ret)
+            bench_pairs.append((r.ticker, ret))
             if r.ticker in buys:
                 held.append((r.ticker, ret))
+        bench = [v for _, v in bench_pairs]
         bench_ret = (sum(bench) / len(bench)) if bench else None
         if len(held) >= MIN_BUYS and bench_ret is not None:
             n_buys = len(buys)
@@ -755,34 +810,53 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
             drop_best = _drop_best_excess(held, n_buys, bench_ret, cost)
             random_mean_excess = None
             if random_baskets > 0:
-                pool = np.asarray(bench, dtype=float)
-                k = min(n_buys, pool.size)
+                pool_tickers = [t for t, _ in bench_pairs]
+                k = min(n_buys, len(pool_tickers))
                 if k < n_buys:
                     undersized_rounds += 1
-                if k > 0:
+                basket_excess = None
+                rest_means = None
+                if k > 0 and random_mode == RANDOM_MODE_INDEPENDENT:
+                    pool = np.asarray(bench, dtype=float)
                     rng = np.random.default_rng(_round_seed(result.cohort_slug, lens_id, d))
                     idx = _sample_baskets(rng, pool.size, k, random_baskets)     # (N, k)
                     basket_returns = pool[idx]                                  # (N, k)
                     basket_excess = (basket_returns.mean(axis=1) - cost) - bench_ret   # (N,)
+                    if n_buys >= 4 and k >= 2:
+                        best = basket_returns.max(axis=1)
+                        rest_means = (basket_returns.sum(axis=1) - best) / (k - 1)
+                elif k > 0:                                                     # "turnover"
+                    if turnover_baskets is None:
+                        turnover_baskets = _TurnoverBaskets(result.cohort_slug, lens_id,
+                                                            random_baskets)
+                    chosen_sets = turnover_baskets.draw(pool_tickers, n_buys, n_new)
+                    ticker_to_return = dict(bench_pairs)
+                    basket_means = np.array([sum(ticker_to_return[t] for t in s) / len(s)
+                                            for s in chosen_sets])
+                    basket_excess = (basket_means - cost) - bench_ret
+                    if n_buys >= 4 and k >= 2:
+                        rest_means = np.array([
+                            _series_rest_mean_dropping_best(
+                                [(t, ticker_to_return[t]) for t in sorted(s)])
+                            for s in chosen_sets])
+                if basket_excess is not None:
                     random_mean_excess = float(basket_excess.mean())
                     pos_dates.append(d)
                     pos_excess_cols.append(basket_excess)
-                    if n_buys >= 4 and k >= 2:
-                        best = basket_returns.max(axis=1)
-                        rest_mean = (basket_returns.sum(axis=1) - best) / (k - 1)
+                    if rest_means is not None:
                         dropbest_dates.append(d)
-                        dropbest_cols.append((rest_mean - cost) - bench_ret)
+                        dropbest_cols.append((rest_means - cost) - bench_ret)
             result.rounds.append(Round(d, n_buys, buy_ret, bench_ret, buy_ret - bench_ret,
                                        tuple(t for t, _ in held), exit_date, len(live),
                                        n_eligible=len(eligible), excess_drop_best=drop_best,
-                                       random_mean_excess=random_mean_excess))
+                                       random_mean_excess=random_mean_excess, n_new=n_new))
         else:
             result.rounds.append(Round(d, len(buys), None, bench_ret, None, (), exit_date,
-                                       len(live), n_eligible=len(eligible)))
+                                       len(live), n_eligible=len(eligible), n_new=n_new))
         if progress is not None:
             last = result.rounds[-1]
             progress(f"{d} ({i}/{len(dates)}): {len(eligible)} eligible, {len(live)} ranked, "
-                     f"{len(buys)} BUY, "
+                     f"{len(buys)} BUY ({n_new} new), "
                      + (f"excess {last.excess:+.1%}" if last.has_position else "no position"))
     result.price_warnings = sorted(set(price_warnings))
     if random_baskets > 0 and pos_excess_cols:
@@ -802,8 +876,84 @@ def _round_seed(cohort_slug_: str, lens_id: str, round_date: date) -> int:
 def _sample_baskets(rng: "np.random.Generator", pool_size: int, k: int, n: int) -> "np.ndarray":
     """``n`` independent random index combinations of size ``k``, without replacement, from
     ``range(pool_size)`` - vectorised (one call, no Python loop over ``n``): one random float per
-    (basket, pool member), argsort each basket's row, keep the first ``k`` columns. Shape (n, k)."""
+    (basket, pool member), argsort each basket's row, keep the first ``k`` columns. Shape (n, k).
+    ``random_mode="independent"`` (BACKTEST-1C) only - see ``_TurnoverBaskets`` for the default."""
     return np.argsort(rng.random((n, pool_size)), axis=1)[:, :k]
+
+
+def _series_seed(cohort_slug_: str, lens_id: str, series_index: int) -> int:
+    """A seed fixed by cohort + lens + SERIES index (TURNOVER_SEED_RULE, BACKTEST-1D) - one seed
+    per series, consumed across every round that series evolves through, unlike ``_round_seed``'s
+    one-seed-per-round (which redraws from scratch and needs no persistent state)."""
+    key = f"{cohort_slug_}|{lens_id}|series{series_index}"
+    return int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:8], 16)
+
+
+class _TurnoverBaskets:
+    """BACKTEST-1D — ``n`` persistent random baskets that EVOLVE one round at a time instead of
+    being redrawn from scratch, so their stickiness matches a real lens's. One instance per
+    (cohort, lens); call ``draw`` once per POSITIONED round, in round order — it is stateful, and
+    a call is what consumes the "first round" case.
+    """
+
+    def __init__(self, cohort_slug_: str, lens_id: str, n: int) -> None:
+        self._rngs = [random.Random(_series_seed(cohort_slug_, lens_id, i)) for i in range(n)]
+        self._holdings: list = [frozenset() for _ in range(n)]
+        self._started = False
+
+    def draw(self, pool_tickers, n_buys: int, n_new: int) -> list:
+        """``pool_tickers`` is THIS round's priced eligible names. Returns a list of ``n``
+        frozensets (one evolved basket per series), each of size ``min(n_buys, len(pool_tickers))``
+        — updates the persisted state for the next call.
+
+        Per series, in order: (1) drop whatever it holds that fell out of ``pool_tickers`` (an
+        automatic consequence of eligibility, never a choice); (2) ADDITIONALLY swap out
+        ``min(n_new, what remains)`` of what is left, chosen at random — the LENS's own turnover
+        this round, mimicked on a basket that owes it nothing itself; (3) draw fresh names to fill
+        whatever is missing to reach ``n_buys`` (covering both the eligibility-driven drops from
+        step 1 and the turnover-driven ones from step 2 in one draw), or trim down if ``n_buys``
+        itself shrank below what survived steps 1-2. This ORDER matters: swapping out BEFORE
+        drawing in is what keeps the replacement count exactly ``n_new`` (plus drops) rather than
+        overshooting the target size and then needing an unrelated random trim to fix it. Every
+        draw is from ``sorted(...)`` of its candidate pool, never a bare set, because Python's set
+        iteration order is not reproducible across processes (hash randomisation) and this must be.
+        """
+        pool = set(pool_tickers)
+        cap = min(n_buys, len(pool))
+        out = []
+        for i, rng in enumerate(self._rngs):
+            if not self._started:
+                chosen = set(rng.sample(sorted(pool), cap)) if cap else set()
+            else:
+                kept = self._holdings[i] & pool                        # step 1 - eligibility only
+                to_swap_out = min(max(0, n_new), len(kept))
+                removed = set()
+                if to_swap_out:                                        # step 2 - the lens's turnover
+                    removed = set(rng.sample(sorted(kept), to_swap_out))
+                    kept -= removed
+                needed = cap - len(kept)                                # step 3 - fill, or trim
+                if needed > 0:
+                    # exclude ``removed`` too - a name just swapped OUT must not be immediately
+                    # drawn back IN, or the swap is not a swap.
+                    available = sorted(pool - kept - removed)
+                    kept |= set(rng.sample(available, min(needed, len(available))))
+                elif needed < 0:
+                    kept = set(rng.sample(sorted(kept), cap))
+                chosen = kept
+            chosen = frozenset(chosen)
+            self._holdings[i] = chosen
+            out.append(chosen)
+        self._started = True
+        return out
+
+
+def _series_rest_mean_dropping_best(pairs: list) -> float:
+    """``pairs`` is ``[(ticker, return), ...]``, length >= 2, from a SORTED iteration (so a tied
+    return breaks the same way every run). The mean return with the single best-returning ticker
+    dropped — the same construction ``_drop_best_excess`` uses, per random series."""
+    best_ticker = max(pairs, key=lambda tv: tv[1])[0]
+    rest = [v for t, v in pairs if t != best_ticker]
+    return sum(rest) / len(rest)
 
 
 def _year_group_means(matrix: "np.ndarray", dates: list) -> "np.ndarray":
@@ -882,12 +1032,16 @@ def _caveats(result: BacktestResult, unpriced: int, undersized_rounds: int = 0) 
         out.append(f"{unpriced} name-round(s) had no usable price at the entry or exit date and were "
                    "left out of both the BUY basket and the benchmark.")
     if result.random_baskets:
+        mode_note = ("redrawn from scratch every round (independent mode)"
+                    if result.random_mode == RANDOM_MODE_INDEPENDENT
+                    else "a PERSISTENT basket evolving with the lens's own turnover each round "
+                         "(turnover mode, BACKTEST-1D)")
         out.append(f"RANDOM-BASKET LUCK BASELINE: {result.random_baskets} random baskets per "
                    "positioned round, each the same size as that round's own BUY basket, drawn "
-                   "without replacement from the same priced names the benchmark is built from "
-                   f"({SEED_RULE}). luck_pct_mean <= {result.max_luck:.0%} is required for "
-                   "\"proven\"; below that a lens that clears the excess/years bar reads "
-                   "\"not beyond luck\" instead. See docs/BACKTEST.md, Skill versus luck.")
+                   f"without replacement from the same priced names the benchmark is built from - "
+                   f"{mode_note} ({result.seed_rule}). luck_pct_mean <= {result.max_luck:.0%} is "
+                   "required for \"proven\"; below that a lens that clears the excess/years bar "
+                   "reads \"not beyond luck\" instead. See docs/BACKTEST.md, Skill versus luck.")
     if undersized_rounds:
         out.append(f"{undersized_rounds} round(s) had fewer priced eligible names than the lens's "
                    "own BUY basket size, so that round's random baskets were drawn smaller than "
@@ -898,7 +1052,7 @@ def _caveats(result: BacktestResult, unpriced: int, undersized_rounds: int = 0) 
 # --------------------------------------------------------------------------- #
 # the file
 # --------------------------------------------------------------------------- #
-_ROUND_COLUMNS = ("date", "exit_date", "n_eligible", "n_ranked", "n_buys", "buy_return",
+_ROUND_COLUMNS = ("date", "exit_date", "n_eligible", "n_ranked", "n_buys", "n_new", "buy_return",
                   "bench_return", "excess", "excess_drop_best", "random_mean_excess", "tickers")
 
 
@@ -936,6 +1090,7 @@ def to_csv(result: BacktestResult, path) -> Path:
                               f"ratio ({result.size_floor_note})") if result.size_floor is not None
          else "n/a - no market-cap data for this run"),
         ("random_baskets", result.random_baskets),
+        ("random_mode", result.random_mode if result.random_baskets else "n/a - random_baskets=0"),
         ("seed_rule", result.seed_rule or "n/a - random_baskets=0"),
         ("max_luck", repr(float(result.max_luck))),
         ("luck_pct_mean", _num(result.luck_pct_mean) or "n/a"),
@@ -955,7 +1110,7 @@ def to_csv(result: BacktestResult, path) -> Path:
         writer.writerow(_ROUND_COLUMNS)
         for r in sorted(result.rounds, key=lambda r: r.date):
             writer.writerow([r.date.isoformat(), r.exit_date.isoformat() if r.exit_date else "",
-                             r.n_eligible, r.n_ranked, r.n_buys, _num(r.buy_return),
+                             r.n_eligible, r.n_ranked, r.n_buys, r.n_new, _num(r.buy_return),
                              _num(r.bench_return), _num(r.excess), _num(r.excess_drop_best),
                              _num(r.random_mean_excess), " ".join(r.tickers)])
     return target
@@ -1001,12 +1156,24 @@ def from_csv(path) -> BacktestResult:
             n_ranked=int(row["n_ranked"]),
             n_eligible=int(row["n_eligible"]) if row.get("n_eligible") not in (None, "") else 0,
             excess_drop_best=_unnum(row.get("excess_drop_best") or ""),
-            random_mean_excess=_unnum(row.get("random_mean_excess") or "")))
+            random_mean_excess=_unnum(row.get("random_mean_excess") or ""),
+            n_new=int(row["n_new"]) if row.get("n_new") not in (None, "") else 0))
     size_floor, size_floor_note = _parse_size_floor(meta.get("as_of_size_floor", ""))
 
     def _meta_num(key: str) -> Optional[float]:
         text = meta.get(key, "")
         return None if text in ("", "n/a") else float(text)
+
+    random_baskets_n = int(meta.get("random_baskets") or 0)
+    if meta.get("random_mode") in RANDOM_MODES:
+        random_mode_value = meta["random_mode"]
+    elif random_baskets_n:
+        # BACKTEST-1D — a file with baskets but no random_mode line at all predates this build,
+        # and 1C only ever drew independently; read it as what it actually is, never the new
+        # default.
+        random_mode_value = RANDOM_MODE_INDEPENDENT
+    else:
+        random_mode_value = RANDOM_MODE_DEFAULT
 
     return BacktestResult(
         cohort=meta["cohort"], lens_id=meta["lens"], start=date.fromisoformat(meta["start"]),
@@ -1017,8 +1184,8 @@ def from_csv(path) -> BacktestResult:
         cohort_version=int(meta["cohort_version"]) if meta.get("cohort_version") else None,
         n_members=int(meta.get("cohort_members") or 0),
         size_floor=size_floor, size_floor_note=size_floor_note, price_warnings=price_warnings,
-        random_baskets=int(meta.get("random_baskets") or 0),
-        seed_rule=(meta.get("seed_rule", "") if int(meta.get("random_baskets") or 0) else ""),
+        random_baskets=random_baskets_n, random_mode=random_mode_value,
+        seed_rule=(meta.get("seed_rule", "") if random_baskets_n else ""),
         max_luck=float(meta["max_luck"]) if meta.get("max_luck") else MAX_LUCK,
         luck_pct_mean=_meta_num("luck_pct_mean"), luck_pct_pass=_meta_num("luck_pct_pass"),
         drop_best_vs_random=_meta_num("drop_best_vs_random"))
@@ -1081,13 +1248,74 @@ def multiple_testing(results) -> MultipleTestingStats:
 
 def multiple_testing_for_directory(root) -> MultipleTestingStats:
     """``multiple_testing`` over every readable ``<root>/<cohort>/<lens>.csv``."""
+    return multiple_testing(_read_directory(root))
+
+
+def _read_directory(root) -> list:
+    """Every readable ``<root>/<cohort>/<lens>.csv``, as ``BacktestResult`` objects, in file
+    order. An unreadable file is left out silently here (``summarize_directory`` is where an
+    unreadable file gets NAMED for a human); shared by ``multiple_testing_for_directory`` and
+    ``calibration_report_for_directory`` so the two can never read a different set of files."""
     results = []
     for path in sorted(Path(root).glob("*/*.csv")):
         try:
             results.append(from_csv(path))
         except Exception:                                      # noqa: BLE001 - just left out
             continue
-    return multiple_testing(results)
+    return results
+
+
+# --------------------------------------------------------------------------- #
+# BACKTEST-1D — the calibration check
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class CalibrationReport:
+    """Is the luck test itself trustworthy? Bins ``luck_pct_mean`` over every testable result and
+    compares the counts against what a CALIBRATED (fair) test would put in each bin."""
+    n_tests: int
+    counts: tuple                # 5 ints, one per CALIBRATION_BINS
+    expected: tuple               # 5 floats, ``n_tests * CALIBRATION_EXPECTED_SHARE``
+    warn: bool                    # a tail holds > CALIBRATION_WARNING_FACTOR x its expected share
+
+    def lines(self) -> list:
+        if self.n_tests == 0:
+            return ["Calibration: no luck-measured, testable result yet."]
+        out = ["Calibration (luck_pct_mean bins, observed vs expected under a fair test):"]
+        for label, c, e in zip(CALIBRATION_LABELS, self.counts, self.expected):
+            out.append(f"  {label:>8}: {c} observed, {e:.1f} expected")
+        if self.warn:
+            out.append("luck test may still be over-confident")
+        return out
+
+
+def _calibration_bin(pct: float) -> int:
+    for i, (lo, hi) in enumerate(CALIBRATION_BINS):
+        if pct < hi or (i == len(CALIBRATION_BINS) - 1 and pct <= hi):
+            return i
+    return len(CALIBRATION_BINS) - 1              # pragma: no cover - unreachable, pct in [0, 100]
+
+
+def calibration_report(results) -> CalibrationReport:
+    """``results`` is any iterable of ``BacktestResult``. Only non-"insufficient", luck-measured
+    results are binned — the same population ``multiple_testing`` counts as ``tests_run``, minus
+    any whose luck was never measured (``random_baskets=0``): a calibration claim needs the actual
+    number to bin, not a guess."""
+    tested = [r for r in results
+             if verdict(r, max_luck=r.max_luck) != "insufficient" and r.luck_pct_mean is not None]
+    n = len(tested)
+    counts = [0] * len(CALIBRATION_BINS)
+    for r in tested:
+        counts[_calibration_bin(r.luck_pct_mean * 100.0)] += 1
+    expected = tuple(n * share for share in CALIBRATION_EXPECTED_SHARE)
+    tails_observed = counts[0] + counts[-1]
+    tails_expected = expected[0] + expected[-1]
+    warn = tails_expected > 0 and tails_observed > CALIBRATION_WARNING_FACTOR * tails_expected
+    return CalibrationReport(n_tests=n, counts=tuple(counts), expected=expected, warn=warn)
+
+
+def calibration_report_for_directory(root) -> CalibrationReport:
+    """``calibration_report`` over every readable ``<root>/<cohort>/<lens>.csv``."""
+    return calibration_report(_read_directory(root))
 
 
 # --------------------------------------------------------------------------- #
@@ -1116,6 +1344,9 @@ def _build_parser():
                           f"{RANDOM_BASKETS_DEFAULT}; 0 opts out) - BACKTEST-1C")
     run.add_argument("--max-luck", type=float, default=MAX_LUCK,
                      help=f"\"proven\" needs luck_pct_mean <= this (default {MAX_LUCK:g})")
+    run.add_argument("--random-mode", choices=RANDOM_MODES, default=RANDOM_MODE_DEFAULT,
+                     help=f"\"turnover\" (default) matches the lens's own turnover; "
+                          f"\"independent\" is the 1C behaviour, kept for comparison")
     summ = sub.add_parser("summary", help="one line per cohort x lens under a backtests directory")
     summ.add_argument("root", nargs="?", default="backtests")
     return p
@@ -1141,6 +1372,8 @@ def main(argv=None) -> int:
         print("\n".join(lines) if lines else f"no backtests under {args.root}")
         if lines:
             print(multiple_testing_for_directory(args.root).sentence())
+            for line in calibration_report_for_directory(args.root).lines():
+                print(line)
         return 0
     _load_env()
     end = args.end or month_end(date.today().replace(day=1) - timedelta(days=1))
@@ -1149,7 +1382,7 @@ def main(argv=None) -> int:
         args.cohort, args.lens, start=start, end=end, hold_months=args.hold, step_months=args.step,
         cost_bps=args.cost_bps, lag_days=args.lag_days, cohorts_root=args.cohorts_root,
         random_baskets=args.random_baskets, max_luck=args.max_luck,
-        progress=lambda msg: print(msg, flush=True))
+        random_mode=args.random_mode, progress=lambda msg: print(msg, flush=True))
     path = to_csv(result, args.out)
     print(f"wrote {path}")
     print(summary_line(result))
