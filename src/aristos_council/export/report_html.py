@@ -1604,8 +1604,9 @@ _JOIN = "\n"
 
 def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     """The Company Report as ONE self-contained HTML file, in the page order: summary (if asked
-    for), agreement headline and table, each lens's vote, peers, valuation band, absolute readings,
-    analyst forecasts, Sources. The same objects the text export prints, so the two cannot drift."""
+    for), council opinion (if asked for), agreement headline and table, each lens's vote, peers,
+    valuation band, absolute readings, analyst forecasts, Sources. The same objects the text
+    export prints, so the two cannot drift."""
     from ..company_check import company_sources
     from ..company_report import HOUSE_LINE, NO_LENS_REASON
     from ..peer_table import rank_columns
@@ -1626,6 +1627,15 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
 
     if report.summary is not None:
         parts.append(_reader_section(report.summary))
+
+    if report.council_opinion is not None:
+        parts.append('<section class="section"><h2>Council opinion</h2>'
+                     '<p class="note">Narration only — never a vote; the agreement below is '
+                     "the verdict of record.</p>")
+        op = report.council_opinion
+        parts.append(_narration_html(op.narrative) if op.available
+                    else f'<p class="note">{_esc(op.note)}</p>')
+        parts.append("</section>")
 
     parts.append('<section class="section"><h2>Agreement</h2>')
     if report.agreement is not None:

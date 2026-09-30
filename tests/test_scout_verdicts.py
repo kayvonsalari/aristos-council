@@ -593,3 +593,105 @@ def test_the_f_score_moves_no_verdict(tmp_path):
     for sid in sv.STOCK_LENSES:
         text = (STRAT_DIR / f"{sid}.yaml").read_text(encoding="utf-8")
         assert "min_f_score" not in text, sid
+
+
+# --------------------------------------------------------------------------- #
+# SCOUT-HOLDINGS-401 — a failed Holdings-tab fetch fails LOUDLY
+# --------------------------------------------------------------------------- #
+def test_holdings_fetch_failure_names_a_real_fetch_failure_only():
+    failed = sv.HoldingsTabRead([], [{"source": sv.HOLDINGS_SOURCE, "cell": "u",
+                                      "reason": "fetch failed: HTTP Error 401: Unauthorized"}])
+    assert sv.holdings_fetch_failure(failed) == "fetch failed: HTTP Error 401: Unauthorized"
+
+
+def test_holdings_fetch_failure_ignores_an_empty_or_unconfigured_or_malformed_tab():
+    empty = sv.HoldingsTabRead([], [])
+    unconfigured = sv.HoldingsTabRead([], [{"source": sv.HOLDINGS_SOURCE, "cell": "-",
+                                            "reason": "no Holdings tab configured "
+                                                      "(SCOUT_SHEET_HOLDINGS empty)"}])
+    malformed = sv.HoldingsTabRead([], [{"source": sv.HOLDINGS_SOURCE, "cell": "u",
+                                         "reason": "no 'Ticker' header found"}])
+    row_level_skip = sv.HoldingsTabRead(
+        [], [{"source": sv.HOLDINGS_SOURCE, "cell": "x | y | Trust",
+             "reason": "type 'Trust' not gradeable by the stock lenses"}])
+    for tab in (empty, unconfigured, malformed, row_level_skip):
+        assert sv.holdings_fetch_failure(tab) is None
+
+
+class _FakeTodoistClient:
+    """No network: records what would have been posted."""
+
+    def __init__(self):
+        self.projects = {}
+        self.tasks = {}
+
+    def find_project(self, name):
+        return self.projects.get(name)
+
+    def create_project(self, name):
+        pid = f"proj-{len(self.projects) + 1}"
+        self.projects[name] = pid
+        return pid
+
+    def find_task(self, project_id, *, title_prefix):
+        for task_id, (content, _desc) in self.tasks.items():
+            if content.startswith(title_prefix):
+                return task_id
+        return None
+
+    def create_task(self, *, content, description, project_id):
+        task_id = f"task-{len(self.tasks) + 1}"
+        self.tasks[task_id] = (content, description)
+        return task_id
+
+    def update_task(self, task_id, *, content, description):
+        self.tasks[task_id] = (content, description)
+
+
+def test_alert_holdings_fetch_failed_posts_one_task_naming_the_reason():
+    client = _FakeTodoistClient()
+    outcome = sv.alert_holdings_fetch_failed(
+        TODAY, "fetch failed: HTTP Error 401: Unauthorized", client=client)
+    assert outcome.sent
+    assert client.projects == {sv.TODOIST_PROJECT: "proj-1"}
+    content, description = next(iter(client.tasks.values()))
+    assert content == f"Scout holdings fetch failed {TODAY.isoformat()}"
+    assert "HTTP Error 401: Unauthorized" in description
+
+
+def test_alert_holdings_fetch_failed_updates_rather_than_duplicates_a_same_day_retry():
+    client = _FakeTodoistClient()
+    sv.alert_holdings_fetch_failed(TODAY, "fetch failed: first", client=client)
+    sv.alert_holdings_fetch_failed(TODAY, "fetch failed: second", client=client)
+    assert len(client.tasks) == 1
+    _content, description = next(iter(client.tasks.values()))
+    assert "second" in description and "first" not in description
+
+
+def test_alert_with_no_client_never_raises_and_reports_not_sent():
+    from aristos_council.todoist_client import RestTodoist
+    outcome = sv.alert_holdings_fetch_failed(
+        TODAY, "fetch failed: x", client=RestTodoist(token=""))
+    assert not outcome.sent and "TODOIST_API_TOKEN" in outcome.error
+
+
+def test_write_outputs_omits_holdings_entirely_when_the_fetch_failed_others_unaffected(
+        tmp_path):
+    """SCOUT-HOLDINGS-401's core promise: a failed fetch writes NOTHING for holdings — not
+    even an empty {stamp}_verdicts.* or a latest.json overwrite — while every other source
+    (here: ft) still writes exactly as it always has. ``main`` achieves this by leaving the
+    HOLDINGS_SOURCE key out of ``per_source`` entirely on a failed fetch; this pins that a
+    missing key, not an empty payload, is what ``_write_outputs`` needs to write nothing."""
+    per_source = {
+        "ft": {"scouted": [], "skipped": [], "result": None, "cohort_size": 0,
+              "cohort": "combined", "also_found_by": {}},
+        # HOLDINGS_SOURCE deliberately absent — simulates main()'s own omission on failure.
+    }
+    sv._write_outputs(TODAY, per_source, {}, root=tmp_path)
+    out = tmp_path / "reports" / "scout"
+    stamp = TODAY.isoformat()
+    assert (out / "ft" / f"{stamp}_verdicts.json").is_file()
+    assert (out / "ft" / f"{stamp}_verdicts.md").is_file()
+    assert not (out / "holdings").exists()
+    index = json.loads((out / "latest.json").read_text())
+    assert set(index["sources"]) == {"ft"}                # holdings never entered the index

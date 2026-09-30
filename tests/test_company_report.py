@@ -331,11 +331,13 @@ def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
 # =========================================================================== #
 # page order, exports, the saved run
 # =========================================================================== #
-_TEXT_HEADS = {"summary": "SUMMARY", "agreement": "AGREEMENT", "lens votes": "LENS VOTES",
+_TEXT_HEADS = {"summary": "SUMMARY", "council opinion": "COUNCIL OPINION",
+               "agreement": "AGREEMENT", "lens votes": "LENS VOTES",
                "peers": "PEERS", "valuation band": "VALUATION BAND",
                "absolute readings": "ABSOLUTE READINGS", "what analysts say": "WHAT ANALYSTS SAY",
                "sources": "SOURCES"}
-_HTML_HEADS = {"summary": "<h2>Summary</h2>", "agreement": "<h2>Agreement</h2>",
+_HTML_HEADS = {"summary": "<h2>Summary</h2>", "council opinion": "<h2>Council opinion</h2>",
+               "agreement": "<h2>Agreement</h2>",
                "lens votes": "<h2>Lens votes</h2>", "peers": "<h2>Peers</h2>",
                "valuation band": "<h2>Valuation band</h2>",
                "absolute readings": "<h2>Absolute readings</h2>",
@@ -343,11 +345,17 @@ _HTML_HEADS = {"summary": "<h2>Summary</h2>", "agreement": "<h2>Agreement</h2>",
 
 
 def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
+    from aristos_council.company_report import CouncilOpinion
+
     probe = _run([RAW], tmp_path=tmp_path, save=False)
     report = _run([RAW, SCREENED], tmp_path=tmp_path, with_summary=True,
                   reader_runner=_Writer(_fields(probe)), save=False)
-    assert SECTION_ORDER == ("summary", "agreement", "lens votes", "peers", "valuation band",
-                             "absolute readings", "what analysts say", "sources")
+    # COUNCIL-OPINION-1 — injected directly (no model call): the section's PLACEMENT is what
+    # this test pins, not the council itself, which has its own dedicated tests below.
+    report.council_opinion = CouncilOpinion(available=True, narrative="It ranked well.")
+    assert SECTION_ORDER == ("summary", "council opinion", "agreement", "lens votes", "peers",
+                             "valuation band", "absolute readings", "what analysts say",
+                             "sources")
     text, html = format_company_report(report), company_report_html(report)
     for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
         at = [doc.index(heads[name]) for name in SECTION_ORDER]
@@ -355,10 +363,13 @@ def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
 
 
 def test_an_unticked_summary_leaves_no_section_and_the_order_holds(tmp_path):
+    # Neither the summary nor the council opinion was ticked: BOTH optional sections are
+    # absent, and the order holds over whatever remains.
     report = _run([RAW], tmp_path=tmp_path, save=False)
     text, html = format_company_report(report), company_report_html(report)
-    order = [n for n in SECTION_ORDER if n != "summary"]
+    order = [n for n in SECTION_ORDER if n not in ("summary", "council opinion")]
     assert "SUMMARY" not in text and "<h2>Summary</h2>" not in html
+    assert "COUNCIL OPINION" not in text and "<h2>Council opinion</h2>" not in html
     for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
         at = [doc.index(heads[name]) for name in order]
         assert at == sorted(at)
@@ -776,3 +787,123 @@ def test_the_agreement_count_is_unchanged_whether_or_not_badges_are_attached(tmp
     assert again.buy == report.agreement.buy and again.hold == report.agreement.hold
     assert again.sell == report.agreement.sell
     assert again.n_ticked == report.agreement.n_ticked and again.n_voted == report.agreement.n_voted
+
+
+# =========================================================================== #
+# COUNCIL-OPINION-1 — the existing council, narrator mode, one company
+# =========================================================================== #
+class _OpinionSpecialistRunner:
+    def __init__(self):
+        self.calls = 0
+
+    def invoke(self, system, user):
+        self.calls += 1
+        from aristos_council.agents.schemas import SpecialistOutput
+        from aristos_council.state import Stance
+        if "SENTIMENT specialist" in system:
+            return SpecialistOutput(stance=Stance.ABSTAIN, confidence=0.0,
+                                    thesis="no sentiment data", agrees_with_ranker=None)
+        return SpecialistOutput(stance=Stance.BULLISH, confidence=0.8,
+                                thesis="ranked well against its peers", agrees_with_ranker=True)
+
+
+class _OpinionDecisionRunner:
+    def __init__(self, out):
+        self._out = out
+        self.calls = 0
+
+    def invoke(self, system, user):
+        self.calls += 1
+        return self._out
+
+
+def _opinion_runners():
+    from aristos_council.agents.schemas import CriticOutput, DecisionOutput
+    from aristos_council.state import Recommendation
+    decision = DecisionOutput(recommendation=Recommendation.BUY, confidence=0.7,
+                              rationale="It ranked well among its peers and the vote agrees.")
+    return {"specialist": _OpinionSpecialistRunner(),
+           "critic": _OpinionDecisionRunner(CriticOutput(counter_thesis="a counter-case")),
+           "decision": _OpinionDecisionRunner(decision)}
+
+
+def test_no_api_key_is_unavailable_and_reaches_no_runner(tmp_path, monkeypatch):
+    from aristos_council.company_report import run_council_opinion
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    op = run_council_opinion(report)
+    assert not op.available and "ANTHROPIC_API_KEY" in op.note and op.calls == 0
+
+
+def test_no_votes_is_unavailable_with_the_same_reason_the_page_shows(tmp_path):
+    from aristos_council.company_report import run_council_opinion
+
+    lonely = _Store([_row("CO.US", "CO", name="Company Co", sub="Space Tourism")])
+    lonely._rows[0].industry = "Space Tourism"
+    report = _run([RAW], tmp_path=tmp_path, store=lonely, save=False)
+    op = run_council_opinion(report, runners=_opinion_runners())
+    assert not op.available and "no peer group" in op.note
+
+
+def test_an_unrateable_company_is_unavailable_with_the_data_integrity_note(tmp_path):
+    from aristos_council.company_report import run_council_opinion
+
+    class _Dead(_Adapter):
+        def get_fundamentals(self, ticker):
+            return (Fundamentals(ticker=ticker) if ticker == "CO"
+                   else super().get_fundamentals(ticker))
+
+        def get_price_history(self, ticker, *, start, end):
+            if ticker == "CO":
+                raise RuntimeError("no timezone found, symbol may be delisted")
+            return super().get_price_history(ticker, start=start, end=end)
+
+    report = run_company_report("CO", [RAW], adapter=_Dead(), strategies_dir=STRAT_DIR,
+                                universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
+                                store=_table(), save=False)
+    assert report.unrateable
+    op = run_council_opinion(report, runners=_opinion_runners())
+    assert not op.available and op.note.startswith("Council opinion unavailable:")
+
+
+def test_a_successful_council_opinion_writes_without_voting(tmp_path):
+    from aristos_council.company_report import run_council_opinion
+
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    runners = _opinion_runners()
+    op = run_council_opinion(report, adapter=_Adapter(), runners=runners, today=TODAY)
+    assert op.available and op.narrative and "unavailable" not in op.narrative.lower()
+    # SENTIMENT abstains without a call in this test env (no FINNHUB_API_KEY wired) — the
+    # other three specialists (fundamental, technical, risk) each call once.
+    assert runners["specialist"].calls == 3
+    assert runners["critic"].calls == 1 and runners["decision"].calls == 1
+    # the verdict of record is UNCHANGED by the opinion having run
+    assert report.agreement.headline == build_agreement(report.votes,
+                                                         band_percentile=report.check.band_percentile
+                                                         ).headline
+
+
+def test_run_company_report_with_council_attaches_the_opinion_and_saves_it(tmp_path):
+    from aristos_council.company_report import report_record
+
+    report = _run([RAW], tmp_path=tmp_path, save=False, with_council=True,
+                  council_runners=_opinion_runners())
+    assert report.council_opinion is not None and report.council_opinion.available
+    record = report_record(report)
+    assert record["council_opinion"]["available"] is True
+    assert record["council_opinion"]["narrative"] == report.council_opinion.narrative
+
+
+def test_with_council_false_by_default_touches_nothing(tmp_path):
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    assert report.council_opinion is None
+
+
+def test_council_opinion_text_and_html_sections_carry_the_narrative(tmp_path):
+    report = _run([RAW], tmp_path=tmp_path, save=False, with_council=True,
+                  council_runners=_opinion_runners())
+    text = format_company_report(report)
+    html = company_report_html(report)
+    assert "COUNCIL OPINION" in text and report.council_opinion.narrative in text
+    assert "<h2>Council opinion</h2>" in html
