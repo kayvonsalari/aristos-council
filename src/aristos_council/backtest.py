@@ -1319,6 +1319,198 @@ def calibration_report_for_directory(root) -> CalibrationReport:
 
 
 # --------------------------------------------------------------------------- #
+# BACKTEST-2 — plain-English track-record badges
+#
+# Display only: a badge NEVER changes a vote, a rank or a verdict, and every lens keeps its vote
+# whatever its badge says. It is derived entirely from the committed CSVs under ``backtests/`` (or
+# an explicit ``root``) — read once per process and cached, never re-run.
+# --------------------------------------------------------------------------- #
+_BACKTESTS_ROOT = Path(__file__).resolve().parents[2] / "backtests"
+
+# {resolved root path (str) -> {(cohort_slug, lens_id): BacktestResult}}, filled on first use.
+_TRACK_RECORD_CACHE: dict = {}
+
+NO_BACKTESTS_NOTICE = "no backtest results found"
+
+# The five labels, in the order the badge rule checks them (see ``track_record``), each with the
+# ONE sentence that explains what it means — written once, reused by the UI (the hover/expander)
+# and by docs/BACKTEST.md's badge-scale table (BACKTEST-2 item 4a), so the two can never drift.
+BADGE_MEANINGS = {
+    "proven here": ("Beat its benchmark in this cohort by enough, often enough, for long enough, "
+                    "that fewer than 1 in 20 random stock-pickers matched it."),
+    "promising here": ("Beat its benchmark in this cohort by a real margin most years, and did "
+                       "better than most random stock-pickers - not yet enough history or "
+                       "separation from luck to call it proven."),
+    "worked against you here": ("In this cohort, picking names at random would have matched or "
+                                "beaten this lens at least 9 times in 10."),
+    "no edge shown here": ("In this cohort, this lens's record does not clear the bar, and does "
+                           "no better than picking names at random."),
+    "untested here": ("There is not yet enough measured history for this cohort and this lens to "
+                      "say anything."),
+}
+BADGE_LABELS = tuple(BADGE_MEANINGS)  # display order
+
+
+@dataclass(frozen=True)
+class Badge:
+    """One lens's plain-English track record in one cohort (BACKTEST-2). ``verdict`` is the raw
+    four-valued ``verdict()`` string when a committed result exists, else ``None`` (nothing was
+    ever run for this cohort/lens pair). Every other field is read straight off that result's
+    ``Summary`` and is ``None`` when there is no result to read it from."""
+    label: str                          # one of BADGE_LABELS
+    verdict: Optional[str]
+    mean_excess: Optional[float]        # Summary.mean_annual_excess
+    luck_pct: Optional[float]           # Summary.luck_pct_mean
+    years_positive: Optional[int]
+    years_measured: Optional[int]
+    rounds_held: Optional[int]          # Summary.n_positions
+    note: str = ""                      # why "untested here", when it needs saying; else ""
+
+    def detail_line(self) -> str:
+        """"mean excess +4.5%/yr · 7 of 10 years positive · luck 4% · 108 rounds held" - the numbers
+        behind the badge, for a hover/expander; "no numbers measured" when there is nothing to show."""
+        if self.years_measured is None:
+            return self.note or "no numbers measured"
+        luck = f"{self.luck_pct:.0%}" if self.luck_pct is not None else "n/a"
+        return (f"mean excess {_pct(self.mean_excess)}/yr · {self.years_positive} of "
+               f"{self.years_measured} years positive · luck {luck} · {self.rounds_held} "
+               f"round(s) held")
+
+
+def _untested_badge(note: str) -> Badge:
+    return Badge(label="untested here", verdict=None, mean_excess=None, luck_pct=None,
+                years_positive=None, years_measured=None, rounds_held=None, note=note)
+
+
+def _load_backtests(root=None) -> dict:
+    """Every committed backtest result under ``root`` (default ``backtests/`` at the repo root), as
+    ``{(cohort_slug, lens_id): BacktestResult}`` — read once and cached in memory for the rest of
+    the process (BACKTEST-2 item 1). A missing root, or a root with no CSVs, caches an empty dict
+    rather than raising; an unreadable individual file is left out silently (same contract as
+    ``_read_directory``, which this mirrors but keys by the committed DIRECTORY/FILE names, the
+    authoritative cohort slug and lens id, rather than by re-deriving them from the file's own
+    ``# cohort:`` line)."""
+    base = Path(root) if root else _BACKTESTS_ROOT
+    key = str(base.resolve()) if base.exists() else f"missing:{base}"
+    if key not in _TRACK_RECORD_CACHE:
+        found: dict = {}
+        if base.is_dir():
+            for path in sorted(base.glob("*/*.csv")):
+                try:
+                    found[(path.parent.name, path.stem)] = from_csv(path)
+                except Exception:                          # noqa: BLE001 - left out, not fatal
+                    continue
+        _TRACK_RECORD_CACHE[key] = found
+    return _TRACK_RECORD_CACHE[key]
+
+
+def has_track_record(cohort_slug: str, *, root=None) -> bool:
+    """True if ANY committed result exists for this cohort slug — lets a caller decide whether a
+    track-record section is worth showing at all before asking about individual lenses."""
+    return any(slug == cohort_slug for slug, _lens in _load_backtests(root))
+
+
+def track_record(cohort_slug: str, lens_id: str, *, root=None) -> Badge:
+    """The plain-English track-record badge for one (cohort, lens) pair (BACKTEST-2). Reads the
+    committed CSVs under ``backtests/`` (cached after the first call); never gates — this is
+    display only and is never fed back into a vote, rank or verdict.
+
+    Checked in this order:
+      - no committed result for this cohort+lens at all, or its own ``verdict()`` is
+        "insufficient" (too little measured history to trust ANY number below) -> "untested here"
+      - ``verdict()`` == "proven" -> "proven here"
+      - the plain excess/years bar met (mean excess >= 2%/yr, years positive >= 6 of 10) AND
+        ``luck_pct_mean`` <= 25% -> "promising here"
+      - ``luck_pct_mean`` >= 90% (a random stock-picker matched or beat it at least 9 times in
+        10) — regardless of the bar -> "worked against you here"
+      - everything else that was actually tested -> "no edge shown here"
+    """
+    cache = _load_backtests(root)
+    result = cache.get((cohort_slug, lens_id))
+    if result is None:
+        base = Path(root) if root else _BACKTESTS_ROOT
+        note = NO_BACKTESTS_NOTICE if not base.is_dir() else (
+            "no backtest result for this cohort and lens")
+        return _untested_badge(note)
+
+    s = result.summary
+    v = verdict(result, max_luck=result.max_luck)
+    common = dict(verdict=v, mean_excess=s.mean_annual_excess, luck_pct=s.luck_pct_mean,
+                 years_positive=s.years_positive, years_measured=s.years_measured,
+                 rounds_held=s.n_positions)
+    if v == "insufficient":
+        return Badge(label="untested here", note=(
+            f"only {s.years_measured} year(s) measured, {s.n_positions} round(s) held - not "
+            f"enough history yet"), **common)
+    if v == "proven":
+        return Badge(label="proven here", **common)
+    if (_passes_bar(s, PROOF_MIN_EXCESS, PROOF_MIN_YEARS, PROOF_OF_YEARS)
+            and s.luck_pct_mean is not None and s.luck_pct_mean <= 0.25):
+        return Badge(label="promising here", **common)
+    if s.luck_pct_mean is not None and s.luck_pct_mean >= 0.90:
+        return Badge(label="worked against you here", **common)
+    return Badge(label="no edge shown here", **common)
+
+
+def track_record_caption(cohort_slug: str, *, root=None) -> Optional[str]:
+    """"Track record from the <short name> cohort, N years to <Mon YYYY>" - or None when nothing
+    is committed for this cohort at all. Every lens in a cohort shares the same window, so any one
+    committed result names it."""
+    cache = _load_backtests(root)
+    result = next((r for (slug, _lens), r in cache.items() if slug == cohort_slug), None)
+    if result is None:
+        return None
+    years = round((result.end - result.start).days / 365.25)
+    _, sep, short = result.cohort.partition(" - ")
+    name = short if sep else result.cohort
+    return f"Track record from the {name} cohort, {years} years to {result.end.strftime('%b %Y')}"
+
+
+def format_track_record_summary(badges) -> str:
+    """"Track record: 2 proven, 1 promising, 2 no edge shown" - counts, over ``badges`` (an
+    iterable of ``Badge``), of each label actually present, in the fixed badge-scale order, each
+    label's trailing " here" dropped for a shorter line. "" when ``badges`` is empty."""
+    from collections import Counter
+    counts = Counter(b.label for b in badges)
+    parts = [f"{counts[label]} {label[:-len(' here')]}" for label in BADGE_LABELS if counts[label]]
+    return "Track record: " + ", ".join(parts) if parts else ""
+
+
+def cohort_for_industry(industry: Optional[str], gics_subindustry: Optional[str] = None, *,
+                        definitions_path=None) -> Optional[str]:
+    """The backtested cohort SLUG whose ``data/cohort_definitions.yaml`` rule matches this
+    industry label — the SAME matching rule the cohort builder applies when it selects members
+    (``cohorts.source.build_pool_from_index``'s industry-code match, narrowed by
+    ``cohorts.cleanup.rule_exclusions``'s GICS sub-industry filter when the definition names one).
+    ``None`` when no definition's industry list contains the label, or (for a definition narrowed
+    to a GICS sub-industry) the label carries none of those sub-industries, or no company's
+    sub-industry at all. This is a pure textual match against the DEFINITIONS file — it does not
+    care whether that cohort has ever actually been built or backtested (``track_record`` already
+    degrades to "untested here" when it has not)."""
+    from .cohorts.definitions import load_definitions
+
+    industry_norm = (industry or "").replace("\xa0", " ").strip()
+    if not industry_norm:
+        return None
+    sub_norm = (gics_subindustry or "").strip().lower()
+    path = Path(definitions_path) if definitions_path else (
+        _BACKTESTS_ROOT.parent / "data" / "cohort_definitions.yaml")
+    try:
+        defs = load_definitions(path)
+    except Exception:                                       # noqa: BLE001 - no match, not a crash
+        return None
+    for defn in defs:
+        if industry_norm not in set(defn.industry):
+            continue
+        if defn.gics_subindustry:
+            wanted = {s.lower() for s in defn.gics_subindustry}
+            if not sub_norm or sub_norm not in wanted:
+                continue
+        return defn.slug
+    return None
+
+
+# --------------------------------------------------------------------------- #
 # CLI:  python -m aristos_council.backtest run|summary
 # --------------------------------------------------------------------------- #
 def _build_parser():

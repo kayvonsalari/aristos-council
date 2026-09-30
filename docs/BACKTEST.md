@@ -4,8 +4,9 @@ A lens says BUY on a handful of companies in a cohort. The backtest asks the one
 decides whether that vote deserves trust: **if you had held that lens's BUY names, would you have
 done better than holding the whole cohort?**
 
-It is a separate, slow, offline measurement. It calls no language model, it changes no verdict, and
-nothing in a normal run reads it yet (see "What it will be used for").
+It is a separate, slow, offline measurement. It calls no language model and it changes no verdict —
+a normal run reads it only to LABEL a vote in plain English (the "Track-record badges" section
+below), never to change one (see "What it will be used for").
 
 ## What is measured
 
@@ -65,15 +66,17 @@ read as "no evidence either way," never as a silent pass or fail.
 **Known open check (not fixed here):** a small number of single rounds show excess beyond ±100% —
 seen so far in `comms_media_entertainment` × `conservative_plus_v1` (round 2023-12-31) and
 `tech_semiconductor_equipment` × `magic_formula_raw_v1` (round 2025-04-30). The likely cause is an
-unadjusted split or a currency mix inside one name's price series, not yet confirmed. This needs to be
-investigated from the CSVs before BACKTEST-2 gates any vote on these results; it is documented here,
-deliberately left unfixed, so it is not lost.
+unadjusted split or a currency mix inside one name's price series, not yet confirmed. Since
+BACKTEST-2's badges never gate a vote (see "Track-record badges" below), this affects only how
+those two cohort × lens badges READ, not any vote — but it should still be run down from the CSVs
+before either result is trusted; it is documented here, deliberately left unfixed, so it is not lost.
 
 **First run scope:** the 13 locally watched cohorts (`data/local/cohorts/watch.yaml`, personal, not in
 the repo — see `docs/COHORTS.md`) × the 5 voting stock lenses (`magic_formula_raw_v1`,
 `magic_formula_momentum_v1`, `growth_garp_v2`, `conservative_plus_v1`, `cyclical_income_v1`),
-2016-09 to 2026-09, 12-month holds, monthly steps. Results land in
-`backtests/<cohort_slug>/<lens_id>.csv`; once committed, BACKTEST-2 will read them.
+2016-09 to 2026-09, 12-month holds, monthly steps. Results are committed under
+`backtests/<cohort_slug>/<lens_id>.csv`; BACKTEST-2 reads them to badge every vote — see
+"Track-record badges" below.
 
 ## The pass bar (the owner's ruling, 2026-09-26)
 
@@ -172,8 +175,10 @@ size — the sum of every measured test's own `luck_pct_pass`. A proven count no
 expected-by-chance number is the first real evidence that something here beats a random picker; a
 proven count close to it is not.
 
-**BACKTEST-2 (the vote gate, not yet built) must read this verdict**, not the plain excess/years bar
-— a lens "not beyond luck" is exactly the case gating exists to catch.
+**BACKTEST-2 reads this verdict** (see "Track-record badges" below) to label a lens's vote in plain
+English — it does NOT gate on it. A future gate that changes a vote's WEIGHT because of its badge
+is a separate, still-unbuilt step; a lens "not beyond luck" is exactly the case such a gate would
+need to catch, but nothing in this build caps or reweights a vote.
 
 ### Why the random pickers had to get stickier (BACKTEST-1D)
 
@@ -212,6 +217,102 @@ about twice their expected share, a line prints: **`luck test may still be over-
 that as "do not trust these luck scores at face value yet," not as a verdict on any one lens. This
 is the check that would have caught the 1C miscalibration on its own, without needing to eyeball the
 distribution by hand.
+
+## Track-record badges (BACKTEST-2, shipped 2026-09-30)
+
+Every lens's vote, in the Run tab and in Company Check, carries a plain-English **badge** naming
+its own track record in the relevant cohort — read straight off the committed `backtests/` files
+above. **No gating.** A badge is display only: every lens keeps its vote whatever its badge says,
+and the equal-vote agreement count is exactly what it would be with no badges shown at all. A
+future gate that changes a vote's weight because of its badge is a separate, still-unbuilt step
+(see "What it will be used for").
+
+### The badge scale
+
+One of five labels, checked in this order, each with the ONE sentence that explains it — written
+here once and reused verbatim by the app's hover/expander, so the two can never drift
+(`BADGE_MEANINGS` in `backtest.py`):
+
+| Badge | Meaning |
+|---|---|
+| **proven here** | Beat its benchmark in this cohort by enough, often enough, for long enough, that fewer than 1 in 20 random stock-pickers matched it. |
+| **promising here** | Beat its benchmark in this cohort by a real margin most years, and did better than most random stock-pickers - not yet enough history or separation from luck to call it proven. |
+| **worked against you here** | In this cohort, picking names at random would have matched or beaten this lens at least 9 times in 10. |
+| **no edge shown here** | In this cohort, this lens's record does not clear the bar, and does no better than picking names at random. |
+| **untested here** | There is not yet enough measured history for this cohort and this lens to say anything. |
+
+The rule, precisely (`track_record()` in `backtest.py`):
+
+1. no committed result for this cohort + lens at all, or its own `verdict()` reads
+   "insufficient" (too little measured history to trust anything below) → **untested here**
+2. `verdict()` == "proven" → **proven here**
+3. the plain excess/years bar is met (mean excess ≥ +2%/yr, positive in ≥ 6 of 10 years) AND
+   `luck_pct_mean` ≤ 25% → **promising here**
+4. `luck_pct_mean` ≥ 90% — regardless of whether the bar was met — → **worked against you here**
+5. everything else that was actually tested → **no edge shown here**
+
+### Where the cohort comes from
+
+- **Run tab.** The universe being run either IS one of the 13 backtested cohorts or it is not —
+  its display name is slugified the same way a cohort's name is (`cohort_slug()`) and matched
+  directly against `backtests/<slug>/`. Most Run-tab universes (an ad-hoc paste, a saved list of a
+  different shape) match none of the 13, and show no track-record section at all; that is the
+  ordinary case, not an error.
+- **Company Check.** A company's own industry label (EODHD, or the GICS sub-industry a cohort is
+  narrowed to) is matched against `data/cohort_definitions.yaml` by `cohort_for_industry()` — the
+  SAME rule the cohort builder itself uses to select members. This is independent of the
+  company's PEER GROUP (`market_index.peers`), which is a different, wider ladder built for
+  comparison, not for backtesting; a company can have a peer group with no matching backtested
+  cohort, and vice versa.
+
+### Read this before trusting a badge
+
+- **Ten years is one market regime.** 2016–2026 favoured growth and momentum over cheap, out-of-
+  favour stocks for most of its length. A badge earned in this decade says nothing about how the
+  same lens would have read in, say, 2000–2010.
+- **The baskets are thin.** Three to nine names, month to month — a badge is a statement about a
+  small, concentrated basket's own history, not a diversified portfolio's.
+- **39 tests were run at a bar fixed up front** (13 cohorts × 5 lenses, minus the pairs that read
+  "insufficient" — too thin a cohort for a selective lens) **— about 2 "proven" results are
+  expected by chance alone**, even with zero real skill anywhere (see "Skill versus luck" above
+  and the multiple-testing line `summary` prints). A "proven" badge is evidence, not proof.
+- **A badge describes the past, in one cohort — never a forecast.** It says how this lens's own
+  picks did over the last ten years against this particular group of similar companies, not what
+  it will do next. The optional plain-English summary is held to the same rule: it may repeat a
+  badge's label, but must never turn it into a claim that a lens predicts anything.
+
+### The 13×5 results matrix
+
+Generated from `backtests/SUMMARY.csv` by `scripts/backtest_badge_matrix.py` — re-run it after
+every refresh (below) and paste its output back in here; never hand-edited, so this table can
+never silently drift from what is actually committed:
+
+```
+python -m scripts.backtest_badge_matrix
+```
+
+**P** = proven, **L** = not beyond luck, **N** = not proven, **U** = insufficient (untested — too
+little measured history), each cell's mean annual excess in parentheses:
+
+| Cohort | conservative_plus_v1 | cyclical_income_v1 | growth_garp_v2 | magic_formula_momentum_v1 | magic_formula_raw_v1 |
+|---|---|---|---|---|---|
+| Comms - Interactive Media & Gaming | N (0.1%) | N (1.7%) | P (8.1%) | P (4.5%) | L (2.6%) |
+| Comms - Media & Entertainment | N (-5.5%) | N (-4.5%) | U | N (-5.1%) | N (-0.6%) |
+| Consumer - Auto Manufacturers | U (-6.7%) | N (2.5%) | N (-14.6%) | N (-3.4%) | L (6.2%) |
+| Health - Large Pharma | U (6.9%) | N (-5.3%) | U | N (-2.8%) | N (-1.1%) |
+| Health - Medical Devices & Instruments | N (1.8%) | N (-1.7%) | U | N (1.5%) | N (1.4%) |
+| Industrials - Airlines & Airports | U | N (-9.6%) | U | N (-1.3%) | N (-0.2%) |
+| Industrials - Grid & Electrical Machinery | U | U (-35.5%) | U | U (10.5%) | L (6.1%) |
+| Materials - Diversified Mining | U (-6.0%) | U (-8.5%) | U (2.5%) | U (8.2%) | P (16.0%) |
+| Tech - Hardware | U (-19.2%) | N (-12.4%) | U (37.7%) | N (2.4%) | N (-1.0%) |
+| Tech - IT Services | N (-4.5%) | N (-4.1%) | U (4.3%) | N (0.2%) | N (-1.2%) |
+| Tech - Semiconductor Equipment | U | U (0.8%) | U (-5.3%) | U (-1.4%) | U (7.2%) |
+| Tech - Semiconductors | U (9.0%) | L (4.7%) | U (5.7%) | N (-6.8%) | N (-7.9%) |
+| Tech - Systems Software | N (-7.1%) | N (-2.5%) | U | N (-6.1%) | N (-6.1%) |
+
+As of this run: 3 proven, 4 not beyond luck, 32 not proven, 26 insufficient — consistent with
+"about 2 proven expected by chance" being a floor, not a ceiling, and with most cells reading
+"not proven" or "insufficient" rather than either extreme.
 
 ## How the universe is chosen per round (BACKTEST-1B)
 
@@ -316,24 +417,46 @@ print(verdict(result), result.summary, result.year_excess)
 to_csv(result, "backtests/")
 ```
 
-## Re-running yearly
+## Refreshing the results
 
-The verdict is only as fresh as its end date. Once a year, re-run each cohort × lens with
-`--years 10` (the window moves forward a year), commit the new CSVs under `backtests/`, and read
-`summary`. A cohort that has been re-built (`v2`) is a different cohort: its file records the version,
-and a rebuilt cohort should be re-run rather than compared with the old file.
+The 13-cohort × 5-lens run behind the matrix above (and every badge in the app) is only as fresh
+as its end date (2026-09-01). To refresh it:
+
+1. In Colab, re-run `notebooks/aristos_backtest.ipynb` end to end.
+2. Run cell 8, which zips the 13 cohort folders plus `SUMMARY.csv` into `backtests_export.zip`
+   and offers it for download.
+3. Unzip it locally, over `backtests/` (`backtests/<cohort_slug>/<lens_id>.csv` and
+   `backtests/SUMMARY.csv` — the same layout already committed).
+4. `python -m scripts.backtest_badge_matrix` — regenerates the matrix above (paste its output
+   over the table) and rewrites `backtests/RUN.md` with today's date.
+5. Commit the refreshed `backtests/` (results, RUN.md) and the updated matrix in this file
+   together, as one commit.
+
+A single cohort × lens can also be refreshed on its own from the CLI (`--years 10` moves the
+window forward a year): `python -m aristos_council.backtest run --cohort ... --lens ... --out
+backtests/`, then `python -m aristos_council.backtest summary backtests/` to read it — but the
+matrix above and `backtests/RUN.md` should still be regenerated afterward so they describe
+exactly what is committed. A cohort that has been re-built (`v2`) is a different cohort: its file
+records the version, and a rebuilt cohort should be re-run rather than compared with the old file.
+
+`backtests/RUN.md` (written by the script above) states the date `backtests/` was last refreshed,
+so a reader of the committed results — or of a badge in the app — can tell at a glance how stale
+they are.
 
 ## What it will be used for
 
-Later (BACKTEST-2, **not in this build**), a lens's vote in a cohort will depend on this file: a lens
-that is not "proven" there — "not beyond luck", "not proven" or "insufficient" alike — will be shown
-as a vote without the weight of a proven one. Nothing does that today. Until then this is a
-measurement you read, not a rule the system applies — and it ships as such, deliberately: no
-strategy, screen or verdict reads a `backtests/` file. **BACKTEST-2 must gate on the full verdict**
-(the one `luck_pct_mean` already gates INTO "proven"), never on the plain excess/years bar alone —
-see "Skill versus luck" above for why the bar by itself is not enough.
+**Shipped:** every lens's vote now carries a plain-English track-record badge, read from this
+file — see "Track-record badges" above. It is display only; no strategy, screen or verdict reads
+a `backtests/` file to decide anything, and no vote is capped, reweighted or hidden because of its
+badge.
 
-Further out, and also not built, this backtest-gated vote is planned to be one of four quantitative
+**Not yet built:** a GATE that changes a vote's weight because of its badge — a lens that is not
+"proven" somewhere (whatever its badge reads) shown as a vote without the weight of a proven one.
+That would need to read the FULL verdict (the one `luck_pct_mean` already gates INTO "proven"),
+never the plain excess/years bar alone — see "Skill versus luck" above for why the bar by itself
+is not enough. Nothing in the repo does this today.
+
+Further out, and also not built, a backtest-gated vote is planned to be one of four quantitative
 methods (alongside fair-multiple valuation, a composite score, and Gap Ledger's earnings drift) that
 converge on one shared engine called from both the Run tab and Company Check — see
 [docs/GAP_LEDGER.md § Relationship to Aristos Council](GAP_LEDGER.md#relationship-to-aristos-council).

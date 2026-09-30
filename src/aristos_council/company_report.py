@@ -28,11 +28,13 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+from .backtest import Badge, cohort_for_industry, format_track_record_summary, track_record
+from .backtest import track_record_caption as _cohort_track_record_caption
 from .company_check import (CompanyCheckResult, absolute_reading_lines, analyst_forecast_lines,
                             attach_peers, company_sources, mixed_source_marker, peers_lines,
                             run_company_check)
@@ -65,10 +67,19 @@ class LensVote:
     cohort_size: int = 0
     reason: str = ""                  # why it does not apply (plain words)
     factor_note: str = ""             # "ranked on 2 of 3 factors"
+    # BACKTEST-2 — this lens's plain-English track record in the company's backtested cohort.
+    # None when no cohort could be matched to the company's industry (never fed back into the
+    # vote itself — attached AFTER votes are built, purely display).
+    badge: Optional[Badge] = None
 
     @property
     def votes(self) -> bool:
         return (self.kind or "selector") != "check"
+
+    @property
+    def badge_suffix(self) -> str:
+        """" (proven here)" beside the badge's label, or "" when there is none to show."""
+        return f" ({self.badge.label})" if self.badge is not None else ""
 
     @property
     def ranked(self) -> bool:
@@ -209,6 +220,11 @@ class CompanyReport:
     seconds: float = 0.0
     cache: dict = field(default_factory=dict)         # {"hits": n, "misses": n}
     saved_to: str = ""
+    # BACKTEST-2 — the backtested cohort this company's industry matched (None -> no match, so no
+    # badge is shown anywhere) and its "Track record from the <name> cohort, N years to <Mon
+    # YYYY>" caption ("" when cohort_slug is None).
+    cohort_slug: Optional[str] = None
+    track_record_caption: str = ""
 
     @property
     def display(self) -> str:
@@ -221,6 +237,12 @@ class CompanyReport:
     @property
     def unrateable(self) -> bool:
         return bool(self.check.unrateable)
+
+    @property
+    def track_record_summary(self) -> str:
+        """"Track record: 2 proven, 1 promising, 2 no edge shown" over every TICKED lens's badge
+        (BACKTEST-2) - "" when none was matched to a cohort."""
+        return format_track_record_summary(v.badge for v in self.votes if v.badge is not None)
 
 
 def peers_for_ranking(group) -> tuple[list[str], list[str]]:
@@ -284,6 +306,26 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
 def _plain_reason(reason: str) -> str:
     """The raw exclusion reason without the price-divergence badge some carry."""
     return (reason or "").split(" ⚠")[0].strip()
+
+
+def attach_track_record(report: CompanyReport) -> None:
+    """BACKTEST-2 — decorate every vote with its lens's plain-English track-record badge in the
+    company's backtested cohort, and set the report's cohort slug + caption. Runs AFTER the votes
+    are built and never changes one: a badge is read, never fed back in.
+
+    The cohort is found from the company's OWN industry label (the peer group's subject), matched
+    against ``data/cohort_definitions.yaml`` the same way the cohort builder matches members —
+    NOT from the peer group itself, which is a different, wider ladder (COMPANY-CHECK builds a
+    peer group; this maps to one of the 13 BACKTESTED cohorts, or none). No match -> every vote
+    keeps ``badge=None`` and the caption stays ""; nothing else changes."""
+    subject = report.peer_group.subject if report.peer_group is not None else None
+    slug = cohort_for_industry(getattr(subject, "industry", None),
+                               getattr(subject, "gics_subindustry", None)) if subject else None
+    report.cohort_slug = slug
+    if slug is None:
+        return
+    report.track_record_caption = _cohort_track_record_caption(slug) or ""
+    report.votes = [replace(v, badge=track_record(slug, v.strategy_id)) for v in report.votes]
 
 
 def lens_ranks_record(multi) -> dict:
@@ -373,6 +415,10 @@ def run_company_report(
     if report.votes and any(v.status != "no_group" for v in report.votes):
         report.agreement = build_agreement(report.votes, band_percentile=check.band_percentile)
 
+    # BACKTEST-2 — badges are display only and never feed the agreement built above.
+    if report.votes:
+        attach_track_record(report)
+
     # ----- the opt-in summary: the ONE model call, and only when asked for ------------------ #
     if with_summary:
         say("Writing the plain-English summary…")
@@ -405,12 +451,22 @@ def report_record(report: CompanyReport) -> dict:
         "universe": list(report.universe),
         "votes": [{"lens": v.strategy_id, "label": v.label, "votes": v.votes, "status": v.status,
                    "verdict": v.verdict, "position": v.position, "of": v.cohort_size,
-                   "result": v.result()} for v in report.votes],
+                   "result": v.result(),
+                   # BACKTEST-2 — display only; None when no cohort was matched.
+                   "track_record_badge": (None if v.badge is None else {
+                       "label": v.badge.label, "verdict": v.badge.verdict,
+                       "mean_excess": v.badge.mean_excess, "luck_pct": v.badge.luck_pct,
+                       "years_positive": v.badge.years_positive,
+                       "years_measured": v.badge.years_measured,
+                       "rounds_held": v.badge.rounds_held, "note": v.badge.note})}
+                  for v in report.votes],
         "agreement": (None if agreement is None else {
             "headline": agreement.headline, "buy": list(agreement.buy),
             "hold": list(agreement.hold), "sell": list(agreement.sell),
             "checks": dict(agreement.checks), "marks": list(agreement.marks)}),
         "no_vote_reason": report.no_vote_reason,
+        "cohort_slug": report.cohort_slug, "track_record_caption": report.track_record_caption,
+        "track_record_summary": report.track_record_summary,
         "lens_ranks": report.lens_ranks,
         "sources": [{"topic": s.topic, "text": s.text} for s in company_sources(report.check)],
         "seconds": report.seconds, "cache": report.cache,
@@ -454,7 +510,8 @@ def agreement_table_lines(report: CompanyReport) -> list[str]:
 def vote_table_lines(report: CompanyReport) -> list[str]:
     width = max((len(v.label) for v in report.votes), default=4)
     out = [f"{'Lens'.ljust(width)}  {'Role':<22} Result"]
-    out += [f"{v.label.ljust(width)}  {v.role:<22} {v.result()}" for v in report.votes]
+    out += [f"{v.label.ljust(width)}  {v.role:<22} {v.result()}{v.badge_suffix}"
+           for v in report.votes]
     return out
 
 
@@ -490,6 +547,12 @@ def format_company_report(report: CompanyReport) -> str:
     if report.agreement is not None:
         lines.append(f"  {report.agreement.headline}")
         lines.extend(f"  {ln}" for ln in agreement_table_lines(report))
+        # BACKTEST-2 — display only, right under the agreement count; counts the ticked lenses'
+        # badges, never the vote itself.
+        if report.track_record_caption:
+            lines.append(f"  {report.track_record_caption}")
+        if report.track_record_summary:
+            lines.append(f"  {report.track_record_summary}")
     else:
         lines.append(f"  No vote: {report.no_vote_reason}")
     lines.append("")
@@ -500,6 +563,10 @@ def format_company_report(report: CompanyReport) -> str:
         for v in report.votes:
             if v.asks:
                 lines.append(f"    {v.label}: {v.asks}")
+            if v.badge is not None:
+                from .backtest import BADGE_MEANINGS
+                lines.append(f"    {v.label} track record: {v.badge.detail_line()} — "
+                             f"{BADGE_MEANINGS[v.badge.label]}")
     else:
         lines.append(f"  {report.no_vote_reason or NO_LENS_REASON}")
     lines.append("")
@@ -555,7 +622,11 @@ def company_facts_pack(report: CompanyReport) -> dict:
                "role": v.role, "result": v.result(),
                "verdict": v.word if v.ranked else "", "position": v.position,
                "of": v.cohort_size or None,
-               "applies": v.ranked} for v in report.votes]
+               "applies": v.ranked,
+               # BACKTEST-2 — the LABEL only (never the raw numbers): the summary may repeat
+               # this wording, but must never turn it into a claim the lens "predicts" anything.
+               "track_record_label": (v.badge.label if v.badge is not None else None)}
+              for v in report.votes]
     trend = c.analyst_trend
     return {
         "company": {"name": report.display,
