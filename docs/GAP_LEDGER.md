@@ -73,19 +73,24 @@ pace. Until then, only bug fixes land on it; no new filters, thresholds, checkpo
 ## The commands
 
 ```bash
-python -m aristos_council.gap_ledger run        # the pre-market screen, stamped 09:00 New York
+python -m aristos_council.gap_ledger run        # catch up, then the pre-market screen (09:00 NY)
+python -m aristos_council.gap_ledger catch-up   # fill missing/partial days on demand (GAP-BACKFILL-1)
 python -m aristos_council.gap_ledger outcomes   # after the close, fill the readings
-python -m aristos_council.gap_ledger score      # candidates vs control group, all days
+python -m aristos_council.gap_ledger score      # candidates vs control group, all days (+ live/backfilled split)
 streamlit run gap_ledger_app.py                 # the read-only viewer (never starts a screen)
 ```
 
-`run` writes the day's CSV and posts one Todoist task. Options: `--explain` (off by default) adds
-one cheap LLM call; `--no-news` skips the charged EODHD calls; `--no-todoist` skips the task;
-`--no-ibkr` skips Interactive Brokers and screens on yfinance alone; `--dry-run` writes nothing;
-`--tickers <file>` screens a hand-written list instead of the index; `--limit N` takes the first
-N names for a smoke test; `--date` / `--at` screen a past morning; `--refresh` ignores the cached
-daily bars. `outcomes --date D` fills one day (default: every unfilled day). A run with no cost
-and no side effects is `run --no-news --no-todoist --no-ibkr --dry-run`.
+`run` first catches up any missing/partial day (GAP-BACKFILL-1; `--no-backfill` skips this,
+`--backfill-max N` caps it — default 15), then, only inside the live window, screens and posts one
+Todoist task. Options: `--explain` (off by default) adds one cheap LLM call; `--no-news` skips the
+charged EODHD calls; `--no-todoist` skips the task; `--no-ibkr` skips Interactive Brokers and
+screens on yfinance alone; `--dry-run` writes nothing; `--tickers <file>` screens a hand-written
+list instead of the index; `--limit N` takes the first N names for a smoke test; `--date` / `--at`
+screen one past morning DIRECTLY (bypasses the catch-up/live-window gate — a targeted run, not the
+daily one); `--refresh` ignores the cached daily bars. `catch-up --max N --dry-run` runs the same
+catch-up on its own, `--dry-run` only listing what is missing. `outcomes --date D` fills one day
+(default: every unfilled day). A run with no cost and no side effects is `run --no-news
+--no-todoist --no-ibkr --no-backfill --dry-run`.
 
 Everything runs on **New York time**. The rest of this repo displays Europe/Berlin because that
 is where the developer reads reports; a pre-market screen is a statement about a session, and a
@@ -104,10 +109,14 @@ repository; this is what they do:
 | **Gap Ledger outcomes** | 22:30 | 16:30 (after the close) | `python -m aristos_council.gap_ledger outcomes`, logging to `data/local/gap_ledger_outcomes.log` — one line per day: "filled outcomes for N of N logged names" |
 | **Gap Ledger backup** | 23:00 | 17:00 | `robocopy` of `data/local/gap_ledger` to a cloud-synced folder. `robocopy` exit codes below 8 are success, so a "last result" of 3 (files copied, extras present) is normal. |
 
-Settings worth knowing: the tasks wake the machine, have a one-hour execution limit, and do **not**
-catch up a missed run — a day the machine was off is a day not logged, and the scorecard simply has
-one fewer day. The IB Gateway must be running and logged in at 09:00 ET for stage 2 to happen; if it
-is not, the run proceeds on yfinance alone and says so.
+Settings worth knowing: the tasks wake the machine and have a one-hour execution limit. **The Gap
+Ledger run task now catches up a missed run** (GAP-BACKFILL-1, below) — it is set to start as soon
+as possible after a missed scheduled start, so a day the laptop was off no longer costs a logged
+day, it costs a delay of a run or two. The other two tasks (outcomes, backup) are unaffected and
+still simply skip a day the machine was off; `outcomes` catches up on its own the next time it runs
+(it fills every unfilled day, not only the newest), so nothing further was needed there. The IB
+Gateway must be running and logged in for stage 2 to happen; if it is not, GAP-BACKFILL-1 governs
+what the run does instead of a degraded scan.
 
 > **Daylight-saving caveat.** The tasks are on the Berlin clock and the screen is stamped 09:00 New
 > York. Europe and the US change clocks on different dates, so for about three weeks each spring
@@ -118,6 +127,93 @@ is not, the run proceeds on yfinance alone and says so.
 > serve anyway) would be late. A task that starts late for any other reason is invisible in the CSV
 > for the same reason, so check the run log's file times if it matters.
 
+## Catch-up and backfill (GAP-BACKFILL-1)
+
+**A DATED EXCEPTION to the feature freeze below, agreed 2026-09-30.** The freeze bars new filters,
+thresholds and checkpoints — the rules the screen judges by. A missed day is not a new rule; it is
+the same rule, applied to a day nobody was there to run it on. Two causes account for nearly every
+missed day: the laptop being off (travel), and — more often — the IB Gateway having silently
+disconnected while the laptop stayed on. Both are now handled without anyone watching.
+
+**How a missing day is found.** On every run (the daily scheduled one, or a manual `catch-up`),
+before anything else: every NYSE trading day (weekends and exchange holidays excluded, computed by
+`gap_ledger/nyse_calendar.py` — see its module docstring for why this is the one place in the repo
+that models an exchange calendar, against the general house rule of not doing that) from the
+**earliest logged day** to the **last trading day whose session has already closed** is checked
+against `data/local/gap_ledger/`. A day is missing if it has no file, **or** its file is flagged
+`incomplete` or `partial` — a crash mid-run, an IB Gateway that never came back that day, or an
+earlier backfill that had to guess less than it needed to, are all found again on the next run.
+
+**How it is filled.** Each missing day is rebuilt from historical data only, up to that same day's
+normal 09:00 ET cutoff — never later, so nothing from after the fact leaks into what "the screen
+would have said that morning." It reuses the exact same maths as a live run (the pre-filter, the
+gap and relative-volume formulas, the price-trust tests); what differs is only where the pre-market
+tape comes from: IBKR's own historical bars where they reach back far enough, yfinance's where they
+do not, and honestly marked **unavailable** — never guessed, never a fabricated zero — where
+neither can supply a figure. Each backfilled row records which of the three supplied its gap and
+its relative volume (`backfill_gap_source` / `backfill_volume_source`), and the whole day is
+flagged `backfilled=true` with a timestamp of when it was actually filled.
+
+**Two things a backfilled day genuinely lacks, on purpose, not by oversight:**
+
+- **No spread reading.** A book is a snapshot of *now*; a day rebuilt after the fact cannot have
+  one, so `spread_pct` reads "spread unknown — historical run" exactly as an explicit `--date`
+  backfill has always read (this is not new).
+- **Weaker news matching.** Live news matching catches a headline within its 18-hour lookback of
+  the *actual* pre-market move; a backfilled day's news is fetched against the same historical
+  cutoff, but the underlying provider's coverage of an OLD morning's exact headline timing is
+  less reliable than catching it live. Read a backfilled day's `reason`/headline columns knowing
+  this.
+
+Both are said in the first line of a backfilled day's Todoist task and CSV, never buried: a
+backfilled task is titled `Gap Ledger <date> (backfilled on <run date>)`, and its body opens with
+the same caveat in words.
+
+**Capped and incremental.** At most 15 days are backfilled per run (`--backfill-max` on `run`,
+`--max` on `catch-up`), oldest first, so a long absence catches up over a few runs rather than one
+very slow one; whatever is left over is picked up again the next time. The one-time `python -m
+aristos_council.gap_ledger catch-up [--max N] [--dry-run]` command runs this on demand —
+`--dry-run` lists the missing days without fetching anything.
+
+**Safe to fire whenever the laptop switches on.** The scheduled run does the catch-up FIRST, then
+checks whether it is still within the *live window* — the scheduled time plus 45 minutes. Outside
+that window it prints `outside live window, backfill only` and stops cleanly: a run that fires at
+14:00 because the laptop had been off all morning fills the missing days and does **not** also
+attempt a "pre-market" screen for a session that is already over. Inside the window it screens
+exactly as before.
+
+**IB Gateway unreachable at run time.** The run first tries to reach the gateway, retrying every 60
+seconds for up to 10 minutes. If it is still down: **no degraded live scan is attempted.** Instead
+the day is written as a single `incomplete` stub (reason "ibkr unreachable") — which makes it
+eligible for backfill on a later run, exactly like any other missing day — and ONE Todoist task
+titled `Gap Ledger <date> NOT RUN: IB Gateway unreachable` is posted so it is seen without watching
+the log. Re-posting the same alert, or later backfilling that same day successfully, **updates** the
+one existing task for that date rather than creating a second one — including upgrading the alert
+itself into the day's real candidate list once a backfill succeeds. No day, live, alerted or
+backfilled, is ever posted to Todoist twice.
+
+**A partial backfill is redone when the gateway comes back.** A day that had to fall back to
+yfinance (or mark a field unavailable) because IBKR could not supply it stays flagged `partial` and
+eligible. The next run that reaches IBKR redoes it properly; the superseded attempt is kept, not
+discarded, as `<date>.partial.csv` beside the real file, for audit. A day already `complete` is
+never re-touched.
+
+**The weekly re-login.** Interactive Brokers forces a re-login roughly once a week (2FA). The plain
+rule: **if the gateway shows logged out on a Monday, log in once — the missed days fill themselves**
+on the next run or two, capped at 15 per run as above. Nothing needs to be re-run by hand.
+
+**Gateway hygiene (owner action, not code).** IB Gateway's own daily auto-restart should be set to a
+fixed time well clear of the run window (03:00 local is a safe choice) so the restart itself never
+lands inside a run and gets mistaken for an outage. This is a setting inside the Gateway's own
+Configuration UI, not something this repo's code can reach: **Configure -> Settings -> Lock and Exit
+-> "Auto restart" time.**
+
+**Splitting the November verdict.** `score(days, origin=...)` ("all" / "live" / "backfilled") lets
+the evaluation read the combined record and the two halves separately, so a backfilled day's
+weaker news matching or restated pre-market tape can never be silently averaged into a "live"
+verdict without anyone being able to tell. `python -m aristos_council.gap_ledger score` prints the
+split automatically once any day has been backfilled, and says nothing extra otherwise.
+
 ## Feature freeze and the verdict
 
 **The screen is frozen for the duration of the test.** Every threshold lives in `GapConfig` and is
@@ -126,7 +222,9 @@ day — but a test that changes its own rules half-way measures nothing. Until t
 no new filters, no threshold changes, no new checkpoints; only bug fixes and documentation. A bug fix
 that changes which names are selected is to be noted in this file with its date so the days before and
 after it can be told apart. (The freeze is stated here from 2026-09-26, three logged days in; the
-first day, 2026-09-22, predates IBKR verification and is a yfinance-only record.)
+first day, 2026-09-22, predates IBKR verification and is a yfinance-only record. **GAP-BACKFILL-1,
+2026-09-30, is a dated EXCEPTION to this freeze** — see "Catch-up and backfill" above: it changes how
+a missed day is filled, never the rules a day is judged by, so it does not reset the freeze clock.)
 
 **The verdict is made after 40 trading days with filled outcomes** (`min_days_to_score`), never
 before; below that the scorecard says "not enough days" and presents no rate as a finding. A day
@@ -338,7 +436,7 @@ EODHD intraday is explicitly not on the current plan.
 
 ## The record and the control group
 
-`data/local/gap_ledger/YYYY-MM-DD.csv`, 85 columns (2026-09-26; new columns are added at the end and old files still load), one row per name per day, gitignored.
+`data/local/gap_ledger/YYYY-MM-DD.csv`, 91 columns (2026-09-30, GAP-BACKFILL-1 added six: `backfilled`, `backfilled_at`, `run_status`, `status_reason`, `backfill_gap_source`, `backfill_volume_source`; new columns are always added at the end and old files still load), one row per name per day, gitignored.
 Every candidate with all its numbers, flags and links — plus an **equal-size control group**.
 
 The control group is the point of the file. "Gapping names carried on 58% of the time" is not

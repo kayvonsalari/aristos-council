@@ -36,6 +36,11 @@ _log = logging.getLogger(__name__)
 
 GROUP_CANDIDATE = "candidate"
 GROUP_BASELINE = "baseline"
+# GAP-BACKFILL-1 — a day-level marker row, never a name. It carries the day's run_status /
+# backfilled / status_reason so a whole day's completeness can be read WITHOUT a second file
+# format, while every existing consumer that filters on GROUP_CANDIDATE/GROUP_BASELINE (score.py,
+# todoist.py, viewer.py) ignores it automatically — it was never a candidate or a control name.
+GROUP_STATUS = "status"
 
 
 @dataclass
@@ -180,6 +185,29 @@ class LedgerRow:
     cfg_max_confirm_drift: Optional[float] = None
     cfg_news_lookback_hours: Optional[int] = None
     cfg_early_volume_multiple: Optional[float] = None
+
+    # -- GAP-BACKFILL-1: self-healing catch-up ------------------------------ #
+    # "true" / "" (blank = a live row, never backfilled) — three-valued as text, matching
+    # screen_passed's convention. Every row written for one day shares one value.
+    backfilled: str = ""
+    backfilled_at: str = ""              # ET timestamp of the run that wrote/rewrote this row
+    # run_status is a DAY-level fact, repeated on every row of that day (including baseline and
+    # any GROUP_STATUS row) so it survives being read one row at a time:
+    #   "complete"    a live run, or a backfill that got everything it asked for
+    #   "partial"     a backfill that had to fall back to yfinance or mark a field unavailable,
+    #                 because IBKR could not supply it for this day — stays eligible for redo
+    #   "incomplete"  no screen ran at all (e.g. IB Gateway unreachable at run time) — a stub
+    #                 day, GROUP_STATUS only, eligible for backfill like a missing file
+    # Blank on every row written before this column existed, which reads as "complete" (see
+    # ledger.day_status) — an old file is never mistaken for missing.
+    run_status: str = ""
+    # Why run_status is not "complete" — "ibkr unreachable" on an incomplete stub, or which
+    # field(s) fell back / went unavailable on a partial backfill. Blank when run_status is.
+    status_reason: str = ""
+    # Per-field source on a BACKFILLED row: "ibkr-history" / "yfinance" / "unavailable". Blank
+    # on a live row (the existing ``source`` column already says ibkr/yfinance for a live one).
+    backfill_gap_source: str = ""
+    backfill_volume_source: str = ""
 
     @property
     def direction(self) -> int:
@@ -329,3 +357,51 @@ def et_stamp(when: Optional[datetime]) -> str:
     if when is None:
         return ""
     return when.astimezone(NY).isoformat(timespec="minutes")
+
+
+# --------------------------------------------------------------------------- #
+# GAP-BACKFILL-1 — a day's completeness, read from its rows
+# --------------------------------------------------------------------------- #
+COMPLETE, PARTIAL, INCOMPLETE = "complete", "partial", "incomplete"
+
+
+def day_status(rows: Sequence[LedgerRow]) -> str:
+    """The day's ``run_status``, read off its rows. Every row of one day is written with the
+    SAME ``run_status`` (see ``run_status`` on ``LedgerRow``), so the first non-blank one
+    settles it. No rows at all, or every row blank (every file written before this column
+    existed, or a genuinely empty day), reads as COMPLETE — an old file is never mistaken for
+    one needing backfill."""
+    for row in rows:
+        if row.run_status:
+            return row.run_status
+    return COMPLETE
+
+
+def is_backfilled(rows: Sequence[LedgerRow]) -> bool:
+    """Was this day filled by the catch-up path rather than its own scheduled run?"""
+    return any(row.backfilled == "true" for row in rows)
+
+
+def stamp_backfill(rows: Sequence[LedgerRow], *, status: str, reason: str = "",
+                   at: Optional[datetime] = None) -> None:
+    """Stamp every row of a backfilled day with ``backfilled``, ``backfilled_at``,
+    ``run_status`` and ``status_reason`` IN PLACE — one place that sets these four fields
+    together, so they can never disagree with each other across a day's rows."""
+    stamp = et_stamp(at)
+    for row in rows:
+        row.backfilled = "true"
+        row.backfilled_at = stamp
+        row.run_status = status
+        row.status_reason = reason
+
+
+def status_row(day: date, *, run_at: datetime, status: str, reason: str,
+              backfilled: bool = False, backfilled_at: Optional[datetime] = None) -> LedgerRow:
+    """A GROUP_STATUS marker row for a day with no name rows at all (the IB-Gateway-down
+    stub, GAP-BACKFILL-1 7a) — carries the day's status without pretending to be a candidate
+    or a control name. Every consumer that filters on GROUP_CANDIDATE/GROUP_BASELINE ignores
+    it by construction."""
+    return LedgerRow(date=day.isoformat(), group=GROUP_STATUS, run_at_et=et_stamp(run_at),
+                     run_status=status, status_reason=reason,
+                     backfilled=("true" if backfilled else ""),
+                     backfilled_at=et_stamp(backfilled_at) if backfilled else "")

@@ -149,11 +149,16 @@ class FakeNews:
 
 @dataclass
 class FakeTodoist:
-    """A Todoist that records instead of posting."""
+    """A Todoist that records instead of posting.
+
+    GAP-BACKFILL-1 — ``tasks`` entries carry an ``"id"`` so ``find_task``/``update_task`` can
+    round-trip against them, exactly the shape ``deliver``'s dedup path (7c) exercises.
+    """
 
     projects: dict[str, str] = field(default_factory=dict)
     created_projects: list[str] = field(default_factory=list)
     tasks: list[dict] = field(default_factory=list)
+    updated: list[dict] = field(default_factory=list)
     fail_on: str = ""
 
     def find_project(self, name: str):
@@ -171,9 +176,85 @@ class FakeTodoist:
     def create_task(self, *, content: str, description: str, project_id: str) -> str:
         if self.fail_on == "create_task":
             raise RuntimeError("todoist refused the task")
-        self.tasks.append({"content": content, "description": description,
+        task_id = f"task-{len(self.tasks) + 1}"
+        self.tasks.append({"id": task_id, "content": content, "description": description,
                            "project_id": project_id})
-        return f"task-{len(self.tasks)}"
+        return task_id
+
+    def find_task(self, project_id: str, *, title_prefix: str):
+        if self.fail_on == "find_task":
+            raise RuntimeError("todoist down")
+        for task in self.tasks:
+            if task["project_id"] == project_id and task["content"].startswith(title_prefix):
+                return task["id"]
+        return None
+
+    def update_task(self, task_id: str, *, content: str, description: str) -> None:
+        if self.fail_on == "update_task":
+            raise RuntimeError("todoist refused the update")
+        for task in self.tasks:
+            if task["id"] == task_id:
+                task["content"], task["description"] = content, description
+                self.updated.append(dict(task))
+                return
+        raise RuntimeError(f"no such task {task_id!r}")
+
+
+@dataclass
+class FakeIBKR:
+    """A stand-in for ``gap_ledger.ibkr.IBKRBars`` (GAP-BACKFILL-1 — no FakeIBKR existed before
+    this). Answers ``bars_for``/``intraday_bars``/``quote_for`` from dicts, exactly like
+    ``FakeBars``, and records every ``bars_for`` request's ``(ticker, start, end, bar_size,
+    duration)`` so a backfill's baseline-shaped call can be asserted on.
+
+    ``unreachable`` raises ``IBKRUnavailable`` from every call, as a gateway that never answers
+    (``ensure_gateway``'s retry loop exhausts against this). ``unreachable_after`` raises only
+    once that many ``bars_for`` calls have already succeeded — the gateway going away MID-run
+    (GAP-BACKFILL-1 7). A ticker simply absent from ``bars`` answers an empty list (IBKR has no
+    history for it, not a failure) — the ordinary, expected backfill fallback case.
+    """
+
+    bars: dict = field(default_factory=dict)                   # {ticker: [IntradayBar, ...]}
+    quote_map: dict = field(default_factory=dict)
+    unreachable: bool = False
+    unreachable_after: int = 0
+    calls: list = field(default_factory=list)                  # (ticker, start, end, bar_size, duration)
+    ping_calls: int = 0
+    disconnected: bool = False
+    connected: bool = True
+
+    def _check(self) -> None:
+        from aristos_council.gap_ledger.ibkr import IBKRUnavailable
+        if self.unreachable or (self.unreachable_after and len(self.calls) >= self.unreachable_after):
+            raise IBKRUnavailable("fake gateway unreachable")
+
+    def ping(self) -> None:
+        self.ping_calls += 1
+        self._check()
+
+    def bars_for(self, ticker: str, *, start, end, bar_size: str = "5 mins", duration=None):
+        self._check()
+        self.calls.append((ticker, start, end, bar_size, duration))
+        return list(self.bars.get(ticker, []))
+
+    def intraday_bars(self, tickers, *, start, end):
+        out = {}
+        for ticker in tickers:
+            bars = self.bars_for(ticker, start=start, end=end)
+            if bars:
+                out[ticker] = bars
+        return out
+
+    def quote_for(self, ticker: str):
+        self._check()
+        from aristos_council.gap_ledger.bars import Quote
+        return self.quote_map.get(ticker, Quote())
+
+    def quotes(self, tickers):
+        return {t: self.quote_for(t) for t in tickers if t in self.quote_map}
+
+    def disconnect(self) -> None:
+        self.disconnected = True
 
 
 @dataclass

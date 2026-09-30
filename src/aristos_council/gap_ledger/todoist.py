@@ -81,10 +81,21 @@ DELIVERY_BACKOFF = (20.0, 40.0)
 # --------------------------------------------------------------------------- #
 # the message — pure, so what gets sent is testable without a network
 # --------------------------------------------------------------------------- #
-def task_title(day: date, candidates: Sequence[LedgerRow]) -> str:
-    """The one-line title: the date, the count, and the names."""
+def task_title(day: date, candidates: Sequence[LedgerRow], *,
+              backfilled_on: Optional[date] = None) -> str:
+    """The one-line title: the date, the count, and the names.
+
+    GAP-BACKFILL-1 — every title for a given ``day`` STARTS WITH ``f"Gap Ledger {day}"``
+    regardless of ``backfilled_on``, which is the whole of ``find_task_for_day``'s dedup
+    mechanism (7c): a live task, a gateway-down alert, and a backfilled task for the same day
+    are all found by the same prefix search, so a later post updates whichever came before it
+    instead of creating a second one.
+    """
     names = ", ".join(row.ticker for row in candidates)
-    return f"Gap Ledger {day.isoformat()} — {len(candidates)} name(s): {names}"
+    base = f"Gap Ledger {day.isoformat()}"
+    if backfilled_on is not None:
+        base += f" (backfilled on {backfilled_on.isoformat()})"
+    return f"{base} — {len(candidates)} name(s): {names}"
 
 
 def _pct(value: Optional[float]) -> str:
@@ -106,13 +117,21 @@ def _short_spread(note: str) -> str:
     return "spread n/a" if head in ("", "spread unknown") else head
 
 
-def task_body(candidates: Sequence[LedgerRow]) -> str:
+def task_body(candidates: Sequence[LedgerRow], *, backfilled_on: Optional[date] = None) -> str:
     """One block per name: gap, relative volume, the flags, and the headline link.
 
     Markdown, which Todoist renders in a task description. Every figure comes from the
     row — this function computes nothing.
     """
     blocks: list[str] = []
+    if backfilled_on is not None:
+        # GAP-BACKFILL-1 3 — said in the FIRST line, not buried: a backfilled day lacks a
+        # spread reading (a book is a snapshot of now) and its news matching runs after the
+        # fact, which is weaker than live's same-morning attribution.
+        blocks.append(
+            f"_Backfilled on {backfilled_on.isoformat()}. No spread reading (a book cannot be "
+            f"read retroactively); news matching is after-the-fact and weaker than live. See "
+            f"docs/GAP_LEDGER.md, Catch-up and backfill section._")
     for row in candidates:
         # GAP-REPORT-CLARITY-1 (b) — the row keeps only what is about the row. The
         # subscription explanation is a fact about the ACCOUNT and is said once at the end,
@@ -182,6 +201,15 @@ class TodoistClient(Protocol):
 
     def create_task(self, *, content: str, description: str, project_id: str) -> str:
         """Create the task and return its id."""
+
+    def find_task(self, project_id: str, *, title_prefix: str) -> Optional[str]:
+        """GAP-BACKFILL-1 7c — the id of a task in ``project_id`` whose content STARTS WITH
+        ``title_prefix``, or None. The dedup primitive: a live task, a gateway-down alert and a
+        backfilled task for the same day all share the ``f"Gap Ledger {day}"`` prefix, so this
+        finds "the task for this date" whichever of the three posted it."""
+
+    def update_task(self, task_id: str, *, content: str, description: str) -> None:
+        """Replace an existing task's content and description in place."""
 
 
 class RestTodoist:
@@ -280,6 +308,36 @@ class RestTodoist:
         created = self._call("tasks", payload=payload, request_id=request_id)
         return str((created or {}).get("id"))
 
+    def _tasks(self, project_id: str):
+        """Every task in ``project_id``, following ``next_cursor`` — the same pagination
+        discipline ``_projects`` uses, for the same reason (GAP-TODOIST-1)."""
+        cursor: Optional[str] = None
+        seen = 0
+        while True:
+            params = {"project_id": project_id, "limit": PAGE_LIMIT}
+            if cursor:
+                params["cursor"] = cursor
+            page = self._call("tasks", params=params)
+            rows, cursor = _results(page)
+            yield from rows
+            seen += len(rows)
+            if not cursor or not rows or seen > 10_000:
+                return
+
+    def find_task(self, project_id: str, *, title_prefix: str) -> Optional[str]:
+        for task in self._tasks(project_id):
+            if not isinstance(task, dict):
+                continue
+            if str(task.get("content", "")).startswith(title_prefix):
+                identifier = task.get("id")
+                if identifier is not None:
+                    return str(identifier)
+        return None
+
+    def update_task(self, task_id: str, *, content: str, description: str) -> None:
+        self._call(f"tasks/{task_id}",
+                  payload={"content": content, "description": description})
+
 
 # --------------------------------------------------------------------------- #
 # the step
@@ -312,9 +370,24 @@ def _is_transient(exc: BaseException) -> bool:
     return isinstance(exc, (TodoistTransient, OSError, http.client.HTTPException))
 
 
+def find_task_for_day(client: TodoistClient, project_id: str, day: date) -> Optional[str]:
+    """GAP-BACKFILL-1 7c — the existing task for ``day``, in whichever of its three possible
+    forms it was last posted as (a live list, a gateway-down alert, an earlier backfill)."""
+    return client.find_task(project_id, title_prefix=f"Gap Ledger {day.isoformat()}")
+
+
+def _project(client: TodoistClient) -> tuple[str, bool]:
+    """``(project_id, created)`` — found or made, once per delivery attempt loop."""
+    project_id = client.find_project(PROJECT_NAME)
+    if project_id is None:
+        return client.create_project(PROJECT_NAME), True
+    return project_id, False
+
+
 def deliver(day: date, rows: Sequence[LedgerRow], *,
             client: Optional[TodoistClient], sleep=time.sleep,
-            backoff: Sequence[float] = DELIVERY_BACKOFF) -> DeliveryOutcome:
+            backoff: Sequence[float] = DELIVERY_BACKOFF,
+            backfilled_on: Optional[date] = None) -> DeliveryOutcome:
     """Send the day's candidates as one task. Never raises.
 
     GAP-TODOIST-RETRY-1: a transient failure is asked again after each wait in ``backoff`` (three
@@ -322,6 +395,11 @@ def deliver(day: date, rows: Sequence[LedgerRow], *,
     step that failed is repeated - a project found or created stays found - and any other failure
     is reported on the first try, because waiting cannot change it. The run stays non-fatal
     whatever happens here: the CSV is the record.
+
+    ``backfilled_on`` (GAP-BACKFILL-1): set on a backfill delivery. It changes the title/body
+    (see ``task_title``/``task_body``) AND the create-vs-update decision — a backfill looks for
+    an existing task for ``day`` first (7c) and UPDATES it rather than posting a second one. A
+    live delivery (``backfilled_on=None``) always creates, exactly as before this change.
     """
     candidates = [r for r in rows if r.group == GROUP_CANDIDATE]
     if not candidates:
@@ -335,13 +413,17 @@ def deliver(day: date, rows: Sequence[LedgerRow], *,
     for attempt in range(1, tries + 1):
         try:
             if project_id is None:
-                project_id = client.find_project(PROJECT_NAME)
-                created = project_id is None
-                if project_id is None:
-                    project_id = client.create_project(PROJECT_NAME)
-            task_id = client.create_task(content=task_title(day, candidates),
-                                         description=task_body(candidates),
-                                         project_id=project_id)
+                project_id, created = _project(client)
+            content = task_title(day, candidates, backfilled_on=backfilled_on)
+            description = task_body(candidates, backfilled_on=backfilled_on)
+            existing = (find_task_for_day(client, project_id, day)
+                       if backfilled_on is not None else None)
+            if existing is not None:
+                client.update_task(existing, content=content, description=description)
+                task_id = existing
+            else:
+                task_id = client.create_task(content=content, description=description,
+                                             project_id=project_id)
         except Exception as exc:                         # a convenience, never the record
             if _is_transient(exc) and attempt < tries:
                 wait = backoff[attempt - 1]
@@ -350,6 +432,48 @@ def deliver(day: date, rows: Sequence[LedgerRow], *,
                 sleep(wait)
                 continue
             _log.warning("gap_ledger: Todoist delivery failed: %s", exc)
+            spent = sum(backoff[:attempt - 1])
+            after = f" (after {attempt} tries over {spent:g}s)" if attempt > 1 else ""
+            return DeliveryOutcome(error=f"{exc}{after}", attempts=attempt)
+        return DeliveryOutcome(sent=True, task_id=task_id, project_created=created,
+                               attempts=attempt)
+    raise AssertionError("unreachable")                  # pragma: no cover
+
+
+def deliver_alert(day: date, message: str, *, client: Optional[TodoistClient],
+                  sleep=time.sleep,
+                  backoff: Sequence[float] = DELIVERY_BACKOFF) -> DeliveryOutcome:
+    """GAP-BACKFILL-1 7a — one alert task with no candidate rows behind it (e.g. "Gap Ledger
+    <date> NOT RUN: IB Gateway unreachable"). Same dedup as a backfilled day's task (7c): if
+    ``day`` already has a task under any title, this UPDATES it rather than posting a second
+    one — including the reverse case, where a later successful backfill finds and upgrades
+    this very alert into the day's real candidate list. Never raises; never retried beyond
+    ``backoff``, same as ``deliver``.
+    """
+    if client is None:
+        return DeliveryOutcome(skipped="delivery switched off")
+    tries = len(backoff) + 1
+    project_id: Optional[str] = None
+    created = False
+    for attempt in range(1, tries + 1):
+        try:
+            if project_id is None:
+                project_id, created = _project(client)
+            existing = find_task_for_day(client, project_id, day)
+            if existing is not None:
+                client.update_task(existing, content=message, description="")
+                task_id = existing
+            else:
+                task_id = client.create_task(content=message, description="",
+                                             project_id=project_id)
+        except Exception as exc:
+            if _is_transient(exc) and attempt < tries:
+                wait = backoff[attempt - 1]
+                _log.warning("gap_ledger: Todoist alert attempt %d of %d failed (%s); "
+                             "retrying in %gs", attempt, tries, exc, wait)
+                sleep(wait)
+                continue
+            _log.warning("gap_ledger: Todoist alert failed: %s", exc)
             spent = sum(backoff[:attempt - 1])
             after = f" (after {attempt} tries over {spent:g}s)" if attempt > 1 else ""
             return DeliveryOutcome(error=f"{exc}{after}", attempts=attempt)
