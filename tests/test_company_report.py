@@ -688,6 +688,108 @@ def test_the_columns_cost_nothing_no_fetch_no_model_call(tmp_path):
 
 
 # =========================================================================== #
+# BACKTEST-2 — track-record badges (display only; no vote, rank or verdict above moves)
+# =========================================================================== #
+def test_attach_track_record_decorates_votes_without_touching_the_agreement():
+    from types import SimpleNamespace
+
+    from aristos_council.backtest import BADGE_LABELS
+    from aristos_council.company_report import CompanyReport, attach_track_record
+
+    votes = [LensVote("magic_formula_raw_v1", "Magic Formula RAW", status="ranked",
+                      verdict="buy", position=2, cohort_size=14),
+             LensVote("growth_garp_v2", "Growth (GARP v2)", status="ranked",
+                      verdict="hold", position=6, cohort_size=14)]
+    subject = SimpleNamespace(industry="Semiconductors", gics_subindustry="Semiconductors")
+    check = SimpleNamespace(peer_group=SimpleNamespace(subject=subject))
+    report = CompanyReport(ticker="CO", check=check, votes=votes)
+    report.agreement = build_agreement(votes)
+    before = report.agreement                                # the SAME object, not a copy
+
+    attach_track_record(report)
+
+    assert report.cohort_slug == "tech_semiconductors"
+    assert report.track_record_caption.startswith(
+        "Track record from the Semiconductors cohort")
+    assert all(v.badge is not None and v.badge.label in BADGE_LABELS for v in report.votes)
+    assert report.agreement is before                        # untouched: still the same object
+    assert report.track_record_summary.startswith("Track record: ")
+
+
+def test_no_cohort_match_leaves_every_badge_none_and_no_caption():
+    from types import SimpleNamespace
+
+    from aristos_council.company_report import CompanyReport, attach_track_record
+
+    votes = [LensVote("magic_formula_raw_v1", "Magic Formula RAW", status="ranked",
+                      verdict="buy", position=2, cohort_size=14)]
+    subject = SimpleNamespace(industry="Something Nobody Backtested", gics_subindustry="")
+    check = SimpleNamespace(peer_group=SimpleNamespace(subject=subject))
+    report = CompanyReport(ticker="CO", check=check, votes=votes)
+
+    attach_track_record(report)
+
+    assert report.cohort_slug is None and report.track_record_caption == ""
+    assert all(v.badge is None and v.badge_suffix == "" for v in report.votes)
+    assert report.track_record_summary == ""
+
+
+def test_no_peer_group_at_all_attaches_no_badge(tmp_path):
+    """attach_track_record needs a subject to read an industry off; ``peer_group`` (or its
+    ``subject``) can be None, and nothing should raise."""
+    from aristos_council.company_report import attach_track_record
+
+    lonely = _Store([_row("CO.US", "CO", name="Company Co", sub="Space Tourism")])
+    lonely._rows[0].industry = "Space Tourism"
+    report = _run([RAW], tmp_path=tmp_path, store=lonely, save=False)
+    assert report.cohort_slug is None
+    attach_track_record(report)                              # idempotent; no crash on a re-call
+    assert report.cohort_slug is None
+    assert all(v.badge is None for v in report.votes)
+
+
+def test_exports_carry_the_badge_text_and_the_cohort_used(tmp_path):
+    """RAW (magic_formula_raw_v1) is one of the five backtested lenses, and the fixture's
+    fabricated industry/sub-industry ("Semiconductors" / "Semiconductors") is exactly the "Tech -
+    Semiconductors" cohort's own rule, so this is a REAL match against the committed backtests/,
+    not a fabricated one."""
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    assert report.cohort_slug == "tech_semiconductors"
+    badge = report.votes[0].badge
+    assert badge is not None
+
+    text = format_company_report(report)
+    assert "Track record from the Semiconductors cohort" in text
+    assert f"({badge.label})" in text
+    assert report.track_record_summary in text
+
+    html = company_report_html(report)
+    assert f"({badge.label})" in html
+    assert "Track record from the Semiconductors cohort" in html
+
+    from aristos_council.company_report import report_record
+    record = report_record(report)
+    assert record["cohort_slug"] == "tech_semiconductors"
+    assert record["track_record_caption"].startswith("Track record from the Semiconductors")
+    vote_record = next(v for v in record["votes"] if v["lens"] == RAW)
+    assert vote_record["track_record_badge"]["label"] == badge.label
+
+
+def test_the_agreement_count_is_unchanged_whether_or_not_badges_are_attached(tmp_path):
+    """Badges never gate: the SAME agreement a badge-free run would produce, read off a report
+    that DOES carry badges on every vote."""
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    assert any(v.badge is not None for v in report.votes)    # badges ARE attached
+    from dataclasses import replace
+    stripped = [replace(v, badge=None) for v in report.votes]
+    again = build_agreement(stripped, band_percentile=report.check.band_percentile)
+    assert again.headline == report.agreement.headline
+    assert again.buy == report.agreement.buy and again.hold == report.agreement.hold
+    assert again.sell == report.agreement.sell
+    assert again.n_ticked == report.agreement.n_ticked and again.n_voted == report.agreement.n_voted
+
+
+# =========================================================================== #
 # COUNCIL-OPINION-1 — the existing council, narrator mode, one company
 # =========================================================================== #
 class _OpinionSpecialistRunner:

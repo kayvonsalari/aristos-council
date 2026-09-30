@@ -1642,15 +1642,26 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
         row = report.agreement.table_row(report.display)
         parts.append(f"<p><strong>{_esc(report.agreement.headline)}</strong></p>"
                      + _table(list(row), [[_esc(str(v)) for v in row.values()]]))
+        # BACKTEST-2 — display only, right under the agreement count.
+        if report.track_record_caption:
+            parts.append(f'<p class="note">{_esc(report.track_record_caption)}</p>')
+        if report.track_record_summary:
+            parts.append(f'<p class="note">{_esc(report.track_record_summary)}</p>')
     else:
         parts.append(f'<p class="note">No vote: {_esc(report.no_vote_reason)}</p>')
     parts.append("</section>")
 
     parts.append('<section class="section"><h2>Lens votes</h2>')
     if report.votes:
-        body = [[_esc(v.label), _esc(v.role), _esc(v.result()), _esc(v.asks)]
+        body = [[_esc(v.label), _esc(v.role), _esc(v.result() + v.badge_suffix), _esc(v.asks)]
                 for v in report.votes]
         parts.append(_table(["Lens", "Role", "Result", "What it asks"], body))
+        from ..backtest import BADGE_MEANINGS
+        badged = [v for v in report.votes if v.badge is not None]
+        if badged:
+            parts.append(_bullets(
+                f"<strong>{_esc(v.label)}</strong> — {_esc(v.badge.detail_line())} — "
+                f"{_esc(BADGE_MEANINGS[v.badge.label])}" for v in badged))
     else:
         parts.append(f'<p class="note">{_esc(report.no_vote_reason or NO_LENS_REASON)}</p>')
     parts.append("</section>")

@@ -1597,6 +1597,48 @@ def _rules_applied_markdown(result, *, include_title: bool = True) -> list[str]:
     return lines
 
 
+# --------------------------------------------------------------------------- #
+# BACKTEST-2 — Run-tab track-record badges
+#
+# The Run tab already knows its universe directly (unlike Company Check, which infers a cohort
+# from one company's industry): if the universe's own name slugifies to one of the 13 backtested
+# cohorts, its lenses' badges are shown; any other universe (the ordinary case — an ad-hoc list,
+# a saved list of a different shape) shows none. Display only; nothing here touches a vote, a
+# rank or the combined grid.
+# --------------------------------------------------------------------------- #
+def _run_track_record(m: dict, lens_ids) -> tuple:
+    """``(cohort_slug or None, {lens_id: Badge})`` for a Run-tab universe. Empty/``None`` when the
+    universe's name does not slugify to a cohort with any committed backtest result."""
+    from aristos_council.backtest import cohort_slug, has_track_record, track_record
+
+    name = (m.get("universe_name") or "").strip()
+    slug = cohort_slug(name) if name else None
+    if not slug or not has_track_record(slug):
+        return None, {}
+    return slug, {sid: track_record(slug, sid) for sid in lens_ids}
+
+
+def _run_track_record_lines(m: dict, lens_labels: dict) -> list:
+    """The caption lines for a Run-tab track-record section — the cohort/date caption, one badge
+    per lens (by its display label), and the summary count — or ``[]`` when the universe matched
+    no backtested cohort. Shared by the UI renderers and the markdown exports so the two can
+    never drift."""
+    from aristos_council.backtest import format_track_record_summary, track_record_caption
+
+    slug, badges = _run_track_record(m, list(lens_labels))
+    if not badges:
+        return []
+    lines = []
+    caption = track_record_caption(slug)
+    if caption:
+        lines.append(caption)
+    lines += [f"{lens_labels.get(sid, sid)}: {b.label}" for sid, b in badges.items()]
+    summary = format_track_record_summary(badges.values())
+    if summary:
+        lines.append(summary)
+    return lines
+
+
 def _universe_markdown(result) -> str:
     """The run as a self-contained markdown doc (the download; NO new storage format
     this sprint — the pipeline does not persist reports).
@@ -1632,6 +1674,10 @@ def _universe_markdown(result) -> str:
         lines.append(f"- Shortlist: {len(m['shortlist'])} names · estimated cost "
                      f"${m['est_cost']:.2f}")
         lines.append(f"- narration coverage: {m.get('narrate_coverage', 'buys_only')}")
+    # BACKTEST-2 — the same track-record lines the UI shows, so the download can't drift from it.
+    _lens_label = m.get("rank_strategy_name") or m["rank_strategy_id"]
+    lines += [f"- {line}" for line in
+             _run_track_record_lines(m, {m["rank_strategy_id"]: _lens_label})]
     # REPORT-1: every rule that was applied, with its limit and what it did, BEFORE any
     # result — the header used to name only the screen's id.
     lines += _rules_applied_markdown(result)
@@ -2303,6 +2349,12 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     lines += ["", f"_{multi_header_line(multi_result)}_", ""]
     lines += [f"### {multi_summary_line(multi_result)}", ""]
 
+    # BACKTEST-2 — the same track-record lines the UI shows, so the download can't drift from it.
+    _run_lens_labels = {sid: label_with_id(names.get(sid) or sid, sid) for sid in ids}
+    _track_lines = _run_track_record_lines(m, _run_lens_labels)
+    if _track_lines:
+        lines += [f"_{line}_" for line in _track_lines] + [""]
+
     # RULES-TOP-1 — what each lens IS, at the point the reader meets its verdicts. The
     # full tables stay below, as reference; this is one line each, linked to them.
     compact = compact_rules(multi_result)
@@ -2593,6 +2645,11 @@ def _render_multi_strategy_result(multi_result) -> None:
     # line's count, so a reader working in the app could see THAT names survived without
     # seeing WHICH — and, after SHORTLIST-2, without seeing the price warning on one.
     _render_shortlist(getattr(multi_result, "lens_agreement", None))
+    # BACKTEST-2 — this universe's own track record per lens, when its name matches one of the
+    # 13 backtested cohorts; nothing shown otherwise. Display only — the shortlist above is
+    # unaffected.
+    for line in _run_track_record_lines(m, lens_labels):
+        st.caption(line)
     # NARR-2: which names the run explained and which met the rule without being explained.
     # The Run tab does not render the narrations themselves (they travel in the downloaded
     # report), but the SELECTION is a decision the reader made and should see the result of.
@@ -2749,6 +2806,11 @@ def _render_universe_result(result) -> None:
     if m.get("run_id"):
         meta_bits += f" · run id `{m['run_id']}`"
     st.caption(meta_bits)
+    # BACKTEST-2 — this lens's track record in this cohort, when the universe matches one of the
+    # 13 backtested cohorts; nothing shown otherwise. Display only.
+    _lens_label = m.get("rank_strategy_name") or m["rank_strategy_id"]
+    for line in _run_track_record_lines(m, {m["rank_strategy_id"]: _lens_label}):
+        st.caption(line)
 
     # 1b — REPORT-1: RULES APPLIED, before any result. Every rule the run applied, its
     # limit in plain English, and what it actually did — including rules nothing failed.
@@ -3789,14 +3851,28 @@ def _render_company_report(report) -> None:
         st.markdown(f"**{report.agreement.headline}**")
         st.dataframe(pd.DataFrame([report.agreement.table_row(report.display)]),
                      hide_index=True, width="stretch")
+        # BACKTEST-2 — display only, right under the agreement count; no vote, rank or verdict
+        # above is affected by anything here.
+        if report.track_record_caption:
+            st.caption(report.track_record_caption)
+        if report.track_record_summary:
+            st.caption(report.track_record_summary)
     else:
         st.info(f"No vote: {report.no_vote_reason}")
 
     st.subheader("Lens votes")
     if report.votes:
-        st.dataframe(pd.DataFrame([{"Lens": v.label, "Role": v.role, "Result": v.result(),
+        st.dataframe(pd.DataFrame([{"Lens": v.label, "Role": v.role,
+                                    "Result": v.result() + v.badge_suffix,
                                     "What it asks": v.asks} for v in report.votes]),
                      hide_index=True, width="stretch")
+        badged = [v for v in report.votes if v.badge is not None]
+        if badged:
+            from aristos_council.backtest import BADGE_MEANINGS
+            with st.expander("Track record — what each badge means"):
+                for v in badged:
+                    st.markdown(f"**{v.label} ({v.badge.label})**")
+                    st.caption(f"{v.badge.detail_line()} — {BADGE_MEANINGS[v.badge.label]}")
     else:
         st.info(report.no_vote_reason or NO_LENS_REASON)
 
@@ -3810,6 +3886,9 @@ def _render_company_report(report) -> None:
     _render_absolute_readings(check, with_analyst=False)
     _render_analyst_forecasts(check)
     _render_sources(check)
+    # BACKTEST-2 — the page footer, so a badge is never on screen without a way to read how it
+    # was earned.
+    st.caption("How lenses are graded: docs/BACKTEST.md")
 
     # Two exports side by side (REPORT-HTML-1): the text is canonical, the HTML the shareable copy.
     from aristos_council.download_names import (company_check_download_name,
