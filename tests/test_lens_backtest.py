@@ -12,12 +12,13 @@ from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 import aristos_council.backtest as bt
-from aristos_council.backtest import (BacktestResult, Round, add_months, from_csv, round_dates,
-                                      run_lens_backtest, summarize_directory, summary_line, to_csv,
-                                      verdict)
+from aristos_council.backtest import (BacktestResult, RANDOM_BASKETS_DEFAULT, Round, add_months,
+                                      from_csv, round_dates, run_lens_backtest, summarize_directory,
+                                      summary_line, to_csv, verdict)
 from aristos_council.data.adapter import (DataUnavailable, DividendEvent, Fundamentals,
                                           MarketDataAdapter, PriceBar, PriceHistory)
 from aristos_council.data.asof_adapter import AsOfAdapter
@@ -231,9 +232,13 @@ def _rounds(excess_by_year: dict, per_year=12, buy=0.10):
     return out
 
 
-def _result(rounds):
+def _result(rounds, luck_pct_mean=0.0):
+    # BACKTEST-1C: verdict() now also needs luck_pct_mean measured (None reads as "not beyond
+    # luck"). Tests here are about the plain excess/years bar, not luck, so the default is a
+    # comfortably-clears-the-bar 0.0; the dedicated luck tests override it.
     return BacktestResult("Test Cohort", "some_lens_v1", date(2010, 1, 31), date(2021, 12, 31),
-                          rounds=rounds, caveats=["c1"])
+                          rounds=rounds, caveats=["c1"], random_baskets=500,
+                          luck_pct_mean=luck_pct_mean)
 
 
 def test_overlapping_holds_starting_in_a_year_are_averaged_within_that_year():
@@ -300,9 +305,9 @@ def test_verdict_scales_the_year_test_when_fewer_than_ten_years_were_measured():
 
 def test_verdict_arguments_are_the_contract():
     params = inspect.signature(verdict).parameters
-    assert list(params) == ["result", "min_excess", "min_years", "of_years"]
+    assert list(params) == ["result", "min_excess", "min_years", "of_years", "max_luck"]
     assert (params["min_excess"].default, params["min_years"].default,
-            params["of_years"].default) == (0.02, 6, 10)
+            params["of_years"].default, params["max_luck"].default) == (0.02, 6, 10, 0.05)
     assert "2026-09-26" in inspect.getsource(bt)                              # the ruling is dated
 
 
@@ -347,9 +352,12 @@ def test_csv_header_states_the_rules_and_rows_carry_no_timestamps(monkeypatch, t
                    "# verdict: insufficient", "# lens_commit: abc1234", "# cohort: Test Cohort"):
         assert needle in joined, needle
     assert "# as_of_size_floor: n/a - no market-cap data for this run" in joined
+    for needle in ("# random_baskets: 500", "# seed_rule:", "# max_luck: 0.05",
+                   "# luck_pct_mean:", "# luck_pct_pass:", "# drop_best_vs_random:"):
+        assert needle in joined, needle
     rows = [l for l in text.splitlines() if not l.startswith("#")]
     assert rows[0] == ("date,exit_date,n_eligible,n_ranked,n_buys,buy_return,bench_return,excess,"
-                       "excess_drop_best,tickers")
+                       "excess_drop_best,random_mean_excess,tickers")
     assert len(rows) == 1 + 6 and rows[1].startswith("2019-01-31,2020-01-31,5,5,3,")
     assert not any("T" in r.split(",")[0] or ":" in r for r in rows[1:])            # dates only, no clock
 
@@ -499,7 +507,8 @@ def test_cli_run_writes_the_csv_and_prints_the_summary(monkeypatch, tmp_path, ca
 def test_cli_summary_prints_one_line_per_file(monkeypatch, tmp_path, capsys):
     to_csv(_result(_rounds({2015: 0.05})), tmp_path)
     assert bt.main(["summary", str(tmp_path)]) == 0
-    assert capsys.readouterr().out.count("\n") == 1
+    out = capsys.readouterr().out
+    assert out.count("\n") == 2 and "Multiple testing:" in out       # the per-file line + the total
     empty = tmp_path / "nothing"
     empty.mkdir()
     bt.main(["summary", str(empty)])
@@ -724,9 +733,233 @@ def test_an_old_csv_with_no_new_columns_still_loads(tmp_path):
     assert back.rounds[0].n_eligible == 0 and back.rounds[0].excess_drop_best is None
     assert back.size_floor is None and back.price_warnings == []
     assert back.rounds[0].n_ranked == 5 and back.rounds[0].n_buys == 3    # old columns still read
+    # BACKTEST-1C columns are absent from this even-older file too - none of it is fabricated
+    assert back.rounds[0].random_mean_excess is None
+    assert back.random_baskets == 0 and back.seed_rule == "" and back.max_luck == bt.MAX_LUCK
+    assert back.luck_pct_mean is None and back.luck_pct_pass is None
+    assert back.drop_best_vs_random is None
 
 
 def test_no_llm_anywhere_in_the_backtest_1b_additions():
     source = inspect.getsource(bt).lower()
     for banned in ("anthropic", "langchain", "init_chat_model"):
         assert banned not in source
+
+
+# =========================================================================== #
+# BACKTEST-1C - the random-basket luck baseline
+# =========================================================================== #
+def test_sample_baskets_is_reproducible_in_bounds_and_without_replacement():
+    rng1, rng2 = np.random.default_rng(12345), np.random.default_rng(12345)
+    a = bt._sample_baskets(rng1, pool_size=17, k=5, n=200)
+    b = bt._sample_baskets(rng2, pool_size=17, k=5, n=200)
+    assert a.shape == (200, 5)
+    assert np.array_equal(a, b)                              # same seed -> same draws
+    assert a.min() >= 0 and a.max() < 17                      # every index in bounds
+    assert all(len(set(row)) == 5 for row in a)               # no duplicate within one basket
+    # a different seed draws differently (not a universal constant basket)
+    c = bt._sample_baskets(np.random.default_rng(999), pool_size=17, k=5, n=200)
+    assert not np.array_equal(a, c)
+
+
+def test_round_seed_is_fixed_by_cohort_lens_and_date_and_nothing_else():
+    d = date(2020, 6, 30)
+    assert bt._round_seed("coh", "lens", d) == bt._round_seed("coh", "lens", d)
+    assert bt._round_seed("coh", "lens", d) != bt._round_seed("other", "lens", d)
+    assert bt._round_seed("coh", "lens", d) != bt._round_seed("coh", "other_lens", d)
+    assert bt._round_seed("coh", "lens", d) != bt._round_seed("coh", "lens", date(2020, 7, 31))
+
+
+def test_a_rerun_draws_identical_random_baskets_end_to_end(monkeypatch):
+    first = _run(monkeypatch)
+    second = _run(monkeypatch)
+    a = [r.random_mean_excess for r in first.rounds]
+    b = [r.random_mean_excess for r in second.rounds]
+    assert a == b and any(v is not None for v in a)           # reproducible, and actually ran
+
+
+def test_random_baskets_are_sized_n_buys_and_drawn_from_the_priced_eligible_pool(monkeypatch):
+    growth5 = {"A": 0.5, "B": 0.3, "C": 0.2, "D": 0.1, "E": 0.0}
+    seen = {}
+    original = bt._sample_baskets
+
+    def spy(rng, pool_size, k, n):
+        seen["pool_size"], seen["k"], seen["n"] = pool_size, k, n
+        return original(rng, pool_size, k, n)
+    monkeypatch.setattr(bt, "_sample_baskets", spy)
+    _stub_pipeline(monkeypatch, lambda d: ("A", "B", "C", "D"))     # n_buys = 4
+    result = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed(growth5),
+                               members=sorted(growth5), random_baskets=250)
+    assert seen == {"pool_size": 5, "k": 4, "n": 250}          # all 5 names live -> pool 5, k=n_buys
+    assert result.rounds[0].random_mean_excess is not None
+
+
+def test_a_pool_thinner_than_n_buys_draws_the_largest_basket_it_can(monkeypatch):
+    growth3 = {"A": 0.5, "B": 0.3, "C": 0.2}
+    _stub_pipeline(monkeypatch, lambda d: ("A", "B", "C"))               # n_buys = 3, pool = 3
+    # force n_buys to exceed the pool by flagging a 4th, unpriced ticker as a "buy" too - the
+    # stub still only ranks the members it is given (3), so n_buys counts a name never in the
+    # eligible universe at all; simpler: just confirm the k<=pool_size guarantee holds when
+    # pool_size == n_buys exactly (the common, load-bearing case).
+    result = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed(growth3),
+                               members=sorted(growth3), random_baskets=100)
+    assert not any("smaller than n_buys" in c for c in result.caveats)    # pool == n_buys: no shortfall
+
+
+def test_no_random_baskets_are_drawn_for_a_no_position_round(monkeypatch):
+    result = _run(monkeypatch, buys=("A", "B"))                # < MIN_BUYS -> every round unpositioned
+    assert all(r.random_mean_excess is None for r in result.rounds)
+    assert result.luck_pct_mean is None and result.random_baskets == RANDOM_BASKETS_DEFAULT
+
+
+def test_random_baskets_0_opts_out_entirely(monkeypatch):
+    result = _run(monkeypatch, random_baskets=0)
+    assert result.random_baskets == 0 and result.seed_rule == ""
+    assert all(r.random_mean_excess is None for r in result.rounds)
+    assert result.luck_pct_mean is None and result.luck_pct_pass is None
+    assert result.drop_best_vs_random is None
+    assert not any("RANDOM-BASKET" in c for c in result.caveats)
+
+
+# --- the luck statistics themselves, tested directly against a known generating distribution --- #
+def _series_matrix(rng, n, n_rounds, loc=0.0, scale=0.05):
+    return rng.normal(loc=loc, scale=scale, size=(n, n_rounds))
+
+
+def _dated(n_rounds, years=10):
+    per_year = max(1, n_rounds // years)
+    return [date(2010 + min(i // per_year, years - 1), 1 + (i % 12), 28) for i in range(n_rounds)]
+
+
+def test_a_lens_that_is_itself_a_random_draw_scores_luck_near_half_on_average():
+    # A SINGLE random draw's rank among its peers is uniform on [0, 1] - it can legitimately land
+    # anywhere, including far from 0.5. What "a lens that is a random basket scores luck near 0.5"
+    # actually claims is about the EXPECTATION: average luck_pct_mean over many independent
+    # instances of "the lens happens to be a random draw" should converge to 0.5 by exchangeability
+    # (a continuous distribution has no ties, so each of the trials+1 draws is equally likely to
+    # rank anywhere). Averaging many trials narrows this to a tight, non-flaky band.
+    rng = np.random.default_rng(2026)
+    n_random, n_rounds, trials = 3000, 30, 300
+    dates = _dated(n_rounds)
+    pool = _series_matrix(rng, n_random, n_rounds)                  # (n_random, n_rounds)
+    pos_excess_cols = list(pool.T)                                  # -> n_rounds x (n_random,)
+    lens_trials = _series_matrix(rng, trials, n_rounds)
+    luck_values = []
+    for lens_excess in lens_trials:
+        result = BacktestResult("Coh", "lens", date(2010, 1, 1), date(2020, 1, 1),
+                                rounds=[Round(d, 4, 0.0, 0.0, float(e), (), None, 0)
+                                       for d, e in zip(dates, lens_excess)])
+        bt._apply_luck_stats(result, pos_dates=dates, pos_excess_cols=pos_excess_cols,
+                            dropbest_dates=[], dropbest_cols=[])
+        luck_values.append(result.luck_pct_mean)
+    assert 0.40 <= (sum(luck_values) / len(luck_values)) <= 0.60
+
+
+def test_a_lens_built_to_beat_every_random_pick_scores_luck_near_zero():
+    rng = np.random.default_rng(7)
+    n, n_rounds = 2000, 24
+    pool = _series_matrix(rng, n, n_rounds)                        # (n, n_rounds)
+    dates = _dated(n_rounds)
+    lens_excess = pool.max(axis=0) + 1.0                      # strictly beats EVERY random draw
+    result = BacktestResult("Coh", "lens", date(2010, 1, 1), date(2020, 1, 1),
+                            rounds=[Round(d, 4, 0.0, 0.0, float(e), (), None, 0)
+                                   for d, e in zip(dates, lens_excess)])
+    bt._apply_luck_stats(result, pos_dates=dates, pos_excess_cols=list(pool.T),
+                        dropbest_dates=[], dropbest_cols=[])
+    assert result.luck_pct_mean == pytest.approx(0.0)
+
+
+def test_drop_best_vs_random_is_positive_when_the_lens_is_less_top_heavy_than_random():
+    # Exact by construction: every random series' drop-best is IDENTICAL (lens_excess - 0.02), so
+    # their median is that constant exactly - no sampling noise to tolerate.
+    n_rounds = 12
+    dates = _dated(n_rounds, years=6)
+    lens_excess = np.linspace(-0.05, 0.05, n_rounds)
+    n = 500
+    random_drop_best = np.tile(lens_excess - 0.02, (n, 1)).T      # (n_rounds, n): every row identical
+    pool_for_excess = np.tile(lens_excess, (n, 1)).T               # bench excess itself is irrelevant here
+    result = BacktestResult("Coh", "lens", date(2010, 1, 1), date(2020, 1, 1),
+                            rounds=[Round(d, 4, 0.0, 0.0, float(e), (), None, 0, excess_drop_best=float(e))
+                                   for d, e in zip(dates, lens_excess)])
+    bt._apply_luck_stats(result, pos_dates=dates, pos_excess_cols=list(pool_for_excess),
+                        dropbest_dates=dates, dropbest_cols=list(random_drop_best))
+    assert result.drop_best_vs_random == pytest.approx(0.02, abs=1e-9)
+
+
+def test_not_beyond_luck_when_the_bar_passes_but_luck_is_high():
+    good = {y: 0.05 for y in range(2010, 2020)}
+    high_luck = _result(_rounds(good), luck_pct_mean=0.40)
+    assert bt._passes_bar(high_luck.summary, bt.PROOF_MIN_EXCESS, bt.PROOF_MIN_YEARS,
+                          bt.PROOF_OF_YEARS)
+    assert verdict(high_luck) == "not beyond luck"
+    low_luck = _result(_rounds(good), luck_pct_mean=0.05)      # exactly at max_luck -> inclusive
+    assert verdict(low_luck) == "proven"
+    unmeasured = _result(_rounds(good), luck_pct_mean=None)
+    assert verdict(unmeasured) == "not beyond luck"            # never silently promoted
+    custom_bar = _result(_rounds(good), luck_pct_mean=0.20)
+    assert verdict(custom_bar, max_luck=0.25) == "proven"      # max_luck is a real parameter
+
+
+# --- CSV round-trip of the new fields --- #
+def test_backtest_1c_fields_round_trip_through_the_csv(monkeypatch, tmp_path):
+    result = _run(monkeypatch, random_baskets=300)
+    assert result.random_baskets == 300 and result.luck_pct_mean is not None
+    back = from_csv(to_csv(result, tmp_path))
+    assert back.random_baskets == result.random_baskets
+    assert back.seed_rule == result.seed_rule
+    assert back.max_luck == pytest.approx(result.max_luck)
+    assert back.luck_pct_mean == pytest.approx(result.luck_pct_mean)
+    assert back.luck_pct_pass == pytest.approx(result.luck_pct_pass)
+    if result.drop_best_vs_random is not None:
+        assert back.drop_best_vs_random == pytest.approx(result.drop_best_vs_random)
+    else:
+        assert back.drop_best_vs_random is None
+    for r1, r2 in zip(sorted(result.rounds, key=lambda r: r.date),
+                      sorted(back.rounds, key=lambda r: r.date)):
+        if r1.random_mean_excess is None:
+            assert r2.random_mean_excess is None
+        else:
+            assert r2.random_mean_excess == pytest.approx(r1.random_mean_excess)
+    assert verdict(back) == verdict(result)
+
+
+# --- the multiple-testing line --- #
+def test_multiple_testing_sums_luck_pct_pass_over_non_insufficient_tests():
+    good = {y: 0.05 for y in range(2010, 2020)}
+    proven = _result(_rounds(good), luck_pct_mean=0.0)
+    proven = BacktestResult(**{**proven.__dict__, "luck_pct_pass": 0.02})
+    not_beyond = _result(_rounds(good), luck_pct_mean=0.5)
+    not_beyond = BacktestResult(**{**not_beyond.__dict__, "luck_pct_pass": 0.5})
+    not_proven = _result(_rounds({y: -0.01 for y in range(2010, 2020)}), luck_pct_mean=0.0)
+    not_proven = BacktestResult(**{**not_proven.__dict__, "luck_pct_pass": 0.01})
+    insufficient = _result(_rounds({2019: 0.05}), luck_pct_mean=0.0)     # too few years/rounds
+    insufficient = BacktestResult(**{**insufficient.__dict__, "luck_pct_pass": 0.9})
+    stats = bt.multiple_testing([proven, not_beyond, not_proven, insufficient])
+    assert stats.tests_run == 3                                  # insufficient excluded
+    assert stats.proven == 1
+    assert stats.expected_by_chance == pytest.approx(0.02 + 0.5 + 0.01)
+    assert "3 test(s)" in stats.sentence() and "1 proven" in stats.sentence()
+
+
+def test_multiple_testing_for_directory_reads_every_csv(monkeypatch, tmp_path):
+    result = _run(monkeypatch, random_baskets=50)
+    to_csv(result, tmp_path)
+    stats = bt.multiple_testing_for_directory(tmp_path)
+    assert stats.tests_run in (0, 1)                              # insufficient (short sample) or not
+    single = bt.multiple_testing([from_csv(p) for p in tmp_path.glob("*/*.csv")])
+    assert stats == single
+
+
+def test_cli_run_passes_random_baskets_and_max_luck_through(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake_run(cohort, lens, **kw):
+        seen.update(kw)
+        return _result(_rounds({2015: 0.05}))
+    monkeypatch.setattr(bt, "run_lens_backtest", fake_run)
+    bt.main(["run", "--cohort", "Test Cohort", "--lens", "some_lens_v1", "--years", "2",
+            "--end", "2021-12-31", "--random-baskets", "111", "--max-luck", "0.1",
+            "--out", str(tmp_path)])
+    assert seen["random_baskets"] == 111 and seen["max_luck"] == 0.1

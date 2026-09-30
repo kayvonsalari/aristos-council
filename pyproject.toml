@@ -21,6 +21,10 @@ dependencies = [
     # neither was declared anywhere.)
     "pandas>=2.0",
     "pyarrow>=14",
+    # BACKTEST-1C — the random-basket luck baseline draws and scores hundreds of baskets per
+    # round; already an implicit dependency (pandas pulls it in), made explicit because
+    # backtest.py imports it directly now, not only through pandas.
+    "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
