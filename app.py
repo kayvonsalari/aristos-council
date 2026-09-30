@@ -3506,19 +3506,22 @@ def _company_check_adapter():
 
 
 def render_company_check_tab(show_validation: bool = False) -> None:
-    """Company Check (Company Report, Part B): ONE company against its own peer group. Tick the
-    lenses (the same component and list as the Run tab, several at once), optionally tick the
-    plain-English summary, run. The valuation band is always shown. Each ticked lens ranks the company among its
-    peers exactly as a Run-tab run ranks a list; the company's vote is its verdict in that run.
-    The math judges; the only thing that can call a model is the summary, and only when ticked."""
+    """Company Check (Company Report, Part B): ONE company against its own peer group. Find it
+    by name or ticker (FIND-COMPANY-1, fronting the ticker box — offline, the local market index
+    only), tick the lenses (the same component and list as the Run tab, several at once),
+    optionally tick the plain-English summary and/or the Council opinion (COUNCIL-OPINION-1),
+    run. The valuation band is always shown. Each ticked lens ranks the company among its peers
+    exactly as a Run-tab run ranks a list; the company's vote is its verdict in that run. The
+    math judges; the only things that can call a model are the summary and the council opinion,
+    each off unless ticked, and neither ever changes a vote."""
     import os
 
     from aristos_council.company_report import run_company_report
 
     st.subheader("Company Check — one company against its peers")
     st.caption("Every ticked lens ranks the company among its peer group and gives one vote of "
-               "equal weight; a check lens marks and does not vote. **The math judges — the "
-               "model only writes, and only if you tick the summary.**")
+               "equal weight; a check lens marks and does not vote. **The math judges — a model "
+               "only writes, and only if you tick the summary and/or the council opinion.**")
 
     # The SAME picker and switch the Run tab uses (FUND-UI-2, strategy/picker.py, ASSET-MODE-1).
     choices = strategy_choices([o[2] for o in list_rank_strategy_options(STRATEGIES_DIR)],
@@ -3527,6 +3530,37 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     if not choices:
         st.error(f"No {asset_mode()} strategies found under {STRATEGIES_DIR}")
         return
+
+    # FIND-COMPANY-1 — fronts the bare ticker box: type part of a name or a ticker, pick a
+    # match, it fills the box below. Offline (the local market index and the built cohorts'
+    # own member lists only, each read once and cached) — no network call, no holdings data.
+    st.markdown("**Find a company**")
+    find_query = st.text_input(
+        "Find a company", value="", key="cc_find", label_visibility="collapsed",
+        placeholder="Type a name or ticker — siemens, novo, rheinmetall, 2330…")
+    if find_query.strip():
+        from aristos_council.company_search import search_companies
+        found = search_companies(find_query)
+        if not found.matches:
+            st.caption("No match in the local market index.")
+        else:
+            if not found.cohorts_known:
+                st.caption("No cohort has been built locally yet, so cohort membership is "
+                          "not shown.")
+
+            def _match_label(m) -> str:
+                where = f"{m.name} ({m.ticker}) — {m.where} — {m.market_cap_display}"
+                if m.cohorts:
+                    return f"{where} — {', '.join(m.cohorts)}"
+                return where if not found.cohorts_known else f"{where} — no cohort"
+
+            options = [_match_label(m) for m in found.matches]
+            picked = st.selectbox("Matches", options, key="cc_find_pick",
+                                  label_visibility="collapsed")
+            if st.button("Use this company", key="cc_find_use"):
+                chosen = found.matches[options.index(picked)]
+                st.session_state["cc_ticker"] = chosen.ticker
+                st.rerun()
 
     ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
                                             placeholder="MU"))
@@ -3547,17 +3581,30 @@ def render_company_check_tab(show_validation: bool = False) -> None:
         "Plain-English summary", value=False, key="cc_summary",
         help="One short note at the top, written from the tables below; every number in it is "
              "checked back against them, and a summary that fails is withheld with its reason. "
-             "It explains; it never recommends. This is the only thing on this page that calls a "
-             "model — one call — and it is off unless you tick it.")
+             "It explains; it never recommends. One model call, off unless you tick it.")
+    # COUNCIL-OPINION-1 — off by default, independent of the summary above. NARRATOR mode: the
+    # council writes about the vote already on the page; it never issues one of its own.
+    with_council = st.checkbox(
+        "Council opinion", value=False, key="cc_council",
+        help="The four specialists, a critic and a narrator — the same council the rest of "
+             "Aristos uses — read this company's votes, marks and readings and write about "
+             "them. They never vote: the agreement above stays the verdict of record. About "
+             "six model calls, mostly on the cheap tier; off unless you tick it.")
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    if with_summary and not has_key:
-        st.info("The summary needs ANTHROPIC_API_KEY in the environment or `.env`; without it the "
-                "page runs without a summary and says so.")
+    if (with_summary or with_council) and not has_key:
+        st.info("This needs ANTHROPIC_API_KEY in the environment or `.env`; without it the page "
+                "runs without it and says so.")
 
-    run = st.button(
-        "▶ Run company check (free — no LLM)" if not with_summary
-        else "▶ Run company check + summary (one model call)",
-        type="primary", disabled=not ticker, key="cc_run")
+    _extras = [n for n, on in (("summary", with_summary), ("council opinion", with_council)) if on]
+    if not _extras:
+        _label = "▶ Run company check (free — no LLM)"
+    elif _extras == ["summary"]:
+        _label = "▶ Run company check + summary (one model call)"
+    elif _extras == ["council opinion"]:
+        _label = "▶ Run company check + council opinion (~6 model calls)"
+    else:
+        _label = "▶ Run company check + summary + council opinion (~7 model calls)"
+    run = st.button(_label, type="primary", disabled=not ticker, key="cc_run")
     if run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         status = st.status("Starting…", expanded=True)
@@ -3565,7 +3612,8 @@ def render_company_check_tab(show_validation: bool = False) -> None:
             report = run_company_report(
                 ticker, [s_.id for s_ in strategies], adapter=_company_check_adapter(),
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                runs_dir=ROOT / "runs", with_summary=with_summary, progress=lambda msg: status.update(label=msg))
+                runs_dir=ROOT / "runs", with_summary=with_summary, with_council=with_council,
+                progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")
             st.exception(exc)
@@ -3698,8 +3746,9 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
 
 def _render_company_report(report) -> None:
     """The Company Report page, in the ONE order every surface uses: summary (if asked for) →
-    agreement headline and table → each lens's vote → peers → valuation band → absolute readings →
-    analyst forecasts → Sources. The text and HTML exports follow the same order."""
+    council opinion (if asked for) → agreement headline and table → each lens's vote → peers →
+    valuation band → absolute readings → analyst forecasts → Sources. The text and HTML exports
+    follow the same order."""
     import pandas as pd
 
     from aristos_council.company_report import (HOUSE_LINE, NO_LENS_REASON,
@@ -3724,6 +3773,16 @@ def _render_company_report(report) -> None:
             st.caption(READER_SECTION_NOTE)
         else:
             st.info(report.summary.note)
+
+    if report.council_opinion is not None:                # only when it was ticked
+        st.subheader("Council opinion")
+        st.caption("Narration only — never a vote; the agreement below is the verdict of "
+                   "record.")
+        op = report.council_opinion
+        if op.available:
+            st.markdown(_md(op.narrative) or "_(no narrative produced)_")
+        else:
+            st.info(op.note)
 
     st.subheader("Agreement")
     if report.agreement is not None:

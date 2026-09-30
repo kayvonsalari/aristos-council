@@ -18,11 +18,20 @@ somebody had to pick. It now gives a verdict of its own, and the math still judg
 
 No peer group means no lens votes: the report says why and still shows the band and the readings.
 
-The one LLM call in this module is the OPT-IN plain-English summary (``with_summary``), the existing
-reader under the READER-5 contract, fed a facts pack built here from the very numbers the page
-prints. Unticked, nothing is imported that could reach a model and nothing is called. Every run is
-saved under ``runs/`` with the peer snapshot and every lens's ranks, so a verdict can be read later
-against the list it was measured on.
+Two OPT-IN model features, both off by default, both independent of each other:
+
+- The plain-English summary (``with_summary``), the existing reader under the READER-5 contract,
+  fed a facts pack built here from the very numbers the page prints. ONE model call.
+- COUNCIL-OPINION-1: the "Council opinion" (``with_council``) - the existing four-specialist +
+  critic + narrator council (``graph.build_council``, unchanged), run in NARRATOR MODE on this
+  one company: it WRITES about the vote above, it never issues one. "Math judges, LLM writes" -
+  the equal-vote agreement stays the verdict of record whatever the council says. About six model
+  calls, mostly on the cheap tier (see ``run_council_opinion``).
+
+Neither is ticked, nothing beyond the deterministic votes is imported and nothing is called.
+Every run is saved under ``runs/`` with the peer snapshot and every lens's ranks (and, when
+ticked, the council opinion), so a verdict can be read later against the list it was measured on,
+with no new model call on reopen.
 """
 from __future__ import annotations
 
@@ -46,6 +55,7 @@ HOUSE_LINE = ("The math judges: each vote below is the lens's own verdict on thi
               "among its peer group, and every lens counts once. Nothing here is a recommendation.")
 NO_LENS_REASON = "No lens is ticked, so there is nothing to vote."
 SUMMARY_NOT_ASKED = ""          # an unticked summary leaves NO section, not a placeholder
+NO_KEY_NOTE_OPINION = "Council opinion unavailable: no ANTHROPIC_API_KEY set"
 
 
 # --------------------------------------------------------------------------- #
@@ -192,6 +202,24 @@ def build_agreement(votes: list[LensVote], *,
 
 
 # --------------------------------------------------------------------------- #
+# COUNCIL-OPINION-1 — the council in NARRATOR MODE on this one company
+# --------------------------------------------------------------------------- #
+@dataclass
+class CouncilOpinion:
+    """The result of ``run_council_opinion``: prose, never a verdict. ``available`` False
+    means nothing was written — ``note`` says why, in a sentence fit to show on the page
+    (no key, no votes, a model failure) — and NOTHING here ever changes ``CompanyReport.
+    agreement``, which stays the verdict of record whatever the council wrote."""
+
+    available: bool = False
+    narrative: str = ""               # markdown, via pipeline._narrative_text
+    note: str = ""                    # "" when available; the reason otherwise
+    calls: int = 0
+    cost: Optional[float] = None      # None: not measured (a fake runner); never a silent 0
+    seconds: float = 0.0
+
+
+# --------------------------------------------------------------------------- #
 # The report
 # --------------------------------------------------------------------------- #
 @dataclass
@@ -203,6 +231,7 @@ class CompanyReport:
     agreement: Optional[CompanyAgreement] = None
     no_vote_reason: str = ""                          # why there is no vote, when there is none
     summary: object = None                            # a reader.ReaderResult, only when asked for
+    council_opinion: Optional[CouncilOpinion] = None  # COUNCIL-OPINION-1, only when asked for
     universe: list = field(default_factory=list)      # the tickers every lens ranked, company first
     lens_ranks: dict = field(default_factory=dict)    # strategy id -> the run's ranks, for the record
     run_at: str = ""
@@ -221,6 +250,143 @@ class CompanyReport:
     @property
     def unrateable(self) -> bool:
         return bool(self.check.unrateable)
+
+
+# --------------------------------------------------------------------------- #
+# COUNCIL-OPINION-1 — narration-only inputs, built from what the page already shows
+# --------------------------------------------------------------------------- #
+def _company_check_frame(report: CompanyReport):
+    """A SCREEN-LESS council frame carrying Company Check's OWN identity (the same
+    NARR-FRAME-1 mechanism ``pipeline._multi_lens_frame`` uses for a multi-lens Run-tab
+    narration): no criteria, so the council is not framed by any ONE lens's philosophy —
+    every lens's own verdict rides in as evidence instead, attributed."""
+    from .strategy.loader import Strategy
+
+    labels = ", ".join(v.label for v in report.votes)
+    return Strategy.model_construct(
+        id="company_check_run", name=f"Company Check: {report.display}", version=1,
+        criteria=[],
+        description=(f"One company ({report.display}) measured against its peer group by "
+                     f"{len(report.votes)} lens(es): {labels}."),
+        rationale=("Each lens reaches its own verdict on its own terms; the equal-vote "
+                   "agreement is the verdict of record. This narration ATTRIBUTES what "
+                   "each lens found about this company — it never reconciles the lenses "
+                   "against each other or issues a net view of its own."),
+        notes="", lens_kind="", lens_factor_labels=[])
+
+
+def _lead_vote(votes: list[LensVote]) -> Optional[LensVote]:
+    """The vote anchoring the narration's deterministic scaffolding (cohort size) — the
+    first BUY, else the first ranked vote, else None (mirrors ``pipeline._lead_row``).
+    Every lens's own verdict still rides in the cross-lens evidence regardless of which
+    one is picked here."""
+    buys = [v for v in votes if v.ranked and v.verdict == "buy"]
+    if buys:
+        return buys[0]
+    ranked = [v for v in votes if v.ranked]
+    return ranked[0] if ranked else None
+
+
+def _council_agreement_row(agreement: Optional[CompanyAgreement]) -> dict:
+    """The same shape ``pipeline.agreement_row_for`` builds for a multi-lens Run-tab
+    narration, read off Company Check's OWN agreement instead of a lens-agreement table
+    row — so the narrator opens on what the run concluded, in the SAME words the page
+    shows (CHECK-WORDS-1: a check's reading, never its verdict word)."""
+    if agreement is None:
+        return {}
+    return {"buy_votes": agreement.buy_votes, "n_voting": agreement.n_voted,
+           "buy_lenses": list(agreement.buy), "sell_lenses": list(agreement.sell),
+           "checks": [{"lens": label, "reading": word}
+                      for label, word in agreement.checks.items()],
+           "marks": list(agreement.marks)}
+
+
+def _council_cross_lens_verdicts(votes: list[LensVote]) -> list[dict]:
+    """EVERY ticked lens's verdict for this company, including one that did not apply —
+    the same shape ``pipeline.cross_lens_verdicts`` builds, so the narrator's existing
+    cross-lens checks (``narration_check.check_cross_lens``) work unchanged."""
+    return [{"lens": v.label, "lens_id": v.strategy_id,
+            "lens_label": f"{v.label} ({v.strategy_id})", "cell": v.result(),
+            "status": v.status, "verdict": v.verdict} for v in votes]
+
+
+def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
+                        today: Optional[date] = None) -> CouncilOpinion:
+    """COUNCIL-OPINION-1 — the ONE other model feature this module offers (with the plain-
+    English summary): the existing four specialists, the critic and the narrator
+    (``graph.build_council``, unchanged — no second council), run in NARRATOR MODE on this
+    one company. "Math judges, LLM writes": ``report.agreement`` stays the verdict of
+    record whatever gets written here.
+
+    Fed the SAME facts the page already shows — every lens's verdict and rank position
+    (``cross_lens_verdicts``), the agreement row (votes, each check's own reading, the
+    marks — Forensic, "priced high"), via the same fields a multi-lens Run-tab narration
+    uses. The specialists still GATHER the company's own fundamentals/technical/sentiment
+    through the unchanged ``gather`` node, which is where the absolute readings the
+    narrator can discuss come from. Never raises: no votes, no key, or a failed call each
+    return an unavailable opinion with a plain reason instead."""
+    if report.unrateable:
+        return CouncilOpinion(
+            note=f"Council opinion unavailable: {report.check.data_integrity.note}")
+    if not report.votes or report.agreement is None:
+        return CouncilOpinion(note="Council opinion unavailable: "
+                              f"{report.no_vote_reason or 'no vote to narrate'}")
+    lead = _lead_vote(report.votes)
+    if lead is None:
+        return CouncilOpinion(note="Council opinion unavailable: no lens ranked this company")
+
+    import os
+    if runners is None and not os.environ.get("ANTHROPIC_API_KEY"):
+        return CouncilOpinion(note=NO_KEY_NOTE_OPINION)
+
+    started = time.perf_counter()
+    today = today or date.today()
+    if runners is None:
+        from .agents.runners import production_runners
+        runners = production_runners()
+    if adapter is None:
+        adapter = _default_adapter(today)
+
+    from .graph import build_council
+    from .pipeline import CouncilOutcome, _annotate_cross_lens, _cost_mark, _cost_meta, \
+        _narrative_text, _sentiment_wiring
+    from .persistence.reports import report_from_state
+    from .state import Recommendation, ResearchState
+
+    sentiment_adapter, sentiment_missing_key, sentiment_error = _sentiment_wiring()
+    frame = _company_check_frame(report)
+    cross_lens = _council_cross_lens_verdicts(report.votes)
+    agreement_row = _council_agreement_row(report.agreement)
+
+    meter, mark = _cost_mark(runners)
+    try:
+        app = build_council(adapter, frame, runners, council_mode="narrator",
+                            sentiment_adapter=sentiment_adapter,
+                            sentiment_missing_key=sentiment_missing_key,
+                            sentiment_error=sentiment_error, run_matrix=False)
+        state = ResearchState.model_validate(app.invoke(ResearchState(
+            ticker=report.ticker, strategy_id=frame.id,
+            ranker_verdict=Recommendation(lead.verdict), ranker_explanation=lead.result(),
+            ranker_cohort_size=lead.cohort_size,
+            cross_lens_verdicts=cross_lens, agreement_row=agreement_row)))
+    except Exception as exc:                              # noqa: BLE001 - reported, never raised
+        cost = _cost_meta(meter, mark)
+        return CouncilOpinion(
+            note=f"Council opinion unavailable: {type(exc).__name__}: {exc}",
+            calls=cost["actual_calls"], cost=cost["actual_cost"],
+            seconds=round(time.perf_counter() - started, 1))
+
+    rep = report_from_state(state)
+    # NARR-UNION-1's cross-lens check, unchanged: flags a sentence that RECONCILES two
+    # lenses' verdicts instead of just reporting them (never rewrites the prose).
+    _annotate_cross_lens(rep, cross_lens)
+    outcome = CouncilOutcome(ticker=report.ticker, ranker_verdict=lead.verdict,
+                             council_verdict=None, agreement=None,
+                             dissent_notes=rep.dissent_notes, report=rep)
+    cost = _cost_meta(meter, mark)
+    return CouncilOpinion(available=True, narrative=_narrative_text(outcome),
+                          calls=cost["actual_calls"], cost=cost["actual_cost"],
+                          seconds=round(time.perf_counter() - started, 1))
 
 
 def peers_for_ranking(group) -> tuple[list[str], list[str]]:
@@ -309,12 +475,14 @@ def lens_ranks_record(multi) -> dict:
 def run_company_report(
     ticker: str, lens_ids: list[str], *, adapter=None, strategies_dir=None, universes_dir=None,
     runs_dir=None, today: Optional[date] = None,
-    with_summary: bool = False, reader_runner=None, store=None, save: bool = True,
+    with_summary: bool = False, reader_runner=None, with_council: bool = False,
+    council_runners=None, store=None, save: bool = True,
     progress: Optional[Callable[[str], None]] = None,
 ) -> CompanyReport:
     """Build the whole report. ``adapter`` is shared by the readings and every lens run, so a name
     fetched once is read from the day-cache thereafter. Nothing here calls a model unless
-    ``with_summary`` is True."""
+    ``with_summary`` and/or ``with_council`` (COUNCIL-OPINION-1) is True — the two are
+    independent tick boxes."""
     say = progress or (lambda _m: None)
     started = time.perf_counter()
     today = today or date.today()
@@ -373,7 +541,11 @@ def run_company_report(
     if report.votes and any(v.status != "no_group" for v in report.votes):
         report.agreement = build_agreement(report.votes, band_percentile=check.band_percentile)
 
-    # ----- the opt-in summary: the ONE model call, and only when asked for ------------------ #
+    # ----- the two opt-in model features, each only when asked for -------------------------- #
+    if with_council:
+        say("Convening the council (narrator mode — it writes, it does not vote)…")
+        report.council_opinion = run_council_opinion(report, adapter=adapter,
+                                                      runners=council_runners, today=today)
     if with_summary:
         say("Writing the plain-English summary…")
         report.summary = write_company_summary(report, runner=reader_runner)
@@ -415,6 +587,12 @@ def report_record(report: CompanyReport) -> dict:
         "sources": [{"topic": s.topic, "text": s.text} for s in company_sources(report.check)],
         "seconds": report.seconds, "cache": report.cache,
         "summary_written": bool(getattr(report.summary, "available", False)),
+        # COUNCIL-OPINION-1 — the full narrative, so a reload never needs a new model call.
+        "council_opinion": (None if report.council_opinion is None else {
+            "available": report.council_opinion.available,
+            "narrative": report.council_opinion.narrative,
+            "note": report.council_opinion.note, "calls": report.council_opinion.calls,
+            "cost": report.council_opinion.cost, "seconds": report.council_opinion.seconds}),
     }
 
 
@@ -437,10 +615,10 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # --------------------------------------------------------------------------- #
 # The text export (the page and the HTML follow the SAME order)
 # --------------------------------------------------------------------------- #
-# summary -> agreement (headline + table) -> each lens's vote -> peers -> valuation band ->
-# absolute readings -> analyst forecasts -> sources
-SECTION_ORDER = ("summary", "agreement", "lens votes", "peers", "valuation band",
-                 "absolute readings", "what analysts say", "sources")
+# summary -> council opinion -> agreement (headline + table) -> each lens's vote -> peers ->
+# valuation band -> absolute readings -> analyst forecasts -> sources
+SECTION_ORDER = ("summary", "council opinion", "agreement", "lens votes", "peers",
+                 "valuation band", "absolute readings", "what analysts say", "sources")
 
 
 def agreement_table_lines(report: CompanyReport) -> list[str]:
@@ -474,6 +652,16 @@ def summary_lines(report: CompanyReport) -> list[str]:
     return out
 
 
+def council_opinion_lines(report: CompanyReport) -> list[str]:
+    """The council's narration, or the one-line reason it is unavailable."""
+    op = report.council_opinion
+    if op is None:
+        return []
+    if not op.available:
+        return [f"  {op.note}"]
+    return [f"  {ln}" for ln in op.narrative.splitlines()] or ["  (no narrative produced)"]
+
+
 def format_company_report(report: CompanyReport) -> str:
     """The report as text, in the page order."""
     c = report.check
@@ -485,6 +673,10 @@ def format_company_report(report: CompanyReport) -> str:
 
     if report.summary is not None:
         lines += ["SUMMARY", *summary_lines(report), ""]
+
+    if report.council_opinion is not None:
+        lines += ["COUNCIL OPINION (narration only — never a vote; the agreement below is "
+                  "the verdict of record)", *council_opinion_lines(report), ""]
 
     lines.append("AGREEMENT")
     if report.agreement is not None:

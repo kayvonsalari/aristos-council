@@ -654,6 +654,93 @@ def test_ticking_the_summary_says_the_run_calls_a_model_once():
                for b in at.button)
 
 
+def test_council_opinion_checkbox_is_off_by_default_and_combines_with_the_summary():
+    """COUNCIL-OPINION-1 — its own tick box, off by default, independent of the summary; the
+    run button names whichever of the two (or both) are ticked."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    ticks = {str(c.label) for c in at.checkbox}
+    assert "Council opinion" in ticks
+    council = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_council")
+    assert council.value is False                                    # off by default
+
+    council.set_value(True).run()
+    assert not at.exception
+    assert any(b.label.startswith("▶ Run company check + council opinion (~6 model calls)")
+               for b in at.button)
+
+    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary").set_value(True).run()
+    assert not at.exception
+    assert any(b.label.startswith(
+        "▶ Run company check + summary + council opinion (~7 model calls)") for b in at.button)
+
+
+def test_find_a_company_search_fills_the_ticker_box(monkeypatch):
+    """FIND-COMPANY-1 — a picked match fills the Ticker box; the search itself is faked (no
+    real market index read in a test)."""
+    from streamlit.testing.v1 import AppTest
+
+    from aristos_council.company_search import CompanyMatch, SearchResult
+
+    fake_result = SearchResult(
+        matches=(CompanyMatch(ticker="SIE.XETRA", name="Siemens Aktiengesellschaft",
+                              exchange="XETRA", market="XETRA", country="Germany",
+                              market_cap_usd=236.4e9, is_home=True,
+                              cohorts=("Industrials - Industrial Machinery",)),),
+        cohorts_known=True)
+    monkeypatch.setattr("aristos_council.company_search.search_companies",
+                        lambda *a, **kw: fake_result)
+
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at.text_input(key="cc_find").set_value("siemens").run()
+    assert not at.exception
+    options = next(sb for sb in at.selectbox if str(getattr(sb, "key", "")) == "cc_find_pick"
+                  ).options
+    assert options == ["Siemens Aktiengesellschaft (SIE.XETRA) — Germany — XETRA — $236.4bn "
+                       "— Industrials - Industrial Machinery"]
+
+    at.button(key="cc_find_use").click().run()
+    assert not at.exception
+    ticker_box = next(t for t in at.text_input if str(getattr(t, "key", "")) == "cc_ticker")
+    assert ticker_box.value == "SIE.XETRA"
+
+
+def test_find_a_company_says_so_when_nothing_matches(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from aristos_council.company_search import SearchResult
+
+    monkeypatch.setattr("aristos_council.company_search.search_companies",
+                        lambda *a, **kw: SearchResult(matches=(), cohorts_known=True))
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at.text_input(key="cc_find").set_value("zzznotacompany").run()
+    assert not at.exception
+    assert any("No match in the local market index" in str(getattr(c, "value", ""))
+              for c in at.caption)
+
+
+def test_find_a_company_notes_when_no_cohort_has_been_built(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from aristos_council.company_search import CompanyMatch, SearchResult
+
+    monkeypatch.setattr(
+        "aristos_council.company_search.search_companies",
+        lambda *a, **kw: SearchResult(
+            matches=(CompanyMatch(ticker="X.US", name="X Corp", exchange="NYSE", market="US",
+                                  country="US", market_cap_usd=1e9, is_home=True, cohorts=()),),
+            cohorts_known=False))
+    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at.text_input(key="cc_find").set_value("x corp").run()
+    assert not at.exception
+    assert any("No cohort has been built locally yet" in str(getattr(c, "value", ""))
+              for c in at.caption)
+    options = next(sb for sb in at.selectbox if str(getattr(sb, "key", "")) == "cc_find_pick"
+                  ).options
+    assert options == ["X Corp (X.US) — US — NYSE — $1.0bn"]      # no "— no cohort" suffix
+
+
 def test_the_run_tab_list_selector_offers_no_suggestion_ordering():
     # FUND-UI-2: no per-section "relevant" filtering or steering in the ONE run flow — the
     # List selector is a flat list of what you saved, and every strategy is offered for it.
