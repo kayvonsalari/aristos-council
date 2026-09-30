@@ -79,6 +79,13 @@ sector, wider than a normal group of similar companies, so the ranking says less
 **No peer group, no votes.** If `agreement.available` is false, there were no votes; say why in
 one sentence and describe only the facts about the company alone.
 
+**A test's track record, in its own words only.** Some tests carry `track_record_label`
+(`lenses[].track_record_label`) — a phrase like "proven here" or "no edge shown here", about how
+that test's OWN past picks did in this company's group, over the last ten years. You may mention
+it, using that exact phrase. Never say a test "predicts", "will beat the market", or anything
+about the future — a track record describes the past, not what happens next. A test with no
+`track_record_label` (`null`) has nothing to say here; do not mention one.
+
 # The five fields
 
 - `asked` — 1-2 sentences. Which company, how big its peer group was, which tests ran.

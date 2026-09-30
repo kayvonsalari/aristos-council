@@ -368,6 +368,55 @@ def test_universe_markdown_has_sections_from_the_result():
     assert "## Narrative" in md and "ranked #1 on ROIC." in md
 
 
+# =========================================================================== #
+# BACKTEST-2 — Run-tab track-record badges (display only)
+# =========================================================================== #
+def test_run_track_record_matches_a_universe_name_that_slugifies_to_a_backtested_cohort():
+    m = {"universe_name": "Materials - Diversified Mining"}
+    slug, badges = app._run_track_record(m, ["growth_garp_v2", "magic_formula_raw_v1"])
+    assert slug == "materials_diversified_mining"
+    assert set(badges) == {"growth_garp_v2", "magic_formula_raw_v1"}
+    from aristos_council.backtest import BADGE_LABELS
+    assert all(b.label in BADGE_LABELS for b in badges.values())
+
+
+def test_run_track_record_is_empty_for_an_ordinary_ad_hoc_universe():
+    m = {"universe_name": "My Watchlist"}
+    slug, badges = app._run_track_record(m, ["growth_garp_v2"])
+    assert slug is None and badges == {}
+    assert app._run_track_record_lines(m, {"growth_garp_v2": "Growth (GARP v2)"}) == []
+
+
+def test_run_track_record_lines_name_each_lens_by_its_label_and_end_with_the_summary_count():
+    m = {"universe_name": "Materials - Diversified Mining"}
+    lines = app._run_track_record_lines(
+        m, {"growth_garp_v2": "Growth (GARP v2)", "magic_formula_raw_v1": "Magic Formula RAW"})
+    assert lines[0].startswith("Track record from the Diversified Mining cohort")
+    assert any(ln.startswith("Growth (GARP v2): ") for ln in lines[1:-1])
+    assert any(ln.startswith("Magic Formula RAW: ") for ln in lines[1:-1])
+    assert lines[-1].startswith("Track record: ")
+
+
+def test_universe_markdown_carries_the_run_tabs_own_track_record_when_it_matches():
+    from aristos_council.pipeline import RankPipelineResult
+    from aristos_council.rank_engine import RankedTicker
+    rt = RankedTicker(ticker="A", factor_ranks={"earnings_yield": 1.0},
+                      factor_values={}, combined_rank=1.0, universe_size=1, verdict="buy")
+    result = RankPipelineResult(
+        ranked=[rt], excluded=[], unrateable=[], narratives={},
+        header="Verdict: deterministic ranker.  Narrative: LLM (non-judging).",
+        meta={"rank_strategy_id": "magic_formula_raw_v1",
+              "rank_strategy_name": "Magic Formula RAW",
+              "screen_strategy_id": "magic_value_screen_v1",
+              "universe_name": "Materials - Diversified Mining",
+              "council_mode": "ranker-only", "ranker_only": True,
+              "universe_size": 1, "ranked_count": 1, "shortlist": []},
+        council_mode="ranker-only")
+    md = app._universe_markdown(result)
+    assert "Track record from the Diversified Mining cohort" in md
+    assert "Magic Formula RAW: " in md
+
+
 class _LensGrid:
     """The Run tab's lens control, in the shape the old dropdown had.
 

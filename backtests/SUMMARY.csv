@@ -1,0 +1,66 @@
+cohort,lens,verdict,mean excess / yr,"mean excess / yr, drop best",years positive,hit rate %,rounds held,n_eligible (first -> last),worst round %,luck % (lower is better),chance pass rate %,drop-best vs random,random_mode
+Comms - Interactive Media & Gaming,conservative_plus_v1,not proven,0.1,-10.5,6 of 10,62.0,108 of 108,20 -> 37,-80.0,38.6,16.4,3.7,turnover
+Comms - Interactive Media & Gaming,cyclical_income_v1,not proven,1.7,-8.3,6 of 10,44.0,108 of 108,20 -> 37,-42.2,25.4,19.2,4.4,turnover
+Comms - Interactive Media & Gaming,growth_garp_v2,proven,8.1,-19.8,6 of 10,62.0,108 of 108,20 -> 37,-29.3,3.0,21.6,-12.0,turnover
+Comms - Interactive Media & Gaming,magic_formula_momentum_v1,proven,4.5,-9.9,7 of 10,56.0,108 of 108,20 -> 37,-44.1,4.4,13.0,2.8,turnover
+Comms - Interactive Media & Gaming,magic_formula_raw_v1,not beyond luck,2.6,-8.2,6 of 10,52.0,108 of 108,20 -> 37,-40.9,15.0,17.2,3.2,turnover
+Comms - Media & Entertainment,conservative_plus_v1,not proven,-5.5,1.3,3 of 8,32.0,66 of 108,19 -> 32,-48.2,71.4,18.0,12.2,turnover
+Comms - Media & Entertainment,cyclical_income_v1,not proven,-4.5,-13.6,2 of 10,36.0,108 of 108,19 -> 32,-43.8,64.0,12.4,1.6,turnover
+Comms - Media & Entertainment,growth_garp_v2,insufficient,,,0 of 0,,0 of 108,19 -> 32,,,,,turnover
+Comms - Media & Entertainment,magic_formula_momentum_v1,not proven,-5.1,-17.5,3 of 10,31.0,108 of 108,19 -> 32,-73.1,78.2,15.6,-1.9,turnover
+Comms - Media & Entertainment,magic_formula_raw_v1,not proven,-0.6,-12.5,6 of 10,49.0,108 of 108,19 -> 32,-31.6,41.8,14.6,1.3,turnover
+Consumer - Auto Manufacturers,conservative_plus_v1,insufficient,-6.7,,3 of 6,53.0,32 of 108,20 -> 29,-50.4,78.8,17.4,,turnover
+Consumer - Auto Manufacturers,cyclical_income_v1,not proven,2.5,-38.2,3 of 6,55.0,66 of 108,20 -> 29,-46.5,41.2,30.4,-17.0,turnover
+Consumer - Auto Manufacturers,growth_garp_v2,not proven,-14.6,,2 of 8,45.0,64 of 108,20 -> 29,-53.7,98.4,15.4,,turnover
+Consumer - Auto Manufacturers,magic_formula_momentum_v1,not proven,-3.4,-17.2,2 of 9,33.0,83 of 108,20 -> 29,-42.8,63.4,8.0,-3.8,turnover
+Consumer - Auto Manufacturers,magic_formula_raw_v1,not beyond luck,6.2,-14.1,6 of 10,56.0,108 of 108,20 -> 29,-44.6,13.6,17.6,3.3,turnover
+Health - Large Pharma,conservative_plus_v1,insufficient,6.9,,2 of 2,78.0,9 of 108,20 -> 21,-7.8,3.4,15.4,,turnover
+Health - Large Pharma,cyclical_income_v1,not proven,-5.3,-16.5,2 of 10,29.0,108 of 108,20 -> 21,-36.9,92.6,15.4,-7.2,turnover
+Health - Large Pharma,growth_garp_v2,insufficient,,,0 of 0,,0 of 108,20 -> 21,,,,,turnover
+Health - Large Pharma,magic_formula_momentum_v1,not proven,-2.8,-10.6,4 of 10,39.0,108 of 108,20 -> 21,-39.4,83.4,12.8,-0.5,turnover
+Health - Large Pharma,magic_formula_raw_v1,not proven,-1.1,-11.1,5 of 10,46.0,108 of 108,20 -> 21,-27.1,59.4,9.0,-2.0,turnover
+Health - Medical Devices & Instruments,conservative_plus_v1,not proven,1.8,-8.0,5 of 10,50.0,101 of 108,25 -> 43,-43.7,24.4,12.2,2.0,turnover
+Health - Medical Devices & Instruments,cyclical_income_v1,not proven,-1.7,-8.9,3 of 10,37.0,108 of 108,25 -> 43,-17.6,67.8,13.6,-1.0,turnover
+Health - Medical Devices & Instruments,growth_garp_v2,insufficient,,,0 of 0,,0 of 108,25 -> 43,,,,,turnover
+Health - Medical Devices & Instruments,magic_formula_momentum_v1,not proven,1.5,-7.8,5 of 10,44.0,108 of 108,25 -> 43,-38.7,18.8,11.0,2.4,turnover
+Health - Medical Devices & Instruments,magic_formula_raw_v1,not proven,1.4,-5.4,5 of 10,33.0,108 of 108,25 -> 43,-25.2,13.4,6.8,1.7,turnover
+Industrials - Airlines & Airports,conservative_plus_v1,insufficient,,,0 of 0,,0 of 108,27 -> 33,,,,,turnover
+Industrials - Airlines & Airports,cyclical_income_v1,not proven,-9.6,,3 of 10,38.0,64 of 108,27 -> 33,-33.9,98.8,21.0,,turnover
+Industrials - Airlines & Airports,growth_garp_v2,insufficient,,,0 of 0,,0 of 108,27 -> 33,,,,,turnover
+Industrials - Airlines & Airports,magic_formula_momentum_v1,not proven,-1.3,-11.7,5 of 10,49.0,100 of 108,27 -> 33,-36.7,61.8,13.0,-2.6,turnover
+Industrials - Airlines & Airports,magic_formula_raw_v1,not proven,-0.2,-6.0,6 of 10,53.0,108 of 108,27 -> 33,-36.7,44.4,11.0,2.3,turnover
+Industrials - Grid & Electrical Machinery,conservative_plus_v1,insufficient,,,0 of 0,,0 of 108,14 -> 20,,,,,turnover
+Industrials - Grid & Electrical Machinery,cyclical_income_v1,insufficient,-35.5,,0 of 2,14.0,14 of 108,14 -> 20,-75.2,86.6,34.0,,turnover
+Industrials - Grid & Electrical Machinery,growth_garp_v2,insufficient,,,0 of 0,,0 of 108,14 -> 20,,,,,turnover
+Industrials - Grid & Electrical Machinery,magic_formula_momentum_v1,insufficient,10.5,,3 of 3,83.0,18 of 108,14 -> 20,-6.0,5.2,33.4,,turnover
+Industrials - Grid & Electrical Machinery,magic_formula_raw_v1,not beyond luck,6.1,-16.2,7 of 10,64.0,105 of 108,14 -> 20,-41.7,6.6,20.2,2.3,turnover
+Materials - Diversified Mining,conservative_plus_v1,insufficient,-6.0,,2 of 6,50.0,56 of 108,10 -> 21,-32.8,81.0,26.8,,turnover
+Materials - Diversified Mining,cyclical_income_v1,insufficient,-8.5,,2 of 6,38.0,58 of 108,10 -> 21,-53.5,85.8,19.8,,turnover
+Materials - Diversified Mining,growth_garp_v2,insufficient,2.5,,2 of 6,52.0,56 of 108,10 -> 21,-37.7,29.4,19.8,,turnover
+Materials - Diversified Mining,magic_formula_momentum_v1,insufficient,8.2,-0.3,5 of 6,84.0,58 of 108,10 -> 21,-22.9,9.4,16.2,14.1,turnover
+Materials - Diversified Mining,magic_formula_raw_v1,proven,16.0,-5.1,5 of 6,74.0,62 of 108,10 -> 21,-26.5,1.0,19.6,11.7,turnover
+Tech - Hardware,conservative_plus_v1,insufficient,-19.2,,0 of 3,15.0,20 of 108,19 -> 38,-54.1,93.6,26.6,,turnover
+Tech - Hardware,cyclical_income_v1,not proven,-12.4,-36.3,4 of 9,41.0,96 of 108,19 -> 38,-156.6,93.8,18.4,-4.8,turnover
+Tech - Hardware,growth_garp_v2,insufficient,37.7,,1 of 1,100.0,3 of 108,19 -> 38,23.0,3.8,39.2,,turnover
+Tech - Hardware,magic_formula_momentum_v1,not proven,2.4,-12.2,5 of 10,58.0,108 of 108,19 -> 38,-89.6,34.4,26.0,4.5,turnover
+Tech - Hardware,magic_formula_raw_v1,not proven,-1.0,-13.1,6 of 10,51.0,108 of 108,19 -> 38,-64.2,51.8,17.8,2.7,turnover
+Tech - IT Services,conservative_plus_v1,not proven,-4.5,9.6,4 of 8,57.0,69 of 108,23 -> 33,-65.8,78.4,23.2,20.2,turnover
+Tech - IT Services,cyclical_income_v1,not proven,-4.1,-12.5,3 of 10,41.0,108 of 108,23 -> 33,-51.4,84.8,22.0,-2.5,turnover
+Tech - IT Services,growth_garp_v2,insufficient,4.3,,1 of 2,50.0,8 of 108,23 -> 33,-27.2,25.6,19.6,,turnover
+Tech - IT Services,magic_formula_momentum_v1,not proven,0.2,-3.8,5 of 10,54.0,108 of 108,23 -> 33,-34.4,36.8,17.2,7.2,turnover
+Tech - IT Services,magic_formula_raw_v1,not proven,-1.2,-6.9,5 of 10,52.0,108 of 108,23 -> 33,-28.7,50.2,13.8,2.7,turnover
+Tech - Semiconductor Equipment,conservative_plus_v1,insufficient,,,0 of 0,,0 of 108,10 -> 23,,,,,turnover
+Tech - Semiconductor Equipment,cyclical_income_v1,insufficient,0.8,,2 of 3,58.0,19 of 108,10 -> 23,-16.1,31.8,21.8,,turnover
+Tech - Semiconductor Equipment,growth_garp_v2,insufficient,-5.3,,1 of 2,33.0,3 of 108,10 -> 23,-21.9,65.2,21.4,,turnover
+Tech - Semiconductor Equipment,magic_formula_momentum_v1,insufficient,-1.4,,1 of 4,53.0,19 of 108,10 -> 23,-37.4,48.8,21.6,,turnover
+Tech - Semiconductor Equipment,magic_formula_raw_v1,insufficient,7.2,-13.1,4 of 5,67.0,54 of 108,10 -> 23,-32.6,7.6,20.8,6.3,turnover
+Tech - Semiconductors,conservative_plus_v1,insufficient,9.0,-9.5,5 of 10,55.0,44 of 108,25 -> 42,-33.8,14.8,14.4,-2.0,turnover
+Tech - Semiconductors,cyclical_income_v1,not beyond luck,4.7,-16.0,7 of 10,61.0,108 of 108,25 -> 42,-80.1,14.8,19.2,0.8,turnover
+Tech - Semiconductors,growth_garp_v2,insufficient,5.7,-16.7,3 of 4,59.0,32 of 108,25 -> 42,-25.0,30.2,23.2,-1.1,turnover
+Tech - Semiconductors,magic_formula_momentum_v1,not proven,-6.8,-21.6,2 of 10,34.0,103 of 108,25 -> 42,-92.3,91.8,16.8,-5.8,turnover
+Tech - Semiconductors,magic_formula_raw_v1,not proven,-7.9,-19.1,4 of 10,31.0,108 of 108,25 -> 42,-99.8,93.8,15.8,-3.5,turnover
+Tech - Systems Software,conservative_plus_v1,not proven,-7.1,-14.3,2 of 9,33.0,88 of 108,19 -> 42,-80.8,96.4,14.0,1.4,turnover
+Tech - Systems Software,cyclical_income_v1,not proven,-2.5,-12.9,3 of 10,45.0,108 of 108,19 -> 42,-67.1,54.2,15.6,0.8,turnover
+Tech - Systems Software,growth_garp_v2,insufficient,,,0 of 0,,0 of 108,19 -> 42,,,,,turnover
+Tech - Systems Software,magic_formula_momentum_v1,not proven,-6.1,-16.0,1 of 10,37.0,108 of 108,19 -> 42,-52.9,92.0,20.6,-0.6,turnover
+Tech - Systems Software,magic_formula_raw_v1,not proven,-6.1,-15.1,1 of 10,31.0,108 of 108,19 -> 42,-42.0,95.2,19.0,-1.7,turnover
