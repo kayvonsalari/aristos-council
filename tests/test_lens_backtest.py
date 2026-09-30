@@ -356,8 +356,8 @@ def test_csv_header_states_the_rules_and_rows_carry_no_timestamps(monkeypatch, t
                    "# luck_pct_mean:", "# luck_pct_pass:", "# drop_best_vs_random:"):
         assert needle in joined, needle
     rows = [l for l in text.splitlines() if not l.startswith("#")]
-    assert rows[0] == ("date,exit_date,n_eligible,n_ranked,n_buys,buy_return,bench_return,excess,"
-                       "excess_drop_best,random_mean_excess,tickers")
+    assert rows[0] == ("date,exit_date,n_eligible,n_ranked,n_buys,n_new,buy_return,bench_return,"
+                       "excess,excess_drop_best,random_mean_excess,tickers")
     assert len(rows) == 1 + 6 and rows[1].startswith("2019-01-31,2020-01-31,5,5,3,")
     assert not any("T" in r.split(",")[0] or ":" in r for r in rows[1:])            # dates only, no clock
 
@@ -508,7 +508,8 @@ def test_cli_summary_prints_one_line_per_file(monkeypatch, tmp_path, capsys):
     to_csv(_result(_rounds({2015: 0.05})), tmp_path)
     assert bt.main(["summary", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    assert out.count("\n") == 2 and "Multiple testing:" in out       # the per-file line + the total
+    # the per-file line, the multiple-testing line, and >=1 calibration line
+    assert out.count("\n") >= 3 and "Multiple testing:" in out and "Calibration" in out
     empty = tmp_path / "nothing"
     empty.mkdir()
     bt.main(["summary", str(empty)])
@@ -778,7 +779,8 @@ def test_a_rerun_draws_identical_random_baskets_end_to_end(monkeypatch):
     assert a == b and any(v is not None for v in a)           # reproducible, and actually ran
 
 
-def test_random_baskets_are_sized_n_buys_and_drawn_from_the_priced_eligible_pool(monkeypatch):
+def test_independent_mode_random_baskets_are_sized_n_buys_and_drawn_from_the_priced_pool(
+        monkeypatch):
     growth5 = {"A": 0.5, "B": 0.3, "C": 0.2, "D": 0.1, "E": 0.0}
     seen = {}
     original = bt._sample_baskets
@@ -790,9 +792,25 @@ def test_random_baskets_are_sized_n_buys_and_drawn_from_the_priced_eligible_pool
     _stub_pipeline(monkeypatch, lambda d: ("A", "B", "C", "D"))     # n_buys = 4
     result = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
                                end=date(2020, 6, 30), adapter=_Feed(growth5),
-                               members=sorted(growth5), random_baskets=250)
+                               members=sorted(growth5), random_baskets=250,
+                               random_mode="independent")
     assert seen == {"pool_size": 5, "k": 4, "n": 250}          # all 5 names live -> pool 5, k=n_buys
     assert result.rounds[0].random_mean_excess is not None
+    assert result.random_mode == "independent"
+
+
+def test_turnover_mode_random_baskets_are_sized_n_buys_and_drawn_from_the_priced_pool(
+        monkeypatch):
+    growth5 = {"A": 0.5, "B": 0.3, "C": 0.2, "D": 0.1, "E": 0.0}
+    _stub_pipeline(monkeypatch, lambda d: ("A", "B", "C", "D"))     # n_buys = 4, pool = 5
+    result = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed(growth5),
+                               members=sorted(growth5), random_baskets=250)   # default: turnover
+    assert result.random_mode == "turnover"
+    assert result.rounds[0].random_mean_excess is not None
+    for r in result.rounds:
+        if r.has_position:
+            assert r.random_mean_excess is not None
 
 
 def test_a_pool_thinner_than_n_buys_draws_the_largest_basket_it_can(monkeypatch):
@@ -963,3 +981,194 @@ def test_cli_run_passes_random_baskets_and_max_luck_through(monkeypatch, tmp_pat
             "--end", "2021-12-31", "--random-baskets", "111", "--max-luck", "0.1",
             "--out", str(tmp_path)])
     assert seen["random_baskets"] == 111 and seen["max_luck"] == 0.1
+    assert seen["random_mode"] == "turnover"
+
+
+# =========================================================================== #
+# BACKTEST-1D - turnover-matched random baskets
+# =========================================================================== #
+def test_n_new_counts_names_new_to_the_basket_first_round_all_new(monkeypatch):
+    schedule = {date(2019, 1, 31): ("A", "B", "C"),
+               date(2019, 2, 28): ("A", "B", "D"),          # C dropped, D added -> 1 new
+               date(2019, 3, 31): ("A", "B", "D")}          # unchanged -> 0 new
+    _stub_pipeline(monkeypatch, lambda d: schedule.get(d, ()))
+    growth = {"A": 0.1, "B": 0.1, "C": 0.1, "D": 0.1, "E": 0.0}
+    result = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 3, 31), adapter=_Feed(growth),
+                               members=sorted(growth), random_baskets=0)
+    by_date = {r.date: r.n_new for r in result.rounds}
+    assert by_date[date(2019, 1, 31)] == 3                   # first round: all new
+    assert by_date[date(2019, 2, 28)] == 1                   # only D is new; C dropping doesn't count
+    assert by_date[date(2019, 3, 31)] == 0
+
+
+def test_n_new_is_measured_even_across_a_no_position_round(monkeypatch):
+    # a round with only 1 BUY name (below MIN_BUYS) is "no position" but still has a real basket
+    schedule = {date(2019, 1, 31): ("A", "B", "C"),
+               date(2019, 2, 28): ("A",),                    # no position this round
+               date(2019, 3, 31): ("A", "D", "E")}           # 2 new relative to just ("A",)
+    _stub_pipeline(monkeypatch, lambda d: schedule.get(d, ()))
+    growth = {"A": 0.1, "B": 0.1, "C": 0.1, "D": 0.1, "E": 0.0}
+    result = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 3, 31), adapter=_Feed(growth),
+                               members=sorted(growth), random_baskets=0)
+    by_date = {r.date: r.n_new for r in result.rounds}
+    assert by_date[date(2019, 2, 28)] == 0                   # A already held - nothing new
+    assert by_date[date(2019, 3, 31)] == 2                   # D and E are new versus ("A",)
+
+
+# --- _TurnoverBaskets directly ------------------------------------------------------------- #
+def test_turnover_baskets_bootstrap_the_whole_basket_on_the_first_draw():
+    tb = bt._TurnoverBaskets("coh", "lens", 20)
+    pool = ["A", "B", "C", "D", "E", "F"]
+    first = tb.draw(pool, n_buys=3, n_new=3)                 # n_new is irrelevant on the bootstrap
+    assert len(first) == 20 and all(len(s) == 3 for s in first)
+    assert all(s <= set(pool) for s in first)
+
+
+def test_turnover_baskets_keep_size_and_swap_only_n_new_plus_dropped():
+    tb = bt._TurnoverBaskets("coh", "lens", 30)
+    pool = ["A", "B", "C", "D", "E"]
+    first = tb.draw(pool, n_buys=3, n_new=3)
+    # same pool, one name's worth of turnover -> exactly one member swapped per series
+    second = tb.draw(pool, n_buys=3, n_new=1)
+    for prev, curr in zip(first, second):
+        assert len(curr) == 3
+        assert len(prev & curr) == 2                          # kept 2, swapped 1
+    # a held name (possibly) falls out of the pool -> an EXTRA replacement beyond n_new=0
+    shrunk_pool = ["A", "B", "D", "E"]                         # "C" is gone
+    third = tb.draw(shrunk_pool, n_buys=3, n_new=0)
+    for curr in third:
+        assert len(curr) == 3 and "C" not in curr and curr <= set(shrunk_pool)
+
+
+def test_turnover_baskets_size_shrinks_or_grows_to_match_n_buys_even_with_zero_turnover():
+    tb = bt._TurnoverBaskets("coh", "lens", 25)
+    pool = ["A", "B", "C", "D", "E", "F"]
+    tb.draw(pool, n_buys=4, n_new=4)
+    grown = tb.draw(pool, n_buys=5, n_new=0)                   # the lens's basket itself grew
+    assert all(len(s) == 5 for s in grown)
+    shrunk = tb.draw(pool, n_buys=2, n_new=0)                  # and then shrank
+    assert all(len(s) == 2 for s in shrunk)
+
+
+def test_turnover_baskets_are_reproducible_and_series_specific():
+    a = bt._TurnoverBaskets("coh", "lens", 50).draw(["A", "B", "C", "D", "E"], 3, 3)
+    b = bt._TurnoverBaskets("coh", "lens", 50).draw(["A", "B", "C", "D", "E"], 3, 3)
+    assert a == b                                              # same seed inputs -> same draw
+    c = bt._TurnoverBaskets("other_cohort", "lens", 50).draw(["A", "B", "C", "D", "E"], 3, 3)
+    assert a != c
+    assert len({frozenset(s) for s in a}) > 1                  # different series draw differently
+
+
+def test_independent_mode_still_uses_the_1c_seed_rule_and_mechanism(monkeypatch):
+    growth5 = {"A": 0.5, "B": 0.3, "C": 0.2, "D": 0.1, "E": 0.0}
+    _stub_pipeline(monkeypatch, lambda d: ("A", "B", "C", "D"))
+    result = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed(growth5),
+                               members=sorted(growth5), random_baskets=250,
+                               random_mode="independent")
+    assert result.seed_rule == bt.SEED_RULE                    # the unchanged 1C rule, not 1D's
+    turnover = run_lens_backtest("Test Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                                 end=date(2020, 6, 30), adapter=_Feed(growth5),
+                                 members=sorted(growth5), random_baskets=250)
+    assert turnover.seed_rule == bt.TURNOVER_SEED_RULE and turnover.seed_rule != result.seed_rule
+
+
+def test_turnover_mode_a_persistent_random_lens_scores_luck_near_half_on_average():
+    # Same reasoning as the 1C independent-mode test: ONE persistent random draw's own rank among
+    # its peers is uniform on [0, 1], so this has to be averaged over many independent trials
+    # against a fixed population, not asserted on a single trial.
+    rng = np.random.default_rng(99)
+    M, n_buys, n_new, n_rounds = 30, 4, 1, 24
+    tickers = [f"T{i:02d}" for i in range(M)]
+    returns_matrix = rng.normal(scale=0.05, size=(n_rounds, M))
+    dates = _dated(n_rounds, years=n_rounds // 2)
+
+    def yearly_means(tb, n):
+        cols = []
+        for r in range(n_rounds):
+            returns = {t: float(returns_matrix[r, i]) for i, t in enumerate(tickers)}
+            chosen = tb.draw(tickers, n_buys, n_new)
+            cols.append(np.array([sum(returns[t] for t in s) / len(s) for s in chosen]))
+        return bt._year_group_means(np.column_stack(cols), dates)      # (n_years, n)
+
+    population = bt._TurnoverBaskets("coh", "population_lens", 1500)
+    pop_mean_annual = yearly_means(population, 1500).mean(axis=0)       # (1500,)
+
+    trials = 150
+    luck_values = []
+    for trial in range(trials):
+        one = bt._TurnoverBaskets("coh", f"trial_lens_{trial}", 1)
+        lens_mean_annual = float(yearly_means(one, 1).mean())
+        luck_values.append(float(np.mean(pop_mean_annual >= lens_mean_annual)))
+    assert 0.40 <= (sum(luck_values) / len(luck_values)) <= 0.60
+
+
+# --- calibration_report -------------------------------------------------------------------- #
+def _luck_result(luck):
+    base = _result(_rounds({y: 0.05 for y in range(2010, 2020)}), luck_pct_mean=luck)
+    return BacktestResult(**{**base.__dict__, "luck_pct_pass": 0.1})
+
+
+def test_calibration_report_bins_correctly_and_warns_on_a_heavy_tail():
+    results = ([_luck_result(0.02)] * 3        # 0-5%
+             + [_luck_result(0.10)] * 2        # 5-25%
+             + [_luck_result(0.50)] * 5        # 25-75%
+             + [_luck_result(0.80)] * 2        # 75-95%
+             + [_luck_result(0.97)] * 3)       # 95-100%
+    report = bt.calibration_report(results)
+    assert report.n_tests == 15
+    assert report.counts == (3, 2, 5, 2, 3)
+    assert report.expected == pytest.approx((0.75, 3.0, 7.5, 3.0, 0.75))
+    assert report.warn is True                                 # 6 observed vs 1.5 expected in the tails
+    assert "luck test may still be over-confident" in report.lines()
+
+
+def test_calibration_report_does_not_warn_when_the_tails_are_within_bounds():
+    results = ([_luck_result(0.02)] * 1 + [_luck_result(0.10)] * 4 + [_luck_result(0.50)] * 10
+             + [_luck_result(0.80)] * 4 + [_luck_result(0.97)] * 1)
+    report = bt.calibration_report(results)
+    assert report.n_tests == 20 and report.warn is False
+    assert not any("over-confident" in line for line in report.lines())
+
+
+def test_calibration_bin_boundaries():
+    assert bt._calibration_bin(0.0) == 0 and bt._calibration_bin(4.999) == 0
+    assert bt._calibration_bin(5.0) == 1 and bt._calibration_bin(24.999) == 1
+    assert bt._calibration_bin(25.0) == 2 and bt._calibration_bin(74.999) == 2
+    assert bt._calibration_bin(75.0) == 3 and bt._calibration_bin(94.999) == 3
+    assert bt._calibration_bin(95.0) == 4 and bt._calibration_bin(100.0) == 4
+
+
+def test_calibration_report_excludes_insufficient_and_unmeasured():
+    insufficient = _luck_result(0.02)
+    insufficient = BacktestResult(**{**insufficient.__dict__, "rounds": _rounds({2019: 0.05})})
+    unmeasured = _result(_rounds({y: 0.05 for y in range(2010, 2020)}), luck_pct_mean=None)
+    counted = _luck_result(0.5)
+    report = bt.calibration_report([insufficient, unmeasured, counted])
+    assert report.n_tests == 1 and sum(report.counts) == 1
+
+
+def test_calibration_report_for_directory_matches_a_hand_built_one(monkeypatch, tmp_path):
+    result = _run(monkeypatch, random_baskets=50)
+    to_csv(result, tmp_path)
+    hand = bt.calibration_report([from_csv(p) for p in tmp_path.glob("*/*.csv")])
+    assert bt.calibration_report_for_directory(tmp_path) == hand
+
+
+def test_cli_run_passes_random_mode_through_and_summary_prints_calibration(monkeypatch, tmp_path,
+                                                                           capsys):
+    seen = {}
+
+    def fake_run(cohort, lens, **kw):
+        seen.update(kw)
+        return _luck_result(0.02)
+    monkeypatch.setattr(bt, "run_lens_backtest", fake_run)
+    bt.main(["run", "--cohort", "Test Cohort", "--lens", "some_lens_v1", "--years", "2",
+            "--end", "2021-12-31", "--random-mode", "independent", "--out", str(tmp_path)])
+    assert seen["random_mode"] == "independent"
+    capsys.readouterr()
+    bt.main(["summary", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "Calibration" in out

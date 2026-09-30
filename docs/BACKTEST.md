@@ -123,7 +123,7 @@ that happened to be in the basket. Read `mean_annual_excess` against `mean_annua
 together: a small gap between them is a lens spreading its edge across names; a large one is a lens
 riding a single winner.
 
-## Skill versus luck (BACKTEST-1C)
+## Skill versus luck (BACKTEST-1C/1D)
 
 The first watched-cohort run (13 cohorts × 5 lenses = 65 tests) gave 7 proven, 32 not proven, 26
 insufficient. Proven verdicts changed a lot between runs, hit rates sit near 50%, and **with 65
@@ -174,6 +174,44 @@ proven count close to it is not.
 
 **BACKTEST-2 (the vote gate, not yet built) must read this verdict**, not the plain excess/years bar
 — a lens "not beyond luck" is exactly the case gating exists to catch.
+
+### Why the random pickers had to get stickier (BACKTEST-1D)
+
+The first 1C watched-cohort run put 7 of 39 testable pairs at `luck_pct_mean <= 2%` and 14 at
+`luck_pct_mean >= 95%` — against roughly 2 of 39 expected in EACH tail under a calibrated test. That
+is not "a lot of skilled lenses and a lot of hopeless ones"; it is a sign the luck test itself was
+miscalibrated.
+
+**The cause:** a 1C random basket is redrawn from scratch every round — pure chance, no memory of
+what it held last month. A REAL lens is not like that: it holds most of the same names month to
+month, and a run of good (or bad) months clusters into a streak, because the same handful of stocks
+are driving it the whole time. Averaged over ten years, a from-scratch-every-round random basket's
+ups and downs cancel out fast and its yearly average bunches tightly around zero excess. A real
+lens's average does not cancel out nearly as fast, because its months are not independent draws.
+Measured against that too-tight bunch of independent random baskets, ANY persistent strategy —
+good, bad, or middling — looks like an extreme outlier, in whichever direction its actual streak
+happened to run. **The random pickers being compared against have to hold their picks with the same
+stickiness the lens does, or the comparison is not fair.**
+
+**The fix:** `random_mode="turnover"` (the new default) makes each of the 500 random series a
+PERSISTENT basket that evolves one round at a time, matching the lens's own **turnover** — the
+number of names it changed since last round (`n_new` on each round: all of them on the very first
+round the lens held a position, otherwise the count that were not in last round's basket). Each
+random series: drops whatever it holds that stopped being eligible; on top of that, swaps out
+exactly `n_new` more of its own holdings, at random; then draws fresh names to fill back up to that
+round's basket size. It ends every round the same size as the lens's own basket, having changed by
+almost exactly the same amount the lens did — no more, no less. `random_mode="independent"` (the
+1C behaviour) is kept available for comparison; a file records which one produced it
+(`random_mode` header line, and every row's own numbers).
+
+**Reading the calibration table.** `python -m aristos_council.backtest summary` now also prints a
+table: every testable result's `luck_pct_mean` sorted into five bins (0-5%, 5-25%, 25-75%, 75-95%,
+95-100%), observed counts beside what a genuinely fair, well-calibrated test would produce (5%, 20%,
+50%, 20%, 5% of the tests, respectively). If the two extreme bins between them still hold more than
+about twice their expected share, a line prints: **`luck test may still be over-confident`** — read
+that as "do not trust these luck scores at face value yet," not as a verdict on any one lens. This
+is the check that would have caught the 1C miscalibration on its own, without needing to eyeball the
+distribution by hand.
 
 ## How the universe is chosen per round (BACKTEST-1B)
 
@@ -242,19 +280,20 @@ for the whole ten years. Prices and dividends come from yfinance (free). The who
 and day-cached, so re-running on the same day makes no new requests. A **40-company cohort costs 40
 EODHD requests (400 units) and 80 yfinance requests**, however many years or months are tested.
 
-The 500 random baskets per round (BACKTEST-1C) cost no extra requests at all — they are drawn from
-prices already fetched for the lens's own scoring, in memory, with `numpy`. Measured on a warm cache,
-`Tech: Semiconductor Equipment` × `magic_formula_raw_v1`, 10 years (108 rounds, 55 of them holding a
-position and so drawing baskets): **15.4 seconds** end to end, well inside the 60-seconds-per-run
-target this was built to. `--random-baskets 0` turns the whole thing off if you ever need the plain
-excess/years engine alone.
+The 500 random baskets per round (BACKTEST-1C/1D) cost no extra requests at all — they are drawn
+from prices already fetched for the lens's own scoring, in memory, with `numpy` and (for the default
+turnover mode) plain Python sets. Measured on a warm cache, `Tech: Semiconductor Equipment` ×
+`magic_formula_raw_v1`, 10 years (108 rounds, 54 of them holding a position and so drawing baskets):
+**4.0 seconds** end to end in the default `"turnover"` mode, **15.4 seconds** in `"independent"`
+mode — both well inside the 60-seconds-per-run target this was built to. `--random-baskets 0` turns
+the whole thing off if you ever need the plain excess/years engine alone.
 
 ## How to run it
 
 ```
 python -m aristos_council.backtest run --cohort "Tech: Semiconductor Equipment" \
     --lens magic_formula_momentum_v1 --years 10 [--hold 12 --step 1 --cost-bps 50 --lag-days 90 \
-    --random-baskets 500 --max-luck 0.05 --out backtests/]
+    --random-baskets 500 --max-luck 0.05 --random-mode turnover --out backtests/]
 python -m aristos_council.backtest summary backtests/
 ```
 
