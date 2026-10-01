@@ -33,6 +33,7 @@ from aristos_council.data import provider as _provider
 from aristos_council.data import sentiment as _sentiment
 from aristos_council.gap_ledger import bars as _gap_bars
 from aristos_council.gap_ledger import ibkr as _gap_ibkr
+from aristos_council.paper_trade import ibkr_paper as _paper_ibkr
 
 # --------------------------------------------------------------------------- #
 # the message the brief asks for, plus the node id of whoever tripped it
@@ -110,6 +111,10 @@ def _sentiment_guard(real):
 #     only place that catches a test that should not be constructing one at all.
 #   * ``gap_ledger.ibkr.IBKRBars``          — GAP-IBKR-1, a socket to the owner's live IB
 #     Gateway. Guarded for the same reason and more urgently.
+#   * ``paper_trade.ibkr_paper.PaperIBKR``   — PAPER-TRADE-1, a socket to the owner's PAPER
+#     Gateway that can PLACE ORDERS. Guarded on construction exactly like ``IBKRBars`` —
+#     a test that wants the real class (even with a fake ``ib`` injected) opts in with
+#     ``@pytest.mark.real_adapter``, same convention, no exceptions for "but it's paper".
 _TARGETS = (
     (_pipeline, "_build_adapter",
      lambda real: _guard("pipeline._build_adapter", real)),
@@ -123,6 +128,8 @@ _TARGETS = (
     # guard is on construction, which is where the connection would be arranged.
     (_gap_ibkr, "IBKRBars",
      lambda real: _guard("gap_ledger.ibkr.IBKRBars", real)),
+    (_paper_ibkr, "PaperIBKR",
+     lambda real: _guard("paper_trade.ibkr_paper.PaperIBKR", real)),
 )
 
 

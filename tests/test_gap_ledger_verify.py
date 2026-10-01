@@ -488,9 +488,39 @@ def test_a_csv_written_before_the_ibkr_columns_still_loads(tmp_path):
 # --------------------------------------------------------------------------- #
 # item 5 — the licence boundary
 # --------------------------------------------------------------------------- #
+def _imports_gap_ledger_ibkr(path) -> bool:
+    """Did this file actually IMPORT ``gap_ledger.ibkr`` (any spelling: relative, absolute,
+    ``from ... import ibkr``, or ``from ...gap_ledger.ibkr import X``)? An AST check, not a
+    text-substring one — PAPER-TRADE-1 added a module that talks ABOUT
+    ``gap_ledger.ibkr`` in a comment (explaining that it is independent of it) without ever
+    importing it, and a substring scan could not tell the two apart."""
+    import ast
+
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except SyntaxError:                                      # pragma: no cover
+        return False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module.endswith("gap_ledger.ibkr"):
+                return True
+            if module.endswith("gap_ledger") and any(a.name == "ibkr" for a in node.names):
+                return True
+        elif isinstance(node, ast.Import):
+            if any(a.name.endswith("gap_ledger.ibkr") for a in node.names):
+                return True
+    return False
+
+
 def test_nothing_in_aristos_imports_the_ibkr_adapter():
-    """IBKR data is licensed for the owner's personal, non-professional use. It stays inside
-    gap_ledger/ — a lens that ranked on it would be redistributing it."""
+    """IBKR data READ THROUGH ``gap_ledger.ibkr`` is licensed for the owner's personal,
+    non-professional use. That adapter stays inside gap_ledger/ — a lens that ranked on it
+    would be redistributing it. PAPER-TRADE-1's own, SEPARATE IBKR connection
+    (``paper_trade.ibkr_paper.PaperIBKR`` — the owner's own paper account, placing orders,
+    nothing read under GAP-IBKR-1's licence) is a different integration entirely and is not
+    what this test protects; it is caught instead by
+    ``test_paper_trade_ibkr_paper_guard.py`` staying out of ``gap_ledger.ibkr`` specifically."""
     import pathlib
 
     root = pathlib.Path(__file__).resolve().parents[1]
@@ -498,15 +528,15 @@ def test_nothing_in_aristos_imports_the_ibkr_adapter():
     for path in (root / "src" / "aristos_council").rglob("*.py"):
         if "gap_ledger" in path.parts:
             continue
-        if "ibkr" in path.read_text(encoding="utf-8"):
+        if _imports_gap_ledger_ibkr(path):
             offenders.append(str(path.relative_to(root)))
     for extra in ("app.py", "examples", "scripts"):
         target = root / extra
         paths = [target] if target.is_file() else list(target.rglob("*.py")) if target.exists() else []
         for path in paths:
-            if "ibkr" in path.read_text(encoding="utf-8"):
+            if _imports_gap_ledger_ibkr(path):
                 offenders.append(str(path.relative_to(root)))
-    assert offenders == [], f"IBKR must stay inside gap_ledger/: {offenders}"
+    assert offenders == [], f"gap_ledger.ibkr must stay inside gap_ledger/: {offenders}"
 
 
 def test_the_ibkr_module_lives_inside_gap_ledger():
