@@ -529,6 +529,20 @@ def run_company_report(
     started = time.perf_counter()
     today = today or date.today()
     ticker = normalize_ticker(ticker)
+    # FIND-COMPANY-UNRATEABLE-1 — the market index's OWN ticker field is EODHD's form
+    # ("NFLX.US", "RIO.AU"), which is what FIND-COMPANY-1/2's search box fills the ticker
+    # box with (CompanyMatch.ticker's documented contract); the adapter below is Yahoo-
+    # queryable ("NFLX", "RIO.AX") and 404s on the EODHD form — every peer already goes
+    # through this SAME translation (peers_for_ranking, below), but the company itself
+    # never did, so every find-box pick outside the handful of exchanges whose EODHD and
+    # Yahoo suffixes happen to collide (worse: ".US" is NOT one of them) came back
+    # UNRATEABLE. A ticker typed directly (already Yahoo-form, or on an exchange with no
+    # translation entry) is left exactly as given — SymbolError is not a failure here.
+    from .cohorts.symbols import SymbolError, yahoo_symbol
+    try:
+        ticker = yahoo_symbol(ticker)
+    except SymbolError:
+        pass
     strategies_dir = Path(strategies_dir) if strategies_dir else _ROOT / "strategies"
     universes_dir = Path(universes_dir) if universes_dir else _ROOT / "universes"
     runs_dir = Path(runs_dir) if runs_dir else _ROOT / "runs"
