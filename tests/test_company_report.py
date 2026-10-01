@@ -900,6 +900,18 @@ def test_with_council_false_by_default_touches_nothing(tmp_path):
     assert report.council_opinion is None
 
 
+def test_run_company_report_accepts_with_council_directly(tmp_path):
+    """Batch — post-merge fixes, item 1: calls ``run_company_report`` itself (not through the
+    ``_run`` test helper), with stub runners, exactly as the signature is called from app.py's
+    Company Check tab and from the ``--council`` CLI flag. A merge that drops ``with_council``
+    from the signature fails this loudly with a TypeError, never silently."""
+    report = run_company_report(
+        "CO", [RAW], adapter=_Adapter(), strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR,
+        runs_dir=tmp_path / "runs", today=TODAY, store=_table(), save=False,
+        with_council=True, council_runners=_opinion_runners())
+    assert report.council_opinion is not None and report.council_opinion.available
+
+
 def test_council_opinion_text_and_html_sections_carry_the_narrative(tmp_path):
     report = _run([RAW], tmp_path=tmp_path, save=False, with_council=True,
                   council_runners=_opinion_runners())

@@ -84,6 +84,61 @@ def test_a_ticker_match_finds_the_company_by_substring():
     assert [m.ticker for m in res.matches] == ["2330.TW"]
 
 
+# =========================================================================== #
+# FIND-COMPANY-2 — alias names, ticker-search ranking, no duplicated country/exchange
+# =========================================================================== #
+def test_a_common_short_name_is_found_by_alias():
+    rows = [_row("2330.TW", "Taiwan Semiconductor Manufacturing Co. Ltd.", cap_bn=2000,
+                market="TW", country="TW")]
+    res = search_companies("TSMC", rows=rows, cohorts_root=Path("/nope"))
+    assert [m.ticker for m in res.matches] == ["2330.TW"]
+    res_lower = search_companies("tsmc", rows=rows, cohorts_root=Path("/nope"))
+    assert [m.ticker for m in res_lower.matches] == ["2330.TW"]
+
+
+def test_a_ticker_search_ranks_the_exact_match_first_the_real_2330_collision():
+    """The real-world bug: "2330" used to rank 282330.KO, 2330.HK, 012330.KO, 052330.KQ ahead
+    of TSMC's own 2330.TW (alphabetically "Taiwan..." sorts last among those five names).
+    Exact-ticker-ignoring-suffix now wins regardless of name, and market cap breaks the
+    remaining ties."""
+    rows = [
+        _row("282330.KO", "BGF Retail Co Ltd", cap_bn=1.68, market="KO", country="KR"),
+        _row("2330.HK", "China Uptown Group Co Ltd", cap_bn=0.0147, market="HK", country="HK"),
+        _row("012330.KO", "Hyundai Mobis Co.,Ltd", cap_bn=23.86, market="KO", country="KR"),
+        _row("052330.KQ", "Kortek Corporation", cap_bn=0.099, market="KQ", country="KR"),
+        _row("2330.TW", "Taiwan Semiconductor Manufacturing Co. Ltd.", cap_bn=2026,
+            market="TW", country="TW"),
+    ]
+    res = search_companies("2330", rows=rows, cohorts_root=Path("/nope"))
+    assert [m.ticker for m in res.matches] == [
+        "2330.TW",       # exact ticker match ignoring suffix, largest cap of the two exact hits
+        "2330.HK",       # exact ticker match ignoring suffix, smaller cap
+        "012330.KO",     # contains "2330", largest cap of the remaining three
+        "282330.KO",
+        "052330.KQ",
+    ]
+
+
+def test_an_exact_ticker_match_outranks_a_mere_name_match():
+    rows = [_row("GE.US", "GE Aerospace", cap_bn=326.0, market="NYSE", country="US"),
+           _row("GEHC.US", "GE HealthCare Technologies Inc.", cap_bn=29.0, market="NASDAQ",
+                country="US")]
+    res = search_companies("GE", rows=rows, cohorts_root=Path("/nope"))
+    assert res.matches[0].ticker == "GE.US"
+
+
+def test_no_duplicated_country_and_exchange_codes():
+    taiwan = _row("2330.TW", "Taiwan Semiconductor Manufacturing Co. Ltd.", market="TW",
+                 country="TW")
+    hongkong = _row("OTHER.HK", "Some Hong Kong Co", market="HK", country="HK")
+    germany = _row("SIE.XETRA", "Siemens Aktiengesellschaft", market="XETRA", country="DE")
+    unmapped = _row("ZZZ.ZZ", "Unmapped Co", market="ZZ", country="ZZ")
+    for row, expected in ((taiwan, "Taiwan"), (hongkong, "Hong Kong"),
+                         (germany, "Germany — XETRA"), (unmapped, "ZZ")):
+        res = search_companies(row.name, rows=[row], cohorts_root=Path("/nope"))
+        assert res.matches[0].where == expected, row.ticker
+
+
 def test_a_secondary_line_never_appears_as_its_own_match():
     """TSM.US is TSMC's own ADR line, naming 2330.TW as its home (PrimaryTicker) — the SAME
     real shape tests/test_market_index_peer_pools.py pins. clean_pool collapses it into the
@@ -144,6 +199,8 @@ def test_matches_are_capped_at_the_limit():
 
 
 def test_the_where_property_names_country_and_exchange():
-    rows = [_row("SIE.XETRA", "Siemens Aktiengesellschaft", market="XETRA", country="Germany")]
+    """``country`` holds the bare code the index actually stores ("DE"), not a full name —
+    ``where`` looks it up (FIND-COMPANY-2 item 3)."""
+    rows = [_row("SIE.XETRA", "Siemens Aktiengesellschaft", market="XETRA", country="DE")]
     res = search_companies("siemens", rows=rows, cohorts_root=Path("/nope"))
     assert res.matches[0].where == "Germany — XETRA"
