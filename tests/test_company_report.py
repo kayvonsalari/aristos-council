@@ -100,6 +100,62 @@ def _run(lens_ids, *, tmp_path, store=None, company_ebit=400.0, **kw):
 
 
 # =========================================================================== #
+# FIND-COMPANY-UNRATEABLE-1 — a company chosen through the find box (EODHD-form ticker,
+# e.g. "NFLX.US", "RIO.AU") must be translated to the Yahoo-queryable form the adapter
+# expects before it is fetched, exactly as every peer already is (peers_for_ranking). Live
+# regression: picking Netflix or Rio Tinto via "Find a company" came back UNRATEABLE
+# because the adapter 404'd on the untranslated EODHD ticker.
+# =========================================================================== #
+def test_a_company_chosen_through_the_find_box_is_not_unrateable(tmp_path):
+    report = run_company_report(
+        "CO.US", [RAW], adapter=_Adapter(), strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR,
+        runs_dir=tmp_path / "runs", today=TODAY, store=_table(), save=False)
+    assert not report.unrateable
+    assert report.ticker == "CO"                      # translated to the form the adapter took
+    assert report.votes and report.votes[0].ranked and report.agreement is not None
+
+
+def test_the_eodhd_ticker_is_translated_before_the_adapter_ever_sees_it(tmp_path):
+    """Pins the mechanism itself, not just the outcome: records exactly what string the
+    adapter was called with, for a US ticker (suffix drops to nothing) and a non-US one
+    (AU -> AX is a DIFFERENT string, not merely a stripped one — the bug was not "trim the
+    suffix", it is "ask the adapter in the form it understands")."""
+    seen: list[str] = []
+
+    class _Recorder(_Adapter):
+        def get_fundamentals(self, ticker):
+            seen.append(ticker)
+            return super().get_fundamentals("CO")
+
+        def get_price_history(self, ticker, *, start, end):
+            return super().get_price_history("CO")
+
+        def get_dividend_history(self, ticker, *, start, end):
+            return []
+
+    # seen[0] is the company itself (fetched first, in run_company_check, before the peer
+    # ranking pass that follows fetches every peer too).
+    run_company_report("CO.US", [RAW], adapter=_Recorder(), strategies_dir=STRAT_DIR,
+                       universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
+                       store=_table(), save=False)
+    assert seen[0] == "CO"
+
+    seen.clear()
+    run_company_report("CO.AU", [RAW], adapter=_Recorder(), strategies_dir=STRAT_DIR,
+                       universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
+                       store=_table(), save=False)
+    assert seen[0] == "CO.AX"
+
+
+def test_a_ticker_typed_directly_in_an_already_queryable_form_is_left_unchanged(tmp_path):
+    """No translation table entry for the exchange (or already bare/Yahoo-form, as every
+    manually-typed ticker always has been) -> used exactly as given. The fix must never
+    touch what already worked."""
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    assert report.ticker == "CO"
+
+
+# =========================================================================== #
 # votes
 # =========================================================================== #
 def test_a_fabricated_peer_table_gives_a_deterministic_vote(tmp_path):
