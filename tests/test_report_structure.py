@@ -183,10 +183,38 @@ def test_every_lens_verdict_is_stated_before_any_prose():
 
 
 def test_the_disagreement_is_reported_and_left_standing():
+    """COUNCIL-OPINION-2 item 2.2: the heading now says "specialists" (near-always what the
+    field actually carries on a single/few-lens run) — genuine lens disagreement is still
+    welcome under it, as its own leading sentence, per the updated prompt instruction."""
     md = narration_markdown(_sk_hynix())
-    assert "Where the lenses disagree" in md
+    assert "Where the specialists disagree" in md
     assert "left standing" in md
     assert "the ranker's verdicts are unchanged" in md.lower()
+
+
+def test_a_heading_written_inside_a_free_text_field_renders_as_plain_text_not_raw_syntax():
+    """COUNCIL-OPINION-2 item 2.1 — the live bug: the narrator wrote a markdown heading
+    and a table INSIDE disagreement_note (forbidden by STRUCTURED_NARRATION, but the rule
+    alone did not hold). Embedded mid-paragraph, Streamlit's st.markdown cannot turn
+    "#### heading" or a bare "| a | b |" back into real markdown elements — it shows the
+    literal characters. The field is sanitized rather than trusted a second time."""
+    narration = _sk_hynix().model_copy(update=dict(
+        disagreement_note="Some context first.\n\n#### Where it matters\n\nA split "
+                          "follows.\n\n| Specialist | Stance |\n| --- | --- |\n"
+                          "| Technical | bullish |\n| Risk | bearish |\n"))
+    md = narration_markdown(narration)
+    assert "#### Where it matters" not in md
+    assert "| Technical | bullish |" not in md
+    assert "Where it matters" in md               # the words survive, just not as a heading
+    assert "Technical" in md and "bullish" in md   # the table's content survives too
+
+
+def test_an_embedded_heading_in_the_html_export_is_sanitized_the_same_way():
+    narration = _sk_hynix().model_copy(
+        update=dict(disagreement_note="Lead-in.\n\n### Nested heading\n\nTail."))
+    html = narration_html(narration)
+    assert "### Nested heading" not in html
+    assert "Nested heading" in html
 
 
 def test_the_flattened_prose_keeps_the_lens_names_the_fact_checker_routes_on():

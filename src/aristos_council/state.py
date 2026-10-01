@@ -397,6 +397,21 @@ class ResearchState(BaseModel):
     # goes in, because a model shown an implied price will quote it as a target. Empty on
     # a single-lens run, which keeps that prompt byte-unchanged.
     agreement_row: dict = Field(default_factory=dict)
+    # COUNCIL-OPINION-2 (Batch 12 item 2.3/2.6) — facts the Company Check page ALREADY shows
+    # that the council's own fresh `gather` call never surfaced: the absolute readings (debt/
+    # cash, growth record — the council's open questions asked for net debt when the page
+    # already states it), the EODHD analyst block (ratings + forecasts, item 1a — also logged
+    # into the Sentiment specialist's OWN channel by `gather`, see SPECIALIST_CHANNELS), and
+    # the PEER TABLE's own market cap for this company (item 2.6 — the council quoting a
+    # freshly-fetched market cap from a DIFFERENT day than the index snapshot the peer table
+    # reads is two true numbers that merely disagree on date, not an error, but a reader
+    # cannot tell that apart from one).
+    #   {"absolute_readings": [str, ...],
+    #    "analyst": {"available": bool, "lines": [str, ...], "source_note": str},
+    #    "market_cap": {"local": str, "usd": str, "as_of": str}}
+    # Empty on a standalone council run (no Company Check report to draw from), so that
+    # prompt stays byte-unchanged.
+    company_facts_block: dict = Field(default_factory=dict)
     # Ephemeral per-run disposition overrides applied on top of the base strategy
     # (e.g. {"partial_pass_allows_hold": false,
     #        "criteria.min_dividend_growth_streak.is_gating": true}). Empty for a

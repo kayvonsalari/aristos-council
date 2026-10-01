@@ -487,7 +487,10 @@ def test_sentiment_outage_degrades_not_crashes():
     state, _ = _run_with_sentiment(BrokenSentimentAdapter())
     # failures logged as failed tool calls + errors, run completed
     failed = [tc for tc in state.tool_calls if not tc.ok]
-    assert len(failed) == 2
+    # SENT-FALLBACK-1: Finnhub's own two failed calls, PLUS the news fallback this test's
+    # harness leaves unconfigured (no EODHD/yfinance fetcher injected) — also a logged,
+    # failed attempt, not a silent gap (item 1d: every source tried is recorded).
+    assert len(failed) == 3
     assert any("simulated outage" in e for e in state.errors)
     assert state.decision is not None
     # The run DEGRADES gracefully (no crash). data_quality fires here from the

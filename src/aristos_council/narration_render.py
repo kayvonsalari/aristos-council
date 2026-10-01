@@ -41,7 +41,13 @@ _SECTION_TITLES = {
     "verdict": "Ranker verdict",
     "lens_verdicts": "Every lens's verdict",
     "attribution": "Why each lens ranked it there",
-    "disagreement": "Where the lenses disagree",
+    # COUNCIL-OPINION-2 item 2.2 — renamed from "Where the lenses disagree": on a
+    # single/few-lens run (Company Check's council opinion) the content the model puts
+    # here is near-always the SPECIALISTS disagreeing with each other, not the lenses —
+    # there is usually only one lens to disagree WITH. Genuine lens disagreement (several
+    # lenses voted and split) still belongs here, but now as its own short paragraph
+    # BEFORE the specialist disagreement, per the updated STRUCTURED_NARRATION prompt.
+    "disagreement": "Where the specialists disagree",
     "series": "Reported series",
     "context": "Neutral context",
     "specialists": "Specialist views",
@@ -210,6 +216,47 @@ def format_series(series) -> tuple[str, str]:
     return rendered, full
 
 
+# COUNCIL-OPINION-2 item 2.1 — a markdown HEADING line inside a free-text field.
+# STRUCTURED_NARRATION forbids these ("FORBIDDEN IN EVERY FIELD: ... markdown headings
+# ('#')"), but the prompt rule alone did not hold on the first Company Check council run:
+# a heading written INSIDE a prose field (disagreement_note / a specialist's reasoning)
+# sits mid-paragraph in the assembled document, not on its own block, so no markdown
+# renderer — Streamlit's included — turns it back into a heading; it shows as the literal
+# characters "#### Some heading". The fix mirrors MOMENTUM-GLOSS-1's own seam: strip what
+# the narrator was told not to write, rather than trust the rule a second time.
+_MD_HEADING_LINE = re.compile(r"^\s{0,3}#{1,6}\s+(.*)$", re.MULTILINE)
+# A markdown TABLE embedded the same way: a header row, then a separator row
+# ("| --- | --- |"). Converted to a plain, comma-joined line per row so the pipes never
+# show bare and out of place.
+_MD_TABLE_BLOCK = re.compile(
+    r"^[ \t]*\|(?P<header>.+)\|[ \t]*\r?\n"
+    r"^[ \t]*\|(?P<sep>[\s:|-]+)\|[ \t]*\r?\n"
+    r"(?P<body>(?:^[ \t]*\|.*\|[ \t]*\r?\n?)+)",
+    re.MULTILINE)
+
+
+def _cells(row: str) -> list[str]:
+    return [c.strip() for c in row.strip().strip("|").split("|")]
+
+
+def _md_table_to_prose(match: "re.Match") -> str:
+    rows = [_cells(match.group("header"))]
+    rows += [_cells(line) for line in match.group("body").splitlines() if line.strip()]
+    return "; ".join(" — ".join(c for c in row if c) for row in rows if any(row)) + "\n"
+
+
+def strip_forbidden_markdown(text: str) -> str:
+    """Neutralize the two block-level markdown shapes STRUCTURED_NARRATION forbids inside
+    a free-text field (heading lines, tables) into plain prose, so a narration that
+    breaks the rule still reads cleanly instead of showing raw "####"/"| a | b |" — see
+    the module-level note above. Inline emphasis (``**bold**``, ``_italic_``) is left
+    alone: it renders correctly through ``st.markdown`` wherever it sits."""
+    if not text:
+        return text
+    text = _MD_TABLE_BLOCK.sub(_md_table_to_prose, text)
+    return _MD_HEADING_LINE.sub(r"\1", text)
+
+
 def money_text(text: str) -> str:
     """One narration text field, with every money amount at or above a million rendered
     through the SHARED helper (MONEY-ABBREV-2).
@@ -220,9 +267,11 @@ def money_text(text: str) -> str:
     precision (``narration_prose`` is built from the UNABBREVIATED text)."""
     from .tools.price_context import abbreviate_money_in_text
 
-    # MOMENTUM-GLOSS-1 rides the same seam: one pass over model-written prose, applying
-    # display rules the narrator cannot be trusted to apply itself.
-    return gloss_momentum_in_text(abbreviate_money_in_text(text or "")[0])
+    # MOMENTUM-GLOSS-1 and item 2.1's forbidden-markdown strip ride the same seam: one
+    # pass over model-written prose, applying display rules the narrator cannot be
+    # trusted to apply itself.
+    cleaned = strip_forbidden_markdown(text or "")
+    return gloss_momentum_in_text(abbreviate_money_in_text(cleaned)[0])
 
 
 def money_title(text: str) -> str:

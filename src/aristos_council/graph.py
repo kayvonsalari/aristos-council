@@ -47,13 +47,15 @@ def build_council(
     sentiment_error: str = "",
     council_mode: str = "second_opinion",   # A/B toggle (B default); see prompts.py
     run_matrix: bool = True,                 # skip when a RANKER drives the pipeline
+    news_fallback_fetchers: dict | None = None,   # SENT-FALLBACK-1 — see make_gather_node
 ):
     g = StateGraph(ResearchState)
 
     g.add_node("gather",
                make_gather_node(adapter, strategy, sentiment_adapter,
                                 sentiment_missing_key=sentiment_missing_key,
-                                sentiment_error=sentiment_error))
+                                sentiment_error=sentiment_error,
+                                news_fallback_fetchers=news_fallback_fetchers))
     for who in SPECIALIST_ORDER:
         g.add_node(
             who.value,
