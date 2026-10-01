@@ -787,7 +787,8 @@ def test_find_a_company_notes_when_no_cohort_has_been_built(monkeypatch):
               for c in at.caption)
     options = next(sb for sb in at.selectbox if str(getattr(sb, "key", "")) == "cc_find_pick"
                   ).options
-    assert options == ["X Corp (X.US) — US — NYSE — $1.0bn"]      # no "— no cohort" suffix
+    # FIND-COMPANY-2: "where" names the country in full ("US" -> "United States").
+    assert options == ["X Corp (X.US) — United States — NYSE — $1.0bn"]   # no "— no cohort" suffix
 
 
 def test_the_run_tab_list_selector_offers_no_suggestion_ordering():

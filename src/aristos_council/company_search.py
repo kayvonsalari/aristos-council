@@ -48,8 +48,16 @@ class CompanyMatch:
 
     @property
     def where(self) -> str:
-        """"Germany — XETRA", or just the exchange when the index carries no country."""
-        return f"{self.country} — {self.exchange}" if self.country else (self.exchange or "—")
+        """"Germany — XETRA" names the country in full; the exchange is appended only when it
+        differs from the bare code the index stores for country (Taiwan's own exchange code
+        IS "TW", so that pair reads just "Taiwan", never "Taiwan — TW" — FIND-COMPANY-2 item
+        3). Just the exchange when the index carries no country at all."""
+        if not self.country:
+            return self.exchange or "—"
+        name = _COUNTRY_NAMES.get(self.country, self.country)
+        if not self.exchange or self.exchange == self.country:
+            return name
+        return f"{name} — {self.exchange}"
 
 
 @dataclass(frozen=True)
@@ -64,6 +72,64 @@ def _fold(text: str) -> str:
     decomposition, then the rest is case-folded."""
     normalized = unicodedata.normalize("NFKD", text or "")
     return "".join(ch for ch in normalized if not unicodedata.combining(ch)).casefold()
+
+
+# FIND-COMPANY-2 — common short names that are neither the company's own name nor its ticker,
+# so plain substring matching never finds them (e.g. "TSMC" appears in neither "Taiwan
+# Semiconductor Manufacturing Co. Ltd." nor "2330.TW"). Each alias maps to a fragment that DOES
+# appear in that company's name in the local index. Small and hand-picked, not a general
+# initials-matcher — the two tried (BMW, ASML, LVMH) already match by ticker or name substring,
+# so they are harmless rather than load-bearing here, but kept for when the index's naming
+# drifts (e.g. a legal-suffix change).
+_ALIASES: dict[str, str] = {
+    "tsmc": "taiwan semiconductor",
+    "vw": "volkswagen",
+    "bmw": "bayerische motoren werke",
+    "lvmh": "lvmh",
+    "asml": "asml",
+    "ge": "ge aerospace",
+    "j&j": "johnson & johnson",
+}
+
+# The 18 exchange-code countries MARKET-INDEX-1 covers (docs/MARKET_INDEX.md). The index
+# stores the bare ISO-ish code ("TW", "HK") as `country`, which is also often identical to
+# `exchange` for a single-exchange market — showing the raw code twice ("TW — TW") is FIND-
+# COMPANY-2 item 3. A code missing here (the index gains a 19th market) falls back to showing
+# itself, never a blank.
+_COUNTRY_NAMES: dict[str, str] = {
+    "AU": "Australia", "BR": "Brazil", "CA": "Canada", "CH": "Switzerland",
+    "DE": "Germany", "DK": "Denmark", "ES": "Spain", "FI": "Finland",
+    "FR": "France", "GB": "United Kingdom", "HK": "Hong Kong", "KR": "South Korea",
+    "NA": "Namibia", "NL": "Netherlands", "NO": "Norway", "SE": "Sweden",
+    "TW": "Taiwan", "US": "United States",
+}
+
+
+def _ticker_base(ticker: str) -> str:
+    """"2330.TW" -> "2330" — the exchange suffix stripped, so a ticker search ranks a company
+    by its OWN identity rather than by which exchange happened to list it."""
+    return ticker.rpartition(".")[0] or ticker
+
+
+def _ticker_rank(row, needle: str, alias_needle: Optional[str] = None) -> int:
+    """0 = exact ticker match ignoring the exchange suffix, OR a curated alias match (hand-
+    picked for exactly one company, so it is just as confident as an exact ticker — without
+    this, "VW" ranked a dozen tickers that merely CONTAIN the letters "vw" — VWS.CO (Vestas),
+    CVW.AU — ahead of the aliased Volkswagen itself, which sits at a different ticker, VOW.DE,
+    entirely); 1 = ticker starts with the query; 2 = ticker contains the query; 3 = matched by
+    plain name only. Checked against both the EODHD and Yahoo ticker forms, since the two
+    disagree on suffix style (``AAPL.US`` vs ``AAPL``)."""
+    if alias_needle and alias_needle in _fold(row.name):
+        return 0
+    ticker_f, yahoo_f = _fold(row.ticker), _fold(row.yahoo_ticker)
+    base_f, ybase_f = _fold(_ticker_base(row.ticker)), _fold(_ticker_base(row.yahoo_ticker))
+    if needle == base_f or needle == ybase_f:
+        return 0
+    if ticker_f.startswith(needle) or yahoo_f.startswith(needle):
+        return 1
+    if needle in ticker_f or needle in yahoo_f:
+        return 2
+    return 3
 
 
 # --------------------------------------------------------------------------- #
@@ -120,11 +186,14 @@ def _cohort_membership(cohorts_root=None) -> tuple[dict, bool]:
 
 def search_companies(query: str, *, limit: int = MAX_MATCHES, root=None,
                      cohorts_root=None, rows=None) -> SearchResult:
-    """Up to ``limit`` matches for ``query`` against a company's full name, EODHD ticker or
-    Yahoo ticker — case- and accent-insensitive substring matching, home listings first, then
-    by name. Empty/whitespace-only query -> no matches. Every call after the first reuses the
-    cached pool and cohort membership; neither is re-read. ``rows`` (tests only) injects a
-    fixed set of ``IndexRow`` directly, bypassing the local index file and its cache."""
+    """Up to ``limit`` matches for ``query`` against a company's full name, EODHD ticker,
+    Yahoo ticker or a small hand-picked alias (``_ALIASES``) — case- and accent-insensitive.
+    Ranked exact-ticker-ignoring-suffix first, then ticker-starts-with, then ticker-contains,
+    then name/alias matches; ties within a tier break by market cap, largest first (FIND-
+    COMPANY-2 item 2) — so the top result is always the one worth preselecting. Empty/
+    whitespace-only query -> no matches. Every call after the first reuses the cached pool and
+    cohort membership; neither is re-read. ``rows`` (tests only) injects a fixed set of
+    ``IndexRow`` directly, bypassing the local index file and its cache."""
     from .market_index import is_home_listing
 
     needle = _fold(query.strip())
@@ -132,10 +201,13 @@ def search_companies(query: str, *, limit: int = MAX_MATCHES, root=None,
         return SearchResult(matches=(), cohorts_known=True)
     pool = _clean_pool(root, rows=rows)
     membership, any_built = _cohort_membership(cohorts_root)
+    alias_needle = _ALIASES.get(needle)
     hits = [row for row in pool.rows
            if needle in _fold(row.name) or needle in _fold(row.ticker)
-           or needle in _fold(row.yahoo_ticker)]
-    hits.sort(key=lambda r: (not is_home_listing(r), _fold(r.name)))
+           or needle in _fold(row.yahoo_ticker)
+           or (alias_needle and alias_needle in _fold(row.name))]
+    hits.sort(key=lambda r: (_ticker_rank(r, needle, alias_needle),
+                             -(r.market_cap_usd or 0.0), _fold(r.name)))
     matches = tuple(
         CompanyMatch(ticker=row.ticker, name=row.name, exchange=row.exchange,
                     market=row.market, country=row.country,
