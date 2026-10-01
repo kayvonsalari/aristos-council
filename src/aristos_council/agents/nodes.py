@@ -104,7 +104,7 @@ def _screen_criteria(state: ResearchState) -> list:
 def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                      sentiment_adapter: SentimentAdapter | None = None,
                      *, sentiment_missing_key: bool = False,
-                     sentiment_error: str = ""):
+                     sentiment_error: str = "", news_fallback_fetchers: dict | None = None):
     def gather(state: ResearchState) -> ResearchState:
         today = date.today()
         lookback_start = today - timedelta(days=400)   # enough for SMA200
@@ -289,9 +289,10 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
         # Sentiment specialist finds nothing and abstains (pre-Finnhub
         # behaviour, preserved exactly). With one, two provider calls plus a
         # deterministic aggregation land in the ledger like everything else.
+        news_start = today - timedelta(days=14)
+        news: Optional[list] = None
+        trends = None
         if sentiment_adapter is not None:
-            news_start = today - timedelta(days=14)
-
             def _fetch_news_capped():
                 # High-coverage tickers (NVDA: 300+ items/fortnight) made the
                 # evidence block — and therefore EVERY agent prompt — grow
@@ -326,17 +327,80 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                 ),
                 source="sentiment",
             )
-            if news is not None or trends is not None:
-                snap = sentiment_snapshot(news or [], trends or [])  # full list: count stays truthful
-                state.tool_calls.append(
-                    ToolCall(
-                        call_id=_new_call_id(),
-                        tool_name="sentiment_snapshot",
-                        inputs={"ticker": state.ticker,
-                                "news_window_days": 14},
-                        output=asdict(snap),
-                    )
+
+        # SENT-FALLBACK-1 — Finnhub is US-only on this plan (FINNHUB-SKIP-1); without a
+        # fallback the Sentiment specialist abstained on EVERY non-US name no matter how
+        # much real news existed elsewhere. Tried only when Finnhub was ACTUALLY WIRED
+        # and its OWN call came back with nothing (a skipped non-US symbol, or a
+        # genuinely quiet window) — a Finnhub success is never second-guessed, and a run
+        # with NO sentiment adapter configured at all (most tests; "pre-Finnhub
+        # behaviour", the comment above) tries nothing further, exactly as before — EODHD
+        # has no news without a key either way, and yfinance needs none, so without this
+        # gate every such test would reach for a live yfinance call by default.
+        if sentiment_adapter is not None and not news:
+            from ..data.news_fallback import gather_news_with_fallback
+
+            def _no_call(*_a, **_k):
+                # TEST-ISOLATION-1: a caller that builds this node directly (every test
+                # that does NOT thread `news_fallback_fetchers` through — the overwhelming
+                # majority) must NEVER reach the real network just because it left this
+                # optional fallback unconfigured. Only `graph.build_council` (the real
+                # production path) passes the REAL fetchers explicitly, below.
+                return [], "no fallback source configured for this run"
+
+            fetchers = news_fallback_fetchers or {}
+            eodhd_fetcher = fetchers.get("eodhd_fetcher", _no_call)
+            yfinance_fetcher = fetchers.get("yfinance_fetcher", _no_call)
+            skipped = [tc for tc in state.tool_calls
+                      if tc.tool_name == "get_company_news" and not tc.ok]
+            finnhub_reason = skipped[-1].error if skipped else "no items in the window"
+            fb = gather_news_with_fallback(
+                state.ticker, start=news_start, end=today, finnhub_items=news or [],
+                finnhub_reason=finnhub_reason,
+                eodhd_fetcher=eodhd_fetcher, yfinance_fetcher=yfinance_fetcher)
+            state.tool_calls.append(
+                ToolCall(
+                    call_id=_new_call_id(), tool_name="get_company_news_fallback",
+                    inputs={"ticker": state.ticker, "tried": list(fb.tried)},
+                    output=({"source": fb.source,
+                            "items": [asdict(n) for n in fb.items]} if fb.available else None),
+                    ok=fb.available,
+                    error="" if fb.available else "; ".join(fb.tried),
                 )
+            )
+            if fb.available:
+                news = list(fb.items)
+
+        # COUNCIL-OPINION-2 item 1a — the report's OWN, already-fetched EODHD analyst
+        # block (counts, target, EPS revisions), logged into the Sentiment specialist's
+        # channel so "no Finnhub recommendation trend" does not mean "no analyst view
+        # exists" when Company Check's own page shows one three sections down. A re-fetch
+        # would double the EODHD charge for the SAME figures within one run; this is the
+        # SAME data `_company_facts_block` (above) hands the other agents, logged here a
+        # second time ONLY so the channel-scoped Sentiment specialist (which cannot see
+        # that block — SENT-ISOLATE-1) can see it too.
+        analyst = (state.company_facts_block or {}).get("analyst")
+        if analyst is not None:
+            state.tool_calls.append(
+                ToolCall(
+                    call_id=_new_call_id(), tool_name="analyst_block",
+                    inputs={"ticker": state.ticker}, output=analyst,
+                    ok=bool(analyst.get("available")),
+                    error="" if analyst.get("available") else analyst.get("source_note", ""),
+                )
+            )
+
+        if news is not None or trends is not None:
+            snap = sentiment_snapshot(news or [], trends or [])  # full list: count stays truthful
+            state.tool_calls.append(
+                ToolCall(
+                    call_id=_new_call_id(),
+                    tool_name="sentiment_snapshot",
+                    inputs={"ticker": state.ticker,
+                            "news_window_days": 14},
+                    output=asdict(snap),
+                )
+            )
         return state
 
     return gather
@@ -519,7 +583,11 @@ def _display_map(output, currency: str | None,
 # nobody has reported a problem with. Declared here rather than assumed, so widening the
 # map later is a one-line change with a test to match.
 SPECIALIST_CHANNELS: dict[str, tuple[str, ...]] = {
-    "sentiment": ("get_company_news", "get_recommendation_trends", "sentiment_snapshot"),
+    # SENT-FALLBACK-1: get_company_news_fallback (EODHD/yfinance news, item 1b) and
+    # analyst_block (the report's own EODHD analyst data, item 1a) widen the channel so
+    # "not assessed" fires only when ALL of these are empty (item 1c), not just Finnhub.
+    "sentiment": ("get_company_news", "get_company_news_fallback", "get_recommendation_trends",
+                 "analyst_block", "sentiment_snapshot"),
 }
 
 
@@ -711,7 +779,42 @@ def _ranker_block(state: ResearchState) -> str:
                   f"rank table.")
     return (f"\nRANKER VERDICT (the deterministic verdict-of-record for this name): "
             f"{state.ranker_verdict.value.upper()}{expl}{legend}"
-            f"{_boundary_tie_block(state)}{_agreement_block(state) + _cross_lens_block(state)}\n")
+            f"{_boundary_tie_block(state)}{_agreement_block(state) + _cross_lens_block(state)}"
+            f"{_company_facts_block(state)}\n")
+
+
+def _company_facts_block(state) -> str:
+    """COUNCIL-OPINION-2 items 1a/2.3/2.6 — facts the Company Check page already shows that
+    this run's OWN fresh ``gather`` call never surfaced: absolute readings (debt/cash,
+    growth), the EODHD analyst block, and the peer table's OWN market cap for this company
+    (a different day's snapshot than whatever ``get_fundamentals`` below just fetched — two
+    true numbers that merely disagree on date, stated here with ITS date so nothing is
+    quoted as if it were today's). Empty on a standalone council run."""
+    facts = getattr(state, "company_facts_block", None) or {}
+    if not facts:
+        return ""
+    lines = []
+    if facts.get("market_cap"):
+        mc = facts["market_cap"]
+        lines.append(f"  - Market cap, index snapshot {mc.get('as_of') or 'n/a'} (this is "
+                     f"what the peer table above quotes — use THIS figure for market cap/"
+                     f"size, not get_fundamentals' own market_cap below, which was fetched "
+                     f"on a different day and will read slightly differently): "
+                     f"{mc.get('local', '')} local / {mc.get('usd', '')}")
+    for line in facts.get("absolute_readings") or []:
+        lines.append(f"  - {line}")
+    analyst = facts.get("analyst")
+    if analyst:
+        tag = f" ({analyst.get('source_note', '')})" if analyst.get("source_note") else ""
+        if analyst.get("available"):
+            lines.append(f"  - Analyst block{tag}:")
+            lines += [f"      {ln}" for ln in analyst.get("lines") or []]
+        else:
+            lines.append(f"  - Analyst block: not available{tag}")
+    if not lines:
+        return ""
+    return ("\nCOMPANY FACTS ALREADY ON THE PAGE (cite these; do NOT raise an open question "
+            "asking for a figure already stated here):\n" + "\n".join(lines))
 
 
 def _cross_lens_block(state: ResearchState) -> str:

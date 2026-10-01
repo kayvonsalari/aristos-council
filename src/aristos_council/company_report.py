@@ -332,6 +332,43 @@ def _council_cross_lens_verdicts(votes: list[LensVote]) -> list[dict]:
             "status": v.status, "verdict": v.verdict} for v in votes]
 
 
+def _council_company_facts(report: CompanyReport) -> dict:
+    """COUNCIL-OPINION-2 items 1a/2.3/2.6 — the facts the Company Check page already shows
+    that the council's own fresh ``gather`` call never surfaced. Never raises: an absent
+    reading/trend/peer-group is simply left out of the pack, not a broken run."""
+    from .tools.price_context import format_money
+
+    check = report.check
+    facts: dict = {}
+
+    lines: list[str] = []
+    debt, growth = getattr(check, "debt_and_cash", None), getattr(check, "growth_record", None)
+    if debt is not None:
+        lines += list(debt.lines())
+    if growth is not None:
+        lines += list(growth.lines())
+    if lines:
+        facts["absolute_readings"] = lines
+
+    trend = getattr(check, "analyst_trend", None)
+    if trend is not None and trend.available:
+        facts["analyst"] = {"available": True, "lines": list(trend.lines()),
+                            "source_note": trend.tag()}
+    elif trend is not None:
+        facts["analyst"] = {"available": False, "lines": [], "source_note": trend.headline}
+
+    group = report.check.peer_group
+    subject = getattr(group, "subject", None) if group is not None else None
+    if subject is not None:
+        facts["market_cap"] = {
+            "local": format_money(subject.market_cap, getattr(subject, "currency", "") or "",
+                                  abbreviate=True),
+            "usd": format_money(subject.market_cap_usd, "USD", abbreviate=True),
+            "as_of": getattr(group, "snapshot", "") or "",
+        }
+    return facts
+
+
 def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
                         today: Optional[date] = None) -> CouncilOpinion:
     """COUNCIL-OPINION-1 — the ONE other model feature this module offers (with the plain-
@@ -379,18 +416,23 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
     frame = _company_check_frame(report)
     cross_lens = _council_cross_lens_verdicts(report.votes)
     agreement_row = _council_agreement_row(report.agreement)
+    company_facts = _council_company_facts(report)
 
     meter, mark = _cost_mark(runners)
     try:
+        from .data.news_fallback import fetch_eodhd_news, fetch_yfinance_news
         app = build_council(adapter, frame, runners, council_mode="narrator",
                             sentiment_adapter=sentiment_adapter,
                             sentiment_missing_key=sentiment_missing_key,
-                            sentiment_error=sentiment_error, run_matrix=False)
+                            sentiment_error=sentiment_error, run_matrix=False,
+                            news_fallback_fetchers={"eodhd_fetcher": fetch_eodhd_news,
+                                                   "yfinance_fetcher": fetch_yfinance_news})
         state = ResearchState.model_validate(app.invoke(ResearchState(
             ticker=report.ticker, strategy_id=frame.id,
             ranker_verdict=Recommendation(lead.verdict), ranker_explanation=lead.result(),
             ranker_cohort_size=lead.cohort_size,
-            cross_lens_verdicts=cross_lens, agreement_row=agreement_row)))
+            cross_lens_verdicts=cross_lens, agreement_row=agreement_row,
+            company_facts_block=company_facts)))
     except Exception as exc:                              # noqa: BLE001 - reported, never raised
         cost = _cost_meta(meter, mark)
         return CouncilOpinion(

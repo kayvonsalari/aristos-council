@@ -671,8 +671,15 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
                   "represents. Lower is safer, and a company holding more cash than debt "
                   "shows a negative figure."),
         unit="multiple", source_fn=_net_debt_to_oi_source),
+    # COUNCIL-OPINION-2 item 2.4 — the window AND the source are now both in the label.
+    # Live confusion (RIO.AX): this factor's 3-year, yfinance-sourced CAGR (+1.0%/yr) read
+    # as contradicting Company Check's absolute-readings growth record (+6.0%/yr over 5
+    # years, EODHD) — two true, differently-scoped numbers that looked like one wrong one.
+    # ``label`` reaches every specialist/critic/narrator prompt (see the note above), so
+    # this one edit is what lets a narration finally say WHY the two figures differ,
+    # instead of just stating the smaller one unqualified.
     "revenue_growth": FactorDef(
-        "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3y)",
+        "revenue_growth", _revenue_growth, "high", "Revenue CAGR (3-yr, yfinance)",
         glossary="Average yearly sales growth over the measured period.",
         unit="percent"),
     "dividend_streak": FactorDef(

@@ -1645,15 +1645,25 @@ def _link_groups_by_name(groups: list) -> list:
     return list(merged.values())
 
 
-def _listing_rank(row: "IndexRow") -> tuple:
+def _listing_rank(row: "IndexRow", *, home_first: bool = False) -> tuple:
     """Which row of a company is the one to keep. Lower is better.
 
     A DEPOSITARY RECEIPT (a name that says ADR / ADS / GDR / depositary) ranks below any ordinary
-    line of the same company, whatever else is true of it. COHORT-3 found SAP: ``SAP.US`` names
-    its own home in PrimaryTicker (an ADR that calls itself home), ``SAP.XETRA`` names a venue the
-    index does not track, so they tied on home and country and the ticker tiebreak
-    (``SAP.US`` < ``SAP.XETRA``) seated the ADR. The receipt is a claim on the shares, not the
-    shares.
+    line of the same company, whatever else is true of it. COHORT-3 found SAP: ``SAP.US`` names a
+    venue this index does not track (Frankfurt) as its home, ``SAP.XETRA`` does too — neither
+    SELF-declares as home, so they tie on that and on country, and the receipt tier alone (not
+    the old ticker tiebreak) now seats the ordinary ``SAP.XETRA`` line. The receipt is a claim on
+    the shares, not the shares.
+
+    ``home_first`` (PEER-HOME-EXCLUDED-1): the company_pool caller sets this
+    for a group where NO candidate is both ordinary and self-declared home — typically because the
+    true home listing's market is excluded from peers altogether (``peer_exclude_markets: [SA]``:
+    Vale's own ``VALE3.SA`` never reaches this group at all). Choosing receipt-first among what is
+    left seated Vale's non-home Madrid cross-listing (``XVALO.MC``, a thin, barely-covered line)
+    over its own US ADR (``VALE.US``, which DOES self-declare home, is 100x more liquid, and is
+    what analysts and the rest of this report actually cover) — worse on every count except not
+    being named ADR. Checked ONLY when the ordinary-home tier is already empty in this group, so a
+    normal company (home present, receipt absent) is byte-unchanged.
     """
     receipt = 1 if _DEPOSITARY_ROW.search(row.name or "") else 0
     home = 0 if is_home_listing(row) else 1
@@ -1662,7 +1672,17 @@ def _listing_rank(row: "IndexRow") -> tuple:
     country_match = 1
     if row.country and row.isin and len(row.isin) >= 2:
         country_match = 0 if row.isin[:2].upper() == row.country.strip().upper() else 1
-    return (receipt, home, country_match, normalise_symbol(row.ticker))
+    tiebreak = (country_match, normalise_symbol(row.ticker))
+    return (home, receipt, *tiebreak) if home_first else (receipt, home, *tiebreak)
+
+
+def _group_has_ordinary_home(group) -> bool:
+    """True when at least one row in this GROUP already satisfies BOTH "not a receipt" and
+    "self-declares home" — the case the receipt-first rule exists to protect (never let an ADR
+    stand in when a genuine, available ordinary home line exists). False means the true home
+    listing is simply absent from this group (its market excluded, or no row self-declares),
+    so ``_listing_rank(home_first=True)`` picks the best of what is actually here instead."""
+    return any(not _DEPOSITARY_ROW.search(r.name or "") and is_home_listing(r) for r in group)
 
 
 def company_pool(rows, *, link_by_name: bool = False) -> tuple[list, int, dict]:
@@ -1673,7 +1693,12 @@ def company_pool(rows, *, link_by_name: bool = False) -> tuple[list, int, dict]:
     dropped = 0
     absorbed: dict[str, str] = {}
     for group in company_groups(rows, link_by_name=link_by_name):
-        group.sort(key=_listing_rank)
+        # PEER-HOME-EXCLUDED-1 — see _listing_rank: only when this group has NO ordinary,
+        # self-declared-home candidate at all (the true home line is absent, typically its
+        # market is excluded) does a self-declaring receipt outrank a merely-ordinary,
+        # non-home line. Byte-unchanged for every group whose true home survived.
+        home_first = not _group_has_ordinary_home(group)
+        group.sort(key=lambda r: _listing_rank(r, home_first=home_first))
         kept.append(group[0])
         dropped += len(group) - 1
         for other in group[1:]:

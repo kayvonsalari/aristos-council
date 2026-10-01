@@ -56,6 +56,17 @@ def test_every_registered_criterion_declares_a_glossary(name):
     assert len(gloss.split()) >= 5, f"criterion {name}'s definition is too terse"
 
 
+def test_the_growth_lenss_revenue_factor_label_states_its_window_and_source():
+    """COUNCIL-OPINION-2 item 2.4 — live confusion (RIO.AX): this factor's own 3-year,
+    yfinance-sourced CAGR read as contradicting Company Check's absolute-readings growth
+    record (a different window, EODHD) because neither figure said what it was measuring.
+    The label is load-bearing in every specialist/critic/narrator prompt (see factors.py's
+    own note), so this one string is what lets a narration say why the two differ."""
+    label = FACTOR_REGISTRY["revenue_growth"].label
+    assert "3-yr" in label or "3y" in label.replace(" ", "")
+    assert "yfinance" in label
+
+
 # --------------------------------------------------------------------------- #
 # 2. THE SECTION HOLDS ONLY WHAT THE REPORT USED
 # --------------------------------------------------------------------------- #

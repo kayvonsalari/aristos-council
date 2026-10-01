@@ -940,6 +940,41 @@ def test_a_successful_council_opinion_writes_without_voting(tmp_path):
                                                          ).headline
 
 
+def test_council_company_facts_carries_absolute_readings_and_the_peer_table_market_cap(tmp_path):
+    """COUNCIL-OPINION-2 items 2.3/2.6 — the council's own evidence pack is built from
+    what the PAGE already shows (debt/cash, growth record, the peer table's own, dated
+    market cap), so it never has to ask for net debt the page already states, and never
+    quotes a market cap from a different day than the one beside it."""
+    from aristos_council.company_report import _council_company_facts
+
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    facts = _council_company_facts(report)
+    assert facts["absolute_readings"]                           # debt/cash + growth lines
+    assert any("debt" in ln.lower() or "cash" in ln.lower() for ln in facts["absolute_readings"])
+    assert "market_cap" in facts
+    assert facts["market_cap"]["as_of"] == report.check.peer_group.snapshot
+    assert facts["market_cap"]["usd"]                            # non-empty formatted string
+    # no EODHD key in this test env -> analyst is present but unavailable, with a reason
+    assert facts["analyst"]["available"] is False and facts["analyst"]["source_note"]
+
+
+def test_the_company_facts_block_instructs_citing_the_dated_market_cap_over_fundamentals():
+    from aristos_council.agents.nodes import _company_facts_block
+    from aristos_council.state import ResearchState
+
+    state = ResearchState(ticker="CO", strategy_id=RAW, company_facts_block={
+        "market_cap": {"local": "A$272.4bn", "usd": "$193.9bn", "as_of": "2026-09-25"},
+        "absolute_readings": ["owes $13.3bn net of cash"],
+        "analyst": {"available": True, "lines": ["8 analysts: 3 strong buy"],
+                   "source_note": "EODHD via RIO.US"},
+    })
+    block = _company_facts_block(state)
+    assert "2026-09-25" in block and "A$272.4bn" in block and "$193.9bn" in block
+    assert "not get_fundamentals' own market_cap" in block
+    assert "owes $13.3bn net of cash" in block
+    assert "EODHD via RIO.US" in block and "8 analysts: 3 strong buy" in block
+
+
 def test_run_company_report_with_council_attaches_the_opinion_and_saves_it(tmp_path):
     from aristos_council.company_report import report_record
 

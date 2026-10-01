@@ -695,6 +695,50 @@ def test_the_default_cohort_pool_excludes_sao_paulo_up_front(monkeypatch):
 
 
 # =========================================================================== #
+# 11b. PEER-HOME-EXCLUDED-1 — Batch 12 item 2.5: when Sao Paulo is excluded from PEERS (not
+# just cohorts) and the company has a THIRD, ordinary-but-not-home line elsewhere, that line
+# must not beat the company's own self-declaring US ADR. Live bug: Rio Tinto's peer group
+# showed Vale as its thin Madrid cross-listing XVALO.MC (not even home, not even liquid)
+# instead of VALE.US (self-declares home, and is what the rest of the report's analyst data
+# covers). _vale_shaped's two-row fixture above cannot catch this — it has nothing for the
+# ADR to lose to once Sao Paulo is dropped (a group of one trivially keeps its seat).
+# =========================================================================== #
+def _vale_three_way():
+    """The real shape (probed 2026-10-01): VALE3.SA (home, Sao Paulo), VALE.US (self-declaring
+    ADR — ``PrimaryTicker`` names ITSELF, unlike the plainer ``_vale_shaped`` fixture above),
+    and XVALO.MC (an ordinary Madrid cross-listing that names VALE3.SA as home, so it is
+    neither a receipt NOR self-home — worse than the ADR on both axes once Sao Paulo is gone)."""
+    home = _row("VALE3.SA", "Vale S.A.", industry="Other Industrial Metals & Mining",
+               market="SA", currency="BRL", primary="VALE3.SA", isin="BRVALEACNOR0", cap_bn=58.9)
+    adr = _row("VALE.US", "Vale SA ADR", industry="Other Industrial Metals & Mining",
+              primary="VALE.US", isin="US91912E1055", cap_bn=60.5)   # self-declares home
+    madrid = _row("XVALO.MC", "Vale S.A.", industry="Other Industrial Metals & Mining",
+                 market="MC", currency="EUR", primary="VALE3.SA", isin="ES0105046009",
+                 cap_bn=60.0)                                        # names VALE3.SA as home
+    return home, adr, madrid
+
+
+def test_a_self_declaring_adr_beats_a_non_home_cross_listing_once_home_is_excluded():
+    home, adr, madrid = _vale_three_way()
+    # the plain pool (no exclusion) seats the real home line, as always
+    assert [r.ticker for r in clean_pool([home, adr, madrid]).rows] == ["VALE3.SA"]
+    # Sao Paulo excluded (peers' OWN peer_exclude_markets, not just the cohort path) —
+    # the self-declaring ADR wins, not the merely-ordinary, non-home Madrid line
+    excluded_pool = clean_pool([home, adr, madrid], exclude_markets=("SA",))
+    assert [r.ticker for r in excluded_pool.rows] == ["VALE.US"]
+
+
+def test_the_same_fallback_applies_through_peers_own_exclusion_setting():
+    home, adr, madrid = _vale_three_way()
+    rivals = [_row(f"RIV{i:02d}.US", f"Rival {i}", industry="Other Industrial Metals & Mining",
+                  cap_bn=50.0 + i) for i in range(12)]
+    group = peers("RIV00.US", rows=[home, adr, madrid, *rivals], exclude_markets=("SA",))
+    tickers = [m.ticker for m in group.members]
+    assert "VALE.US" in tickers
+    assert "XVALO.MC" not in tickers and "VALE3.SA" not in tickers
+
+
+# =========================================================================== #
 # 12. the local watch overlay: personal, never in the tracked file
 # =========================================================================== #
 from aristos_council.cohorts.definitions import (apply_watch_overlay,  # noqa: E402

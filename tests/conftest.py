@@ -29,6 +29,7 @@ import os
 import pytest
 
 from aristos_council import pipeline as _pipeline
+from aristos_council.data import news_fallback as _news_fallback
 from aristos_council.data import provider as _provider
 from aristos_council.data import sentiment as _sentiment
 from aristos_council.gap_ledger import bars as _gap_bars
@@ -115,6 +116,14 @@ def _sentiment_guard(real):
 #     Gateway that can PLACE ORDERS. Guarded on construction exactly like ``IBKRBars`` —
 #     a test that wants the real class (even with a fake ``ib`` injected) opts in with
 #     ``@pytest.mark.real_adapter``, same convention, no exceptions for "but it's paper".
+#   * ``data.news_fallback.real_url_opener`` / ``real_yfinance_news`` — SENT-FALLBACK-1's
+#     EODHD-news and yfinance-news fallback. Each fetcher takes an injectable
+#     ``opener``/``fetcher`` and falls back to these TWO factories only when none is
+#     given — which is every test's own call, except the many tests across the suite that
+#     reach ``agents.nodes.gather()`` indirectly (through the rank pipeline, the council
+#     graph, Company Check) WITHOUT configuring sentiment at all. Those used to abstain
+#     for "no sentiment adapter" with no network reached; guarding here is what keeps that
+#     true now that an unconfigured sentiment channel also tries these two as a fallback.
 _TARGETS = (
     (_pipeline, "_build_adapter",
      lambda real: _guard("pipeline._build_adapter", real)),
@@ -130,6 +139,10 @@ _TARGETS = (
      lambda real: _guard("gap_ledger.ibkr.IBKRBars", real)),
     (_paper_ibkr, "PaperIBKR",
      lambda real: _guard("paper_trade.ibkr_paper.PaperIBKR", real)),
+    (_news_fallback, "real_url_opener",
+     lambda real: _guard("data.news_fallback.real_url_opener", real)),
+    (_news_fallback, "real_yfinance_news",
+     lambda real: _guard("data.news_fallback.real_yfinance_news", real)),
 )
 
 
