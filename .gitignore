@@ -52,3 +52,8 @@ data/local/market_index/
 # its daily-bar cache. Machine-written local data, rebuildable by re-running the screen,
 # and a log of what was looked at on which morning. See docs/GAP_LEDGER.md.
 data/local/gap_ledger/
+
+# PAPER-TRADE-1 — the paper-trading tool's own local record: one CSV + two JSON state
+# files per trading day, and the kill-switch STOP file. Machine-written, local, never
+# personal (ticker picks and prices only, same convention as Gap Ledger's own record).
+data/local/paper_trade/
