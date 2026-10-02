@@ -317,6 +317,14 @@ class Round:
     # the liquidity guard this round (0 whenever the guard did not apply - the default $5bn+ floor,
     # or min_cap_usd not given). Reported, never silent: n_eligible already EXCLUDES these.
     n_illiquid: int = 0
+    # SIZE-FLOOR-2 item 2d — share of n_eligible whose as-of Fundamentals carried ANY dated
+    # accounts at all (non-empty period_ends — the opposite of AsOfAdapter._abstain's
+    # identity-only shell). A data-coverage fact about the NAMES this round, independent of
+    # which lens is running: 1.0 means every eligible name had SOMETHING to screen/rank on;
+    # well below it is the as-of accounts gap the SIZE-FLOOR-1/2 bug reports found, made
+    # visible per round rather than inferred from a lens's own n_ranked. None when there was
+    # no cap data to determine eligibility at all (member_caps empty).
+    accounts_coverage: Optional[float] = None
 
     @property
     def has_position(self) -> bool:
@@ -378,6 +386,12 @@ class BacktestResult:
     min_cap_usd: Optional[float] = None
     min_adv_usd: Optional[float] = None
     total_illiquid: int = 0
+    # SIZE-FLOOR-2 item 2a — True when min_cap_usd was asked for BELOW the cohort's own
+    # as-of membership floor (size_floor, above): never run (rounds stays empty), because
+    # the cohort's own as-of eligibility — unchanged by this item, see min_cap_usd's own
+    # docstring — would already have excluded every name a lower lens gate could admit.
+    # "Below cohort floor" is a fact to report, not a result to compute.
+    below_cohort_floor: bool = False
     # BACKTEST-1C — the random-basket luck baseline. These three cannot be recomputed from
     # ``rounds`` alone (only each round's MEAN random excess is persisted, not the underlying
     # draws), so they are set ONCE by run_lens_backtest and carried as plain fields, read straight
@@ -786,14 +800,36 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
         members, version, member_caps = load_cohort_members(cohort, cohorts_root)
     members = list(members)
     member_caps = dict(member_caps) if member_caps else {}
-    if min_cap_usd is not None:
-        # SIZE-FLOOR-1 — the override REPLACES the file-declared floor outright (never blended
-        # with it), so "what if it were $1bn" is answered with exactly $1bn, not the lesser of
-        # the two. Still requires member_caps to scale by (same as-of mechanism, step 1).
-        size_floor, size_floor_note = float(min_cap_usd), "run override (min_cap_usd)"
-    else:
-        size_floor, size_floor_note = (_size_floor(cohort, cohorts_root, version, member_caps)
-                                       if member_caps else (None, ""))
+    # SIZE-FLOOR-2 item 2b — size_floor is ALWAYS the cohort's own as-of membership floor
+    # now, never overridden: that is what the COMMITTED/default run (min_cap_usd=None) has
+    # always applied in eligible_at, and it is what every named cohort's own definition.yaml
+    # sets (a COHORT-3 size-TIER value — $1-10bn by industry crowding — which is NOT the
+    # lens's own $5bn gate; see cohort_native_floor). SIZE-FLOOR-1 blended the two into one
+    # number, which is exactly why its grid's $5bn row never reproduced SUMMARY.csv for any
+    # of the five named cohorts (none carries a $5bn membership floor) and, per the
+    # SIZE-FLOOR-2 bug report, is the most likely reason growth_garp_v2's screen read
+    # universally blind on the grid path: eligibility was admitting a DIFFERENT population
+    # (by floor value, hence by as-of accounts depth) than the lens's own file-declared gate
+    # ever ranked under the committed/default run. min_cap_usd now moves ONLY the lens's own
+    # gate (min_market_cap_override below) — membership eligibility is untouched by it.
+    size_floor, size_floor_note = (_size_floor(cohort, cohorts_root, version, member_caps)
+                                   if member_caps else (None, ""))
+    # A lens gate BELOW the cohort's own membership floor can never admit a name membership
+    # itself already excludes — not a stricter-or-looser experiment, just a no-op dressed up
+    # as one. Reported, never silently run as if it measured something (item 2a).
+    if min_cap_usd is not None and size_floor is not None and min_cap_usd < size_floor:
+        result = BacktestResult(cohort=cohort, lens_id=lens_id, start=start, end=end,
+                                hold_months=hold_months, step_months=step_months,
+                                cost_bps=float(cost_bps), lag_days=lag_days,
+                                cohort_version=version, n_members=len(members),
+                                size_floor=size_floor, size_floor_note=size_floor_note,
+                                lens_commit=lens_commit(lens_id, strategies_dir),
+                                min_cap_usd=min_cap_usd, below_cohort_floor=True)
+        result.caveats = [
+            f"min_cap_usd (${min_cap_usd:,.0f}) is below this cohort's own as-of membership "
+            f"floor (${size_floor:,.0f}, {size_floor_note}) — no round was run. A lens gate "
+            "this low could never admit a name membership eligibility already excludes."]
+        return result
     liquidity_guard_on = min_cap_usd is not None and min_cap_usd < 5e9
     dates = round_dates(start, end, hold_months, step_months)
     result = BacktestResult(cohort=cohort, lens_id=lens_id, start=start, end=end,
@@ -876,11 +912,40 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
         exit_date = add_months(d, hold_months)
         eligible, n_illiquid = eligible_at(d)
         total_illiquid += n_illiquid
-        ranked = run_rank_pipeline(
-            eligible, lens_id, ranker_only=True, adapter=AsOfAdapter(memo, d, lag_days), today=d,
+        asof = AsOfAdapter(memo, d, lag_days)
+        # SIZE-FLOOR-2 item 2d — a data-coverage fact about ELIGIBLE NAMES this round, not
+        # about any one lens: non-empty period_ends means AsOfAdapter served real dated
+        # accounts, not its identity-only abstain shell (_abstain, asof_adapter.py). Cheap —
+        # MemoAdapter already has the raw fetch cached; this only re-runs the as-of cut.
+        accounts_coverage = (sum(1 for t in eligible if asof.get_fundamentals(t).period_ends)
+                             / len(eligible)) if eligible else None
+        pipeline_result = run_rank_pipeline(
+            eligible, lens_id, ranker_only=True, adapter=asof, today=d,
             use_cache=True, strategies_dir=strategies_dir,
-            min_market_cap_override=min_cap_usd).ranked
-        live = [r for r in ranked if not r.excluded]
+            min_market_cap_override=min_cap_usd)
+        ranked = pipeline_result.ranked
+        # SIZE-FLOOR-2 item 1b — a name whose SCREEN could not evaluate a single criterion
+        # (every one abstained — not one confirmed pass or fail) is NOT ranked by this lens
+        # this round, matching the app's own "does not apply" convention (a screen with
+        # nothing to say about a name is not the same as a screen that cleared it). Without
+        # this, such a name still reaches factor ranking, where a missing factor is imputed
+        # (missing: worst) rather than the name being left out — silently turning "the
+        # screen had no data" into "the screen passed it". getattr(..., None) or {} keeps
+        # every fixture using _stub_pipeline (a fake with no screen_outcomes at all)
+        # byte-unchanged: an empty dict excludes no one, exactly as before this item.
+        outcomes = getattr(pipeline_result, "screen_outcomes", None) or {}
+        screen_blind = set()
+        for r in ranked:
+            # min_market_cap is excluded from "every criterion abstained": it is a trivial
+            # gate (market cap is almost never missing) already enforced separately as the
+            # rank strategy's own direct cap gate (above, before the screen even runs) — its
+            # own confirmed pass/fail says nothing about whether the SCREEN had anything
+            # substantive to say about this name, which is what this check is for.
+            substantive = {name: o for name, o in (outcomes.get(r.ticker) or {}).items()
+                          if name != "min_market_cap"}
+            if substantive and all(o.get("passed") is None for o in substantive.values()):
+                screen_blind.add(r.ticker)
+        live = [r for r in ranked if not r.excluded and r.ticker not in screen_blind]
         buys = sorted(r.ticker for r in live if r.verdict == "buy")
         # BACKTEST-1D — a fact about the LENS's own basket sequence, measured every round whether
         # or not it counts as positioned (rule 1): all new on the very first round.
@@ -944,11 +1009,11 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                                        tuple(t for t, _ in held), exit_date, len(live),
                                        n_eligible=len(eligible), excess_drop_best=drop_best,
                                        random_mean_excess=random_mean_excess, n_new=n_new,
-                                       n_illiquid=n_illiquid))
+                                       n_illiquid=n_illiquid, accounts_coverage=accounts_coverage))
         else:
             result.rounds.append(Round(d, len(buys), None, bench_ret, None, (), exit_date,
                                        len(live), n_eligible=len(eligible), n_new=n_new,
-                                       n_illiquid=n_illiquid))
+                                       n_illiquid=n_illiquid, accounts_coverage=accounts_coverage))
         if progress is not None:
             last = result.rounds[-1]
             illiquid_note = f", {n_illiquid} illiquid" if liquidity_guard_on else ""
@@ -1151,8 +1216,8 @@ def _caveats(result: BacktestResult, unpriced: int, undersized_rounds: int = 0) 
 # the file
 # --------------------------------------------------------------------------- #
 _ROUND_COLUMNS = ("date", "exit_date", "n_eligible", "n_ranked", "n_buys", "n_new", "n_illiquid",
-                  "buy_return", "bench_return", "excess", "excess_drop_best", "random_mean_excess",
-                  "tickers")
+                  "accounts_coverage", "buy_return", "bench_return", "excess", "excess_drop_best",
+                  "random_mean_excess", "tickers")
 
 
 def _num(x: Optional[float]) -> str:
@@ -1216,6 +1281,7 @@ def to_csv(result: BacktestResult, path) -> Path:
         for r in sorted(result.rounds, key=lambda r: r.date):
             writer.writerow([r.date.isoformat(), r.exit_date.isoformat() if r.exit_date else "",
                              r.n_eligible, r.n_ranked, r.n_buys, r.n_new, r.n_illiquid,
+                             _num(r.accounts_coverage),
                              _num(r.buy_return), _num(r.bench_return), _num(r.excess),
                              _num(r.excess_drop_best), _num(r.random_mean_excess),
                              " ".join(r.tickers)])
@@ -1266,7 +1332,10 @@ def from_csv(path) -> BacktestResult:
             n_new=int(row["n_new"]) if row.get("n_new") not in (None, "") else 0,
             # SIZE-FLOOR-1: absent from a file written before this item -> 0 (the guard never
             # applied there, so 0 is the true count, not a filled-in default).
-            n_illiquid=int(row["n_illiquid"]) if row.get("n_illiquid") not in (None, "") else 0))
+            n_illiquid=int(row["n_illiquid"]) if row.get("n_illiquid") not in (None, "") else 0,
+            # SIZE-FLOOR-2 item 2d: absent from a file written before this item -> None (the
+            # coverage fact was never measured there, not "zero coverage").
+            accounts_coverage=_unnum(row.get("accounts_coverage") or "")))
     size_floor, size_floor_note = _parse_size_floor(meta.get("as_of_size_floor", ""))
 
     def _meta_num(key: str) -> Optional[float]:
