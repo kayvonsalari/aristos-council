@@ -1717,3 +1717,118 @@ def test_cli_run_passes_random_mode_through_and_summary_prints_calibration(monke
     bt.main(["summary", str(tmp_path)])
     out = capsys.readouterr().out
     assert "Calibration" in out
+
+
+# --------------------------------------------------------------------------- #
+# SIZE-FLOOR-2 follow-up (2026-10-02) - a real notebook/library mismatch: cells 9 and 10
+# of notebooks/aristos_backtest.ipynb reference BacktestResult.below_cohort_floor and
+# Round.accounts_coverage; a run against a version of backtest.py that lacked either
+# field computed every grid result and then raised AttributeError at the save step,
+# discarding all of it. No existing test executed the NOTEBOOK'S OWN code, only the
+# library functions it calls - so the mismatch never showed up in CI. These two tests
+# extract cell 9's and cell 10's CURRENT source directly from the .ipynb at test time
+# (never a copy that could drift) and exec() it, in the same shared namespace a real
+# notebook session gives it, against a REAL BacktestResult (run_lens_backtest
+# monkeypatched; everything else - cohort_native_floor, to_csv, from_csv - runs for
+# real). A future field either side renames or removes fails here, in CI, instead of
+# after 78 real grid runs are computed and discarded.
+# --------------------------------------------------------------------------------------- #
+_ROOT = Path(__file__).resolve().parents[1]
+_NOTEBOOK = _ROOT / "notebooks" / "aristos_backtest.ipynb"
+
+
+def _notebook_cell_source(index: int) -> str:
+    import json
+    nb = json.loads(_NOTEBOOK.read_text(encoding="utf-8"))
+    return "".join(nb["cells"][index]["source"])
+
+
+def _fake_run_lens_backtest_for_notebook_test(cohort, lens, *, start, end, hold_months,
+                                              cost_bps, cohorts_root, random_baskets,
+                                              min_cap_usd, progress=None):
+    """Stands in for the real run_lens_backtest inside the exec'd cell 9 - returns a REAL
+    BacktestResult (not a stub object), with below_cohort_floor and accounts_coverage set
+    exactly as the real function would, for a (cohort, lens, floor) triple cell 9 asks for."""
+    if min_cap_usd == 5e9:
+        return BacktestResult(
+            cohort=cohort, lens_id=lens, start=start, end=end, hold_months=hold_months,
+            cost_bps=cost_bps, size_floor=5e9,
+            size_floor_note="the cohort definition's min_market_cap_usd", min_cap_usd=5e9,
+            rounds=[Round(date(2019, 1, 31), 3, 0.10, 0.05, 0.05, ("A", "B", "C"),
+                          date(2020, 1, 31), n_ranked=3, n_eligible=5,
+                          accounts_coverage=0.8)])
+    return BacktestResult(
+        cohort=cohort, lens_id=lens, start=start, end=end, hold_months=hold_months,
+        cost_bps=cost_bps, size_floor=5e9,
+        size_floor_note="the cohort definition's min_market_cap_usd", min_cap_usd=min_cap_usd,
+        below_cohort_floor=True)
+
+
+def test_notebook_cell_9_save_path_runs_against_the_current_backtest_py(monkeypatch, tmp_path):
+    """Executes cell 9's actual source. A below_cohort_floor result must not raise when
+    the cell reads r.below_cohort_floor / r.size_floor; a normal result must round-trip
+    through to_csv (which reads r.rounds[i].accounts_coverage)."""
+    monkeypatch.setattr(bt, "run_lens_backtest", _fake_run_lens_backtest_for_notebook_test)
+    namespace = {
+        "watched": ["Notebook Test Cohort"], "OUT": str(tmp_path), "YEARS": 10,
+        "HOLD_MONTHS": 12, "COST_BPS": 50, "RANDOM_BASKETS": 0, "COHORTS_ROOT": str(tmp_path),
+    }
+    exec(compile(_notebook_cell_source(9), "cell-9", "exec"), namespace)
+    assert namespace["below_floor"], "below_cohort_floor results were not recorded"
+    assert namespace["size_floor_results"], "no normal result was saved"
+    written = list(Path(namespace["SIZE_FLOOR_OUT"]).glob("*/*/*.csv"))
+    assert written, "cell 9 did not write a CSV for the 5bn (normal) result"
+    saved = from_csv(written[0])
+    assert saved.rounds[0].accounts_coverage == 0.8
+
+
+def test_notebook_cell_10_summary_path_runs_against_the_current_backtest_py(
+        monkeypatch, tmp_path):
+    """Executes cell 9 then cell 10 in the SAME shared namespace, exactly as a real
+    notebook session would - cell 10 reads _key, SIZE_FLOOR_OUT, FLOOR_LENSES, FLOORS,
+    BELOW_FLOOR_LOG and SIZE_COHORTS straight off cell 9's own namespace. A real,
+    built cohort (not a stub) backs cohort_native_floor, so that call runs for real too."""
+    _write_cohort(tmp_path, "notebook_test_cohort", versions=(1,), min_market_cap_usd=1e9,
+                 caps={"AAA.US": 8e9})
+    monkeypatch.setattr(bt, "run_lens_backtest", _fake_run_lens_backtest_for_notebook_test)
+    namespace = {
+        "watched": ["Notebook Test Cohort"], "OUT": str(tmp_path), "YEARS": 10,
+        "HOLD_MONTHS": 12, "COST_BPS": 50, "RANDOM_BASKETS": 0, "COHORTS_ROOT": str(tmp_path),
+        "display": lambda *a, **kw: None,   # Jupyter/Colab built-in, not available here
+    }
+    exec(compile(_notebook_cell_source(9), "cell-9", "exec"), namespace)
+    exec(compile(_notebook_cell_source(10), "cell-10", "exec"), namespace)
+    out_path = Path(namespace["SIZE_FLOOR_OUT"]) / "SIZE_FLOOR_SUMMARY.csv"
+    assert out_path.exists()
+    import pandas as pd
+    table = pd.read_csv(out_path)
+    assert "accounts_coverage_pct (first -> last)" in table.columns
+    assert "is_cohort_own_floor" in table.columns
+    assert (table["verdict"] == "below cohort floor").any()
+    assert (table["verdict"] != "below cohort floor").any()
+
+
+def test_notebook_cell_10_prints_a_plain_message_on_an_empty_frame_instead_of_crashing(
+        tmp_path, capsys):
+    """SIZE-FLOOR-2 follow-up item 3 - no CSV written and nothing recorded below its own
+    floor (cell 9 has not been run, or has not finished) used to raise KeyError('lens')
+    from pd.DataFrame([]).sort_values(...). It must print a plain message and stop."""
+    size_floor_out = tmp_path / "size_floor"
+    size_floor_out.mkdir()
+    # cohort_slug is normally imported by cell 9's own "from aristos_council.backtest
+    # import (...)" line, into the SAME shared namespace cell 10 then reads from - cell 9
+    # having run (even without finishing) is exactly what "has not finished" means here.
+    namespace = {
+        "watched": ["Notebook Test Cohort"], "SIZE_COHORTS": ["Notebook Test Cohort"],
+        "FLOOR_LENSES": ["magic_formula_raw_v1", "growth_garp_v2"], "FLOORS": [1e9, 2e9, 5e9],
+        "COHORTS_ROOT": str(tmp_path), "SIZE_FLOOR_OUT": str(size_floor_out),
+        "BELOW_FLOOR_LOG": str(size_floor_out / "below_cohort_floor.json"),
+        "_key": lambda cohort, lens, floor: f"{cohort}|{lens}|{int(floor)}",
+        "cohort_slug": bt.cohort_slug,
+    }
+    _write_cohort(tmp_path, "notebook_test_cohort", versions=(1,), min_market_cap_usd=1e9,
+                 caps={"AAA.US": 8e9})
+    exec(compile(_notebook_cell_source(10), "cell-10", "exec"), namespace)
+    out = capsys.readouterr().out
+    assert "no results found" in out
+    assert not (size_floor_out / "SIZE_FLOOR_SUMMARY.csv").exists()
