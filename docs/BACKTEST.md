@@ -391,6 +391,24 @@ but not previously surfaced in a summary row) and `n_illiquid`. Run it the same 
 main grid (same Drive, same cache, same EODHD key via `getpass`, never saved) — it is an
 independent cell and does not require having run the main grid first.
 
+**The $5bn row is not a control for the main grid's `SUMMARY.csv`, unless the cohort's own
+floor happens to be $5bn too.** A grid row's `min_cap_usd` REPLACES the as-of floor the
+default (no-override) run would have used — and that default is `cohort_native_floor()`'s
+own value, read from the cohort definition's `min_market_cap_usd` (a COHORT-3 size-TIER
+value, $1–10bn by how crowded the industry is), never the lens's own $5bn gate. None of
+the five grid cohorts happen to carry one at exactly $5bn (Materials - Diversified Mining
+and Comms - Interactive Media & Gaming are both $2bn; Consumer - Auto Manufacturers and
+Industrials - Grid & Electrical Machinery are both $1bn; Tech - Semiconductors is $3bn) —
+so every row in `SIZE_FLOOR_SUMMARY.csv`, including every $5bn one, is EXPECTED to show a
+smaller `n_eligible` and a different excess than `SUMMARY.csv`, because the floor itself
+genuinely changed which names were eligible, not because anything is broken. The summary
+cell prints each cohort's own floor and carries an `is cohort's own floor` column so this
+is visible rather than something to debug: `True` on a row means it should reproduce
+`SUMMARY.csv` (verified by a fixture test, `tests/test_lens_backtest.py`, where the
+override exactly equals the cohort's own floor); `False` means it is a genuinely
+different, stricter-or-looser experiment and a difference from `SUMMARY.csv` is the floor
+working as intended, not a discrepancy.
+
 ## The two honesty limits
 
 These are stamped into every result and every CSV. Both **flatter** the lens, and neither can be

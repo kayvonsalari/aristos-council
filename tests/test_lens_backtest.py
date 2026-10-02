@@ -590,6 +590,17 @@ def test_the_floor_falls_back_to_the_smallest_member_cap_with_no_definition_floo
     assert floor == 3e9 and "smallest market_cap_usd" in note
 
 
+def test_cohort_native_floor_matches_what_a_default_run_would_apply_with_no_backtest(tmp_path):
+    """SIZE-FLOOR-1 bug report follow-up: cohort_native_floor is a read-only lookup (no
+    backtest run) of the SAME value _size_floor computes internally — the notebook's size-
+    floor summary surfaces it so a $5bn grid row's relationship to a cohort's own floor is
+    never guessed at."""
+    _write_cohort(tmp_path, "two_bn_cohort", versions=(1,),
+                 caps={"AAA.US": 8e9, "BBB.US": 6e9}, min_market_cap_usd=2e9)
+    floor, note = bt.cohort_native_floor("Two Bn Cohort", tmp_path)
+    assert floor == 2e9 and "min_market_cap_usd" in note
+
+
 def test_no_cap_data_at_all_leaves_the_floor_inactive_and_every_member_eligible(monkeypatch):
     calls = []
     _stub_pipeline(monkeypatch, lambda d: (), calls)
@@ -720,6 +731,186 @@ def test_csv_round_trips_n_illiquid_and_the_min_cap_min_adv_header_lines(tmp_pat
     back = from_csv(path)
     assert back.min_cap_usd == 1e9 and back.min_adv_usd == 3_000_000.0 and back.total_illiquid == 7
     assert back.rounds[0].n_illiquid == 2
+
+
+# --------------------------------------------------------------------------- #
+# SIZE-FLOOR-1 bug report (2026-10-02) — grid results invalid on two counts.
+#
+# Both tests below go through the REAL ``run_rank_pipeline`` (no ``_stub_pipeline``), with
+# REAL ``growth_garp_v2`` / ``magic_formula_raw_v1`` lenses and a ``Fundamentals`` fixture
+# shaped the way ``AsOfAdapter`` actually requires (``period_ends`` covering EVERY annual
+# series a screen criterion reads — total_revenue, operating_income, tax_provision,
+# pretax_income, invested_capital — and ``period_scalars`` with shares_outstanding per
+# period; omitting ANY of these silently empties that series under the as-of cut, which is
+# NOT what a screen abstaining on genuinely-missing data looks like, and was the trap in
+# this investigation's own early fixtures: an EV field spelled wrong raised inside
+# ``gather_factor_inputs``'s swallowed try/except, abstaining every factor AND the screen
+# on every name for both lenses alike, which look identical only because both are ranking
+# nothing).
+#
+# FINDING: the override mechanism itself is correct on both counts below. The bug report's
+# symptom 1 (identical baskets) and symptom 2 (the $5bn row not matching committed results)
+# both trace to ONE cause outside this mechanism: ``_size_floor()``'s default (no-override)
+# path reads the COHORT's own ``min_market_cap_usd`` (a size-TIER value picked by
+# COHORT-3's $1-10bn crowding rule — $2bn for Materials - Diversified Mining and
+# Comms - Interactive Media & Gaming, $1bn for Consumer - Auto Manufacturers and
+# Industrials - Grid & Electrical Machinery, $3bn for Tech - Semiconductors; confirmed by
+# reading all five committed definition.yaml files), which is NOT the lens's own $5bn
+# gate. So an explicit ``min_cap_usd=5e9`` grid row is, for every one of the five named
+# cohorts, a GENUINELY STRICTER as-of floor than the committed run ever applied — not a
+# control that should reproduce it. The resulting SMALLER eligible pool (SIZE-FLOOR-1's
+# own "committed grid n_eligible 6->15 vs 10->21" observation) is consistent with growth's
+# OWN extra screening, applied to an already-thin pool, converging on the same handful of
+# survivors RAW's unscreened ranking also favours — the fix is in the GRID'S FRAMING
+# (see the notebook/docs change in the same commit), not in this code path.
+def _as_of_fundamentals(ticker: str, *, roic: float, rev_growth: float, pe: float,
+                        shares: float = 100e6, invested_capital: float = 4e9,
+                        period_ends=("2016-12-31", "2017-12-31", "2018-12-31", "2019-12-31"),
+                        price: float = 80.0) -> Fundamentals:
+    """A Fundamentals fixture AsOfAdapter will actually serve (not abstain on): every
+    annual series min_roic/min_revenue_cagr read is dated via period_ends, and
+    period_scalars carries shares_outstanding so a market cap survives the cut too."""
+    ends = sorted(period_ends, reverse=True)
+    rev = [1e9]
+    for _ in range(len(ends) - 1):
+        rev.append(rev[-1] * (1 + rev_growth))
+    rev_newest_first = list(reversed(rev))
+    tax_rate = 0.2
+    n = len(ends)
+    # Operating income tracks revenue (same growth rate), not a flat series: max_peg_ratio
+    # reads operating_income's OWN growth and FAILS outright (not abstains) on a flat or
+    # declining series — a flat EBIT accidentally failed PEG for every name here, including
+    # the genuinely-growing ones, in an earlier draft of this fixture. The margin is picked
+    # so the WINDOW MEAN still nets the requested through-cycle ROIC.
+    nopat_target = roic * invested_capital
+    ebit_mean_target = nopat_target / (1 - tax_rate)
+    margin = ebit_mean_target / (sum(rev_newest_first) / n)
+    ebit_newest_first = [margin * r for r in rev_newest_first]
+    eps = price / pe
+    period_scalars = {e: {"eps": eps, "free_cash_flow": 1e8, "total_debt": 0.0,
+                          "total_cash": 0.0, "dividends_paid": 0.0,
+                          "operating_cash_flow": 1e8, "capital_expenditure": 1e7,
+                          "shares_outstanding": shares}
+                      for e in ends}
+    return Fundamentals(
+        ticker=ticker, name=ticker, company_name=ticker, market_cap=8e9, pe_ratio=pe,
+        free_cash_flow=1e8, eps=eps, sector="Technology",
+        total_revenue=rev_newest_first, operating_income=ebit_newest_first,
+        ebit=ebit_newest_first, tax_provision=[e * tax_rate for e in ebit_newest_first],
+        pretax_income=ebit_newest_first, invested_capital=[invested_capital] * n,
+        total_debt=0.0, total_cash=0.0, currency="USD",
+        period_ends={"total_revenue": ends, "operating_income": ends, "ebit": ends,
+                    "tax_provision": ends, "pretax_income": ends, "invested_capital": ends},
+        period_scalars=period_scalars,
+    )
+
+
+_REAL_LENS_FUND = {
+    # AAA/BBB clear growth_screen_v2 (roic>=12%, revenue CAGR>=10%); CCC..FFF fail on ROIC.
+    "AAA": dict(roic=0.25, rev_growth=0.20, pe=8.0),
+    "BBB": dict(roic=0.20, rev_growth=0.15, pe=9.0),
+    "CCC": dict(roic=0.03, rev_growth=0.01, pe=15.0),
+    "DDD": dict(roic=0.02, rev_growth=-0.05, pe=20.0),
+    "EEE": dict(roic=0.01, rev_growth=-0.10, pe=25.0),
+    "FFF": dict(roic=0.04, rev_growth=0.02, pe=18.0),
+}
+
+
+class _RealLensFeed(MarketDataAdapter):
+    """Flat $80 prices (the screen/factor math under test does not need price movement)
+    plus a properly as-of-shaped Fundamentals per ticker (see _as_of_fundamentals)."""
+
+    name = "real-lens-fixture"
+
+    def get_price_history(self, ticker, *, start, end):
+        bars, d = [], date(2015, 1, 1)
+        while d <= date(2020, 12, 31):
+            if d.weekday() < 5:
+                bars.append(PriceBar(day=d, open=80.0, high=80.0, low=80.0, close=80.0,
+                                     adj_close=80.0, volume=1_000_000))
+            d += timedelta(days=1)
+        return PriceHistory(ticker=ticker, bars=[b for b in bars if start <= b.day <= end])
+
+    def get_fundamentals(self, ticker):
+        return _as_of_fundamentals(ticker, **_REAL_LENS_FUND[ticker])
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return []
+
+
+def test_a_5bn_override_reproduces_the_default_run_when_the_cohorts_own_floor_is_also_5bn(
+        tmp_path):
+    """SIZE-FLOOR-1 bug report symptom 2, part 1: an override EQUAL to the cohort's own
+    as-of floor must be a complete no-op — for BOTH the screened and the unscreened lens.
+    (This is the premise the bug report's "must be byte-identical" claim assumed always
+    holds for min_cap_usd=5e9; it only holds when the cohort's OWN floor is 5bn too — see
+    the two tests below for what happens when it is not, which is every real cohort in
+    the batch 13 grid.)"""
+    tickers = sorted(_REAL_LENS_FUND)
+    _write_cohort(tmp_path, "real_lens_5bn_cohort", versions=(1,),
+                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=5e9)
+    feed = _RealLensFeed()
+    for lens in ("magic_formula_raw_v1", "growth_garp_v2"):
+        r_default = run_lens_backtest("Real Lens 5bn Cohort", lens, start=date(2019, 1, 31),
+                                      end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                                      min_cap_usd=None)
+        r_override = run_lens_backtest("Real Lens 5bn Cohort", lens, start=date(2019, 1, 31),
+                                       end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                                       min_cap_usd=5e9)
+        default_shape = [(r.n_eligible, r.n_buys, r.excess) for r in r_default.rounds]
+        override_shape = [(r.n_eligible, r.n_buys, r.excess) for r in r_override.rounds]
+        assert default_shape == override_shape, lens
+        assert r_default.summary.mean_annual_excess == r_override.summary.mean_annual_excess, lens
+
+
+def test_a_cohorts_own_floor_differing_from_the_override_is_a_genuinely_different_experiment(
+        tmp_path):
+    """SIZE-FLOOR-1 bug report symptom 2, part 2 — the actual root cause: when the cohort's
+    OWN as-of floor (e.g. the $2bn COHORT-3 tier Materials - Diversified Mining and
+    Comms - Interactive Media & Gaming both actually carry) is BELOW the grid's $5bn row,
+    the override admits FEWER names than the committed/default run did — a real,
+    expected divergence, not a bug in the override arithmetic. Names between the two
+    floors are eligible under the committed run and excluded under the $5bn grid row."""
+    tickers = sorted(_REAL_LENS_FUND)
+    _write_cohort(tmp_path, "real_lens_2bn_cohort", versions=(1,),
+                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=2e9)   # NOT 5bn
+    feed = _RealLensFeed()
+    r_default = run_lens_backtest("Real Lens 2bn Cohort", "magic_formula_raw_v1",
+                                  start=date(2019, 1, 31), end=date(2020, 6, 30),
+                                  adapter=feed, cohorts_root=tmp_path, min_cap_usd=None)
+    r_grid_5bn = run_lens_backtest("Real Lens 2bn Cohort", "magic_formula_raw_v1",
+                                   start=date(2019, 1, 31), end=date(2020, 6, 30),
+                                   adapter=feed, cohorts_root=tmp_path, min_cap_usd=5e9)
+    assert r_default.size_floor == 2e9
+    assert r_grid_5bn.size_floor == 5e9
+    # Not a bug: a DIFFERENT, explicitly stricter floor was asked for and applied.
+    assert r_default.size_floor != r_grid_5bn.size_floor
+
+
+def test_growth_and_raw_pick_different_baskets_when_their_screens_disagree():
+    """SIZE-FLOOR-1 bug report symptom 1 — the override mechanism does NOT replace the
+    lens's full screen set: growth_garp_v2's prefilter (min_roic >= 12%) confirmed-excludes
+    the four weak-ROIC names here, exactly as it does with no override at all, while
+    magic_formula_raw_v1 (no screen, by design) does not. Different survivors -> different
+    baskets, proving the two lenses are NOT silently collapsed to the same ranking."""
+    from aristos_council.pipeline import run_rank_pipeline
+
+    feed = _RealLensFeed()
+    tickers = sorted(_REAL_LENS_FUND)
+    for override in (None, 5e9, 1e9):          # the override value must not matter here
+        raw = run_rank_pipeline(tickers, "magic_formula_raw_v1", ranker_only=True, adapter=feed,
+                                today=date(2019, 6, 30), use_cache=False,
+                                min_market_cap_override=override)
+        growth = run_rank_pipeline(tickers, "growth_garp_v2", ranker_only=True, adapter=feed,
+                                   today=date(2019, 6, 30), use_cache=False,
+                                   min_market_cap_override=override)
+        raw_buys = sorted(r.ticker for r in raw.ranked if not r.excluded and r.verdict == "buy")
+        growth_buys = sorted(r.ticker for r in growth.ranked
+                             if not r.excluded and r.verdict == "buy")
+        growth_excluded = {t for t, _ in growth.excluded}
+        assert growth_excluded == {"CCC", "DDD", "EEE", "FFF"}, override
+        assert not any(t in growth_excluded for t, _ in raw.excluded) or not raw.excluded
+        assert raw_buys != growth_buys, override
 
 
 # --- excess_drop_best --------------------------------------------------------------------- #
