@@ -502,6 +502,66 @@ def test_an_exclusion_that_is_not_a_screen_rule_keeps_its_own_prose():
 
 
 # --------------------------------------------------------------------------- #
+# NOVOTE-1 item 2.1 — every failing screen rule is listed, not just the first
+# --------------------------------------------------------------------------- #
+def test_a_name_that_fails_three_screen_rules_lists_all_three_not_just_the_first():
+    """The VKTX case: a pre-revenue, non-dividend-paying biotech below a dividend lens's
+    cap floor. The old behaviour named only the cap ("its size ruled it out"), which is
+    false of the conclusion — it would have failed on earnings and on paying no dividend
+    at any floor. The three criteria are DECLARED in a different order than the lens's
+    own screen would evaluate min_market_cap first, pinning that the full list is read
+    off the evaluation's own outcomes, not re-sorted or assumed."""
+    class _Result:
+        ranked: list = []
+        names: dict = {"VKTX": "Viking Therapeutics"}
+        screen_outcomes: dict = {"VKTX": {
+            "min_market_cap": {"passed": False, "observed": 3.4e9, "threshold": 5.0e9,
+                               "note": "", "basis": "", "borderline": False},
+            "min_roic": {"passed": False, "observed": -0.42, "threshold": 0.0,
+                        "note": "", "basis": "", "borderline": False},
+            "min_dividend_yield": {"passed": False, "observed": 0.0, "threshold": 0.01,
+                                   "note": "", "basis": "", "borderline": False},
+        }}
+        excluded = [("VKTX", "screen: min_market_cap (observed 3400000000.0 vs "
+                             "threshold 5000000000.0)")]
+    row = exclusion_rows(_Result())[0]
+    assert row["criterion"] == "min_market_cap"           # unchanged: the first/primary one
+    for needle in ("market value $3.4bn", "$5.0bn", "return on invested capital",
+                  "dividend yield"):
+        assert needle in row["sentence"], (needle, row["sentence"])
+
+
+def test_a_single_failing_rule_is_byte_identical_to_the_old_one_rule_sentence():
+    """No regression for the overwhelming majority of exclusions: one failing criterion
+    produces the EXACT same sentence all_failing_rules_sentence always gave."""
+    from aristos_council.pipeline import all_failing_rules_sentence, exclusion_sentence
+    reason = "screen: min_dividend_yield (observed 0.005 vs threshold 0.015)"
+
+    class _Result:
+        ranked: list = []
+        names: dict = {}
+        screen_outcomes: dict = {"X": {"min_dividend_yield": {
+            "passed": False, "observed": 0.005, "threshold": 0.015, "note": "",
+            "basis": "", "borderline": False}}}
+    r = _Result()
+    assert all_failing_rules_sentence(r, "X", reason) == exclusion_sentence(r, "X", reason)
+
+
+def test_a_gate_exclusion_is_unaffected_still_says_no_other_rule_was_tested():
+    """Market-cap/sector/payout GATES (not a screen criterion) stop evaluation before any
+    other rule runs — genuinely nothing else to list, and the existing "a gate is a gate"
+    contract (test_lens_detail.py) must not change."""
+    from aristos_council.pipeline import all_failing_rules_sentence
+    class _Result:
+        ranked: list = []
+        names: dict = {}
+        screen_outcomes: dict = {}
+    sentence = all_failing_rules_sentence(_Result(), "QQQ",
+                                          "below min market cap ($5.0bn)")
+    assert sentence == "below min market cap ($5.0bn)"
+
+
+# --------------------------------------------------------------------------- #
 # 8. THE UNTESTED RULE — in words, not a bare dagger
 # --------------------------------------------------------------------------- #
 def test_a_rule_that_could_not_be_tested_is_stated_in_words(result):

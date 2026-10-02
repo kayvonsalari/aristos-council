@@ -174,6 +174,17 @@ def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
     return ranks
 
 
+# NOVOTE-1 item 2.3b — below this many rankable names, a cut is arithmetic, not a
+# comparison: enforced by company_report.votes_from_multi, specifically for Company
+# Check's PEER-COMPARISON votes (the HLB case — its peer group collapsed to itself).
+# Deliberately NOT enforced here, nor in pipeline._rank_stage: rank_universe is called
+# directly by dozens of unit tests with small (2-4 name) synthetic fixtures unrelated to
+# this feature, and a user-chosen Run-tab universe may legitimately be that small too —
+# gating either one broke the wrong things for the wrong reason. 3 matches the task's own
+# "fewer than 3 rankable names" wording.
+MIN_RANKABLE_COHORT = 3
+
+
 def _verdict_for_position(i: int, n: int, cut: str, k: int, percentile: float) -> str:
     if cut == "top_k":
         return "buy" if i < k else "hold"

@@ -1297,26 +1297,13 @@ def summary_line(result) -> str:
         fetch_errors=len(getattr(result, "fetch_errors", []) or []))
 
 
-def exclusion_sentence(result, ticker: str, reason: str) -> str:
-    """One excluded name as a SENTENCE: the rule in words, the observed value and the
-    limit, both in their proper units.
-
-    The raw form was ``screen: min_dividend_yield (observed 0.009547 vs threshold
-    0.015)`` — three machine identifiers and two raw decimals. This reads
-
-        Walmart (WMT) — dividend yield 0.95%; the rule requires at least 1.5%.
-                        [min_dividend_yield]
-
-    The observed value, the threshold and the pass/fail decision are IDENTICAL — only
-    the words change. Falls back to the raw reason for an exclusion that is not a screen
-    rule (a market-cap floor, a sector or asset-kind gate, an unrateable name): those
-    already read as prose and have no criterion to look up."""
+def _criterion_clause(name: str, o: dict) -> str:
+    """"dividend yield 0.95%; the rule requires at least 1.5%" — the observed value and
+    the limit for ONE criterion's outcome, no trailing period, no basis/borderline tail.
+    The reusable half of ``exclusion_sentence`` (one criterion, full sentence) and
+    ``all_failing_rules_sentence`` (NOVOTE-1 item 2.1 — every criterion, joined)."""
     from .tools.criteria.registry import REGISTRY
 
-    outcome = _failing_outcome(result, ticker, reason)
-    if outcome is None:
-        return reason
-    name, o = outcome
     crit = REGISTRY.get(name)
     spec = crit.threshold_param if crit is not None else None
     unit = getattr(spec, "unit", "") or UNIT_RATIO
@@ -1348,13 +1335,64 @@ def exclusion_sentence(result, ticker: str, reason: str) -> str:
     limit = (f"the rule requires {own.format(threshold=_plain_threshold(o['threshold']))}"
              if own else
              format_limit_clause(comparison, o["threshold"], unit, currency=currency))
+    return f"{observed}; {limit}"
+
+
+def _one_criterion_sentence(name: str, o: dict) -> str:
+    """The clause plus its basis/borderline tail, for ONE criterion — the reusable body
+    of ``exclusion_sentence`` (one criterion) and ``all_failing_rules_sentence`` (every
+    failing criterion, NOVOTE-1 item 2.1)."""
     tail = ""
     basis = o.get("basis") or ""
     if basis and basis != "abstained":
         tail += f" Measured on {basis_phrase(basis)}."
     if o.get("borderline"):
         tail += " This is a borderline miss — it is still a miss."
-    return f"{observed}; {limit}.{tail}"
+    return f"{_criterion_clause(name, o)}.{tail}"
+
+
+def exclusion_sentence(result, ticker: str, reason: str) -> str:
+    """One excluded name as a SENTENCE: the rule in words, the observed value and the
+    limit, both in their proper units.
+
+    The raw form was ``screen: min_dividend_yield (observed 0.009547 vs threshold
+    0.015)`` — three machine identifiers and two raw decimals. This reads
+
+        Walmart (WMT) — dividend yield 0.95%; the rule requires at least 1.5%.
+                        [min_dividend_yield]
+
+    The observed value, the threshold and the pass/fail decision are IDENTICAL — only
+    the words change. Falls back to the raw reason for an exclusion that is not a screen
+    rule (a market-cap floor, a sector or asset-kind gate, an unrateable name): those
+    already read as prose and have no criterion to look up."""
+    outcome = _failing_outcome(result, ticker, reason)
+    if outcome is None:
+        return reason
+    name, o = outcome
+    return _one_criterion_sentence(name, o)
+
+
+def all_failing_rules_sentence(result, ticker: str, reason: str) -> str:
+    """NOVOTE-1 item 2.1 — EVERY criterion this name confirmed-failed in the screen that
+    excluded it, one full sentence each (same wording ``exclusion_sentence`` gives the
+    first), space-joined — not just the first one ``reason`` names. A loss-making, non-
+    dividend-paying biotech below the cap floor used to read as "its size ruled it out"
+    (the summary writer quoting the first-fail reason alone) — true of the floor, false
+    of the conclusion, since the SAME name would have failed on earnings and on paying
+    no dividend at any floor. Byte-identical to ``exclusion_sentence`` whenever only one
+    criterion actually failed (the overwhelming majority of exclusions).
+
+    Falls back to ``exclusion_sentence`` unchanged for a gate that is not a screen rule
+    (market-cap/sector/payout GATES, asset-kind, UNRATEABLE) — those stop evaluation
+    before any other rule runs, so there is genuinely nothing else to list; the existing
+    "a gate says no other rule was tested" contract is unchanged."""
+    if not reason.startswith(_SCREEN_REASON_PREFIX):
+        return exclusion_sentence(result, ticker, reason)
+    per_name = (getattr(result, "screen_outcomes", None) or {}).get(ticker) or {}
+    failing = [(name, o) for name, o in per_name.items() if o.get("passed") is False]
+    if not failing:
+        return exclusion_sentence(result, ticker, reason)
+    return " ".join(_one_criterion_sentence(name, o) for name, o in failing)
 
 
 def _plain_threshold(value) -> str:
@@ -1397,7 +1435,8 @@ def exclusion_rows(result) -> list[dict]:
         rows.append({
             "ticker": ticker,
             "name": _disp(result, ticker),
-            "sentence": exclusion_sentence(result, ticker, body),
+            # NOVOTE-1 item 2.1: every confirmed-failing rule, not just the first.
+            "sentence": all_failing_rules_sentence(result, ticker, body),
             "criterion": outcome[0] if outcome else "",
             "flag": flag,
         })
@@ -2452,8 +2491,12 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
             for ticker, reason in pairs:
                 # The RAW reason is kept verbatim; the plain-English sentence rides
                 # beside it (REPORT-1 wording, REPORT-2 grid), never replacing it.
+                # NOVOTE-1 item 2.1: EVERY confirmed-failing screen rule, not just the
+                # first ``reason`` names — a gate (market cap/sector/payout as a rank-
+                # strategy field, asset-kind, UNRATEABLE) still reads as one cause,
+                # genuinely the only one evaluated.
                 body, _flag = _split_flag(reason)
-                plain = (exclusion_sentence(res, ticker, body)
+                plain = (all_failing_rules_sentence(res, ticker, body)
                          if status == _EXCLUDED else "")
                 _cell(ticker, MultiStrategyCell(
                     strategy_id=sid, status=status, reason=reason,
