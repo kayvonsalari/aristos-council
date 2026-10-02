@@ -80,6 +80,7 @@ from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
 from .rank_engine import (
     BOUNDARY_FLAG,
+    MIN_RANKABLE_COHORT,
     FactorSpec,
     RankedTicker,
     boundary_tie_facts,
@@ -90,6 +91,7 @@ from .rank_engine import (
     rank_universe,
     factor_measurement,
     ranked_table_rows,
+    too_few_to_rank_text,
 )
 from .report_language import (
     COMPARISON_MIN,
@@ -2223,8 +2225,16 @@ def format_cli_report(result: RankPipelineResult) -> str:
     positions = cohort_positions(result.ranked)      # tie-shared #N of M (RANK-DISPLAY-1)
     cohort_m = len(result.ranked)                     # rateable cohort size (M); NOT `m`
                                                       # (that is result.meta, used below)
+    # BATCH-14 RUNTAB-RANK-1 — same guard as combine_rank_results' multi-lens grid: a
+    # cut over fewer than MIN_RANKABLE_COHORT names is arithmetic, not a comparison, so
+    # the CLI table (and the Run tab's markdown download, which calls this SAME function)
+    # says so instead of printing a meaningless "#1 of 1".
+    too_few = 0 < cohort_m < MIN_RANKABLE_COHORT
     for r in result.ranked:
         disp = _disp(result, r.ticker) + ("†" if r.screen_abstentions else "")
+        if too_few:
+            lines.append(f"  {_name_col(disp):<34} {too_few_to_rank_text(cohort_m)}")
+            continue
         pos, tied = positions.get(r.ticker, (None, False))
         cell = format_position_cell(pos, cohort_m, tied, r.combined_rank,
                                     len(r.factor_ranks))
@@ -2333,8 +2343,8 @@ def agreement_csv_rows(result: PipelineResult) -> list[dict]:
 # optional single-strategy run. No new decision logic: each column is exactly the
 # verdict-of-record that a single run of that strategy would produce, and the grid only
 # arranges them.
-_RANKED, _EXCLUDED, _UNRATEABLE, _FETCH_ERROR, _ABSENT = (
-    "ranked", "excluded", "unrateable", "fetch_error", "absent")
+_RANKED, _EXCLUDED, _UNRATEABLE, _FETCH_ERROR, _ABSENT, _TOO_FEW = (
+    "ranked", "excluded", "unrateable", "fetch_error", "absent", "too_few")
 
 
 @dataclass
@@ -2344,7 +2354,10 @@ class MultiStrategyCell:
     ``status`` is the axis the name landed on under THIS strategy: ranked (with its
     cohort position, verdict and rank-sum score), excluded (the failed rule + observed
     value, verbatim from the run), unrateable (no data — no verdict), fetch_error
-    (transient; rerun), or absent (the strategy never reported the name)."""
+    (transient; rerun), too_few (BATCH-14 RUNTAB-RANK-1 — this lens ranked fewer than
+    MIN_RANKABLE_COHORT names; a cut over this few names is arithmetic, not a
+    comparison, so no position or verdict is shown even though rank_universe's own
+    math scored one), or absent (the strategy never reported the name)."""
 
     strategy_id: str
     status: str = _ABSENT
@@ -2381,6 +2394,9 @@ class MultiStrategyCell:
     def render(self) -> str:
         """The cell as one honest line — each axis reads distinctly (an exclusion is not
         a bad rank, and no-data is not an exclusion)."""
+        if self.status == _TOO_FEW:
+            from .rank_engine import too_few_to_rank_text
+            return too_few_to_rank_text(self.cohort_size)
         if self.status == _RANKED:
             pos = f"#{self.position} of {self.cohort_size}" if self.position else "ranked"
             from .report_language import verdict_word
@@ -2473,7 +2489,20 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
         names.update(res.names or {})
         positions = cohort_positions(res.ranked)
         cohort_m = len(res.ranked)
+        # BATCH-14 RUNTAB-RANK-1 — a cut over fewer than MIN_RANKABLE_COHORT names is
+        # arithmetic, not a comparison (rank_universe's own "#1 of 1" always reads "top
+        # 20%", whatever the name's merit); the Run tab used to print it anyway, the one
+        # place this guard (already applied to Company Check's peer votes, NOVOTE-1
+        # item 2.3b) was still missing. Cells land on their own axis, not _RANKED, so
+        # neither the rank-sum nor BUY-based narration selection below treats a
+        # meaningless position as a real one.
+        too_few = 0 < cohort_m < MIN_RANKABLE_COHORT
         for r in res.ranked:
+            if too_few:
+                _cell(r.ticker, MultiStrategyCell(strategy_id=sid, status=_TOO_FEW,
+                                                  cohort_size=cohort_m,
+                                                  is_check=_is_check_result(res)))
+                continue
             pos, _tied = positions.get(r.ticker, (None, False))
             _cell(r.ticker, MultiStrategyCell(
                 strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,

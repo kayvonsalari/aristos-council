@@ -180,7 +180,11 @@ def test_both_marks_flow_into_the_cli_report():
 def test_a_same_verdict_tie_adds_nothing_to_the_report():
     from aristos_council.pipeline import format_cli_report
 
-    report = format_cli_report(_result([_rt("A", "hold", 10), _rt("B", "hold", 10)]))
+    # BATCH-14 RUNTAB-RANK-1: a third name (C, a different score) keeps this cohort at
+    # 3 - at 2, the new "too few to rank" guard would replace the tied positions this
+    # test means to check with the too-few text instead.
+    report = format_cli_report(_result([_rt("A", "hold", 10), _rt("B", "hold", 10),
+                                        _rt("C", "sell", 20)]))
     assert "boundary" not in report
     assert "(tied)" in report                      # the tie itself is still disclosed
 

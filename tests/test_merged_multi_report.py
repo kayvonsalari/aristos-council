@@ -141,14 +141,22 @@ def test_every_verdict_rank_and_exclusion_matches_the_per_strategy_reports(three
 
     for sid in three.strategy_ids:
         res = three.results[sid]
-        # every RANKED name: its position and verdict, exactly as its own run recorded
-        from aristos_council.rank_engine import cohort_positions
+        # every RANKED name: its position and verdict, exactly as its own run recorded.
+        # BATCH-14 RUNTAB-RANK-1: a cohort below MIN_RANKABLE_COHORT renders the shared
+        # "too few to rank" text on BOTH sides instead of a position - parity still
+        # holds, the expected cell text just changes with it.
+        from aristos_council.rank_engine import MIN_RANKABLE_COHORT, cohort_positions, \
+            too_few_to_rank_text
         positions = cohort_positions(res.ranked)
+        cohort_m = len(res.ranked)
         for r in res.ranked:
             cell = by_name[res.names.get(r.ticker, r.ticker) if False
                            else _display(three, r.ticker)][columns[sid]]
+            if cohort_m < MIN_RANKABLE_COHORT:
+                assert cell == too_few_to_rank_text(cohort_m)
+                continue
             pos, _tied = positions[r.ticker]
-            assert cell == f"#{pos} of {len(res.ranked)} · {r.verdict.upper()}"
+            assert cell == f"#{pos} of {cohort_m} · {r.verdict.upper()}"
         # every EXCLUDED name: the same plain sentence its own report carries
         for row in exclusion_rows(res):
             cell = by_name[row["name"]][columns[sid]]

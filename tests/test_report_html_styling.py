@@ -155,6 +155,29 @@ Everything ADDED is the new section saying what it is: the title, the rule sente
 BUY/SELL vote columns naming the lenses, the Marks column, the overlap note, and the
 "N names had no BUY from any lens" line. The RULE is pinned independently of every fixture
 here by ``tests/test_agreement.py``, so the guard was not simply relaxed.
+
+BASELINE MOVED AGAIN, AND THE SNAPSHOT RE-TAKEN (2026-10-02, BATCH-14 RUNTAB-RANK-1). A
+cohort below ``rank_engine.MIN_RANKABLE_COHORT`` (3) now renders "too few to rank (only N
+companies here, not a peer group)" instead of a position — the Run tab's own version of the
+guard Company Check already applied, so it can no longer print "#1 of 2"/"#2 of 2" either.
+In this fixture, SCREENED's and Value + Momentum's own cohort is A+B only (C fails
+SCREENED's ROIC floor and Value + Momentum's own screen; RAW's cohort stays the real 3 of
+A/B/C), so both lenses' A and B cells move. That removes rendered values, which the
+"nothing lost" guard is built to catch — correctly — so the snapshot is re-taken here and
+what goes is recorded rather than exempted in the helper:
+
+  - "#1 of 2 · BUY" / "#2 of 2 · HOLD" for A and B under both Classic Value and Value +
+    Momentum (four cells total, two per lens), replaced by the shared too-few text. RAW's
+    "#1 of 3"/"#2 of 3"/"#3 of 3" cells are untouched — its cohort was never too few.
+  - the summary line's "1 name rated BUY by every lens" clause — with SCREENED's and
+    Value + Momentum's A no longer a real ranked position, "every lens" is no longer an
+    honest claim; the shortlist clause right after it ("1 name BUY on all 3 voting lenses")
+    is untouched, since the shortlist counts votes, not cohort positions.
+
+Nothing else moved. The guard (and the wording itself) is pinned independently of this
+fixture by ``tests/test_merged_multi_report.py::
+test_every_verdict_rank_and_exclusion_matches_the_per_strategy_reports`` and
+``rank_engine.too_few_to_rank_text``, so this was not simply relaxed.
 """
 
 from __future__ import annotations

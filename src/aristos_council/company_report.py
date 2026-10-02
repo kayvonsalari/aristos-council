@@ -49,7 +49,7 @@ from .company_check import (CompanyCheckResult, absolute_reading_lines, analyst_
                             run_company_check)
 from .data.adapter import normalize_ticker
 from .peer_table import rank_columns
-from .rank_engine import MIN_RANKABLE_COHORT
+from .rank_engine import MIN_RANKABLE_COHORT, too_few_to_rank_text
 from .tools.valuation_band import ordinal
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -113,9 +113,9 @@ class LensVote:
             # NOVOTE-1 item 2.3b — a verdict over fewer than MIN_RANKABLE_COHORT names is
             # arithmetic, not a comparison (the HLB case: "1 of 1" instead of an honest
             # abstention). Never a verdict word here, even "hold" — there is nothing to
-            # compare it against.
-            company = "company" if self.cohort_size == 1 else "companies"
-            return f"too few to rank (only {self.cohort_size} {company} here, not a peer group)"
+            # compare it against. BATCH-14: the wording itself now lives in rank_engine,
+            # shared with the Run tab's own guard, so it can never drift between surfaces.
+            return too_few_to_rank_text(self.cohort_size)
         if self.status == "excluded":
             return f"does not apply - {self.reason}"
         if self.status == "unrateable":
