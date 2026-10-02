@@ -19,7 +19,7 @@ import pytest
 
 from aristos_council.company_report import (SECTION_ORDER, LensVote, build_agreement,
                                             company_facts_pack, format_company_report,
-                                            run_company_report)
+                                            run_company_report, votes_from_multi)
 from aristos_council.data.adapter import (Fundamentals, MarketDataAdapter, PriceBar,
                                           PriceHistory)
 from aristos_council.export.report_html import company_report_html
@@ -890,6 +890,59 @@ def test_no_api_key_is_unavailable_and_reaches_no_runner(tmp_path, monkeypatch):
     report = _run([RAW], tmp_path=tmp_path, save=False)
     op = run_council_opinion(report)
     assert not op.available and "ANTHROPIC_API_KEY" in op.note and op.calls == 0
+
+
+def _multi(cohort_size, *, position=1, verdict="buy", strategy_id="cyclical_income_v1"):
+    """A minimal fake MultiStrategyResult: one ticker, one strategy, cohort_size exactly
+    what's handed in — enough to exercise votes_from_multi without a full peer-group run."""
+    from types import SimpleNamespace
+    from aristos_council.pipeline import MultiStrategyCell, MultiStrategyRow
+
+    cell = MultiStrategyCell(strategy_id=strategy_id, status="ranked", position=position,
+                             cohort_size=cohort_size, verdict=verdict)
+    row = MultiStrategyRow(ticker="HLB", display="HLB Co. Ltd", cells={strategy_id: cell},
+                           rank_sum=position, graded=1, comparable=True)
+    strategy = SimpleNamespace(kind="selector", asks="")
+    result = SimpleNamespace(rank_strategy=strategy)
+    return SimpleNamespace(strategy_ids=[strategy_id], strategy_names={strategy_id: "Cyclical Income"},
+                           results={strategy_id: result}, rows=[row])
+
+
+def test_a_lens_that_ranked_only_one_name_reports_too_few_not_rank_1_of_1():
+    """NOVOTE-1 item 2.3b — the live bug, reproduced directly: Cyclical Income ranked HLB
+    Co. Ltd "1 of 1" after a classification leak (item 2.3a) left it alone in its own
+    cohort. A rank over this few names is arithmetic, never a verdict."""
+    votes = votes_from_multi(_multi(cohort_size=1), "HLB")
+    v = votes[0]
+    assert v.status == "too_few" and v.ranked is False
+    assert v.result() == "too few to rank (only 1 company here, not a peer group)"
+    # not counted as a vote in the agreement, but visible as why it did not vote
+    agreement = build_agreement(votes)
+    assert agreement.buy == () and agreement.hold == () and agreement.sell == ()
+    assert agreement.not_applicable == (("Cyclical Income", v.result()),)
+
+
+def test_two_rankable_names_is_still_too_few_three_is_not():
+    assert votes_from_multi(_multi(cohort_size=2), "HLB")[0].status == "too_few"
+    assert votes_from_multi(_multi(cohort_size=3), "HLB")[0].status == "ranked"
+
+
+def test_every_ticked_lens_excluding_the_company_explains_plainly_not_as_an_error(tmp_path):
+    """NOVOTE-1 item 2.2 — the VKTX case: every ticked lens excludes the company (none
+    ranks it), so there is an agreement row (0 of 0 voted) but no lead vote to narrate.
+    "Council opinion unavailable: no lens ranked this company" read as a broken run; the
+    council has nothing to comment on because it only narrates a vote, and there isn't
+    one — the new wording says that plainly instead."""
+    from aristos_council.company_report import run_council_opinion
+
+    report = _run([SCREENED], tmp_path=tmp_path, save=False)   # excluded: 6% ROIC < 12%
+    assert report.votes and report.votes[0].status == "excluded"
+    assert report.agreement is not None                        # ticked, just none ranked
+    op = run_council_opinion(report, runners=_opinion_runners())
+    assert not op.available
+    assert op.note == ("No lens voted, so there is no verdict to narrate; the council "
+                       "only comments on votes.")
+    assert "unavailable" not in op.note.lower()                 # reads as a fact, not an error
 
 
 def test_no_votes_is_unavailable_with_the_same_reason_the_page_shows(tmp_path):

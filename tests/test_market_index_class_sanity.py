@@ -80,6 +80,55 @@ def test_a_bank_filed_under_semiconductors_is_classification_suspect():
     assert is_suspect(row)
 
 
+# --------------------------------------------------------------------------- #
+# NOVOTE-1 item 2.3a — EODHD industry vs GICS sector, a SEPARATE check from the name
+# contradiction above. Deliberately narrow (see market_index.py's own note): four named
+# families, not a blanket sector-mismatch rule, which the real index shows would flag
+# thousands of rows that are not errors.
+# --------------------------------------------------------------------------- #
+def test_the_real_hlb_biotech_filed_as_leisure_products_is_classification_suspect():
+    """The live bug: HLB Co. Ltd (028300.KQ) — EODHD industry Biotechnology (Healthcare),
+    GICS sub-industry Leisure Products (Consumer Discretionary) — appeared as the ONLY
+    peer Cyclical Income ranked for it. Reproduced with the row's real field shape."""
+    row = _row("028300.KQ", "HLB Co. Ltd", sub="Leisure Products", industry="Biotechnology",
+              sector="Healthcare", gics_sector="Consumer Discretionary", market="KQ")
+    assert not is_fund(row)
+    reason = suspect_reason(row)
+    assert reason.startswith(CLASSIFICATION_SUSPECT)
+    assert "Biotechnology" in reason and "Consumer Discretionary" in reason
+    assert is_suspect(row)
+
+
+@pytest.mark.parametrize("industry,gics_sector", [
+    ("Pharmaceuticals", "Energy"),
+    ("Banks - Regional", "Materials"),
+    ("Insurance - Life", "Industrials"),
+    ("Utilities - Regulated Electric", "Materials"),
+    ("Oil & Gas E&P", "Real Estate"),
+])
+def test_each_named_family_against_an_unrelated_gics_sector_is_suspect(industry, gics_sector):
+    row = _row("ZZZ.US", "Example Co", industry=industry, sector="Healthcare",
+              gics_sector=gics_sector, market="US")
+    assert suspect_reason(row).startswith(CLASSIFICATION_SUSPECT)
+    assert is_suspect(row)
+
+
+def test_a_sector_level_naming_difference_outside_the_named_families_is_not_suspect():
+    """The broad, pre-existing EODHD/GICS sector-vocabulary disagreement (Industrials vs
+    Information Technology, etc.) is explicitly NOT this rule's concern — logged
+    separately as a wider data-quality question, never guessed at here."""
+    row = _row("AAA.US", "Example Industrial Co", industry="Specialty Industrial Machinery",
+              sector="Industrials", gics_sector="Information Technology", market="US")
+    assert suspect_reason(row) == ""
+    assert not is_suspect(row)
+
+
+def test_a_matching_gics_sector_in_a_named_family_is_not_suspect():
+    row = _row("BBB.US", "Example Biotech Co", industry="Biotechnology", sector="Healthcare",
+              gics_sector="Health Care", market="US")
+    assert suspect_reason(row) == ""
+
+
 def test_a_taiwan_fund_is_counted_once_as_a_fund_and_never_also_as_suspect():
     row = _row("00939.TW", "China Construction Bank Corp Class H",
                sub="Semiconductor Materials & Equipment", industry="Semiconductors",

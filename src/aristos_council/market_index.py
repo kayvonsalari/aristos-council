@@ -1881,21 +1881,62 @@ _NAME_EXPECTS = (
 
 CLASSIFICATION_SUSPECT = "classification suspect"
 
+# NOVOTE-1 item 2.3a — EODHD's own industry vs its GICS copy, NOT a name check (the
+# _NAME_EXPECTS table above). Live bug: HLB Co. Ltd (028300.KQ) — EODHD industry
+# "Biotechnology" (Healthcare), GICS subindustry "Leisure Products" (Consumer
+# Discretionary) — appeared as the ONLY peer Cyclical Income ranked for a Biotechnology
+# name, a one-company "cohort" with no real comparison in it.
+#
+# DELIBERATELY NARROW, by measurement, not guess: checked sector vs gics_sector across
+# the WHOLE index before writing this table. ~15-20% of ~25,000 rows disagree at the
+# sector level overall — a blanket "sector mismatch" rule would flag thousands of real
+# peers across unrelated cohorts (176 rows alone read Industrials/Information
+# Technology), which is a SEPARATE, pre-existing GICS-enrichment data-quality question
+# (logged for a later batch — a hand-check of a random sample is pending; the table
+# belongs in the next batch's report, not guessed at here). This table covers only the
+# four EODHD industry families severe and specific enough that NO plausible GICS sector
+# disagrees without one of the two fields being wrong outright: a biotech/pharma company
+# is never genuinely Consumer-anything, a bank or insurer is never genuinely
+# Materials/Industrials, a utility is never genuinely something else, an oil & gas
+# company is never genuinely Real Estate. Measured against this exact table: 161 of
+# 3,123 rows in these four families disagree (5%, not 15-20%) — small enough to hand-
+# review case by case rather than trust blind, and each stays VISIBLE with its reason
+# (flagged, never silently dropped — the same convention as every other correction in
+# cohorts/flags.py), so a genuine diversified holding company misflagged here is still
+# seen, just not counted as a peer under a label neither field quite earns.
+_EODHD_GICS_SECTOR_EXPECTS = (
+    ("Biotechnology/Pharmaceuticals", re.compile(r"biotech|pharma", re.IGNORECASE),
+     "Health Care"),
+    ("Banks/Insurance", re.compile(r"^bank|insurance", re.IGNORECASE), "Financials"),
+    ("Utilities", re.compile(r"utilit", re.IGNORECASE), "Utilities"),
+    ("Oil & Gas", re.compile(r"oil\s*&\s*gas|oil and gas", re.IGNORECASE), "Energy"),
+)
+
 
 def suspect_reason(row: "IndexRow") -> str:
-    """Why this row's classification contradicts its own name, or "" when it does not.
+    """Why this row's classification contradicts itself, or "" when it does not.
 
-    A row with no classification at all is NEVER suspect: nothing contradicts anything, and the
-    peer ladder already cannot place it. A fund is not reported here either - it has its own
-    reason and is counted once.
+    Two independent checks, either of which can fire: the NAME says one thing and every
+    classification field says another (``_NAME_EXPECTS``), or EODHD's own industry and
+    its GICS sector are in families that should never disagree (item 2.3a, above). A row
+    with no classification at all is NEVER suspect: nothing contradicts anything, and the
+    peer ladder already cannot place it. A fund is not reported here either - it has its
+    own reason and is counted once.
     """
     classification = _classification_text(row)
-    if not classification:
-        return ""
-    for word, pattern, family in _NAME_EXPECTS:
-        if pattern.search(row.name or "") and not family.search(classification):
-            return (f"{CLASSIFICATION_SUSPECT} (named like a {word}, filed under "
-                    f"{row.classification or classification})")
+    if classification:
+        for word, pattern, family in _NAME_EXPECTS:
+            if pattern.search(row.name or "") and not family.search(classification):
+                return (f"{CLASSIFICATION_SUSPECT} (named like a {word}, filed under "
+                        f"{row.classification or classification})")
+    industry = (row.industry or "").strip()
+    gics_sector = (row.gics_sector or "").strip()
+    if industry and gics_sector:
+        for label, pattern, required in _EODHD_GICS_SECTOR_EXPECTS:
+            if pattern.search(industry) and gics_sector != required:
+                return (f"{CLASSIFICATION_SUSPECT} (EODHD industry {industry!r} "
+                        f"({label}) filed under GICS sector {gics_sector!r}, expected "
+                        f"{required!r})")
     return ""
 
 

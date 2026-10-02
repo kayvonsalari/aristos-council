@@ -49,6 +49,7 @@ from .company_check import (CompanyCheckResult, absolute_reading_lines, analyst_
                             run_company_check)
 from .data.adapter import normalize_ticker
 from .peer_table import rank_columns
+from .rank_engine import MIN_RANKABLE_COHORT
 from .tools.valuation_band import ordinal
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -108,6 +109,13 @@ class LensVote:
             where = (f"{ordinal(self.position)} of {self.cohort_size}" if self.position
                      else f"ranked of {self.cohort_size}")
             return f"{self.word} - {where}{self.factor_note}"
+        if self.status == "too_few":
+            # NOVOTE-1 item 2.3b — a verdict over fewer than MIN_RANKABLE_COHORT names is
+            # arithmetic, not a comparison (the HLB case: "1 of 1" instead of an honest
+            # abstention). Never a verdict word here, even "hold" — there is nothing to
+            # compare it against.
+            company = "company" if self.cohort_size == 1 else "companies"
+            return f"too few to rank (only {self.cohort_size} {company} here, not a peer group)"
         if self.status == "excluded":
             return f"does not apply - {self.reason}"
         if self.status == "unrateable":
@@ -392,7 +400,16 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
                               f"{report.no_vote_reason or 'no vote to narrate'}")
     lead = _lead_vote(report.votes)
     if lead is None:
-        return CouncilOpinion(note="Council opinion unavailable: no lens ranked this company")
+        # NOVOTE-1 item 2.2 — every ticked lens EXCLUDED this name (the VKTX case: a
+        # pre-revenue biotech, excluded by every dividend-style lens it was checked
+        # against). "Council opinion unavailable: no lens ranked this company" read as an
+        # error message about a broken run; the council has nothing wrong with it; it
+        # simply has nothing to narrate, because it only comments on a vote and there
+        # isn't one. Specialist-only factual context (cash, price trend, analysts) with
+        # no verdict is a materially new council mode — deferred, not "cheap" to add
+        # alongside this wording fix; see the done-report.
+        return CouncilOpinion(note="No lens voted, so there is no verdict to narrate; the "
+                              "council only comments on votes.")
 
     import os
     if runners is None and not os.environ.get("ANTHROPIC_API_KEY"):
@@ -501,6 +518,12 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
         cell = row.cells.get(sid) if row is not None else None
         if cell is None or cell.status == "absent":
             votes.append(LensVote(**base, status="absent"))
+        elif cell.status == "ranked" and cell.cohort_size < MIN_RANKABLE_COHORT:
+            # NOVOTE-1 item 2.3b — the HLB case: Cyclical Income ranked it "1 of 1"
+            # because a classification leak (item 2.3a) left it the only name in its own
+            # cohort. A rank over this few names is arithmetic, not a comparison — never
+            # reported as a verdict, however the cut's own math would have scored it.
+            votes.append(LensVote(**base, status="too_few", cohort_size=cell.cohort_size))
         elif cell.status == "ranked":
             votes.append(LensVote(**base, status="ranked", verdict=cell.verdict,
                                   position=cell.position, cohort_size=cell.cohort_size,
