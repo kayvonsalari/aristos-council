@@ -50,6 +50,7 @@ from .company_check import (CompanyCheckResult, absolute_reading_lines, analyst_
 from .data.adapter import normalize_ticker
 from .peer_table import rank_columns
 from .rank_engine import MIN_RANKABLE_COHORT, too_few_to_rank_text
+from .smallcap_band import SMALLCAP_CEILING_USD
 from .tools.valuation_band import ordinal
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -59,6 +60,11 @@ HOUSE_LINE = ("The math judges: each vote below is the lens's own verdict on thi
 NO_LENS_REASON = "No lens is ticked, so there is nothing to vote."
 SUMMARY_NOT_ASKED = ""          # an unticked summary leaves NO section, not a placeholder
 NO_KEY_NOTE_OPINION = "Council opinion unavailable: no ANTHROPIC_API_KEY set"
+# SMALLCAP-VIEW-1 — the exact line the header and every lens verdict carry when the company
+# was ranked below the five lenses' own $5bn gate, on the opt-in small-company band instead
+# of a normal peer group (see smallcap_band.py). Never shown for a company at or above the
+# gate, ticked or not (item 1d: identical to unticked).
+OUTSIDE_TESTED_RANGE_LINE = "Outside the tested range (under $5bn): no track record applies."
 
 
 # --------------------------------------------------------------------------- #
@@ -262,6 +268,17 @@ class CompanyReport:
     # YYYY>" caption ("" when cohort_slug is None).
     cohort_slug: Optional[str] = None
     track_record_caption: str = ""
+    # SMALLCAP-VIEW-1 — True only when the company was below the $5bn lens gate AND ranked on
+    # the opt-in small-company band (never set for a normal, at-or-above-gate run, ticked or
+    # not). attach_track_record is never called for such a run, so cohort_slug/
+    # track_record_caption above stay at their defaults — no badge was ever earned on this
+    # band, which was never backtested. smallcap_cohort/smallcap_floor_usd are display-only,
+    # naming the band this company was actually measured against.
+    outside_tested_range: bool = False
+    smallcap_cohort: str = ""
+    smallcap_floor_usd: Optional[float] = None
+    smallcap_band_note: str = ""      # "" unless the band itself was degraded (e.g. the
+                                       # cohort's own floor sits at or above $5bn)
 
     @property
     def display(self) -> str:
@@ -518,11 +535,19 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
         cell = row.cells.get(sid) if row is not None else None
         if cell is None or cell.status == "absent":
             votes.append(LensVote(**base, status="absent"))
-        elif cell.status == "ranked" and cell.cohort_size < MIN_RANKABLE_COHORT:
+        elif cell.status == "too_few" or (cell.status == "ranked"
+                                          and cell.cohort_size < MIN_RANKABLE_COHORT):
             # NOVOTE-1 item 2.3b — the HLB case: Cyclical Income ranked it "1 of 1"
             # because a classification leak (item 2.3a) left it the only name in its own
             # cohort. A rank over this few names is arithmetic, not a comparison — never
             # reported as a verdict, however the cut's own math would have scored it.
+            # BATCH-14 RUNTAB-RANK-1 follow-up fix: combine_rank_results now tags such a
+            # cell "too_few" directly (so the Run tab gets the same guard), which made
+            # this branch's own "ranked and cohort_size < floor" half unreachable in a
+            # real run and silently dropped the cohort_size (it read 0, not the real
+            # count) — caught by SMALLCAP-VIEW-1's own too-few test, fixed by accepting
+            # either shape. The "ranked and small" half is kept for any caller that still
+            # builds a MultiStrategyCell directly (this file's own unit tests do).
             votes.append(LensVote(**base, status="too_few", cohort_size=cell.cohort_size))
         elif cell.status == "ranked":
             votes.append(LensVote(**base, status="ranked", verdict=cell.verdict,
@@ -585,11 +610,23 @@ def run_company_report(
     with_summary: bool = False, reader_runner=None, with_council: bool = False,
     council_runners=None, store=None, save: bool = True,
     progress: Optional[Callable[[str], None]] = None,
+    include_small: bool = False,
 ) -> CompanyReport:
     """Build the whole report. ``adapter`` is shared by the readings and every lens run, so a name
     fetched once is read from the day-cache thereafter. Nothing here calls a model unless
     ``with_summary`` and/or ``with_council`` (COUNCIL-OPINION-1) is True — the two are
-    independent tick boxes."""
+    independent tick boxes.
+
+    ``include_small`` (SMALLCAP-VIEW-1, off by default) changes nothing for a company AT OR
+    ABOVE the five lenses' own $5bn gate (item 1d: byte-identical to ``include_small=False``).
+    For one BELOW it, the normal peer group (``market_index.peers`` — size-ratio banded, no
+    $-floor of its own) is replaced by the company's own backtested cohort's band between
+    that cohort's USD floor and $5bn (``smallcap_band.build_smallcap_peer_band``), ranked
+    with the gate switched off for this run only
+    (``run_multi_strategy_pipeline``'s existing ``min_market_cap_override``) — no lens's
+    maths changes, only who else is in the room. ``attach_track_record`` is skipped for such
+    a run: a badge earned on the normal, $5bn-and-up backtested cohort says nothing about
+    this band, which was never backtested."""
     say = progress or (lambda _m: None)
     started = time.perf_counter()
     today = today or date.today()
@@ -627,11 +664,46 @@ def run_company_report(
 
     # ----- the votes ---------------------------------------------------------------------- #
     group = check.peer_group
+    subject = getattr(group, "subject", None) if group is not None else None
+    subject_cap_usd = getattr(subject, "market_cap_usd", None) if subject is not None else None
+    # SMALLCAP-VIEW-1 item 1d — a MISSING cap cannot be shown to be below the gate, so it is
+    # never treated as smallcap: same as an unticked box, the honest reading of "unknown".
+    smallcap_mode = (include_small and subject is not None and subject_cap_usd is not None
+                     and subject_cap_usd < SMALLCAP_CEILING_USD)
     if check.unrateable:
         report.no_vote_reason = ("no data for this company, so there is nothing to rank "
                                  f"({check.data_integrity.note})")
     elif not ids:
         report.no_vote_reason = NO_LENS_REASON
+    elif smallcap_mode:
+        from .smallcap_band import build_smallcap_peer_band
+        band = build_smallcap_peer_band(subject, adapter=adapter, today=today, store=store)
+        if band.cohort_slug is None:
+            report.no_vote_reason = (
+                f"no peer group, so no lens can vote: {band.reasons[0] if band.reasons else 'no small-company band could be built'}. "
+                f"The valuation band and the readings below do not need one.")
+        else:
+            universe = [ticker] + band.tickers
+            report.universe = universe
+            say(f"Ranking {ticker} against {len(band.tickers)} small-company peer"
+                f"{'s' if len(band.tickers) != 1 else ''} ({band.cohort_name}) under "
+                f"{len(ids)} lens{'es' if len(ids) != 1 else ''}…")
+            from .pipeline import run_multi_strategy_pipeline
+            multi = run_multi_strategy_pipeline(
+                universe, ids, strategies_dir=strategies_dir, universes_dir=universes_dir,
+                adapter=adapter, today=today, freeze_dir=runs_dir, with_valuation_band=False,
+                progress=say, min_market_cap_override=0.0)
+            report.votes = votes_from_multi(multi, ticker)
+            report.lens_ranks = lens_ranks_record(multi)
+            report.outside_tested_range = True
+            report.smallcap_cohort = band.cohort_name
+            report.smallcap_floor_usd = band.floor_usd
+            # Live, 2026-10-02 — a cohort whose own floor is at or above $5bn (Biotechnology,
+            # $10bn) leaves no band to rank in; the subject still runs alone through the
+            # pipeline above and the EXISTING too-few guard reports it honestly ("only 1
+            # company"), but the REASON is worth keeping on the record rather than left to
+            # be inferred.
+            report.smallcap_band_note = band.reasons[0] if band.reasons else ""
     elif group is None or not group.available:
         why = ("; ".join(group.reasons) if group is not None and group.reasons
                else check.peer_error or "no peer group could be formed")
@@ -663,7 +735,9 @@ def run_company_report(
         report.agreement = build_agreement(report.votes, band_percentile=check.band_percentile)
 
     # BACKTEST-2 — badges are display only and never feed the agreement built above.
-    if report.votes:
+    # SMALLCAP-VIEW-1 — never for a small-company-band run: a badge earned on the normal,
+    # $5bn-and-up backtested cohort says nothing about an untested band (item 1c).
+    if report.votes and not report.outside_tested_range:
         attach_track_record(report)
 
     # ----- the two opt-in model features, each only when asked for -------------------------- #
@@ -765,9 +839,12 @@ def agreement_table_lines(report: CompanyReport) -> list[str]:
 
 
 def vote_table_lines(report: CompanyReport) -> list[str]:
+    # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-band
+    # run (item 1c); never shown otherwise.
+    suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
     width = max((len(v.label) for v in report.votes), default=4)
     out = [f"{'Lens'.ljust(width)}  {'Role':<22} Result"]
-    out += [f"{v.label.ljust(width)}  {v.role:<22} {v.result()}{v.badge_suffix}"
+    out += [f"{v.label.ljust(width)}  {v.role:<22} {v.result()}{v.badge_suffix}{suffix}"
            for v in report.votes]
     return out
 
@@ -801,7 +878,17 @@ def council_opinion_lines(report: CompanyReport) -> list[str]:
 def format_company_report(report: CompanyReport) -> str:
     """The report as text, in the page order."""
     c = report.check
-    lines = [f"Company Report - {report.display}", HOUSE_LINE, ""]
+    lines = [f"Company Report - {report.display}", HOUSE_LINE]
+    if report.outside_tested_range:
+        lines.append(OUTSIDE_TESTED_RANGE_LINE)
+        if report.smallcap_cohort:
+            floor = (f"${report.smallcap_floor_usd / 1e9:g}bn" if report.smallcap_floor_usd
+                    else "its own floor")
+            lines.append(f"Small-company peer band: the {report.smallcap_cohort} cohort, "
+                         f"{floor}-$5bn.")
+        if report.smallcap_band_note:
+            lines.append(report.smallcap_band_note.capitalize() + ".")
+    lines.append("")
     if report.unrateable:
         lines += [f"UNRATEABLE - {c.data_integrity.note}. No data, so no votes and no readings.",
                   c.pointer]
@@ -990,6 +1077,11 @@ def main(argv=None) -> int:
                         help="tick the council opinion (COUNCIL-OPINION-1) — narrator mode, "
                              "about six model calls; needs ANTHROPIC_API_KEY; never votes")
     parser.add_argument("--no-save", action="store_true", help="do not write the run under runs/")
+    parser.add_argument("--include-small", action="store_true",
+                        help="SMALLCAP-VIEW-1: for a company under the $5bn lens gate, rank it "
+                             "against other sub-$5bn peers in its own cohort instead of skipping "
+                             "every lens; no track record badge is shown for such a run. No "
+                             "effect on a company at or above the gate.")
     args = parser.parse_args(argv)
     force_utf8_stdout()
     try:
@@ -1000,6 +1092,7 @@ def main(argv=None) -> int:
     report = run_company_report(
         args.ticker, args.lenses or list(DEFAULT_LENSES),
         with_summary=args.summary, with_council=args.council, save=not args.no_save,
+        include_small=args.include_small,
         progress=lambda m: print(m, flush=True) if os.environ.get("ARISTOS_VERBOSE") else None)
     print(format_company_report(report))
     return 0

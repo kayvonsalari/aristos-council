@@ -3593,6 +3593,18 @@ def render_company_check_tab(show_validation: bool = False) -> None:
         st.error(f"No {asset_mode()} strategies found under {STRATEGIES_DIR}")
         return
 
+    # SMALLCAP-VIEW-1 — off by default, never persisted beyond this session (a bare widget
+    # key; nothing here writes it to disk). Ticked, a company under the five lenses' own
+    # $5bn gate is ranked against other sub-$5bn peers in its own cohort instead of being
+    # skipped by every lens; no track record badge is shown for such a run. No effect on a
+    # company at or above the gate (item 1d).
+    include_small = st.checkbox(
+        "Include companies under $5bn", value=False, key="cc_include_small",
+        help="Off by default. For a company below the $5bn floor every lens's own YAML "
+             "declares, this ranks it against other sub-$5bn companies in its own cohort "
+             "instead of letting every lens skip it — clearly marked as outside the tested "
+             "range, with no track-record badge. A company at or above $5bn is unaffected.")
+
     # FIND-COMPANY-1 — fronts the bare ticker box: type part of a name or a ticker, pick a
     # match, it fills the box below. Offline (the local market index and the built cohorts'
     # own member lists only, each read once and cached) — no network call, no holdings data.
@@ -3675,6 +3687,7 @@ def render_company_check_tab(show_validation: bool = False) -> None:
                 ticker, [s_.id for s_ in strategies], adapter=_company_check_adapter(),
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 runs_dir=ROOT / "runs", with_summary=with_summary, with_council=with_council,
+                include_small=include_small,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")
@@ -3814,12 +3827,22 @@ def _render_company_report(report) -> None:
     import pandas as pd
 
     from aristos_council.company_report import (HOUSE_LINE, NO_LENS_REASON,
+                                                OUTSIDE_TESTED_RANGE_LINE,
                                                 format_company_report)
     from aristos_council.export.report_html import company_report_html
 
     check = report.check
     st.markdown(f"### Company Report — {report.display}")
     st.caption(HOUSE_LINE)
+    # SMALLCAP-VIEW-1 — the header caveat, exactly the line every lens's own vote also
+    # carries below. Never shown for a company at or above the $5bn gate.
+    if report.outside_tested_range:
+        floor = (f"${report.smallcap_floor_usd / 1e9:g}bn" if report.smallcap_floor_usd
+                else "its own floor")
+        st.warning(f"**{OUTSIDE_TESTED_RANGE_LINE}**" + (
+            f" Small-company peer band: the {report.smallcap_cohort} cohort, {floor}-$5bn."
+            if report.smallcap_cohort else "")
+            + (f" {report.smallcap_band_note.capitalize()}." if report.smallcap_band_note else ""))
     if report.unrateable:
         st.warning(f"⚪ **UNRATEABLE** — {check.data_integrity.note}. No data, so no votes and no "
                    "readings.")
@@ -3862,8 +3885,11 @@ def _render_company_report(report) -> None:
 
     st.subheader("Lens votes")
     if report.votes:
+        # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-
+        # band run; never shown otherwise.
+        _suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
         st.dataframe(pd.DataFrame([{"Lens": v.label, "Role": v.role,
-                                    "Result": v.result() + v.badge_suffix,
+                                    "Result": v.result() + v.badge_suffix + _suffix,
                                     "What it asks": v.asks} for v in report.votes]),
                      hide_index=True, width="stretch")
         badged = [v for v in report.votes if v.badge is not None]

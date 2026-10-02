@@ -1608,17 +1608,27 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     valuation band, absolute readings, analyst forecasts, Sources. The same objects the text
     export prints, so the two cannot drift."""
     from ..company_check import company_sources
-    from ..company_report import HOUSE_LINE, NO_LENS_REASON
+    from ..company_report import HOUSE_LINE, NO_LENS_REASON, OUTSIDE_TESTED_RANGE_LINE
     from ..peer_table import rank_columns
 
     c = report.check
     stamp = _local_stamp(run_start)
+    header_tail = f'<p class="house">{_esc(HOUSE_LINE)}</p>'
+    if report.outside_tested_range:
+        header_tail += f'<p class="note">{_esc(OUTSIDE_TESTED_RANGE_LINE)}</p>'
+        if report.smallcap_cohort:
+            floor = (f"${report.smallcap_floor_usd / 1e9:g}bn" if report.smallcap_floor_usd
+                    else "its own floor")
+            header_tail += (f'<p class="note">Small-company peer band: the '
+                            f'{_esc(report.smallcap_cohort)} cohort, {_esc(floor)}-$5bn.</p>')
+        if report.smallcap_band_note:
+            header_tail += f'<p class="note">{_esc(report.smallcap_band_note.capitalize())}.</p>'
     parts = ['<header class="doc"><p class="kicker">Aristos Council · company report · one '
              "company against its peer group</p>"
              f"<h1>{_esc(report.display)}</h1>"
              + _kv([("lenses", ", ".join(f"<code>{_esc(i)}</code>" for i in report.lens_ids)),
                     ("run", _esc(stamp))])
-             + f'<p class="house">{_esc(HOUSE_LINE)}</p></header>']
+             + header_tail + "</header>"]
     if report.unrateable:
         parts.append(_callout(f"UNRATEABLE — {c.data_integrity.note}. No data, so no votes and no "
                               "readings.", kind="alert"))
@@ -1653,8 +1663,12 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
 
     parts.append('<section class="section"><h2>Lens votes</h2>')
     if report.votes:
-        body = [[_esc(v.label), _esc(v.role), _esc(v.result() + v.badge_suffix), _esc(v.asks)]
-                for v in report.votes]
+        # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-band
+        # run; never shown otherwise. No badge bullets follow (attach_track_record is never
+        # called for such a run — badged is always empty below).
+        suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
+        body = [[_esc(v.label), _esc(v.role), _esc(v.result() + v.badge_suffix + suffix),
+                _esc(v.asks)] for v in report.votes]
         parts.append(_table(["Lens", "Role", "Result", "What it asks"], body))
         from ..backtest import BADGE_MEANINGS
         badged = [v for v in report.votes if v.badge is not None]

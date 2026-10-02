@@ -1063,3 +1063,172 @@ def test_council_opinion_text_and_html_sections_carry_the_narrative(tmp_path):
     html = company_report_html(report)
     assert "COUNCIL OPINION" in text and report.council_opinion.narrative in text
     assert "<h2>Council opinion</h2>" in html
+
+
+# =========================================================================== #
+# BATCH-14 SMALLCAP-VIEW-1 — the opt-in peer band for a company below the $5bn lens gate.
+# "Tech - Semiconductors" is a REAL, committed cohort (data/cohort_definitions.yaml: industry
+# "Semiconductors" narrowed to the GICS sub-industry "Semiconductors", floor $3bn) — the same
+# one test_exports_carry_the_badge_text_and_the_cohort_used already matches, so this is a real
+# cohort match, not a fabricated one. The company's own $5bn lens gate is UNCHANGED; what
+# changes is the UNIVERSE a smallcap company is ranked against and that run's gate OVERRIDE
+# (``min_market_cap_override=0.0``), so the fake adapter's own ``market_cap=2e10`` never
+# matters here — only the INDEX row's ``market_cap_usd`` (what the band filters on) does.
+# =========================================================================== #
+from aristos_council.company_report import OUTSIDE_TESTED_RANGE_LINE
+
+
+class _SmallcapAdapter(_Adapter):
+    """Same fundamentals as ``_Adapter`` (peers improve with their number); LIQUID volume —
+    ``_Adapter``'s own volume=10 bars would read as illiquid under SIZE-FLOOR-1's $3m ADV
+    floor, which is the wrong reason for this fixture's lenses to exclude a peer."""
+
+    def get_price_history(self, ticker, *, start, end):
+        slope = 0.05 + 0.01 * _number(ticker)
+        return PriceHistory(ticker=ticker, bars=[
+            PriceBar(day=date(2026, 1, 1), open=100, high=101, low=99,
+                     close=100 + slope * i, adj_close=100 + slope * i, volume=100_000)
+            for i in range(300)])
+
+
+def _semi_row(ticker, code, *, cap_usd):
+    return _row(ticker, code, name=f"{code} Corp", cap=cap_usd, sub="Semiconductors")
+
+
+def _smallcap_table(n_peers=4, *, subject_cap=4e9, peer_cap=3.5e9):
+    rows = [_semi_row("CO.US", "CO", cap_usd=subject_cap)]
+    rows += [_semi_row(f"P{i:02d}.US", f"P{i:02d}", cap_usd=peer_cap) for i in range(n_peers)]
+    return _Store(rows)
+
+
+def _smallcap_run(lens_ids, *, tmp_path, n_peers=4, subject_cap=4e9, peer_cap=3.5e9,
+                  include_small=True, **kw):
+    return run_company_report(
+        "CO", lens_ids, adapter=_SmallcapAdapter(), strategies_dir=STRAT_DIR,
+        universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
+        store=_smallcap_table(n_peers, subject_cap=subject_cap, peer_cap=peer_cap),
+        include_small=include_small, save=False, **kw)
+
+
+def test_include_small_off_by_default_changes_nothing(tmp_path):
+    """Item 1b — the flag defaults off; a sub-$5bn company run without it behaves exactly as
+    a normal run (gated out of every voting lens, as $4bn always was and still is)."""
+    report = _smallcap_run([RAW], tmp_path=tmp_path, include_small=False)
+    assert report.outside_tested_range is False
+    assert report.smallcap_cohort == "" and report.smallcap_floor_usd is None
+    assert all(v.status != "ranked" for v in report.votes)   # the $5bn gate still excludes it
+
+
+def test_a_subcap_company_ranks_against_its_smallcap_band(tmp_path):
+    """Item 1c — the core positive case: $4bn, ticked, ranked against its own cohort's
+    $3bn-$5bn band instead of being gated out of every lens."""
+    report = _smallcap_run([RAW], tmp_path=tmp_path)
+    assert report.outside_tested_range is True
+    assert report.smallcap_cohort == "Tech - Semiconductors"
+    assert report.smallcap_floor_usd == 3_000_000_000
+    vote = report.votes[0]
+    assert vote.status == "ranked" and vote.cohort_size == 5     # CO + 4 peers
+    # No track record: attach_track_record is never called for this run.
+    assert vote.badge is None
+    assert report.cohort_slug is None and report.track_record_caption == ""
+
+
+def test_the_outside_tested_range_line_is_on_the_header_and_every_vote(tmp_path):
+    report = _smallcap_run([RAW, SCREENED], tmp_path=tmp_path)
+    text = format_company_report(report)
+    html = company_report_html(report)
+    assert text.count(OUTSIDE_TESTED_RANGE_LINE) >= 1 + len(report.votes)   # header + each vote
+    assert OUTSIDE_TESTED_RANGE_LINE in html
+    # the vote TABLE row (not result() itself, which stays undecorated — the caveat is added
+    # at the rendering layer, same reason _council_cross_lens_verdicts's "cell" text must
+    # never carry it: it is a display caveat, not part of the lens's own verdict string).
+    from aristos_council.company_report import vote_table_lines
+    for line in vote_table_lines(report)[1:]:
+        assert OUTSIDE_TESTED_RANGE_LINE in line
+
+
+def test_zero_badge_strings_in_the_html_for_a_smallcap_run(tmp_path):
+    """Item 1c — 'no proven/not proven/untested badges for these companies'."""
+    from aristos_council.backtest import BADGE_LABELS
+
+    report = _smallcap_run([RAW], tmp_path=tmp_path)
+    html = company_report_html(report)
+    for label in BADGE_LABELS:
+        assert label not in html
+    assert "Track record" not in html
+
+
+def test_too_few_band_members_shows_too_few_to_rank(tmp_path):
+    """Item 1c's own cross-reference to the existing guard — a band under
+    MIN_RANKABLE_COHORT (3) reads 'too few to rank', the SAME guard Company Check's normal
+    peer path already uses, not a new rule."""
+    from aristos_council.rank_engine import too_few_to_rank_text
+
+    report = _smallcap_run([RAW], tmp_path=tmp_path, n_peers=1)      # CO + 1 peer = 2, too few
+    assert report.votes[0].status == "too_few"
+    assert report.votes[0].result() == too_few_to_rank_text(2)
+
+
+def test_no_cohort_match_falls_back_to_a_stated_no_vote_reason(tmp_path):
+    """A sub-$5bn company whose industry matches no backtested cohort at all cannot be
+    banded — honest abstention, not a crash and not a silent normal run."""
+    store = _Store([_semi_row("CO.US", "CO", cap_usd=2e9)])
+    store._rows[0].industry = "Something Nobody Backtested"
+    store._rows[0].gics_subindustry = ""
+    report = run_company_report(
+        "CO", [RAW], adapter=_SmallcapAdapter(), strategies_dir=STRAT_DIR,
+        universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY, store=store,
+        include_small=True, save=False)
+    assert report.outside_tested_range is False
+    assert not report.votes or report.votes[0].status == "no_group"
+    assert "no small-company band" in report.no_vote_reason or "no backtested cohort" \
+        in report.no_vote_reason
+
+
+def test_a_company_at_or_above_5bn_ignores_include_small(tmp_path):
+    """Item 1d — identical to unticked. Compared field-by-field rather than by full text,
+    since the text's own 'Ran in Xs' tail is wall-clock and never equal between two runs."""
+    on = _smallcap_run([RAW], tmp_path=tmp_path, subject_cap=6e9, peer_cap=3.5e9,
+                       include_small=True)
+    off = _smallcap_run([RAW], tmp_path=tmp_path, subject_cap=6e9, peer_cap=3.5e9,
+                        include_small=False)
+    assert on.outside_tested_range is False and off.outside_tested_range is False
+    assert [v.result() for v in on.votes] == [v.result() for v in off.votes]
+    assert on.universe == off.universe
+    assert (on.agreement.headline if on.agreement else None) == \
+        (off.agreement.headline if off.agreement else None)
+
+
+def test_a_missing_market_cap_is_never_treated_as_smallcap(tmp_path):
+    """Item 1d's own edge: an UNKNOWN cap cannot be shown to be below the gate, so
+    include_small has no effect — the honest reading of 'we don't know', not a guess
+    either way."""
+    store = _smallcap_table()
+    store._rows[0] = replace_market_cap_usd_none(store._rows[0])
+    report = run_company_report(
+        "CO", [RAW], adapter=_SmallcapAdapter(), strategies_dir=STRAT_DIR,
+        universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY, store=store,
+        include_small=True, save=False)
+    assert report.outside_tested_range is False
+
+
+def replace_market_cap_usd_none(row):
+    from dataclasses import replace as _dc_replace
+    return _dc_replace(row, market_cap_usd=None)
+
+
+def test_include_small_cli_flag_is_wired(tmp_path, monkeypatch, capsys):
+    """The --include-small flag reaches run_company_report (argparse plumbing only — the
+    behavior itself is pinned above)."""
+    import aristos_council.company_report as cr
+
+    captured = {}
+
+    def _fake(ticker, lens_ids, **kw):
+        captured.update(kw)
+        return _smallcap_run([RAW], tmp_path=tmp_path, include_small=kw.get("include_small", False))
+
+    monkeypatch.setattr(cr, "run_company_report", _fake)
+    monkeypatch.chdir(tmp_path)
+    cr.main(["CO", "--lens", RAW, "--include-small", "--no-save"])
+    assert captured.get("include_small") is True
