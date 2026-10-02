@@ -648,6 +648,22 @@ def _size_floor(cohort: str, cohorts_root, version: Optional[int],
     return None, ""
 
 
+def cohort_native_floor(cohort: str, cohorts_root=None) -> tuple:
+    """``(floor USD or None, note)`` a DEFAULT run (``min_cap_usd=None``) actually applies for
+    ``cohort`` — the exact value ``_size_floor`` would compute, without running a backtest.
+
+    SIZE-FLOOR-1 bug report (2026-10-02), symptom 2: a grid row's ``min_cap_usd=5e9`` is a
+    control that reproduces the committed/default run ONLY when this native floor happens to
+    equal 5bn too — it is a COHORT-scoped tier value (COHORT-3's $1-10bn crowding rule), not
+    the lens's own $5bn gate, and none of the five SIZE-FLOOR-1 grid cohorts carry one at
+    exactly $5bn (Materials - Diversified Mining and Comms - Interactive Media & Gaming are
+    both $2bn; Consumer - Auto Manufacturers and Industrials - Grid & Electrical Machinery are
+    both $1bn; Tech - Semiconductors is $3bn). Surfaced so a reader comparing a grid row
+    against ``SUMMARY.csv`` can see at a glance whether "$5bn" was actually a no-op there."""
+    _, version, member_caps = load_cohort_members(cohort, cohorts_root)
+    return _size_floor(cohort, cohorts_root, version, member_caps)
+
+
 def lens_commit(lens_id: str, strategies_dir=None) -> str:
     """The git commit that last touched the lens YAML (and the screen lens it references), for the
     CSV header. "<hash>+uncommitted" when the working copy differs; "unknown" outside a checkout."""
