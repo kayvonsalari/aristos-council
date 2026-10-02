@@ -409,6 +409,27 @@ override exactly equals the cohort's own floor); `False` means it is a genuinely
 different, stricter-or-looser experiment and a difference from `SUMMARY.csv` is the floor
 working as intended, not a discrepancy.
 
+**If two lenses read identically anyway, check `n_ranked` before suspecting a bug.** A
+2026-10-02 bug report also found growth_garp_v2 and magic_formula_raw_v1 producing
+IDENTICAL baskets (same excess, years positive, drawdown — only luck % differed, which is
+expected: its random draw is seeded by `lens_id` too). Reproduced in a fixture
+(`tests/test_lens_backtest.py`, `test_a_real_lens_screen_can_go_silently_inert_on_thin_as_of_accounts_coverage`)
+with no code bug anywhere: growth_garp_v2's three screen criteria each need as-of data
+that is genuinely plausible to be missing for a smaller or more recently-listed name early
+in a long backtest — `min_revenue_cagr`/`max_peg_ratio` need 4 annual points surviving the
+90-day lag cut (3y of change), and `min_roic` needs `invested_capital` dated via its own
+`period_ends` entry (a derived balance-sheet line, plausibly less completely reported than
+the income-statement lines the other two read). When every candidate in a round is short
+on this data, every criterion abstains (NOT-EVAL, never a confirmed fail) for every name —
+the null != false discipline doing exactly what it should, just with nothing left for it
+to discriminate on — and a screened lens ranks the exact same universe an unscreened one
+does. `Round.n_ranked` (how many of `n_eligible` the lens's OWN screen actually kept) was
+already computed and already round-trips through the CSV; it just was not surfaced in a
+summary row before this bug report. `magic_formula_raw_v1` has no screen, so its
+`n_ranked` always equals `n_eligible` — that is normal. For a SCREENED lens,
+`n_ranked == n_eligible` on every round means its screen confirmed zero fails that round:
+check this column first whenever two lenses' numbers agree unexpectedly.
+
 ## The two honesty limits
 
 These are stamped into every result and every CSV. Both **flatter** the lens, and neither can be

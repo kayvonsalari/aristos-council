@@ -680,7 +680,16 @@ def test_min_cap_usd_overrides_the_as_of_floor_instead_of_the_cohort_file(monkey
 def test_default_run_is_untouched_min_cap_usd_none_is_a_complete_no_op(monkeypatch, tmp_path):
     """Item 1f — the existing, already-validated backtests must read byte-identical: with no
     override, the lens's own gate sees min_market_cap_override=None (its file value applies,
-    unchanged) and no liquidity guard runs at all."""
+    unchanged) and no liquidity guard runs at all.
+
+    SIZE-FLOOR-1 bug report (2026-10-02) item c — this test (and every other test above it in
+    this file that calls ``_run``/``_stub_pipeline``) proves NOTHING about whether the override
+    reaches the screen correctly: ``_stub_pipeline`` REPLACES ``run_rank_pipeline`` wholesale
+    with a fake that ranks every member and ignores ``strategy_id`` entirely (see its docstring
+    above) — it asserts only that ``min_market_cap_override`` arrives in the kwargs, never that
+    a REAL lens's REAL screen still runs under it. The gap: nothing in this file, before the
+    "SIZE-FLOOR-1 bug report" section further down, ever calls the real pipeline with a real
+    screened lens. Covered there instead, against growth_garp_v2 / magic_formula_raw_v1."""
     calls = []
     result = _run(monkeypatch, calls=calls)
     assert result.min_cap_usd is None and result.min_adv_usd is None and result.total_illiquid == 0
@@ -911,6 +920,66 @@ def test_growth_and_raw_pick_different_baskets_when_their_screens_disagree():
         assert growth_excluded == {"CCC", "DDD", "EEE", "FFF"}, override
         assert not any(t in growth_excluded for t, _ in raw.excluded) or not raw.excluded
         assert raw_buys != growth_buys, override
+
+
+def test_a_real_lens_screen_can_go_silently_inert_on_thin_as_of_accounts_coverage(tmp_path):
+    """SIZE-FLOOR-1 bug report (2026-10-02), round 2 — reproduces symptom 1's actual
+    mechanism, found by instrumenting the real screen (not guessed): growth_garp_v2's THREE
+    criteria each abstain (NOT-EVAL, never a confirmed fail) under a data condition that is
+    plausible for a real backtest, not a code bug:
+
+      - min_revenue_cagr / max_peg_ratio need 4 annual points to survive the as-of cut
+        (3y of change); fewer than 4 years of as-of-visible accounts — ordinary for a
+        smaller or more recently-listed name early in a 10-year window — abstains both.
+      - min_roic needs invested_capital dated via its OWN period_ends entry; EODHD's
+        netInvestedCapital is a derived balance-sheet line, plausibly reported less
+        completely than the income-statement lines the other two criteria read.
+
+    When BOTH conditions hold for every candidate in a round, EVERY criterion abstains for
+    EVERY name, the screen confirms zero fails, and growth_garp_v2 ranks the exact same
+    universe magic_formula_raw_v1 does — producing identical baskets with NO code bug
+    anywhere: the null != false discipline is doing exactly what it should, just with
+    nothing left for it to discriminate on. This is a SILENT failure in today's reporting
+    (nothing marks a round where the screen did nothing) - Round.n_ranked already carries
+    the fix for free (it equals n_eligible exactly when the screen excluded no one), and
+    the notebook now surfaces it; this test pins the mechanism Round.n_ranked exists to
+    catch, not merely that the field exists."""
+    from dataclasses import replace
+
+    class InertScreenFeed(_RealLensFeed):
+        def get_fundamentals(self, ticker):
+            f = super().get_fundamentals(ticker)
+            n = 3                                    # one short of the 4 CAGR/PEG need
+            trimmed_ends = sorted(f.period_ends["total_revenue"], reverse=True)[:n]
+            period_ends = {k: trimmed_ends for k in f.period_ends}
+            period_ends.pop("invested_capital", None)          # ROIC's own date-map is gone
+            return replace(
+                f, total_revenue=f.total_revenue[:n], operating_income=f.operating_income[:n],
+                ebit=f.ebit[:n], tax_provision=f.tax_provision[:n],
+                pretax_income=f.pretax_income[:n], invested_capital=f.invested_capital[:n],
+                period_ends=period_ends,
+                period_scalars={d: v for d, v in f.period_scalars.items() if d in trimmed_ends},
+            )
+
+    tickers = sorted(_REAL_LENS_FUND)
+    _write_cohort(tmp_path, "inert_screen_cohort", versions=(1,),
+                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=1e9,
+                 members=[f"{t}.US" for t in tickers])
+    feed = InertScreenFeed()
+    raw = run_lens_backtest("Inert Screen Cohort", "magic_formula_raw_v1", start=date(2019, 1, 31),
+                            end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                            min_cap_usd=1e9)
+    growth = run_lens_backtest("Inert Screen Cohort", "growth_garp_v2", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                               min_cap_usd=1e9)
+    # The visible signature: growth's OWN screen kept everyone it was offered, every round -
+    # n_ranked == n_eligible, exactly as a screen-less lens's always does.
+    assert all(r.n_ranked == r.n_eligible for r in growth.rounds)
+    assert all(r.n_ranked == r.n_eligible for r in raw.rounds)      # RAW has no screen at all
+    # And with nothing left to discriminate on, the two lenses' own round-level numbers agree.
+    growth_shape = [(r.n_buys, r.excess) for r in growth.rounds]
+    raw_shape = [(r.n_buys, r.excess) for r in raw.rounds]
+    assert growth_shape == raw_shape
 
 
 # --- excess_drop_best --------------------------------------------------------------------- #
