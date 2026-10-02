@@ -219,6 +219,16 @@ import numpy as np
 MIN_BUYS = 3                      # fewer BUY names than this is "no position", not a 1-stock bet
 PRICE_TOLERANCE_DAYS = 10         # a close older than this (before a date) is "no price", not stale
 
+# SIZE-FLOOR-1 — a lower min-cap floor increases survivorship bias more than the as-of scaling
+# alone corrects for (a micro-cap that happened to survive AND grow into the cohort by today is
+# exactly the kind of name a point-in-time feed cannot see fail), so below the lens's own $5bn
+# floor a LIQUIDITY guard also applies: a name needs at least this much in mean daily $ value
+# traded over the trailing ~30 calendar days, estimated AS OF the round (item 1c). Never applied
+# at or above the $5bn default floor, where it would be redundant (nothing that illiquid clears
+# $5bn anyway) and the existing, already-validated backtests must stay byte-identical.
+MIN_ADV_USD_DEFAULT = 3_000_000.0
+ADV_WINDOW_DAYS = 30
+
 # OWNER'S RULING, 2026-09-26 - the pass bar. A lens is "proven" on a cohort when, over the measured
 # calendar years, its BUY basket beat the cohort's equal-weight benchmark by at least 2% a year on
 # average AND in at least 6 of 10 years (proportionally, if fewer than 10 years were measured). With
@@ -303,6 +313,10 @@ class Round:
     # lens's own raw BUY list (not the priced subset) - a fact about the lens's turnover, not about
     # what could be scored. Drives the turnover-matched random baskets; not read by verdict().
     n_new: int = 0
+    # SIZE-FLOOR-1 item 1c — how many names cleared the as-of size floor but were THEN excluded by
+    # the liquidity guard this round (0 whenever the guard did not apply - the default $5bn+ floor,
+    # or min_cap_usd not given). Reported, never silent: n_eligible already EXCLUDES these.
+    n_illiquid: int = 0
 
     @property
     def has_position(self) -> bool:
@@ -354,6 +368,16 @@ class BacktestResult:
     size_floor: Optional[float] = None
     size_floor_note: str = ""
     price_warnings: list = field(default_factory=list)
+    # SIZE-FLOOR-1 — a per-run override of the as-of size floor above ("what if it were $1bn"),
+    # applied through the SAME as-of scaling (BACKTEST-1B) and through min_market_cap_override
+    # (FLOOR-1/2) so the lens's own gate and screen agree with the floor this run actually used.
+    # None -> the lens/cohort's own file-declared floor, exactly as before this item (default
+    # $5bn runs are byte-identical). min_adv_usd is the item-1c liquidity guard's own threshold,
+    # applied only when min_cap_usd is set AND below $5bn; total_illiquid sums every round's
+    # n_illiquid, so "how many did the guard remove" is answered once, in the header.
+    min_cap_usd: Optional[float] = None
+    min_adv_usd: Optional[float] = None
+    total_illiquid: int = 0
     # BACKTEST-1C — the random-basket luck baseline. These three cannot be recomputed from
     # ``rounds`` alone (only each round's MEAN random excess is persisted, not the underlying
     # draws), so they are set ONCE by run_lens_backtest and carried as plain fields, read straight
@@ -457,12 +481,19 @@ def round_dates(start: date, end: date, hold_months: int, step_months: int) -> l
 # returns
 # --------------------------------------------------------------------------- #
 class _Closes:
-    """One ticker's (day, adjusted close) points with bisect lookups."""
+    """One ticker's (day, adjusted close) points with bisect lookups, plus (day, raw close x
+    volume) for the SIZE-FLOOR-1 liquidity guard (item 1c)."""
 
     def __init__(self, bars) -> None:
         pts = sorted((b.day, b.adj_close) for b in bars if b.adj_close is not None)
         self._days = [d for d, _ in pts]
         self._vals = [v for _, v in pts]
+        # $ value traded that day — RAW close (what actually changed hands), not the
+        # dividend-adjusted one, x volume. Sorted once, same tolerance window as prices.
+        traded = sorted((b.day, b.close * b.volume) for b in bars
+                        if b.close is not None and b.volume is not None)
+        self._adv_days = [d for d, _ in traded]
+        self._adv_vals = [v for _, v in traded]
 
     def on_or_before(self, d: date) -> Optional[float]:
         """The close on ``d`` or the last one before it - None when there is none within the
@@ -477,6 +508,16 @@ class _Closes:
         (BACKTEST-1B): ``member_caps`` is a snapshot as of roughly now, so it is scaled against
         the price at roughly now, not against an arbitrary date."""
         return self._vals[-1] if self._vals else None
+
+    def adv_usd(self, d: date, *, window_days: int = ADV_WINDOW_DAYS) -> Optional[float]:
+        """Mean $ value traded over the ``window_days`` calendar days up to and including
+        ``d`` (item 1c) — AS OF the round, never today's. ``None`` with no traded-value bars
+        in the window (never a silent zero — a missing read is NOT a confirmed illiquid)."""
+        lo = d - timedelta(days=window_days)
+        i = bisect.bisect_right(self._adv_days, d)
+        j = bisect.bisect_left(self._adv_days, lo)
+        window = self._adv_vals[j:i]
+        return (sum(window) / len(window)) if window else None
 
 
 PRICE_JUMP_RATIO = 3.0             # a one-day adjusted-close move beyond this, either way, is flagged
@@ -654,7 +695,9 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                       strategies_dir=None, member_caps=None,
                       random_baskets: int = RANDOM_BASKETS_DEFAULT,
                       max_luck: float = MAX_LUCK,
-                      random_mode: str = RANDOM_MODE_DEFAULT) -> BacktestResult:
+                      random_mode: str = RANDOM_MODE_DEFAULT,
+                      min_cap_usd: Optional[float] = None,
+                      min_adv_usd: float = MIN_ADV_USD_DEFAULT) -> BacktestResult:
     """Backtest one lens on one cohort. The first eight parameters are the contract; the rest of the
     keywords only say WHERE things live (a cohort directory, an explicit member list and its market
     caps for a machine with no built cohorts, a strategies directory) and change no rule.
@@ -699,6 +742,20 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
        eligibility) with fresh random draws, so its size still matches ``n_buys``. ``"independent"``
        is the 1C behaviour (redrawn from scratch every round) kept for comparison. Seeding changes
        accordingly: one seed per SERIES (persists across rounds), not per round.
+    6. **Size-floor override + liquidity guard (SIZE-FLOOR-1), both off by default.**
+       ``min_cap_usd`` REPLACES the as-of size floor in step 1 (instead of the cohort/lens file's
+       own) — "what if the floor were $1bn" without touching a YAML — and is ALSO passed as
+       ``min_market_cap_override`` to ``run_rank_pipeline``, so the lens's own ``min_market_cap``
+       gate (and its screen's, if any — FLOOR-1/2) agrees with the floor this run actually used;
+       without this second part the lens would re-exclude everything the loosened as-of floor just
+       admitted, and the experiment would measure nothing. When (and only when) ``min_cap_usd`` is
+       given AND below the $5bn default, a LIQUIDITY guard also applies: a name needs at least
+       ``min_adv_usd`` (default $3m) in mean daily $ value traded (close x volume, from the same
+       price feed) over the trailing 30 calendar days as of ``d`` — a lower cap floor alone
+       increases survivorship bias more than the as-of scaling corrects for, and this is the
+       second guard against it. ``Round.n_illiquid`` and ``BacktestResult.total_illiquid`` report
+       exactly how many names it removed, every round and summed. ``min_cap_usd=None`` (the
+       default) is a complete no-op: every existing backtest output is byte-identical.
 
     No LLM is called; ``adapter`` (default: EODHD accounts + yfinance prices) is the inner data
     source."""
@@ -713,8 +770,15 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
         members, version, member_caps = load_cohort_members(cohort, cohorts_root)
     members = list(members)
     member_caps = dict(member_caps) if member_caps else {}
-    size_floor, size_floor_note = (_size_floor(cohort, cohorts_root, version, member_caps)
-                                   if member_caps else (None, ""))
+    if min_cap_usd is not None:
+        # SIZE-FLOOR-1 — the override REPLACES the file-declared floor outright (never blended
+        # with it), so "what if it were $1bn" is answered with exactly $1bn, not the lesser of
+        # the two. Still requires member_caps to scale by (same as-of mechanism, step 1).
+        size_floor, size_floor_note = float(min_cap_usd), "run override (min_cap_usd)"
+    else:
+        size_floor, size_floor_note = (_size_floor(cohort, cohorts_root, version, member_caps)
+                                       if member_caps else (None, ""))
+    liquidity_guard_on = min_cap_usd is not None and min_cap_usd < 5e9
     dates = round_dates(start, end, hold_months, step_months)
     result = BacktestResult(cohort=cohort, lens_id=lens_id, start=start, end=end,
                             hold_months=hold_months, step_months=step_months,
@@ -725,7 +789,9 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                             random_baskets=max(0, int(random_baskets)),
                             seed_rule=((TURNOVER_SEED_RULE if random_mode == RANDOM_MODE_TURNOVER
                                        else SEED_RULE) if random_baskets > 0 else ""),
-                            max_luck=float(max_luck), random_mode=random_mode)
+                            max_luck=float(max_luck), random_mode=random_mode,
+                            min_cap_usd=min_cap_usd,
+                            min_adv_usd=float(min_adv_usd) if liquidity_guard_on else None)
     if not dates:
         result.caveats = _caveats(result, 0)
         result.caveats.append(f"the window {start} to {end} is shorter than one {hold_months}-month "
@@ -749,12 +815,16 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                 closes[ticker] = None                    # no series -> unpriced, counted below
         return closes[ticker]
 
-    def eligible_at(d: date) -> list:
-        """The as-of-size-floor-eligible universe for round ``d`` (step 1 above); ``members``
-        unchanged when there is no cap data to apply a floor with."""
+    def eligible_at(d: date) -> tuple:
+        """``(eligible tickers, n_illiquid)`` for round ``d`` (step 1/6 above); ``members``
+        unchanged (0 illiquid) when there is no cap data to apply a floor with. The liquidity
+        guard (item 1c) is checked AFTER the size floor, so n_illiquid counts only names that
+        cleared the cap but failed on traded value — a name cut by the cap alone is not
+        double-counted as illiquid too."""
         if not member_caps:
-            return members
+            return members, 0
         out = []
+        n_illiquid = 0
         for t in members:
             cap_today = member_caps.get(t)
             if cap_today is None:
@@ -767,13 +837,19 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
             estimate = cap_today * (p_d / p_latest)
             if size_floor is not None and estimate < size_floor:
                 continue
+            if liquidity_guard_on:
+                adv = cl.adv_usd(d) if cl else None
+                if adv is None or adv < min_adv_usd:
+                    n_illiquid += 1
+                    continue
             out.append(t)
-        return out
+        return out, n_illiquid
 
     cost = float(cost_bps) / 10_000.0
     random_baskets = max(0, int(random_baskets))
     unpriced = 0
     undersized_rounds = 0                                  # pool smaller than n_buys (rare)
+    total_illiquid = 0                                     # SIZE-FLOOR-1 item 1c, summed below
     pos_dates: list = []
     pos_excess_cols: list = []                              # each shape (random_baskets,)
     dropbest_dates: list = []
@@ -782,10 +858,12 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
     turnover_baskets: Optional[_TurnoverBaskets] = None      # built lazily, on first use
     for i, d in enumerate(dates, 1):
         exit_date = add_months(d, hold_months)
-        eligible = eligible_at(d)
+        eligible, n_illiquid = eligible_at(d)
+        total_illiquid += n_illiquid
         ranked = run_rank_pipeline(
             eligible, lens_id, ranker_only=True, adapter=AsOfAdapter(memo, d, lag_days), today=d,
-            use_cache=True, strategies_dir=strategies_dir).ranked
+            use_cache=True, strategies_dir=strategies_dir,
+            min_market_cap_override=min_cap_usd).ranked
         live = [r for r in ranked if not r.excluded]
         buys = sorted(r.ticker for r in live if r.verdict == "buy")
         # BACKTEST-1D — a fact about the LENS's own basket sequence, measured every round whether
@@ -849,16 +927,20 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
             result.rounds.append(Round(d, n_buys, buy_ret, bench_ret, buy_ret - bench_ret,
                                        tuple(t for t, _ in held), exit_date, len(live),
                                        n_eligible=len(eligible), excess_drop_best=drop_best,
-                                       random_mean_excess=random_mean_excess, n_new=n_new))
+                                       random_mean_excess=random_mean_excess, n_new=n_new,
+                                       n_illiquid=n_illiquid))
         else:
             result.rounds.append(Round(d, len(buys), None, bench_ret, None, (), exit_date,
-                                       len(live), n_eligible=len(eligible), n_new=n_new))
+                                       len(live), n_eligible=len(eligible), n_new=n_new,
+                                       n_illiquid=n_illiquid))
         if progress is not None:
             last = result.rounds[-1]
-            progress(f"{d} ({i}/{len(dates)}): {len(eligible)} eligible, {len(live)} ranked, "
-                     f"{len(buys)} BUY ({n_new} new), "
+            illiquid_note = f", {n_illiquid} illiquid" if liquidity_guard_on else ""
+            progress(f"{d} ({i}/{len(dates)}): {len(eligible)} eligible{illiquid_note}, "
+                     f"{len(live)} ranked, {len(buys)} BUY ({n_new} new), "
                      + (f"excess {last.excess:+.1%}" if last.has_position else "no position"))
     result.price_warnings = sorted(set(price_warnings))
+    result.total_illiquid = total_illiquid
     if random_baskets > 0 and pos_excess_cols:
         _apply_luck_stats(result, pos_dates=pos_dates, pos_excess_cols=pos_excess_cols,
                           dropbest_dates=dropbest_dates, dropbest_cols=dropbest_cols)
@@ -1052,8 +1134,9 @@ def _caveats(result: BacktestResult, unpriced: int, undersized_rounds: int = 0) 
 # --------------------------------------------------------------------------- #
 # the file
 # --------------------------------------------------------------------------- #
-_ROUND_COLUMNS = ("date", "exit_date", "n_eligible", "n_ranked", "n_buys", "n_new", "buy_return",
-                  "bench_return", "excess", "excess_drop_best", "random_mean_excess", "tickers")
+_ROUND_COLUMNS = ("date", "exit_date", "n_eligible", "n_ranked", "n_buys", "n_new", "n_illiquid",
+                  "buy_return", "bench_return", "excess", "excess_drop_best", "random_mean_excess",
+                  "tickers")
 
 
 def _num(x: Optional[float]) -> str:
@@ -1089,6 +1172,12 @@ def to_csv(result: BacktestResult, path) -> Path:
         ("as_of_size_floor", (f"{result.size_floor:,.0f} USD, estimated from today's cap and price "
                               f"ratio ({result.size_floor_note})") if result.size_floor is not None
          else "n/a - no market-cap data for this run"),
+        ("min_cap_usd_override", (f"{result.min_cap_usd:,.0f}" if result.min_cap_usd is not None
+                                  else "n/a - the lens/cohort's own floor")),
+        ("min_adv_usd", (f"{result.min_adv_usd:,.0f} (liquidity guard applied — item 1c)"
+                         if result.min_adv_usd is not None
+                         else "n/a - not applied this run (floor at or above $5bn, or no override)")),
+        ("total_illiquid_removed", result.total_illiquid),
         ("random_baskets", result.random_baskets),
         ("random_mode", result.random_mode if result.random_baskets else "n/a - random_baskets=0"),
         ("seed_rule", result.seed_rule or "n/a - random_baskets=0"),
@@ -1110,9 +1199,10 @@ def to_csv(result: BacktestResult, path) -> Path:
         writer.writerow(_ROUND_COLUMNS)
         for r in sorted(result.rounds, key=lambda r: r.date):
             writer.writerow([r.date.isoformat(), r.exit_date.isoformat() if r.exit_date else "",
-                             r.n_eligible, r.n_ranked, r.n_buys, r.n_new, _num(r.buy_return),
-                             _num(r.bench_return), _num(r.excess), _num(r.excess_drop_best),
-                             _num(r.random_mean_excess), " ".join(r.tickers)])
+                             r.n_eligible, r.n_ranked, r.n_buys, r.n_new, r.n_illiquid,
+                             _num(r.buy_return), _num(r.bench_return), _num(r.excess),
+                             _num(r.excess_drop_best), _num(r.random_mean_excess),
+                             " ".join(r.tickers)])
     return target
 
 
@@ -1157,12 +1247,23 @@ def from_csv(path) -> BacktestResult:
             n_eligible=int(row["n_eligible"]) if row.get("n_eligible") not in (None, "") else 0,
             excess_drop_best=_unnum(row.get("excess_drop_best") or ""),
             random_mean_excess=_unnum(row.get("random_mean_excess") or ""),
-            n_new=int(row["n_new"]) if row.get("n_new") not in (None, "") else 0))
+            n_new=int(row["n_new"]) if row.get("n_new") not in (None, "") else 0,
+            # SIZE-FLOOR-1: absent from a file written before this item -> 0 (the guard never
+            # applied there, so 0 is the true count, not a filled-in default).
+            n_illiquid=int(row["n_illiquid"]) if row.get("n_illiquid") not in (None, "") else 0))
     size_floor, size_floor_note = _parse_size_floor(meta.get("as_of_size_floor", ""))
 
     def _meta_num(key: str) -> Optional[float]:
         text = meta.get(key, "")
         return None if text in ("", "n/a") else float(text)
+
+    def _meta_num_or_tagged_na(key: str) -> Optional[float]:
+        """Like ``_meta_num``, for a header value that is a descriptive "n/a - ..." sentence
+        rather than the bare "n/a" the luck fields use (SIZE-FLOOR-1's min_cap/min_adv lines)."""
+        text = meta.get(key, "")
+        if not text or text.startswith("n/a"):
+            return None
+        return float(text.split()[0].replace(",", ""))
 
     random_baskets_n = int(meta.get("random_baskets") or 0)
     if meta.get("random_mode") in RANDOM_MODES:
@@ -1184,6 +1285,9 @@ def from_csv(path) -> BacktestResult:
         cohort_version=int(meta["cohort_version"]) if meta.get("cohort_version") else None,
         n_members=int(meta.get("cohort_members") or 0),
         size_floor=size_floor, size_floor_note=size_floor_note, price_warnings=price_warnings,
+        min_cap_usd=_meta_num_or_tagged_na("min_cap_usd_override"),
+        min_adv_usd=_meta_num_or_tagged_na("min_adv_usd"),
+        total_illiquid=int(meta.get("total_illiquid_removed") or 0),
         random_baskets=random_baskets_n, random_mode=random_mode_value,
         seed_rule=(meta.get("seed_rule", "") if random_baskets_n else ""),
         max_luck=float(meta["max_luck"]) if meta.get("max_luck") else MAX_LUCK,

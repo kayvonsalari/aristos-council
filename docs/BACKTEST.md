@@ -343,6 +343,54 @@ guessing. The CSV records the floor used on its `as_of_size_floor` header line, 
 lens's own screen kept) shows the effect directly — a strategy over a small cohort with a steep
 floor may see `n_eligible` shrink to almost nothing in its earliest rounds.
 
+## Size floor experiment (SIZE-FLOOR-1)
+
+All five voting lenses carry the same $5bn minimum market cap today. `run_lens_backtest` can
+measure whether Magic Formula RAW or Growth would do better (or worse) at a lower floor —
+**without changing the floor the live app actually uses**: `strategies/*.yaml` is never
+touched, and a run with no override is byte-identical to one before this item existed.
+
+```python
+from aristos_council.backtest import run_lens_backtest, to_csv
+result = run_lens_backtest("Tech: Semiconductors", "magic_formula_raw_v1",
+                           start=date(2016, 1, 31), end=date(2026, 8, 31),
+                           min_cap_usd=1e9)               # instead of the lens's own $5bn
+to_csv(result, "backtests/")
+```
+
+**Why the as-of floor matters more here, not less.** A lower floor does not just admit more
+names — it reaches further down the size scale into names more likely to have failed, merged
+away, or gone illiquid *before* today, and a membership frozen from TODAY's survivors cannot
+see any of that. The as-of scaling (above) is the only thing standing between "what a $1bn
+floor would have ranked in 2017" and "what today's winners looked like in 2017, relabelled
+as a $1bn universe" — survivorship bias dressed up as a finding. `min_cap_usd` **replaces**
+the cohort/lens file's own floor outright (never the lesser of the two) and is applied through
+the exact same as-of mechanism, and it is also passed through as the lens's own
+`min_market_cap_override` (FLOOR-1/2) so the lens's own gate — and its screen's, if it has one
+— agree with the floor the run actually used; without that second part the lens would
+re-exclude everything the loosened as-of floor had just admitted, and the run would measure
+nothing.
+
+**The liquidity guard.** Below $5bn, survivorship bias is not fully answered by as-of scaling
+alone, so a second guard applies automatically: a name needs at least `min_adv_usd` (default
+$3m) in mean daily dollar value traded (close × volume, from the same price feed the backtest
+already reads) over the trailing 30 calendar days, estimated as of the round — not today's
+volume, same principle as the cap. A name that clears the cap but fails this is excluded and
+counted separately: `Round.n_illiquid` per round, `BacktestResult.total_illiquid` summed, both
+round-tripped through the CSV (`n_illiquid` column, `min_cap_usd_override` / `min_adv_usd`
+header lines) so "how many did the guard remove" is answered from the file itself, never
+silently. The guard never applies at or above $5bn — nothing that illiquid clears $5bn anyway,
+and every existing, already-validated backtest must stay untouched.
+
+**Running the grid.** `notebooks/aristos_backtest.ipynb` has a cell ("9. Size floor
+experiment") that runs `[magic_formula_raw_v1, growth_garp_v2]` × `[$1bn, $2bn, $5bn]` ×
+five watched cohorts (30 runs) and writes `SIZE_FLOOR_SUMMARY.csv` — one row per (lens,
+floor, cohort), with the same verdict/mean-excess/years-positive/luck columns the main
+summary table uses, plus `n_eligible` and `max drawdown` (both already computed by the engine
+but not previously surfaced in a summary row) and `n_illiquid`. Run it the same way as the
+main grid (same Drive, same cache, same EODHD key via `getpass`, never saved) — it is an
+independent cell and does not require having run the main grid first.
+
 ## The two honesty limits
 
 These are stamped into every result and every CSV. Both **flatter** the lens, and neither can be

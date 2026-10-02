@@ -355,9 +355,13 @@ def test_csv_header_states_the_rules_and_rows_carry_no_timestamps(monkeypatch, t
     for needle in ("# random_baskets: 500", "# seed_rule:", "# max_luck: 0.05",
                    "# luck_pct_mean:", "# luck_pct_pass:", "# drop_best_vs_random:"):
         assert needle in joined, needle
+    # SIZE-FLOOR-1: n_illiquid joins the round columns (0 whenever the liquidity guard did
+    # not apply, as here — min_cap_usd not given).
+    assert "# min_cap_usd_override: n/a - the lens/cohort's own floor" in joined
+    assert "# min_adv_usd: n/a - not applied this run" in joined
     rows = [l for l in text.splitlines() if not l.startswith("#")]
-    assert rows[0] == ("date,exit_date,n_eligible,n_ranked,n_buys,n_new,buy_return,bench_return,"
-                       "excess,excess_drop_best,random_mean_excess,tickers")
+    assert rows[0] == ("date,exit_date,n_eligible,n_ranked,n_buys,n_new,n_illiquid,buy_return,"
+                       "bench_return,excess,excess_drop_best,random_mean_excess,tickers")
     assert len(rows) == 1 + 6 and rows[1].startswith("2019-01-31,2020-01-31,5,5,3,")
     assert not any("T" in r.split(",")[0] or ":" in r for r in rows[1:])            # dates only, no clock
 
@@ -594,6 +598,128 @@ def test_no_cap_data_at_all_leaves_the_floor_inactive_and_every_member_eligible(
     assert result.size_floor is None and result.size_floor_note == ""
     assert all(set(c[0]) == set(GROWTH) for c in calls)        # unchanged from pre-1B behaviour
     assert all(r.n_eligible == len(GROWTH) for r in result.rounds)
+
+
+# =========================================================================== #
+# SIZE-FLOOR-1 — a per-run min_cap_usd override (item 1b), the liquidity guard that rides
+# with it below $5bn (item 1c), and proof the default run is untouched (item 1f)
+# =========================================================================== #
+def _volume_daily(start, end, price_of, volume: int):
+    """Like ``_daily`` above, but with a caller-chosen, CONSTANT volume — enough to drive the
+    liquidity guard's close x volume without needing a realistic volume series."""
+    d, out = start, []
+    while d <= end:
+        if d.weekday() < 5:
+            p = price_of(d)
+            out.append(PriceBar(day=d, open=p, high=p, low=p, close=p, adj_close=p,
+                                volume=volume))
+        d += timedelta(days=1)
+    return out
+
+
+class _VolumeFeed(MarketDataAdapter):
+    """Like ``_Feed``, with a per-ticker volume so the liquidity guard (item 1c) has
+    something real to gate on. Flat prices (growth 0.0) unless a ticker names its own."""
+
+    name = "fake-feed-volume"
+
+    def __init__(self, growth: dict, volumes: dict):
+        self._g, self._v = growth, volumes
+
+    def get_price_history(self, ticker, *, start, end):
+        bars = _volume_daily(date(2018, 1, 1), date(2023, 12, 31), _growth(self._g[ticker]),
+                             self._v[ticker])
+        return PriceHistory(ticker=ticker, bars=[b for b in bars if start <= b.day <= end])
+
+    def get_fundamentals(self, ticker):
+        return Fundamentals(ticker=ticker)
+
+    def get_dividend_history(self, ticker, *, start, end):
+        return []
+
+
+def test_min_cap_usd_overrides_the_as_of_floor_instead_of_the_cohort_file(monkeypatch, tmp_path):
+    """The exact BACKTEST-1B as-of scenario pinned above
+    (test_the_as_of_floor_excludes_an_early_micro_cap_and_includes_it_once_it_grows — same
+    caps, same floor value, same crossover), but the $1.5bn floor comes from the RUN
+    override, not the cohort's own (unset here) min_market_cap_usd: a name whose as-of
+    estimate has not yet crossed it is excluded, exactly as the file-declared floor would
+    exclude it."""
+    _write_cohort(tmp_path, "riser_cohort_override", versions=(1,),
+                 caps={"AAA.US": 8e9, "BBB.US": 4e9})            # NO min_market_cap_usd on file
+    calls = []
+    _stub_pipeline(monkeypatch, lambda d: (), calls)
+    # min_cap_usd is below $5bn here, so the liquidity guard (item 1c) also applies — give
+    # both names ample volume so this test isolates the FLOOR override alone; the guard itself
+    # is covered separately below.
+    feed = _VolumeFeed({"AAA": 2.5, "BBB": 0.0}, {"AAA": 1_000_000, "BBB": 1_000_000})
+    result = run_lens_backtest("Riser Cohort Override", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                               min_cap_usd=1.5e9)
+    assert result.size_floor == 1.5e9 and result.size_floor_note == "run override (min_cap_usd)"
+    assert result.min_cap_usd == 1.5e9
+    universes = [set(c[0]) for c in calls]
+    assert "AAA" not in universes[0] and all("AAA" in u for u in universes[2:])
+    # FLOOR-1/2: the SAME override reaches the lens's own gate, not just the cohort pre-filter —
+    # without this the lens would re-exclude everything below $5bn regardless of the loosened
+    # as-of floor, and the experiment would measure nothing.
+    assert all(kw["min_market_cap_override"] == 1.5e9 for _, _, kw in calls)
+
+
+def test_default_run_is_untouched_min_cap_usd_none_is_a_complete_no_op(monkeypatch, tmp_path):
+    """Item 1f — the existing, already-validated backtests must read byte-identical: with no
+    override, the lens's own gate sees min_market_cap_override=None (its file value applies,
+    unchanged) and no liquidity guard runs at all."""
+    calls = []
+    result = _run(monkeypatch, calls=calls)
+    assert result.min_cap_usd is None and result.min_adv_usd is None and result.total_illiquid == 0
+    assert all(r.n_illiquid == 0 for r in result.rounds)
+    assert all(kw["min_market_cap_override"] is None for _, _, kw in calls)
+
+
+def test_a_floor_at_or_above_5bn_does_not_trigger_the_liquidity_guard_either(monkeypatch, tmp_path):
+    """The guard is specifically for BELOW the $5bn default (item 1c) — an override AT or
+    above it changes the floor but must not start gating on liquidity too."""
+    _write_cohort(tmp_path, "at_default_cohort", versions=(1,), caps={"AAA.US": 8e9, "BBB.US": 6e9})
+    _stub_pipeline(monkeypatch, lambda d: ())
+    result = run_lens_backtest("At Default Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed({"AAA": 0.0, "BBB": 0.0}),
+                               cohorts_root=tmp_path, min_cap_usd=5e9)
+    assert result.min_adv_usd is None
+    assert all(r.n_illiquid == 0 for r in result.rounds)
+
+
+def test_the_liquidity_guard_removes_a_name_too_thin_to_trade(monkeypatch, tmp_path):
+    """Item 1c: below $5bn, a name clearing the cap floor but trading under $3m/day (mean,
+    trailing 30 calendar days, close x volume) is excluded and counted as illiquid — a
+    DIFFERENT reason than failing the cap, and reported, never silent."""
+    _write_cohort(tmp_path, "illiquid_cohort", versions=(1,), caps={"AAA.US": 2e9, "BBB.US": 2e9})
+    calls = []
+    _stub_pipeline(monkeypatch, lambda d: (), calls)
+    # _growth(0.0)'s price is a flat $100 (its own default base). AAA: volume 20,000/day ->
+    # ~$2m/day traded (under $3m). BBB: volume 1,000,000/day -> ~$100m/day (clears $3m easily).
+    feed = _VolumeFeed({"AAA": 0.0, "BBB": 0.0}, {"AAA": 20_000, "BBB": 1_000_000})
+    result = run_lens_backtest("Illiquid Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                               min_cap_usd=1e9)
+    assert result.min_adv_usd == 3_000_000.0
+    universes = [set(c[0]) for c in calls]
+    assert all("AAA" not in u for u in universes)               # both clear the $1bn cap...
+    assert all("BBB" in u for u in universes)                   # ...only AAA fails on liquidity
+    assert result.total_illiquid == sum(r.n_illiquid for r in result.rounds)
+    assert result.total_illiquid == len(result.rounds)          # AAA fails every round
+    assert all(r.n_illiquid == 1 for r in result.rounds)
+
+
+def test_csv_round_trips_n_illiquid_and_the_min_cap_min_adv_header_lines(tmp_path):
+    result = BacktestResult(cohort="C", lens_id="L", start=date(2019, 1, 1), end=date(2020, 1, 1),
+                            min_cap_usd=1e9, min_adv_usd=3_000_000.0, total_illiquid=7,
+                            rounds=[Round(date(2019, 1, 31), 3, 0.1, 0.05, 0.05, ("A", "B", "C"),
+                                         date(2020, 1, 31), 5, n_eligible=8, n_illiquid=2)])
+    path = to_csv(result, tmp_path)
+    back = from_csv(path)
+    assert back.min_cap_usd == 1e9 and back.min_adv_usd == 3_000_000.0 and back.total_illiquid == 7
+    assert back.rounds[0].n_illiquid == 2
 
 
 # --- excess_drop_best --------------------------------------------------------------------- #
