@@ -360,8 +360,9 @@ def test_csv_header_states_the_rules_and_rows_carry_no_timestamps(monkeypatch, t
     assert "# min_cap_usd_override: n/a - the lens/cohort's own floor" in joined
     assert "# min_adv_usd: n/a - not applied this run" in joined
     rows = [l for l in text.splitlines() if not l.startswith("#")]
-    assert rows[0] == ("date,exit_date,n_eligible,n_ranked,n_buys,n_new,n_illiquid,buy_return,"
-                       "bench_return,excess,excess_drop_best,random_mean_excess,tickers")
+    assert rows[0] == ("date,exit_date,n_eligible,n_ranked,n_buys,n_new,n_illiquid,"
+                       "accounts_coverage,buy_return,bench_return,excess,excess_drop_best,"
+                       "random_mean_excess,tickers")
     assert len(rows) == 1 + 6 and rows[1].startswith("2019-01-31,2020-01-31,5,5,3,")
     assert not any("T" in r.split(",")[0] or ":" in r for r in rows[1:])            # dates only, no clock
 
@@ -649,32 +650,64 @@ class _VolumeFeed(MarketDataAdapter):
         return []
 
 
-def test_min_cap_usd_overrides_the_as_of_floor_instead_of_the_cohort_file(monkeypatch, tmp_path):
-    """The exact BACKTEST-1B as-of scenario pinned above
-    (test_the_as_of_floor_excludes_an_early_micro_cap_and_includes_it_once_it_grows — same
-    caps, same floor value, same crossover), but the $1.5bn floor comes from the RUN
-    override, not the cohort's own (unset here) min_market_cap_usd: a name whose as-of
-    estimate has not yet crossed it is excluded, exactly as the file-declared floor would
-    exclude it."""
-    _write_cohort(tmp_path, "riser_cohort_override", versions=(1,),
-                 caps={"AAA.US": 8e9, "BBB.US": 4e9})            # NO min_market_cap_usd on file
+def test_min_cap_usd_moves_only_the_lens_gate_never_the_cohorts_membership_floor(
+        monkeypatch, tmp_path):
+    """SIZE-FLOOR-2 item 2b — superseded design: SIZE-FLOOR-1 had min_cap_usd REPLACE the
+    as-of membership floor outright. That blended two different floors into one number —
+    the cohort's own as-of membership eligibility (a COHORT-3 size-TIER value the
+    committed/default run has always applied) and the LENS's own min_market_cap gate — and
+    was the most likely cause of both the "$5bn row never matches SUMMARY.csv" and the
+    "growth_garp_v2's screen reads universally blind on the grid" bug reports: eligibility
+    was quietly admitting a DIFFERENT population than the committed run ever ranked. Now
+    size_floor is ALWAYS the cohort's own as-of floor (unmodified here); min_cap_usd only
+    changes what reaches run_rank_pipeline as min_market_cap_override — the LENS's own
+    gate, not cohort membership."""
+    _write_cohort(tmp_path, "riser_cohort_gate_only", versions=(1,), min_market_cap_usd=1e9,
+                 caps={"AAA.US": 8e9, "BBB.US": 4e9})
     calls = []
     _stub_pipeline(monkeypatch, lambda d: (), calls)
-    # min_cap_usd is below $5bn here, so the liquidity guard (item 1c) also applies — give
-    # both names ample volume so this test isolates the FLOOR override alone; the guard itself
-    # is covered separately below.
     feed = _VolumeFeed({"AAA": 2.5, "BBB": 0.0}, {"AAA": 1_000_000, "BBB": 1_000_000})
-    result = run_lens_backtest("Riser Cohort Override", "some_lens_v1", start=date(2019, 1, 31),
+    result = run_lens_backtest("Riser Cohort Gate Only", "some_lens_v1", start=date(2019, 1, 31),
                                end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
                                min_cap_usd=1.5e9)
-    assert result.size_floor == 1.5e9 and result.size_floor_note == "run override (min_cap_usd)"
+    # The cohort's own as-of floor is UNCHANGED by the gate override (the $1bn the file
+    # declares, not the $1.5bn asked for) — membership eligibility is untouched by item 2b.
+    assert result.size_floor == 1e9 and "min_market_cap_usd" in result.size_floor_note
     assert result.min_cap_usd == 1.5e9
+    # So BOTH AAA and BBB are eligible from round 1 (both clear the cohort's own $1bn floor
+    # as-of day one) — the universe the lens is OFFERED is the full membership every round.
     universes = [set(c[0]) for c in calls]
-    assert "AAA" not in universes[0] and all("AAA" in u for u in universes[2:])
-    # FLOOR-1/2: the SAME override reaches the lens's own gate, not just the cohort pre-filter —
-    # without this the lens would re-exclude everything below $5bn regardless of the loosened
-    # as-of floor, and the experiment would measure nothing.
+    assert all(u == {"AAA", "BBB"} for u in universes)
+    # The lens's OWN gate still sees the $1.5bn override, exactly as SIZE-FLOOR-1 intended —
+    # only the membership-floor half of that design is gone, not this half.
     assert all(kw["min_market_cap_override"] == 1.5e9 for _, _, kw in calls)
+
+
+def test_a_gate_below_the_cohorts_own_floor_is_skipped_not_silently_run(tmp_path):
+    """SIZE-FLOOR-2 item 2a — a lens gate below the cohort's own as-of membership floor can
+    never admit a name membership eligibility has already excluded: running it would not
+    measure a stricter-or-looser experiment, just report the cohort's own numbers under a
+    misleading label. Reported as below_cohort_floor, with zero rounds, rather than run."""
+    _write_cohort(tmp_path, "two_bn_floor_cohort", versions=(1,), min_market_cap_usd=2e9,
+                 caps={"AAA.US": 8e9, "BBB.US": 6e9})
+    result = run_lens_backtest("Two Bn Floor Cohort", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed({"AAA": 0.0, "BBB": 0.0}),
+                               cohorts_root=tmp_path, min_cap_usd=1e9)        # below the $2bn floor
+    assert result.below_cohort_floor is True
+    assert result.rounds == []
+    assert result.size_floor == 2e9 and result.min_cap_usd == 1e9
+    assert result.caveats and "below" in result.caveats[0].lower()
+
+
+def test_a_gate_at_or_above_the_cohorts_own_floor_is_run_normally(monkeypatch, tmp_path):
+    _write_cohort(tmp_path, "two_bn_floor_cohort_ok", versions=(1,), min_market_cap_usd=2e9,
+                 caps={"AAA.US": 8e9, "BBB.US": 6e9})
+    _stub_pipeline(monkeypatch, lambda d: ())
+    result = run_lens_backtest("Two Bn Floor Cohort Ok", "some_lens_v1", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=_Feed({"AAA": 0.0, "BBB": 0.0}),
+                               cohorts_root=tmp_path, min_cap_usd=2e9)        # exactly the floor
+    assert result.below_cohort_floor is False
+    assert result.rounds
 
 
 def test_default_run_is_untouched_min_cap_usd_none_is_a_complete_no_op(monkeypatch, tmp_path):
@@ -698,9 +731,12 @@ def test_default_run_is_untouched_min_cap_usd_none_is_a_complete_no_op(monkeypat
 
 
 def test_a_floor_at_or_above_5bn_does_not_trigger_the_liquidity_guard_either(monkeypatch, tmp_path):
-    """The guard is specifically for BELOW the $5bn default (item 1c) — an override AT or
-    above it changes the floor but must not start gating on liquidity too."""
-    _write_cohort(tmp_path, "at_default_cohort", versions=(1,), caps={"AAA.US": 8e9, "BBB.US": 6e9})
+    """The guard is specifically for BELOW the $5bn default (item 1c) — a gate override AT
+    or above it must not start gating on liquidity too. min_market_cap_usd=5e9 declared
+    explicitly (SIZE-FLOOR-2 item 2b) so the $5bn gate below is not BELOW the cohort's own
+    as-of floor (item 2a would skip the run otherwise)."""
+    _write_cohort(tmp_path, "at_default_cohort", versions=(1,), min_market_cap_usd=5e9,
+                 caps={"AAA.US": 8e9, "BBB.US": 6e9})
     _stub_pipeline(monkeypatch, lambda d: ())
     result = run_lens_backtest("At Default Cohort", "some_lens_v1", start=date(2019, 1, 31),
                                end=date(2020, 6, 30), adapter=_Feed({"AAA": 0.0, "BBB": 0.0}),
@@ -713,7 +749,11 @@ def test_the_liquidity_guard_removes_a_name_too_thin_to_trade(monkeypatch, tmp_p
     """Item 1c: below $5bn, a name clearing the cap floor but trading under $3m/day (mean,
     trailing 30 calendar days, close x volume) is excluded and counted as illiquid — a
     DIFFERENT reason than failing the cap, and reported, never silent."""
-    _write_cohort(tmp_path, "illiquid_cohort", versions=(1,), caps={"AAA.US": 2e9, "BBB.US": 2e9})
+    # SIZE-FLOOR-2 item 2b: min_market_cap_usd=1e9 declared explicitly so the $1e9 gate below
+    # is not BELOW the cohort's own as-of floor (item 2a would skip the run otherwise) —
+    # size_floor no longer takes its value from min_cap_usd.
+    _write_cohort(tmp_path, "illiquid_cohort", versions=(1,), min_market_cap_usd=1e9,
+                 caps={"AAA.US": 2e9, "BBB.US": 2e9})
     calls = []
     _stub_pipeline(monkeypatch, lambda d: (), calls)
     # _growth(0.0)'s price is a flat $100 (its own default base). AAA: volume 20,000/day ->
@@ -872,28 +912,104 @@ def test_a_5bn_override_reproduces_the_default_run_when_the_cohorts_own_floor_is
         assert r_default.summary.mean_annual_excess == r_override.summary.mean_annual_excess, lens
 
 
-def test_a_cohorts_own_floor_differing_from_the_override_is_a_genuinely_different_experiment(
+def test_at_the_cohorts_own_floor_growth_still_differs_from_raw_with_n_ranked_below_eligible(
         tmp_path):
-    """SIZE-FLOOR-1 bug report symptom 2, part 2 — the actual root cause: when the cohort's
-    OWN as-of floor (e.g. the $2bn COHORT-3 tier Materials - Diversified Mining and
-    Comms - Interactive Media & Gaming both actually carry) is BELOW the grid's $5bn row,
-    the override admits FEWER names than the committed/default run did — a real,
-    expected divergence, not a bug in the override arithmetic. Names between the two
-    floors are eligible under the committed run and excluded under the $5bn grid row."""
+    """SIZE-FLOOR-2 item 1c — a fixture with REAL (AsOfAdapter-shaped) accounts, at the
+    cohort's OWN floor (no symptom-2 framing mismatch in play at all): growth_garp_v2 must
+    still differ from magic_formula_raw_v1's basket, and n_ranked < n_eligible for growth in
+    at least one round — i.e. the screen is genuinely doing something, not merely present."""
+    tickers = sorted(_REAL_LENS_FUND)
+    _write_cohort(tmp_path, "real_accounts_cohort", versions=(1,),
+                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=1e9,
+                 members=[f"{t}.US" for t in tickers])
+    feed = _RealLensFeed()
+    raw = run_lens_backtest("Real Accounts Cohort", "magic_formula_raw_v1", start=date(2019, 1, 31),
+                            end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                            min_cap_usd=1e9)
+    growth = run_lens_backtest("Real Accounts Cohort", "growth_garp_v2", start=date(2019, 1, 31),
+                               end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                               min_cap_usd=1e9)
+    assert any(r.n_ranked < r.n_eligible for r in growth.rounds)
+    assert all(r.n_ranked == r.n_eligible for r in raw.rounds)         # RAW has no screen
+    growth_shape = [(r.n_buys, r.excess) for r in growth.rounds]
+    raw_shape = [(r.n_buys, r.excess) for r in raw.rounds]
+    assert growth_shape != raw_shape
+
+
+def test_the_5bn_row_reproduces_the_default_run_even_when_the_cohorts_own_floor_is_not_5bn(
+        tmp_path):
+    """SIZE-FLOOR-2 item 2b's acceptance test — supersedes the SIZE-FLOOR-1 test this
+    replaces (which pinned the OLD, now-removed behaviour: size_floor taking the override's
+    value). Materials - Diversified Mining and Comms - Interactive Media & Gaming both
+    carry a $2bn COHORT-3 tier floor, not $5bn — under item 2b, the $5bn row must STILL
+    reproduce the committed/default run exactly, for BOTH lenses, because both
+    magic_formula_raw_v1 AND growth_garp_v2 already declare min_market_cap: 5.0e9 in their
+    OWN files: min_cap_usd=5e9 is a no-op for the lens gate (it matches the file value) AND
+    a no-op for membership eligibility (size_floor is the cohort's own $2bn either way, item
+    2b) — the two reasons combined are WHY $5bn is the one gate every cohort's default run
+    already measures, regardless of its own membership floor's value."""
     tickers = sorted(_REAL_LENS_FUND)
     _write_cohort(tmp_path, "real_lens_2bn_cohort", versions=(1,),
-                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=2e9)   # NOT 5bn
+                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=2e9,   # NOT 5bn
+                 members=[f"{t}.US" for t in tickers])
     feed = _RealLensFeed()
-    r_default = run_lens_backtest("Real Lens 2bn Cohort", "magic_formula_raw_v1",
+    for lens in ("magic_formula_raw_v1", "growth_garp_v2"):
+        r_default = run_lens_backtest("Real Lens 2bn Cohort", lens, start=date(2019, 1, 31),
+                                      end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                                      min_cap_usd=None)
+        r_grid_5bn = run_lens_backtest("Real Lens 2bn Cohort", lens, start=date(2019, 1, 31),
+                                       end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                                       min_cap_usd=5e9)
+        assert r_default.size_floor == 2e9 and r_grid_5bn.size_floor == 2e9, lens
+        default_shape = [(r.n_eligible, r.n_ranked, r.n_buys, r.excess) for r in r_default.rounds]
+        grid_shape = [(r.n_eligible, r.n_ranked, r.n_buys, r.excess) for r in r_grid_5bn.rounds]
+        assert default_shape == grid_shape, lens
+        assert r_default.summary.mean_annual_excess == r_grid_5bn.summary.mean_annual_excess, lens
+
+
+def test_a_lens_gate_above_the_cohorts_own_floor_is_a_genuinely_stricter_experiment(tmp_path):
+    """Unlike the $5bn case above, a gate that does NOT match either lens's own file value
+    (here $6bn, above both the cohort's $2bn floor and magic_formula_raw_v1's own $5bn) is a
+    real override of the lens's gate — admits fewer names than the default run, by design."""
+    from dataclasses import replace
+
+    class MixedCapFeed(_RealLensFeed):
+        """Every name but FFF is a genuine $8bn cap throughout. FFF's as-of cap (shares x
+        close under AsOfAdapter) is pinned to $5.5bn — clears the cohort's $2bn membership
+        floor AND magic_formula_raw_v1's own $5bn file gate (so the DEFAULT run ranks it),
+        but not a $6bn override (so the TIGHTENED run excludes it)."""
+        def get_fundamentals(self, ticker):
+            f = super().get_fundamentals(ticker)
+            if ticker != "FFF":
+                return f
+            shares_for_5_5bn = 5.5e9 / 80.0        # price is pinned at $80 (_as_of_fundamentals)
+            return replace(f, period_scalars={d: {**v, "shares_outstanding": shares_for_5_5bn}
+                                              for d, v in f.period_scalars.items()})
+
+    tickers = sorted(_REAL_LENS_FUND)
+    _write_cohort(tmp_path, "real_lens_2bn_cohort_6bn_gate", versions=(1,),
+                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=2e9,
+                 members=[f"{t}.US" for t in tickers])
+    feed = MixedCapFeed()
+    r_default = run_lens_backtest("Real Lens 2bn Cohort 6bn Gate", "magic_formula_raw_v1",
                                   start=date(2019, 1, 31), end=date(2020, 6, 30),
                                   adapter=feed, cohorts_root=tmp_path, min_cap_usd=None)
-    r_grid_5bn = run_lens_backtest("Real Lens 2bn Cohort", "magic_formula_raw_v1",
+    r_6bn_gate = run_lens_backtest("Real Lens 2bn Cohort 6bn Gate", "magic_formula_raw_v1",
                                    start=date(2019, 1, 31), end=date(2020, 6, 30),
-                                   adapter=feed, cohorts_root=tmp_path, min_cap_usd=5e9)
-    assert r_default.size_floor == 2e9
-    assert r_grid_5bn.size_floor == 5e9
-    # Not a bug: a DIFFERENT, explicitly stricter floor was asked for and applied.
-    assert r_default.size_floor != r_grid_5bn.size_floor
+                                   adapter=feed, cohorts_root=tmp_path, min_cap_usd=6e9)
+    # Membership eligibility is UNCHANGED (the cohort's own $2bn floor, both runs) — only the
+    # lens's own gate moved, from its file's $5bn to the run's $6bn.
+    assert r_default.size_floor == 2e9 and r_6bn_gate.size_floor == 2e9
+    assert r_default.min_cap_usd is None and r_6bn_gate.min_cap_usd == 6e9
+    # Not a bug: a DIFFERENT, explicitly stricter LENS GATE was asked for and applied —
+    # membership eligibility itself stayed exactly as the committed run always used it.
+    default_shape = [(r.n_eligible, r.n_ranked) for r in r_default.rounds]
+    gate_shape = [(r.n_eligible, r.n_ranked) for r in r_6bn_gate.rounds]
+    assert default_shape != gate_shape
+    assert all(e == 6 for e, _ in default_shape) and all(e == 6 for e, _ in gate_shape)
+    # FFF clears the default run's $5bn file gate ($5.5bn) but not the $6bn override.
+    assert all(ranked == 6 for _, ranked in default_shape)
+    assert all(ranked == 5 for _, ranked in gate_shape)
 
 
 def test_growth_and_raw_pick_different_baskets_when_their_screens_disagree():
@@ -923,10 +1039,10 @@ def test_growth_and_raw_pick_different_baskets_when_their_screens_disagree():
 
 
 def test_a_real_lens_screen_can_go_silently_inert_on_thin_as_of_accounts_coverage(tmp_path):
-    """SIZE-FLOOR-1 bug report (2026-10-02), round 2 — reproduces symptom 1's actual
-    mechanism, found by instrumenting the real screen (not guessed): growth_garp_v2's THREE
-    criteria each abstain (NOT-EVAL, never a confirmed fail) under a data condition that is
-    plausible for a real backtest, not a code bug:
+    """SIZE-FLOOR-2 (2026-10-02) — reproduces symptom 1's actual mechanism, found by
+    instrumenting the real screen (not guessed): growth_garp_v2's THREE substantive screen
+    criteria can all abstain (NOT-EVAL, never a confirmed fail) under a data condition that
+    is plausible for a real backtest, not a code bug:
 
       - min_revenue_cagr / max_peg_ratio need 4 annual points to survive the as-of cut
         (3y of change); fewer than 4 years of as-of-visible accounts — ordinary for a
@@ -935,15 +1051,15 @@ def test_a_real_lens_screen_can_go_silently_inert_on_thin_as_of_accounts_coverag
         netInvestedCapital is a derived balance-sheet line, plausibly reported less
         completely than the income-statement lines the other two criteria read.
 
-    When BOTH conditions hold for every candidate in a round, EVERY criterion abstains for
-    EVERY name, the screen confirms zero fails, and growth_garp_v2 ranks the exact same
-    universe magic_formula_raw_v1 does — producing identical baskets with NO code bug
-    anywhere: the null != false discipline is doing exactly what it should, just with
-    nothing left for it to discriminate on. This is a SILENT failure in today's reporting
-    (nothing marks a round where the screen did nothing) - Round.n_ranked already carries
-    the fix for free (it equals n_eligible exactly when the screen excluded no one), and
-    the notebook now surfaces it; this test pins the mechanism Round.n_ranked exists to
-    catch, not merely that the field exists."""
+    SIZE-FLOOR-1 round 2 found this and showed it only as a VISIBILITY gap (n_ranked ==
+    n_eligible, surfaced in the notebook). SIZE-FLOOR-2 item 1b changes the underlying
+    behaviour: a name whose screen could not evaluate a single SUBSTANTIVE criterion (every
+    one abstained; min_market_cap excluded — a trivial, separately-gated check) is now NOT
+    ranked by this lens that round at all, matching the app's own "does not apply"
+    convention instead of silently reaching factor ranking with an imputed worst-case
+    value. growth_garp_v2 therefore holds NO POSITION in a round this blind (n_ranked == 0,
+    n_eligible unchanged), rather than quietly ranking the exact same universe
+    magic_formula_raw_v1 (no screen, unaffected) does."""
     from dataclasses import replace
 
     class InertScreenFeed(_RealLensFeed):
@@ -972,14 +1088,57 @@ def test_a_real_lens_screen_can_go_silently_inert_on_thin_as_of_accounts_coverag
     growth = run_lens_backtest("Inert Screen Cohort", "growth_garp_v2", start=date(2019, 1, 31),
                                end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
                                min_cap_usd=1e9)
-    # The visible signature: growth's OWN screen kept everyone it was offered, every round -
-    # n_ranked == n_eligible, exactly as a screen-less lens's always does.
-    assert all(r.n_ranked == r.n_eligible for r in growth.rounds)
-    assert all(r.n_ranked == r.n_eligible for r in raw.rounds)      # RAW has no screen at all
-    # And with nothing left to discriminate on, the two lenses' own round-level numbers agree.
-    growth_shape = [(r.n_buys, r.excess) for r in growth.rounds]
-    raw_shape = [(r.n_buys, r.excess) for r in raw.rounds]
-    assert growth_shape == raw_shape
+    # RAW has no screen at all — unaffected, kept everyone it was offered, every round.
+    assert all(r.n_ranked == r.n_eligible > 0 for r in raw.rounds)
+    # growth's screen was blind on every candidate, every round: n_ranked collapses to 0
+    # (not to n_eligible — item 1b's fix) and it holds no position, rather than silently
+    # mirroring RAW's own picks.
+    assert all(r.n_ranked == 0 for r in growth.rounds)
+    assert all(not r.has_position for r in growth.rounds)
+    assert all(r.n_eligible > 0 for r in growth.rounds)    # genuinely blind, not just empty
+    # SIZE-FLOOR-2 item 2d — accounts_coverage is a COARSER fact than "this lens's screen
+    # could evaluate": it is 1.0 here (every name still carries SOME dated accounts — 3
+    # years, just one short of what min_revenue_cagr/max_peg_ratio need, and no
+    # invested_capital at all for min_roic). It catches the extreme case (AsOfAdapter's
+    # identity-only abstain shell, see the next test for that), not "shallow but present" —
+    # which is exactly why n_ranked, not accounts_coverage alone, is the per-lens signal to
+    # check first when two lenses read suspiciously alike.
+    assert all(r.accounts_coverage == 1.0 for r in growth.rounds)
+    assert all(r.accounts_coverage == 1.0 for r in raw.rounds)         # a fact about names
+
+
+def test_accounts_coverage_reads_0_when_a_name_has_no_dated_accounts_at_all(tmp_path):
+    """The genuinely-zero case accounts_coverage DOES catch: AsOfAdapter's own _abstain
+    shell (no period_ends, no period_scalars at all — not merely a shallow series)."""
+    tickers = sorted(_REAL_LENS_FUND)
+    _write_cohort(tmp_path, "no_accounts_cohort", versions=(1,),
+                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=1e9,
+                 members=[f"{t}.US" for t in tickers])
+
+    class NoAccountsFeed(_RealLensFeed):
+        def get_fundamentals(self, ticker):
+            from dataclasses import replace
+            return replace(super().get_fundamentals(ticker), period_ends={}, period_scalars={})
+
+    raw = run_lens_backtest("No Accounts Cohort", "magic_formula_raw_v1", start=date(2019, 1, 31),
+                            end=date(2020, 6, 30), adapter=NoAccountsFeed(), cohorts_root=tmp_path,
+                            min_cap_usd=1e9)
+    assert all(r.accounts_coverage == 0.0 for r in raw.rounds)
+
+
+def test_accounts_coverage_reads_1_0_when_every_eligible_name_has_dated_accounts(tmp_path):
+    """The complement of the fixture above: real, AsOfAdapter-shaped accounts for every
+    name (as the committed backtests' own real-world runs mostly see) reads full coverage,
+    independent of whether the lens running happens to have a screen at all."""
+    tickers = sorted(_REAL_LENS_FUND)
+    _write_cohort(tmp_path, "full_coverage_cohort", versions=(1,),
+                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=1e9,
+                 members=[f"{t}.US" for t in tickers])
+    feed = _RealLensFeed()
+    raw = run_lens_backtest("Full Coverage Cohort", "magic_formula_raw_v1", start=date(2019, 1, 31),
+                            end=date(2020, 6, 30), adapter=feed, cohorts_root=tmp_path,
+                            min_cap_usd=1e9)
+    assert all(r.accounts_coverage == 1.0 for r in raw.rounds)
 
 
 # --- excess_drop_best --------------------------------------------------------------------- #

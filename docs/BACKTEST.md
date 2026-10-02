@@ -430,6 +430,79 @@ summary row before this bug report. `magic_formula_raw_v1` has no screen, so its
 `n_ranked == n_eligible` on every round means its screen confirmed zero fails that round:
 check this column first whenever two lenses' numbers agree unexpectedly.
 
+## Size floor experiment, take two (SIZE-FLOOR-2)
+
+A 2026-10-02 real-data Colab run still showed `growth_garp_v2` reading `n_ranked ==
+n_eligible` in **every** cohort and round of the grid above, including
+Industrials - Grid & Electrical Machinery at its *own* $1bn floor — where SIZE-FLOOR-1's
+floor-framing explanation does not apply at all (the gate matched the cohort's own
+membership floor exactly), yet the committed/default run on the same cohorts did screen
+(e.g. Interactive Media: Growth +8.1%/yr vs RAW +2.6%/yr). That ruled out "coincidental
+thin accounts" as the sole explanation and pointed at the grid's own mechanics.
+
+**The actual defect**: SIZE-FLOOR-1's `min_cap_usd` replaced BOTH the cohort's own as-of
+membership floor (`eligible_at`'s pre-filter) AND the lens's own `min_market_cap` gate with
+one number. Blending the two meant a grid row's *eligible population* — and therefore its
+as-of accounts depth — was never the same population the committed/default run ever
+screened, for any gate that did not happen to equal the cohort's own floor.
+
+**The fix**: `min_cap_usd` now moves **only** the lens's own gate
+(`run_rank_pipeline`'s `min_market_cap_override`). The cohort's own as-of membership floor
+(`size_floor`) is never touched by it — it is always `cohort_native_floor()`'s own value,
+exactly what the committed/default run has always applied. Two consequences, both load-
+bearing:
+
+- **The $5bn row now reproduces `SUMMARY.csv` for every cohort**, regardless of that
+  cohort's own membership floor — not because the gate happens to match it (SIZE-FLOOR-1's
+  accidental, narrow case), but because `magic_formula_raw_v1` and `growth_garp_v2` both
+  already declare `min_market_cap: 5.0e9` in their own files, making a $5bn gate a no-op
+  for the lens too. Pinned by a fixture test
+  (`test_the_5bn_row_reproduces_the_default_run_even_when_the_cohorts_own_floor_is_not_5bn`).
+- **A gate below a cohort's own membership floor is now a no-op by construction**: a name
+  below that floor was never in the eligible population the lens could rank, so loosening
+  the lens's own gate further can admit nothing new. `run_lens_backtest` reports this as
+  `below_cohort_floor` (zero rounds run) rather than silently measuring nothing; the grid
+  cell records it as its own row ("below cohort floor"), never a CSV.
+
+**`accounts_coverage`** (`Round.accounts_coverage`, `SIZE_FLOOR_SUMMARY.csv`'s
+`accounts_coverage_pct` column) is new: the share of `n_eligible` names whose as-of
+`Fundamentals` carried *any* dated accounts at all (non-empty `period_ends` — the opposite
+of `AsOfAdapter`'s identity-only abstain shell). It is a fact about the **names**, not the
+lens — read it alongside `n_ranked` (a fact about the **lens's screen**) rather than in
+place of it: a name can have 3 years of real accounts (`accounts_coverage` reads 1.0) and
+still make `min_revenue_cagr`/`max_peg_ratio` abstain for want of the 4th year `min_roic`'s
+own `invested_capital` series needs — `n_ranked` catches that, `accounts_coverage` alone
+would not.
+
+**Null excludes, not imputes.** A name whose screen could not evaluate a single
+*substantive* criterion (`min_market_cap` excluded — a trivial, separately-gated check; see
+the one actual run where this fired) now reads as "does not apply" for that lens that
+round — excluded from ranking entirely, matching Company Check's own convention — rather
+than reaching factor ranking where a missing factor used to be imputed under `missing:
+worst`. This is a real behaviour change, not only a visibility one: it applies to every
+`run_lens_backtest` call, including the committed/default runs, not only the grid.
+**The existing 65 committed CSVs have not been re-run against this change** — doing so
+needs live EODHD access this environment does not have; re-running cell 5 and diffing
+against the committed files is the way to find which (cohort, lens) pairs actually move.
+
+**The decision rule (item 2c), pre-registered before any result is read**: for each lens
+and each gate below $5bn, count the cohorts (among those actually run at both that gate and
+$5bn) where the lower gate beats the $5bn row by ≥2 points of annual excess *and* its own
+`luck_pct` is ≤25% ("better"), and where it is worse by ≥2 points ("worse"). The grid cell
+prints "lower the gate" only when better ≥9 of 13 and worse ≤2 — otherwise "keep $5bn". The
+threshold is fixed at 9-of-13 (the cohort count `watch.yaml` carried when this rule was
+written), not rescaled to however many cohorts actually finished a given session: a partial
+grid is read as a partial answer, never a looser bar.
+
+**Not run against real data from this environment** — no EODHD/live-data access here. The
+grid, the decision rule's printed verdict per (lens, gate), and the "4-cohort RAW result"
+a prior report referenced were all measured under the now-replaced SIZE-FLOOR-1 design and
+are not valid under SIZE-FLOOR-2's: eligibility itself may have changed for any cohort
+whose own floor is not $5bn. **Re-run notebook cells 9 and 10** (`run_lens_backtest`,
+`cohort_native_floor`) against real Drive-cached data to get numbers that mean what this
+section says they mean, then record the actual decision-rule lines and any numeric example
+here — not before.
+
 ## The two honesty limits
 
 These are stamped into every result and every CSV. Both **flatter** the lens, and neither can be
