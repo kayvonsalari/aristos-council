@@ -175,14 +175,26 @@ def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
 
 
 # NOVOTE-1 item 2.3b — below this many rankable names, a cut is arithmetic, not a
-# comparison: enforced by company_report.votes_from_multi, specifically for Company
-# Check's PEER-COMPARISON votes (the HLB case — its peer group collapsed to itself).
-# Deliberately NOT enforced here, nor in pipeline._rank_stage: rank_universe is called
-# directly by dozens of unit tests with small (2-4 name) synthetic fixtures unrelated to
-# this feature, and a user-chosen Run-tab universe may legitimately be that small too —
-# gating either one broke the wrong things for the wrong reason. 3 matches the task's own
-# "fewer than 3 rankable names" wording.
+# comparison: enforced by company_report.votes_from_multi (Company Check's PEER-
+# COMPARISON votes — the HLB case, its peer group collapsed to itself) and, as of
+# BATCH-14 RUNTAB-RANK-1, by pipeline.combine_rank_results/format_cli_report (the Run
+# tab, so it can no longer print "#1 of 1"/"#2 of 2" either). Deliberately NOT enforced
+# here, nor in pipeline._rank_stage itself: rank_universe is called directly by dozens
+# of unit tests with small (2-4 name) synthetic fixtures unrelated to this feature, and
+# gating the ranking primitive broke them for the wrong reason — the fix belongs at the
+# DISPLAY layer, same as Company Check's own, so a real run's RANKED LIST is unchanged
+# and only how a too-small cohort's position is RENDERED differs. 3 matches the task's
+# own "fewer than 3 rankable names" wording.
 MIN_RANKABLE_COHORT = 3
+
+
+def too_few_to_rank_text(cohort_size: int) -> str:
+    """"too few to rank (only 1 company here, not a peer group)" — the ONE wording every
+    surface uses for a cohort below MIN_RANKABLE_COHORT (Company Check's votes_from_multi,
+    the Run tab's combine_rank_results/format_cli_report), so it can never read two
+    different ways on two different pages."""
+    company = "company" if cohort_size == 1 else "companies"
+    return f"too few to rank (only {cohort_size} {company} here, not a peer group)"
 
 
 def _verdict_for_position(i: int, n: int, cut: str, k: int, percentile: float) -> str:

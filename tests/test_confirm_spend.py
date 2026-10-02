@@ -44,9 +44,10 @@ _APP = Path(__file__).resolve().parents[1] / "app.py"
 _RUN = datetime(2026, 8, 24, 11, 49, tzinfo=timezone.utc)
 
 
-def _ranked_multi(ids=(SCREENED, RAW, MOMENTUM)):
+def _ranked_multi(ids=(SCREENED, RAW, MOMENTUM), *, universe=None, adapter=None):
     return run_multi_strategy_pipeline(
-        UNIVERSE, list(ids), strategies_dir=STRAT_DIR, adapter=_Adapter(), today=TODAY)
+        universe or UNIVERSE, list(ids), strategies_dir=STRAT_DIR,
+        adapter=adapter or _Adapter(), today=TODAY)
 
 
 def _ranked_single(sid=SCREENED):
@@ -76,8 +77,14 @@ def test_the_confirm_step_shows_an_EXACT_count_not_a_bound():
     such. NARR-2 narrates the names the voting lenses AGREE on instead — a deliberate
     change, so the union assertion is retired rather than weakened, and what it was
     really guarding is asserted directly: the count is EXACT, because the ranking has
-    already happened. No bound, no coefficient, and the cost follows the count."""
-    result = _ranked_multi()
+    already happened. No bound, no coefficient, and the cost follows the count.
+
+    BATCH-14 RUNTAB-RANK-1: SCREENED's base-UNIVERSE cohort (A+B) is too few to rank
+    (2), which collapses every lens to the same 1-name BUY set and makes the "genuinely
+    smaller" assertion below vacuous - UNIVERSE4/_Adapter4's extra healthy name D
+    keeps every lens's cohort real."""
+    from tests.test_multi_strategy_run import UNIVERSE4, _Adapter4
+    result = _ranked_multi(universe=UNIVERSE4, adapter=_Adapter4())
     plan = narration_plan(result)
 
     assert plan["count"] == len(plan["names"])

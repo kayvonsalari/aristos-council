@@ -42,7 +42,9 @@ from tests.test_multi_strategy_run import (  # the established multi-lens fixtur
     STRAT_DIR,
     TODAY,
     UNIVERSE,
+    UNIVERSE4,
     _Adapter,
+    _Adapter4,
 )
 
 MOMENTUM = "magic_formula_momentum_v1"
@@ -82,17 +84,17 @@ class _CountingRunners(dict):
         return len(self.decisions)
 
 
-def _narrated(ids, *, coverage="buys_only", runners=None):
+def _narrated(ids, *, coverage="buys_only", runners=None, universe=None, adapter=None):
     runners = runners or _CountingRunners()
     result = run_multi_strategy_pipeline(
-        UNIVERSE, ids, strategies_dir=STRAT_DIR, adapter=_Adapter(), today=TODAY,
-        ranker_only=False, narrate_coverage=coverage, runners=runners)
+        universe or UNIVERSE, ids, strategies_dir=STRAT_DIR, adapter=adapter or _Adapter(),
+        today=TODAY, ranker_only=False, narrate_coverage=coverage, runners=runners)
     return result, runners
 
 
-def _ranked(ids):
-    return run_multi_strategy_pipeline(UNIVERSE, ids, strategies_dir=STRAT_DIR,
-                                       adapter=_Adapter(), today=TODAY)
+def _ranked(ids, *, universe=None, adapter=None):
+    return run_multi_strategy_pipeline(universe or UNIVERSE, ids, strategies_dir=STRAT_DIR,
+                                       adapter=adapter or _Adapter(), today=TODAY)
 
 
 # --------------------------------------------------------------------------- #
@@ -143,8 +145,14 @@ def test_a_name_no_lens_bought_is_not_narrated():
 # 2. THE COST GUARD — one call per NAME, never per name-and-lens
 # --------------------------------------------------------------------------- #
 def test_exactly_one_narration_call_per_distinct_name():
-    """THE cost guard. Looping lenses would bill one call per BUY VERDICT."""
-    result, runners = _narrated([SCREENED, RAW, MOMENTUM])
+    """THE cost guard. Looping lenses would bill one call per BUY VERDICT.
+
+    BATCH-14 RUNTAB-RANK-1: SCREENED's base-UNIVERSE cohort (A+B) is too few to rank
+    (2, below MIN_RANKABLE_COHORT) under the new Run-tab guard, which would make this
+    fixture vacuous (no "more than one lens bought" case to prove the guard against) -
+    UNIVERSE4/_Adapter4's extra healthy name D keeps every lens's cohort real."""
+    result, runners = _narrated([SCREENED, RAW, MOMENTUM], universe=UNIVERSE4,
+                                adapter=_Adapter4())
     union = narrated_union(result)
     verdict_count = sum(1 for row in result.rows for c in row.cells.values()
                         if c.status == "ranked" and c.verdict == "buy")
@@ -199,13 +207,20 @@ def test_the_narration_stage_is_never_entered_when_the_union_is_empty(monkeypatc
 # verdict row has to render honestly — a BUY beside an exclusion.
 # --------------------------------------------------------------------------- #
 FINANCIALS = "financials_v1"
-DISAGREE_UNIVERSE = ["TECH1", "TECH2", "BANK1", "BANK2"]
+# BATCH-14 RUNTAB-RANK-1: a THIRD name on each side (TECH3/BANK3) so RAW's own cohort
+# (the two techs - it excludes Financial Services) and FINANCIALS' own cohort (the two
+# banks - it admits only Financials) each clear MIN_RANKABLE_COHORT (3), not read as
+# "too few to rank" by the new Run-tab guard - this fixture's whole point is a lens
+# that DID buy beside one that excluded, which needs a real verdict on each side.
+DISAGREE_UNIVERSE = ["TECH1", "TECH2", "TECH3", "BANK1", "BANK2", "BANK3"]
 
 _SPLIT_FUND = {
     "TECH1": dict(sector="Technology", ebit=[3000.0]),
     "TECH2": dict(sector="Technology", ebit=[1500.0]),
+    "TECH3": dict(sector="Technology", ebit=[1000.0]),
     "BANK1": dict(sector="Financial Services", ebit=[3000.0]),
     "BANK2": dict(sector="Financial Services", ebit=[1500.0]),
+    "BANK3": dict(sector="Financial Services", ebit=[1000.0]),
 }
 
 
@@ -272,7 +287,9 @@ def test_a_name_bought_by_one_lens_and_excluded_by_another_shows_both():
 
 
 def test_each_buying_lens_gets_its_own_attributed_reasons():
-    result = _ranked([SCREENED, RAW, MOMENTUM])
+    # BATCH-14 RUNTAB-RANK-1: see test_exactly_one_narration_call_per_distinct_name
+    # above for why this uses UNIVERSE4/_Adapter4.
+    result = _ranked([SCREENED, RAW, MOMENTUM], universe=UNIVERSE4, adapter=_Adapter4())
     shared = next((t for t in narrated_union(result)
                    if len(buying_lenses(result, t)) >= 2), None)
     assert shared, "the fixture must contain a name two lenses bought"

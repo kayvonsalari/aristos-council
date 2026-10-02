@@ -81,6 +81,23 @@ class _Adapter(MarketDataAdapter):
         return []
 
 
+# --------------------------------------------------------------------------- #
+# BATCH-14 RUNTAB-RANK-1 — a FOURTH healthy name, additive, never touching UNIVERSE/
+# _FUND/_Adapter above: SCREENED's own cohort here is A+B only (2, below
+# MIN_RANKABLE_COHORT), which several existing tests relied on reading a real position
+# for. _FUND4/_UNIVERSE4/_Adapter4 give those same tests a cohort of 3 (A+B+D) under
+# SCREENED without changing a single existing, already-passing test's fixture.
+_FUND4 = {**_FUND, "D": dict(_FUND["B"])}
+UNIVERSE4 = ["A", "B", "C", "D", "DEAD"]
+
+
+class _Adapter4(_Adapter):
+    def get_fundamentals(self, ticker):
+        if ticker == "DEAD":
+            return Fundamentals(ticker="DEAD")
+        return Fundamentals(ticker=ticker, name=ticker, **_FUND4[ticker])
+
+
 def _multi(ids):
     return run_multi_strategy_pipeline(UNIVERSE, ids, strategies_dir=STRAT_DIR,
                                        adapter=_Adapter(), today=TODAY)
@@ -90,10 +107,15 @@ def _multi(ids):
 # Two strategies -> ONE grid
 # --------------------------------------------------------------------------- #
 def test_two_strategy_run_returns_one_combined_grid():
-    res = _multi([SCREENED, RAW])
+    # BATCH-14 RUNTAB-RANK-1: SCREENED's own cohort over the base UNIVERSE is just A+B
+    # (C fails its screen) - 2 names, below MIN_RANKABLE_COHORT, so this test (about
+    # grid mechanics, not the too-few guard) uses UNIVERSE4/_Adapter4's extra healthy
+    # name D to keep SCREENED's cohort at a real, rankable 3.
+    res = run_multi_strategy_pipeline(UNIVERSE4, [SCREENED, RAW], strategies_dir=STRAT_DIR,
+                                      adapter=_Adapter4(), today=TODAY)
     assert res.strategy_ids == [SCREENED, RAW]           # given order = column order
     by = {row.ticker: row for row in res.rows}
-    assert set(by) == {"A", "B", "C", "DEAD"}            # one row per name, once
+    assert set(by) == {"A", "B", "C", "D", "DEAD"}       # one row per name, once
     assert all(set(row.cells) == {SCREENED, RAW} for row in res.rows)
 
     # A is best under BOTH lenses -> rank-sum 2, graded by all, and heads the grid.
@@ -132,12 +154,45 @@ def test_unrateable_keeps_its_own_axis_in_every_column():
     assert dead.ticker == res.rows[-1].ticker            # never-ranked names sort last
 
 
+def test_a_cohort_under_three_shows_too_few_to_rank_not_a_fake_position():
+    """BATCH-14 RUNTAB-RANK-1 — the Run tab's own version of the guard Company Check's
+    votes_from_multi already applied, so it can no longer print "#1 of 1"/"#2 of 2"
+    either. SCREENED's own cohort over the base UNIVERSE is A+B only (C fails its ROIC
+    floor) — exactly 2, below MIN_RANKABLE_COHORT (3) — on BOTH surfaces this feature
+    touches: the multi-lens combined grid and the single-lens CLI/Run-tab report."""
+    from aristos_council.rank_engine import too_few_to_rank_text
+
+    expected = too_few_to_rank_text(2)
+    assert expected == "too few to rank (only 2 companies here, not a peer group)"
+
+    # The multi-lens grid (combine_rank_results / MultiStrategyCell.render()).
+    multi = _multi([SCREENED, RAW])
+    by = {row.ticker: row for row in multi.rows}
+    assert by["A"].cells[SCREENED].status == "too_few"
+    assert by["A"].cells[SCREENED].render() == expected
+    assert by["B"].cells[SCREENED].status == "too_few"
+    assert by["B"].cells[SCREENED].render() == expected
+    # RAW's own cohort is the real 3 (A/B/C) — untouched by the guard.
+    assert by["A"].cells[RAW].status == "ranked"
+
+    # The single-lens CLI / Run-tab report (format_cli_report).
+    single = run_rank_pipeline(UNIVERSE, SCREENED, ranker_only=True,
+                               strategies_dir=STRAT_DIR, adapter=_Adapter(), today=TODAY)
+    report = format_cli_report(single)
+    assert expected in report
+    assert "#1 of 1" not in report and "#2 of 2" not in report
+
+
 def test_multi_run_is_deterministic_no_council_no_narratives():
-    res = _multi([SCREENED, RAW])
+    # BATCH-14 RUNTAB-RANK-1: see test_two_strategy_run_returns_one_combined_grid above
+    # for why this uses UNIVERSE4/_Adapter4 - SCREENED's base cohort (A+B) is too few
+    # to rank, so graded_by_all would read 0, not the 2 this test means to pin.
+    res = run_multi_strategy_pipeline(UNIVERSE4, [SCREENED, RAW], strategies_dir=STRAT_DIR,
+                                      adapter=_Adapter4(), today=TODAY)
     assert all(r.council == [] and r.narratives == {} for r in res.results.values())
     assert all(r.meta["ranker_only"] for r in res.results.values())
     assert res.meta["council_mode"] == "ranker-only" and res.meta["ranker_only"]
-    assert res.meta["graded_by_all"] == 2                # A and B ranked by both lenses
+    assert res.meta["graded_by_all"] == 3                # A, B and D ranked by both lenses
 
 
 # --------------------------------------------------------------------------- #

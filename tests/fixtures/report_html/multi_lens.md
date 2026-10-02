@@ -8,7 +8,7 @@
 
 _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 
-### 3 lenses × 4 names — 1 name rated BUY by every lens, 3 of 4 ranked by at least one — shortlist: 1 name BUY on all 3 voting lenses
+### 3 lenses × 4 names — 3 of 4 ranked by at least one — shortlist: 1 name BUY on all 3 voting lenses
 
 **Classic Value** — Quality-value screen, 2 rules · **Magic Formula RAW** — no screen (ranking only) · **Value + Momentum** — Quality-value screen, 2 rules  ([details](#rules-applied--by-lens))
 
@@ -56,8 +56,8 @@ One row per name, one column per lens. A ranked cell gives the name's position i
 
 | Name | Classic Value | Magic Formula RAW | Value + Momentum |
 |---|---|---|---|
-| **A** | #1 of 2 · BUY | #1 of 3 · BUY | #1 of 2 · BUY |
-| **B** | #2 of 2 · HOLD | #2 of 3 · HOLD | #2 of 2 · HOLD |
+| **A** | too few to rank (only 2 companies here, not a peer group) | #1 of 3 · BUY | too few to rank (only 2 companies here, not a peer group) |
+| **B** | too few to rank (only 2 companies here, not a peer group) | #2 of 3 · HOLD | too few to rank (only 2 companies here, not a peer group) |
 | **C** | excluded — return on invested capital 7.7%; the rule requires at least 12%. | #3 of 3 · HOLD | excluded — return on invested capital 7.7%; the rule requires at least 12%. |
 | **DEAD** | no data | no data | no data |
 
