@@ -1194,13 +1194,12 @@ def lens_checkbox_key(strategy_id: str) -> str:
 
 def opt_lens_checkbox_key(input_kind: str):
     """TAB-MERGE-1 commit 1 — the ONE options block's key family (``opt_lens_*``),
-    replacing the ``uni_lens_*``/``cc_lens_*`` duplicates. ``render_universe_tab`` and
-    ``render_company_check_tab`` still both render on every script run today (Streamlit
-    tab bodies all execute, regardless of which tab is visually active — the exact reason
-    ``cc_lens_checkbox_key`` existed as its own prefix), so the key is qualified by
-    ``input_kind`` ("list" | "company") to keep the two calls from colliding; once commit
-    3 collapses them into one call per run, the qualifier is simply always the SAME value
-    for the active mode and costs nothing."""
+    replacing the ``uni_lens_*``/``cc_lens_*`` duplicates. Qualified by ``input_kind``
+    ("list" | "company") — commit 3's ``render_run_tab`` renders only ONE of the two
+    branches per script run (the other is simply never called), so collision is no
+    longer possible either way, but the qualifier is kept: it is what lets a COMPANY
+    pick and a LIST pick remember their own separate lens ticks across a switch back and
+    forth on the same page."""
     def _key(strategy_id: str) -> str:
         return f"opt_lens_{input_kind}_{strategy_id}"
     return _key
@@ -1250,11 +1249,11 @@ def lens_selection_captions(strategies) -> None:
 
 # --------------------------------------------------------------------------- #
 # TAB-MERGE-1 commit 1 — the ONE options block both input kinds call: lenses (+
-# captions), the plain-English summary checkbox, and (company input only, today) the
-# council-opinion checkbox. The Run tab's OWN run-mode radio / narration-level / cap /
-# skip-doubted / spend-threshold / size-floor controls are UNCHANGED and stay in
-# render_universe_tab — they are not part of this shared block in commit 1 (folding the
-# list side's "Council opinion ticked = Narrator mode" is commit 3's job, per the task).
+# captions), the plain-English summary checkbox, and the council-opinion checkbox
+# (company input always; list input too, per commit 3, unless the validation toggle
+# restores the old 3-way run-mode radio instead). The list side's OWN narration-level /
+# cap / skip-doubted / spend-threshold / size-floor controls are UNCHANGED and stay in
+# render_run_tab's list branch — they are not part of this shared block.
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class RunOptions:
@@ -3105,82 +3104,177 @@ def _preselect_default_lens(choices, *, seeded_key: str = "uni_lenses_seeded",
     st.session_state.setdefault((key_for or lens_checkbox_key)(chosen.id), True)
 
 
-def render_universe_tab(show_validation: bool = False) -> None:
-    import os
+# --------------------------------------------------------------------------- #
+# TAB-MERGE-1 commit 3 — ONE Analyse tab: Company or Cohort / list, decided by an
+# EXPLICIT switch, never inferred from what was typed.
+# --------------------------------------------------------------------------- #
+INPUT_COMPANY = "company"
+INPUT_LIST = "list"
 
-    from aristos_council.pipeline import NARRATION_BASIS
-    from aristos_council.reproducibility import estimate_cost
 
+@dataclass(frozen=True)
+class InputChoice:
+    """``render_input``'s result. Company-mode fields are set only for
+    ``kind == INPUT_COMPANY``; list-mode fields only for ``kind == INPUT_LIST`` — the
+    other side's fields sit at their defaults and the caller never reads them."""
+    kind: str = INPUT_LIST
+    # company mode
+    ticker: str = ""
+    include_small: bool = False
+    small_company_line: str = ""        # "" unless shown
+    # list mode
+    universe: list = field(default_factory=list)
+    picked_list: object = None
+    universe_id: Optional[str] = None
+    universe_display_name: str = ""
+    derived_from: str = ""
+
+
+def _market_cap_from_index(ticker: str, *, store=None) -> Optional[float]:
+    """A FREE (offline, no network) market cap for a ticker already known to the local
+    market index — the SAME field (``IndexRow.market_cap_usd``) ``run_company_report``'s
+    own smallcap detection reads off ``peer_group.subject``. Used here only to decide the
+    ADVANCE info line; ``run_company_report`` re-derives this itself when it actually
+    runs and is the real authority — this is a best-effort heads-up, never a guarantee."""
+    from aristos_council.market_index import peers as _peers
+    try:
+        group = _peers(ticker, store=store)
+    except Exception:                                       # noqa: BLE001 — never block the page
+        return None
+    subject = getattr(group, "subject", None)
+    return getattr(subject, "market_cap_usd", None) if subject is not None else None
+
+
+def _resolve_company_cap(ticker: str, *, match_cap_usd: Optional[float], adapter_factory,
+                         store=None) -> tuple[Optional[float], bool]:
+    """``(market_cap_usd, was_live_fetched)``. Three sources, free ones first: (1) the
+    find-box's own ``CompanyMatch.market_cap_usd`` (already fetched by the search);
+    (2) the local index, for a hand-typed ticker that happens to be listed (free, no
+    network); (3) a live, CACHED fundamentals fetch — the one genuinely unknown-at-
+    pick-time case (a ticker the index has no row for at all). ``adapter_factory`` is
+    called ONLY if tier (3) is actually reached — tiers (1)/(2) must never touch the
+    real adapter factory at all (TEST-ISOLATION-1; also just wasted work when the free
+    tiers already answered). Whatever it returns reuses the SAME cache_dir/day as the
+    run that follows, so this costs no second network call once the run proceeds — the
+    on-disk day-cache serves the identical request again, even from a fresh instance."""
+    if match_cap_usd is not None:
+        return match_cap_usd, False
+    cap = _market_cap_from_index(ticker, store=store)
+    if cap is not None:
+        return cap, False
+    try:
+        cap = adapter_factory().get_fundamentals(ticker).market_cap
+    except Exception:                                       # noqa: BLE001 — unknown, not a crash
+        cap = None
+    return cap, True
+
+
+def small_company_notice(cap_usd: Optional[float], *, live_fetched: bool) -> str:
+    """The exact info line (owner's ruling 2026-10-03) for a sub-$5bn company — "" when
+    not small, or when the cap could not be determined at all (a missing cap is never
+    guessed either way, SMALLCAP-VIEW-1's own rule)."""
+    from aristos_council.smallcap_band import SMALLCAP_CEILING_USD
+    from aristos_council.tools.price_context import format_money
+
+    if cap_usd is None or cap_usd >= SMALLCAP_CEILING_USD:
+        return ""
+    cap_text = format_money(cap_usd, "USD", abbreviate=True)
+    tail = (" Its size was not known in advance; this was decided once its market cap "
+           "was read." if live_fetched else "")
+    return (f"This company is worth {cap_text}, below the $5bn rule, so it will be "
+           f"compared with other small companies. Results are outside the tested "
+           f"range.{tail}")
+
+
+def render_input(*, show_validation: bool) -> InputChoice:
+    """ONE switch — "Company" or "Cohort / list" — never inferred from the ticker box's
+    contents. Hidden (not greyed) in ETF mode: the market index covers listed common
+    stocks only, so there is no company search and no company peer group for a fund."""
+    etf_mode = asset_mode() == ETFS
+    if etf_mode:
+        kind = INPUT_LIST
+        st.caption("ETF mode: a list of fund tickers only — there is no per-fund peer "
+                  "group to check one against.")
+    else:
+        # Cohort / list is the DEFAULT (index=1) — the pre-merge "Run" tab was the
+        # primary, first-selected flow, and this keeps that precedent rather than
+        # silently making Company the landing experience.
+        choice = st.radio("Input", ["Company", "Cohort / list"], index=1,
+                          key="run_input_kind", horizontal=True,
+                          help="Company: one name against its own peer group. "
+                               "Cohort / list: several names, ranked and compared "
+                               "against each other.")
+        kind = INPUT_COMPANY if choice == "Company" else INPUT_LIST
+
+    if kind == INPUT_COMPANY:
+        # FIND-COMPANY-1 — fronts the bare ticker box: type part of a name or a ticker,
+        # pick a match, it fills the box below. Offline (the local market index and the
+        # built cohorts' own member lists only, each read once and cached) — no network
+        # call, no holdings data.
+        st.markdown("**Find a company**")
+        find_query = st.text_input(
+            "Find a company", value="", key="cc_find", label_visibility="collapsed",
+            placeholder="Type a name or ticker — siemens, novo, rheinmetall, 2330…")
+        if find_query.strip():
+            from aristos_council.company_search import search_companies
+            found = search_companies(find_query)
+            if not found.matches:
+                st.caption("No match in the local market index.")
+            else:
+                if not found.cohorts_known:
+                    st.caption("No cohort has been built locally yet, so cohort "
+                              "membership is not shown.")
+
+                def _match_label(m) -> str:
+                    where = f"{m.name} ({m.ticker}) — {m.where} — {m.market_cap_display}"
+                    if m.cohorts:
+                        return f"{where} — {', '.join(m.cohorts)}"
+                    return where if not found.cohorts_known else f"{where} — no cohort"
+
+                match_options = [_match_label(m) for m in found.matches]
+                picked = st.selectbox("Matches", match_options, key="cc_find_pick",
+                                      label_visibility="collapsed")
+                if st.button("Use this company", key="cc_find_use"):
+                    chosen = found.matches[match_options.index(picked)]
+                    st.session_state["cc_ticker"] = chosen.ticker
+                    # SMALLCAP-VIEW-1 — the find box already paid for this fetch; carry
+                    # it to the cap-resolution check below so a hand-edit of the ticker
+                    # box (NOT matching what was just picked) can tell "stale pick" from
+                    # "still the one I picked" and never trust a cap for the wrong name.
+                    st.session_state["cc_matched_cap"] = (chosen.ticker, chosen.market_cap_usd)
+                    st.rerun()
+
+        ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
+                                                placeholder="MU"))
+        matched = st.session_state.get("cc_matched_cap")
+        match_cap_usd = matched[1] if matched and matched[0] == ticker else None
+
+        small_line = ""
+        include_small = False
+        # LAZY — the real adapter factory is touched only if the live-fetch tier is
+        # actually reached (an unindexed ticker). Tiers (1)/(2) are free/offline and
+        # must never build it at all (TEST-ISOLATION-1; also just wasted work when a
+        # free tier already answered). The adapter the actual run uses is built fresh,
+        # at run time, in ``_render_company_run`` — a fresh instance shares the SAME
+        # on-disk day-cache, so nothing here costs that run a second network call.
+        if ticker:
+            cap_usd, live_fetched = _resolve_company_cap(
+                ticker, match_cap_usd=match_cap_usd, adapter_factory=_company_check_adapter)
+            small_line = small_company_notice(cap_usd, live_fetched=live_fetched)
+            include_small = bool(small_line)
+            if small_line:
+                st.info(small_line)
+        return InputChoice(kind=INPUT_COMPANY, ticker=ticker, include_small=include_small,
+                           small_company_line=small_line)
+
+    # --- list input: unchanged from the pre-merge Run tab (saved-list picker, ticker
+    # box, save-list expander) --------------------------------------------------------- #
     from aristos_council.universe import list_universes
-
     from aristos_council.universe_editor import (
         existing_universe_ids, graded_universe_ids, list_id_from_name,
         parse_ticker_lines, save_local_universe)
 
-    st.subheader("Run — pick strategies, pick tickers, run")
-    st.caption("Screen → rank → gates issue the verdict of record; the LLM only "
-               "narrates. Pick one or more strategies, edit the ticker list, run. That "
-               "is the whole flow (FUND-UI-2).")
-
-    # 1 — STRATEGIES. ONE picker (FUND-UI-2, strategy/picker.py): visibility filtering (the
-    # validation toggle reveals the ``ui: hidden`` baseline/superseded configs), the
-    # flagship-first ordering, and the label->strategy resolution all live in that module
-    # now, shared with Company Check — so a fix lands on both surfaces at once. EVERY
-    # visible strategy is offered for ANY ticker list: no per-section "relevant strategies"
-    # filtering, because a list does not make a strategy unofferable. Asset-class scope
-    # stays an honest caption + a confirmed-mismatch warning below, never a hidden option.
-    # ASSET-MODE-1: and then the switch, which decides whether this picker is offering
-    # the stock lenses or the fund ones. Visibility only — every lens still exists, still
-    # loads, and still runs from the CLI and Colab.
-    choices = strategy_choices([o[2] for o in list_rank_strategy_options(STRATEGIES_DIR)],
-                               show_validation=show_validation)
-    choices = [c for c in choices if _mode_filters()[0](c.strategy)]
-    if not choices:
-        st.error(f"No {asset_mode()} strategies found under {STRATEGIES_DIR}")
-        return
-    # The picker renders FRIENDLY display names; the technical id lives only in a small
-    # caption (ids are the stable record keys — never renamed, never in the label). A label
-    # two configs would SHARE carries its id, so a pick can't resolve to the wrong one.
-    labels = choice_labels(choices)
-    # SHORTLIST-3 — ONE control. There is no primary lens: every lens you tick is a vote of
-    # equal weight, and a check lens marks rather than votes. The dropdown that used to
-    # elect one lens above the others is gone, not hidden behind a setting — it encoded a
-    # hierarchy the owner does not want, and leaving it as an option would leave the
-    # hierarchy in the report.
-    #
-    # The suggested-first lens is PRE-TICKED on a fresh session, so the tab opens ready to
-    # run rather than refusing until you pick something.
-    # TAB-MERGE-1 commit 1 — lenses, their captions and the plain-English summary
-    # checkbox now come from the ONE shared options block (opt_lens_list_<id>,
-    # opt_summary_list — the uni_lens_*/uni_reader keys are gone). show_council=False:
-    # the Run tab's own run-mode radio is untouched below, so .with_council is unused.
-    options = render_run_options(choices, input_kind="list", show_council=False)
-    strategies = options.strategies
-    with_reader = options.with_summary
-    # BAND-ALWAYS-ON-1 (owner's ruling 2026-09-26): the valuation band is ALWAYS computed and shown -
-    # it is free (yfinance history through the day-cache, no model call), so it has no tick box. It
-    # CONTEXTUALIZES (an absolute percentile column: where today's valuation sits in each name's OWN
-    # 5-year EV/EBIT or P/E range), never grades, reorders or narrates.
-    # READER-1: ONE short AI note about the whole RUN, not about a name. Neither this nor the band is
-    # a lens: the band adds context, this adds prose, and neither grades anything. Default OFF, and
-    # INDEPENDENT of the run mode — ticked on a ranker-only run it makes exactly one model call and
-    # nothing else.
-    # SHORTLIST-3: a zero-lens selection IS now reachable (untick everything), and it is
-    # refused by run_problems below rather than silently defaulted — a run with no lens
-    # has nothing to say.
-    multi = len(strategies) > 1
-    # SHORTLIST-3: with no primary, the cost estimate and the narration settings describe
-    # the FIRST ticked lens — the only one a single-lens run could narrate. A multi-lens
-    # run is deterministic, so neither is in play then, and a zero-lens run is refused
-    # before either is read.
-    rank_strategy = strategies[0] if strategies else None
-
-    # 2 — TICKERS. A list is a plain, editable ticker list: pick one of yours (or start a
-    # new one), edit it right here, run it. Selecting a list LOADS it into this box — there
-    # is no separate "universe edit runs" section any more, and no manifest ceremony.
-    saved = visible_universes(list_universes(UNIVERSES_DIR),
-                              show_validation=show_validation)
-    # ASSET-MODE-1: only the lists that belong to the side of the switch you are on.
+    saved = visible_universes(list_universes(UNIVERSES_DIR), show_validation=show_validation)
     saved = [u for u in saved if _mode_filters()[1](u)]
     NEW_LIST = "New list"
     list_labels = [NEW_LIST] + saved_list_labels(saved)
@@ -3188,10 +3282,7 @@ def render_universe_tab(show_validation: bool = False) -> None:
                                help="Your saved ticker lists. Selecting one loads it "
                                     "below, where you can edit it before running.")
     picked_list = (saved[list_labels.index(list_choice) - 1]
-                   if list_choice != NEW_LIST else None)
-    # Load-on-select: seed the ticker box from the chosen list. Written BEFORE the widget
-    # below is instantiated (Streamlit's supported pre-instantiation write) and only when
-    # the SELECTION changed, so an edit in progress is never overwritten on a rerun.
+                  if list_choice != NEW_LIST else None)
     if st.session_state.get("uni_loaded_list") != list_choice:
         st.session_state["uni_loaded_list"] = list_choice
         if picked_list is not None:
@@ -3203,41 +3294,29 @@ def render_universe_tab(show_validation: bool = False) -> None:
         key="uni_tickers", height=180,
         placeholder="AAPL\nMSFT  # anchor\n# --- energy ---\nXOM")
     universe = parse_ticker_lines(raw)
+    if len(universe) == 1:
+        st.caption(f"Just **{universe[0]}** — open this as a company page instead?")
 
-    # A list runs under its own id only while it still IS that list; an edited (or new) list
-    # runs ad-hoc — ``adhoc:<hex8>`` — rather than filing a changed cohort under a name
-    # whose past verdicts were graded on different members. Either way the run record
-    # carries the exact membership (FUND-UI-2), so nothing is lost by not saving.
     unchanged = picked_list is not None and universe == list(picked_list.tickers)
     universe_id = picked_list.id if unchanged else None
     universe_display_name = picked_list.display_name if unchanged else ""
-    # REPORT-4 part 4: an edit FORKS to `adhoc:<hex8>` (FUND-UI-2), which is right for the
-    # record and useless as a title — "adhoc:507e10cf" names nothing a reader recognises.
-    # The parent's name rides along, display-only; the id stays the record key.
     derived_from = ("" if unchanged or picked_list is None
                     else (picked_list.display_name or picked_list.id))
 
-    # An edit is ALWAYS a fork, never an in-place mutation of the manifest on disk: the run
-    # grades an ad-hoc copy and the source file is untouched until you explicitly save. Say
-    # which list the edit came from and that the original is intact — and, when that list
-    # cannot be rewritten at all (a shipped or scoreboard-graded one), say that too rather
-    # than pointing at a Save button that is disabled.
     graded = graded_universe_ids(SNAPSHOTS_CSV)
     is_mine = (picked_list is not None and getattr(picked_list, "local", False)
-               and picked_list.id not in graded)
+              and picked_list.id not in graded)
     if picked_list is not None and not unchanged:
         keep = ("Use **Save changes** to write the edit back into it, or **Save as new "
-                "list** to fork it." if is_mine else
-                "It cannot be edited in place — use **Save as new list** to keep the edit.")
+               "list** to fork it." if is_mine else
+               "It cannot be edited in place — use **Save as new list** to keep the edit.")
         st.caption(f"Edited — this run grades an ad-hoc copy (fingerprinted); "
-                   f"**{universe_label(picked_list)}** on disk is untouched. {keep}")
+                  f"**{universe_label(picked_list)}** on disk is untouched. {keep}")
     with st.expander("💾 Save this list"):
         st.caption("Lists live in `universes/local/` and are gitignored by default — "
-                   "portfolio-class data never rides a commit.")
+                  "portfolio-class data never rides a commit.")
         name = st.text_input("List name", key="uni_list_name",
                              placeholder="My Portfolio")
-        # THESIS-1: what the list was BUILT FOR. Blank is allowed and is the default —
-        # an unmarked list makes no claim, so it never triggers the fit caption.
         _theses = ["", "value", "growth", "income", "quality", "funds"]
         _current = getattr(picked_list, "thesis", "") or ""
         list_thesis = st.selectbox(
@@ -3246,8 +3325,8 @@ def render_universe_tab(show_validation: bool = False) -> None:
             format_func=lambda t: t or "— not stated —",
             key="uni_list_thesis",
             help="What this list was assembled to find. Recorded on the list and stated in "
-                 "the run's summary; it never filters a lens or blocks a run. Leave blank "
-                 "to make no claim.")
+               "the run's summary; it never filters a lens or blocks a run. Leave blank "
+               "to make no claim.")
         col_save, col_saveas = st.columns(2)
         with col_save:
             save_over = st.button("Save changes", key="uni_save_over",
@@ -3265,40 +3344,135 @@ def render_universe_tab(show_validation: bool = False) -> None:
                         UNIVERSES_DIR, id=picked_list.id, tickers=universe,
                         created=created, display_name=name.strip() or picked_list.id,
                         graded_ids=graded, overwrite=True, thesis=list_thesis,
-                        # ASSET-MODE-1: the list comes back where it was made.
                         asset_kind=_mode_asset_kind())
                 else:
-                    new_id = list_id_from_name(name,
-                                               existing_universe_ids(UNIVERSES_DIR))
+                    new_id = list_id_from_name(name, existing_universe_ids(UNIVERSES_DIR))
                     path = save_local_universe(
                         UNIVERSES_DIR, id=new_id, tickers=universe, created=created,
-                        display_name=name.strip(), graded_ids=graded,
-                        thesis=list_thesis,
-                        # ASSET-MODE-1: the list comes back where it was made.
+                        display_name=name.strip(), graded_ids=graded, thesis=list_thesis,
                         asset_kind=_mode_asset_kind())
             except (ValueError, ValidationError) as exc:
                 st.error(str(exc))
             else:
                 st.success(f"Saved **{name.strip() or path.stem}** → "
-                           f"`{path.relative_to(ROOT)}` ({len(universe)} names).")
+                          f"`{path.relative_to(ROOT)}` ({len(universe)} names).")
 
-    # STRAT-PICKER-1: which lenses can HONESTLY grade this cohort. The cohort's asset class
-    # is DERIVED from the lenses that declare it (applicability.py); an AD-HOC cohort
-    # declares nothing, so it is UNKNOWN and NOTHING is filtered out — the live 2026-08-10
-    # bug was an ad-hoc stock cohort offered a single lens while five stock lenses sat
-    # unreachable in strategies/. The picker above stays complete either way (never hide a
-    # runnable strategy); this only NAMES what applies and warns on a CONFIRMED mismatch,
-    # which the run-time asset-kind gate would exclude anyway.
+    return InputChoice(kind=INPUT_LIST, universe=universe, picked_list=picked_list,
+                       universe_id=universe_id, universe_display_name=universe_display_name,
+                       derived_from=derived_from)
+
+
+def render_run_tab(show_validation: bool = False) -> None:
+    """TAB-MERGE-1 commit 3 — ONE tab, "Analyse": Company or Cohort / list, picked by an
+    explicit switch (``render_input``). Options (lenses, summary, council) are shown
+    once (commit 1). The two run ENGINES (``run_company_report`` for a company,
+    ``run_multi_strategy_pipeline``/``run_rank_pipeline`` for a list) and their own
+    result renderers are UNCHANGED — this only decides which one runs and shows its
+    EXISTING page, in its EXISTING order (Part 2 reorders the company page)."""
+    st.subheader("Analyse — one company, or a cohort")
+    st.caption("Screen → rank → gates issue the verdict of record; the LLM only "
+               "narrates. Pick Company or Cohort / list, pick strategies, run.")
+
+    choice = render_input(show_validation=show_validation)
+
+    # STRATEGIES. ONE picker (FUND-UI-2, strategy/picker.py), shared by both input kinds
+    # exactly as it was shared by the two separate tabs before this merge.
+    choices = strategy_choices([o[2] for o in list_rank_strategy_options(STRATEGIES_DIR)],
+                               show_validation=show_validation)
+    choices = [c for c in choices if _mode_filters()[0](c.strategy)]
+    if not choices:
+        st.error(f"No {asset_mode()} strategies found under {STRATEGIES_DIR}")
+        return
+    labels = choice_labels(choices)          # kept, as before (unused; see the Part 2 cleanup)
+
+    if choice.kind == INPUT_COMPANY:
+        _render_company_run(choice, choices)
+    else:
+        _render_list_run(choice, choices, show_validation=show_validation)
+
+
+def _render_company_run(choice: InputChoice, choices) -> None:
+    """The company-input half of the Analyse tab — unchanged from the pre-merge Company
+    Check tab, except: options come from the shared block (commit 1), and
+    ``include_small``/the adapter come from ``render_input``'s own auto-detection
+    (commit 3) instead of a tick box."""
+    import os
+
+    from aristos_council.company_report import run_company_report
+
+    run_options = render_run_options(choices, input_kind="company", show_council=True)
+    strategies = run_options.strategies
+    with_summary = run_options.with_summary
+    with_council = run_options.with_council
+
+    has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    if (with_summary or with_council) and not has_key:
+        st.info("This needs ANTHROPIC_API_KEY in the environment or `.env`; without it the page "
+                "runs without it and says so.")
+
+    run = st.button(_md(run_button_label(n_strategies=len(strategies),
+                                         with_reader=with_summary,
+                                         with_council=with_council)),
+                    type="primary", disabled=not choice.ticker, key="cc_run")
+    if run:
+        run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
+        status = st.status("Starting…", expanded=True)
+        try:
+            report = run_company_report(
+                choice.ticker, [s_.id for s_ in strategies], adapter=_company_check_adapter(),
+                strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
+                runs_dir=ROOT / "runs", with_summary=with_summary, with_council=with_council,
+                include_small=choice.include_small,
+                progress=lambda msg: status.update(label=msg))
+        except Exception as exc:
+            status.update(label="Run failed", state="error")
+            st.exception(exc)
+            st.session_state.pop("cc_report", None)
+        else:
+            status.update(label="Done.", state="complete")
+            st.session_state["cc_report"] = report
+            st.session_state["cc_run_start"] = run_start
+
+    report = st.session_state.get("cc_report")
+    if report is not None:
+        st.divider()
+        _render_company_report(report)
+
+
+def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> None:
+    """The list-input half of the Analyse tab — unchanged pipeline calls and result
+    renderers; what changed: options come from the shared block (commit 1); "Council
+    opinion" ticked/unticked now drives Narrator/Ranker-only by default, with the old
+    3-way Run-mode radio (Second opinion) restored only behind the validation toggle —
+    never both controls at once; the spend threshold and size-floor override moved into
+    an "Advanced (list only)" expander."""
+    import os
+
+    from aristos_council.pipeline import NARRATION_BASIS
+    from aristos_council.reproducibility import estimate_cost
+
+    universe = choice.universe
+    picked_list = choice.picked_list
+    universe_id = choice.universe_id
+    universe_display_name = choice.universe_display_name
+    derived_from = choice.derived_from
+
+    # TAB-MERGE-1 commit 3: "Council opinion" ticked = Narrator, unticked = Ranker only.
+    # "Second opinion" is KEPT, visible only behind the validation toggle — as the OLD
+    # 3-way radio, restored in place of the checkbox so the two controls never both show.
+    show_run_mode_radio = show_validation
+    options = render_run_options(choices, input_kind="list",
+                                 show_council=not show_run_mode_radio)
+    strategies = options.strategies
+    with_reader = options.with_summary
+    multi = len(strategies) > 1
+    rank_strategy = strategies[0] if strategies else None
+
+    # STRAT-PICKER-1: which lenses can HONESTLY grade this cohort (unchanged).
     all_rank_strategies = [c.strategy for c in choices]
     cohort_kind = cohort_asset_kind(universe_id, all_rank_strategies)
     applicable = applicable_rank_strategies(all_rank_strategies, cohort_kind)
-    st.caption(cohort_scope_note(cohort_kind, len(applicable),
-                                 adhoc=universe_id is None))
-    # SHORTLIST-3 removed the THESIS-1 fit warning. It asked whether the PRIMARY lens was
-    # the right one for this list, and there is no primary lens any more — every ticked
-    # lens is an equal vote, so "the lens" the warning was about does not exist. The
-    # asset-kind scope note below stays: that one is about whether a lens can read these
-    # names at all, which is a fact about the data rather than a claim about intent.
+    st.caption(cohort_scope_note(cohort_kind, len(applicable), adhoc=universe_id is None))
     for s in strategies:
         scope_warning = out_of_scope_note(s, cohort_kind)
         if scope_warning:
@@ -3306,44 +3480,15 @@ def render_universe_tab(show_validation: bool = False) -> None:
 
     strategy_ids = [s.id for s in strategies]
 
-    # RUNMODE-1 — ONE control, and it always shows the value in force.
-    # NARR-UNION-1 relaxed the multi-lens LOCK to a DEFAULT: several lenses now CAN
-    # narrate (one section per NAME over the union of their BUYs), so the control is no
-    # longer disabled. Ranker-only stays the default there because it is free.
+    # RUNMODE-1 — the mode in force. Behind the validation toggle, the ORIGINAL 3-way
+    # radio (unchanged mechanism: it follows the lens count until touched, then obeys the
+    # user). Otherwise it is DERIVED from the one "Council opinion" checkbox above.
     n_strategies = len(strategies)
-    # The mode FOLLOWS the lens count until the user states a preference, and obeys the
-    # user for ever after. Two session keys, because they answer different questions:
-    #   uni_run_mode_choice  — what the user last picked (a plain key, so it outlives the
-    #                          widget: Streamlit drops widget state when the widget is not
-    #                          rendered, which is how the earlier lock erased the choice).
-    #   uni_run_mode_touched — whether the user has picked AT ALL. Untouched, ticking a
-    #                          second lens moves the default to ranker-only (free, and
-    #                          what a cross-lens comparison usually wants); touched, the
-    #                          choice stands through ticking and unticking alike.
-    # SEEDED ONCE, then it is the user's. The lens count picks the STARTING mode and
-    # never touches it again.
-    #
-    # It used to re-default on every lens-count change, gated on an `uni_run_mode_touched`
-    # flag set from the radio's on_change. That flag could not do the job it was given:
-    # Streamlit fires on_change only when the value CHANGES, so a user who selects the
-    # option already showing (Narrator, on a one-lens run) registers as never having
-    # expressed a preference — and ticking a second lens then silently moved them to
-    # ranker-only. That is the CONFIRM-SPEND-1 live failure of 2026-08-25 11:21: narrator
-    # chosen, three lenses, and a ranker-only report with no narration and no confirmation
-    # step, because the mode in force was never the mode the user had picked.
-    #
-    # The re-default existed to stop a multi-lens run spending by accident. It is now
-    # redundant: CONFIRM-SPEND-1 ranks for free and spends only from a button carrying the
-    # exact figure, so nothing can be billed unasked whatever this control says. Between a
-    # guard that cannot misfire and one that silently overrides intent, the guard stays and
-    # the override goes.
-    st.session_state.setdefault("uni_run_mode_choice", default_run_mode(n_strategies))
-    st.session_state.setdefault(
-        "uni_run_mode", effective_run_mode(st.session_state["uni_run_mode_choice"],
-                                           n_strategies=n_strategies))
-
-    col_a, col_b = st.columns(2)
-    with col_a:
+    if show_run_mode_radio:
+        st.session_state.setdefault("uni_run_mode_choice", default_run_mode(n_strategies))
+        st.session_state.setdefault(
+            "uni_run_mode", effective_run_mode(st.session_state["uni_run_mode_choice"],
+                                               n_strategies=n_strategies))
         run_mode = st.radio(
             "Run mode", RUN_MODES,
             format_func=lambda m: RUN_MODE_LABELS[m], key="uni_run_mode",
@@ -3353,118 +3498,80 @@ def render_universe_tab(show_validation: bool = False) -> None:
                  "pre-registered experiment that returned a null result; kept "
                  "behind this option.")
         st.session_state["uni_run_mode_choice"] = run_mode
-        if n_strategies > 1 and run_mode_narrates(run_mode):
-            st.caption(MULTI_LENS_NARRATION_NOTE)
-    with col_b:
-        # NARR-2: WHICH names get narrated. The old control offered "BUYs only" or "all
-        # ranked", and "BUYs only" meant the UNION of every lens's BUYs — 28 names on the
-        # oil dividend list, 26 of them one lens's pick. So the expensive half of the run
-        # explained names nothing else agreed with, and the two both lenses chose were
-        # buried among them.
-        #
-        # Three levers now: the level of agreement, a cap, and whether to skip the marked
-        # ones. HIDDEN — not greyed — when nothing narrates: a greyed control still
-        # invites a reading it cannot support.
-        narrate_coverage = "buys_only"          # the pipeline's own inert default
-        if run_mode_narrates(run_mode):
-            narrate_level = st.selectbox(
-                "Narrate", list(NARRATION_LEVELS),
-                key="uni_narr_level",
-                format_func=lambda k: NARRATION_LEVELS[k],
-                help="Which names to explain. The lenses that VOTE are the ticked ones "
-                     "that are not checks; a check marks rather than votes.")
-            n_voting = sum(1 for st_ in strategies
-                           if (getattr(st_, "kind", "selector") or "selector") != "check")
-            if n_voting == 2:
-                # With two voting lenses, more than half of two is two — so "most" and
-                # "all" are the same test. Saying so beats offering a choice that is not
-                # one.
-                st.caption("2 voting lenses ticked: most = all.")
-            # NARR-ZERO-1 — the condition that bit the 18:09 run: Cyclical Income ranked
-            # 1 of 21 names, so "all voting lenses agree" could only ever match that one.
-            # Said BEFORE the run, under the lever that is hostage to it.
-            #
-            # It needs per-lens ranked counts, which exist only once this cohort HAS been
-            # ranked — so it reads the last result in the session and is silent before the
-            # first run. Silent is the right failure: a hint that guessed would be worse
-            # than no hint.
-            _thin = _thin_lens_hint(narrate_level)
-            if _thin:
-                st.caption(_thin)
-            narrate_cap = int(st.number_input(
-                "Up to", min_value=1, max_value=60, value=DEFAULT_NARRATION_CAP, step=1,
-                key="uni_narr_cap",
-                help="How many names to explain, at most, in agreement-table order. Each "
-                     "one is a model call."))
-            narrate_skip = st.checkbox(
-                "Skip names doubted by Forensic", value=True,
-                key="uni_narr_skip",
-                help="On: a name a check lens doubted is left out. Off: it is explained "
-                     "too, with the narrator told the doubt. A PRICED-HIGH name is always "
-                     "explained either way — that it is dear against its own history is "
-                     "the thing most worth explaining, not a reason to skip it.")
-        else:
-            narrate_level = st.session_state.get("uni_narr_level",
-                                                 DEFAULT_NARRATION_LEVEL)
-            narrate_cap = int(st.session_state.get("uni_narr_cap",
-                                                  DEFAULT_NARRATION_CAP))
-            narrate_skip = bool(st.session_state.get("uni_narr_skip", True))
-
-    # COST-2 — the confirmation becomes PROPORTIONATE. Shown only where it applies:
-    # ranker-only spends nothing, so a threshold there would be a control with no effect.
-    if run_mode_narrates(run_mode):
-        confirm_threshold = read_threshold(st.number_input(
-            "Ask before narrating when the estimate exceeds:",
-            min_value=0.0, max_value=1000.0, step=1.0,
-            value=read_threshold(
-                st.session_state.get("uni_confirm_threshold",
-                                     DEFAULT_CONFIRM_THRESHOLD),
-                default=DEFAULT_CONFIRM_THRESHOLD),
-            format="%.2f", key="uni_confirm_threshold",
-            help="0 = always ask. At or below this figure a narrated run goes straight "
-                 "through after the free ranking; above it the run stops and shows the "
-                 "exact count and cost for you to confirm."), default=0.0)
     else:
-        confirm_threshold = read_threshold(
-            st.session_state.get("uni_confirm_threshold", DEFAULT_CONFIRM_THRESHOLD),
-            default=0.0)
+        run_mode = RUN_MODE_NARRATOR if options.with_council else RUN_MODE_RANKER
+    if n_strategies > 1 and run_mode_narrates(run_mode):
+        st.caption(MULTI_LENS_NARRATION_NOTE)
 
-    # The two pipeline arguments, derived from the ONE control (UI layer only).
+    # NARR-2: WHICH names get narrated — unchanged location/behaviour, list-only, HIDDEN
+    # (not greyed) when nothing narrates.
+    narrate_coverage = "buys_only"
+    if run_mode_narrates(run_mode):
+        narrate_level = st.selectbox(
+            "Narrate", list(NARRATION_LEVELS),
+            key="uni_narr_level",
+            format_func=lambda k: NARRATION_LEVELS[k],
+            help="Which names to explain. The lenses that VOTE are the ticked ones "
+                 "that are not checks; a check marks rather than votes.")
+        n_voting = sum(1 for st_ in strategies
+                       if (getattr(st_, "kind", "selector") or "selector") != "check")
+        if n_voting == 2:
+            st.caption("2 voting lenses ticked: most = all.")
+        _thin = _thin_lens_hint(narrate_level)
+        if _thin:
+            st.caption(_thin)
+        narrate_cap = int(st.number_input(
+            "Up to", min_value=1, max_value=60, value=DEFAULT_NARRATION_CAP, step=1,
+            key="uni_narr_cap",
+            help="How many names to explain, at most, in agreement-table order. Each "
+                 "one is a model call."))
+        narrate_skip = st.checkbox(
+            "Skip names doubted by Forensic", value=True,
+            key="uni_narr_skip",
+            help="On: a name a check lens doubted is left out. Off: it is explained "
+                 "too, with the narrator told the doubt. A PRICED-HIGH name is always "
+                 "explained either way — that it is dear against its own history is "
+                 "the thing most worth explaining, not a reason to skip it.")
+    else:
+        narrate_level = st.session_state.get("uni_narr_level", DEFAULT_NARRATION_LEVEL)
+        narrate_cap = int(st.session_state.get("uni_narr_cap", DEFAULT_NARRATION_CAP))
+        narrate_skip = bool(st.session_state.get("uni_narr_skip", True))
+
+    # TAB-MERGE-1 commit 3 — list-only, tucked away: the spend-confirmation threshold and
+    # the company-size floor override. Same widgets, same keys, same behaviour; only the
+    # container is new.
+    with st.expander("Advanced (list only)"):
+        if run_mode_narrates(run_mode):
+            confirm_threshold = read_threshold(st.number_input(
+                "Ask before narrating when the estimate exceeds:",
+                min_value=0.0, max_value=1000.0, step=1.0,
+                value=read_threshold(
+                    st.session_state.get("uni_confirm_threshold", DEFAULT_CONFIRM_THRESHOLD),
+                    default=DEFAULT_CONFIRM_THRESHOLD),
+                format="%.2f", key="uni_confirm_threshold",
+                help="0 = always ask. At or below this figure a narrated run goes straight "
+                     "through after the free ranking; above it the run stops and shows the "
+                     "exact count and cost for you to confirm."), default=0.0)
+        else:
+            confirm_threshold = read_threshold(
+                st.session_state.get("uni_confirm_threshold", DEFAULT_CONFIRM_THRESHOLD),
+                default=0.0)
+        min_market_cap_override = _company_size_floor_override(rank_strategy, len(strategies))
+
+    # The two pipeline arguments, derived from the mode in force (UI layer only).
     ranker_only, mode = run_mode_arguments(run_mode)
 
-    # FLOOR-1 — the EPHEMERAL company-size floor. Same doctrine as the council strategy's
-    # "Run overrides — this run only" block: applied to THIS run, stamped on the report,
-    # the strategy file never touched. It sits here because the floor is a COHORT
-    # statement — it decides who is in the room — so it applies to every lens in a
-    # multi-lens run rather than being set per lens.
-    min_market_cap_override = _company_size_floor_override(rank_strategy, len(strategies))
-
-    # CAP-1: the caption quotes the cap that actually applies to the SELECTED mode, read
-    # from the same helper the guard uses, so the two can never disagree.
     _cap_now = universe_cap(ranker_only)
     st.caption(f"**{len(universe)}** ticker(s) — up to **{_cap_now}** for "
                f"{'a ranker-only' if ranker_only else 'a narrated'} run.")
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    # NARR-UNION-1: a multi-lens run is no longer deterministic BY CONSTRUCTION — it can
-    # narrate now — so the one thing that decides whether a key is needed and a cost is
-    # shown is the run MODE, for one lens and for five alike.
     deterministic = ranker_only
-    # ONE guard set, pure and unit-tested (FUND-UI-2). The old flow re-declared CAP and the
-    # key check per section, which is precisely how the two halves drifted apart.
     problems = run_problems(universe, n_strategies=len(strategies),
                             deterministic=deterministic, has_key=has_key)
 
-    # NARR-UNION-1: on a MULTI-LENS narrated run the bill is proportional to the size of
-    # the UNION of every lens's BUYs — NOT to the lens count, and not to the number of BUY
-    # verdicts (five lenses produced 18 verdicts over 13 distinct names on 2026-08-24).
-    # The union cannot be known before the free ranking pass, so the pre-run number is the
-    # same upper bound the single-lens flow already shows, stated per NAME.
     est = None
     narrated_count = None
-    # SHORTLIST-3: with no primary lens, a run with NOTHING ticked is reachable. It is
-    # refused by run_problems above; the estimate simply has nothing to estimate, so it is
-    # skipped rather than asked about a lens that is not there.
     if (not deterministic and universe and rank_strategy is not None
             and len(universe) <= UNIVERSE_CAP):
         per_lens = _estimate_shortlist_size(len(universe), rank_strategy,
@@ -3483,8 +3590,6 @@ def render_universe_tab(show_validation: bool = False) -> None:
     for msg in problems:
         st.info(msg)
 
-    # RUNMODE-1 + NARR-UNION-1: the button says WHAT will happen and WHAT IT COSTS, on its
-    # own line — and on a multi-lens narrated run it says how many NAMES that is.
     run = st.button(_md(run_button_label(
                         run_mode, n_strategies=n_strategies, est_cost=est,
                         narrated_count=narrated_count, with_reader=with_reader)),
@@ -3502,18 +3607,12 @@ def render_universe_tab(show_validation: bool = False) -> None:
         try:
             from aristos_council.pipeline import run_multi_strategy_pipeline
 
-            # CONFIRM-SPEND-1 — PHASE ONE, always: the FREE ranking pass, no
-            # confirmation. This is work the pipeline does before any narration anyway;
-            # running it now is what turns an upper bound into the exact figure. In a
-            # narrating mode the result is HELD for confirmation rather than reported,
-            # and phase two consumes it — the ranking is never thrown away or re-run.
             multi_result = run_multi_strategy_pipeline(
                 universe, strategy_ids, universe_id=universe_id,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 freeze_dir=ROOT / "runs", with_valuation_band=True,
                 derived_from=derived_from,
                 min_market_cap_override=min_market_cap_override,
-                # READER-1: one call per run, off unless asked for.
                 with_reader=with_reader,
                 cohort_thesis=getattr(picked_list, "thesis", "") or "",
                 progress=lambda msg: status.update(label=msg))
@@ -3526,17 +3625,11 @@ def render_universe_tab(show_validation: bool = False) -> None:
             st.session_state["uni_run_start"] = run_start
             st.session_state["uni_universe_display_name"] = universe_display_name
             st.session_state.pop("uni_result", None)
-            # The free ranking is REPORTED either way — downloading it and narrating it
-            # are not alternatives (the confirm panel used to offer only "narrate" or
-            # "keep", with the finished ranking's downloads nowhere on screen). Narrating
-            # later REPLACES this pair rather than adding a second one (_supersede).
             _publish_multi(multi_result, run_start, universe_display_name)
             if run_mode_narrates(run_mode):
                 _offer_or_narrate(
                     {"kind": "multi", "result": multi_result, "mode": mode,
                      "coverage": narrate_coverage,
-                     # NARR-2: the levers travel with the pending narration, so the
-                     # figure the user confirms is the figure the run then spends.
                      "level": narrate_level, "cap": narrate_cap,
                      "skip_marked": narrate_skip},
                     threshold=confirm_threshold, status=status,
@@ -3550,25 +3643,17 @@ def render_universe_tab(show_validation: bool = False) -> None:
         try:
             from aristos_council.pipeline import run_rank_pipeline
 
-            # CONFIRM-SPEND-1 — PHASE ONE: rank for free, always. A narrating mode
-            # HOLDS the result for confirmation; ranker-only reports it straight away.
             result = run_rank_pipeline(
                 universe, rank_strategy.id, universe_id=universe_id,
                 council_mode=mode, ranker_only=True,
                 narrate_coverage=narrate_coverage, derived_from=derived_from,
                 with_valuation_band=True,
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                # Freeze this run's raw inputs so Company Check's reference-cohort reader
-                # (_latest_reference_run) can replay it offline — without this the UI
-                # never wrote runs/ and cohort context was dead code (ITEM 1).
                 freeze_dir=ROOT / "runs",
                 min_market_cap_override=min_market_cap_override,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
             status.update(label="Run failed", state="error")
-            # Finnhub scope-fence (sprint item 4): a live crash on Finnhub is a
-            # SEPARATE bug with its own spec — capture the traceback and STOP,
-            # do not paper over it. Sentiment should degrade to abstention upstream.
             st.exception(exc)
             st.session_state.pop("uni_result", None)
         else:
@@ -3581,8 +3666,6 @@ def render_universe_tab(show_validation: bool = False) -> None:
                 _offer_or_narrate(
                     {"kind": "single", "result": result, "mode": mode,
                      "coverage": narrate_coverage,
-                     # NARR-2: the levers travel with the pending narration, so the
-                     # figure the user confirms is the figure the run then spends.
                      "level": narrate_level, "cap": narrate_cap,
                      "skip_marked": narrate_skip},
                     threshold=confirm_threshold, status=status,
@@ -3656,120 +3739,6 @@ def _company_check_adapter():
     return CachingAdapter(select_market_adapter(), cache_dir=DEFAULT_CACHE_DIR,
                           today=_date.today())
 
-
-def render_company_check_tab(show_validation: bool = False) -> None:
-    """Company Check (Company Report, Part B): ONE company against its own peer group. Find it
-    by name or ticker (FIND-COMPANY-1, fronting the ticker box — offline, the local market index
-    only), tick the lenses (the same component and list as the Run tab, several at once),
-    optionally tick the plain-English summary and/or the Council opinion (COUNCIL-OPINION-1),
-    run. The valuation band is always shown. Each ticked lens ranks the company among its peers
-    exactly as a Run-tab run ranks a list; the company's vote is its verdict in that run. The
-    math judges; the only things that can call a model are the summary and the council opinion,
-    each off unless ticked, and neither ever changes a vote."""
-    import os
-
-    from aristos_council.company_report import run_company_report
-
-    st.subheader("Company Check — one company against its peers")
-    st.caption("Every ticked lens ranks the company among its peer group and gives one vote of "
-               "equal weight; a check lens marks and does not vote. **The math judges — a model "
-               "only writes, and only if you tick the summary and/or the council opinion.**")
-
-    # The SAME picker and switch the Run tab uses (FUND-UI-2, strategy/picker.py, ASSET-MODE-1).
-    choices = strategy_choices([o[2] for o in list_rank_strategy_options(STRATEGIES_DIR)],
-                               show_validation=show_validation)
-    choices = [c for c in choices if _mode_filters()[0](c.strategy)]
-    if not choices:
-        st.error(f"No {asset_mode()} strategies found under {STRATEGIES_DIR}")
-        return
-
-    # SMALLCAP-VIEW-1 — off by default, never persisted beyond this session (a bare widget
-    # key; nothing here writes it to disk). Ticked, a company under the five lenses' own
-    # $5bn gate is ranked against other sub-$5bn peers in its own cohort instead of being
-    # skipped by every lens; no track record badge is shown for such a run. No effect on a
-    # company at or above the gate (item 1d).
-    include_small = st.checkbox(
-        "Include companies under $5bn", value=False, key="cc_include_small",
-        help="Off by default. For a company below the $5bn floor every lens's own YAML "
-             "declares, this ranks it against other sub-$5bn companies in its own cohort "
-             "instead of letting every lens skip it — clearly marked as outside the tested "
-             "range, with no track-record badge. A company at or above $5bn is unaffected.")
-
-    # FIND-COMPANY-1 — fronts the bare ticker box: type part of a name or a ticker, pick a
-    # match, it fills the box below. Offline (the local market index and the built cohorts'
-    # own member lists only, each read once and cached) — no network call, no holdings data.
-    st.markdown("**Find a company**")
-    find_query = st.text_input(
-        "Find a company", value="", key="cc_find", label_visibility="collapsed",
-        placeholder="Type a name or ticker — siemens, novo, rheinmetall, 2330…")
-    if find_query.strip():
-        from aristos_council.company_search import search_companies
-        found = search_companies(find_query)
-        if not found.matches:
-            st.caption("No match in the local market index.")
-        else:
-            if not found.cohorts_known:
-                st.caption("No cohort has been built locally yet, so cohort membership is "
-                          "not shown.")
-
-            def _match_label(m) -> str:
-                where = f"{m.name} ({m.ticker}) — {m.where} — {m.market_cap_display}"
-                if m.cohorts:
-                    return f"{where} — {', '.join(m.cohorts)}"
-                return where if not found.cohorts_known else f"{where} — no cohort"
-
-            options = [_match_label(m) for m in found.matches]
-            picked = st.selectbox("Matches", options, key="cc_find_pick",
-                                  label_visibility="collapsed")
-            if st.button("Use this company", key="cc_find_use"):
-                chosen = found.matches[options.index(picked)]
-                st.session_state["cc_ticker"] = chosen.ticker
-                st.rerun()
-
-    ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
-                                            placeholder="MU"))
-
-    # TAB-MERGE-1 commit 1 — lenses, their captions, the plain-English summary checkbox
-    # and the council-opinion checkbox all come from the ONE shared options block now
-    # (opt_lens_company_<id>, opt_summary_company, opt_council_company — the
-    # cc_lens_*/cc_summary/cc_council keys are gone).
-    run_options = render_run_options(choices, input_kind="company", show_council=True)
-    strategies = run_options.strategies
-    with_summary = run_options.with_summary
-    with_council = run_options.with_council
-
-    has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    if (with_summary or with_council) and not has_key:
-        st.info("This needs ANTHROPIC_API_KEY in the environment or `.env`; without it the page "
-                "runs without it and says so.")
-
-    run = st.button(_md(run_button_label(n_strategies=len(strategies),
-                                         with_reader=with_summary,
-                                         with_council=with_council)),
-                    type="primary", disabled=not ticker, key="cc_run")
-    if run:
-        run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
-        status = st.status("Starting…", expanded=True)
-        try:
-            report = run_company_report(
-                ticker, [s_.id for s_ in strategies], adapter=_company_check_adapter(),
-                strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
-                runs_dir=ROOT / "runs", with_summary=with_summary, with_council=with_council,
-                include_small=include_small,
-                progress=lambda msg: status.update(label=msg))
-        except Exception as exc:
-            status.update(label="Run failed", state="error")
-            st.exception(exc)
-            st.session_state.pop("cc_report", None)
-        else:
-            status.update(label="Done.", state="complete")
-            st.session_state["cc_report"] = report
-            st.session_state["cc_run_start"] = run_start
-
-    report = st.session_state.get("cc_report")
-    if report is not None:
-        st.divider()
-        _render_company_report(report)
 
 
 def _render_price_and_cash(result) -> None:
@@ -4226,31 +4195,27 @@ def main() -> None:
         st.success(pending)
 
     if not show_legacy:
-        # v2-ONLY landing: Run + Company Check + Scoreboard (all first-class, not legacy).
-        # Validation assets hidden (show_validation=False). The tab is "Run" (FUND-UI-2):
-        # there is ONE run flow to name, so naming it after the universe half is misleading.
-        tab_universe, tab_company, tab_scoreboard = st.tabs(
-            ["Run", "Company Check", "Scoreboard"])
-        with tab_universe:
-            render_universe_tab(show_validation=False)
-        with tab_company:
-            render_company_check_tab(show_validation=False)
+        # v2-ONLY landing: Analyse + Scoreboard (first-class, not legacy). Validation
+        # assets hidden (show_validation=False). TAB-MERGE-1 commit 3: Company Check and
+        # the old Run tab are now ONE tab, "Analyse" — picking Company or Cohort / list is
+        # an explicit switch inside it, not a choice of tab.
+        tab_analyse, tab_scoreboard = st.tabs(["Analyse", "Scoreboard"])
+        with tab_analyse:
+            render_run_tab(show_validation=False)
         with tab_scoreboard:
             render_scoreboard_tab()
         return
 
-    # Legacy ON: Run FIRST (Streamlit default-selects it), Company Check + Scoreboard next
+    # Legacy ON: Analyse FIRST (Streamlit default-selects it), Scoreboard next
     # (first-class), then the pre-v2 council browsers (Legacy), the YAML editor last. The
-    # toggle is ON here, so validation assets are revealed.
-    tab_universe, tab_company, tab_scoreboard, tab_report, tab_history, tab_strategy = \
-        st.tabs(["Run", "Company Check", "Scoreboard", "Report · Legacy",
+    # toggle is ON here, so validation assets are revealed (incl. the "Second opinion"
+    # run mode, TAB-MERGE-1 commit 3).
+    tab_analyse, tab_scoreboard, tab_report, tab_history, tab_strategy = \
+        st.tabs(["Analyse", "Scoreboard", "Report · Legacy",
                  "History · Legacy", "Strategy · Legacy"])
 
-    with tab_universe:
-        render_universe_tab(show_validation=True)
-
-    with tab_company:
-        render_company_check_tab(show_validation=True)
+    with tab_analyse:
+        render_run_tab(show_validation=True)
 
     with tab_scoreboard:
         render_scoreboard_tab()

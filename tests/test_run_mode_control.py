@@ -119,8 +119,21 @@ def test_every_mode_has_a_label_and_they_are_distinct():
 def _run_tab(*, extra_lens: str | None = None, timeout: int = 90):
     from streamlit.testing.v1 import AppTest
 
-    at = AppTest.from_file(str(_APP), default_timeout=timeout).run()
+    at = AppTest.from_file(str(_APP), default_timeout=timeout)
+    # TAB-MERGE-1 commit 3: the "Run mode" radio (Second opinion included) now lives
+    # behind the validation toggle — the default surface shows a plain "Council opinion"
+    # checkbox instead. This module is specifically ABOUT the 3-way control, so it needs
+    # the toggle on to see it at all; the control itself, its keys and its behaviour are
+    # otherwise unchanged.
+    at.session_state["show_legacy"] = True
+    at = at.run()
     assert not at.exception
+    # The merged tab defaults its Company/Cohort switch to "Cohort / list" — select it
+    # explicitly so this module (never about the switch) does not depend on that default.
+    kind = next((r for r in at.radio if str(r.label) == "Input"), None)
+    if kind is not None and kind.value != "Cohort / list":
+        kind.set_value("Cohort / list").run()
+        assert not at.exception
     if extra_lens is not None:
         _lens_checkbox(at, extra_lens).set_value(True).run()
         assert not at.exception
@@ -296,10 +309,7 @@ def test_deselecting_the_extra_lens_restores_the_mode_rather_than_stranding_the_
     """The forced multi-lens control renders under its OWN key, so it never clobbers the
     single-lens choice — untick the lens and the mode you picked comes back."""
     pytest.importorskip("streamlit")
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file(str(_APP), default_timeout=90).run()
-    assert not at.exception
+    at = _run_tab()
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
 
     _run_mode_widget(at).set_value(app.RUN_MODE_SECOND_OPINION).run()

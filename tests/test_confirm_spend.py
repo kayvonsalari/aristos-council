@@ -212,7 +212,12 @@ def _ss(at, key, default=None):
 
 def _run_tab(timeout: int = 120):
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=timeout).run()
+    at = AppTest.from_file(str(_APP), default_timeout=timeout)
+    # TAB-MERGE-1 commit 3: the "Run mode" radio (Second opinion included) now lives
+    # behind the validation toggle; the default surface shows a "Council opinion"
+    # checkbox instead. This module drives the radio directly, so it needs the toggle on.
+    at.session_state["show_legacy"] = True
+    at = at.run()
     assert not at.exception, at.exception
     return at
 
