@@ -893,10 +893,16 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # --------------------------------------------------------------------------- #
 # The text export (the page and the HTML follow the SAME order)
 # --------------------------------------------------------------------------- #
-# summary -> council opinion -> agreement (headline + table) -> each lens's vote -> peers ->
-# price and cash -> valuation band -> absolute readings -> analyst forecasts -> sources
-SECTION_ORDER = ("summary", "council opinion", "agreement", "lens votes", "peers",
-                 "price and cash", "valuation band", "absolute readings", "what analysts say",
+# TAB-MERGE-1 part 2 commit 2 — reordered per the owner's 10-step order: summary ->
+# verdict and lens votes (agreement headline + each lens's vote, which already states
+# its rank among peers — "BUY - 3rd of 14" — in LensVote.result()) -> valuation band ->
+# price and cash -> absolute readings -> what analysts say -> council opinion -> the
+# full peers table (company row highlighted) -> sources. Council and the full peers
+# table both moved toward the end; price-and-cash and valuation-band swapped relative
+# order. The text export, the HTML export and the screen renderer (app.py) all follow
+# this SAME order — a test pins it across all three.
+SECTION_ORDER = ("summary", "agreement", "lens votes", "valuation band", "price and cash",
+                 "absolute readings", "what analysts say", "council opinion", "peers",
                  "sources")
 
 
@@ -976,10 +982,6 @@ def format_company_report(report: CompanyReport) -> str:
     if report.summary is not None:
         lines += ["SUMMARY", *summary_lines(report), ""]
 
-    if report.council_opinion is not None:
-        lines += ["COUNCIL OPINION (narration only — never a vote; the agreement below is "
-                  "the verdict of record)", *council_opinion_lines(report), ""]
-
     lines.append("AGREEMENT")
     if report.agreement is not None:
         lines.append(f"  {report.agreement.headline}")
@@ -1008,16 +1010,12 @@ def format_company_report(report: CompanyReport) -> str:
         lines.append(f"  {report.no_vote_reason or NO_LENS_REASON}")
     lines.append("")
 
-    peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
-    lines.extend(peer_block if peer_block else ["PEERS: none computed"])
+    lines.append("VALUATION BAND (this company against its own history; a mark, never a veto)")
+    lines.append(f"  {c.valuation_band}")
     lines.append("")
 
     lines.append("PRICE AND CASH (no comparison group; they do not vote)")
     lines.extend(price_and_cash_lines(c))
-    lines.append("")
-
-    lines.append("VALUATION BAND (this company against its own history; a mark, never a veto)")
-    lines.append(f"  {c.valuation_band}")
     lines.append("")
 
     lines.append("ABSOLUTE READINGS (no comparison group; they do not vote)")
@@ -1033,6 +1031,14 @@ def format_company_report(report: CompanyReport) -> str:
         lines.extend(forecasts[1:])                       # the heading above replaces the sub-heading
     else:
         lines.append("  not available")
+    lines.append("")
+
+    if report.council_opinion is not None:
+        lines += ["COUNCIL OPINION (narration only — never a vote; the agreement above is "
+                  "the verdict of record)", *council_opinion_lines(report), ""]
+
+    peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
+    lines.extend(peer_block if peer_block else ["PEERS: none computed"])
     lines.append("")
 
     lines.append("SOURCES")

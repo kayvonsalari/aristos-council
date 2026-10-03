@@ -3858,11 +3858,21 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
     frame = pd.DataFrame(peer_frame_records(group, columns, company_ticker))
     data = frame
     rank_headers = [c.header for c in columns if c.kind == "rank"]
-    if rank_headers:
-        # A rank column stays NUMERIC (it sorts by rank); the words - "does not apply", "no data" -
-        # are only how a cell that has no number reads.
-        data = frame.style.format({h: (lambda v: rank_display(v)) for h in rank_headers},
-                                  na_rep="does not apply")
+    # TAB-MERGE-1 part 2 commit 2: row 0 is reliably the company whenever columns+
+    # company_ticker are both given (peer_table.peer_rows's own contract) — a VISIBLE
+    # highlight on it, not just the "(this company)" text marker.
+    highlight_company = bool(columns and company_ticker and not frame.empty)
+    if rank_headers or highlight_company:
+        data = frame.style
+        if rank_headers:
+            # A rank column stays NUMERIC (it sorts by rank); the words - "does not
+            # apply", "no data" - are only how a cell that has no number reads.
+            data = data.format({h: (lambda v: rank_display(v)) for h in rank_headers},
+                               na_rep="does not apply")
+        if highlight_company:
+            data = data.apply(
+                lambda row: (["background-color: rgba(127,127,127,.14); font-weight: 600"]
+                            * len(row)) if row.name == 0 else [""] * len(row), axis=1)
     st.dataframe(
         data, hide_index=True, width="stretch",
         column_config={
@@ -3876,9 +3886,10 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
 
 
 def _render_company_report(report) -> None:
-    """The Company Report page, in the ONE order every surface uses: summary (if asked for) →
-    council opinion (if asked for) → agreement headline and table → each lens's vote → peers →
-    valuation band → absolute readings → analyst forecasts → Sources. The text and HTML exports
+    """The Company Report page, in the ONE order every surface uses (TAB-MERGE-1 part 2
+    commit 2): summary (if asked for) → agreement headline and table → each lens's vote
+    → valuation band → price and cash → absolute readings → analyst forecasts → council
+    opinion (if asked for) → the full peers table → Sources. The text and HTML exports
     follow the same order."""
     import pandas as pd
 
@@ -3915,16 +3926,6 @@ def _render_company_report(report) -> None:
         else:
             st.info(report.summary.note)
 
-    if report.council_opinion is not None:                # only when it was ticked
-        st.subheader("Council opinion")
-        st.caption("Narration only — never a vote; the agreement below is the verdict of "
-                   "record.")
-        op = report.council_opinion
-        if op.available:
-            st.markdown(_md(op.narrative) or "_(no narrative produced)_")
-        else:
-            st.info(op.note)
-
     st.subheader("Agreement")
     if report.agreement is not None:
         st.markdown(f"**{report.agreement.headline}**")
@@ -3958,17 +3959,27 @@ def _render_company_report(report) -> None:
     else:
         st.info(report.no_vote_reason or NO_LENS_REASON)
 
-    from aristos_council.peer_table import rank_columns
-    _render_peers(check, rank_columns(report), report.ticker)
-
-    _render_price_and_cash(check)
-
     st.subheader("Valuation band")
     st.caption("This company against its own history; a mark, never a veto.")
     st.write(check.valuation_band)
 
+    _render_price_and_cash(check)
     _render_absolute_readings(check, with_analyst=False)
     _render_analyst_forecasts(check)
+
+    if report.council_opinion is not None:                # only when it was ticked
+        st.subheader("Council opinion")
+        st.caption("Narration only — never a vote; the agreement above is the verdict of "
+                   "record.")
+        op = report.council_opinion
+        if op.available:
+            st.markdown(_md(op.narrative) or "_(no narrative produced)_")
+        else:
+            st.info(op.note)
+
+    from aristos_council.peer_table import rank_columns
+    _render_peers(check, rank_columns(report), report.ticker)
+
     _render_sources(check)
     # BACKTEST-2 — the page footer, so a badge is never on screen without a way to read how it
     # was earned.

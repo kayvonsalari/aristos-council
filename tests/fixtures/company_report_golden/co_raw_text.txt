@@ -14,6 +14,41 @@ LENS VOTES
     Magic Formula RAW: Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities).
     Magic Formula RAW track record: mean excess -7.9%/yr · 4 of 10 years positive · luck 94% · 108 round(s) held — In this cohort, picking names at random would have matched or beaten this lens at least 9 times in 10.
 
+VALUATION BAND (this company against its own history; a mark, never a veto)
+  not evaluated — no monthly price history in the 5-year window
+
+PRICE AND CASH (no comparison group; they do not vote)
+  last close $264.45
+  50-day average price $250.97
+  200-day average price $209.72
+  0.0% above its 52-week high
+  6-month return +35.5%
+  12-month return +110.1%
+  annualised volatility 1.5%
+  not stated — period labels unavailable
+  not stated — trailing EPS not reported
+  trailing P/E 22.5
+  not stated — no analyst consensus EPS for this year
+  not stated — no analyst consensus EPS for next year
+  Recent news: not shown — test fixture: no news modelled
+
+ABSOLUTE READINGS (no comparison group; they do not vote)
+  Debt and cash
+    - owes $600 net of cash
+    - would take 2.4 years of operating cash flow to repay its debt
+    - not stated — interest expense is not reported
+    - not stated — free cash flow is not reported
+  Growth record (see Sources)
+    - revenue compounded +6.3% a year over 3 years — only 3 years of accounts are available, so neither the 5- nor the 10-year window could be filled
+    - revenue grew in 3 of the 3 years reported
+    - not stated — only 0 year(s) of earnings per share reported; a compound rate needs at least 3
+    - not stated — not enough earnings per share history to count growth years
+    (4 years on file, all used)
+
+WHAT ANALYSTS SAY (a mark: it does not vote and changes no verdict) (see Sources)
+    Analyst ratings are not shown: EODHD_API_KEY is not set
+    Analyst forecasts are not shown: EODHD_API_KEY is not set, so no analyst data was asked for.
+
 PEERS (who this company would be measured against):
   13 peers at sub-industry, 1/4x–4x (0.25x-4x market cap (USD)), index snapshot 2026-09-26 - found at step 1 of 4, 13 distinct companies
   Ticker                     Name                         Exch     Market cap (USD)           Local  Magic Formula RAW rank (of 14)  Sub-industry
@@ -32,41 +67,6 @@ PEERS (who this company would be measured against):
   P11.US                     P11 Corp                     US                $20.0bn         $20.0bn                               2  Semiconductors
   P12.US                     P12 Corp                     US                $20.0bn         $20.0bn                               1  Semiconductors
   · matched on: GICS only 0, EODHD label only 0, both 13
-
-PRICE AND CASH (no comparison group; they do not vote)
-  last close $264.45
-  50-day average price $250.97
-  200-day average price $209.72
-  0.0% above its 52-week high
-  6-month return +35.5%
-  12-month return +110.1%
-  annualised volatility 1.5%
-  not stated — period labels unavailable
-  not stated — trailing EPS not reported
-  trailing P/E 22.5
-  not stated — no analyst consensus EPS for this year
-  not stated — no analyst consensus EPS for next year
-  Recent news: not shown — test fixture: no news modelled
-
-VALUATION BAND (this company against its own history; a mark, never a veto)
-  not evaluated — no monthly price history in the 5-year window
-
-ABSOLUTE READINGS (no comparison group; they do not vote)
-  Debt and cash
-    - owes $600 net of cash
-    - would take 2.4 years of operating cash flow to repay its debt
-    - not stated — interest expense is not reported
-    - not stated — free cash flow is not reported
-  Growth record (see Sources)
-    - revenue compounded +6.3% a year over 3 years — only 3 years of accounts are available, so neither the 5- nor the 10-year window could be filled
-    - revenue grew in 3 of the 3 years reported
-    - not stated — only 0 year(s) of earnings per share reported; a compound rate needs at least 3
-    - not stated — not enough earnings per share history to count growth years
-    (4 years on file, all used)
-
-WHAT ANALYSTS SAY (a mark: it does not vote and changes no verdict) (see Sources)
-    Analyst ratings are not shown: EODHD_API_KEY is not set
-    Analyst forecasts are not shown: EODHD_API_KEY is not set, so no analyst data was asked for.
 
 SOURCES
   Fundamentals and accounts: fake, fetched 2026-06-30

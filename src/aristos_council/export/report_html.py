@@ -362,6 +362,10 @@ td.cell-buy { box-shadow: inset 3px 0 0 var(--buy); }
 td.cell-hold { box-shadow: inset 3px 0 0 var(--hold); }
 td.cell-sell { box-shadow: inset 3px 0 0 var(--sell); }
 
+/* TAB-MERGE-1 part 2 commit 2: the company's own row in a peers table — a VISIBLE
+   highlight beside the "(this company)" text marker, not instead of it. */
+td.this-company { background: var(--panel) !important; font-weight: 700; }
+
 /* Valuation percentile: a diverging tint behind a cell that ALREADY says the word. */
 td.pct-cheapest { background: var(--pct-cheapest) !important; }
 td.pct-cheap    { background: var(--pct-cheap) !important; }
@@ -1603,9 +1607,10 @@ _JOIN = "\n"
 
 
 def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
-    """The Company Report as ONE self-contained HTML file, in the page order: summary (if asked
-    for), council opinion (if asked for), agreement headline and table, each lens's vote, peers,
-    valuation band, absolute readings, analyst forecasts, Sources. The same objects the text
+    """The Company Report as ONE self-contained HTML file, in the page order (TAB-MERGE-1
+    part 2 commit 2): summary (if asked for), agreement headline and table, each lens's
+    vote, valuation band, price and cash, absolute readings, analyst forecasts, council
+    opinion (if asked for), the full peers table, Sources. The same objects the text
     export prints, so the two cannot drift."""
     from ..company_check import company_sources
     from ..company_report import HOUSE_LINE, NO_LENS_REASON, OUTSIDE_TESTED_RANGE_LINE
@@ -1637,15 +1642,6 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
 
     if report.summary is not None:
         parts.append(_reader_section(report.summary))
-
-    if report.council_opinion is not None:
-        parts.append('<section class="section"><h2>Council opinion</h2>'
-                     '<p class="note">Narration only — never a vote; the agreement below is '
-                     "the verdict of record.</p>")
-        op = report.council_opinion
-        parts.append(_narration_html(op.narrative) if op.available
-                    else f'<p class="note">{_esc(op.note)}</p>')
-        parts.append("</section>")
 
     parts.append('<section class="section"><h2>Agreement</h2>')
     if report.agreement is not None:
@@ -1680,19 +1676,28 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
         parts.append(f'<p class="note">{_esc(report.no_vote_reason or NO_LENS_REASON)}</p>')
     parts.append("</section>")
 
-    parts.append(_company_peers_html(c, rank_columns(report), report.ticker))
-
-    parts.append(_price_and_cash_html(c))
-
     parts.append('<section class="section"><h2>Valuation band</h2>'
                  '<p class="note">This company against its own history; a mark, never a veto.</p>'
                  f"<p>{_esc(c.valuation_band)}</p></section>")
+    parts.append(_price_and_cash_html(c))
     parts.append(_absolute_readings_html(c, with_analyst=False)
                  or '<section class="section"><h2>Absolute readings</h2>'
                     '<p class="note">none available</p></section>')
     parts.append(_analyst_forecasts_html(c)
                  or '<section class="section"><h2>What analysts say</h2>'
                     '<p class="note">not available</p></section>')
+
+    if report.council_opinion is not None:
+        parts.append('<section class="section"><h2>Council opinion</h2>'
+                     '<p class="note">Narration only — never a vote; the agreement above is '
+                     "the verdict of record.</p>")
+        op = report.council_opinion
+        parts.append(_narration_html(op.narrative) if op.available
+                    else f'<p class="note">{_esc(op.note)}</p>')
+        parts.append("</section>")
+
+    parts.append(_company_peers_html(c, rank_columns(report), report.ticker))
+
     sources = company_sources(c)
     if sources:
         parts.append('<section class="section"><h2>Sources</h2>'
@@ -1807,8 +1812,15 @@ def _company_peers_html(result, columns=None, company_ticker: str = "") -> str:
                  *(f'<span class="mono">{_esc(rank_display(cell) if c.kind == "rank" else cell)}'
                    f"</span>" for c, (_h, cell) in zip(columns, r.ranks)),
                  _esc(r.sub_industry)] for r in rows]
+        # TAB-MERGE-1 part 2 commit 2: a VISIBLE highlight on the company's own row, not
+        # just the "(this company)" text marker. Row 0 is reliably the company whenever
+        # columns+company_ticker are both given (peer_table.peer_rows's own contract).
+        n_cols = 6 + len(columns)
+        cell_classes = ({(0, i): "this-company" for i in range(n_cols)}
+                       if columns and company_ticker and rows else {})
         out.append(_table(["Ticker", "Name", "Exchange", "Market cap (USD)", "Market cap (local)",
-                           *(c.header for c in columns), "Sub-industry"], body))
+                           *(c.header for c in columns), "Sub-industry"], body,
+                          cell_classes=cell_classes))
         if has_one_system_peers(rows):
             out.append(f'<p class="note">{_esc(ONE_SYSTEM_NOTE)}</p>')
     else:

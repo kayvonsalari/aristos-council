@@ -424,9 +424,10 @@ def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
     # COUNCIL-OPINION-1 — injected directly (no model call): the section's PLACEMENT is what
     # this test pins, not the council itself, which has its own dedicated tests below.
     report.council_opinion = CouncilOpinion(available=True, narrative="It ranked well.")
-    assert SECTION_ORDER == ("summary", "council opinion", "agreement", "lens votes", "peers",
-                             "price and cash", "valuation band", "absolute readings",
-                             "what analysts say", "sources")
+    # TAB-MERGE-1 part 2 commit 2 order.
+    assert SECTION_ORDER == ("summary", "agreement", "lens votes", "valuation band",
+                             "price and cash", "absolute readings", "what analysts say",
+                             "council opinion", "peers", "sources")
     text, html = format_company_report(report), company_report_html(report)
     for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
         at = [doc.index(heads[name]) for name in SECTION_ORDER]
@@ -551,9 +552,10 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     at.run()
     assert not at.exception
     heads = [str(getattr(h, "value", "")) for h in at.subheader]
-    assert heads[:4] == ["Summary", "Agreement", "Lens votes", "Peers"], heads
-    assert heads[-3:] == ["Absolute readings", "What analysts say", "Sources"], heads
-    assert "Valuation band" in heads
+    # TAB-MERGE-1 part 2 commit 2 order (no council opinion here — not ticked).
+    assert heads[:4] == ["Summary", "Agreement", "Lens votes", "Valuation band"], heads
+    assert heads[-3:] == ["What analysts say", "Peers", "Sources"], heads
+    assert "Price and cash" in heads and "Absolute readings" in heads
     frames = [df.value for df in at.dataframe]
     assert any("BUY votes" in list(f.columns) for f in frames)            # the agreement row
     assert any("Result" in list(f.columns) for f in frames)               # the vote table
