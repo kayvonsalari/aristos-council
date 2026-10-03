@@ -3196,10 +3196,10 @@ def render_input(*, show_validation: bool) -> InputChoice:
         st.caption("ETF mode: a list of fund tickers only — there is no per-fund peer "
                   "group to check one against.")
     else:
-        # Cohort / list is the DEFAULT (index=1) — the pre-merge "Run" tab was the
-        # primary, first-selected flow, and this keeps that precedent rather than
-        # silently making Company the landing experience.
-        choice = st.radio("Input", ["Company", "Cohort / list"], index=1,
+        # TAB-MERGE-1 part 2 commit 1 — owner's ruling 2026-10-03: Company is the
+        # DEFAULT (index=0). Part 1 defaulted to "Cohort / list" to minimise test
+        # churn from the merge itself; this is a deliberate, separate UI decision.
+        choice = st.radio("Input", ["Company", "Cohort / list"], index=0,
                           key="run_input_kind", horizontal=True,
                           help="Company: one name against its own peer group. "
                                "Cohort / list: several names, ranked and compared "
@@ -4118,7 +4118,10 @@ def main() -> None:
         # param or local storage, so the app opens on Stocks every time — which is what
         # "a stock-analysis tool by default" means. A persisted ETFs choice would make
         # the majority job the one you have to remember to switch back to.
-        st.radio("Analyse", list(ASSET_MODES), horizontal=True, index=0,
+        # TAB-MERGE-1 part 2 commit 1: renamed from "Analyse" — the merged tab (app.py's
+        # main Analyse tab) now carries that name, and this switch must not share it.
+        # Options and default (Stocks, index=0) unchanged.
+        st.radio("Asset type", list(ASSET_MODES), horizontal=True, index=0,
                  key="asset_mode")
         st.caption("ETF lists and lenses are hidden while Stocks is selected.")
         st.divider()

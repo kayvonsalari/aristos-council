@@ -219,6 +219,13 @@ def _run_tab(timeout: int = 120):
     at.session_state["show_legacy"] = True
     at = at.run()
     assert not at.exception, at.exception
+    # TAB-MERGE-1 part 2 commit 1: the Analyse tab now opens in COMPANY mode by default
+    # — this module is entirely about the list flow, so it selects "Cohort / list"
+    # explicitly rather than depending on whichever mode happens to be the default.
+    kind = next((r for r in at.radio if str(r.label) == "Input"), None)
+    if kind is not None and kind.value != "Cohort / list":
+        kind.set_value("Cohort / list").run()
+        assert not at.exception
     return at
 
 
