@@ -53,6 +53,7 @@ from aristos_council.tools.price_context import (
     PriceContext,
     format_money,
     price_context,
+    round_half_up,
 )
 from aristos_council.tools.reversion import ReversionValue, reversion_value
 from aristos_council.tools.valuation_band import ValuationBand, valuation_band
@@ -951,3 +952,29 @@ def test_the_cli_renders_the_same_columns_as_aligned_fixed_width_text():
             if any(ln.strip().startswith(r["Name"]) for r in table.rows)]
     assert len(data) == len(table.rows)
     assert len({len(ln.rstrip()) for ln in data}) == 1
+
+
+# --------------------------------------------------------------------------- #
+# CI-FLOAT-1 (2026-10-03) — ``round_half_up`` is the explicit, conventional
+# money-rounding rule (round half AWAY from zero, on the EXACT binary value), used
+# where an averaged price-and-cash figure (a moving average, a volatility) is
+# displayed — paired with ``tools/technical.py``'s ``math.fsum`` fix so neither the
+# value nor its rounding depends on which Python computed it.
+# --------------------------------------------------------------------------- #
+def test_round_half_up_rounds_an_exact_midpoint_up():
+    assert round_half_up(2.5, 0) == 3.0
+    assert round_half_up(1.125, 2) == 1.13
+    assert round_half_up(-1.125, 2) == -1.13      # a tie goes AWAY from zero
+
+
+def test_round_half_up_matches_the_live_ci_failure_value():
+    """The exact value tools/technical.sma() returns for the CI-FLOAT-1 series — a
+    half-ULP BELOW the true 250.975 midpoint, so it rounds down regardless of which
+    rounding mode is used; the point is that this is now the SAME on every Python."""
+    value = 250.974999999999994315658113919198513031005859375
+    assert round_half_up(value, 2) == 250.97
+
+
+def test_round_half_up_leaves_an_already_exact_value_unchanged():
+    assert round_half_up(27.14, 2) == 27.14
+    assert round_half_up(100.0, 2) == 100.0

@@ -22,7 +22,7 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
-from .tools.price_context import format_money
+from .tools.price_context import format_money, round_half_up
 
 _log = logging.getLogger(__name__)
 
@@ -902,12 +902,19 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5) ->
                               label=f"last close {money(technical.last_close)}")
                      if technical.last_close is not None
                      else _abstain("no price history"))
+        # CI-FLOAT-1: a moving average, rounded explicitly with ROUND_HALF_UP on its
+        # exact value — not left to the formatter's own (binary, round-half-to-even)
+        # default. Paired with ``sma``'s own ``math.fsum`` fix (tools/technical.py), so
+        # neither the value nor its rounding depends on which Python computed it.
+        # ``Reading.value`` stays the raw figure; only the rendered LABEL is rounded.
         sma_50 = (Reading(value=technical.sma_50, unit=currency,
-                          label=f"50-day average price {money(technical.sma_50)}")
+                          label=f"50-day average price "
+                                f"{money(round_half_up(technical.sma_50))}")
                  if technical.sma_50 is not None
                  else _abstain("sma_50 unavailable: fewer than 50 closes"))
         sma_200 = (Reading(value=technical.sma_200, unit=currency,
-                           label=f"200-day average price {money(technical.sma_200)}")
+                           label=f"200-day average price "
+                                 f"{money(round_half_up(technical.sma_200))}")
                   if technical.sma_200 is not None
                   else _abstain("sma_200 unavailable: fewer than 200 closes"))
         pct_off_high = (Reading(value=technical.pct_off_52w_high, unit="fraction",
@@ -924,8 +931,14 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5) ->
                               label=f"12-month return {_pct(technical.return_12m)}")
                      if technical.return_12m is not None
                      else _abstain("return_12m unavailable: insufficient price history"))
-        volatility = (Reading(value=technical.annualized_volatility, unit="fraction",
-                              label=f"annualised volatility {technical.annualized_volatility:.1%}")
+        # CI-FLOAT-1: same pairing as the moving averages above — annualized_volatility
+        # is itself a mean-of-squares (tools/technical.py, also fsum'd now), and its
+        # displayed percentage is rounded explicitly rather than left to ``:.1%}``'s own
+        # binary round-half-to-even.
+        volatility = (Reading(
+            value=technical.annualized_volatility, unit="fraction",
+            label=f"annualised volatility "
+                  f"{round_half_up(technical.annualized_volatility * 100, 1):.1f}%")
                      if technical.annualized_volatility is not None
                      else _abstain("volatility unavailable: insufficient price history"))
 

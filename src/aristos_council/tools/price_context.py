@@ -45,6 +45,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional, Sequence
 
 # --- Construction constants (documented above) ------------------------------------- #
@@ -81,6 +82,22 @@ def currency_note(currency: Optional[str]) -> str:
 # provenance audit keep full precision, and ``format_money_full`` is what a hover title
 # shows so the exact figure is always one gesture away.
 _MAGNITUDES = ((1e12, "tn"), (1e9, "bn"), (1e6, "m"))
+
+
+def round_half_up(value: float, decimals: int = 2) -> float:
+    """Round ``value`` to ``decimals`` places using ROUND_HALF_UP on its EXACT binary
+    value — CI-FLOAT-1. The conventional money-rounding rule (an f-string's own
+    ``:.Nf}`` rounds half-to-even on the binary value instead), and made explicit here
+    rather than left to whatever the formatter does by default. Applied to an AVERAGED
+    figure (a moving average, a volatility) AFTER it has been computed with
+    ``math.fsum`` (tools/technical.py) rather than the built-in ``sum`` — the pairing
+    that matters: ``fsum`` makes the value itself the same on every Python version;
+    this makes the ROUNDING of that value explicit rather than incidental. ``Decimal``
+    is built from the float directly (its exact binary value), not from ``repr(value)``,
+    so two different floats that happen to print the same never round the same way by
+    accident."""
+    quantum = Decimal(1).scaleb(-decimals)
+    return float(Decimal(value).quantize(quantum, rounding=ROUND_HALF_UP))
 
 
 def format_money(value: Optional[float], currency: Optional[str], *,
