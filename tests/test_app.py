@@ -425,9 +425,10 @@ class _LensGrid:
     the picker OFFER" still have a real question, so this stands in for it — ``.options``
     is every lens offered, in offer order, which is exactly what the dropdown's was."""
 
-    def __init__(self, at, prefix: str = "uni_lens_"):
-        # Company Check offers the SAME lenses through the SAME component under its own keys
-        # (``cc_lens_``); the Run tab's boxes are the ``uni_lens_`` ones. Two tabs, one component.
+    def __init__(self, at, prefix: str = "opt_lens_list_"):
+        # TAB-MERGE-1 commit 1: ONE shared component (render_run_options), ONE key family
+        # (opt_lens_<input_kind>_<id>) replacing uni_lens_*/cc_lens_* — Company Check's
+        # boxes are "opt_lens_company_", the Run tab's are "opt_lens_list_".
         self._boxes = [c for c in at.checkbox if str(getattr(c, "key", "") or "").startswith(prefix)]
         self.options = [str(c.label) for c in self._boxes]
 
@@ -446,7 +447,8 @@ def _lens_checkbox(at, needle):
     """One "Also grade with" lens checkbox, by its exact label or a fragment of it (exact
     wins, so "Growth" never resolves to "Growth ETFs (US)"). The whole set is visible at
     once — that is the point of the checkbox group replacing the multiselect."""
-    run_tab = [c for c in at.checkbox if str(getattr(c, "key", "") or "").startswith("uni_lens_")]
+    run_tab = [c for c in at.checkbox
+              if str(getattr(c, "key", "") or "").startswith("opt_lens_list_")]
     return (next((c for c in run_tab if str(c.label) == needle), None)
             or next(c for c in run_tab if needle in str(c.label)))
 
@@ -468,7 +470,9 @@ def test_rank_picker_order_baseline_label_and_no_v2_heading():
     # test_validation_assets_revealed_when_toggle_on).
     assert not any("baseline" in o.lower() for o in opts)
     heads = " ".join(str(getattr(e, "value", "")) for e in at.subheader)
-    assert "Run — pick strategies, pick tickers, run" in heads and "v2" not in heads
+    # TAB-MERGE-1 commit 3: the tab (and its subheader) is now "Analyse", covering both
+    # input kinds — the old Run-tab-only wording is gone.
+    assert "Analyse — one company, or a cohort" in heads and "v2" not in heads
 
 
 def test_confirmation_line_states_strategy_universe_and_mode():
@@ -527,8 +531,10 @@ def test_run_tab_renders_with_the_one_flow():
     # (Company Check has its own "▶ Run company check" button on another tab.)
     run_buttons = [b.label for b in at.button if b.label.startswith("▶ Run —")]
     assert len(run_buttons) == 1, run_buttons
-    # the single-lens default. The click is FREE; narration is a second, priced button.
-    assert run_buttons[0].startswith("▶ Run — free · then choose whether to narrate")
+    # TAB-MERGE-1 commit 3: "Council opinion" (unticked by default) now drives list
+    # mode, replacing the old lens-count default (which started a single lens on
+    # Narrator). Unticked -> Ranker only, deterministic and free.
+    assert run_buttons[0] == "▶ Run — deterministic, free"
 
 
 # --------------------------------------------------------------------------- #
@@ -571,6 +577,17 @@ def test_legacy_surfaces_appear_when_toggle_on():
 
 def _dropdown(at, label):
     return next(s for s in at.selectbox if s.label == label)
+
+
+def _company_mode(at):
+    """TAB-MERGE-1 commit 3: Company and Cohort / list are now ONE tab's internal
+    switch, defaulting to "Cohort / list" (most existing tests are list-focused) — a
+    test that is specifically ABOUT the company flow selects "Company" explicitly,
+    exactly as a real user would."""
+    radio = next(r for r in at.radio if str(r.label) == "Input")
+    if radio.value != "Company":
+        radio.set_value("Company").run()
+    return at
 
 
 def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
@@ -645,11 +662,15 @@ def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
 def test_both_strategy_pickers_list_the_live_strategies():
     # 4C ITEM 2 + FUND-UI-2: the Run tab's picker AND Company Check's both come from the
     # ONE picker module, so they offer the SAME set with the same friendly display names.
+    # TAB-MERGE-1 commit 3: Company and list are now ONE tab's internal switch, so only
+    # one of the two renders per script run — read list mode (the default), then switch
+    # to Company and read again, rather than reading both off a single run.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
     rank = _strategy_picker(at).options
-    cc = _LensGrid(at, "cc_lens_").options       # Company Check: the SAME component, its own keys
+    _company_mode(at)
+    cc = _LensGrid(at, "opt_lens_company_").options       # Company Check: the SAME component, its own keys
     assert list(rank) == list(cc)                                    # one picker, one set
     for opts in (rank, cc):
         assert "Growth" in opts                                      # plain names now
@@ -660,13 +681,14 @@ def test_both_strategy_pickers_list_the_live_strategies():
         assert any("Cyclical Income" in o for o in opts)             # CYCLICAL-INCOME-1
         # ASSET-MODE-1: the 7 stock lenses. The app opens on Stocks.
         assert len(opts) == 7
-    # The contract that matters is that the two pickers AGREE, and they must agree on the
-    # other side of the switch too — a filter applied to one and not the other is exactly
-    # the drift the ONE picker module exists to prevent.
+    # The contract that matters is that the two pickers AGREE on the other side of the
+    # switch too — a filter applied to one and not the other is exactly the drift the
+    # ONE picker module exists to prevent. ETF mode has no Company Check at all (TAB-
+    # MERGE-1 commit 3: the market index covers listed common stocks only, so there is
+    # no per-fund peer group) — so the only live picker there is the list one.
     _etfs_mode(at)
     rank = _strategy_picker(at).options
-    cc = _LensGrid(at, "cc_lens_").options
-    assert list(rank) == list(cc)
+    assert not _LensGrid(at, "opt_lens_company_").options
     assert len(rank) == 3 and all("ETF" in o for o in rank)
 
 
@@ -676,16 +698,16 @@ def test_company_check_has_no_strategy_dropdown_and_no_reference_universe_picker
     now measured against its own peer group under every ticked lens, not against a list somebody
     had to choose. The valuation band and the summary are their own tick boxes."""
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _company_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     labels = {str(s.label) for s in at.selectbox}
     assert "Strategy (lens screen + factors)" not in labels
     assert "Reference universe (for factor context)" not in labels
-    cc_boxes = _LensGrid(at, "cc_lens_")
+    cc_boxes = _LensGrid(at, "opt_lens_company_")
     assert cc_boxes.options and len(cc_boxes.ticked) == 1            # one pre-ticked, like the Run tab
     ticks = {str(c.label) for c in at.checkbox}
     assert "Plain-English summary" in ticks                          # the Run tab's and the page's
-    summary = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary")
+    summary = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "opt_summary_company")
     assert summary.value is False                                    # the summary is OFF by default
     # BAND-ALWAYS-ON-1: the valuation band has NO tick box on either tab - it is always shown
     assert not any("Valuation band" in str(c.label) for c in at.checkbox)
@@ -696,8 +718,8 @@ def test_company_check_has_no_strategy_dropdown_and_no_reference_universe_picker
 
 def test_ticking_the_summary_says_the_run_calls_a_model_once():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
-    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary").set_value(True).run()
+    at = _company_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
+    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "opt_summary_company").set_value(True).run()
     assert not at.exception
     assert any(b.label.startswith("▶ Run company check + summary (one model call)")
                for b in at.button)
@@ -708,10 +730,10 @@ def test_council_opinion_checkbox_is_off_by_default_and_combines_with_the_summar
     run button names whichever of the two (or both) are ticked."""
     from streamlit.testing.v1 import AppTest
 
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _company_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     ticks = {str(c.label) for c in at.checkbox}
     assert "Council opinion" in ticks
-    council = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_council")
+    council = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "opt_council_company")
     assert council.value is False                                    # off by default
 
     council.set_value(True).run()
@@ -719,7 +741,7 @@ def test_council_opinion_checkbox_is_off_by_default_and_combines_with_the_summar
     assert any(b.label.startswith("▶ Run company check + council opinion (~6 model calls)")
                for b in at.button)
 
-    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary").set_value(True).run()
+    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "opt_summary_company").set_value(True).run()
     assert not at.exception
     assert any(b.label.startswith(
         "▶ Run company check + summary + council opinion (~7 model calls)") for b in at.button)
@@ -741,7 +763,7 @@ def test_find_a_company_search_fills_the_ticker_box(monkeypatch):
     monkeypatch.setattr("aristos_council.company_search.search_companies",
                         lambda *a, **kw: fake_result)
 
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _company_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     at.text_input(key="cc_find").set_value("siemens").run()
     assert not at.exception
     options = next(sb for sb in at.selectbox if str(getattr(sb, "key", "")) == "cc_find_pick"
@@ -762,7 +784,7 @@ def test_find_a_company_says_so_when_nothing_matches(monkeypatch):
 
     monkeypatch.setattr("aristos_council.company_search.search_companies",
                         lambda *a, **kw: SearchResult(matches=(), cohorts_known=True))
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _company_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     at.text_input(key="cc_find").set_value("zzznotacompany").run()
     assert not at.exception
     assert any("No match in the local market index" in str(getattr(c, "value", ""))
@@ -780,7 +802,7 @@ def test_find_a_company_notes_when_no_cohort_has_been_built(monkeypatch):
             matches=(CompanyMatch(ticker="X.US", name="X Corp", exchange="NYSE", market="US",
                                   country="US", market_cap_usd=1e9, is_home=True, cohorts=()),),
             cohorts_known=False))
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _company_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     at.text_input(key="cc_find").set_value("x corp").run()
     assert not at.exception
     assert any("No cohort has been built locally yet" in str(getattr(c, "value", ""))
@@ -1250,11 +1272,14 @@ def test_scoreboard_panel_is_no_longer_wired_into_the_run_flow():
     # Source-level regression guard: the panel moved OFF the Run flow (ITEM 4).
     # AppTest can't distinguish "which tab" an element came from (all tab bodies execute
     # in one script run), so this pins the actual wiring instead.
+    # TAB-MERGE-1 commit 3: render_universe_tab/render_company_check_tab were replaced by
+    # render_run_tab (dispatching to _render_company_run / _render_list_run).
     import inspect
 
-    uni_src = inspect.getsource(app.render_universe_tab)
-    assert "render_scoreboard_tab" not in uni_src
-    assert "_render_snapshot_history" not in uni_src   # the old name is gone entirely
+    for fn in (app.render_run_tab, app._render_company_run, app._render_list_run):
+        src = inspect.getsource(fn)
+        assert "render_scoreboard_tab" not in src
+    assert "_render_snapshot_history" not in inspect.getsource(app.render_run_tab)
     assert not hasattr(app, "_render_snapshot_history")
 
     main_src = inspect.getsource(app.main)
@@ -1341,11 +1366,11 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
     _lens_checkbox(at, raw).set_value(True).run()
     assert not at.exception
-    # CONFIRM-SPEND-1: the lens count SEEDS the mode and no longer re-defaults it (a
-    # silent re-default overrode explicit Narrator picks), so the deterministic run this
-    # test is about is selected rather than assumed. What it then asserts is unchanged.
-    next(r for r in at.radio if str(r.label) == "Run mode").set_value(
-        app.RUN_MODE_RANKER).run()
+    # TAB-MERGE-1 commit 3: "Council opinion" is unticked by default, which IS ranker
+    # only now (the old 3-way radio, and the lens-count seeding this comment used to
+    # describe, only exist behind the validation toggle). Nothing to select — the
+    # deterministic run this test is about is already what's in force.
+    assert not any(str(c.label) == "Council opinion" and c.value for c in at.checkbox)
     blob = _caption_blob(at)
     assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
     assert "ONE combined grid" in blob

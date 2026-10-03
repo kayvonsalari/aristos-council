@@ -41,13 +41,23 @@ def sma(closes: list[float], window: int) -> float | None:
     None if too short OR if the window contains non-finite values (NaN/inf) —
     a NaN must surface as "metric unavailable", never as a NaN that silently
     propagates into specialist evidence.
+
+    ``math.fsum``, not the built-in ``sum`` — CI-FLOAT-1 (2026-10-03): the built-in's
+    float-summation algorithm is not the same across Python versions (it was made more
+    accurate in 3.12), so the SAME `closes` list can sum to a different last bit on
+    3.11 than on 3.14. For a mean sitting a half-ULP from a rounding boundary that
+    flipped the DISPLAYED "50-day average price" between $250.97 (naive sum, 3.14) and
+    $250.98 (naive sum, 3.11) — a CI failure on a value that passed locally. ``fsum``
+    computes the correctly-rounded total regardless of version, so the mean this
+    function returns — and anything ranked or displayed from it — no longer depends on
+    which Python summed it.
     """
     if window <= 0 or len(closes) < window:
         return None
     tail = closes[-window:]
     if not _finite(tail):
         return None
-    return sum(tail) / window
+    return math.fsum(tail) / window
 
 
 def pct_off_high(closes: list[float], lookback: int = 252) -> float | None:
@@ -67,7 +77,11 @@ def pct_off_high(closes: list[float], lookback: int = 252) -> float | None:
 
 
 def annualized_volatility(closes: list[float], trading_days: int = 252) -> float | None:
-    """Annualized stdev of daily log returns. None if <2 closes."""
+    """Annualized stdev of daily log returns. None if <2 closes.
+
+    ``math.fsum``, not the built-in ``sum`` — CI-FLOAT-1, same reasoning as ``sma``
+    above: a mean or a sum-of-squares is exactly the shape of value whose last bit can
+    depend on which Python version summed it."""
     if len(closes) < 2 or not _finite(closes):
         return None
     rets = []
@@ -78,8 +92,8 @@ def annualized_volatility(closes: list[float], trading_days: int = 252) -> float
     n = len(rets)
     if n < 2:
         return None
-    mean = sum(rets) / n
-    var = sum((r - mean) ** 2 for r in rets) / (n - 1)
+    mean = math.fsum(rets) / n
+    var = math.fsum((r - mean) ** 2 for r in rets) / (n - 1)
     return math.sqrt(var) * math.sqrt(trading_days)
 
 

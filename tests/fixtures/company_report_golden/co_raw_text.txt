@@ -1,0 +1,78 @@
+Company Report - CO Corp (CO)
+The math judges: each vote below is the lens's own verdict on this company ranked among its peer group, and every lens counts once. Nothing here is a recommendation.
+
+AGREEMENT
+  BUY on 0 of 1 vote
+  Company       BUY votes  Voted BUY  Checks       Marks
+  CO Corp (CO)  0 of 1     none       none ticked  none 
+  Track record from the Semiconductors cohort, 10 years to Sep 2026
+  Track record: 1 worked against you
+
+LENS VOTES
+  Lens               Role                   Result
+  Magic Formula RAW  votes                  HOLD - 10th of 14 (worked against you here)
+    Magic Formula RAW: Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities).
+    Magic Formula RAW track record: mean excess -7.9%/yr · 4 of 10 years positive · luck 94% · 108 round(s) held — In this cohort, picking names at random would have matched or beaten this lens at least 9 times in 10.
+
+PEERS (who this company would be measured against):
+  13 peers at sub-industry, 1/4x–4x (0.25x-4x market cap (USD)), index snapshot 2026-09-26 - found at step 1 of 4, 13 distinct companies
+  Ticker                     Name                         Exch     Market cap (USD)           Local  Magic Formula RAW rank (of 14)  Sub-industry
+  CO (this company)          Company Co                   US                $20.0bn         $20.0bn                              10  Semiconductors
+  P00.US                     P00 Corp                     US                $20.0bn         $20.0bn                              14  Semiconductors
+  P01.US                     P01 Corp                     US                $20.0bn         $20.0bn                              13  Semiconductors
+  P02.US                     P02 Corp                     US                $20.0bn         $20.0bn                              12  Semiconductors
+  P03.US                     P03 Corp                     US                $20.0bn         $20.0bn                              11  Semiconductors
+  P04.US                     P04 Corp                     US                $20.0bn         $20.0bn                               9  Semiconductors
+  P05.US                     P05 Corp                     US                $20.0bn         $20.0bn                               8  Semiconductors
+  P06.US                     P06 Corp                     US                $20.0bn         $20.0bn                               7  Semiconductors
+  P07.US                     P07 Corp                     US                $20.0bn         $20.0bn                               6  Semiconductors
+  P08.US                     P08 Corp                     US                $20.0bn         $20.0bn                               5  Semiconductors
+  P09.US                     P09 Corp                     US                $20.0bn         $20.0bn                               4  Semiconductors
+  P10.US                     P10 Corp                     US                $20.0bn         $20.0bn                               3  Semiconductors
+  P11.US                     P11 Corp                     US                $20.0bn         $20.0bn                               2  Semiconductors
+  P12.US                     P12 Corp                     US                $20.0bn         $20.0bn                               1  Semiconductors
+  · matched on: GICS only 0, EODHD label only 0, both 13
+
+PRICE AND CASH (no comparison group; they do not vote)
+  last close $264.45
+  50-day average price $250.97
+  200-day average price $209.72
+  0.0% above its 52-week high
+  6-month return +35.5%
+  12-month return +110.1%
+  annualised volatility 1.5%
+  not stated — period labels unavailable
+  not stated — trailing EPS not reported
+  trailing P/E 22.5
+  not stated — no analyst consensus EPS for this year
+  not stated — no analyst consensus EPS for next year
+  Recent news: not shown — test fixture: no news modelled
+
+VALUATION BAND (this company against its own history; a mark, never a veto)
+  not evaluated — no monthly price history in the 5-year window
+
+ABSOLUTE READINGS (no comparison group; they do not vote)
+  Debt and cash
+    - owes $600 net of cash
+    - would take 2.4 years of operating cash flow to repay its debt
+    - not stated — interest expense is not reported
+    - not stated — free cash flow is not reported
+  Growth record (see Sources)
+    - revenue compounded +6.3% a year over 3 years — only 3 years of accounts are available, so neither the 5- nor the 10-year window could be filled
+    - revenue grew in 3 of the 3 years reported
+    - not stated — only 0 year(s) of earnings per share reported; a compound rate needs at least 3
+    - not stated — not enough earnings per share history to count growth years
+    (4 years on file, all used)
+
+WHAT ANALYSTS SAY (a mark: it does not vote and changes no verdict) (see Sources)
+    Analyst ratings are not shown: EODHD_API_KEY is not set
+    Analyst forecasts are not shown: EODHD_API_KEY is not set, so no analyst data was asked for.
+
+SOURCES
+  Fundamentals and accounts: fake, fetched 2026-06-30
+  Prices: fake, latest close 2026-01-01
+  Growth record: yfinance, 4 annual reports
+  Analyst ratings and forecasts: EODHD, as of 2026-06-30
+  Market index: local table of listed companies built from EODHD, snapshot 2026-09-26; classification is EODHD's copy of GICS and its own industry labels
+  How peers are chosen: docs/CLASSIFICATION.md
+

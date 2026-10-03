@@ -71,3 +71,36 @@ def test_snapshot_degrades_to_notes_not_nan():
     for v in (snap.sma_50, snap.sma_200, snap.pct_off_52w_high,
               snap.annualized_volatility):
         assert v is None or _m.isfinite(v)
+
+
+# --------------------------------------------------------------------------- #
+# CI-FLOAT-1 (2026-10-03) — a mean that lands EXACTLY on a 2-decimal rounding
+# boundary must round the SAME way regardless of which Python summed it. The live
+# failure: this exact series' 50-day average is a half-ULP below the true decimal
+# midpoint 250.975 — Python's built-in ``sum()`` (whose float-summation algorithm is
+# not the same across versions) gave 250.97500000000002 on 3.11 (-> "$250.98") and
+# 250.975 on 3.14 (-> "$250.97"). ``math.fsum`` gives the correctly-rounded total on
+# BOTH, so the mean — and its display — no longer depends on the interpreter.
+# --------------------------------------------------------------------------- #
+def test_sma_lands_exactly_on_a_rounding_boundary_the_same_way_on_every_python():
+    closes = [100 + 0.55 * i for i in range(300)]
+    result = sma(closes, 50)
+    # The mathematically exact mean of closes[250:300] is 250.975 — not exactly
+    # representable in binary, so the nearest double is a half-ULP BELOW it. Pinning
+    # the exact bit pattern (not just the rounded display) is what would catch a
+    # regression back to the built-in ``sum`` reintroducing version-dependence.
+    assert result == 250.974999999999994315658113919198513031005859375
+    from aristos_council.tools.price_context import round_half_up
+    assert round_half_up(result, 2) == 250.97
+
+
+def test_sma_is_insensitive_to_the_order_the_closes_happen_to_sum_in():
+    """``math.fsum`` is exact regardless of input order — unlike the naive running sum
+    it replaced, which could accumulate a different last-bit error depending on it."""
+    import random
+
+    closes = [100 + 0.55 * i for i in range(300)]
+    tail = closes[-50:]
+    shuffled_tail = list(tail)
+    random.Random(0).shuffle(shuffled_tail)
+    assert sma(closes[:-50] + shuffled_tail, 50) == sma(closes, 50)

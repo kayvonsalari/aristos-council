@@ -809,11 +809,21 @@ def run_company_report(
 # The saved record
 # --------------------------------------------------------------------------- #
 def report_record(report: CompanyReport) -> dict:
+    """The saved JSON record. RECORD-V2 (TAB-MERGE-1 commit 2) — ``schema_version`` plus
+    every field SMALLCAP-VIEW-1 and COMPANY-FACTS-TABLE-1 added to ``CompanyReport``/
+    ``CompanyCheckResult`` that this function did not yet write. ADDITIVE ONLY: every
+    key written by schema_version 1 keeps its exact name, shape and value — nothing
+    here is removed or renamed. Rule for ANY reader of this record, present or future: a
+    MISSING key means an OLDER record (schema_version 1 predates this rule, so it also
+    lacks ``council_opinion``/``cohort_slug``/``track_record_*`` even though those are
+    not new in v2) — never raise on a missing key, read it with ``.get(key, default)``."""
     from .market_index import peer_snapshot
 
     group = report.peer_group
     agreement = report.agreement
+    pac = getattr(report.check, "price_and_cash", None)
     return {
+        "schema_version": 2,
         "kind": "company_report", "ticker": report.ticker, "company": report.display,
         "run_at": report.run_at, "lenses": list(report.lens_ids),
         "peer_snapshot": peer_snapshot(group) if group is not None and group.subject else None,
@@ -847,6 +857,20 @@ def report_record(report: CompanyReport) -> dict:
             "narrative": report.council_opinion.narrative,
             "note": report.council_opinion.note, "calls": report.council_opinion.calls,
             "cost": report.council_opinion.cost, "seconds": report.council_opinion.seconds}),
+        # RECORD-V2 — SMALLCAP-VIEW-1 (Batch 14): always present on a v2 record, even
+        # when False/empty/None, so a reader can tell "definitely not a small-company
+        # run" (v2, value False) from "don't know, this predates the field" (v1, key
+        # absent) — never conflate the two.
+        "outside_tested_range": report.outside_tested_range,
+        "smallcap_cohort": report.smallcap_cohort,
+        "smallcap_floor_usd": report.smallcap_floor_usd,
+        "smallcap_band_note": report.smallcap_band_note,
+        # RECORD-V2 — COMPANY-FACTS-TABLE-1 (Batch 15): None when the caller never asked
+        # for it (``with_price_and_cash=False`` — every caller outside Company Check),
+        # exactly like ``council_opinion`` above. The rendered lines, not the raw Reading
+        # objects — the same processed-display shape ``sources`` and ``lens_ranks`` use.
+        "price_and_cash": (None if pac is None else {
+            "lines": pac.lines(), "news_source": pac.news_source}),
     }
 
 

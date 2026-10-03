@@ -62,9 +62,11 @@ def test_freeze_writes_manifest_and_company_check_reader_finds_it(tmp_path):
 def test_ui_universe_run_wires_freeze_dir():
     # Regression guard for the specific bug: the UI run path must pass freeze_dir, else
     # runs/ is never written and cohort context stays dead.
+    # TAB-MERGE-1 commit 3: render_universe_tab was replaced by render_run_tab's list
+    # branch, _render_list_run.
     pytest.importorskip("streamlit")
     import inspect
 
     import app
-    src = inspect.getsource(app.render_universe_tab)
+    src = inspect.getsource(app._render_list_run)
     assert "freeze_dir" in src
