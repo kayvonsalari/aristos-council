@@ -18,6 +18,7 @@ many years it actually used rather than how many it wanted.
 from __future__ import annotations
 
 import logging
+import statistics
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
@@ -59,13 +60,20 @@ class Reading:
     # renderer can tell that the 5-year and 10-year windows collapsed onto the same
     # history and print ONE line instead of two identical ones.
     span: Optional[int] = None
+    # GROWTH-SANITY-1 (Batch 15 item 3a) — a visible caveat on an otherwise-plain figure
+    # (e.g. "CAUTION: starting year unusually low"). A SEPARATE field, not baked into
+    # ``label``'s text, so a renderer that reconstructs ``label`` for its own reasons
+    # (GrowthLeg.lines()'s window-collapse branch below) cannot silently lose it.
+    caution: str = ""
 
     @property
     def available(self) -> bool:
         return self.value is not None
 
     def text(self) -> str:
-        return self.label if self.available else f"not stated — {self.note}"
+        if not self.available:
+            return f"not stated — {self.note}"
+        return f"{self.label}{self.caution}" if self.caution else self.label
 
 
 def dedupe_lines(lines) -> list[str]:
@@ -292,7 +300,10 @@ class GrowthLeg:
             # "5- nor the 10-" + "year" -> "5- nor the 10-year". The rstrip that was
             # here ate the second hyphen and printed "10year".
             asked = " nor the ".join(f"{w}-" for w in windows)
-            head = reading.label.split(" (only ")[0]
+            # GROWTH-SANITY-1: reading.label.split(" (only ")[0] drops everything AFTER
+            # "(only ...)" too, which would silently eat reading.caution if it were baked
+            # into label — it isn't (caution is its own field), so it is re-appended here.
+            head = reading.label.split(" (only ")[0] + reading.caution
             if span in windows:
                 out.append(head)                     # a window was genuinely filled
             else:
@@ -338,6 +349,29 @@ class GrowthRecord:
         return out
 
 
+# GROWTH-SANITY-1 (Batch 15 item 3a) — live, EL.PA 2026-10-03: EPS compounded +90.9%/yr
+# over 5 years against +3.5%/yr over 10 — almost certainly a low starting year (a
+# Covid-era or post-merger trough), not a durable growth rate, and the council read it
+# plain. Like VALBAND-1's own sanity bound on an implausible band reading, this never
+# WITHHOLDS the figure (the rate is what the math says) — it makes the READING carry a
+# visible caution instead of reading as a plain, durable number. Two independent
+# triggers, either sufficient, because both point at the same risk (a trough-year base)
+# from different angles: the annualised rate itself is implausibly fast, OR the start
+# point is an outlier against the series' own typical level.
+_EXTREME_CAGR = 0.50          # 50%/yr — durable organic growth this fast is rare
+_LOW_BASE_RATIO = 0.30        # the start point is < 30% of the series' own median
+
+_BASE_YEAR_CAUTION = (" (CAUTION: starting year unusually low — this compound rate may "
+                      "reflect a trough base rather than a durable trend)")
+
+
+def _needs_base_year_caution(present: list[float], start: float, rate: float) -> bool:
+    if abs(rate) > _EXTREME_CAGR:
+        return True
+    typical = statistics.median(present)
+    return typical > 0 and start < _LOW_BASE_RATIO * typical
+
+
 def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading:
     """Compound annual rate over at most ``window`` years, stating the span it used.
 
@@ -359,7 +393,8 @@ def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading
                         f"is not defined")
     rate = (end / start) ** (1.0 / span) - 1.0
     used = "" if span == window else f" (only {span} of {window} years available)"
-    return Reading(value=rate, unit="/yr", span=span,
+    caution = _BASE_YEAR_CAUTION if _needs_base_year_caution(present, start, rate) else ""
+    return Reading(value=rate, unit="/yr", span=span, caution=caution,
                    label=f"{label} compounded {rate:+.1%} a year over {span} years{used}")
 
 

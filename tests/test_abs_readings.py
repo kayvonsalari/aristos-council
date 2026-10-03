@@ -197,6 +197,71 @@ def test_eps_is_derived_from_net_income_and_shares_when_the_line_is_missing_AND_
     assert out.notes().count("earnings per share is derived from net income and share count") == 1
 
 
+# =========================================================================== #
+# GROWTH-SANITY-1 (Batch 15 item 3a) — a base-year caution, like VALBAND-1's own
+# sanity bound, but it never withholds the figure: the rate is shown, with a visible
+# caveat, when it looks like a trough-base artefact rather than a durable trend.
+# Reference case: EL.PA, 2026-10-03 — EPS +90.9%/yr over 5 years vs +3.5%/yr over 10.
+# =========================================================================== #
+def test_an_extreme_rate_carries_the_caution():
+    # end=100, start(5y)=3.125 -> rate = (100/3.125)^(1/5)-1 = 100%/yr, well past 50%.
+    out = growth_record(_f(aligned={"diluted_eps": [100.0, 50, 25, 12.5, 6.25, 3.125]}))
+    five = out.eps.cagr[5]
+    assert five.value == pytest.approx(1.0, abs=1e-3)
+    assert "CAUTION: starting year unusually low" in five.text()
+    assert "CAUTION" in five.text()
+
+
+def test_a_low_base_relative_to_the_series_median_carries_the_caution_even_under_50_pct():
+    # end=70, start(5y)=10 -> rate ~47.6%/yr (under the 50% trigger on its own), but 10 is
+    # far below the full 10-point series' own median of 50 (10 < 30% of 50).
+    series = [70.0, 65, 60, 90, 85, 10, 40, 35, 30, 25]
+    out = growth_record(_f(aligned={"diluted_eps": series}))
+    five = out.eps.cagr[5]
+    assert five.value == pytest.approx(0.4758, abs=1e-3)
+    assert five.value < 0.50                              # confirms trigger 1 alone would NOT fire
+    assert "CAUTION: starting year unusually low" in five.text()
+
+
+def test_an_ordinary_steady_rate_carries_no_caution():
+    out = growth_record(_revenue([130.0, 125, 120, 115, 110, 100.0]))
+    five = out.revenue.cagr[5]
+    assert five.value == pytest.approx(0.0539, abs=1e-3)
+    assert five.caution == "" and "CAUTION" not in five.label and "CAUTION" not in five.text()
+
+
+def test_the_caution_is_a_separate_field_never_mixed_into_the_bare_value():
+    """The caution changes DISPLAY only — the underlying number a rank/criterion would
+    read (``.value``) is untouched, matching 'math judges, LLM writes'."""
+    out = growth_record(_f(aligned={"diluted_eps": [100.0, 50, 25, 12.5, 6.25, 3.125]}))
+    five = out.eps.cagr[5]
+    assert five.value == pytest.approx(1.0, abs=1e-3)      # the number itself: unaffected
+    assert five.caution != "" and five.caution not in five.label  # caution is its OWN field
+
+
+def test_the_caution_survives_the_five_and_ten_year_window_collapse():
+    """ABS-READINGS-2's own window-collapse branch (lines() reconstructs ``head`` from
+    ``label`` by splitting on " (only ") must not silently drop a caution appended after
+    that split point."""
+    # Only 4 points on file (3-year span) -> both the 5y and 10y windows collapse onto
+    # the SAME 3-year reading, exercising lines()'s collapsed-span branch directly.
+    series = [100.0, 50, 25, 12.5]
+    out = growth_record(_f(aligned={"diluted_eps": series}))
+    five = out.eps.cagr[5]
+    assert five.caution and "CAUTION" in five.caution     # the underlying Reading has it
+    assert any("CAUTION" in line for line in out.eps.lines())   # and so does the rendered line
+
+
+def test_the_narrator_must_never_repeat_a_flagged_figure_without_the_caution():
+    """COUNCIL-FIX-1(f)/GROWTH-SANITY-1(a) — the prompt instruction is pinned once here
+    rather than only in test_prompts.py, so this fact and its narration-level guard are
+    cross-referenced from the same place a reader would look for the caution's EFFECT."""
+    from aristos_council.agents.prompts import HARD_RULES
+
+    assert "GROWTH CAUTION" in HARD_RULES
+    assert "(CAUTION: ...)" in HARD_RULES or "CAUTION:" in HARD_RULES
+
+
 def test_the_accounts_currency_is_used_not_the_listings():
     """AstraZeneca is quoted in pence and reports in dollars: 'owes 27.4bn GBp net of cash' put the
     LISTING's currency on the ACCOUNTS' figure (same root cause as the NVO kroner-as-dollars bug)."""

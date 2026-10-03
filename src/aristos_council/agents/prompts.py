@@ -119,6 +119,12 @@ HARD_RULES = (
     "graded the same name. (Live, EL.PA 2026-10-03: the risk specialist attributed the "
     "Growth lens's own qualifying thresholds — ROIC >= 12%, PEG <= 2.00 — to Magic Formula "
     "RAW, which does not screen on either.)\n"
+    "7. GROWTH CAUTION. A growth-rate reading that carries '(CAUTION: ...)' in the "
+    "evidence must NEVER be repeated without that caution — citing the bare number "
+    "('EPS grew 90.9% a year') while dropping the caution it was given with is not a "
+    "shorter version of the same fact, it is a different, overstated one. (Live, EL.PA "
+    "2026-10-03: EPS compounded +90.9%/yr over 5 years against +3.5%/yr over 10 — almost "
+    "certainly a low starting year, not a durable rate.)\n"
 )
 
 
@@ -455,7 +461,7 @@ def critic_system(strategy: Strategy) -> str:
         "assumptions, and missing evidence. You do not vote.\n\n"
         f"{brief.emphasis(include_honesty=True)}"
         f"{HARD_RULES}\n"
-        "7. OPEN QUESTIONS. When your concern is quantitative but the evidence "
+        "8. OPEN QUESTIONS. When your concern is quantitative but the evidence "
         "cannot support it — a computation you are not allowed to perform, a "
         "figure that looks stale, data that is absent — put it in "
         "`open_questions`, phrased as a question for human resolution (e.g. "
@@ -464,7 +470,7 @@ def critic_system(strategy: Strategy) -> str:
         "the missing number, or perform the computation yourself. A sharp "
         "unresolved question is more valuable to this council than a "
         "fabricated certainty.\n"
-        "8. ATTACK THE RANKER. When a RANKER VERDICT is in the evidence, sharpen "
+        "9. ATTACK THE RANKER. When a RANKER VERDICT is in the evidence, sharpen "
         "your counter-case on IT: why might the ranker's BUY be wrong — "
         f"{brief.ranker_attack_examples()}? The ranker sees only trailing data; "
         "you find what it cannot.\n"
@@ -582,14 +588,14 @@ def decision_system(strategy: Strategy,
         f"Operating under the strategy '{strategy.name}' (id {strategy.id}).\n\n"
         f"{lens_brief(strategy).emphasis(include_honesty=True)}"
         f"{HARD_RULES}\n"
-        "7. DISSENT. List every specialist whose stance your call overrides in "
+        "8. DISSENT. List every specialist whose stance your call overrides in "
         "`dissent` — dissent must never be silently dropped.\n"
-        "8. OPEN QUESTIONS ARE NOT EVIDENCE. The critic's open_questions are "
+        "9. OPEN QUESTIONS ARE NOT EVIDENCE. The critic's open_questions are "
         "unresolved questions for a human, not established facts. They may "
         "justify caution (a HOLD pending resolution, lower confidence) but you "
         "must not cite them as if they were findings, and you must not treat a "
         "suspected answer as a known one.\n"
-        "9. NO REAL DISAGREEMENT. Before filling disagreement_note, check what it would "
+        "10. NO REAL DISAGREEMENT. Before filling disagreement_note, check what it would "
         "actually say: if every voting lens issued the SAME verdict and every assessed "
         "specialist's stance points the same way, SAY SO PLAINLY ('no real disagreement "
         "...', per STRUCTURED_NARRATION above) — never fill it with a sentence that "
@@ -597,7 +603,7 @@ def decision_system(strategy: Strategy,
         # A SCREEN-LESS strategy (no criteria) has no partial-pass policy to state — the
         # line is dropped so the narrator is never framed by a foreign lens's policy
         # (NARR-FRAME-1). Screened strategies are byte-unchanged.
-        + (f"10. POLICY. partial_pass_allows_hold="
+        + (f"11. POLICY. partial_pass_allows_hold="
            f"{strategy.policy.partial_pass_allows_hold}.\n"
            if getattr(strategy, "criteria", None) else "")
     )
