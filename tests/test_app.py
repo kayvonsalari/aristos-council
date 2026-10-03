@@ -425,9 +425,10 @@ class _LensGrid:
     the picker OFFER" still have a real question, so this stands in for it — ``.options``
     is every lens offered, in offer order, which is exactly what the dropdown's was."""
 
-    def __init__(self, at, prefix: str = "uni_lens_"):
-        # Company Check offers the SAME lenses through the SAME component under its own keys
-        # (``cc_lens_``); the Run tab's boxes are the ``uni_lens_`` ones. Two tabs, one component.
+    def __init__(self, at, prefix: str = "opt_lens_list_"):
+        # TAB-MERGE-1 commit 1: ONE shared component (render_run_options), ONE key family
+        # (opt_lens_<input_kind>_<id>) replacing uni_lens_*/cc_lens_* — Company Check's
+        # boxes are "opt_lens_company_", the Run tab's are "opt_lens_list_".
         self._boxes = [c for c in at.checkbox if str(getattr(c, "key", "") or "").startswith(prefix)]
         self.options = [str(c.label) for c in self._boxes]
 
@@ -446,7 +447,8 @@ def _lens_checkbox(at, needle):
     """One "Also grade with" lens checkbox, by its exact label or a fragment of it (exact
     wins, so "Growth" never resolves to "Growth ETFs (US)"). The whole set is visible at
     once — that is the point of the checkbox group replacing the multiselect."""
-    run_tab = [c for c in at.checkbox if str(getattr(c, "key", "") or "").startswith("uni_lens_")]
+    run_tab = [c for c in at.checkbox
+              if str(getattr(c, "key", "") or "").startswith("opt_lens_list_")]
     return (next((c for c in run_tab if str(c.label) == needle), None)
             or next(c for c in run_tab if needle in str(c.label)))
 
@@ -649,7 +651,7 @@ def test_both_strategy_pickers_list_the_live_strategies():
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
     rank = _strategy_picker(at).options
-    cc = _LensGrid(at, "cc_lens_").options       # Company Check: the SAME component, its own keys
+    cc = _LensGrid(at, "opt_lens_company_").options       # Company Check: the SAME component, its own keys
     assert list(rank) == list(cc)                                    # one picker, one set
     for opts in (rank, cc):
         assert "Growth" in opts                                      # plain names now
@@ -665,7 +667,7 @@ def test_both_strategy_pickers_list_the_live_strategies():
     # the drift the ONE picker module exists to prevent.
     _etfs_mode(at)
     rank = _strategy_picker(at).options
-    cc = _LensGrid(at, "cc_lens_").options
+    cc = _LensGrid(at, "opt_lens_company_").options
     assert list(rank) == list(cc)
     assert len(rank) == 3 and all("ETF" in o for o in rank)
 
@@ -681,11 +683,11 @@ def test_company_check_has_no_strategy_dropdown_and_no_reference_universe_picker
     labels = {str(s.label) for s in at.selectbox}
     assert "Strategy (lens screen + factors)" not in labels
     assert "Reference universe (for factor context)" not in labels
-    cc_boxes = _LensGrid(at, "cc_lens_")
+    cc_boxes = _LensGrid(at, "opt_lens_company_")
     assert cc_boxes.options and len(cc_boxes.ticked) == 1            # one pre-ticked, like the Run tab
     ticks = {str(c.label) for c in at.checkbox}
     assert "Plain-English summary" in ticks                          # the Run tab's and the page's
-    summary = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary")
+    summary = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "opt_summary_company")
     assert summary.value is False                                    # the summary is OFF by default
     # BAND-ALWAYS-ON-1: the valuation band has NO tick box on either tab - it is always shown
     assert not any("Valuation band" in str(c.label) for c in at.checkbox)
@@ -697,7 +699,7 @@ def test_company_check_has_no_strategy_dropdown_and_no_reference_universe_picker
 def test_ticking_the_summary_says_the_run_calls_a_model_once():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
-    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary").set_value(True).run()
+    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "opt_summary_company").set_value(True).run()
     assert not at.exception
     assert any(b.label.startswith("▶ Run company check + summary (one model call)")
                for b in at.button)
@@ -711,7 +713,7 @@ def test_council_opinion_checkbox_is_off_by_default_and_combines_with_the_summar
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     ticks = {str(c.label) for c in at.checkbox}
     assert "Council opinion" in ticks
-    council = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_council")
+    council = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "opt_council_company")
     assert council.value is False                                    # off by default
 
     council.set_value(True).run()
@@ -719,7 +721,7 @@ def test_council_opinion_checkbox_is_off_by_default_and_combines_with_the_summar
     assert any(b.label.startswith("▶ Run company check + council opinion (~6 model calls)")
                for b in at.button)
 
-    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "cc_summary").set_value(True).run()
+    next(c for c in at.checkbox if str(getattr(c, "key", "")) == "opt_summary_company").set_value(True).run()
     assert not at.exception
     assert any(b.label.startswith(
         "▶ Run company check + summary + council opinion (~7 model calls)") for b in at.button)

@@ -133,7 +133,7 @@ class _Offered:
 
     def __init__(self, at):
         self.options = [str(c.label) for c in at.checkbox
-                        if str(getattr(c, "key", "") or "").startswith("uni_lens_")]
+                        if str(getattr(c, "key", "") or "").startswith("opt_lens_list_")]
 
 
 def _strategy_picker(at):
@@ -141,9 +141,10 @@ def _strategy_picker(at):
 
 
 def _lens_checkbox(at, label: str):
-    # the RUN tab's box: Company Check offers the same lenses under its own keys (``cc_lens_``)
+    # the RUN tab's box: Company Check offers the same lenses under its own keys
+    # (``opt_lens_company_``, TAB-MERGE-1 commit 1)
     return next(c for c in at.checkbox if str(c.label) == label
-                and str(getattr(c, "key", "") or "").startswith("uni_lens_"))
+                and str(getattr(c, "key", "") or "").startswith("opt_lens_list_"))
 
 
 def _run_mode_widget(at):

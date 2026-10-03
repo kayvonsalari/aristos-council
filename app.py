@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 from collections import Counter
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -1191,10 +1192,18 @@ def lens_checkbox_key(strategy_id: str) -> str:
     return f"uni_lens_{strategy_id}"
 
 
-def cc_lens_checkbox_key(strategy_id: str) -> str:
-    """The Company Check tab's own key for the same box. Two tabs render on every run, and two
-    widgets with one key is a Streamlit error, so the component takes its keys from the caller."""
-    return f"cc_lens_{strategy_id}"
+def opt_lens_checkbox_key(input_kind: str):
+    """TAB-MERGE-1 commit 1 — the ONE options block's key family (``opt_lens_*``),
+    replacing the ``uni_lens_*``/``cc_lens_*`` duplicates. ``render_universe_tab`` and
+    ``render_company_check_tab`` still both render on every script run today (Streamlit
+    tab bodies all execute, regardless of which tab is visually active — the exact reason
+    ``cc_lens_checkbox_key`` existed as its own prefix), so the key is qualified by
+    ``input_kind`` ("list" | "company") to keep the two calls from colliding; once commit
+    3 collapses them into one call per run, the qualifier is simply always the SAME value
+    for the active mode and costs nothing."""
+    def _key(strategy_id: str) -> str:
+        return f"opt_lens_{input_kind}_{strategy_id}"
+    return _key
 
 
 def render_lens_checkboxes(choices, key_for) -> list[tuple[str, bool]]:
@@ -1216,6 +1225,93 @@ def render_lens_checkboxes(choices, key_for) -> list[tuple[str, bool]]:
                 if lens_caption(c.strategy):
                     st.caption(lens_caption(c.strategy))
     return extras
+
+
+def lens_selection_captions(strategies) -> None:
+    """TAB-MERGE-1 commit 1 — the id + role + "asks" caption loop under the TICKED
+    lenses (CAPTION-1), unified from the two copies that existed today: the Run tab's own
+    (id, role, asks-for-every-lens, single-lens description) and Company Check's own
+    (id, role ONLY — no asks repeat, no single-lens description). Unified on the FULLER
+    version: it is a strict ADDITION for Company Check (the "asks" text was already
+    visible once per lens under its checkbox via CAPTION-2 inside
+    ``render_lens_checkboxes`` — this is the SAME text, repeated under the ticked-lens
+    caption exactly as the Run tab already did), never a removal for either caller."""
+    for s in strategies:
+        bits = f"`{s.id}`"                               # the stable record key
+        if strategy_role(s):
+            bits += f" · {strategy_role(s)}"
+        st.caption(bits)
+        _asks = (getattr(s, "asks", "") or "").strip()
+        if _asks:
+            st.caption(_asks)
+    if len(strategies) == 1 and getattr(strategies[0], "description", ""):
+        st.caption(strategies[0].description.strip())
+
+
+# --------------------------------------------------------------------------- #
+# TAB-MERGE-1 commit 1 — the ONE options block both input kinds call: lenses (+
+# captions), the plain-English summary checkbox, and (company input only, today) the
+# council-opinion checkbox. The Run tab's OWN run-mode radio / narration-level / cap /
+# skip-doubted / spend-threshold / size-floor controls are UNCHANGED and stay in
+# render_universe_tab — they are not part of this shared block in commit 1 (folding the
+# list side's "Council opinion ticked = Narrator mode" is commit 3's job, per the task).
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class RunOptions:
+    strategies: list = field(default_factory=list)
+    with_summary: bool = False
+    with_council: bool = False          # always False when show_council=False
+
+
+# The "Plain-English summary" checkbox means two different things on the two inputs (one
+# writer narrates the RUN, the other narrates the COMPANY) — same label, same new key
+# family, but the help text must keep saying which, so it stays input-kind-specific.
+_SUMMARY_HELP = {
+    "list": ("Adds a short note at the top of the report saying what the run asked, what "
+            "happened, what survived the checks and what to doubt — in language a "
+            "non-specialist reads in a minute. It is written from the tables, and every "
+            "number in it is checked back against them; a summary that fails that check "
+            "is withheld with its reason rather than published. It explains the results; "
+            "it never recommends anything."),
+    "company": ("One short note at the top, written from the tables below; every number "
+               "in it is checked back against them, and a summary that fails is withheld "
+               "with its reason. It explains; it never recommends. One model call, off "
+               "unless you tick it."),
+}
+_COUNCIL_HELP = ("The four specialists, a critic and a narrator — the same council the "
+                "rest of Aristos uses — read this company's votes, marks and readings "
+                "and write about them. They never vote: the agreement above stays the "
+                "verdict of record. About six model calls, mostly on the cheap tier; "
+                "off unless you tick it.")
+
+
+def render_run_options(choices, *, input_kind: str, show_council: bool) -> RunOptions:
+    """ONE options block, called once per input kind. ``input_kind`` is "list" (the Run
+    tab) or "company" (Company Check) — it only qualifies widget keys (see
+    ``opt_lens_checkbox_key``) and picks the right summary help text; the WIDGETS
+    themselves, their labels and their order are identical either way.
+
+    ``show_council`` renders the council-opinion checkbox or not: True for Company
+    Check (which has one today); False for the Run tab in commit 1, which keeps its own
+    run-mode radio untouched and simply never reads ``.with_council`` (always False)."""
+    key_for = opt_lens_checkbox_key(input_kind)
+    st.markdown("**Lenses**")
+    st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
+    _preselect_default_lens(choices, seeded_key=f"opt_lenses_seeded_{input_kind}",
+                            key_for=key_for)
+    extras = render_lens_checkboxes(choices, key_for)
+    strategies = resolve_all(choices, selected_labels(extras=extras))
+    lens_selection_captions(strategies)
+    with_summary = st.checkbox(
+        "Plain-English summary", value=False, key=f"opt_summary_{input_kind}",
+        help=_SUMMARY_HELP[input_kind])
+    with_council = False
+    if show_council:
+        with_council = st.checkbox(
+            "Council opinion", value=False, key=f"opt_council_{input_kind}",
+            help=_COUNCIL_HELP)
+    return RunOptions(strategies=strategies, with_summary=with_summary,
+                      with_council=with_council)
 
 
 # --------------------------------------------------------------------------- #
@@ -1290,20 +1386,37 @@ def run_mode_narrates(run_mode: str) -> bool:
     return not run_mode_arguments(run_mode)[0]
 
 
-def run_button_label(run_mode: str, *, n_strategies: int,
+def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
                      est_cost: float | None = None,
                      narrated_count: int | None = None,
-                     with_reader: bool = False) -> str:
+                     with_reader: bool = False,
+                     with_council: bool | None = None) -> str:
     """The button says what will happen and what it costs, on its own line:
 
         ``▶ Run 5 lenses — deterministic, free``
         ``▶ Run 5 lenses — up to 13 names narrated, est. ≤ $0.68``
         ``▶ Run — narrated, est. $0.42``
 
+    ``with_council`` (TAB-MERGE-1 commit 1, not None): the COMPANY-input label instead
+    of the list-input one — ``run_mode``/``est_cost``/``narrated_count`` are ignored,
+    and the label states the (summary, council) pair exactly as Company Check's own
+    inline ``_label`` logic did (call counts are hardcoded there too; the two label
+    styles have no shared cost-estimate machinery to draw on, same as before the merge).
+
     ``narrated_count`` is the size of the UNION of every lens's BUYs (NARR-UNION-1) — the
     thing the bill is actually proportional to. Five lenses produced 18 BUY verdicts over
     only 13 distinct names on the 2026-08-24 run, and it is the 13 that gets charged, so
     it is the 13 the button states."""
+    if with_council is not None:
+        extras = [n for n, on in (("summary", with_reader), ("council opinion", with_council))
+                 if on]
+        if not extras:
+            return "▶ Run company check (free — no LLM)"
+        if extras == ["summary"]:
+            return "▶ Run company check + summary (one model call)"
+        if extras == ["council opinion"]:
+            return "▶ Run company check + council opinion (~6 model calls)"
+        return "▶ Run company check + summary + council opinion (~7 model calls)"
     what = f"Run {n_strategies} lenses" if n_strategies > 1 else "Run"
     # READER-1: the summary is ONE call and is independent of the run mode, so a
     # ranker-only run with it ticked is no longer free and the button must stop saying so.
@@ -3037,10 +3150,13 @@ def render_universe_tab(show_validation: bool = False) -> None:
     #
     # The suggested-first lens is PRE-TICKED on a fresh session, so the tab opens ready to
     # run rather than refusing until you pick something.
-    st.markdown("**Lenses**")
-    st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
-    _preselect_default_lens(choices)
-    extras = render_lens_checkboxes(choices, lens_checkbox_key)
+    # TAB-MERGE-1 commit 1 — lenses, their captions and the plain-English summary
+    # checkbox now come from the ONE shared options block (opt_lens_list_<id>,
+    # opt_summary_list — the uni_lens_*/uni_reader keys are gone). show_council=False:
+    # the Run tab's own run-mode radio is untouched below, so .with_council is unused.
+    options = render_run_options(choices, input_kind="list", show_council=False)
+    strategies = options.strategies
+    with_reader = options.with_summary
     # BAND-ALWAYS-ON-1 (owner's ruling 2026-09-26): the valuation band is ALWAYS computed and shown -
     # it is free (yfinance history through the day-cache, no model call), so it has no tick box. It
     # CONTEXTUALIZES (an absolute percentile column: where today's valuation sits in each name's OWN
@@ -3049,36 +3165,10 @@ def render_universe_tab(show_validation: bool = False) -> None:
     # a lens: the band adds context, this adds prose, and neither grades anything. Default OFF, and
     # INDEPENDENT of the run mode — ticked on a ranker-only run it makes exactly one model call and
     # nothing else.
-    with_reader = st.checkbox(
-        "Plain-English summary",
-        value=False, key="uni_reader",
-        help="Adds a short note at the top of the report saying what the run asked, what "
-             "happened, what survived the checks and what to doubt — in language a "
-             "non-specialist reads in a minute. It is written from the tables, and every "
-             "number in it is checked back against them; a summary that fails that check "
-             "is withheld with its reason rather than published. It explains the results; "
-             "it never recommends anything.")
-    picked_labels = selected_labels(extras=extras)
-    # OFFER order, not click order (picker.resolve_all), so the combined grid's columns are
-    # reproducible. SHORTLIST-3: a zero-lens selection IS now reachable (untick everything),
-    # and it is refused by run_problems below rather than silently defaulted — a run with
-    # no lens has nothing to say.
-    strategies = resolve_all(choices, picked_labels)
+    # SHORTLIST-3: a zero-lens selection IS now reachable (untick everything), and it is
+    # refused by run_problems below rather than silently defaulted — a run with no lens
+    # has nothing to say.
     multi = len(strategies) > 1
-    for s in strategies:
-        bits = f"`{s.id}`"                               # the stable record key
-        if strategy_role(s):
-            bits += f" · {strategy_role(s)}"
-        st.caption(bits)
-        # CAPTION-1: what this lens asks of a company, for EVERY selected lens — a
-        # multi-lens run used to caption none of them, so a reader comparing a BUY under
-        # one lens with a SELL under another had nothing saying they ask different
-        # questions. Absent `asks` renders nothing.
-        _asks = (getattr(s, "asks", "") or "").strip()
-        if _asks:
-            st.caption(_asks)
-    if len(strategies) == 1 and getattr(strategies[0], "description", ""):
-        st.caption(strategies[0].description.strip())
     # SHORTLIST-3: with no primary, the cost estimate and the narration settings describe
     # the FIRST ticked lens — the only one a single-lens run could narrate. A multi-lens
     # run is deterministic, so neither is in play then, and a zero-lens run is refused
@@ -3639,46 +3729,24 @@ def render_company_check_tab(show_validation: bool = False) -> None:
     ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
                                             placeholder="MU"))
 
-    st.markdown("**Lenses**")
-    st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
-    _preselect_default_lens(choices, seeded_key="cc_lenses_seeded", key_for=cc_lens_checkbox_key)
-    extras = render_lens_checkboxes(choices, cc_lens_checkbox_key)
-    strategies = resolve_all(choices, selected_labels(extras=extras))
-    for strategy in strategies:
-        bits = f"`{strategy.id}`"                          # the stable record key
-        if strategy_role(strategy):
-            bits += f" · {strategy_role(strategy)}"
-        st.caption(bits)
+    # TAB-MERGE-1 commit 1 — lenses, their captions, the plain-English summary checkbox
+    # and the council-opinion checkbox all come from the ONE shared options block now
+    # (opt_lens_company_<id>, opt_summary_company, opt_council_company — the
+    # cc_lens_*/cc_summary/cc_council keys are gone).
+    run_options = render_run_options(choices, input_kind="company", show_council=True)
+    strategies = run_options.strategies
+    with_summary = run_options.with_summary
+    with_council = run_options.with_council
 
-    # The valuation band has no tick box (BAND-ALWAYS-ON-1): it is always computed and shown.
-    with_summary = st.checkbox(
-        "Plain-English summary", value=False, key="cc_summary",
-        help="One short note at the top, written from the tables below; every number in it is "
-             "checked back against them, and a summary that fails is withheld with its reason. "
-             "It explains; it never recommends. One model call, off unless you tick it.")
-    # COUNCIL-OPINION-1 — off by default, independent of the summary above. NARRATOR mode: the
-    # council writes about the vote already on the page; it never issues one of its own.
-    with_council = st.checkbox(
-        "Council opinion", value=False, key="cc_council",
-        help="The four specialists, a critic and a narrator — the same council the rest of "
-             "Aristos uses — read this company's votes, marks and readings and write about "
-             "them. They never vote: the agreement above stays the verdict of record. About "
-             "six model calls, mostly on the cheap tier; off unless you tick it.")
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     if (with_summary or with_council) and not has_key:
         st.info("This needs ANTHROPIC_API_KEY in the environment or `.env`; without it the page "
                 "runs without it and says so.")
 
-    _extras = [n for n, on in (("summary", with_summary), ("council opinion", with_council)) if on]
-    if not _extras:
-        _label = "▶ Run company check (free — no LLM)"
-    elif _extras == ["summary"]:
-        _label = "▶ Run company check + summary (one model call)"
-    elif _extras == ["council opinion"]:
-        _label = "▶ Run company check + council opinion (~6 model calls)"
-    else:
-        _label = "▶ Run company check + summary + council opinion (~7 model calls)"
-    run = st.button(_label, type="primary", disabled=not ticker, key="cc_run")
+    run = st.button(_md(run_button_label(n_strategies=len(strategies),
+                                         with_reader=with_summary,
+                                         with_council=with_council)),
+                    type="primary", disabled=not ticker, key="cc_run")
     if run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         status = st.status("Starting…", expanded=True)
