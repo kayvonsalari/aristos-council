@@ -1002,6 +1002,43 @@ def test_a_successful_council_opinion_writes_without_voting(tmp_path):
     # other three specialists (fundamental, technical, risk) each call once.
     assert runners["specialist"].calls == 3
     assert runners["critic"].calls == 1 and runners["decision"].calls == 1
+
+
+def test_identical_specialist_phrasing_is_flagged_in_the_final_narrative(tmp_path):
+    """COUNCIL-FIX-1(e) (Batch 15) — the Company Check council path annotates convergent
+    phrasing on rep.decision.rationale, the same place every other narration check lands."""
+    from aristos_council.agents.schemas import CriticOutput, DecisionOutput, SpecialistOutput
+    from aristos_council.company_report import run_council_opinion
+    from aristos_council.state import Recommendation, Stance
+
+    phrase = "falling over both windows confirms sustained weakness in the name"
+
+    class _Runner:
+        def __init__(self):
+            self.calls = 0
+
+        def invoke(self, system, user):
+            self.calls += 1
+            if "SENTIMENT specialist" in system:
+                return SpecialistOutput(stance=Stance.ABSTAIN, confidence=0.0,
+                                        thesis="no sentiment data", agrees_with_ranker=None)
+            return SpecialistOutput(stance=Stance.BEARISH, confidence=0.6,
+                                    thesis=f"The evidence shows {phrase} on this name.",
+                                    agrees_with_ranker=False)
+
+    decision = DecisionOutput(recommendation=Recommendation.SELL, confidence=0.6,
+                              rationale="It ranked poorly among its peers.")
+    runners = {"specialist": _Runner(),
+              "critic": _OpinionDecisionRunner(CriticOutput(counter_thesis="a counter-case")),
+              "decision": _OpinionDecisionRunner(decision)}
+
+    report = _run([RAW], tmp_path=tmp_path, save=False, company_ebit=10.0)   # a poor SELL
+    op = run_council_opinion(report, adapter=_Adapter(company_ebit=10.0), runners=runners,
+                             today=TODAY)
+    assert op.available
+    assert "narration check" in op.narrative
+    assert "convergent phrasing" in op.narrative
+    assert phrase in op.narrative
     # the verdict of record is UNCHANGED by the opinion having run
     assert report.agreement.headline == build_agreement(report.votes,
                                                          band_percentile=report.check.band_percentile
@@ -1024,6 +1061,34 @@ def test_council_company_facts_carries_absolute_readings_and_the_peer_table_mark
     assert facts["market_cap"]["usd"]                            # non-empty formatted string
     # no EODHD key in this test env -> analyst is present but unavailable, with a reason
     assert facts["analyst"]["available"] is False and facts["analyst"]["source_note"]
+
+
+def test_council_company_facts_carries_the_valuation_band_and_forward_pe(tmp_path):
+    """COUNCIL-FIX-1(a)/(d) (Batch 15) — the band (whichever side of cheap/expensive) and
+    the forward P/E, so the council never characterises value while silent on the band and
+    never opens an open question asking for a forward multiple already on the page."""
+    from aristos_council.company_report import _council_company_facts
+
+    report = _run([RAW], tmp_path=tmp_path, save=False)
+    facts = _council_company_facts(report)
+    # The fake adapter's 300-bar price history gives a real (non-abstained) band.
+    assert report.check.valuation_band != "—"
+    assert facts.get("valuation_band") == report.check.valuation_band
+    # No analyst trend in this test env -> no consensus EPS -> forward P/E abstains, so
+    # the key is correctly ABSENT (never a fabricated figure).
+    assert "forward_pe" not in facts
+
+
+def test_the_company_facts_block_renders_the_valuation_band_and_forward_pe():
+    from aristos_council.agents.nodes import _company_facts_block
+    from aristos_council.state import ResearchState
+
+    state = ResearchState(ticker="CO", strategy_id="s", company_facts_block={
+        "valuation_band": "EV/EBIT 12.0 — 40th percentile of its own 5-year range",
+        "forward_pe": ["forward P/E (this year) 19.7x (€142.80 / €7.25 consensus EPS)"]})
+    block = _company_facts_block(state)
+    assert "Valuation band" in block and "40th percentile" in block
+    assert "forward P/E (this year) 19.7x" in block
 
 
 def test_the_company_facts_block_instructs_citing_the_dated_market_cap_over_fundamentals():

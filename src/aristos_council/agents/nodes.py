@@ -803,6 +803,15 @@ def _company_facts_block(state) -> str:
                      f"{mc.get('local', '')} local / {mc.get('usd', '')}")
     for line in facts.get("absolute_readings") or []:
         lines.append(f"  - {line}")
+    # COUNCIL-FIX-1(a)/(d) (Batch 15) — the valuation band (always, whichever side of cheap
+    # vs expensive it reads) and the forward P/E, so neither reaches an agent only as a
+    # "mark" buried in agreement_row's marks (which today only fires on the EXPENSIVE
+    # side) and neither is raised as an open question for a number already stated here.
+    if facts.get("valuation_band"):
+        lines.append(f"  - Valuation band (this company against its own history): "
+                     f"{facts['valuation_band']}")
+    for line in facts.get("forward_pe") or []:
+        lines.append(f"  - {line}")
     analyst = facts.get("analyst")
     if analyst:
         tag = f" ({analyst.get('source_note', '')})" if analyst.get("source_note") else ""
