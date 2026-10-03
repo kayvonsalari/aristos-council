@@ -1,7 +1,17 @@
-"""Self-contained HTML export of the universe report + Company Check (REPORT-HTML-1).
+"""Self-contained HTML export of the universe report + the Company Report (REPORT-HTML-1).
+
+TAB-MERGE-1 part 2 commit 5: the Company-side half of this module used to measure
+``company_check_html`` — the OLD single-ticker, no-verdict diagnostic (Screen / Gates /
+"VERDICT OF RECORD" quoted from a reference run). That function and the feature it
+rendered are both gone, superseded by the Company Report (lens votes + agreement,
+``company_report_html``) long before this module's generic properties (self-contained,
+print, canonical-untouched) were last exercised against it. Those four generic
+properties move to ``company_report_html`` here; the diagnostic-specific content tests
+had no replacement to migrate to (company_report_html has no Screen/Gates/VERDICT OF
+RECORD concept at all) and are deleted, not weakened.
 
 The HTML is a PRESENTATION layer over the same report data; the ``.md`` universe report and
-the ``.txt`` Company Check stay canonical. So these tests pin four things:
+the ``.txt`` Company Report stay canonical. So these tests pin four things:
 
 1. **No content silently dropped** — every narration sentence and every ``[⚠ narration
    check: …]`` stamp the markdown carries is in the HTML.
@@ -26,12 +36,12 @@ from aristos_council.company_check import (
     FactorCell,
     GateCell,
     ScreenCell,
-    format_company_check,
 )
+from aristos_council.company_report import CompanyReport, format_company_report
 from aristos_council.export.report_html import (
     DISCLAIMER,
     DOCTRINE,
-    company_check_html,
+    company_report_html,
     universe_report_html,
 )
 from aristos_council.narration_check import _sentences
@@ -176,6 +186,13 @@ def _company_result(**over) -> CompanyCheckResult:
     return CompanyCheckResult(**base)
 
 
+def _as_report(result: CompanyCheckResult) -> CompanyReport:
+    """Wraps a CompanyCheckResult for company_report_html — the generic document
+    properties below (self-contained, print, canonical-untouched) don't need the
+    lens votes/agreement a real Company Report run would also carry."""
+    return CompanyReport(ticker=result.ticker, check=result)
+
+
 # --------------------------------------------------------------------------- #
 # 1 — nothing silently dropped
 # --------------------------------------------------------------------------- #
@@ -285,13 +302,13 @@ def test_universe_html_is_self_contained():
     _assert_self_contained(universe_report_html(_universe_result(), run_start=_RUN))
 
 
-def test_company_check_html_is_self_contained():
-    _assert_self_contained(company_check_html(_company_result(), run_start=_RUN))
+def test_company_report_html_is_self_contained():
+    _assert_self_contained(company_report_html(_as_report(_company_result()), run_start=_RUN))
 
 
 def test_print_stylesheet_paginates_and_stays_grayscale_legible():
     for doc in (universe_report_html(_universe_result(), run_start=_RUN),
-                company_check_html(_company_result(), run_start=_RUN)):
+                company_report_html(_as_report(_company_result()), run_start=_RUN)):
         assert "@media print" in doc
         assert "@page { size: A4 portrait" in doc
         assert "display: table-header-group" in doc         # tables repeat their head
@@ -315,11 +332,12 @@ def test_html_export_leaves_the_canonical_markdown_byte_identical():
     assert "<div" not in before and "<style" not in before   # md stays markdown
 
 
-def test_html_export_leaves_the_canonical_company_check_text_byte_identical():
+def test_html_export_leaves_the_canonical_company_report_text_byte_identical():
     result = _company_result()
-    before = format_company_check(result)
-    company_check_html(result, run_start=_RUN)
-    assert format_company_check(result) == before
+    report = _as_report(result)
+    before = format_company_report(report)
+    company_report_html(report, run_start=_RUN)
+    assert format_company_report(report) == before
     assert "<div" not in before and "<style" not in before
 
 
@@ -454,60 +472,3 @@ def test_universe_html_with_band_off_renders_no_band_section():
     assert _BAND_HEADING not in doc
     assert "Valuation band" not in doc
 
-
-# --------------------------------------------------------------------------- #
-# 4 — Company Check
-# --------------------------------------------------------------------------- #
-def test_company_check_html_renders_the_whole_diagnostic():
-    result = _company_result()
-    doc = company_check_html(result, run_start=_RUN,
-                             strategy_display_name="Value + Momentum (flagship)")
-    visible = _visible(doc)
-    assert "Micron Technology (MU)" in doc                   # ticker + display name
-    assert "magic_formula_momentum_v1" in doc                # strategy id
-    assert "Value + Momentum (flagship)" in doc              # friendly name
-    assert "growth_40_v1" in doc                             # reference universe
-    assert "09.07.2026 17:30" in doc                         # run timestamp
-    assert "NO VERDICT" in doc                               # never issues one at n=1
-    # screen: every criterion with its three-valued status and its tags
-    assert "min_roic" in doc and "FAIL" in doc and "borderline" in doc
-    assert _squash("fails closed by design") in visible or "fails closed" in doc
-    # gates + rationale
-    assert "min_market_cap" in doc and "keeps micro caps out" in doc
-    # factors: value, source badge, cohort context. A static receipt is a value from a different
-    # source than the run's: it keeps a short marker that points to the Sources block, and the
-    # provider is named there once (batch 8)
-    assert '<span class="badge">[static — see Sources]</span>' in doc
-    assert "<h2>Sources</h2>" in doc
-    assert "Fund figures marked static:</strong> 2026-07-21, EODHD" in doc
-    assert "[static: 2026-07-21, EODHD]" not in doc
-    assert _squash("#2 of 5 in growth_40_v1") in visible
-    # the verdict OF RECORD is quoted, never recomputed
-    assert "VERDICT OF RECORD" in doc and "SELL, rank 12 of 16" in doc
-    # divergence + the ⚠ data flags as callouts
-    assert "divergence" in doc.lower() and "price +42%" in doc
-    assert _squash("⚠ dividend_yield 0.2393 (>15%)") in visible
-    assert '<div class="callout alert">' in doc
-    assert "max_payout_ratio_fcf" in doc                     # abstained criteria
-    assert "net_payout_yield" in doc                         # not-evaluated factors
-    assert result.pointer in doc
-    assert DOCTRINE in doc and DISCLAIMER in doc
-
-
-def test_company_check_html_unrateable_says_so_and_stops():
-    result = _company_result(
-        unrateable=True, screen=[], gates=[], factors=[], divergence_flag=None,
-        verdict_of_record=None,
-        data_integrity=DataIntegrity(fundamentals_ok=False, price_ok=False,
-                                     note="no fundamentals and no price history"))
-    doc = company_check_html(result, run_start=_RUN)
-    assert "UNRATEABLE" in doc and "no fundamentals and no price history" in doc
-    assert "Factor values" not in doc                         # no diagnosis at all
-    assert DOCTRINE in doc                                    # footer still travels
-    _assert_self_contained(doc)
-
-
-def test_company_check_html_screenless_strategy_says_it_screens_nothing():
-    doc = company_check_html(_company_result(screen=[], screen_less=True),
-                             run_start=_RUN)
-    assert "No lens screen" in doc and "quality enters via ranking" in doc

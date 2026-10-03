@@ -37,8 +37,8 @@ universe. That is a property of the method, not a bug — the universe is part o
 
 Two different numbers are easy to confuse — a name's **position** in the cohort and its
 **combined rank-sum** (the score). Every display therefore renders them through ONE shared
-formatter (`rank_engine.format_position_cell`), used by the CLI ranked table, the Run tab's
-table, the markdown download, and Company Check:
+formatter (`rank_engine.format_position_cell`), used by the CLI ranked table, the Analyse tab's
+table, the markdown download, and Company mode:
 
 ```
 #1 of 9 · score 11 (best 3 · worst 27)
@@ -89,7 +89,7 @@ descriptions are in the README's **[ETF lenses](../README.md#etf-lenses)**.
 - **`expense_ratio` — LOWER is better.** The one inverted ETF leg. **Unit trap (ETFCHK-3):
   the vendor value is a PERCENT, not a fraction** — SCHD's 0.06% arrives as `0.06`. Ranking is
   unit-invariant, so the factor is untouched by this; but any *absolute* presentation must
-  divide by 100 first. Company Check's plain-English gloss does exactly that, reporting the
+  divide by 100 first. Company mode's plain-English gloss does exactly that, reporting the
   annual fee per €1,000 held (`0.06` → €0.60 per €1,000, every year).
 - **`fund_size` — HIGHER is better.** Net assets, standing in for liquidity and closure risk,
   not for quality. A big fund is not a good fund; it is a fund that can be traded and is
@@ -204,8 +204,8 @@ history (or below half the months in its span), stating the reason with the meas
 fabricated middle. A confirmed accounts-vs-price **currency mismatch** abstains too (house
 rule 8), never mixing currencies into one series.
 
-**Roles.** (a) a **display/context column** per rateable name (CLI report, Run tab, the run
-markdown, Company Check — one shared row builder, `pipeline.valuation_band_rows`, so the
+**Roles.** (a) a **display/context column** per rateable name (CLI report, the Analyse tab, the run
+markdown, Company mode — one shared row builder, `pipeline.valuation_band_rows`, so the
 surfaces cannot drift); (b) a **rankable factor** `valuation_band_percentile` (direction low)
 and the matching **screen criterion**, both delegating to the ONE computation so a ranked and
 a screened band can never diverge. **No shipped strategy selects either, and there is no
@@ -215,17 +215,17 @@ house rules. So VALBAND-1 moves no existing verdict.
 **Opt-in — why the band is a toggle, not always-on.** The band needs its OWN 5-year price
 fetch, kept deliberately separate from the 400-day window the momentum/volatility factors read
 (widening that shared fetch would silently change `low_volatility`, and therefore every
-existing strategy's ranking). Because that second fetch has a cost, the band is **off by
-default** end-to-end: `factors.gather_factor_inputs(..., with_valuation_band=False)` threads up
-through `_rank_stage` → `run_rank_pipeline` / `run_multi_strategy_pipeline`. Off, no band is
-computed, no extra fetch is made, and output is byte-identical to a pre-VALBAND run. The
-Council Station Run tab exposes this as a **"Valuation band (context column — no verdict)"**
-checkbox rendered with the "Also grade with" extra-lens group, **default OFF** — but with
-semantics distinct from those lenses: extra lenses *grade* (add a verdict column), the band
-*contextualizes* (adds the absolute percentile column), re-grading nothing. It combines freely
-with the primary strategy and any extra lenses; in a multi-lens run the band is computed once
-(per name) and shown once beside the combined grid. Company Check shows the band as it has
-since VALBAND-1 shipped.
+existing strategy's ranking). `with_valuation_band` threads from `factors.gather_factor_inputs`
+up through `_rank_stage` → `run_rank_pipeline` / `run_multi_strategy_pipeline`; off, no band is
+computed, no extra fetch is made, and output is byte-identical to a pre-VALBAND run.
+**BAND-ALWAYS-ON-1** (2026-09-26): Council Station's Analyse tab always passes
+`with_valuation_band=True` on both its run paths — the fetch is free (the day-cache, no model
+call), so there is no tick box on either side of the tab. Semantics stay distinct from a lens:
+a lens *grades* (adds a verdict column), the band *contextualizes* (adds the absolute
+percentile column), re-grading nothing. In a multi-lens list run the band is computed once per
+name and shown once beside the combined grid; Company mode shows it among the company's own
+readings, in its own place in the page order (TAB-MERGE-1 part 2: right after Lens votes, before
+Price and cash).
 
 **Narrator.** The band is a **display/context column only** — it is deliberately NOT fed into
 the council/narrator evidence block in this build. A new evidence line invites a citation
@@ -247,7 +247,7 @@ the rest lack usable statements)
 `"; net debt held at latest reported"`, an abstention still renders `"not evaluated — <reason>"`,
 and when every month is computable the `", the rest lack usable statements"` clause is
 dropped (there is no rest to explain). This is the **single-line** rendering, used where ONE
-name is shown (Company Check); the universe report renders the same numbers as a table (§2.6).
+name is shown (Company mode); the universe report renders the same numbers as a table (§2.6).
 
 **The percentile gloss (PRICE-2).** FIXED cutoffs on the ROUNDED percentile — the same number the
 ordinal beside it is built from, so the two halves of the cell can never disagree. No judgement
@@ -312,8 +312,8 @@ span — `"52-week range not evaluated — only 31 weeks of closes"` — never a
 as a full one. The PRICE still renders: the two facts fail independently. With no price bars at
 all the line reads `"price not available — <reason>"`.
 
-**Rendered line** (one shared builder, `pipeline.price_rows`, read by the CLI block, the Run tab
-table, the canonical run markdown and the HTML export, so the four cannot drift):
+**Rendered line** (one shared builder, `pipeline.price_rows`, read by the CLI block, the Analyse
+tab table, the canonical run markdown and the HTML export, so the four cannot drift):
 
 ```
 PFE  $27.14 (as of 2026-08-22) — 34% of its 52-week range (low $22.80 · high $31.20)
@@ -450,7 +450,7 @@ table rather than ahead of the data. The `net debt held at latest reported` disc
 footnote too, naming the affected tickers once.
 
 **One source, four surfaces.** `pipeline.valuation_band_table` returns the columns, the rows
-(already-rendered cells) and the footnotes. The Run tab renders them with `st.dataframe`, the
+(already-rendered cells) and the footnotes. The Analyse tab renders them with `st.dataframe`, the
 markdown record as a pipe table, the HTML export as a `<table>`, and the CLI as column-aligned
 fixed-width text — none of them formats a number of its own.
 
@@ -530,7 +530,7 @@ ABSTENTION never counts as a fail (rule 3). Base-rate warning: *the flag also de
 value traps whose price has not finished falling; it marks disagreement, not direction.*
 The flag NEVER alters a verdict or an exclusion (`factors.price_divergence_flag`).
 
-*Worked example (Company Check, `magic_formula_momentum_v1`).* **MU** — up **+711%** over
+*Worked example (Company mode, `magic_formula_momentum_v1`).* **MU** — up **+711%** over
 12 months while `min_roic` is a confirmed FAIL (**0.048** vs the 0.12 floor): a fundamental
 fail with a runaway price, so the flag **fires**. **GS** — up **~+50%** but excluded by the
 financials **sector gate**, with `min_roic` merely *abstaining* (ROIC isn't computable for a
@@ -1000,7 +1000,7 @@ same treatment.
 - **Vendor sanity flags** (VERIFY-2 / FIN-1) — cheap boundary checks flag absurd vendor
   values (dividend yield > 15%, negative market cap, unit-confused debt/equity > 10000,
   P/B > 100, ROE > 300%). A flag **never corrects and never fails** a name: the value is
-  withheld from the narrator's evidence and surfaced in Company Check's DATA INTEGRITY, so
+  withheld from the narrator's evidence and surfaced in Company mode's DATA INTEGRITY, so
   vendor junk can neither be quoted nor silently used.
 - **Disposition gate** — if a criterion designated *gating* is a confirmed failure, the
   verdict is capped at SELL regardless of any narrative; a *not-evaluated* gating

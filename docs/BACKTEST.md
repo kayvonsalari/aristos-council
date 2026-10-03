@@ -220,12 +220,15 @@ distribution by hand.
 
 ## Track-record badges (BACKTEST-2, shipped 2026-09-30)
 
-Every lens's vote, in the Run tab and in Company Check, carries a plain-English **badge** naming
-its own track record in the relevant cohort — read straight off the committed `backtests/` files
-above. **No gating.** A badge is display only: every lens keeps its vote whatever its badge says,
-and the equal-vote agreement count is exactly what it would be with no badges shown at all. A
-future gate that changes a vote's weight because of its badge is a separate, still-unbuilt step
-(see "What it will be used for").
+Every lens's VOTE, in the Analyse tab's list side and in its Company mode, carries a
+plain-English **badge** naming its own track record in the relevant cohort — read straight off
+the committed `backtests/` files above. TAB-MERGE-1 part 2: a badge is attached only to a lens
+that actually voted (status "ranked"); a "does not apply" row (excluded by the lens's own
+screen, too few peers, no data, …) shows its reason with no badge — a lens's historical hit
+rate says nothing about a company it never ranked. **No gating.** A badge is display only:
+every lens keeps its vote whatever its badge says, and the equal-vote agreement count is
+exactly what it would be with no badges shown at all. A future gate that changes a vote's
+weight because of its badge is a separate, still-unbuilt step (see "What it will be used for").
 
 ### The badge scale
 
@@ -253,12 +256,12 @@ The rule, precisely (`track_record()` in `backtest.py`):
 
 ### Where the cohort comes from
 
-- **Run tab.** The universe being run either IS one of the 13 backtested cohorts or it is not —
-  its display name is slugified the same way a cohort's name is (`cohort_slug()`) and matched
-  directly against `backtests/<slug>/`. Most Run-tab universes (an ad-hoc paste, a saved list of a
-  different shape) match none of the 13, and show no track-record section at all; that is the
-  ordinary case, not an error.
-- **Company Check.** A company's own industry label (EODHD, or the GICS sub-industry a cohort is
+- **The Analyse tab's list side.** The universe being run either IS one of the 13 backtested
+  cohorts or it is not — its display name is slugified the same way a cohort's name is
+  (`cohort_slug()`) and matched directly against `backtests/<slug>/`. Most lists (an ad-hoc
+  paste, a saved list of a different shape) match none of the 13, and show no track-record
+  section at all; that is the ordinary case, not an error.
+- **Company mode.** A company's own industry label (EODHD, or the GICS sub-industry a cohort is
   narrowed to) is matched against `data/cohort_definitions.yaml` by `cohort_for_industry()` — the
   SAME rule the cohort builder itself uses to select members. This is independent of the
   company's PEER GROUP (`market_index.peers`), which is a different, wider ladder built for
@@ -477,7 +480,7 @@ would not.
 **Null excludes, not imputes.** A name whose screen could not evaluate a single
 *substantive* criterion (`min_market_cap` excluded — a trivial, separately-gated check; see
 the one actual run where this fired) now reads as "does not apply" for that lens that
-round — excluded from ranking entirely, matching Company Check's own convention — rather
+round — excluded from ranking entirely, matching Company mode's own convention — rather
 than reaching factor ranking where a missing factor used to be imputed under `missing:
 worst`. This is a real behaviour change, not only a visibility one: it applies to every
 `run_lens_backtest` call, including the committed/default runs, not only the grid.
@@ -618,5 +621,5 @@ is not enough. Nothing in the repo does this today.
 
 Further out, and also not built, a backtest-gated vote is planned to be one of four quantitative
 methods (alongside fair-multiple valuation, a composite score, and Gap Ledger's earnings drift) that
-converge on one shared engine called from both the Run tab and Company Check — see
+converge on one shared engine called from both sides of the Analyse tab — see
 [docs/GAP_LEDGER.md § Relationship to Aristos Council](GAP_LEDGER.md#relationship-to-aristos-council).

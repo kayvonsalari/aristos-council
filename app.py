@@ -1185,13 +1185,6 @@ def saved_list_labels(saved) -> list[str]:
     return [b if times[b] == 1 else f"{b} ({u.id})" for u, b in zip(saved, base)]
 
 
-def lens_checkbox_key(strategy_id: str) -> str:
-    """Session-state key for one extra-lens checkbox. Keyed by the strategy ID (the stable
-    record key), never by the label — so a display-name change cannot silently re-point a
-    ticked box at a different config."""
-    return f"uni_lens_{strategy_id}"
-
-
 def opt_lens_checkbox_key(input_kind: str):
     """TAB-MERGE-1 commit 1 — the ONE options block's key family (``opt_lens_*``),
     replacing the ``uni_lens_*``/``cc_lens_*`` duplicates. Qualified by ``input_kind``
@@ -3172,20 +3165,24 @@ def _render_universe_result(result) -> None:
 
 
 
-def _preselect_default_lens(choices, *, seeded_key: str = "uni_lenses_seeded",
-                            key_for=None) -> None:
+def _preselect_default_lens(choices, *, seeded_key: str = "uni_lenses_seeded", key_for) -> None:
     """Tick the suggested-first lens ONCE per session (SHORTLIST-3).
 
     With the primary dropdown gone, nothing would be selected on a fresh start and the Run
     button would open disabled — which reads as breakage rather than as a choice. So the
     lens ``default_index`` already nominated is pre-ticked, exactly once: the flag is what
     makes unticking it stick, instead of the box re-ticking itself on every rerun.
+
+    ``key_for`` is REQUIRED (TAB-MERGE-1 part 2 commit 5) — render_run_options is the
+    ONE caller since Part 1, and it always passes opt_lens_checkbox_key(input_kind);
+    the old ``uni_lens_*`` fallback this used to default to (``lens_checkbox_key``) was
+    dead code once that became true, and is deleted, not just defaulted away.
     """
     if st.session_state.get(seeded_key) or not choices:
         return
     st.session_state[seeded_key] = True
     chosen = choices[default_index(choices)]
-    st.session_state.setdefault((key_for or lens_checkbox_key)(chosen.id), True)
+    st.session_state.setdefault(key_for(chosen.id), True)
 
 
 # --------------------------------------------------------------------------- #
