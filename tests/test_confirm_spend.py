@@ -212,7 +212,12 @@ def _ss(at, key, default=None):
 
 def _run_tab(timeout: int = 120):
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=timeout).run()
+    at = AppTest.from_file(str(_APP), default_timeout=timeout)
+    # TAB-MERGE-1 commit 3: the "Run mode" radio (Second opinion included) now lives
+    # behind the validation toggle; the default surface shows a "Council opinion"
+    # checkbox instead. This module drives the radio directly, so it needs the toggle on.
+    at.session_state["show_legacy"] = True
+    at = at.run()
     assert not at.exception, at.exception
     return at
 
@@ -407,7 +412,7 @@ def test_a_plan_with_nothing_to_narrate_never_asks_for_a_confirmation(monkeypatc
 # These tests drive the widgets in that order, so a re-default can never again hide
 # behind a directly-seeded session state.
 def _tick_two_lenses(at):
-    boxes = [c for c in at.checkbox if c.key and c.key.startswith("uni_lens_")]
+    boxes = [c for c in at.checkbox if c.key and c.key.startswith("opt_lens_list_")]
     for c in boxes[:2]:
         at.session_state[c.key] = True
     at.run()
@@ -444,7 +449,7 @@ def test_the_mode_is_never_re_defaulted_by_the_lens_count_in_either_direction():
     _tick_two_lenses(at)
     assert _mode(at).value == app.RUN_MODE_NARRATOR
 
-    for c in [c for c in at.checkbox if c.key and c.key.startswith("uni_lens_")][:2]:
+    for c in [c for c in at.checkbox if c.key and c.key.startswith("opt_lens_list_")][:2]:
         at.session_state[c.key] = False
     at.run()
     assert _mode(at).value == app.RUN_MODE_NARRATOR
