@@ -43,6 +43,7 @@ from .tools.screening import (
 from .tools.technical import (
     _TD_6M,
     _TD_12M,
+    TechnicalSnapshot,
     annualized_volatility,
     technical_snapshot,
     total_return,
@@ -124,6 +125,13 @@ class FactorInputs:
     # screen consumes; this is the traded ``close``, which is what "the share price"
     # means (see tools/price_context.py).
     price_context: Optional[PriceContext] = None
+    # COMPANY-FACTS-TABLE-1 (Batch 15) — the FULL technical snapshot (50/200-day averages,
+    # distance from the 52-week high, 6/12-month return, volatility), computed from the
+    # SAME 400-day bars above. ALWAYS ON, like price_context: nothing here costs a second
+    # fetch — ``return_6m``/``return_12m``/``annualized_volatility`` above already came off
+    # this same ``snap``, just not kept whole. Company Check's "Price and cash" table reads
+    # this directly rather than recomputing it.
+    technical: Optional[TechnicalSnapshot] = None
 
 
 # --- factor functions (pure; None == NOT-EVAL) ---------------------------- #
@@ -1163,7 +1171,7 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
         static=static_fill, fund_size_fx=fund_size_fx,
         fund_size_fx_failed=fund_size_fx_failed,
         fund_size_currency_unverified=fund_size_currency_unverified,
-        valuation_band=band, price_context=ctx)
+        valuation_band=band, price_context=ctx, technical=snap)
 
 
 BORDERLINE_TOL = 0.05    # within 5% (relative) of the threshold

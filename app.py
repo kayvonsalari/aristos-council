@@ -3704,6 +3704,25 @@ def render_company_check_tab(show_validation: bool = False) -> None:
         _render_company_report(report)
 
 
+def _render_price_and_cash(result) -> None:
+    """COMPANY-FACTS-TABLE-1 — price, cash and forward-valuation facts the council's own
+    evidence pack already fetched that this page never showed. No comparison group, no
+    vote — the same category as Absolute readings, rendered the same plain way."""
+    pac = getattr(result, "price_and_cash", None)
+    st.subheader("Price and cash")
+    if pac is None:
+        st.caption("not requested")
+        return
+    st.caption("No comparison group. These are facts about this company's own price and "
+               "cash flow — they are not lenses, they do not vote, and nothing here is ranked.")
+    lines = pac.lines()
+    if not lines:
+        st.write("none available")
+        return
+    for line in lines:
+        st.markdown(f"- {line}")
+
+
 def _render_absolute_readings(result, *, with_analyst: bool = True) -> None:
     """ABS-READINGS-1 — what the accounts say, with no comparison group involved.
 
@@ -3904,6 +3923,8 @@ def _render_company_report(report) -> None:
 
     from aristos_council.peer_table import rank_columns
     _render_peers(check, rank_columns(report), report.ticker)
+
+    _render_price_and_cash(check)
 
     st.subheader("Valuation band")
     st.caption("This company against its own history; a mark, never a veto.")

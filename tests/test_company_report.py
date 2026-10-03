@@ -92,7 +92,19 @@ def _table(n_peers=N_PEERS):
                   + [_row(f"P{i:02d}.US", f"P{i:02d}") for i in range(n_peers)])
 
 
+def _no_news(ticker, *, today):
+    """COMPANY-FACTS-TABLE-1 (Batch 15) — ``run_company_report`` always tries a news fetch
+    now (``with_price_and_cash=True``); none of this file's fixtures model news, and this
+    is the one seam (``run_company_report``'s own ``news_fetcher`` param) that skips
+    ``data.news_fallback.gather_news_with_fallback`` entirely, rather than monkeypatching
+    that shared function — which other test MODULES exercise directly and would break if
+    patched globally (SENT-FALLBACK-1's own tests)."""
+    from aristos_council.data.news_fallback import NewsFetchResult
+    return NewsFetchResult(items=(), source="", tried=("test fixture: no news modelled",))
+
+
 def _run(lens_ids, *, tmp_path, store=None, company_ebit=400.0, **kw):
+    kw.setdefault("news_fetcher", _no_news)
     return run_company_report("CO", lens_ids, adapter=_Adapter(company_ebit),
                               strategies_dir=STRAT_DIR,
                               universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
@@ -109,7 +121,8 @@ def _run(lens_ids, *, tmp_path, store=None, company_ebit=400.0, **kw):
 def test_a_company_chosen_through_the_find_box_is_not_unrateable(tmp_path):
     report = run_company_report(
         "CO.US", [RAW], adapter=_Adapter(), strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR,
-        runs_dir=tmp_path / "runs", today=TODAY, store=_table(), save=False)
+        runs_dir=tmp_path / "runs", today=TODAY, store=_table(), save=False,
+        news_fetcher=_no_news)
     assert not report.unrateable
     assert report.ticker == "CO"                      # translated to the form the adapter took
     assert report.votes and report.votes[0].ranked and report.agreement is not None
@@ -137,13 +150,13 @@ def test_the_eodhd_ticker_is_translated_before_the_adapter_ever_sees_it(tmp_path
     # ranking pass that follows fetches every peer too).
     run_company_report("CO.US", [RAW], adapter=_Recorder(), strategies_dir=STRAT_DIR,
                        universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
-                       store=_table(), save=False)
+                       store=_table(), save=False, news_fetcher=_no_news)
     assert seen[0] == "CO"
 
     seen.clear()
     run_company_report("CO.AU", [RAW], adapter=_Recorder(), strategies_dir=STRAT_DIR,
                        universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
-                       store=_table(), save=False)
+                       store=_table(), save=False, news_fetcher=_no_news)
     assert seen[0] == "CO.AX"
 
 
@@ -389,12 +402,14 @@ def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
 # =========================================================================== #
 _TEXT_HEADS = {"summary": "SUMMARY", "council opinion": "COUNCIL OPINION",
                "agreement": "AGREEMENT", "lens votes": "LENS VOTES",
-               "peers": "PEERS", "valuation band": "VALUATION BAND",
+               "peers": "PEERS", "price and cash": "PRICE AND CASH",
+               "valuation band": "VALUATION BAND",
                "absolute readings": "ABSOLUTE READINGS", "what analysts say": "WHAT ANALYSTS SAY",
                "sources": "SOURCES"}
 _HTML_HEADS = {"summary": "<h2>Summary</h2>", "council opinion": "<h2>Council opinion</h2>",
                "agreement": "<h2>Agreement</h2>",
                "lens votes": "<h2>Lens votes</h2>", "peers": "<h2>Peers</h2>",
+               "price and cash": "<h2>Price and cash</h2>",
                "valuation band": "<h2>Valuation band</h2>",
                "absolute readings": "<h2>Absolute readings</h2>",
                "what analysts say": "<h2>What analysts say</h2>", "sources": "<h2>Sources</h2>"}
@@ -410,8 +425,8 @@ def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
     # this test pins, not the council itself, which has its own dedicated tests below.
     report.council_opinion = CouncilOpinion(available=True, narrative="It ranked well.")
     assert SECTION_ORDER == ("summary", "council opinion", "agreement", "lens votes", "peers",
-                             "valuation band", "absolute readings", "what analysts say",
-                             "sources")
+                             "price and cash", "valuation band", "absolute readings",
+                             "what analysts say", "sources")
     text, html = format_company_report(report), company_report_html(report)
     for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
         at = [doc.index(heads[name]) for name in SECTION_ORDER]
@@ -733,7 +748,7 @@ def test_the_columns_cost_nothing_no_fetch_no_model_call(tmp_path):
     adapter = _Counting()
     report = run_company_report("CO", [RAW, SCREENED], adapter=adapter, strategies_dir=STRAT_DIR,
                                 universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
-                                store=_table(), save=False)
+                                store=_table(), save=False, news_fetcher=_no_news)
     before = _Counting.calls
     for _ in range(3):
         _cols(report)
@@ -1052,7 +1067,7 @@ def test_run_company_report_accepts_with_council_directly(tmp_path):
     report = run_company_report(
         "CO", [RAW], adapter=_Adapter(), strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR,
         runs_dir=tmp_path / "runs", today=TODAY, store=_table(), save=False,
-        with_council=True, council_runners=_opinion_runners())
+        with_council=True, council_runners=_opinion_runners(), news_fetcher=_no_news)
     assert report.council_opinion is not None and report.council_opinion.available
 
 
@@ -1103,6 +1118,7 @@ def _smallcap_table(n_peers=4, *, subject_cap=4e9, peer_cap=3.5e9):
 
 def _smallcap_run(lens_ids, *, tmp_path, n_peers=4, subject_cap=4e9, peer_cap=3.5e9,
                   include_small=True, **kw):
+    kw.setdefault("news_fetcher", _no_news)
     return run_company_report(
         "CO", lens_ids, adapter=_SmallcapAdapter(), strategies_dir=STRAT_DIR,
         universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY,
@@ -1178,7 +1194,7 @@ def test_no_cohort_match_falls_back_to_a_stated_no_vote_reason(tmp_path):
     report = run_company_report(
         "CO", [RAW], adapter=_SmallcapAdapter(), strategies_dir=STRAT_DIR,
         universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY, store=store,
-        include_small=True, save=False)
+        include_small=True, save=False, news_fetcher=_no_news)
     assert report.outside_tested_range is False
     assert not report.votes or report.votes[0].status == "no_group"
     assert "no small-company band" in report.no_vote_reason or "no backtested cohort" \
@@ -1208,7 +1224,7 @@ def test_a_missing_market_cap_is_never_treated_as_smallcap(tmp_path):
     report = run_company_report(
         "CO", [RAW], adapter=_SmallcapAdapter(), strategies_dir=STRAT_DIR,
         universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs", today=TODAY, store=store,
-        include_small=True, save=False)
+        include_small=True, save=False, news_fetcher=_no_news)
     assert report.outside_tested_range is False
 
 
@@ -1232,3 +1248,45 @@ def test_include_small_cli_flag_is_wired(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     cr.main(["CO", "--lens", RAW, "--include-small", "--no-save"])
     assert captured.get("include_small") is True
+
+
+# =========================================================================== #
+# BATCH-15 COMPANY-FACTS-TABLE-1 — the "Price and cash" table, end to end.
+# =========================================================================== #
+def test_price_and_cash_is_populated_and_in_its_own_section(tmp_path):
+    from datetime import date as _date
+
+    from aristos_council.data.news_fallback import NewsFetchResult
+    from aristos_council.data.sentiment import NewsItem
+
+    def news(ticker, *, today):
+        return NewsFetchResult(
+            items=(NewsItem(published=_date(2026, 9, 24), headline="AI glasses unveiled",
+                            source="EODHD"),),
+            source="EODHD news", tried=())
+
+    report = _run([RAW], tmp_path=tmp_path, save=False, news_fetcher=news)
+    pac = report.check.price_and_cash
+    assert pac is not None and pac.last_close.available
+    assert pac.news and pac.news[0].headline == "AI glasses unveiled"
+
+    text = format_company_report(report)
+    html = company_report_html(report)
+    assert "PRICE AND CASH" in text and "<h2>Price and cash</h2>" in html
+    assert "2026-09-24: AI glasses unveiled" in text
+    assert "2026-09-24: AI glasses unveiled" in html
+    # The news source is named once, in Sources — not repeated per line.
+    assert "EODHD news" in text.split("SOURCES")[1]
+
+
+def test_price_and_cash_names_itself_not_requested_when_the_caller_did_not_ask(tmp_path):
+    """``run_company_check`` called directly (not through ``run_company_report``) without
+    ``with_price_and_cash`` — the Run tab / cohort path, which never asked for this."""
+    from aristos_council.company_check import run_company_check
+    from aristos_council.company_report import price_and_cash_lines
+
+    report = run_company_check(
+        "CO", RAW, "", adapter=_Adapter(), strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR,
+        runs_dir=tmp_path / "runs", today=TODAY)
+    assert report.price_and_cash is None
+    assert price_and_cash_lines(report) == ["  not requested"]

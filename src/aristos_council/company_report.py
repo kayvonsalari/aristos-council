@@ -610,7 +610,7 @@ def run_company_report(
     with_summary: bool = False, reader_runner=None, with_council: bool = False,
     council_runners=None, store=None, save: bool = True,
     progress: Optional[Callable[[str], None]] = None,
-    include_small: bool = False,
+    include_small: bool = False, news_fetcher=None,
 ) -> CompanyReport:
     """Build the whole report. ``adapter`` is shared by the readings and every lens run, so a name
     fetched once is read from the day-cache thereafter. Nothing here calls a model unless
@@ -656,8 +656,8 @@ def run_company_report(
     check = run_company_check(
         ticker, ids[0] if ids else DEFAULT_ID, "", adapter=adapter,
         strategies_dir=strategies_dir, universes_dir=universes_dir, runs_dir=runs_dir,
-        today=today, with_analyst_trend=True,
-        ratings_fallback_symbol=_us_line(ticker, store))
+        today=today, with_analyst_trend=True, with_price_and_cash=True,
+        ratings_fallback_symbol=_us_line(ticker, store), news_fetcher=news_fetcher)
     attach_peers(check, store=store)
     report = CompanyReport(ticker=ticker, check=check, lens_ids=ids,
                            run_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
@@ -825,9 +825,19 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # The text export (the page and the HTML follow the SAME order)
 # --------------------------------------------------------------------------- #
 # summary -> council opinion -> agreement (headline + table) -> each lens's vote -> peers ->
-# valuation band -> absolute readings -> analyst forecasts -> sources
+# price and cash -> valuation band -> absolute readings -> analyst forecasts -> sources
 SECTION_ORDER = ("summary", "council opinion", "agreement", "lens votes", "peers",
-                 "valuation band", "absolute readings", "what analysts say", "sources")
+                 "price and cash", "valuation band", "absolute readings", "what analysts say",
+                 "sources")
+
+
+def price_and_cash_lines(result) -> list[str]:
+    """COMPANY-FACTS-TABLE-1 — the small table itself, or the one line saying it was never
+    requested (``with_price_and_cash=False`` — every caller outside Company Check)."""
+    pac = getattr(result, "price_and_cash", None)
+    if pac is None:
+        return ["  not requested"]
+    return [f"  {ln}" for ln in pac.lines()] or ["  none available"]
 
 
 def agreement_table_lines(report: CompanyReport) -> list[str]:
@@ -931,6 +941,10 @@ def format_company_report(report: CompanyReport) -> str:
 
     peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
     lines.extend(peer_block if peer_block else ["PEERS: none computed"])
+    lines.append("")
+
+    lines.append("PRICE AND CASH (no comparison group; they do not vote)")
+    lines.extend(price_and_cash_lines(c))
     lines.append("")
 
     lines.append("VALUATION BAND (this company against its own history; a mark, never a veto)")

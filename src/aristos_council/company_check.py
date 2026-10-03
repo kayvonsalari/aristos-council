@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -162,6 +162,11 @@ class CompanyCheckResult:
     # Company Report (Part B) - the band's percentile (None when not computed or abstained), so the
     # agreement row can carry the SAME "priced high" mark the Run tab's table does.
     band_percentile: Optional[float] = None
+    # COMPANY-FACTS-TABLE-1 (Batch 15) - price/cash facts the council's own evidence pack
+    # already fetched (``abs_readings.PriceAndCash``). None unless the caller asked for it
+    # (the Company Check tab and CLI do by default — see ``with_price_and_cash``). Display
+    # only: no screen, gate, factor or verdict reads it.
+    price_and_cash: object = None
 
     @property
     def display(self) -> str:
@@ -271,7 +276,8 @@ def run_company_check(
     strategies_dir: str | Path | None = None, universes_dir: str | Path | None = None,
     runs_dir: str | Path | None = None, screen_strategy_id: Optional[str] = None,
     today: Optional[date] = None, with_analyst_trend: bool = False, analyst_fetcher=None,
-    ratings_fallback_symbol: Optional[str] = None,
+    ratings_fallback_symbol: Optional[str] = None, with_price_and_cash: bool = False,
+    news_fetcher=None,
 ) -> CompanyCheckResult:
     """Diagnose ONE ticker under ``rank_strategy_id``'s lens screen + factors, with
     cohort context from the latest frozen run of ``reference_universe_id``. NEVER emits
@@ -458,6 +464,26 @@ def run_company_check(
             currency=getattr(f, "financial_currency", None), company=company_name or ticker,
             price=price, price_currency=price_ccy, own_listing=own)
 
+    # COMPANY-FACTS-TABLE-1 (Batch 15 item 1) — opt-in for the same reason analyst trend is:
+    # a cohort run, the watcher and the existing tests get exactly the output they had.
+    # The Company Check tab/CLI pass True. The price/FCF/EPS/PE legs are FREE (already-
+    # fetched ``fi.technical``/``f``); only the news fetch below is a genuinely new request
+    # (EODHD news if a key is configured, else yfinance — never Finnhub, which is the
+    # SENTIMENT specialist's own channel and is council-only).
+    if with_price_and_cash:
+        from .abs_readings import price_and_cash as _price_and_cash
+        from .data.news_fallback import fetch_eodhd_news, fetch_yfinance_news, \
+            gather_news_with_fallback
+
+        news_result = (news_fetcher(ticker, today=today) if news_fetcher else
+                       gather_news_with_fallback(
+                           ticker, start=today - timedelta(days=14), end=today,
+                           finnhub_items=(), finnhub_reason="not attempted outside the council",
+                           eodhd_fetcher=fetch_eodhd_news, yfinance_fetcher=fetch_yfinance_news))
+        readings["price_and_cash"] = _price_and_cash(
+            getattr(fi, "technical", None), f, trend=readings.get("analyst_trend"),
+            news=news_result)
+
     return CompanyCheckResult(
         ticker=ticker, company_name=company_name,
         rank_strategy_id=rank_strategy.id, screen_strategy_id=screen_strategy_id_str,
@@ -599,6 +625,9 @@ def company_sources(result: "CompanyCheckResult") -> list[SourceLine]:
     if getattr(result, "fx_source", ""):
         out.append(SourceLine("Currency rates in the valuation band",
                               f"{result.fx_source}, monthly"))
+    pac = getattr(result, "price_and_cash", None)
+    if pac is not None and getattr(pac, "news_source", ""):
+        out.append(SourceLine("Recent news", pac.news_source))
     statics = sorted({fc.source for fc in getattr(result, "factors", ())
                       if (fc.source or "").startswith("static:")})
     for tag in statics:

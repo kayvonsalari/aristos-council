@@ -1682,6 +1682,8 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
 
     parts.append(_company_peers_html(c, rank_columns(report), report.ticker))
 
+    parts.append(_price_and_cash_html(c))
+
     parts.append('<section class="section"><h2>Valuation band</h2>'
                  '<p class="note">This company against its own history; a mark, never a veto.</p>'
                  f"<p>{_esc(c.valuation_band)}</p></section>")
@@ -1703,6 +1705,25 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     parts.append(_footer())
     return _document(title=f"Company Report — {report.display}" + (f" — {stamp}" if stamp else ""),
                      body=_JOIN.join(parts))
+
+
+def _price_and_cash_html(result) -> str:
+    """COMPANY-FACTS-TABLE-1 — the same ``PriceAndCash`` object the text export reads, as
+    one flat bullet list (the SAME lines, in the SAME order — this and the text export
+    cannot drift), exactly like ``debt.lines()``/``growth.lines()`` above are rendered."""
+    pac = getattr(result, "price_and_cash", None)
+    if pac is None:
+        return ('<section class="section"><h2>Price and cash</h2>'
+               '<p class="note">not requested</p></section>')
+    lines = pac.lines()
+    out = ['<section class="section"><h2>Price and cash</h2>'
+           '<p class="note">No comparison group. These are facts about this company\'s own '
+           "price and cash flow - they are not lenses, they do not vote, and nothing here is "
+           "ranked.</p>"]
+    out.append(_bullets(_esc(ln) for ln in lines) if lines
+              else '<p class="note">none available</p>')
+    out.append("</section>")
+    return "".join(out)
 
 
 def _absolute_readings_html(result, *, with_analyst: bool = True) -> str:
