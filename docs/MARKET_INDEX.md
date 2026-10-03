@@ -290,9 +290,9 @@ wrong hides a rival from every cohort it belongs to, so a small dated file corre
 Every entry carries a date and a reason; it corrects a label only — never a size, a listing or a peer; the index
 on disk is not rewritten; and every use is printed in the cohort report as `label overridden`.
 
-This is exactly why **the peer list is shown by name** on the Company Check page and in
-the CLI. A group assembled from someone else's classification can be wrong in ways no
-amount of internal consistency will reveal, and the only honest defence is to let the
+This is exactly why **the peer list is shown by name** on the Analyse tab's Company page
+and in the CLI. A group assembled from someone else's classification can be wrong in ways
+no amount of internal consistency will reveal, and the only honest defence is to let the
 reader see who the company was measured against.
 
 **Two kinds of row are kept but never used as peers (INDEX-CLASS-SANITY-1).** EODHD lists Taiwan
@@ -398,5 +398,7 @@ was recorded.
 
 ## What it does not do
 
-No verdicts. The Company Check tab shows the peer group, the rung, the band and the
-snapshot date, and stops there. Ranking the peers is separate work.
+This module itself issues no verdict — it only finds who belongs in the room (the peer
+group, the rung, the band, the snapshot date). Ranking the peers (TAB-MERGE-1: each
+ticked lens's vote, the agreement of record) is the Analyse tab's Company mode, built on
+top of this; `market_index.peers` stays the same free, deterministic lookup either way.

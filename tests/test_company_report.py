@@ -424,9 +424,10 @@ def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
     # COUNCIL-OPINION-1 — injected directly (no model call): the section's PLACEMENT is what
     # this test pins, not the council itself, which has its own dedicated tests below.
     report.council_opinion = CouncilOpinion(available=True, narrative="It ranked well.")
-    assert SECTION_ORDER == ("summary", "council opinion", "agreement", "lens votes", "peers",
-                             "price and cash", "valuation band", "absolute readings",
-                             "what analysts say", "sources")
+    # TAB-MERGE-1 part 2 commit 2 order.
+    assert SECTION_ORDER == ("summary", "agreement", "lens votes", "valuation band",
+                             "price and cash", "absolute readings", "what analysts say",
+                             "council opinion", "peers", "sources")
     text, html = format_company_report(report), company_report_html(report)
     for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
         at = [doc.index(heads[name]) for name in SECTION_ORDER]
@@ -551,9 +552,10 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     at.run()
     assert not at.exception
     heads = [str(getattr(h, "value", "")) for h in at.subheader]
-    assert heads[:4] == ["Summary", "Agreement", "Lens votes", "Peers"], heads
-    assert heads[-3:] == ["Absolute readings", "What analysts say", "Sources"], heads
-    assert "Valuation band" in heads
+    # TAB-MERGE-1 part 2 commit 2 order (no council opinion here — not ticked).
+    assert heads[:4] == ["Summary", "Agreement", "Lens votes", "Valuation band"], heads
+    assert heads[-3:] == ["What analysts say", "Peers", "Sources"], heads
+    assert "Price and cash" in heads and "Absolute readings" in heads
     frames = [df.value for df in at.dataframe]
     assert any("BUY votes" in list(f.columns) for f in frames)            # the agreement row
     assert any("Result" in list(f.columns) for f in frames)               # the vote table
@@ -785,6 +787,40 @@ def test_attach_track_record_decorates_votes_without_touching_the_agreement():
     assert all(v.badge is not None and v.badge.label in BADGE_LABELS for v in report.votes)
     assert report.agreement is before                        # untouched: still the same object
     assert report.track_record_summary.startswith("Track record: ")
+
+
+def test_a_does_not_apply_vote_gets_no_badge_even_with_a_cohort_match(tmp_path):
+    """TAB-MERGE-1 part 2 commit 3 — a lens's historical hit rate says nothing about a
+    company that lens never ranked. SCREENED (min_roic 12%) excludes CO (its ROIC here
+    is ~8%, below the floor) while RAW ranks it, in the SAME backtested cohort
+    (tech_semiconductors) both lenses are badge-eligible in. Only the voted one gets one."""
+    from aristos_council.backtest import BADGE_LABELS
+
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    assert report.cohort_slug == "tech_semiconductors"           # the match DID happen
+    raw_vote = next(v for v in report.votes if v.strategy_id == RAW)
+    screened_vote = next(v for v in report.votes if v.strategy_id == SCREENED)
+    assert raw_vote.ranked and raw_vote.badge is not None and raw_vote.badge.label in BADGE_LABELS
+    assert not screened_vote.ranked and screened_vote.status == "excluded"
+    assert screened_vote.badge is None and screened_vote.badge_suffix == ""
+    # the "does not apply" row states its reason only — no badge text anywhere near it
+    assert screened_vote.result().startswith("does not apply - ")
+
+    # format_company_report's own per-lens badge DETAIL line is gated on v.badge, so a
+    # non-voted lens gets no "track record:" line of its own either.
+    text = format_company_report(report)
+    assert f"{raw_vote.label} track record:" in text
+    assert f"{screened_vote.label} track record:" not in text
+
+    # the agreement's "Track record:" summary already filtered on badge-is-not-None
+    # (CompanyReport.track_record_summary), so fixing attach_track_record alone fixes
+    # the count too — it counts exactly the one voted, badged lens, not two.
+    assert report.track_record_summary.startswith("Track record: 1 ")
+    assert "," not in report.track_record_summary
+
+    html = company_report_html(report)
+    for doc in (text, html):
+        assert f"({raw_vote.badge.label})" in doc            # RAW's badge text appears
 
 
 def test_no_cohort_match_leaves_every_badge_none_and_no_caption():

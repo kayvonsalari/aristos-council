@@ -362,6 +362,10 @@ td.cell-buy { box-shadow: inset 3px 0 0 var(--buy); }
 td.cell-hold { box-shadow: inset 3px 0 0 var(--hold); }
 td.cell-sell { box-shadow: inset 3px 0 0 var(--sell); }
 
+/* TAB-MERGE-1 part 2 commit 2: the company's own row in a peers table — a VISIBLE
+   highlight beside the "(this company)" text marker, not instead of it. */
+td.this-company { background: var(--panel) !important; font-weight: 700; }
+
 /* Valuation percentile: a diverging tint behind a cell that ALREADY says the word. */
 td.pct-cheapest { background: var(--pct-cheapest) !important; }
 td.pct-cheap    { background: var(--pct-cheap) !important; }
@@ -1446,166 +1450,14 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
     return _document(title=title, body="\n".join(parts))
 
 
-# --------------------------------------------------------------------------- #
-# Company Check
-# --------------------------------------------------------------------------- #
-def company_check_html(result, *, run_start: Optional[datetime] = None,
-                       strategy_display_name: str = "") -> str:
-    """The single-name diagnostic as ONE self-contained HTML file (REPORT-HTML-1).
-
-    Renders the same content as the canonical ``.txt`` report — every screen criterion with
-    its observed value and three-valued status, the gates, each factor's value with its
-    source badge and cohort context, the verdict OF RECORD (quoted, never recomputed), the
-    divergence flag, and the data-integrity block with its ⚠ flags as callouts. NO verdict
-    is ever issued here: a rank over a class of one is a fabricated verdict.
-    """
-    from ..company_check import (
-        # The SAME gloss the .txt renders, so the two cannot drift.
-        _expense_ratio_gloss,
-        company_sources,
-        factor_source_display,
-        format_factor_value,
-    )
-
-    stamp = _local_stamp(run_start)
-    title_name = strategy_display_name or result.rank_strategy_id
-    parts: list[str] = []
-
-    parts.append(
-        '<header class="doc">'
-        '<p class="kicker">Aristos Council · company check · single-name diagnostic</p>'
-        f"<h1>{_esc(result.display)}</h1>"
-        + _kv([
-            ("strategy", f'<code>{_esc(result.rank_strategy_id)}</code>'
-             + (f" · {_esc(title_name)}" if strategy_display_name else "")),
-            ("lens screen",
-             f'<code>{_esc(result.screen_strategy_id or "none")}</code>'),
-            ("reference", f'<code>{_esc(result.reference_universe_id or "—")}</code>'),
-            ("run", _esc(stamp)),
-        ])
-        + '<p class="house">NO VERDICT — a verdict is a cohort statement, so it comes '
-          "from a universe run, never from a class of one.</p>"
-        "</header>")
-
-    if result.unrateable:
-        parts.append(_callout(f"UNRATEABLE — {result.data_integrity.note}. No data, so no "
-                              "diagnosis and no verdict.", kind="alert"))
-        parts.append(f'<p class="note">{_inline(result.pointer)}</p>')
-        parts.append(_footer())
-        return _document(title=f"Company Check — {result.display}", body="\n".join(parts))
-
-    # ----- screen: every criterion evaluated (a universe run stops at the first fail).
-    parts.append('<section class="section"><h2>Screen</h2>')
-    if result.screen_less:
-        parts.append('<p class="note"><strong>No lens screen</strong> — this strategy '
-                     "screens nothing; quality enters via ranking only. Gates below still "
-                     "apply.</p>")
-    else:
-        parts.append('<p class="note">All criteria evaluated for diagnosis; a universe '
-                     "run excludes on the first confirmed fail.</p>")
-        body = []
-        for c in result.screen:
-            tags = ["gating" if c.gating else "non-gating"]
-            if c.basis:
-                tags.append(c.basis)
-            if c.borderline:
-                tags.append("borderline")
-            observed = ("—" if c.status == "FAIL" and c.observed is None
-                        else _num(c.observed))
-            detail = (_esc(c.note or "fails closed by design")
-                      if c.status == "FAIL" and c.observed is None else _esc(c.note))
-            body.append([
-                f'<span class="status" style="color:{_STATUS_HEX.get(c.status, "")}">'
-                f"{_esc(c.status)}</span>",
-                f'<span class="mono">{_esc(c.name)}</span>',
-                f'<span class="mono">{_esc(observed)}</span>',
-                f'<span class="mono">{_esc(_num(c.threshold))}</span>',
-                " ".join(f'<span class="badge">{_esc(t)}</span>' for t in tags)
-                + (f'<div class="note">{detail}</div>' if detail else ""),
-            ])
-        parts.append(_table(["Status", "Criterion", "Observed", "Threshold", "Notes"],
-                            body))
-        if result.market_cap_in_gates:
-            parts.append('<p class="note">min_market_cap — same floor as the universe '
-                         "gate; shown once, under Gates below.</p>")
-    parts.append("</section>")
-
-    # ----- gates.
-    if result.gates:
-        body = []
-        for g in result.gates:
-            detail = _inline(g.detail)
-            if g.rationale:
-                detail += f'<div class="note">↳ {_inline(g.rationale)}</div>'
-            body.append([
-                f'<span class="status" style="color:{_STATUS_HEX.get(g.status, "")}">'
-                f"{_esc(g.status)}</span>",
-                f'<span class="mono">{_esc(g.name)}</span>', detail])
-        parts.append('<section class="section"><h2>Gates — sector / cap / payout</h2>'
-                     + _table(["Status", "Gate", "Detail"], body) + "</section>")
-
-    # ----- factor values + cohort context (source as a badge — [static: …] included).
-    ref = (f"reference: latest run of {result.reference_universe_id} "
-           f"(run {result.reference_run_date}, {result.reference_cohort_n} ranked)"
-           if result.reference_available
-           else "reference: none available — run the universe once for context")
-    items = []
-    for fc in result.factors:
-        gloss = _expense_ratio_gloss(fc.value) if fc.factor == "expense_ratio" else ""
-        items.append(
-            f"<strong>{_esc(fc.label)}</strong> "
-            f'<span class="mono">({_esc(fc.factor)})</span>: '
-            f"{_esc(format_factor_value(fc.factor, fc.value))}{_esc(gloss)} "
-            f'<span class="badge">[{_esc(factor_source_display(fc.source))}]</span> '
-            f"— {_inline(fc.context)}")
-    parts.append('<section class="section"><h2>Factor values + cohort context</h2>'
-                 f'<p class="note">{_esc(ref)}</p>' + _bullets(items))
-    if result.verdict_of_record:
-        parts.append("<p><strong>VERDICT OF RECORD:</strong> "
-                     f"{_inline(result.verdict_of_record)}</p>")
-    parts.append("</section>")
-
-    parts.append(_company_readings_html(result))
-    parts.append(_company_peers_html(result))
-
-    if result.divergence_flag:
-        parts.append(_callout(f"Price/fundamentals divergence — {result.divergence_flag}",
-                              kind="alert", label="divergence"))
-
-    # ----- data integrity, incl. the ⚠ implausible-vendor-value flags as callouts.
-    di = result.data_integrity
-    parts.append('<section class="section"><h2>Data integrity</h2>')
-    lines = [f"fundamentals: <strong>{'ok' if di.fundamentals_ok else 'MISSING'}</strong>"
-             f" · price: <strong>{'ok' if di.price_ok else 'MISSING'}</strong>"]
-    if di.abstained_criteria:
-        lines.append("criteria not evaluated (abstained): "
-                     + _esc(", ".join(di.abstained_criteria)))
-    if di.not_evaluated_factors:
-        lines.append("factors not evaluated: "
-                     + _esc(", ".join(di.not_evaluated_factors)))
-    parts.append(_bullets(lines))
-    for flag in di.implausible:
-        parts.append(_callout(f"⚠ {flag}", kind="alert", label="data flag"))
-    parts.append("</section>")
-
-    parts.append(f'<p class="note">{_inline(result.pointer)}</p>')
-    sources = company_sources(result)
-    if sources:
-        parts.append('<section class="section"><h2>Sources</h2>'
-                     + _bullets(f"<strong>{_esc(s.topic)}:</strong> {_esc(s.text)}"
-                                for s in sources) + "</section>")
-    parts.append(_footer())
-    title = f"Company Check — {result.display}" + (f" — {stamp}" if stamp else "")
-    return _document(title=title, body="\n".join(parts))
-
-
 _JOIN = "\n"
 
 
 def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
-    """The Company Report as ONE self-contained HTML file, in the page order: summary (if asked
-    for), council opinion (if asked for), agreement headline and table, each lens's vote, peers,
-    valuation band, absolute readings, analyst forecasts, Sources. The same objects the text
+    """The Company Report as ONE self-contained HTML file, in the page order (TAB-MERGE-1
+    part 2 commit 2): summary (if asked for), agreement headline and table, each lens's
+    vote, valuation band, price and cash, absolute readings, analyst forecasts, council
+    opinion (if asked for), the full peers table, Sources. The same objects the text
     export prints, so the two cannot drift."""
     from ..company_check import company_sources
     from ..company_report import HOUSE_LINE, NO_LENS_REASON, OUTSIDE_TESTED_RANGE_LINE
@@ -1637,15 +1489,6 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
 
     if report.summary is not None:
         parts.append(_reader_section(report.summary))
-
-    if report.council_opinion is not None:
-        parts.append('<section class="section"><h2>Council opinion</h2>'
-                     '<p class="note">Narration only — never a vote; the agreement below is '
-                     "the verdict of record.</p>")
-        op = report.council_opinion
-        parts.append(_narration_html(op.narrative) if op.available
-                    else f'<p class="note">{_esc(op.note)}</p>')
-        parts.append("</section>")
 
     parts.append('<section class="section"><h2>Agreement</h2>')
     if report.agreement is not None:
@@ -1680,19 +1523,28 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
         parts.append(f'<p class="note">{_esc(report.no_vote_reason or NO_LENS_REASON)}</p>')
     parts.append("</section>")
 
-    parts.append(_company_peers_html(c, rank_columns(report), report.ticker))
-
-    parts.append(_price_and_cash_html(c))
-
     parts.append('<section class="section"><h2>Valuation band</h2>'
                  '<p class="note">This company against its own history; a mark, never a veto.</p>'
                  f"<p>{_esc(c.valuation_band)}</p></section>")
+    parts.append(_price_and_cash_html(c))
     parts.append(_absolute_readings_html(c, with_analyst=False)
                  or '<section class="section"><h2>Absolute readings</h2>'
                     '<p class="note">none available</p></section>')
     parts.append(_analyst_forecasts_html(c)
                  or '<section class="section"><h2>What analysts say</h2>'
                     '<p class="note">not available</p></section>')
+
+    if report.council_opinion is not None:
+        parts.append('<section class="section"><h2>Council opinion</h2>'
+                     '<p class="note">Narration only — never a vote; the agreement above is '
+                     "the verdict of record.</p>")
+        op = report.council_opinion
+        parts.append(_narration_html(op.narrative) if op.available
+                    else f'<p class="note">{_esc(op.note)}</p>')
+        parts.append("</section>")
+
+    parts.append(_company_peers_html(c, rank_columns(report), report.ticker))
+
     sources = company_sources(c)
     if sources:
         parts.append('<section class="section"><h2>Sources</h2>'
@@ -1753,11 +1605,6 @@ def _absolute_readings_html(result, *, with_analyst: bool = True) -> str:
     return "".join(out)
 
 
-def _company_readings_html(result) -> str:
-    """The single-lens check's block: debt, growth and analyst forecasts under one heading."""
-    return _absolute_readings_html(result, with_analyst=True)
-
-
 def _analyst_forecasts_html(result) -> str:
     """The Company Report's own section, after the absolute readings."""
     from ..company_check import mixed_source_marker
@@ -1807,8 +1654,15 @@ def _company_peers_html(result, columns=None, company_ticker: str = "") -> str:
                  *(f'<span class="mono">{_esc(rank_display(cell) if c.kind == "rank" else cell)}'
                    f"</span>" for c, (_h, cell) in zip(columns, r.ranks)),
                  _esc(r.sub_industry)] for r in rows]
+        # TAB-MERGE-1 part 2 commit 2: a VISIBLE highlight on the company's own row, not
+        # just the "(this company)" text marker. Row 0 is reliably the company whenever
+        # columns+company_ticker are both given (peer_table.peer_rows's own contract).
+        n_cols = 6 + len(columns)
+        cell_classes = ({(0, i): "this-company" for i in range(n_cols)}
+                       if columns and company_ticker and rows else {})
         out.append(_table(["Ticker", "Name", "Exchange", "Market cap (USD)", "Market cap (local)",
-                           *(c.header for c in columns), "Sub-industry"], body))
+                           *(c.header for c in columns), "Sub-industry"], body,
+                          cell_classes=cell_classes))
         if has_one_system_peers(rows):
             out.append(f'<p class="note">{_esc(ONE_SYSTEM_NOTE)}</p>')
     else:

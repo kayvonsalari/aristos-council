@@ -371,7 +371,8 @@ def test_list_run_with_council_opinion_unticked_makes_zero_model_calls(monkeypat
 # --------------------------------------------------------------------------- #
 def test_etf_mode_hides_the_company_choice_and_shows_list_input_only():
     at = _run_tab()
-    radio = next(r for r in at.radio if str(r.label) == "Analyse")   # the Stocks/ETFs switch
+    # TAB-MERGE-1 part 2 commit 1: renamed from "Analyse" (now the merged tab's own name).
+    radio = next(r for r in at.radio if str(r.label) == "Asset type")   # the Stocks/ETFs switch
     radio.set_value("ETFs").run()
     assert not at.exception
     assert not any(str(r.label) == "Input" for r in at.radio)

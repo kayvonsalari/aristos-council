@@ -22,8 +22,8 @@ independent. Only the first is "the product".
 
 | Part | What it is | Start with |
 |---|---|---|
-| **1. Council Station** — the ranker and its narrator | Takes a list of tickers and a *lens* (a versioned YAML strategy: which companies qualify, which factors rank them). A deterministic engine screens, ranks and gates; LLM agents then write the story of the result. A local Streamlit app (the **Run** tab, **Company Check**, **Scoreboard**) and a CLI drive it. | [How a verdict is reached](#how-a-verdict-is-reached) · [docs/COUNCIL_EXPLAINER.md](docs/COUNCIL_EXPLAINER.md) |
-| **2. Market index and cohorts** | A local table of ~25,000 listed companies over 18 exchange codes, with industry and size (`market_index`), from which come **peer groups** (Company Check's "who is this company compared with?") and **57 rule-defined cohorts** — frozen, versioned peer sets of 20–60 companies to rank within. Deterministic; no LLM. | [Market index and cohorts](#market-index-and-cohorts) · [docs/MARKET_INDEX.md](docs/MARKET_INDEX.md) · [docs/COHORTS.md](docs/COHORTS.md) |
+| **1. Council Station** — the ranker and its narrator | Takes a list of tickers and a *lens* (a versioned YAML strategy: which companies qualify, which factors rank them). A deterministic engine screens, ranks and gates; LLM agents then write the story of the result. A local Streamlit app (the **Analyse** tab — one company, or a cohort / list — plus **Scoreboard**) and a CLI drive it. | [How a verdict is reached](#how-a-verdict-is-reached) · [docs/COUNCIL_EXPLAINER.md](docs/COUNCIL_EXPLAINER.md) |
+| **2. Market index and cohorts** | A local table of ~25,000 listed companies over 18 exchange codes, with industry and size (`market_index`), from which come **peer groups** (the Analyse tab's Company mode: "who is this company compared with?") and **57 rule-defined cohorts** — frozen, versioned peer sets of 20–60 companies to rank within. Deterministic; no LLM. | [Market index and cohorts](#market-index-and-cohorts) · [docs/MARKET_INDEX.md](docs/MARKET_INDEX.md) · [docs/COHORTS.md](docs/COHORTS.md) |
 | **3. Gap Ledger** — a separate experiment | A daily pre-market screen for US stocks gapping on news, logged with a control group and graded after the close. It answers "what moved this morning?", not "is this a good business?". **Nothing in parts 1–2 imports it**, and it is under a feature freeze until 40 trading days are scored. | [Gap Ledger](#gap-ledger--a-separate-experiment-in-the-same-repo) · [docs/GAP_LEDGER.md](docs/GAP_LEDGER.md) |
 
 ## Quick start
@@ -54,11 +54,11 @@ streamlit run gap_ledger_app.py
 
 What costs money, and what does not:
 
-- **Free and deterministic:** the ranker, the screen, Company Check, `--ranker-only`, every
+- **Free and deterministic:** the ranker, the screen, a company check, `--ranker-only`, every
   multi-lens run, the market index queries (`status`, `peers`), `cohorts plan`, the whole test suite.
 - **Bills LLM credits (`ANTHROPIC_API_KEY`):** narrating a run (one model call per explained name), the
   optional plain-English summary (about a cent), the single-ticker council (`examples/run_council.py`).
-  Never set this key in a development shell — the Run tab shows a cost estimate before it spends.
+  Never set this key in a development shell — the Analyse tab shows a cost estimate before it spends.
 - **Bills data credits (`EODHD_API_KEY`):** `market_index build` / `refresh` (a `/fundamentals` call costs
   10 units of a daily allowance), Gap Ledger's news call, and the EODHD-backed data providers.
   `FINNHUB_API_KEY` (sentiment, US-only), `TODOIST_API_TOKEN` (Gap Ledger delivery) and the IBKR
@@ -208,7 +208,7 @@ versioned and superseded, not mutated).
 
 ### The plain-English summary (optional, about a cent)
 
-A tick-box on the Run tab, **off by default**, adds one short note at the top of the report:
+A tick-box on the Analyse tab, **off by default**, adds one short note at the top of the report:
 what the run asked, what happened, what survived the checks, what to doubt, and what the run
 structurally cannot tell you. It is written for someone who does not work in finance and
 reads in about a minute.
@@ -243,8 +243,8 @@ It explains the results; it never recommends anything.
 The lenses answer **different questions**, so a BUY on one beside a SELL on another is not
 a contradiction — it is two questions answered. Three things make that readable:
 
-- **Every lens says what it asks.** One plain-English line under its name, in the Run tab
-  and in both reports: what it wants of a company.
+- **Every lens says what it asks.** One plain-English line under its name, in the Analyse
+  tab and in both reports: what it wants of a company.
 - **Every lens you tick is an equal vote.** There is no primary lens. A **check** lens
   (Forensic today; quality and earnings-power lenses later) does not vote at all — it
   MARKS: a doubt about someone else's pick. A check does not even use the verdict words:
@@ -304,12 +304,13 @@ could not be made — never a bad reading, and never a fail.
 
 Nothing in the section is re-graded. Every name, reason and number is the one the run
 recorded; grouping decided only where each is printed. The full per-name sentence is still
-what the CLI and Company Check show, because those look at one name at a time.
+what the CLI and the Analyse tab's Company mode show, because those look at one name at a
+time.
 
 ### What gets explained, and what it costs
 
 The deterministic run is free. Explaining a name in prose is one model call each, so the
-Run tab asks three questions before it spends:
+Analyse tab's list mode asks three questions before it spends:
 
 - **Narrate: all voting lenses agree / most / any.** Default *all* — the names every
   voting lens chose are the ones the run is most sure about, and they are what a reader
@@ -340,7 +341,7 @@ annotation, what fired it, and what it does *not* mean.
 
 ## Stocks and ETFs
 
-One switch in the sidebar, **Analyse: Stocks / ETFs**, decides what every picker offers.
+One switch in the sidebar, **Asset type: Stocks / ETFs**, decides what every picker offers.
 It opens on **Stocks** every time — this is a stock-analysis tool, and the three ETF
 lenses and five ETF lists were in the way of the majority job.
 
@@ -416,24 +417,41 @@ analyse them."* — so the exclusion is a next step rather than a dead end.
    excludes; a name without data gets no verdict at all. INSUFFICIENT_EVIDENCE is a
    first-class outcome.
 
-## Company Check
+## Company Report (the Analyse tab's Company mode)
 
-A single-name diagnostic that answers "why isn't this name on the list?" — and, by
-design, **issues no verdict** (a rank over a **cohort** of one — a cohort is the peer group
-a name is ranked within — would be fabricated). For one
-ticker under a chosen strategy it shows every screen criterion with its value and
-pass/fail/not-evaluated state (all criteria evaluated, not short-circuited at the first
-fail), the sector/market-cap/payout **gates**, each rank factor's value with its position
-against a named, dated reference cohort (replayed offline from a past run — never a fresh
-universe fetch), and the price-vs-fundamentals **divergence flag** when a name's price has
-run up hard while a quality floor fails. It lives in the **Company Check** tab of Council
-Station (and as `examples/company_check.py` on the CLI); a passing name is pointed back to
-a universe run, because a verdict is a cohort statement. The cohort context comes from a
-past run: a universe run (UI or CLI) **freezes its inputs** to `runs/<run_id>/`, and Company
-Check replays the latest frozen run of the chosen reference universe offline — no fresh
-fetch — so its factor positions are reproducible. Both a universe run and a Company Check
-can be saved from the UI as **timestamped** files (`universe_<strategy>_<mode>_<timestamp>.md`,
-`company_check_<ticker>_<strategy>_<timestamp>.txt`).
+One ticker against its **own** peer group — not against a list you pick. The Analyse tab
+opens on this mode by default: type a name or ticker (the find box fills the ticker from
+the local market index, offline), tick one or more lenses, run. Each ticked lens runs
+exactly as it would over a list — the company's vote is its verdict in that one-name run,
+"BUY — 3rd of 14" or "does not apply — `<reason>`" when the lens's own screen excludes
+it — and every ticked lens is an equal vote (SHORTLIST-3); a **check** lens (Forensic)
+marks and never votes. The agreement rule the Run side uses decides the verdict of record;
+the page then shows, in order: the plain-English summary (if ticked), the agreement
+headline and each lens's vote (with its backtested track-record badge, attached ONLY to a
+lens that actually voted — a "does not apply" row never carries one), the valuation band,
+price and cash, debt and growth, what analysts say, the Council opinion (if ticked), the
+full peers table (the company's own row visibly highlighted), and Sources.
+
+**Under $5bn**, the find box (or a live, cached fetch for a hand-typed ticker the local
+index doesn't know) decides automatically: an info line states the market cap and runs the
+company against other small companies in its own backtested cohort instead of the normal
+size-banded peer group, clearly marked **outside the tested range**. No tick box — the
+trigger is mechanical (a known cap under $5bn), so nothing is a reader's guess.
+
+A verdict is a cohort statement, so a diagnostic over a **cohort of one issues no verdict**
+by design — that is a *different*, older tool, kept CLI-only: `examples/company_check.py`
+shows every screen criterion, the gates and each factor's position against a named,
+dated reference cohort replayed offline from a past run's frozen inputs
+(`runs/<run_id>/`), with a price-vs-fundamentals **divergence flag**, but issues nothing a
+reader could mistake for a rank. Both a list run and a company run save **timestamped**
+files (`universe_<strategy>_<mode>_<timestamp>.md`, under `runs/<stamp>_company_check_<ticker>/`
+for a company).
+
+Opening a company from a list result ("Open a company page" under the results) switches
+the Analyse tab's input and loads that ticker — it never starts the company run or spends
+on its own. The page then states, at the top, that it is ranked against its *own* industry
+peers, not against the list it was opened from, plus the free "In your list: …" line
+already known from that run.
 
 ## Which lens for which company
 
@@ -572,12 +590,12 @@ tools" toggle. The ETF universes are front-stage.)
   `universe_id` it ranked within (a new or edited list is fingerprinted `adhoc:<hash>`) **and
   the exact membership it graded** — `universe_members` + an order-insensitive
   `universe_member_hash`, so a past run stays interpretable after the list moves on. Lists are
-  **discovered dynamically** like strategies, and one is front-stage in both selectors unless
-  its `role:` marks it observational (a never-graded watch/control set), which keeps it behind
-  the "show validation" toggle. A strategy may declare `suggested_universes:` to surface its
-  natural pairing first in Company Check's reference-cohort selector — a hierarchy, never a
-  lock; an id no manifest resolves is skipped, so a dangling entry is inert. The Run tab's own
-  List selector does no such steering: it is a flat list of what you saved.
+  **discovered dynamically** like strategies, and one is front-stage in the Analyse tab's List
+  selector unless its `role:` marks it observational (a never-graded watch/control set), which
+  keeps it behind the "show validation" toggle. A strategy may declare `suggested_universes:`
+  to surface its natural pairing first — a hierarchy, never a lock; an id no manifest resolves
+  is skipped, so a dangling entry is inert. The Company mode has no such picker at all: a
+  company is measured against its own peer group, never a chosen list.
 - **Orchestration:** LangGraph; `ResearchState` threaded through every node; LLMs behind
   a `Runner` seam (tiered models via `init_chat_model`), so the graph tests end-to-end
   with fakes — no API keys in CI.
@@ -594,11 +612,13 @@ tools" toggle. The ETF universes are front-stage.)
 - **Persistence & audit:** append-only verdict history, full per-run reports, deep
   provenance audit resolving every cited figure against the tool-call ledger. Every
   run stores the inputs it saw (`runs/<run_id>/`); any run can be replayed offline.
-- **Council Station:** local Streamlit UI. The **Run** tab is the whole run flow — pick one
-  or more strategies, edit the ticker list, run (one strategy narrates; several grade the
-  same list under several lenses and report one combined grid, deterministically and for
-  free). Plus Company Check, the Scoreboard, and strategy editing (edit-as-new-version;
-  published files are never mutated).
+- **Council Station:** local Streamlit UI. The **Analyse** tab is the whole flow — an
+  explicit Company / Cohort-list switch (opens on Company), pick one or more strategies,
+  run. List mode: edit the ticker list, run (one strategy narrates; several grade the same
+  list under several lenses and report one combined grid, deterministically and for free).
+  Company mode: the company's own peer group, each ticked lens's vote the verdict of
+  record. Plus the Scoreboard and strategy editing (edit-as-new-version; published files
+  are never mutated).
 - **Market index and cohorts:** `market_index.py` (a local parquet table of ~25,000 listed companies;
   `clean_pool` gives one row per company; `peers()` is the peer ladder) and `cohorts/` (57 cohort
   rules → frozen, versioned member lists with quality checks and correction flags). Deterministic,
@@ -612,7 +632,7 @@ tools" toggle. The ETF universes are front-stage.)
 
 ```
 aristos-council/
-├── app.py                        # Council Station — local Streamlit UI (Run, Company Check, Scoreboard)
+├── app.py                        # Council Station — local Streamlit UI (Analyse, Scoreboard)
 ├── gap_ledger_app.py             # Gap Ledger — separate read-only viewer (GAP-LEDGER-1)
 ├── src/aristos_council/
 │   │  ── the decision core (deterministic) ─────────────────────────────────────────
@@ -714,7 +734,7 @@ verdicts, only of *comparison sets*.
   listing codes answer HTTP 404 on this data plan — so Japanese and Italian companies have no home
   line here, and any peer group or cohort they belong to is missing them. São Paulo is indexed but
   excluded from peers and cohorts (about half its rows are depositary receipts of foreign companies).
-- **Peer groups** (Company Check, `market_index peers TICKER`): a **ladder** that widens only as far as
+- **Peer groups** (the Analyse tab's Company mode, `market_index peers TICKER`): a **ladder** that widens only as far as
   it must — same GICS sub-industry within ¼×–4× market cap, then ⅒×–10×, then the wider industry — with
   a **floor of 12** peers and a **cap of 40**, or an honest abstention naming how far it looked.
 - **One row per company.** Peer groups and cohorts read the same cleaned pool: depositary receipts,
@@ -790,7 +810,7 @@ Below 40 days the scorecard says "not enough days" and presents no rate as a fin
 **Licence boundary.** Interactive Brokers data is licensed for personal, non-professional use, so it
 stays inside `gap_ledger/`: **nothing in Aristos imports it** (a test asserts this), and it never
 feeds a lens or a cohort. Today's boundary and the planned (not built) direction — a read-only results
-tab, one shared quant engine across Run/Company Check/Gap Ledger — are in
+tab, one shared quant engine across Analyse/Gap Ledger — are in
 [docs/GAP_LEDGER.md § Relationship to Aristos Council](docs/GAP_LEDGER.md#relationship-to-aristos-council).
 
 ```bash

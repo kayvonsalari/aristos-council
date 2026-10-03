@@ -1185,13 +1185,6 @@ def saved_list_labels(saved) -> list[str]:
     return [b if times[b] == 1 else f"{b} ({u.id})" for u, b in zip(saved, base)]
 
 
-def lens_checkbox_key(strategy_id: str) -> str:
-    """Session-state key for one extra-lens checkbox. Keyed by the strategy ID (the stable
-    record key), never by the label — so a display-name change cannot silently re-point a
-    ticked box at a different config."""
-    return f"uni_lens_{strategy_id}"
-
-
 def opt_lens_checkbox_key(input_kind: str):
     """TAB-MERGE-1 commit 1 — the ONE options block's key family (``opt_lens_*``),
     replacing the ``uni_lens_*``/``cc_lens_*`` duplicates. Qualified by ``input_kind``
@@ -2725,6 +2718,75 @@ def _render_wrong_kind_line(result) -> None:
         st.info(line)
 
 
+# --------------------------------------------------------------------------- #
+# TAB-MERGE-1 part 2 commit 4 — click-through from a list result to a company page.
+# "Open a company page" loads the Company input with the picked ticker; it NEVER
+# starts a run and NEVER spends on its own (design doc E1/E3) — the run button, with
+# its own cost label, stays the user's press. The free "In your list: ..." line(s),
+# already known from THIS run, ride along in session state and are shown once, at the
+# top of the company page, on click-through only (_render_company_report).
+# --------------------------------------------------------------------------- #
+def _multi_list_context_lines(multi_result, ticker: str) -> list[str]:
+    """One "In your list: <lens>: <result>" line per lens, reusing votes_from_multi's
+    OWN per-lens status→text mapping (ranked/excluded/too_few/...) — no new wording,
+    no new arithmetic; it is the SAME function Company Check itself uses to read a
+    multi-strategy result's outcome for one ticker."""
+    from aristos_council.company_report import votes_from_multi
+    votes = votes_from_multi(multi_result, ticker)
+    return [f"In your list: {v.label}: {v.result()}" for v in votes]
+
+
+def _single_list_context_lines(result, ticker: str, *, lens_label: str) -> list[str]:
+    """The single-lens equivalent of ``_multi_list_context_lines`` — RankPipelineResult
+    has no MultiStrategyResult shape to feed votes_from_multi, so this reads the SAME
+    already-computed position (rank_engine.cohort_positions) and verdict directly,
+    in the SAME wording LensVote.result() uses."""
+    from aristos_council.rank_engine import MIN_RANKABLE_COHORT, cohort_positions, too_few_to_rank_text
+    from aristos_council.report_language import verdict_word
+    from aristos_council.tools.valuation_band import ordinal
+
+    target = ticker.upper()
+    rt = next((r for r in result.ranked if r.ticker.upper() == target and not r.excluded), None)
+    if rt is not None:
+        cohort_size = sum(1 for r in result.ranked if not r.excluded)
+        if cohort_size < MIN_RANKABLE_COHORT:
+            where = too_few_to_rank_text(cohort_size)
+        else:
+            pos, _tied = cohort_positions(result.ranked).get(target, (None, False))
+            where = f"{ordinal(pos)} of {cohort_size}" if pos else f"ranked of {cohort_size}"
+        return [f"In your list: {lens_label}: {verdict_word(rt.verdict)} - {where}"]
+    excluded_reason = next((why for t, why in result.excluded if t.upper() == target), None)
+    if excluded_reason is not None:
+        return [f"In your list: {lens_label}: does not apply - {excluded_reason}"]
+    unrateable_reason = next((why for t, why in result.unrateable if t.upper() == target), None)
+    if unrateable_reason is not None:
+        return [f"In your list: {lens_label}: {unrateable_reason}"]
+    return []
+
+
+def _render_open_as_company(tickers: list[str], *, make_lines, key_prefix: str) -> None:
+    """The picker + button itself. ``make_lines(ticker)`` is called ONLY on click (not
+    for every option up front) and returns the free context line(s) to carry over."""
+    if not tickers:
+        return
+    st.markdown("**Open a company page**")
+    col_pick, col_open = st.columns([4, 1])
+    with col_pick:
+        picked = st.selectbox("pick a name", tickers, label_visibility="collapsed",
+                              key=f"{key_prefix}_open_company_pick")
+    with col_open:
+        go = st.button("Open", key=f"{key_prefix}_open_company_button")
+    if go:
+        # The "Input" radio (key run_input_kind) and the Ticker box (key cc_ticker)
+        # have ALREADY been instantiated earlier in THIS run (render_input runs first)
+        # — Streamlit forbids overwriting a widget's own key after that. Stash a
+        # PENDING switch instead and rerun; render_input applies it on the NEXT run,
+        # before either widget is drawn (the same pre-instantiation-write pattern the
+        # find-box's "Use this company" button already uses for cc_ticker alone).
+        st.session_state["_pending_open_as_company"] = (normalize_ticker(picked), make_lines(picked))
+        st.rerun()
+
+
 def _render_multi_strategy_result(multi_result) -> None:
     """The combined grid (FUND-RUN-1) — presentation only: every cell is the
     verdict-of-record a single run of that strategy produces."""
@@ -2875,6 +2937,11 @@ def _render_multi_strategy_result(multi_result) -> None:
                 n, mode, run_start, ext="html",
                 universe_display_name=display_name_for_file),
             mime="text/html", key="uni_multi_download_html")
+
+    _render_open_as_company(
+        sorted({r.ticker for r in multi_result.rows}),
+        make_lines=lambda t: _multi_list_context_lines(multi_result, t),
+        key_prefix="multi")
 
 
 def _render_universe_result(result) -> None:
@@ -3086,22 +3153,36 @@ def _render_universe_result(result) -> None:
                "self-contained file (no external requests) for sharing outside the "
                "repo — open it in a browser and Print → PDF for paper.")
 
+    _lens_label_for_click_through = m.get("rank_strategy_name") or m["rank_strategy_id"]
+    _click_through_tickers = sorted(
+        {r.ticker for r in result.ranked} | {t for t, _ in result.excluded}
+        | {t for t, _ in result.unrateable})
+    _render_open_as_company(
+        _click_through_tickers,
+        make_lines=lambda t: _single_list_context_lines(
+            result, t, lens_label=_lens_label_for_click_through),
+        key_prefix="single")
 
 
-def _preselect_default_lens(choices, *, seeded_key: str = "uni_lenses_seeded",
-                            key_for=None) -> None:
+
+def _preselect_default_lens(choices, *, seeded_key: str = "uni_lenses_seeded", key_for) -> None:
     """Tick the suggested-first lens ONCE per session (SHORTLIST-3).
 
     With the primary dropdown gone, nothing would be selected on a fresh start and the Run
     button would open disabled — which reads as breakage rather than as a choice. So the
     lens ``default_index`` already nominated is pre-ticked, exactly once: the flag is what
     makes unticking it stick, instead of the box re-ticking itself on every rerun.
+
+    ``key_for`` is REQUIRED (TAB-MERGE-1 part 2 commit 5) — render_run_options is the
+    ONE caller since Part 1, and it always passes opt_lens_checkbox_key(input_kind);
+    the old ``uni_lens_*`` fallback this used to default to (``lens_checkbox_key``) was
+    dead code once that became true, and is deleted, not just defaulted away.
     """
     if st.session_state.get(seeded_key) or not choices:
         return
     st.session_state[seeded_key] = True
     chosen = choices[default_index(choices)]
-    st.session_state.setdefault((key_for or lens_checkbox_key)(chosen.id), True)
+    st.session_state.setdefault(key_for(chosen.id), True)
 
 
 # --------------------------------------------------------------------------- #
@@ -3190,16 +3271,29 @@ def render_input(*, show_validation: bool) -> InputChoice:
     """ONE switch — "Company" or "Cohort / list" — never inferred from the ticker box's
     contents. Hidden (not greyed) in ETF mode: the market index covers listed common
     stocks only, so there is no company search and no company peer group for a fund."""
+    # TAB-MERGE-1 part 2 commit 4 — a click-through "Open a company page" (under a
+    # list result, rendered LATER in the same run) cannot set run_input_kind/cc_ticker
+    # directly: Streamlit forbids writing a widget's own key after that widget has
+    # already rendered this run, and the Input radio + Ticker box below both render
+    # on EVERY call. So it stashes a pending switch and reruns; applied HERE, first,
+    # before either widget is instantiated.
+    pending = st.session_state.pop("_pending_open_as_company", None)
+    if pending is not None:
+        ticker, lines = pending
+        st.session_state["run_input_kind"] = "Company"
+        st.session_state["cc_ticker"] = ticker
+        st.session_state["cc_from_list"] = (ticker, lines)
+
     etf_mode = asset_mode() == ETFS
     if etf_mode:
         kind = INPUT_LIST
         st.caption("ETF mode: a list of fund tickers only — there is no per-fund peer "
                   "group to check one against.")
     else:
-        # Cohort / list is the DEFAULT (index=1) — the pre-merge "Run" tab was the
-        # primary, first-selected flow, and this keeps that precedent rather than
-        # silently making Company the landing experience.
-        choice = st.radio("Input", ["Company", "Cohort / list"], index=1,
+        # TAB-MERGE-1 part 2 commit 1 — owner's ruling 2026-10-03: Company is the
+        # DEFAULT (index=0). Part 1 defaulted to "Cohort / list" to minimise test
+        # churn from the merge itself; this is a deliberate, separate UI decision.
+        choice = st.radio("Input", ["Company", "Cohort / list"], index=0,
                           key="run_input_kind", horizontal=True,
                           help="Company: one name against its own peer group. "
                                "Cohort / list: several names, ranked and compared "
@@ -3858,11 +3952,21 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
     frame = pd.DataFrame(peer_frame_records(group, columns, company_ticker))
     data = frame
     rank_headers = [c.header for c in columns if c.kind == "rank"]
-    if rank_headers:
-        # A rank column stays NUMERIC (it sorts by rank); the words - "does not apply", "no data" -
-        # are only how a cell that has no number reads.
-        data = frame.style.format({h: (lambda v: rank_display(v)) for h in rank_headers},
-                                  na_rep="does not apply")
+    # TAB-MERGE-1 part 2 commit 2: row 0 is reliably the company whenever columns+
+    # company_ticker are both given (peer_table.peer_rows's own contract) — a VISIBLE
+    # highlight on it, not just the "(this company)" text marker.
+    highlight_company = bool(columns and company_ticker and not frame.empty)
+    if rank_headers or highlight_company:
+        data = frame.style
+        if rank_headers:
+            # A rank column stays NUMERIC (it sorts by rank); the words - "does not
+            # apply", "no data" - are only how a cell that has no number reads.
+            data = data.format({h: (lambda v: rank_display(v)) for h in rank_headers},
+                               na_rep="does not apply")
+        if highlight_company:
+            data = data.apply(
+                lambda row: (["background-color: rgba(127,127,127,.14); font-weight: 600"]
+                            * len(row)) if row.name == 0 else [""] * len(row), axis=1)
     st.dataframe(
         data, hide_index=True, width="stretch",
         column_config={
@@ -3876,9 +3980,10 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
 
 
 def _render_company_report(report) -> None:
-    """The Company Report page, in the ONE order every surface uses: summary (if asked for) →
-    council opinion (if asked for) → agreement headline and table → each lens's vote → peers →
-    valuation band → absolute readings → analyst forecasts → Sources. The text and HTML exports
+    """The Company Report page, in the ONE order every surface uses (TAB-MERGE-1 part 2
+    commit 2): summary (if asked for) → agreement headline and table → each lens's vote
+    → valuation band → price and cash → absolute readings → analyst forecasts → council
+    opinion (if asked for) → the full peers table → Sources. The text and HTML exports
     follow the same order."""
     import pandas as pd
 
@@ -3890,6 +3995,21 @@ def _render_company_report(report) -> None:
     check = report.check
     st.markdown(f"### Company Report — {report.display}")
     st.caption(HOUSE_LINE)
+
+    # TAB-MERGE-1 part 2 commit 4 — click-through from a list result. Shown ONLY when
+    # THIS exact ticker was just opened that way (staleness-checked by ticker match,
+    # same pattern as cc_matched_cap — a hand-typed ticker never sees a stale line from
+    # an earlier click-through). The company page ranks against its OWN industry
+    # peers, never against the list it was opened from; both facts are stated together.
+    from_list = st.session_state.get("cc_from_list")
+    if from_list is not None and from_list[0] == report.ticker:
+        group = getattr(check, "peer_group", None)
+        if group is not None and group.available:
+            st.caption(f"Ranked against its {len(group.members)} industry peers, not "
+                      "against your list.")
+        for line in from_list[1]:
+            st.caption(line)
+
     # SMALLCAP-VIEW-1 — the header caveat, exactly the line every lens's own vote also
     # carries below. Never shown for a company at or above the $5bn gate.
     if report.outside_tested_range:
@@ -3914,16 +4034,6 @@ def _render_company_report(report) -> None:
             st.caption(READER_SECTION_NOTE)
         else:
             st.info(report.summary.note)
-
-    if report.council_opinion is not None:                # only when it was ticked
-        st.subheader("Council opinion")
-        st.caption("Narration only — never a vote; the agreement below is the verdict of "
-                   "record.")
-        op = report.council_opinion
-        if op.available:
-            st.markdown(_md(op.narrative) or "_(no narrative produced)_")
-        else:
-            st.info(op.note)
 
     st.subheader("Agreement")
     if report.agreement is not None:
@@ -3958,17 +4068,27 @@ def _render_company_report(report) -> None:
     else:
         st.info(report.no_vote_reason or NO_LENS_REASON)
 
-    from aristos_council.peer_table import rank_columns
-    _render_peers(check, rank_columns(report), report.ticker)
-
-    _render_price_and_cash(check)
-
     st.subheader("Valuation band")
     st.caption("This company against its own history; a mark, never a veto.")
     st.write(check.valuation_band)
 
+    _render_price_and_cash(check)
     _render_absolute_readings(check, with_analyst=False)
     _render_analyst_forecasts(check)
+
+    if report.council_opinion is not None:                # only when it was ticked
+        st.subheader("Council opinion")
+        st.caption("Narration only — never a vote; the agreement above is the verdict of "
+                   "record.")
+        op = report.council_opinion
+        if op.available:
+            st.markdown(_md(op.narrative) or "_(no narrative produced)_")
+        else:
+            st.info(op.note)
+
+    from aristos_council.peer_table import rank_columns
+    _render_peers(check, rank_columns(report), report.ticker)
+
     _render_sources(check)
     # BACKTEST-2 — the page footer, so a badge is never on screen without a way to read how it
     # was earned.
@@ -4118,7 +4238,10 @@ def main() -> None:
         # param or local storage, so the app opens on Stocks every time — which is what
         # "a stock-analysis tool by default" means. A persisted ETFs choice would make
         # the majority job the one you have to remember to switch back to.
-        st.radio("Analyse", list(ASSET_MODES), horizontal=True, index=0,
+        # TAB-MERGE-1 part 2 commit 1: renamed from "Analyse" — the merged tab (app.py's
+        # main Analyse tab) now carries that name, and this switch must not share it.
+        # Options and default (Stocks, index=0) unchanged.
+        st.radio("Asset type", list(ASSET_MODES), horizontal=True, index=0,
                  key="asset_mode")
         st.caption("ETF lists and lenses are hidden while Stocks is selected.")
         st.divider()

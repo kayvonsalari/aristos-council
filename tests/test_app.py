@@ -461,7 +461,7 @@ def _lens_checkbox_labels(at):
 
 def test_rank_picker_order_baseline_label_and_no_v2_heading():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     opts = list(_strategy_picker(at).options)
     assert "momentum" in opts[0].lower()                        # flagship first
@@ -504,7 +504,7 @@ def test_run_tab_renders_with_the_one_flow():
     # The app renders (all tabs) with the Run tab present: ONE strategy picker, ONE list
     # selector, ONE ticker box, ONE run button — no run triggered, nothing hits the network.
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     # The lens grid only exists inside render_universe_tab, so its presence proves the
     # tab rendered.
@@ -563,8 +563,9 @@ def test_legacy_hidden_by_default_and_toggle_defaults_off():
     assert "Run a council" not in _header_blob(at)
     assert "Edits council-strategy YAMLs" not in _info_blob(at)
     assert not any("Legacy" in str(t.label) for t in at.tabs)
-    # the v2 product IS the landing (the Run tab's lens grid renders)
-    assert _strategy_picker(at).options
+    # the v2 product IS the landing (the Analyse tab's lens grid renders, in either
+    # input mode — this test is about legacy visibility, not about which mode)
+    assert _LensGrid(at, "opt_lens_company_").options
 
 
 def test_legacy_surfaces_appear_when_toggle_on():
@@ -580,13 +581,22 @@ def _dropdown(at, label):
 
 
 def _company_mode(at):
-    """TAB-MERGE-1 commit 3: Company and Cohort / list are now ONE tab's internal
-    switch, defaulting to "Cohort / list" (most existing tests are list-focused) — a
-    test that is specifically ABOUT the company flow selects "Company" explicitly,
-    exactly as a real user would."""
+    """TAB-MERGE-1 commit 3 / part 2 commit 1: Company and Cohort / list are ONE tab's
+    internal switch, defaulting to Company (owner's ruling 2026-10-03) — a no-op for a
+    test that only needs the default, kept explicit here so the test does not silently
+    depend on which mode happens to be the default."""
     radio = next(r for r in at.radio if str(r.label) == "Input")
     if radio.value != "Company":
         radio.set_value("Company").run()
+    return at
+
+
+def _list_mode(at):
+    """The reverse of ``_company_mode`` — a test specifically about the list flow
+    selects "Cohort / list" explicitly rather than depending on the default."""
+    radio = next(r for r in at.radio if str(r.label) == "Input")
+    if radio.value != "Cohort / list":
+        radio.set_value("Cohort / list").run()
     return at
 
 
@@ -611,7 +621,7 @@ def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
                         lambda _dir: _real_list_universes(tmp_path))
 
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
 
     # ASSET-MODE-1: the app opens on STOCKS, so the shipped lists — all of which are ETF
@@ -663,14 +673,15 @@ def test_both_strategy_pickers_list_the_live_strategies():
     # 4C ITEM 2 + FUND-UI-2: the Run tab's picker AND Company Check's both come from the
     # ONE picker module, so they offer the SAME set with the same friendly display names.
     # TAB-MERGE-1 commit 3: Company and list are now ONE tab's internal switch, so only
-    # one of the two renders per script run — read list mode (the default), then switch
-    # to Company and read again, rather than reading both off a single run.
+    # one of the two renders per script run — read company mode (the default, part 2
+    # commit 1), then switch to list and read again, rather than reading both off a
+    # single run.
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    rank = _strategy_picker(at).options
-    _company_mode(at)
     cc = _LensGrid(at, "opt_lens_company_").options       # Company Check: the SAME component, its own keys
+    _list_mode(at)
+    rank = _strategy_picker(at).options
     assert list(rank) == list(cc)                                    # one picker, one set
     for opts in (rank, cc):
         assert "Growth" in opts                                      # plain names now
@@ -817,7 +828,7 @@ def test_the_run_tab_list_selector_offers_no_suggestion_ordering():
     # FUND-UI-2: no per-section "relevant" filtering or steering in the ONE run flow — the
     # List selector is a flat list of what you saved, and every strategy is offered for it.
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     uni = _dropdown(at, "List").options
     assert not any(str(o).startswith("⭐") for o in uni)
@@ -827,9 +838,9 @@ def test_validation_assets_revealed_when_toggle_on():
     # The universe half of this is gone with the demo cohorts (the trap bench is a fixture
     # now, not a shipped list); the STRATEGY half is what the toggle still reveals.
     from streamlit.testing.v1 import AppTest
-    default = AppTest.from_file(str(_APP), default_timeout=60).run()
+    default = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not default.exception
-    at = _legacy_app(60)
+    at = _list_mode(_legacy_app(60))
     assert not at.exception
     rank = _strategy_picker(at).options
     assert any("Classic Value" in o for o in rank)                  # baseline revealed
@@ -1104,7 +1115,7 @@ def test_the_separate_universe_edit_section_is_gone():
 def test_the_one_ticker_box_saves_in_place_or_as_a_new_list():
     # "Type a name, press save" — and editing your own list updates it rather than forking.
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     assert any("Save this list" in str(e.label) for e in at.expander)
     assert any(b.label == "Save changes" for b in at.button)
@@ -1116,7 +1127,7 @@ def test_selecting_a_saved_list_loads_its_tickers_into_the_one_box():
     # Load-on-select (no "Load into editor" button any more): picking a list seeds the box,
     # where it is edited before running.
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     list_dd = _dropdown(at, "List")
     assert list_dd.options[0] == "New list"
@@ -1167,7 +1178,7 @@ def test_saved_local_universe_appears_in_both_selectors():
         "created: '2026-07-15'\nrationale: test\ntickers:\n  - AAPL\n  - MSFT\n",
         encoding="utf-8")
     try:
-        at = AppTest.from_file(str(_APP), default_timeout=60).run()
+        at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
         assert not at.exception
         uni = _dropdown(at, "List").options
         assert any("Apptest Local (local)" in o for o in uni)
@@ -1246,6 +1257,9 @@ def test_saved_to_banner_shows_the_persisted_paths():
     md_p = app.ROOT / "reports" / "universe_runs" / "x.md"
     html_p = app.ROOT / "reports" / "universe_runs" / "x.html"
     at = AppTest.from_file(str(_APP), default_timeout=60)
+    # TAB-MERGE-1 part 2 commit 1: the list result only renders in list mode (now NOT
+    # the default) — pre-seed the switch alongside the other session state.
+    at.session_state["run_input_kind"] = "Cohort / list"
     at.session_state["uni_result"] = _fixture_universe_result()
     at.session_state["uni_run_start"] = datetime(2026, 8, 5, 10, 0, tzinfo=timezone.utc)
     at.session_state["uni_persisted_paths"] = (md_p, html_p)
@@ -1308,7 +1322,9 @@ def _etfs_mode(at):
 
     The app opens on Stocks, so a test that needs an ETF list or lens asks for it
     explicitly — which is the change, not a workaround for it."""
-    radio = next(r for r in at.radio if str(r.label) == "Analyse")
+    # TAB-MERGE-1 part 2 commit 1: the switch is now labelled "Asset type" (it used to
+    # share "Analyse" with the merged tab itself).
+    radio = next(r for r in at.radio if str(r.label) == "Asset type")
     radio.set_value("ETFs").run()
     return at
 
@@ -1326,7 +1342,7 @@ def test_named_etf_cohort_states_its_derived_asset_class():
 def test_adhoc_cohort_filters_nothing_and_says_so():
     # "New list" is the default and declares nothing -> UNKNOWN, so nothing is hidden.
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     blob = _caption_blob(at)
     assert "Ad-hoc cohort" in blob and "nothing is filtered out" in blob
@@ -1361,7 +1377,7 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     # FUND-UI-2 item 5: the second lens is now a CHECKBOX, not a second multiselect pick.
     # Same run underneath — deterministic, one combined grid, no key asked for.
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
     _lens_checkbox(at, raw).set_value(True).run()
@@ -1391,7 +1407,7 @@ def test_a_zero_lens_run_is_REACHABLE_and_refused_with_a_reason():
     # has nothing to say, so it is REFUSED — visibly, with a sentence, and never quietly
     # defaulted to some lens the user did not tick.
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(_APP), default_timeout=60).run()
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     picker = _strategy_picker(at)
     assert picker.options                            # lenses are offered

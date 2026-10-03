@@ -12,7 +12,8 @@ from pathlib import Path
 from aristos_council.cohorts.report import cap_cell
 from aristos_council.cohorts.source import PATH_CONSTITUENTS, PATH_INDEX, Candidate
 from aristos_council.company_check import format_company_check, run_company_check
-from aristos_council.export.report_html import company_check_html
+from aristos_council.company_report import CompanyReport
+from aristos_council.export.report_html import company_report_html
 from aristos_council.market_index import (SOURCE_EODHD_LISTING, USD_COMPUTED,
                                           USD_COMPUTED_MAJOR_UNIT, IndexRow, PeerGroup)
 from aristos_council.peer_table import (LOCAL_COLUMN, USD_COLUMN, local_cap_currency,
@@ -117,6 +118,14 @@ def _check():
                              runs_dir=Path("runs"), today=__import__("datetime").date(2026, 6, 30))
 
 
+def _as_report(result) -> CompanyReport:
+    """TAB-MERGE-1 part 2 commit 5 — company_check_html (the single-lens HTML export
+    this module used to measure) is deleted (dead: unused by the app since
+    company_report_html replaced it). These exports read the SAME peers/readings
+    formatting, so the coverage moves here rather than being silently lost."""
+    return CompanyReport(ticker=result.ticker, check=result)
+
+
 def test_the_text_export_prints_the_peers_and_the_readings():
     result = _check()
     result.peer_group = _group()
@@ -130,7 +139,7 @@ def test_the_text_export_prints_the_peers_and_the_readings():
 def test_the_html_export_prints_the_peers_and_the_readings():
     result = _check()
     result.peer_group = _group()
-    html = company_check_html(result)
+    html = company_report_html(_as_report(result))
     assert "<h2>Peers</h2>" in html and "£76.5bn" in html and "$1.03tn" in html
     assert "<h2>Absolute readings</h2>" in html and "Debt and cash" in html
     assert "Matched on" not in html and "76,547,235,840" not in html
@@ -140,7 +149,7 @@ def test_a_missing_index_is_a_stated_reason_in_both_exports_not_a_missing_sectio
     result = _check()
     result.peer_error = "FileNotFoundError: no index"
     assert "the market index is not available" in format_company_check(result)
-    assert "The market index is not available" in company_check_html(result)
+    assert "The market index is not available" in company_report_html(_as_report(result))
 
 
 # =========================================================================== #
@@ -234,7 +243,7 @@ def test_a_provider_is_named_once_in_the_footer_and_nowhere_above_it():
     for topic in ("Analyst ratings and forecasts: EODHD, as of", "Growth record: EODHD, 36 annual",
                   "Fundamentals and accounts:", "Prices:", "Market index:"):
         assert topic in footer, topic
-    html = company_check_html(result)
+    html = company_report_html(_as_report(result))
     body, _, html_footer = html.partition("<h2>Sources</h2>")
     assert html_footer and "Analyst ratings and forecasts:" in html_footer
     assert "36 annual reports" not in body
@@ -258,7 +267,13 @@ def test_the_marker_appears_in_both_exports_when_the_sources_differ():
     result.providers = {**result.providers, "fundamentals": "yfinance"}
     assert ("What analysts say (a mark: it does not vote and changes no verdict) "
             "(see Sources)") in format_company_check(result)
-    assert "What analysts say (see Sources)" in company_check_html(result)
+    html = company_report_html(_as_report(result))
+    # company_report_html carries the heading and the marker in separate tags (the
+    # <h2> above, "(see Sources)" inside the mark's own <p>) — the SAME underlying
+    # mixed_source_marker call the text export's single-line version reads.
+    section, _, _ = html.partition("<h2>Sources</h2>")
+    analysts = section.split("<h2>What analysts say</h2>", 1)[1]
+    assert "(see Sources)" in analysts.split("</p>", 1)[0]
 
 
 def test_a_static_fund_receipt_keeps_a_marker_not_the_provider_beside_the_figure():
