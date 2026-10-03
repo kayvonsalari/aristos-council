@@ -9,7 +9,7 @@ correct ordinal statements must pass untouched.
 
 from __future__ import annotations
 
-from aristos_council.narration_check import check_narration
+from aristos_council.narration_check import check_narration, check_specialist_repetition
 
 # conservative run: DUK best (combined 9, position 1); SO second (combined 12, position 2),
 # low_volatility rank 2. growth run: MRK roic rank 21 of 23.
@@ -497,3 +497,63 @@ def test_out_of_bounds_number_beside_the_metric_word_is_not_a_score_claim():
     assert check_narration(
         "Its total score of 40 on the provider's own 100-point scale is a different metric.",
         _ETF_SXR8_SCORED) == []
+
+
+# --------------------------------------------------------------------------- #
+# COUNCIL-FIX-1(e) (Batch 15) — convergent phrasing across independently-written
+# specialist theses. Live, EL.PA 2026-10-03: "falling over both windows — sustained
+# weakness" appeared verbatim in the fundamental, technical AND risk theses.
+# --------------------------------------------------------------------------- #
+def test_a_six_word_run_shared_by_two_theses_is_flagged():
+    theses = {
+        "fundamental": "The stock is falling over both windows sustained weakness here.",
+        "technical": "Price action is falling over both windows sustained weakness too.",
+    }
+    flags = check_specialist_repetition(theses)
+    assert len(flags) == 1
+    assert "falling over both windows sustained weakness" in flags[0]
+    assert "fundamental" in flags[0] and "technical" in flags[0]
+
+
+def test_the_el_pa_phrase_flags_all_three_specialist_pairs():
+    phrase = "falling over both windows sustained weakness confirms the trend"
+    theses = {"fundamental": phrase, "technical": phrase, "risk": phrase}
+    flags = check_specialist_repetition(theses)
+    # 3 specialists all share the SAME phrase — one flag naming all three, not one per pair.
+    assert len(flags) == 1
+    assert "fundamental" in flags[0] and "technical" in flags[0] and "risk" in flags[0]
+
+
+def test_unrelated_theses_are_never_flagged():
+    theses = {
+        "fundamental": "Revenue compounded strongly and the payout looks well covered.",
+        "technical": "The chart sits above both moving averages in a clean uptrend.",
+        "risk": "Leverage is modest and the interest bill is comfortably covered.",
+    }
+    assert check_specialist_repetition(theses) == []
+
+
+def test_short_shared_phrases_never_false_positive():
+    """Five words or fewer ('a valuation stretch', 'the company') is ordinary shared
+    vocabulary, not convergence — the 6-word floor exists so this never fires."""
+    theses = {
+        "fundamental": "This is a valuation stretch given the growth rate.",
+        "risk": "A valuation stretch is the primary risk we see here.",
+    }
+    assert check_specialist_repetition(theses) == []
+
+
+def test_an_empty_or_single_thesis_set_is_never_flagged():
+    assert check_specialist_repetition({}) == []
+    assert check_specialist_repetition({"fundamental": "Some reasonably long thesis text."}) == []
+    assert check_specialist_repetition({"fundamental": "", "technical": ""}) == []
+
+
+def test_the_annotation_names_both_specialists_and_never_rewrites():
+    theses = {
+        "fundamental": "Earnings per share grew nicely and the balance sheet is solid.",
+        "sentiment": "News flow is thin but earnings per share grew nicely and the balance.",
+    }
+    flags = check_specialist_repetition(theses)
+    assert flags and flags[0].startswith("[⚠ narration check:")
+    assert "fundamental" in flags[0] and "sentiment" in flags[0]

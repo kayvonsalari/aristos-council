@@ -18,6 +18,7 @@ many years it actually used rather than how many it wanted.
 from __future__ import annotations
 
 import logging
+import statistics
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
@@ -59,13 +60,20 @@ class Reading:
     # renderer can tell that the 5-year and 10-year windows collapsed onto the same
     # history and print ONE line instead of two identical ones.
     span: Optional[int] = None
+    # GROWTH-SANITY-1 (Batch 15 item 3a) — a visible caveat on an otherwise-plain figure
+    # (e.g. "CAUTION: starting year unusually low"). A SEPARATE field, not baked into
+    # ``label``'s text, so a renderer that reconstructs ``label`` for its own reasons
+    # (GrowthLeg.lines()'s window-collapse branch below) cannot silently lose it.
+    caution: str = ""
 
     @property
     def available(self) -> bool:
         return self.value is not None
 
     def text(self) -> str:
-        return self.label if self.available else f"not stated — {self.note}"
+        if not self.available:
+            return f"not stated — {self.note}"
+        return f"{self.label}{self.caution}" if self.caution else self.label
 
 
 def dedupe_lines(lines) -> list[str]:
@@ -292,7 +300,10 @@ class GrowthLeg:
             # "5- nor the 10-" + "year" -> "5- nor the 10-year". The rstrip that was
             # here ate the second hyphen and printed "10year".
             asked = " nor the ".join(f"{w}-" for w in windows)
-            head = reading.label.split(" (only ")[0]
+            # GROWTH-SANITY-1: reading.label.split(" (only ")[0] drops everything AFTER
+            # "(only ...)" too, which would silently eat reading.caution if it were baked
+            # into label — it isn't (caution is its own field), so it is re-appended here.
+            head = reading.label.split(" (only ")[0] + reading.caution
             if span in windows:
                 out.append(head)                     # a window was genuinely filled
             else:
@@ -338,6 +349,29 @@ class GrowthRecord:
         return out
 
 
+# GROWTH-SANITY-1 (Batch 15 item 3a) — live, EL.PA 2026-10-03: EPS compounded +90.9%/yr
+# over 5 years against +3.5%/yr over 10 — almost certainly a low starting year (a
+# Covid-era or post-merger trough), not a durable growth rate, and the council read it
+# plain. Like VALBAND-1's own sanity bound on an implausible band reading, this never
+# WITHHOLDS the figure (the rate is what the math says) — it makes the READING carry a
+# visible caution instead of reading as a plain, durable number. Two independent
+# triggers, either sufficient, because both point at the same risk (a trough-year base)
+# from different angles: the annualised rate itself is implausibly fast, OR the start
+# point is an outlier against the series' own typical level.
+_EXTREME_CAGR = 0.50          # 50%/yr — durable organic growth this fast is rare
+_LOW_BASE_RATIO = 0.30        # the start point is < 30% of the series' own median
+
+_BASE_YEAR_CAUTION = (" (CAUTION: starting year unusually low — this compound rate may "
+                      "reflect a trough base rather than a durable trend)")
+
+
+def _needs_base_year_caution(present: list[float], start: float, rate: float) -> bool:
+    if abs(rate) > _EXTREME_CAGR:
+        return True
+    typical = statistics.median(present)
+    return typical > 0 and start < _LOW_BASE_RATIO * typical
+
+
 def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading:
     """Compound annual rate over at most ``window`` years, stating the span it used.
 
@@ -359,7 +393,8 @@ def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading
                         f"is not defined")
     rate = (end / start) ** (1.0 / span) - 1.0
     used = "" if span == window else f" (only {span} of {window} years available)"
-    return Reading(value=rate, unit="/yr", span=span,
+    caution = _BASE_YEAR_CAUTION if _needs_base_year_caution(present, start, rate) else ""
+    return Reading(value=rate, unit="/yr", span=span, caution=caution,
                    label=f"{label} compounded {rate:+.1%} a year over {span} years{used}")
 
 
@@ -790,3 +825,174 @@ def analyst_trend(data, currency: Optional[str] = None, *, company: str = "",
     return AnalystTrend(
         mark=mark, direction=Reading(value=change, unit="fraction", label=HEADLINES[mark]),
         rows=table, **base)
+
+
+# --------------------------------------------------------------------------- #
+# COMPANY-FACTS-TABLE-1 (Batch 15 item 1) — price and cash facts the council's own
+# evidence pack already fetches (EL.PA, 2026-10-03: last close, 50/200-day averages,
+# distance from the 52-week high, 6/12-month return, volatility, the FCF series, trailing
+# EPS/PE), that Company Check's OWN page never showed — a reader had to tick the council
+# (six model calls, minutes) to see numbers the ranker's own deterministic tools already
+# held. This function is PURE, like every other reading in this file: the price leg is
+# read off an ALREADY-fetched TechnicalSnapshot (``factors.gather_factor_inputs`` computes
+# one from the SAME 400-day bars the ranker fetches for momentum/volatility — nothing new
+# is fetched for it), and news/analyst data are passed in already-fetched, exactly like
+# ``analyst_trend`` above takes an already-fetched ``TrendData``. FORWARD P/E is new
+# arithmetic over two numbers already on the page (today's close, the analyst consensus
+# EPS already shown in "What analysts say") — not a new fetch.
+# --------------------------------------------------------------------------- #
+def _pct(value: Optional[float]) -> str:
+    return f"{value:+.1%}" if value is not None else ""
+
+
+@dataclass(frozen=True)
+class PriceAndCash:
+    last_close: Reading = field(default_factory=Reading)
+    sma_50: Reading = field(default_factory=Reading)
+    sma_200: Reading = field(default_factory=Reading)
+    pct_off_high: Reading = field(default_factory=Reading)
+    return_6m: Reading = field(default_factory=Reading)
+    return_12m: Reading = field(default_factory=Reading)
+    volatility: Reading = field(default_factory=Reading)
+    fcf_series: Reading = field(default_factory=Reading)
+    trailing_eps: Reading = field(default_factory=Reading)
+    trailing_pe: Reading = field(default_factory=Reading)
+    forward_pe_this_year: Reading = field(default_factory=Reading)
+    forward_pe_next_year: Reading = field(default_factory=Reading)
+    news: tuple = ()           # tuple[NewsItem, ...], newest first
+    news_note: str = ""        # why ``news`` is empty, when it is ("" if genuinely quiet)
+    news_source: str = ""      # which source answered ("EODHD news" / "yfinance news")
+
+    def lines(self) -> list[str]:
+        readings = [self.last_close, self.sma_50, self.sma_200, self.pct_off_high,
+                   self.return_6m, self.return_12m, self.volatility, self.fcf_series,
+                   self.trailing_eps, self.trailing_pe, self.forward_pe_this_year,
+                   self.forward_pe_next_year]
+        out = dedupe_lines([r.text() for r in readings if r.available or r.note])
+        if self.news:
+            out.append(f"Recent news ({self.news_source}):")
+            out.extend(f"  - {item.published.isoformat()}: {item.headline}"
+                      for item in self.news)
+        elif self.news_note:
+            out.append(f"Recent news: not shown — {self.news_note}")
+        return out
+
+
+def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5) -> PriceAndCash:
+    """``technical`` is a ``tools.technical.TechnicalSnapshot`` (already computed from the
+    400-day bars the ranker fetched — ``None`` when there were no price bars at all).
+    ``f`` is ``Fundamentals``. ``trend`` is an already-built ``AnalystTrend`` (or None —
+    forward P/E then abstains, never guesses an estimate). ``news`` is an already-fetched
+    ``data.news_fallback.NewsFetchResult`` (or None — the news line abstains)."""
+    currency = str(getattr(f, "currency", "") or "").strip() if f is not None else ""
+
+    def money(v):
+        return _money(v, currency) if v is not None else None
+
+    if technical is None:
+        last_close = _abstain("no price history")
+        sma_50 = _abstain("no price history")
+        sma_200 = _abstain("no price history")
+        pct_off_high = _abstain("no price history")
+        return_6m = _abstain("no price history")
+        return_12m = _abstain("no price history")
+        volatility = _abstain("no price history")
+    else:
+        last_close = (Reading(value=technical.last_close, unit=currency,
+                              label=f"last close {money(technical.last_close)}")
+                     if technical.last_close is not None
+                     else _abstain("no price history"))
+        sma_50 = (Reading(value=technical.sma_50, unit=currency,
+                          label=f"50-day average price {money(technical.sma_50)}")
+                 if technical.sma_50 is not None
+                 else _abstain("sma_50 unavailable: fewer than 50 closes"))
+        sma_200 = (Reading(value=technical.sma_200, unit=currency,
+                           label=f"200-day average price {money(technical.sma_200)}")
+                  if technical.sma_200 is not None
+                  else _abstain("sma_200 unavailable: fewer than 200 closes"))
+        pct_off_high = (Reading(value=technical.pct_off_52w_high, unit="fraction",
+                                label=f"{abs(technical.pct_off_52w_high):.1%} "
+                                      f"{'below' if technical.pct_off_52w_high < 0 else 'above'} "
+                                      "its 52-week high")
+                       if technical.pct_off_52w_high is not None
+                       else _abstain("52-week high unavailable: insufficient price history"))
+        return_6m = (Reading(value=technical.return_6m, unit="fraction",
+                             label=f"6-month return {_pct(technical.return_6m)}")
+                    if technical.return_6m is not None
+                    else _abstain("return_6m unavailable: insufficient price history"))
+        return_12m = (Reading(value=technical.return_12m, unit="fraction",
+                              label=f"12-month return {_pct(technical.return_12m)}")
+                     if technical.return_12m is not None
+                     else _abstain("return_12m unavailable: insufficient price history"))
+        volatility = (Reading(value=technical.annualized_volatility, unit="fraction",
+                              label=f"annualised volatility {technical.annualized_volatility:.1%}")
+                     if technical.annualized_volatility is not None
+                     else _abstain("volatility unavailable: insufficient price history"))
+
+    # Free cash flow by year, oldest first — the SAME packer the council's own evidence
+    # block uses (series_pack.pack_series), so this can never read a different order or a
+    # different set of years than the figures a narration already cited.
+    from .series_pack import ORDER_OLDEST_FIRST, packed_ok, pack_series
+
+    if f is None:
+        fcf_series = _abstain("no fundamentals")
+    else:
+        packed = pack_series(f, "free_cash_flow_annual", label="Free cash flow",
+                             order=ORDER_OLDEST_FIRST)
+        if packed_ok(packed):
+            pairs = " ".join(f"{y} {money(v)}" for y, v in zip(packed["years"], packed["values"]))
+            fcf_series = Reading(value=packed["values"][-1], unit=currency,
+                                 label=f"free cash flow, oldest first: {pairs}")
+        else:
+            fcf_series = _abstain(packed.get("note") or "free cash flow series unavailable")
+
+    trailing_eps = (Reading(value=f.eps, unit=currency, label=f"trailing EPS {money(f.eps)}")
+                    if f is not None and f.eps is not None
+                    else _abstain("trailing EPS not reported"))
+    trailing_pe = (Reading(value=f.pe_ratio, unit="x", label=f"trailing P/E {f.pe_ratio:.1f}")
+                  if f is not None and f.pe_ratio is not None
+                  else _abstain("trailing P/E not reported"))
+
+    # Forward P/E = today's close / analyst consensus EPS — arithmetic over two numbers
+    # already shown elsewhere on the page (the price above; the consensus estimate in
+    # "What analysts say"). Abstains rather than guesses when either side is missing, or
+    # when the estimate is non-positive (a negative-earnings forward multiple is not a
+    # number a reader can use the way a P/E is used).
+    last_close_v = technical.last_close if technical is not None else None
+
+    def forward_pe(row, when: str) -> Reading:
+        if last_close_v is None:
+            return _abstain("no current price")
+        if row is None or row.now is None:
+            return _abstain(f"no analyst consensus EPS for {when}")
+        if row.now <= 0:
+            return _abstain(f"{when}'s consensus EPS is not positive; a forward P/E is undefined")
+        return Reading(value=last_close_v / row.now, unit="x",
+                      label=f"forward P/E ({when}) {last_close_v / row.now:.1f}x "
+                            f"({money(last_close_v)} / {money(row.now)} consensus EPS)")
+
+    rows = tuple(getattr(trend, "rows", ()) or ())
+    fwd_this = forward_pe(rows[0] if len(rows) > 0 else None, "this year")
+    fwd_next = forward_pe(rows[1] if len(rows) > 1 else None, "next year")
+
+    news_items: tuple = ()
+    news_note = ""
+    news_source = ""
+    if news is not None:
+        items = list(getattr(news, "items", ()) or ())
+        if items:
+            items.sort(key=lambda it: it.published, reverse=True)
+            news_items = tuple(items[:max_news])
+            news_source = getattr(news, "source", "") or ""
+        else:
+            tried = "; ".join(getattr(news, "tried", ()) or ())
+            news_note = tried or "no recent news found"
+    else:
+        news_note = "news was not requested for this run"
+
+    return PriceAndCash(
+        last_close=last_close, sma_50=sma_50, sma_200=sma_200, pct_off_high=pct_off_high,
+        return_6m=return_6m, return_12m=return_12m, volatility=volatility,
+        fcf_series=fcf_series, trailing_eps=trailing_eps, trailing_pe=trailing_pe,
+        forward_pe_this_year=fwd_this, forward_pe_next_year=fwd_next,
+        news=news_items, news_note=news_note, news_source=news_source)

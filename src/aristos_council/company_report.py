@@ -391,7 +391,48 @@ def _council_company_facts(report: CompanyReport) -> dict:
             "usd": format_money(subject.market_cap_usd, "USD", abbreviate=True),
             "as_of": getattr(group, "snapshot", "") or "",
         }
+
+    # COUNCIL-FIX-1(a) (Batch 15) — the valuation band, UNCONDITIONALLY (never only when
+    # it is expensive): EL.PA's band read EV/EBIT at the 1st percentile of its own 5-year
+    # range (the cheapest it has been), yet the risk specialist called it a "valuation
+    # stretch" and nobody mentioned the band at all, because the council's facts pack
+    # never carried it and pipeline.band_mark only ever speaks on the EXPENSIVE side (>=
+    # the 80th percentile shortlist cutoff). Carrying the reading here, always, is what
+    # HARD_RULES' new valuation-band rule (agents/prompts.py) asks every agent to address.
+    band_text = getattr(check, "valuation_band", None)
+    if band_text and band_text != "—":
+        facts["valuation_band"] = band_text
+
+    # COUNCIL-FIX-1(d) (Batch 15) — the SAME forward P/E item 1's own table shows (today's
+    # close / analyst consensus EPS), so the council stops opening an "Open question"
+    # asking for a number already on the page (EL.PA's own open questions did exactly
+    # that: "What is the forward PE ratio ... ?").
+    pac = getattr(check, "price_and_cash", None)
+    if pac is not None:
+        fwd = [r.label for r in (pac.forward_pe_this_year, pac.forward_pe_next_year)
+              if r.available]
+        if fwd:
+            facts["forward_pe"] = fwd
     return facts
+
+
+def _annotate_specialist_repetition(rep, state) -> None:
+    """COUNCIL-FIX-1(e) (Batch 15) — appends the fact-checker's convergent-phrasing
+    annotations in place, the same treatment every other narration check gets. Reads the
+    RAW specialist theses off ``state`` (before ``report_from_state`` loses them); an
+    abstained specialist (no real thesis) is excluded, so its short "no data" line can
+    never trigger a false match against another specialist's actual analysis."""
+    from .narration_check import check_specialist_repetition
+    from .state import Stance
+
+    d = getattr(rep, "decision", None)
+    if d is None or not getattr(d, "rationale", ""):
+        return
+    theses = {op.specialist.value: op.thesis for op in (state.specialist_opinions or [])
+             if op.stance != Stance.ABSTAIN and (op.thesis or "").strip()}
+    flags = check_specialist_repetition(theses)
+    if flags:
+        d.rationale = d.rationale.rstrip() + "\n\n" + "\n".join(flags)
 
 
 def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
@@ -478,6 +519,10 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
     # NARR-UNION-1's cross-lens check, unchanged: flags a sentence that RECONCILES two
     # lenses' verdicts instead of just reporting them (never rewrites the prose).
     _annotate_cross_lens(rep, cross_lens)
+    # COUNCIL-FIX-1(e) (Batch 15) — specialists write independently, so an identical
+    # 6+-word run in two theses is convergent canned phrasing, not analysis. Annotated on
+    # the DECISION's own rationale, the same place every other narration check lands.
+    _annotate_specialist_repetition(rep, state)
     outcome = CouncilOutcome(ticker=report.ticker, ranker_verdict=lead.verdict,
                              council_verdict=None, agreement=None,
                              dissent_notes=rep.dissent_notes, report=rep)
@@ -610,7 +655,7 @@ def run_company_report(
     with_summary: bool = False, reader_runner=None, with_council: bool = False,
     council_runners=None, store=None, save: bool = True,
     progress: Optional[Callable[[str], None]] = None,
-    include_small: bool = False,
+    include_small: bool = False, news_fetcher=None,
 ) -> CompanyReport:
     """Build the whole report. ``adapter`` is shared by the readings and every lens run, so a name
     fetched once is read from the day-cache thereafter. Nothing here calls a model unless
@@ -656,8 +701,8 @@ def run_company_report(
     check = run_company_check(
         ticker, ids[0] if ids else DEFAULT_ID, "", adapter=adapter,
         strategies_dir=strategies_dir, universes_dir=universes_dir, runs_dir=runs_dir,
-        today=today, with_analyst_trend=True,
-        ratings_fallback_symbol=_us_line(ticker, store))
+        today=today, with_analyst_trend=True, with_price_and_cash=True,
+        ratings_fallback_symbol=_us_line(ticker, store), news_fetcher=news_fetcher)
     attach_peers(check, store=store)
     report = CompanyReport(ticker=ticker, check=check, lens_ids=ids,
                            run_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
@@ -825,9 +870,19 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # The text export (the page and the HTML follow the SAME order)
 # --------------------------------------------------------------------------- #
 # summary -> council opinion -> agreement (headline + table) -> each lens's vote -> peers ->
-# valuation band -> absolute readings -> analyst forecasts -> sources
+# price and cash -> valuation band -> absolute readings -> analyst forecasts -> sources
 SECTION_ORDER = ("summary", "council opinion", "agreement", "lens votes", "peers",
-                 "valuation band", "absolute readings", "what analysts say", "sources")
+                 "price and cash", "valuation band", "absolute readings", "what analysts say",
+                 "sources")
+
+
+def price_and_cash_lines(result) -> list[str]:
+    """COMPANY-FACTS-TABLE-1 — the small table itself, or the one line saying it was never
+    requested (``with_price_and_cash=False`` — every caller outside Company Check)."""
+    pac = getattr(result, "price_and_cash", None)
+    if pac is None:
+        return ["  not requested"]
+    return [f"  {ln}" for ln in pac.lines()] or ["  none available"]
 
 
 def agreement_table_lines(report: CompanyReport) -> list[str]:
@@ -931,6 +986,10 @@ def format_company_report(report: CompanyReport) -> str:
 
     peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
     lines.extend(peer_block if peer_block else ["PEERS: none computed"])
+    lines.append("")
+
+    lines.append("PRICE AND CASH (no comparison group; they do not vote)")
+    lines.extend(price_and_cash_lines(c))
     lines.append("")
 
     lines.append("VALUATION BAND (this company against its own history; a mark, never a veto)")

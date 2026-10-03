@@ -889,3 +889,66 @@ def mark_annotation(missing) -> str:
     if not missing:
         return ""
     return f"[⚠ mark not addressed: {'; '.join(missing)}]"
+
+
+# --------------------------------------------------------------------------- #
+# COUNCIL-FIX-1(e) (Batch 15) — specialists write independently (each sees its own
+# evidence block only, never another specialist's output), so an identical PHRASE in two
+# theses is not literal copying — it is convergent, canned language, reached for because
+# both specialists are describing the same two numbers in the same generic words rather
+# than their OWN domain's reasoning. Live, EL.PA 2026-10-03: "falling over both windows —
+# sustained weakness" appeared verbatim in the fundamental, technical AND risk theses.
+# --------------------------------------------------------------------------- #
+_REPEAT_WORDS = 6         # consecutive words — long enough that shared short phrases
+                         # ("the company", "a valuation stretch") never false-positive
+
+
+def _words(text: str) -> list[str]:
+    return re.sub(r"[^\w\s]", " ", (text or "").lower()).split()
+
+
+def _longest_common_run(a: list[str], b: list[str]) -> list[str]:
+    """The longest contiguous word run common to both lists (``[]`` if none) — ONE span,
+    not every overlapping window inside it (an 8-word shared run is one finding, not
+    three overlapping 6-grams of it)."""
+    if not a or not b:
+        return []
+    best_len, best_end = 0, 0
+    prev = [0] * (len(b) + 1)
+    for i in range(1, len(a) + 1):
+        cur = [0] * (len(b) + 1)
+        for j in range(1, len(b) + 1):
+            if a[i - 1] == b[j - 1]:
+                cur[j] = prev[j - 1] + 1
+                if cur[j] > best_len:
+                    best_len, best_end = cur[j], i
+        prev = cur
+    return a[best_end - best_len:best_end] if best_len else []
+
+
+def check_specialist_repetition(theses: dict) -> list[str]:
+    """``theses``: ``{specialist_name: thesis_text}`` (an abstained specialist contributes
+    no real thesis and is skipped by the caller). For every pair, flags the LONGEST
+    contiguous word run they share, when it is at least ``_REPEAT_WORDS`` long — ONE flag
+    per pair, never one per overlapping window inside a longer shared run. Never rewrites,
+    and never claims which specialist is "right"; both wrote it, so both are named."""
+    names = [n for n, t in (theses or {}).items() if (t or "").strip()]
+    words = {n: _words(theses[n]) for n in names}
+    flags: list[str] = []
+    seen_phrases: dict[str, list[str]] = {}       # phrase -> every specialist that used it
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            run = _longest_common_run(words[a], words[b])
+            if len(run) < _REPEAT_WORDS:
+                continue
+            phrase = " ".join(run)
+            holders = seen_phrases.setdefault(phrase, [])
+            for who in (a, b):
+                if who not in holders:
+                    holders.append(who)
+    for phrase, holders in seen_phrases.items():
+        flags.append(
+            f'[⚠ narration check: "{phrase}" appears near-verbatim in {len(holders)} '
+            f'specialists\' theses ({", ".join(holders)}) — convergent phrasing on the '
+            f'same figures, not independent domain analysis]')
+    return flags

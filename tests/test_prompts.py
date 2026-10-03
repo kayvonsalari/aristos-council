@@ -77,6 +77,66 @@ def test_hard_rules_require_citing_the_originating_tool():
     assert "run_strategy_screen" in _HARD_RULES
 
 
+def test_hard_rules_calibration_anchors_confidence_to_decisiveness_not_just_completeness():
+    """COUNCIL-FIX-1(f) (Batch 15) — EL.PA: three specialists reading one evidence pack
+    all reported 0.72, which the old wording ("reflect the completeness of the evidence,
+    not the strength of your conviction") directly invited: completeness is near-identical
+    across specialists on the SAME ledger, conviction is not."""
+    low = _HARD_RULES.lower()
+    assert "calibration" in low
+    assert "decisively" in low
+    assert "0.4-0.6" in _HARD_RULES and "0.8" in _HARD_RULES
+
+
+def test_hard_rules_require_naming_the_valuation_band():
+    """COUNCIL-FIX-1(a) — EL.PA's band read the 1st (cheapest) percentile while the risk
+    specialist called the same name a 'valuation stretch' with no mention of the band."""
+    assert "VALUATION BAND" in _HARD_RULES
+    assert "percentile" in _HARD_RULES.lower()
+
+
+def test_hard_rules_require_attributing_rules_to_the_owning_lens():
+    """COUNCIL-FIX-1(b) — EL.PA's risk specialist attributed Growth's own qualifying
+    thresholds (ROIC >= 12%, PEG <= 2.00) to Magic Formula RAW."""
+    assert "RULE ATTRIBUTION" in _HARD_RULES
+    assert "ROIC >= 12%" in _HARD_RULES or "ROIC" in _HARD_RULES
+
+
+def test_sentiment_brief_reads_headlines_when_ratings_are_absent():
+    """COUNCIL-FIX-1(c) — EL.PA had 5 real headlines (including the Meta AI-glasses
+    announcement) and the specialist still returned not-assessed because analyst ratings
+    were null. Headlines alone must be enough to form a stance."""
+    from aristos_council.agents.prompts import SPECIALIST_BRIEFS
+    from aristos_council.state import SpecialistName
+
+    brief = SPECIALIST_BRIEFS[SpecialistName.SENTIMENT]
+    assert "headlines alone are sufficient" in brief.lower()
+    assert "both channels are" in brief.lower() or "both" in brief.lower()
+
+
+def test_technical_and_fundamental_briefs_each_stay_in_their_own_lane():
+    """COUNCIL-FIX-1(e) — EL.PA's technical specialist cited free cash flow and P/E,
+    neither of which is technical_snapshot evidence."""
+    from aristos_council.agents.prompts import SPECIALIST_BRIEFS
+    from aristos_council.state import SpecialistName
+
+    technical = SPECIALIST_BRIEFS[SpecialistName.TECHNICAL]
+    fundamental = SPECIALIST_BRIEFS[SpecialistName.FUNDAMENTAL]
+    assert "STAY IN YOUR LANE" in technical and "free cash flow" in technical.lower()
+    assert "STAY IN YOUR LANE" in fundamental and "moving averages" in fundamental.lower()
+
+
+def test_structured_narration_requires_saying_no_real_disagreement_plainly():
+    """COUNCIL-FIX-1(g) — the old instruction told the narrator to OMIT
+    disagreement_note on agreement, leaving a reader to infer silence means agreement.
+    It must now say so."""
+    from aristos_council.agents.prompts import STRUCTURED_NARRATION
+
+    assert "no real disagreement" in STRUCTURED_NARRATION.lower()
+    assert "never leave it out" in STRUCTURED_NARRATION.lower() \
+        or "always fill it" in STRUCTURED_NARRATION.lower()
+
+
 def test_every_agent_prompt_carries_the_new_rules():
     for prompt in _all_system_prompts():
         assert "ONE FIGURE = ONE FIELD_PATH" in prompt
