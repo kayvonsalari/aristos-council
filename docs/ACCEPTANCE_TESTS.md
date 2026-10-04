@@ -58,3 +58,4 @@ Architecture section and the PR descriptions for the full design.
 | ID | Steps | Expected result |
 |---|---|---|
 | **B17-T1** | Company mode, type a company under $5bn (e.g. BOSS.XETRA or NVCR.US) and read the line before the run, then run it and read the results banner. | Every "$" amount shows as typed ("worth $3.0bn, below the $5bn rule"; "cohort, $2bn-$5bn") in normal text — no maths-font italics, no missing dollar signs, no raw "**" markers. Check a list run's cost line ("est. ≤ $0.68") too. |
+| **B17-T2** | Company Check on NVCR.US (Novocure), then on F (Ford). | Both pages render. Any earnings or revenue growth line that would start or end on a loss reads "not stated — … was not positive …" (never a percentage, never a crash). If any one reading ever fails internally, that line reads "not available: …" and every other section still shows. |

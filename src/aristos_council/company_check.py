@@ -318,8 +318,9 @@ def run_company_check(
     # worse growth record, not a broken page.
     from .growth_history import fetch_growth_history
     _history = fetch_growth_history(ticker, today=today)
-    readings = {"debt_and_cash": _debt_and_cash(f),
-                "growth_record": _growth_record(f, _history)}
+    from .abs_readings import guard as _guard
+    readings = {"debt_and_cash": _guard("debt_and_cash", _debt_and_cash, f),
+                "growth_record": _guard("growth_record", _growth_record, f, _history)}
 
     providers = _providers_used(adapter, fi, today)
     di = DataIntegrity(
@@ -457,7 +458,8 @@ def run_company_check(
         trend_data = (fetch(ticker, today=today, ratings_fallback_symbol=ratings_fallback_symbol)
                       if ratings_fallback_symbol else fetch(ticker, today=today))
         price, price_ccy, own = _ratings_price(adapter, trend_data, ticker, fi, f, today)
-        readings["analyst_trend"] = _analyst_trend(
+        readings["analyst_trend"] = _guard(
+            "analyst_trend", _analyst_trend,
             trend_data,
             # the ACCOUNTS' currency (the estimates are per-share profits in it); None -> stated
             # as "currency not stated by the source", never guessed from the quote currency
@@ -480,7 +482,8 @@ def run_company_check(
                            ticker, start=today - timedelta(days=14), end=today,
                            finnhub_items=(), finnhub_reason="not attempted outside the council",
                            eodhd_fetcher=fetch_eodhd_news, yfinance_fetcher=fetch_yfinance_news))
-        readings["price_and_cash"] = _price_and_cash(
+        readings["price_and_cash"] = _guard(
+            "price_and_cash", _price_and_cash,
             getattr(fi, "technical", None), f, trend=readings.get("analyst_trend"),
             news=news_result)
 

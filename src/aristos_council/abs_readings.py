@@ -65,12 +65,18 @@ class Reading:
     # ``label``'s text, so a renderer that reconstructs ``label`` for its own reasons
     # (GrowthLeg.lines()'s window-collapse branch below) cannot silently lose it.
     caution: str = ""
+    # CAGR-CRASH-1 — set only when computing the reading RAISED. Distinct from ``note`` (an
+    # honest abstention: the figure is undefined) because a crash is a defect to be seen,
+    # not a finding about the company; it renders as "not available: <reason>".
+    failure: str = ""
 
     @property
     def available(self) -> bool:
         return self.value is not None
 
     def text(self) -> str:
+        if self.failure:
+            return f"not available: {self.failure}"
         if not self.available:
             return f"not stated — {self.note}"
         return f"{self.label}{self.caution}" if self.caution else self.label
@@ -100,6 +106,21 @@ def dedupe_lines(lines) -> list[str]:
 
 def _abstain(note: str) -> Reading:
     return Reading(value=None, note=note)
+
+
+def _failed(exc: BaseException) -> Reading:
+    """A reading whose computation raised: shown as "not available: <reason>", never a crash."""
+    reason = " ".join(f"{type(exc).__name__}: {exc}".split())
+    return Reading(value=None, failure=reason[:200])
+
+
+def _safe(fn, *args, **kwargs) -> Reading:
+    """Run one reading; any exception becomes a visible "not available" Reading so the rest
+    of the page still renders (CAGR-CRASH-1)."""
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:                       # noqa: BLE001 - the point is to contain it
+        return _failed(exc)
 
 
 def _num(x) -> Optional[float]:
@@ -391,7 +412,15 @@ def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading
         # not a growth rate. This is the PEG/CAGR discipline the criteria already use.
         return _abstain(f"{label} was not positive {span} years ago, so a compound rate "
                         f"is not defined")
+    if end is None or end <= 0 or end != end:
+        # CAGR-CRASH-1 (live: Novocure, Ford): a positive start and a loss in the latest
+        # year gave (negative / positive) ** (1/span) — a COMPLEX number in Python — and
+        # ``f"{rate:+.1%}"`` raised. A rate that ends at or below zero is not a growth rate.
+        return _abstain(f"{label} was not positive in the latest year, so a compound rate "
+                        f"is not defined")
     rate = (end / start) ** (1.0 / span) - 1.0
+    if isinstance(rate, complex) or rate != rate:
+        return _abstain(f"{label} compound rate is not defined for this series")
     used = "" if span == window else f" (only {span} of {window} years available)"
     caution = _BASE_YEAR_CAUTION if _needs_base_year_caution(present, start, rate) else ""
     return Reading(value=rate, unit="/yr", span=span, caution=caution,
@@ -462,13 +491,13 @@ def growth_record(f, history=None) -> GrowthRecord:
         eps_derived=eps_derived,
         revenue=GrowthLeg(
             name="revenue",
-            cagr={w: _cagr(revenue, w, "revenue") for w in GROWTH_WINDOWS},
-            grew_in=_grew_in(revenue, "revenue"),
+            cagr={w: _safe(_cagr, revenue, w, "revenue") for w in GROWTH_WINDOWS},
+            grew_in=_safe(_grew_in, revenue, "revenue"),
             years_available=len([v for v in revenue if v is not None])),
         eps=GrowthLeg(
             name="eps",
-            cagr={w: _cagr(eps, w, eps_label) for w in GROWTH_WINDOWS},
-            grew_in=_grew_in(eps, eps_label),
+            cagr={w: _safe(_cagr, eps, w, eps_label) for w in GROWTH_WINDOWS},
+            grew_in=_safe(_grew_in, eps, eps_label),
             years_available=len([v for v in eps if v is not None])))
 
 
@@ -868,7 +897,7 @@ class PriceAndCash:
                    self.return_6m, self.return_12m, self.volatility, self.fcf_series,
                    self.trailing_eps, self.trailing_pe, self.forward_pe_this_year,
                    self.forward_pe_next_year]
-        out = dedupe_lines([r.text() for r in readings if r.available or r.note])
+        out = dedupe_lines([r.text() for r in readings if r.available or r.note or r.failure])
         if self.news:
             out.append(f"Recent news ({self.news_source}):")
             out.extend(f"  - {item.published.isoformat()}: {item.headline}"
@@ -1009,3 +1038,31 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5) ->
         fcf_series=fcf_series, trailing_eps=trailing_eps, trailing_pe=trailing_pe,
         forward_pe_this_year=fwd_this, forward_pe_next_year=fwd_next,
         news=news_items, news_note=news_note, news_source=news_source)
+
+
+# --------------------------------------------------------------------------- #
+# CAGR-CRASH-1 — no single absolute reading may take the page down
+# --------------------------------------------------------------------------- #
+# Each section builder is called through ``guard``; if it raises, the section is replaced by a
+# placeholder of the SAME type whose text reads "not available: <reason>", so every consumer
+# (page, export, report) renders it with no special case and the other sections are untouched.
+def _unavailable(kind: str, exc: BaseException):
+    bad = _failed(exc)
+    if kind == "debt_and_cash":
+        return DebtAndCash(net_debt=bad)
+    if kind == "growth_record":
+        leg = GrowthLeg(cagr={w: bad for w in GROWTH_WINDOWS}, grew_in=bad)
+        return GrowthRecord(revenue=leg, eps=leg)
+    if kind == "analyst_trend":
+        return AnalystTrend(direction=Reading(value=None, note=f"not available: {bad.failure}"))
+    if kind == "price_and_cash":
+        return PriceAndCash(last_close=bad)
+    raise ValueError(kind)
+
+
+def guard(kind: str, fn, *args, **kwargs):
+    """Call a section builder; on any exception return its "not available" placeholder."""
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:                       # noqa: BLE001
+        return _unavailable(kind, exc)
