@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aristos Council — how it works</title>
+<style>
+  :root {
+    --fg: #1d2127; --fg-quiet: #5b6472; --bg: #ffffff; --panel: #f6f7f9;
+    --rule: #e1e4e9; --accent: #2457c9; --buy: #1e7a34; --hold: #a3720c; --sell: #a3332b;
+    --code-bg: #eef1f5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 30px; margin: 0 0 6px; }
+  h2 {
+    font-size: 21px; margin: 44px 0 10px; padding-top: 14px; border-top: 1px solid var(--rule);
+  }
+  h3 { font-size: 16.5px; margin: 22px 0 8px; }
+  p, li { color: var(--fg); }
+  .subtitle { color: var(--fg-quiet); font-size: 15px; margin: 0 0 28px; }
+  .proposal {
+    background: #fff7e0; border: 1px solid #e8d08a; border-radius: 8px;
+    padding: 12px 16px; font-size: 14.5px; margin-bottom: 28px;
+  }
+  .doctrine {
+    background: var(--panel); border-left: 4px solid var(--accent); border-radius: 6px;
+    padding: 14px 18px; margin: 18px 0;
+  }
+  .doctrine strong { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 16px; font-size: 14.5px; }
+  th, td { border: 1px solid var(--rule); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel); font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num { white-space: nowrap; }
+  code {
+    background: var(--code-bg); border-radius: 4px; padding: 1px 5px; font-size: 13.5px;
+  }
+  .badge {
+    display: inline-block; border-radius: 4px; padding: 1px 7px; font-size: 12.5px;
+    font-weight: 600; margin-right: 4px;
+  }
+  .b-proven { background: #e3f3e6; color: var(--buy); }
+  .b-luck { background: #fdf0e3; color: var(--hold); }
+  .b-notproven { background: #f1f2f4; color: var(--fg-quiet); }
+  .b-insufficient { background: #f1f2f4; color: var(--fg-quiet); border: 1px dashed #c3c8cf; }
+  .verdict-buy { color: var(--buy); font-weight: 700; }
+  .verdict-hold { color: var(--hold); font-weight: 700; }
+  .verdict-sell { color: var(--sell); font-weight: 700; }
+  .note { color: var(--fg-quiet); font-size: 14px; }
+  .toc { background: var(--panel); border-radius: 8px; padding: 14px 20px; margin-bottom: 28px; }
+  .toc ul { margin: 6px 0 0; padding-left: 18px; columns: 2; }
+  .toc a { color: var(--fg); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .card {
+    border: 1px solid var(--rule); border-radius: 8px; padding: 12px 16px; margin: 10px 0;
+  }
+  .card h4 { margin: 0 0 4px; font-size: 15px; }
+  .mark { border-left: 3px solid var(--hold); }
+  footer {
+    margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule);
+    color: var(--fg-quiet); font-size: 13px;
+  }
+  @media (max-width: 600px) { .toc ul { columns: 1; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Aristos Council</h1>
+<p class="subtitle">What the app does today, in plain English — for Greg and other testers.</p>
+
+<div class="proposal">
+  <strong>This is a proposal, not a final document.</strong> It replaces an out-of-date
+  2026-08-10 draft by reading the actual app on the <code>main</code> branch. The owner
+  reviews it before it is treated as settled.
+</div>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ul>
+    <li><a href="#doctrine">The one rule: math judges, LLM writes</a></li>
+    <li><a href="#lenses">The lenses — what each one asks</a></li>
+    <li><a href="#marks">Votes versus marks: Forensic and the valuation band</a></li>
+    <li><a href="#cohorts">Cohorts and peer groups</a></li>
+    <li><a href="#analyse">The Analyse tab: one company, or a list</a></li>
+    <li><a href="#backtest">Track-record badges</a></li>
+    <li><a href="#council">The council and the plain-English summary</a></li>
+    <li><a href="#gapledger">Gap Ledger — a separate app</a></li>
+    <li><a href="#data">Where the numbers come from, and their limits</a></li>
+  </ul>
+</div>
+
+<h2 id="doctrine">The one rule: math judges, LLM writes</h2>
+<p>
+  Every BUY, HOLD or SELL you see comes out of a fixed, written-down recipe — not out of
+  a conversation with an AI. A company is scored against its peers on a handful of
+  measurable things (how cheap it is, how profitable, how its price has been moving,
+  and so on), the scores are added up, and the ranking decides the verdict. That part
+  never changes its mind and never gets talked into a different answer.
+</p>
+<div class="doctrine">
+  <strong>The AI's only job is to explain the verdict the math already reached</strong> —
+  never to issue one, never to override one, and never to average several lenses' verdicts
+  into a single "net view." If you tick more than one lens for the same company, you get
+  more than one independent verdict, reported side by side.
+</div>
+<p>
+  This was tested, not assumed: an earlier version let the AI reach the verdict directly,
+  and a controlled check found it gave a <em>different</em> answer on a rerun of the exact
+  same inputs. That version still exists for comparison (it is called
+  "<code>second_opinion</code> mode" in the code and is tucked away behind a validation
+  toggle) but it is not what drives the product.
+</p>
+
+<h2 id="lenses">The lenses — what each one asks</h2>
+<p>
+  A "lens" is one scoring recipe, saved and versioned so it can never quietly change
+  underneath a past result. Ten are visible in the app today: seven score ordinary
+  companies ("stocks") and three score exchange-traded funds ("ETFs"). The app shows
+  stock lenses by default and switches to the ETF ones only when you flip "Asset type"
+  to ETFs in the sidebar.
+</p>
+<table>
+  <tr><th>Lens</th><th>Plain-English question it asks</th></tr>
+  <tr><td><strong>Defensive Income</strong></td>
+      <td>Is this a steady, low-drama dividend payer whose payout is actually covered by
+          cash, without too much debt?</td></tr>
+  <tr><td><strong>Cyclical Income</strong></td>
+      <td>For a boom-and-bust business (oil, mining, shipping) where dividends rise and
+          fall with the cycle: has it at least avoided a cut in the last five years?</td></tr>
+  <tr><td><strong>Value + Momentum</strong> <span class="note">(the flagship)</span></td>
+      <td>Is it cheap relative to its own profits <em>and</em> is its price trend not
+          currently falling off a cliff?</td></tr>
+  <tr><td><strong>Growth (GARP)</strong></td>
+      <td>Is it growing its revenue and returns fast enough to justify its price — "growth
+          at a reasonable price," not growth at any price?</td></tr>
+  <tr><td><strong>Magic Formula RAW</strong></td>
+      <td>The classic "cheap and profitable" formula with no extra filters at all — an
+          exploratory, no-screen comparison point for the others.</td></tr>
+  <tr><td><strong>Financials</strong></td>
+      <td>For banks and insurers (excluded from the lenses above, because their accounts
+          don't compare the same way): is it priced reasonably against its book value and
+          earning a healthy return on it?</td></tr>
+  <tr><td><strong>Forensic</strong> <span class="note">(a check, never a vote — see below)</span></td>
+      <td>Do this company's reported profits look genuinely backed by cash, or is there a
+          warning sign in the accounts?</td></tr>
+</table>
+<table>
+  <tr><th>ETF lens</th><th>Plain-English question it asks</th></tr>
+  <tr><td><strong>Dividend ETFs</strong></td>
+      <td>Good income yield, low fees, reasonably large and liquid?</td></tr>
+  <tr><td><strong>Growth ETFs</strong></td>
+      <td>Low fees and strong recent momentum, among larger funds?</td></tr>
+  <tr><td><strong>ETF Core / Index Tracker</strong></td>
+      <td>Low fees and reasonable size, deliberately ignoring yield (a core index fund's
+          yield depends on whether it pays out or reinvests, which says nothing about
+          quality)?</td></tr>
+</table>
+<p class="note">
+  Every ticked lens ranks a company only against the <em>other names it is able to rank</em> —
+  so "3rd of 40" under one lens and "3rd of 12" under another are both correct; the
+  cohort sizes are allowed to differ. The exact formula behind each lens is in
+  <code>docs/CALCULATIONS.md</code>.
+</p>
+
+<h2 id="marks">Votes versus marks: Forensic and the valuation band</h2>
+<p>
+  Every lens you tick for a company gets an <strong>equal vote</strong> — BUY, HOLD or
+  SELL — and the app simply counts them ("BUY on 2 of 3 votes"). Nothing is weighted,
+  nothing is combined into a single number.
+</p>
+<div class="card mark">
+  <h4>Forensic doesn't vote — it marks</h4>
+  <p>Forensic looks for accounting warning signs, but a clean-looking balance sheet is
+  not a reason to buy something and a doubtful one is not automatically a reason to
+  sell. So its reading is reported in its own words — <em>clean</em>,
+  <em>no concern</em>, or <em>doubted</em> — sitting beside the vote, never replacing or
+  outvoting it.</p>
+</div>
+<div class="card mark">
+  <h4>The valuation band is also a mark, not a vote</h4>
+  <p>This answers a different question from any lens: "is this company cheap or
+  expensive <em>against its own five-year history</em>?" — shown as a percentile (e.g.
+  "cheaper than 92% of its own history"). It never changes a verdict; it is a caution a
+  reader sees alongside it, always shown, whichever way it points.</p>
+</div>
+
+<h2 id="cohorts">Cohorts and peer groups</h2>
+<p>
+  To rank a company, the app needs to know who its peers are. That comes from a
+  <strong>market index</strong> — a locally-built table of roughly 25,000 listed
+  companies across 18 stock-exchange regions — kept up to date by its own refresh job,
+  separate from any one report.
+</p>
+<ul>
+  <li><strong>The peer ladder</strong> — for one company, the app pulls a same-industry
+      peer group sized between 12 and 40 names, widening or narrowing by company size so
+      a $2bn company isn't compared against $200bn ones.</li>
+  <li><strong>Cohorts</strong> — fixed, versioned groups of 20–60 companies in one
+      industry (e.g. "Industrials - Grid & Electrical Machinery"), built from the same
+      index and frozen so a backtest or track-record claim is always measured against
+      the <em>same</em> membership list, not a list that quietly drifted.</li>
+  <li><strong>The small-company view</strong> — every lens has a minimum company size it
+      is actually tested against (usually $5bn). A smaller company isn't silently
+      excluded: it is automatically ranked against its own size band instead, and every
+      vote for it carries a visible caveat that it sits outside the lens's tested range.
+      There is no tick box for this any more — the app detects it and switches
+      automatically.</li>
+</ul>
+
+<h2 id="analyse">The Analyse tab: one company, or a list</h2>
+<p>
+  There is one place to run anything: the <strong>Analyse</strong> tab. A switch at the
+  top — "Company" or "Cohort / list" — decides what you're looking at; there is no
+  separate page for a single company any more.
+</p>
+<ul>
+  <li><strong>Company mode</strong> — type or pick one ticker. The app shows every ticked
+      lens's verdict for it, its peer table, its valuation band, its price and cash
+      position, and (if asked for) the plain-English summary and the council's
+      narration.</li>
+  <li><strong>Cohort / list mode</strong> — paste or pick a list of tickers and the app
+      ranks every name under every ticked lens at once, showing a results table with one
+      column per lens. Clicking a result opens that company in Company mode without
+      re-running anything.</li>
+</ul>
+<p class="note">
+  The <strong>Scoreboard</strong> tab, alongside Analyse, is a read-only log of past
+  ranking runs — one row per ranked name per graded run — kept so a claim about a
+  lens's track record can be checked later against what it actually said at the time.
+</p>
+
+<h2 id="backtest">Track-record badges</h2>
+<p>
+  Next to a lens's verdict you may see a small badge. It answers one question: <em>over
+  the last ten years, did buying this lens's picks in this industry actually beat a
+  random pick from the same group, after costs?</em> It is a statement about the past,
+  never a promise about the future.
+</p>
+<table>
+  <tr><th>Badge</th><th>Meaning</th></tr>
+  <tr><td><span class="badge b-proven">proven</span></td>
+      <td>Beat the cohort by a real margin, consistently enough, and not plausibly down
+          to luck.</td></tr>
+  <tr><td><span class="badge b-luck">not beyond luck</span></td>
+      <td>Did beat the benchmark on average, but not by enough to rule out luck.</td></tr>
+  <tr><td><span class="badge b-notproven">not proven</span></td>
+      <td>Measured, and did not clear the bar.</td></tr>
+  <tr><td><span class="badge b-insufficient">insufficient</span></td>
+      <td>Too little history to measure at all yet (e.g. the lens almost never found a
+          BUY in this group).</td></tr>
+</table>
+<p class="note">
+  The owner's standing ruling (2026-10-02): a backtest result is cyclical and is
+  <strong>not</strong> the deciding factor for loosening a lens's own size floor — the
+  small-company view above handles smaller companies instead.
+</p>
+
+<h2 id="council">The council and the plain-English summary</h2>
+<p>
+  Two features sit on top of the deterministic verdict, both <strong>optional</strong>,
+  both <strong>off by default</strong>, and both cost real API credits to run:
+</p>
+<ul>
+  <li><strong>Plain-English summary</strong> — one short, model-written paragraph
+      restating what the numbers already show, in plain words.</li>
+  <li><strong>Council opinion</strong> — four AI "specialists" (fundamental, technical,
+      sentiment, risk) each write a short independent take, an adversarial "critic" tries
+      to poke holes in the case, and the result is narrated for a reader.</li>
+</ul>
+<div class="doctrine">
+  <strong>Neither one ever changes, votes on, or overrides the verdict.</strong> The
+  agreement table above the narration — "BUY on 2 of 3 votes," say — stays the verdict of
+  record no matter what the council writes underneath it. Several deterministic checks
+  run after the fact specifically to catch and flag the AI drifting from that rule (for
+  example, if it ever tried to credit a non-voting check lens with casting a BUY/HOLD/SELL).
+</div>
+
+<h2 id="gapledger">Gap Ledger — a separate app</h2>
+<p>
+  Gap Ledger is a different tool that happens to live in the same codebase. It answers a
+  completely different question — "which US stocks are moving before the market opens
+  this morning, and why?" — not "is this a good business at this price?" It keeps its
+  own daily shortlist, its own control group, and its own grading after the close.
+</p>
+<p class="note">
+  No part of the council links to it, and it does not read anything from the council. It
+  has its own separate screen (started from the command line, not a button) and its own
+  separate, read-only web page.
+</p>
+
+<h2 id="data">Where the numbers come from, and their limits</h2>
+<ul>
+  <li><strong>Prices, fundamentals and dividend history</strong> mainly come from Yahoo
+      Finance, with EODHD used for the market index and some fundamentals lookups.</li>
+  <li><strong>News sentiment</strong> comes from Finnhub, and is currently reliable only
+      for US-listed companies on the plan this app uses.</li>
+  <li><strong>Everything is cached for a day</strong> so repeated runs don't needlessly
+      re-fetch the same figures.</li>
+  <li><strong>Missing data is never guessed.</strong> If a number genuinely isn't
+      available, the app says so plainly ("not evaluated — insufficient history") rather
+      than quietly treating the gap as a zero, a fail, or a pass. The honest answer is
+      always preferred to a confident-looking wrong one.</li>
+</ul>
+
+<footer>
+  Research tool, not financial advice. Nothing in this app or this document is a
+  recommendation to buy or sell any security. Written from the code on the
+  <code>main</code> branch, Batch 16 (2026-10-04) — ARCH-DOC-1.
+</footer>
+
+</div>
+</body>
+</html>
