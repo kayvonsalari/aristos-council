@@ -71,12 +71,50 @@ def test_the_doctrine_and_every_required_section_is_present():
         assert heading.lower() in text.lower(), f"missing section: {heading!r}"
 
 
-def test_the_live_lenses_are_each_named():
+def test_the_live_lenses_are_each_named_by_the_name_the_app_shows():
+    """ARCH-DOC-2: the names come from the app's own picker (the visible rank strategies, in its
+    order), not from a hand-kept list that can drift from it."""
+    import sys
+
+    sys.path.insert(0, str(DOC.parents[1]))
+    from scripts.build_architecture_doc import _lens_name, _visible_lenses
+
+    lenses = _visible_lenses()
+    assert len(lenses) == 10                       # seven stock lenses and three ETF lenses
     text = _text()
-    for lens in ("Defensive Income", "Cyclical Income", "Value + Momentum",
-                "Growth (GARP)", "Magic Formula RAW", "Financials", "Forensic",
-                "Dividend ETFs", "Growth ETFs", "ETF Core"):
-        assert lens in text, f"missing lens: {lens!r}"
+    for lens in lenses:
+        assert _lens_name(lens) in text, f"missing lens: {_lens_name(lens)!r}"
+
+
+def test_the_lens_and_badge_tables_are_generated_so_they_cannot_drift():
+    """ARCH-DOC-2: a lens's row is its own ``asks`` caption (Value + Momentum's 12% capital rule
+    and Growth's three rules were missing from the hand-written version) and the badge table is
+    ``backtest.BADGE_MEANINGS`` - the app's five labels, never the backtest's internal verdicts."""
+    import html
+    import subprocess
+    import sys
+
+    from aristos_council.backtest import BADGE_MEANINGS
+
+    result = subprocess.run([sys.executable, "-m", "scripts.build_architecture_doc", "--check"],
+                            cwd=DOC.parents[1], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    text = _text()
+    for label, meaning in BADGE_MEANINGS.items():
+        assert html.escape(label) in text and html.escape(meaning) in text
+    for internal in ("not beyond luck", "not proven", ">insufficient<", ">proven<"):
+        assert internal not in text, f"the backtest's own verdict leaked into the page: {internal}"
+    assert "12% on their capital" in text           # Value + Momentum's rule
+    assert "sales up at least 10% a year" in text   # Growth's rules
+
+
+def test_the_page_states_what_each_feature_really_uses_for_news_and_for_click_through():
+    text = _text()
+    assert "EODHD news" in text and "Finnhub" in text          # the page company line AND council
+    assert "without re-running" not in text
+    assert "does not run anything" in text or "does not run" in text
+    assert "own industry" in text and "not against your list" in text
+    assert "This is a proposal" in text                          # the banner stays
 
 
 def test_it_states_both_optional_model_features_are_never_a_verdict():
