@@ -3676,6 +3676,7 @@ class LensAgreement:
     check_labels: dict
     rows: list                      # every name with at least one BUY vote, in order
     no_buy_count: int = 0           # names ranked by a voting lens that none rated BUY
+    sell_no_buy_count: int = 0      # of those, names at least one voting lens rated SELL
     overlap_note: str = ""
 
     @property
@@ -3726,7 +3727,7 @@ class LensAgreement:
 
         Zero buckets are omitted, as every other clause on that line omits its zeros: a
         count of nothing is noise, and the section itself states an empty result."""
-        if not self.available or not self.rows:
+        if not self.available or not (self.rows or self.sell_no_buy_count):
             return ""
         parts = []
         for votes, count in self.buckets().items():
@@ -3736,6 +3737,13 @@ class LensAgreement:
                              f"{'lenses' if votes != 1 else 'lens'}")
             else:
                 parts.append(f"{count} on {votes} of {self.n_voting}")
+        if self.sell_no_buy_count:
+            # AGREEMENT-SELL-1: names no lens bought but at least one SELLs are stated too, so a
+            # list of all-SELL names does not read as an empty shortlist.
+            k = self.sell_no_buy_count
+            if not parts:
+                parts.append("no name BUY")
+            parts.append(f"SELL on {k} {'name' if k == 1 else 'names'} no lens bought")
         return " — shortlist: " + ", ".join(parts)
 
 
@@ -3829,12 +3837,15 @@ def lens_agreement(multi_result) -> LensAgreement:
 
     rows = []
     no_buy = 0
+    sell_no_buy = 0
     for ticker in sorted({t for t in verdict_of
                           if any(sid in verdict_of[t] for sid in voting)}):
         votes = {sid: verdict_of[ticker].get(sid) for sid in voting}
         buys = [_label(s) for s in voting if votes.get(s) == "buy"]
         if not buys:
             no_buy += 1
+            if any(votes.get(s) == "sell" for s in voting):
+                sell_no_buy += 1
             continue
         sells = [_label(s) for s in voting if votes.get(s) == "sell"]
         holds = [_label(s) for s in voting if votes.get(s) == "hold"]
@@ -3858,6 +3869,7 @@ def lens_agreement(multi_result) -> LensAgreement:
                              r.mean_rank_pct if r.mean_rank_pct is not None else 1.0,
                              r.ticker))
     return LensAgreement(**{**empty, "rows": rows, "no_buy_count": no_buy,
+                        "sell_no_buy_count": sell_no_buy,
                         "overlap_note": _overlap_note(results, voting, _label)})
 
 

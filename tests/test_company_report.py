@@ -607,8 +607,9 @@ def test_one_vote_and_two_lenses_that_did_not_apply_is_0_of_1_not_0_of_3():
     ag = build_agreement([_ranked("Magic Formula RAW", "sell"), _not_applying("Value + Momentum"),
                           _not_applying("Growth"), forensic])
     assert (ag.n_ticked, ag.n_voted, ag.n_not_applying, ag.n_checks) == (3, 1, 2, 1)
-    assert ag.headline == "BUY on 0 of 1 vote; 2 lenses did not apply to this company"
+    assert ag.headline == "SELL on 1 of 1 vote; no BUY; 2 lenses did not apply to this company"   # AGREEMENT-SELL-1
     assert ag.table_row("AstraZeneca PLC (AZN.L)")["BUY votes"] == "0 of 1"
+    assert ag.table_row("AstraZeneca PLC (AZN.L)")["SELL votes"] == "1 of 1"
     assert ag.sell == ("Magic Formula RAW",)
 
 
@@ -630,7 +631,7 @@ def test_the_council_facts_pack_carries_the_exact_headline_and_check_labels():
                         position=3, cohort_size=14)
     votes = [_ranked("Magic Formula RAW", "sell"), _not_applying("Growth"), forensic]
     ag = build_agreement(votes)
-    assert ag.headline == "BUY on 0 of 1 vote; 1 lens did not apply to this company"
+    assert ag.headline == "SELL on 1 of 1 vote; no BUY; 1 lens did not apply to this company"
 
     row = _council_agreement_row(ag)
     assert row["headline"] == ag.headline

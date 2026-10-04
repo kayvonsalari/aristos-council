@@ -180,6 +180,10 @@ class CompanyAgreement:
         return len(self.buy) + len(self.hold) + len(self.sell)
 
     @property
+    def sell_votes(self) -> int:
+        return len(self.sell)
+
+    @property
     def n_not_applying(self) -> int:
         return len(self.not_applicable)
 
@@ -194,24 +198,38 @@ class CompanyAgreement:
 
     @property
     def headline(self) -> str:
-        """"BUY on 0 of 1 vote; 2 lenses did not apply to this company", or - when nothing voted -
+        """"BUY on 0 of 1 vote; 2 lenses did not apply to this company", "SELL on 3 of 3 votes; no BUY"
+        (AGREEMENT-SELL-1: SELL votes are always stated), or - when nothing voted -
         "No lens voted: every ticked lens's rules exclude this company". Never "0 of 0"."""
         if not self.n_ticked:
             return ("No voting lens is ticked - every lens here is a check, and a check marks "
                     "rather than votes.")
         if not self.n_voted:
             return "No lens voted: every ticked lens's rules exclude this company"
-        head = f"BUY on {self.buy_votes} of {self.n_voted} vote{'' if self.n_voted == 1 else 's'}"
+        votes = f"{self.n_voted} vote{'' if self.n_voted == 1 else 's'}"
+        if self.sell_votes and not self.buy_votes:
+            # AGREEMENT-SELL-1: "BUY on 0 of 3 votes" hid three SELLs. Say what happened.
+            head = f"SELL on {self.sell_votes} of {votes}; no BUY"
+        elif self.sell_votes:
+            head = f"BUY on {self.buy_votes} of {votes}; SELL on {self.sell_votes}"
+        else:
+            head = f"BUY on {self.buy_votes} of {votes}"
         return f"{head}; {self._did_not_apply()}" if self.n_not_applying else head
 
     def table_row(self, display: str) -> dict:
         """The one row of the agreement table, the Run tab's columns for a single company."""
         checks = "; ".join(f"{label}: {word}" for label, word in self.checks.items()) or "none ticked"
-        return {"Company": display,
-                "BUY votes": (f"{self.buy_votes} of {self.n_voted}" if self.n_voted else "no vote"),
-                "Voted BUY": ", ".join(self.buy) or "none",
-                "Checks": checks,
-                "Marks": "; ".join(self.marks) or "none"}
+        row = {"Company": display,
+               "BUY votes": (f"{self.buy_votes} of {self.n_voted}" if self.n_voted else "no vote"),
+               "Voted BUY": ", ".join(self.buy) or "none"}
+        if self.sell_votes:
+            # AGREEMENT-SELL-1: the SELL columns appear wherever a SELL vote exists (and only
+            # then, so a company with none keeps the table it always had).
+            row["SELL votes"] = f"{self.sell_votes} of {self.n_voted}"
+            row["Voted SELL"] = ", ".join(self.sell)
+        row["Checks"] = checks
+        row["Marks"] = "; ".join(self.marks) or "none"
+        return row
 
 
 def build_agreement(votes: list[LensVote], *,

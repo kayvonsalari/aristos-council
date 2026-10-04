@@ -8,7 +8,7 @@
 
 _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 
-### 3 lenses × 4 names — 3 of 4 ranked by at least one — shortlist: 1 on 1 of 3
+### 3 lenses × 4 names — 3 of 4 ranked by at least one — shortlist: 1 on 1 of 3, SELL on 1 name no lens bought
 
 **Classic Value** — Quality-value screen, 2 rules · **Magic Formula RAW** — no screen (ranking only) · **Value + Momentum** — Quality-value screen, 2 rules  ([details](#rules-applied--by-lens))
 
