@@ -15,10 +15,13 @@ all, only of companies, their listings and their cohort membership.
 """
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+from .exchange_names import exchange_name
 
 _ROOT = Path(__file__).resolve().parents[2]
 MAX_MATCHES = 15
@@ -57,7 +60,12 @@ class CompanyMatch:
         name = _COUNTRY_NAMES.get(self.country, self.country)
         if not self.exchange or self.exchange == self.country:
             return name
-        return f"{name} — {self.exchange}"
+        # EXCHANGE-NAMES-1: a readable exchange ("Copenhagen", not "CO"); dropped when it only
+        # repeats the country ("Hong Kong — Hong Kong", "Taiwan — Taiwan").
+        venue = exchange_name(self.exchange)
+        if _fold(venue) == _fold(name):
+            return name
+        return f"{name} — {venue}"
 
 
 @dataclass(frozen=True)
@@ -111,6 +119,16 @@ def _ticker_base(ticker: str) -> str:
     return ticker.rpartition(".")[0] or ticker
 
 
+def _name_start_rank(name_folded: str, needle: str) -> Optional[int]:
+    """SEARCH-RANK-1 — 0 when the NAME starts with the query, 1 when a later WORD of it does
+    ("Boyd" for "BYD" does not: only a real prefix counts), else None. Word starts split on
+    anything that is not a letter or digit, so "AT&T" and "Rolls-Royce" have words."""
+    if name_folded.startswith(needle):
+        return 0
+    words = re.split(r"[^0-9a-z]+", name_folded)
+    return 1 if any(w.startswith(needle) for w in words[1:] if w) else None
+
+
 def _ticker_rank(row, needle: str, alias_needle: Optional[str] = None) -> int:
     """0 = exact ticker match ignoring the exchange suffix, OR a curated alias match (hand-
     picked for exactly one company, so it is just as confident as an exact ticker — without
@@ -119,13 +137,21 @@ def _ticker_rank(row, needle: str, alias_needle: Optional[str] = None) -> int:
     entirely); 1 = ticker starts with the query; 2 = ticker contains the query; 3 = matched by
     plain name only. Checked against both the EODHD and Yahoo ticker forms, since the two
     disagree on suffix style (``AAPL.US`` vs ``AAPL``)."""
-    if alias_needle and alias_needle in _fold(row.name):
+    name_f = _fold(row.name)
+    if alias_needle and alias_needle in name_f:
+        return 0
+    # SEARCH-RANK-1 (live: "byd" listed Boyd Gaming, whose TICKER is BYD, first and BYD Company
+    # Limited, whose NAME starts with BYD, fourth): a name that starts with the query is at least
+    # as good a match as a ticker that equals it, and a name with a later word that starts with it
+    # is as good as a ticker that starts with it. Ties inside a tier still go to market cap.
+    by_name = _name_start_rank(name_f, needle)
+    if by_name == 0:
         return 0
     ticker_f, yahoo_f = _fold(row.ticker), _fold(row.yahoo_ticker)
     base_f, ybase_f = _fold(_ticker_base(row.ticker)), _fold(_ticker_base(row.yahoo_ticker))
     if needle == base_f or needle == ybase_f:
         return 0
-    if ticker_f.startswith(needle) or yahoo_f.startswith(needle):
+    if ticker_f.startswith(needle) or yahoo_f.startswith(needle) or by_name == 1:
         return 1
     if needle in ticker_f or needle in yahoo_f:
         return 2

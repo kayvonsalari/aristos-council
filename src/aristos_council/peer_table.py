@@ -24,10 +24,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from .exchange_names import exchange_name
 from .market_index import MINOR_UNIT_MARKET_CAP, USD_COMPUTED_MAJOR_UNIT
 from .tools.price_context import format_money
 
 THIS_COMPANY = "(this company)"
+# PEER-ROW-TINT-1: the company's own row needs a tint a reader can SEE. The earlier translucent
+# grey (rgba(127,127,127,.14)) was invisible on a light page and nearly so on a dark one — and a
+# canvas data grid may drop the alpha anyway. An OPAQUE amber with an explicit dark text colour
+# reads on either theme because neither the page's own background nor its own text colour takes
+# part in the contrast. One definition, used by the page (``st.dataframe`` styler) and the HTML.
+THIS_COMPANY_BG = "#f6d86b"
+THIS_COMPANY_FG = "#1d2127"
+THIS_COMPANY_STYLE = (f"background-color: {THIS_COMPANY_BG}; color: {THIS_COMPANY_FG}; "
+                      "font-weight: 700")
 DOES_NOT_APPLY = "does not apply"
 ONE_SYSTEM_MARK = "†"
 ONE_SYSTEM_NOTE = f"{ONE_SYSTEM_MARK} counted as a peer on one industry classification only"
@@ -150,7 +160,7 @@ def peer_rows(group, columns=None, company_ticker: str = "") -> list[PeerRow]:
     for m in group.members:
         how = (getattr(group, "matched_on", None) or {}).get(m.ticker, "")
         rows.append(PeerRow(
-            ticker=m.ticker, name=m.name or "", exchange=m.exchange or "",
+            ticker=m.ticker, name=m.name or "", exchange=exchange_name(m.exchange or ""),
             sub_industry=getattr(m, "classification", "") or "",
             cap_usd=m.market_cap_usd, cap_local=m.market_cap,
             local_currency=local_cap_currency(m),
@@ -160,7 +170,7 @@ def peer_rows(group, columns=None, company_ticker: str = "") -> list[PeerRow]:
     subject = getattr(group, "subject", None)
     if columns and company_ticker and subject is not None:
         rows.insert(0, PeerRow(
-            ticker=company_ticker, name=subject.name or "", exchange=subject.exchange or "",
+            ticker=company_ticker, name=subject.name or "", exchange=exchange_name(subject.exchange or ""),
             sub_industry=getattr(subject, "classification", "") or "",
             cap_usd=subject.market_cap_usd, cap_local=subject.market_cap,
             local_currency=local_cap_currency(subject), is_company=True,
@@ -178,11 +188,14 @@ def peer_text_lines(group, columns=None, company_ticker: str = "") -> list[str]:
     rows = peer_rows(group, columns, company_ticker)
     widths = [max(len(c.header), *(len(_cell_text(r.ranks[i][1])) for r in rows))
               for i, c in enumerate(columns)]
-    head = (f"{'Ticker':<26} {'Name':<28} {'Exch':<7} {'Market cap (USD)':>17} {'Local':>15}  "
+    # EXCHANGE-NAMES-1: a readable name ("Euronext Paris") is longer than the old code, so the column
+    # widens to fit it (never below the old 7, which keeps a US-only table byte-identical).
+    ex_w = max(7, *(len(r.exchange) for r in rows)) if rows else 7
+    head = (f"{'Ticker':<26} {'Name':<28} {'Exch':<{ex_w}} {'Market cap (USD)':>17} {'Local':>15}  "
             + "".join(f"{c.header:>{w}}  " for c, w in zip(columns, widths)) + "Sub-industry")
     out = [head]
     for r in rows:
-        out.append(f"{r.marked_ticker:<26} {r.name[:28]:<28} {r.exchange[:7]:<7} "
+        out.append(f"{r.marked_ticker:<26} {r.name[:28]:<28} {r.exchange:<{ex_w}} "
                    f"{r.usd_text:>17} {r.local_text:>15}  "
                    + "".join(f"{_cell_text(cell):>{w}}  " for (_h, cell), w in zip(r.ranks, widths))
                    + r.sub_industry)

@@ -658,7 +658,12 @@ def attach_track_record(report: CompanyReport) -> None:
     if slug is None:
         return
     report.track_record_caption = _cohort_track_record_caption(slug) or ""
-    report.votes = [replace(v, badge=track_record(slug, v.strategy_id)) if v.ranked else v
+    # FORENSIC-BADGE-1 (owner's ruling): a CHECK lens marks and does not vote, so it earns no
+    # track-record badge - "(untested here)" beside Forensic implied a record a non-voting
+    # lens never had. Same rule for any check lens, which also keeps the agreement's "Track
+    # record:" count to the lenses that actually voted.
+    report.votes = [replace(v, badge=track_record(slug, v.strategy_id))
+                    if v.ranked and v.votes else v
                     for v in report.votes]
 
 

@@ -224,3 +224,23 @@ def asset_mode_filter(mode, *, etf_tickers=None):
         return (universe_asset_kind(universe, etf_tickers=etf_tickers) == "etfs") is etfs
 
     return lens_ok, list_ok
+
+
+def lens_caption(strategy) -> str:
+    """The one-line definition to show under a lens's own control — its ``asks``, or "".
+
+    CAPTION-2. CAPTION-1 put this sentence under the lenses a reader had ALREADY chosen,
+    which is the wrong moment: the question a lens asks is what you need in order to choose
+    it. Pure, so the text a checkbox carries is unit-tested rather than eyeballed. Lives here
+    (not in ``app.py``) so ``docs/aristos-architecture.html`` is generated from the SAME text
+    the app shows (ARCH-DOC-2)."""
+    return (getattr(strategy, "asks", "") or "").strip()
+
+
+def asset_mode_sidebar_note(mode) -> str:
+    """The sidebar's one-line note under the Stocks / ETFs switch — said for the CURRENT choice
+    (SIDEBAR-ETF-TEXT-1: it kept reading "ETF lists and lenses are hidden while Stocks is
+    selected" with ETFs selected)."""
+    etfs = str(mode or "").strip().lower() == "etfs"
+    hidden, chosen = ("Stock", "ETFs") if etfs else ("ETF", "Stocks")
+    return f"{hidden} lists and lenses are hidden while {chosen} is selected."

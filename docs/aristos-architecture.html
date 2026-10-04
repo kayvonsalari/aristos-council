@@ -46,6 +46,7 @@
   .b-proven { background: #e3f3e6; color: var(--buy); }
   .b-luck { background: #fdf0e3; color: var(--hold); }
   .b-notproven { background: #f1f2f4; color: var(--fg-quiet); }
+  .b-against { background: #fbe7e5; color: var(--sell); }
   .b-insufficient { background: #f1f2f4; color: var(--fg-quiet); border: 1px dashed #c3c8cf; }
   .verdict-buy { color: var(--buy); font-weight: 700; }
   .verdict-hold { color: var(--hold); font-weight: 700; }
@@ -124,42 +125,35 @@
   stock lenses by default and switches to the ETF ones only when you flip "Asset type"
   to ETFs in the sidebar.
 </p>
+<!-- GEN:LENSES -->
 <table>
-  <tr><th>Lens</th><th>Plain-English question it asks</th></tr>
-  <tr><td><strong>Defensive Income</strong></td>
-      <td>Is this a steady, low-drama dividend payer whose payout is actually covered by
-          cash, without too much debt?</td></tr>
-  <tr><td><strong>Cyclical Income</strong></td>
-      <td>For a boom-and-bust business (oil, mining, shipping) where dividends rise and
-          fall with the cycle: has it at least avoided a cut in the last five years?</td></tr>
+  <tr><th>Lens</th><th>What it asks</th></tr>
   <tr><td><strong>Value + Momentum</strong> <span class="note">(the flagship)</span></td>
-      <td>Is it cheap relative to its own profits <em>and</em> is its price trend not
-          currently falling off a cliff?</td></tr>
-  <tr><td><strong>Growth (GARP)</strong></td>
-      <td>Is it growing its revenue and returns fast enough to justify its price — "growth
-          at a reasonable price," not growth at any price?</td></tr>
-  <tr><td><strong>Magic Formula RAW</strong></td>
-      <td>The classic "cheap and profitable" formula with no extra filters at all — an
-          exploratory, no-screen comparison point for the others.</td></tr>
+      <td>The same as Magic Formula RAW (companies worth at least $5bn, not banks, insurers or utilities), but only for companies earning at least 12% on their capital.</td></tr>
+  <tr><td><strong>Defensive Income</strong></td>
+      <td>Steady income with the trend intact: a yield of at least 1.5%, paid from cash (no more than 80% of free cash flow) and raised for 10 years, from a company worth at least $5bn with debt no bigger than its market value and a share price not down more than 10%; the calmest share ranks best.</td></tr>
+  <tr><td><strong>Cyclical Income</strong></td>
+      <td>Income that survives the cycle: a yield of at least 1.5%, paid from cash (no more than 80% of free cash flow), not cut in five years, with debt no bigger than the company&#x27;s market value, from a company worth at least $5bn (not a bank or insurer).</td></tr>
   <tr><td><strong>Financials</strong></td>
-      <td>For banks and insurers (excluded from the lenses above, because their accounts
-          don't compare the same way): is it priced reasonably against its book value and
-          earning a healthy return on it?</td></tr>
+      <td>Banks and insurers on their own terms: return on equity against price-to-book, for financial companies worth at least $5bn.</td></tr>
   <tr><td><strong>Forensic</strong> <span class="note">(a check, never a vote — see below)</span></td>
-      <td>Do this company's reported profits look genuinely backed by cash, or is there a
-          warning sign in the accounts?</td></tr>
+      <td>Are the profits real: cash behind the earnings, a safe balance sheet, and improving health checks, for companies worth at least $5bn (not banks or insurers).</td></tr>
+  <tr><td><strong>Growth</strong></td>
+      <td>Growing fast at a fair price: sales up at least 10% a year, earning at least 12% on its capital, and not overpaying for that growth (its price no more than twice its growth rate), for companies worth at least $5bn.</td></tr>
+  <tr><td><strong>Magic Formula RAW</strong></td>
+      <td>Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities).</td></tr>
 </table>
 <table>
-  <tr><th>ETF lens</th><th>Plain-English question it asks</th></tr>
+  <tr><th>ETF lens</th><th>What it asks</th></tr>
+  <tr><td><strong>ETF Index Tracker</strong></td>
+      <td>Index trackers: fee, size and trend.</td></tr>
   <tr><td><strong>Dividend ETFs</strong></td>
-      <td>Good income yield, low fees, reasonably large and liquid?</td></tr>
+      <td>Distributing funds: payout, fee, size and trend.</td></tr>
   <tr><td><strong>Growth ETFs</strong></td>
-      <td>Low fees and strong recent momentum, among larger funds?</td></tr>
-  <tr><td><strong>ETF Core / Index Tracker</strong></td>
-      <td>Low fees and reasonable size, deliberately ignoring yield (a core index fund's
-          yield depends on whether it pays out or reinvests, which says nothing about
-          quality)?</td></tr>
+      <td>Growth funds: fee, trend and scale, no yield.</td></tr>
 </table>
+<!-- /GEN:LENSES -->
+<p class="note">These two tables are generated from each lens's own caption in the app (the sentence under its tick box), so they cannot drift from what the app says. <code>python -m scripts.build_architecture_doc</code> rewrites them.</p>
 <p class="note">
   Every ticked lens ranks a company only against the <em>other names it is able to rank</em> —
   so "3rd of 40" under one lens and "3rd of 12" under another are both correct; the
@@ -225,8 +219,10 @@
       narration.</li>
   <li><strong>Cohort / list mode</strong> — paste or pick a list of tickers and the app
       ranks every name under every ticked lens at once, showing a results table with one
-      column per lens. Clicking a result opens that company in Company mode without
-      re-running anything.</li>
+      column per lens. Under the results, "Open a company page" loads the name you pick
+      into Company mode with the same lenses ticked, and does not run anything. When you
+      press Run there, the app runs a fresh check of that company against its own industry
+      peers — not against your list.</li>
 </ul>
 <p class="note">
   The <strong>Scoreboard</strong> tab, alongside Analyse, is a read-only log of past
@@ -236,24 +232,27 @@
 
 <h2 id="backtest">Track-record badges</h2>
 <p>
-  Next to a lens's verdict you may see a small badge. It answers one question: <em>over
+  Next to a voting lens's verdict you may see a small badge. It answers one question: <em>over
   the last ten years, did buying this lens's picks in this industry actually beat a
   random pick from the same group, after costs?</em> It is a statement about the past,
   never a promise about the future.
 </p>
+<!-- GEN:BADGES -->
 <table>
   <tr><th>Badge</th><th>Meaning</th></tr>
-  <tr><td><span class="badge b-proven">proven</span></td>
-      <td>Beat the cohort by a real margin, consistently enough, and not plausibly down
-          to luck.</td></tr>
-  <tr><td><span class="badge b-luck">not beyond luck</span></td>
-      <td>Did beat the benchmark on average, but not by enough to rule out luck.</td></tr>
-  <tr><td><span class="badge b-notproven">not proven</span></td>
-      <td>Measured, and did not clear the bar.</td></tr>
-  <tr><td><span class="badge b-insufficient">insufficient</span></td>
-      <td>Too little history to measure at all yet (e.g. the lens almost never found a
-          BUY in this group).</td></tr>
+  <tr><td><span class="badge b-proven">proven here</span></td>
+      <td>Beat its benchmark in this cohort by enough, often enough, for long enough, that fewer than 1 in 20 random stock-pickers matched it.</td></tr>
+  <tr><td><span class="badge b-luck">promising here</span></td>
+      <td>Beat its benchmark in this cohort by a real margin most years, and did better than most random stock-pickers - not yet enough history or separation from luck to call it proven.</td></tr>
+  <tr><td><span class="badge b-against">worked against you here</span></td>
+      <td>In this cohort, picking names at random would have matched or beaten this lens at least 9 times in 10.</td></tr>
+  <tr><td><span class="badge b-notproven">no edge shown here</span></td>
+      <td>In this cohort, this lens&#x27;s record does not clear the bar, and does no better than picking names at random.</td></tr>
+  <tr><td><span class="badge b-insufficient">untested here</span></td>
+      <td>There is not yet enough measured history for this cohort and this lens to say anything.</td></tr>
 </table>
+<!-- /GEN:BADGES -->
+<p class="note">These are the five labels the app shows, in the app's own words. A check lens (Forensic) marks and does not vote, so it carries no badge. A lens that did not apply to the company shows its reason instead of a badge.</p>
 <p class="note">
   The owner's standing ruling (2026-10-02): a backtest result is cyclical and is
   <strong>not</strong> the deciding factor for loosening a lens's own size floor — the
@@ -297,8 +296,11 @@
 <ul>
   <li><strong>Prices, fundamentals and dividend history</strong> mainly come from Yahoo
       Finance, with EODHD used for the market index and some fundamentals lookups.</li>
-  <li><strong>News sentiment</strong> comes from Finnhub, and is currently reliable only
-      for US-listed companies on the plan this app uses.</li>
+  <li><strong>Recent news</strong> on the company page ("Recent news: EODHD news") comes
+      from EODHD, with Yahoo Finance's news as the fallback when EODHD has none.</li>
+  <li><strong>News sentiment</strong> — only used by the council's sentiment specialist, an
+      optional paid feature — reads Finnhub, which on the plan this app uses covers US-listed
+      companies only; for other companies it falls back to the same EODHD / Yahoo news.</li>
   <li><strong>Everything is cached for a day</strong> so repeated runs don't needlessly
       re-fetch the same figures.</li>
   <li><strong>Missing data is never guessed.</strong> If a number genuinely isn't
@@ -310,7 +312,7 @@
 <footer>
   Research tool, not financial advice. Nothing in this app or this document is a
   recommendation to buy or sell any security. Written from the code on the
-  <code>main</code> branch, Batch 16 (2026-10-04) — ARCH-DOC-1.
+  <code>main</code> branch, Batch 17 (2026-10-04) — ARCH-DOC-2.
 </footer>
 
 </div>

@@ -48,7 +48,7 @@ def test_sidebar_switch_is_labelled_asset_type_default_stocks():
 def test_the_companys_peer_row_carries_a_visible_highlight_on_screen(tmp_path):
     import pandas as pd
 
-    from aristos_council.peer_table import peer_frame_records, rank_columns
+    from aristos_council.peer_table import THIS_COMPANY_STYLE, peer_frame_records, rank_columns
     from tests.test_company_report import RAW, _run
 
     report = _run([RAW], tmp_path=tmp_path, save=False)
@@ -57,10 +57,12 @@ def test_the_companys_peer_row_carries_a_visible_highlight_on_screen(tmp_path):
     # Build the SAME styler app._render_peers would, directly — this pins the helper's
     # own contract (row 0 carries the highlight class) without driving the full page.
     styler = frame.style.apply(
-        lambda row: (["background-color: rgba(127,127,127,.14); font-weight: 600"]
-                    * len(row)) if row.name == 0 else [""] * len(row), axis=1)
+        lambda row: ([THIS_COMPANY_STYLE] * len(row)) if row.name == 0
+        else [""] * len(row), axis=1)
     html = styler.to_html()
-    assert "background-color: rgba(127,127,127,.14)" in html
+    # PEER-ROW-TINT-1: an opaque tint with an explicit text colour (the old translucent grey
+    # was invisible), on the company's row only
+    assert "background-color: #f6d86b" in html and "font-weight: 700" in html
 
 
 def test_the_companys_peer_row_carries_the_html_export_highlight_class(tmp_path):

@@ -28,6 +28,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import streamlit as st
+
+from aristos_council.ui_text import escape_dollars, install as install_dollar_safety, reader_text
 from pydantic import ValidationError
 
 from aristos_council.data.adapter import (
@@ -35,8 +37,8 @@ from aristos_council.data.adapter import (
 from aristos_council.pipeline import (
     DEFAULT_NARRATION_CAP, DEFAULT_NARRATION_LEVEL, NARRATION_LEVELS)
 from aristos_council.demo_surface import (
-    ASSET_MODES, DEFAULT_ASSET_MODE, ETFS, asset_mode_filter,
-    strategy_label, strategy_role, suggested_first,
+    ASSET_MODES, DEFAULT_ASSET_MODE, ETFS, asset_mode_filter, asset_mode_sidebar_note,
+    lens_caption, strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
 from aristos_council.costs import actual_vs_estimate, cost_phrase
 
@@ -177,7 +179,7 @@ def _prose(text: str, show_provenance: bool) -> str:
 def _md(text: str) -> str:
     """Escape '$' so st.markdown can't read currency as LaTeX math and eat it
     ("$1.048 trillion" -> "`1.048 trillion"). Financial text must keep its $."""
-    return text.replace("$", "\\$") if text else text
+    return escape_dollars(text) if text else text
 
 
 def _render_prose(text: str, show_provenance: bool) -> str:
@@ -1200,6 +1202,75 @@ def saved_list_labels(saved) -> list[str]:
     return [b if times[b] == 1 else f"{b} ({u.id})" for u, b in zip(saved, base)]
 
 
+def _ids_visible() -> bool:
+    """JARGON-UI-1: strategy ids and list fingerprints show on screen only behind the validation
+    toggle ("Show validation & legacy tools"); the exports and run records always keep them."""
+    return bool(st.session_state.get("show_legacy"))
+
+
+def _plain(text):
+    """``text`` for a reader: no strategy ids, no ``adhoc:...`` fingerprints (see ``ui_text``)."""
+    return reader_text(text, show_ids=_ids_visible())
+
+
+# --------------------------------------------------------------------------- #
+# SHARED-OPTIONS-1 (Batch 17 item 4) — ONE options block, remembered across every switch
+# --------------------------------------------------------------------------- #
+# Streamlit drops a widget's state the moment the widget is not drawn in a run, so switching
+# Company <-> Cohort/list (each draws its own copy of the options) or Stocks <-> ETFs used to
+# reset the ticks and the typed list. The values now live in a plain session store that no
+# widget owns; every options widget is SEEDED from it before it is drawn and WRITES TO it after
+# a click. Stock lenses and ETF lenses are different sets, so ticks are remembered per asset
+# mode, but nothing resets on a switch.
+_SHARED_OPTS = "_shared_opts"
+_SHARED_TEXT = "_shared_text"
+
+
+def shared_lens_store_key(asset: str, strategy_id: str) -> str:
+    return f"lens:{asset}:{strategy_id}"
+
+
+def _sync_from_store(widget_key: str, store_key: str, *, switched: bool) -> None:
+    """Call BEFORE the widget is drawn. A value the user just set (the widget already holds it)
+    is banked; right after a switch of input kind the store wins over a stale widget value."""
+    store = st.session_state.setdefault(_SHARED_OPTS, {})
+    if widget_key in st.session_state and not switched:
+        store[store_key] = st.session_state[widget_key]
+    elif store_key in store:
+        st.session_state[widget_key] = store[store_key]
+
+
+def _carry_lenses_to_store(lens_ids) -> None:
+    """Make ``lens_ids`` the ticked set for the current asset mode, in the shared store, and
+    force the options block to reseed from it (it does so whenever the input kind changes)."""
+    asset = asset_mode()
+    store = st.session_state.setdefault(_SHARED_OPTS, {})
+    ticked = set(lens_ids)
+    prefix = f"lens:{asset}:"
+    for key in [k for k in store if k.startswith(prefix)]:
+        store[key] = False
+    for sid in ticked:
+        store[shared_lens_store_key(asset, sid)] = True
+    st.session_state["_opts_last_kind"] = None      # "switched": the store wins over stale ticks
+
+
+def remember_text(widget_key: str, name: str, *, scope: str) -> None:
+    """Keep a typed box (the ticker list, the company ticker) across a switch that stops drawing
+    it. ``scope`` is the asset mode for the list: when it changes, the text the box holds is
+    banked under the OLD scope and the NEW scope's own text is loaded (empty if none yet)."""
+    mem = st.session_state.setdefault(_SHARED_TEXT, {})
+    last = mem.get(f"{name}:_scope")
+    if last is not None and last != scope:
+        if widget_key in st.session_state:
+            mem[f"{name}:{last}"] = st.session_state[widget_key]
+        st.session_state[widget_key] = mem.get(f"{name}:{scope}", "")
+    elif widget_key in st.session_state:
+        mem[f"{name}:{scope}"] = st.session_state[widget_key]
+    elif f"{name}:{scope}" in mem:
+        st.session_state[widget_key] = mem[f"{name}:{scope}"]
+    mem[f"{name}:_scope"] = scope
+
+
 def opt_lens_checkbox_key(input_kind: str):
     """TAB-MERGE-1 commit 1 — the ONE options block's key family (``opt_lens_*``),
     replacing the ``uni_lens_*``/``cc_lens_*`` duplicates. Qualified by ``input_kind``
@@ -1292,7 +1363,8 @@ _COUNCIL_HELP = ("The four specialists, a critic and a narrator — the same cou
                 "off unless you tick it.")
 
 
-def render_run_options(choices, *, input_kind: str, show_council: bool) -> RunOptions:
+def render_run_options(choices, *, input_kind: str, show_council: bool,
+                       show_validation: bool = False) -> RunOptions:
     """ONE options block, called once per input kind. ``input_kind`` is "list" (the Run
     tab) or "company" (Company Check) — it only qualifies widget keys (see
     ``opt_lens_checkbox_key``) and picks the right summary help text; the WIDGETS
@@ -1302,21 +1374,37 @@ def render_run_options(choices, *, input_kind: str, show_council: bool) -> RunOp
     Check (which has one today); False for the Run tab in commit 1, which keeps its own
     run-mode radio untouched and simply never reads ``.with_council`` (always False)."""
     key_for = opt_lens_checkbox_key(input_kind)
+    asset = asset_mode()
+    # SHARED-OPTIONS-1: the ticks follow the user across Company <-> list and are kept per
+    # asset mode; the default lens is seeded once per asset mode, not once per input kind.
+    switched = st.session_state.get("_opts_last_kind") != input_kind
     st.markdown("**Lenses**")
     st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
-    _preselect_default_lens(choices, seeded_key=f"opt_lenses_seeded_{input_kind}",
-                            key_for=key_for)
+    _preselect_default_lens(choices, seeded_key=f"opt_lenses_seeded_{asset}", key_for=key_for)
+    for c in choices:
+        _sync_from_store(key_for(c.id), shared_lens_store_key(asset, c.id), switched=switched)
     extras = render_lens_checkboxes(choices, key_for)
+    store = st.session_state.setdefault(_SHARED_OPTS, {})
+    for c in choices:
+        store[shared_lens_store_key(asset, c.id)] = bool(st.session_state.get(key_for(c.id)))
     strategies = resolve_all(choices, selected_labels(extras=extras))
-    lens_selection_captions(strategies)
+    # JARGON-UI-1: the id / role / long-description block under the lens grid is a validation
+    # view; a reader already has each lens's question under its own tick box.
+    if show_validation:
+        lens_selection_captions(strategies)
+    _sync_from_store(f"opt_summary_{input_kind}", "summary", switched=switched)
     with_summary = st.checkbox(
         "Plain-English summary", value=False, key=f"opt_summary_{input_kind}",
         help=_SUMMARY_HELP[input_kind])
+    store["summary"] = with_summary
     with_council = False
     if show_council:
+        _sync_from_store(f"opt_council_{input_kind}", "council", switched=switched)
         with_council = st.checkbox(
             "Council opinion", value=False, key=f"opt_council_{input_kind}",
             help=_COUNCIL_HELP)
+        store["council"] = with_council
+    st.session_state["_opts_last_kind"] = input_kind
     return RunOptions(strategies=strategies, with_summary=with_summary,
                       with_council=with_council)
 
@@ -1518,15 +1606,6 @@ def _estimate_union_size(n_names: int, strategies, *,
     total = sum(_estimate_shortlist_size(n_names, s, narrate_coverage="buys_only")
                 for s in strategies)
     return min(total, n_names)
-
-
-def lens_caption(strategy) -> str:
-    """The one-line definition to show under a lens's own control — its ``asks``, or "".
-
-    CAPTION-2. CAPTION-1 put this sentence under the lenses a reader had ALREADY chosen,
-    which is the wrong moment: the question a lens asks is what you need in order to choose
-    it. Pure, so the text a checkbox carries is unit-tested rather than eyeballed."""
-    return (getattr(strategy, "asks", "") or "").strip()
 
 
 def floor_override_from_input(raw, *, file_value: float | None) -> float | None:
@@ -2028,8 +2107,10 @@ def _render_narration_line(result) -> None:
     """NARR-2's line on screen — the same builder the two reports render."""
     from aristos_council.pipeline import narration_line
 
+    from aristos_council.pipeline import narration_was_requested
+
     plan = (getattr(result, "meta", None) or {}).get("narration")
-    if not plan:
+    if not plan or not narration_was_requested(plan):
         return
     st.caption(narration_line(plan))
     missing = plan.get("not_narrated") or []
@@ -2312,8 +2393,10 @@ def _narration_line_markdown(result) -> list[str]:
     """NARR-2's line in the .md — the same builder the HTML renders."""
     from aristos_council.pipeline import narration_line
 
+    from aristos_council.pipeline import narration_was_requested
+
     plan = (getattr(result, "meta", None) or {}).get("narration")
-    if not plan:
+    if not plan or not narration_was_requested(plan):
         return []
     lines = ["", f"_{narration_line(plan)}_"]
     missing = plan.get("not_narrated") or []
@@ -2779,15 +2862,23 @@ def _single_list_context_lines(result, ticker: str, *, lens_label: str) -> list[
     return []
 
 
-def _render_open_as_company(tickers: list[str], *, make_lines, key_prefix: str) -> None:
+def _render_open_as_company(tickers: list[str], *, make_lines, key_prefix: str,
+                            labels: Optional[dict] = None, lens_ids=None) -> None:
     """The picker + button itself. ``make_lines(ticker)`` is called ONLY on click (not
-    for every option up front) and returns the free context line(s) to carry over."""
+    for every option up front) and returns the free context line(s) to carry over.
+
+    PICKER-NAMES-1: the options read "Ford Motor Company (F)" (``labels``: ticker -> shown
+    text), not the bare ticker the picker used to list under a "pick a name" caption.
+    CLICKTHROUGH-LENSES-1: ``lens_ids`` are the lenses the list ran with; Company mode opens
+    with them ticked."""
     if not tickers:
         return
+    labels = labels or {}
     st.markdown("**Open a company page**")
     col_pick, col_open = st.columns([4, 1])
     with col_pick:
         picked = st.selectbox("pick a name", tickers, label_visibility="collapsed",
+                              format_func=lambda t: labels.get(t) or t,
                               key=f"{key_prefix}_open_company_pick")
     with col_open:
         go = st.button("Open", key=f"{key_prefix}_open_company_button")
@@ -2798,7 +2889,9 @@ def _render_open_as_company(tickers: list[str], *, make_lines, key_prefix: str) 
         # PENDING switch instead and rerun; render_input applies it on the NEXT run,
         # before either widget is drawn (the same pre-instantiation-write pattern the
         # find-box's "Use this company" button already uses for cc_ticker alone).
-        st.session_state["_pending_open_as_company"] = (normalize_ticker(picked), make_lines(picked))
+        st.session_state["_pending_open_as_company"] = {
+            "ticker": normalize_ticker(picked), "lines": make_lines(picked),
+            "lens_ids": list(lens_ids) if lens_ids is not None else None}
         st.rerun()
 
 
@@ -2821,13 +2914,15 @@ def _render_multi_strategy_result(multi_result) -> None:
     )
     from aristos_council.report_language import label_with_id
 
-    cohort = label_with_id(m.get("universe_name", ""), m.get("universe_id") or "adhoc")
-    lens_labels = {sid: label_with_id(multi_result.strategy_names.get(sid) or sid, sid)
+    # JARGON-UI-1: on screen a reader gets "Value + Momentum" and "your list"; the ids and the
+    # ad-hoc fingerprint stay in the exports (and come back with the validation toggle).
+    cohort = _plain(label_with_id(m.get("universe_name", ""), m.get("universe_id") or "adhoc"))
+    lens_labels = {sid: _plain(label_with_id(multi_result.strategy_names.get(sid) or sid, sid))
                    for sid in ids}
     st.markdown(f"#### {cohort} — {len(ids)} lenses × {m.get('universe_size', 0)} names")
     st.caption("Lenses: " + "; ".join(lens_labels.values()))
-    st.markdown(f"### {multi_summary_line(multi_result)}")
-    st.caption(multi_header_line(multi_result))
+    st.markdown(f"### {_plain(multi_summary_line(multi_result))}")
+    st.caption(_plain(multi_header_line(multi_result)))
 
     # SHORTLIST-1/2 — the answer, on screen, ahead of the evidence for it. Both reports
     # have carried this section since SHORTLIST-1; the Run tab carried only the summary
@@ -2870,8 +2965,8 @@ def _render_multi_strategy_result(multi_result) -> None:
     else:
         st.info("No names reported.")
     st.caption(VERDICT_TABLE_NOTE)
-    st.caption(f"{m.get('graded_by_all', 0)} name(s) were ranked by ALL {len(ids)} "
-               "lenses — only those rank-sums are comparable.")
+    from aristos_council.pipeline import comparable_names_line
+    st.caption(comparable_names_line(multi_result))
 
     # PRICE-1 / VALBAND-1: per-NAME context beside the combined grid, never a verdict.
     # It is ALWAYS shown; the band (and the reversion value riding with it) only when the
@@ -2956,7 +3051,9 @@ def _render_multi_strategy_result(multi_result) -> None:
     _render_open_as_company(
         sorted({r.ticker for r in multi_result.rows}),
         make_lines=lambda t: _multi_list_context_lines(multi_result, t),
-        key_prefix="multi")
+        key_prefix="multi",
+        labels={r.ticker: r.display for r in multi_result.rows},
+        lens_ids=multi_result.strategy_ids)
 
 
 def _render_universe_result(result) -> None:
@@ -2979,25 +3076,30 @@ def _render_universe_result(result) -> None:
     from aristos_council.report_language import format_score_gloss, label_with_id
 
     # ITEM 6: the confirmation line first — a wrong dropdown is visible immediately.
-    st.caption(_confirmation_line(m))
+    if _ids_visible():
+        st.caption(_confirmation_line(m))
+    else:      # JARGON-UI-1: the lens's name and the list's name, not their record keys
+        _list = m.get("universe_name") or m.get("universe_id") or ""
+        st.caption(f"Running {m.get('rank_strategy_name') or m['rank_strategy_id']} on "
+                   f"{_plain(_list) if _list else 'your list'} in {m['council_mode']}.")
     # 1 — REPORT-1: the human names lead; every id stays beside them as the record key.
     head = header_lines(result)
-    st.markdown(f"#### {head[0]}")
+    st.markdown(f"#### {_plain(head[0])}")
     # PRICE-STALE-1 — the same line the report carries, but LOUD here: a caption among
     # captions is exactly how a stale cache went unnoticed in the first place.
     from aristos_council.pipeline import price_stale_line
     _stale = price_stale_line(result)
     for line in head[1:]:
-        (st.warning if line == _stale else st.caption)(line)
-    st.markdown(f"### {summary_line(result)}")
+        (st.warning if line == _stale else st.caption)(_plain(line))
+    st.markdown(f"### {_plain(summary_line(result))}")
     st.caption(result.header)
-    meta_bits = (f"Screen: {label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id'])} · "
+    meta_bits = (f"Screen: {_plain(label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id']))} · "
                  f"ranked {m['ranked_count']} of {m['universe_size']} names")
     if not m["ranker_only"]:
         meta_bits += (f" · shortlist {len(m['shortlist'])} · "
                       f"estimated cost ${m['est_cost']:.2f} · "
                       f"narrating {m.get('narrate_coverage', 'buys_only')}")
-    if m.get("run_id"):
+    if m.get("run_id") and _ids_visible():
         meta_bits += f" · run id `{m['run_id']}`"
     st.caption(meta_bits)
     # BACKTEST-2 — this lens's track record in this cohort, when the universe matches one of the
@@ -3176,7 +3278,9 @@ def _render_universe_result(result) -> None:
         _click_through_tickers,
         make_lines=lambda t: _single_list_context_lines(
             result, t, lens_label=_lens_label_for_click_through),
-        key_prefix="single")
+        key_prefix="single",
+        labels={t: display_name(t, result.names.get(t)) for t in _click_through_tickers},
+        lens_ids=[m["rank_strategy_id"]])
 
 
 
@@ -3294,10 +3398,21 @@ def render_input(*, show_validation: bool) -> InputChoice:
     # before either widget is instantiated.
     pending = st.session_state.pop("_pending_open_as_company", None)
     if pending is not None:
-        ticker, lines = pending
+        if isinstance(pending, dict):
+            ticker, lines = pending["ticker"], pending.get("lines") or []
+            lens_ids = pending.get("lens_ids")
+        else:                                   # the pre-Batch-17 (ticker, lines) shape
+            (ticker, lines), lens_ids = pending, None
         st.session_state["run_input_kind"] = "Company"
         st.session_state["cc_ticker"] = ticker
-        st.session_state["cc_from_list"] = (ticker, lines)
+        if lines:                               # only a list run has "In your list" context
+            st.session_state["cc_from_list"] = (ticker, lines)
+        else:
+            st.session_state.pop("cc_from_list", None)
+        if lens_ids is not None:
+            # CLICKTHROUGH-LENSES-1: Company mode opens with exactly the lenses the list ran
+            # with (the shared store is what the options block seeds from).
+            _carry_lenses_to_store(lens_ids)
 
     etf_mode = asset_mode() == ETFS
     if etf_mode:
@@ -3308,6 +3423,13 @@ def render_input(*, show_validation: bool) -> InputChoice:
         # TAB-MERGE-1 part 2 commit 1 — owner's ruling 2026-10-03: Company is the
         # DEFAULT (index=0). Part 1 defaulted to "Cohort / list" to minimise test
         # churn from the merge itself; this is a deliberate, separate UI decision.
+        # SHARED-OPTIONS-1: the radio is not drawn in ETF mode, so Streamlit drops its state; keep
+        # the last choice in the shared store and restore it on the way back to Stocks.
+        _store = st.session_state.setdefault(_SHARED_OPTS, {})
+        if "run_input_kind" in st.session_state:
+            _store["input_kind"] = st.session_state["run_input_kind"]
+        elif "input_kind" in _store:
+            st.session_state["run_input_kind"] = _store["input_kind"]
         choice = st.radio("Input", ["Company", "Cohort / list"], index=0,
                           key="run_input_kind", horizontal=True,
                           help="Company: one name against its own peer group. "
@@ -3353,6 +3475,7 @@ def render_input(*, show_validation: bool) -> InputChoice:
                     st.session_state["cc_matched_cap"] = (chosen.ticker, chosen.market_cap_usd)
                     st.rerun()
 
+        remember_text("cc_ticker", "company", scope="all")      # SHARED-OPTIONS-1
         ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
                                                 placeholder="MU"))
         matched = st.session_state.get("cc_matched_cap")
@@ -3398,13 +3521,26 @@ def render_input(*, show_validation: bool) -> InputChoice:
             st.session_state["uni_tickers"] = "\n".join(picked_list.tickers)
             st.session_state["uni_list_name"] = (picked_list.display_name
                                                  or picked_list.id)
+    remember_text("uni_tickers", "list", scope=asset_mode())    # SHARED-OPTIONS-1
     raw = st.text_area(
         "Tickers — one per line; spaces/commas fine, `# comments` allowed",
         key="uni_tickers", height=180,
         placeholder="AAPL\nMSFT  # anchor\n# --- energy ---\nXOM")
     universe = parse_ticker_lines(raw)
-    if len(universe) == 1:
-        st.caption(f"Just **{universe[0]}** — open this as a company page instead?")
+    if len(universe) == 1 and not etf_mode:
+        # ONE-TICKER-BUTTON-1: the hint is now a button. It switches to Company with the
+        # ticker loaded and the ticked lenses kept, and does not run anything. (Hidden in ETF
+        # mode, where there is no Company input to open.)
+        col_hint, col_open = st.columns([4, 1], vertical_alignment="center")
+        with col_hint:
+            st.caption(f"Just **{universe[0]}** — open this as a company page instead?")
+        with col_open:
+            if st.button("Open as company page", key="uni_open_single_as_company"):
+                st.session_state["_pending_open_as_company"] = {
+                    "ticker": normalize_ticker(universe[0]), "lines": [], "lens_ids": None}
+                st.rerun()
+    elif len(universe) == 1:
+        st.caption(f"Just **{universe[0]}** — one fund in the list.")
 
     unchanged = picked_list is not None and universe == list(picked_list.tickers)
     universe_id = picked_list.id if unchanged else None
@@ -3495,12 +3631,38 @@ def render_run_tab(show_validation: bool = False) -> None:
     labels = choice_labels(choices)          # kept, as before (unused; see the Part 2 cleanup)
 
     if choice.kind == INPUT_COMPANY:
-        _render_company_run(choice, choices)
+        _render_company_run(choice, choices, show_validation=show_validation)
     else:
         _render_list_run(choice, choices, show_validation=show_validation)
 
 
-def _render_company_run(choice: InputChoice, choices) -> None:
+def stale_results_note(produced_for, current, *, what: str, now: str) -> str:
+    """"" when ``what`` still matches the input; else one plain sentence saying it does not.
+
+    ``produced_for`` / ``current`` are ``(asset_mode, input)`` pairs (the company ticker, or the
+    tuple of list tickers). Pure, so the rule is unit-tested rather than eyeballed."""
+    if produced_for is None or produced_for == current:
+        return ""
+    return (f"Showing {what} from your last Run - the input now reads {now}. "
+            "Press Run to refresh.")
+
+
+_stale_results_note = stale_results_note
+
+
+def _drop_results_from_another_asset(results_key: str, input_key: str) -> None:
+    """Results produced under Stocks mean nothing under ETFs (and vice versa): clear them."""
+    produced = st.session_state.get(input_key)
+    if produced is not None and produced[0] != asset_mode():
+        st.session_state.pop(results_key, None)
+        if results_key in ("uni_multi_result", "uni_result"):
+            st.session_state.pop("uni_multi_persisted", None)
+            st.session_state.pop("uni_persisted_paths", None)
+        else:
+            st.session_state.pop(input_key, None)
+
+
+def _render_company_run(choice: InputChoice, choices, *, show_validation: bool = False) -> None:
     """The company-input half of the Analyse tab — unchanged from the pre-merge Company
     Check tab, except: options come from the shared block (commit 1), and
     ``include_small``/the adapter come from ``render_input``'s own auto-detection
@@ -3509,7 +3671,8 @@ def _render_company_run(choice: InputChoice, choices) -> None:
 
     from aristos_council.company_report import run_company_report
 
-    run_options = render_run_options(choices, input_kind="company", show_council=True)
+    run_options = render_run_options(choices, input_kind="company", show_council=True,
+                                     show_validation=show_validation)
     strategies = run_options.strategies
     with_summary = run_options.with_summary
     with_council = run_options.with_council
@@ -3519,10 +3682,15 @@ def _render_company_run(choice: InputChoice, choices) -> None:
         st.info("This needs ANTHROPIC_API_KEY in the environment or `.env`; without it the page "
                 "runs without it and says so.")
 
+    # CLICKTHROUGH-LENSES-1: like a list run, a company run with no lens ticked is blocked with
+    # the same sentence rather than producing an empty report ("No vote: No lens is ticked").
+    if not strategies:
+        st.info("Pick at least one strategy.")
     run = st.button(_md(run_button_label(n_strategies=len(strategies),
                                          with_reader=with_summary,
                                          with_council=with_council)),
-                    type="primary", disabled=not choice.ticker, key="cc_run")
+                    type="primary", disabled=not choice.ticker or not strategies,
+                    key="cc_run")
     if run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         status = st.status("Starting…", expanded=True)
@@ -3541,10 +3709,18 @@ def _render_company_run(choice: InputChoice, choices) -> None:
             status.update(label="Done.", state="complete")
             st.session_state["cc_report"] = report
             st.session_state["cc_run_start"] = run_start
+            st.session_state["cc_report_input"] = (asset_mode(), choice.ticker)
 
+    _drop_results_from_another_asset("cc_report", "cc_report_input")
     report = st.session_state.get("cc_report")
     if report is not None:
         st.divider()
+        _note = _stale_results_note(
+            st.session_state.get("cc_report_input"), (asset_mode(), choice.ticker),
+            what=f"the company report for {report.display}",
+            now=choice.ticker or "an empty ticker box")
+        if _note:
+            st.warning(_note)
         _render_company_report(report)
 
 
@@ -3571,7 +3747,8 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
     # 3-way radio, restored in place of the checkbox so the two controls never both show.
     show_run_mode_radio = show_validation
     options = render_run_options(choices, input_kind="list",
-                                 show_council=not show_run_mode_radio)
+                                 show_council=not show_run_mode_radio,
+                                 show_validation=show_validation)
     strategies = options.strategies
     with_reader = options.with_summary
     multi = len(strategies) > 1
@@ -3733,6 +3910,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
         else:
             st.session_state["uni_run_start"] = run_start
             st.session_state["uni_universe_display_name"] = universe_display_name
+            st.session_state["uni_result_input"] = (asset_mode(), tuple(universe))
             st.session_state.pop("uni_result", None)
             _publish_multi(multi_result, run_start, universe_display_name)
             if run_mode_narrates(run_mode):
@@ -3768,6 +3946,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
         else:
             st.session_state["uni_run_start"] = run_start
             st.session_state["uni_universe_display_name"] = universe_display_name
+            st.session_state["uni_result_input"] = (asset_mode(), tuple(universe))
             st.session_state.pop("uni_multi_result", None)
             st.session_state.pop("uni_multi_persisted", None)
             _publish_single(result, run_start, universe_display_name)
@@ -3782,6 +3961,17 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
             else:
                 status.update(label="Done.", state="complete")
                 st.session_state.pop("uni_pending_narration", None)
+
+    # an asset-mode switch makes the old results meaningless (stock results under an ETF
+    # list): clear them. An edit within the same mode keeps them, labelled.
+    for _k in ("uni_multi_result", "uni_result"):
+        _drop_results_from_another_asset(_k, "uni_result_input")
+    _list_note = _stale_results_note(
+        st.session_state.get("uni_result_input"), (asset_mode(), tuple(universe)),
+        what="these results", now=(f"{len(universe)} name(s)" if universe else "an empty list"))
+    if _list_note and (st.session_state.get("uni_multi_result") is not None
+                       or st.session_state.get("uni_result") is not None):
+        st.warning(_list_note)
 
     _render_last_spend()
     _render_narration_confirmation()
@@ -3939,7 +4129,8 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
     Report's per-lens ranks, read from the run's saved ranks) the company is the first row and there
     is one sortable rank column per lens."""
     from aristos_council.peer_table import (LOCAL_COLUMN, LOCAL_FORMAT, ONE_SYSTEM_NOTE,
-                                            USD_COLUMN, USD_FORMAT, has_one_system_peers,
+                                            THIS_COMPANY_STYLE, USD_COLUMN, USD_FORMAT,
+                                            has_one_system_peers,
                                             peer_frame_records, peer_rows)
 
     st.subheader("Peers")
@@ -3980,8 +4171,8 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
                                na_rep="does not apply")
         if highlight_company:
             data = data.apply(
-                lambda row: (["background-color: rgba(127,127,127,.14); font-weight: 600"]
-                            * len(row)) if row.name == 0 else [""] * len(row), axis=1)
+                lambda row: ([THIS_COMPANY_STYLE] * len(row)) if row.name == 0
+                else [""] * len(row), axis=1)
     st.dataframe(
         data, hide_index=True, width="stretch",
         column_config={
@@ -4069,10 +4260,13 @@ def _render_company_report(report) -> None:
         # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-
         # band run; never shown otherwise.
         _suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
-        st.dataframe(pd.DataFrame([{"Lens": v.label, "Role": v.role,
-                                    "Result": v.result() + v.badge_suffix + _suffix,
-                                    "What it asks": v.asks} for v in report.votes]),
-                     hide_index=True, width="stretch")
+        # LENS-TABLE-WRAP-1: ``st.table`` wraps a long cell where ``st.dataframe`` (a canvas grid)
+        # cuts it off and needs horizontal scrolling - and the Result and "What it asks" cells
+        # ARE the sentences a reader came for.
+        st.table(pd.DataFrame([{"Lens": v.label, "Role": v.role,
+                                "Result": v.result() + v.badge_suffix + _suffix,
+                                "What it asks": v.asks} for v in report.votes]
+                              ).set_index("Lens"))
         badged = [v for v in report.votes if v.badge is not None]
         if badged:
             from aristos_council.backtest import BADGE_MEANINGS
@@ -4106,8 +4300,12 @@ def _render_company_report(report) -> None:
 
             html_block = _narration_html(op.narrative) if op.narrative \
                 else "<p><em>(no narrative produced)</em></p>"
-            st.markdown(f'<div class="council-narrative">{html_block}</div>',
-                       unsafe_allow_html=True)
+            # DOLLAR-MATH-1: an HTML block is not escaped by the app-wide wrapper (a backslash
+            # would print), so a "$" here becomes its character reference, which the maths
+            # parser never sees and the browser still shows as "$".
+            st.markdown('<div class="council-narrative">'
+                        + html_block.replace("$", "&#36;") + '</div>',
+                        unsafe_allow_html=True)
         else:
             st.info(op.note)
 
@@ -4233,6 +4431,7 @@ def main() -> None:
         st.set_page_config(page_title="Council Station", page_icon="🏛",
                            layout="wide")
     _inject_chrome()
+    install_dollar_safety(st)       # DOLLAR-MATH-1: every markdown-rendering call is $-safe
 
     col_logo, col_title = st.columns([1, 11], vertical_alignment="center")
     with col_logo:
@@ -4268,7 +4467,7 @@ def main() -> None:
         # Options and default (Stocks, index=0) unchanged.
         st.radio("Asset type", list(ASSET_MODES), horizontal=True, index=0,
                  key="asset_mode")
-        st.caption("ETF lists and lenses are hidden while Stocks is selected.")
+        st.caption(asset_mode_sidebar_note(asset_mode()))
         st.divider()
 
         if show_legacy:

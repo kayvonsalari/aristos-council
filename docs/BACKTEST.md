@@ -636,7 +636,9 @@ to_csv(result, "backtests/")
 ## Refreshing the results
 
 The 13-cohort × 5-lens run behind the matrix above (and every badge in the app) is only as fresh
-as its end date (2026-09-01). To refresh it:
+as its last refresh — `backtests/RUN.md` states the date (the matrix was last refreshed
+2026-10-04; each refresh moves the window's end date forward with it, so this page deliberately
+does not repeat a date that would go stale). To refresh it:
 
 1. In Colab, re-run `notebooks/aristos_backtest.ipynb` end to end.
 2. Run cell 8, which zips the 13 cohort folders plus `SUMMARY.csv` into `backtests_export.zip`

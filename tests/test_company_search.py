@@ -134,7 +134,7 @@ def test_no_duplicated_country_and_exchange_codes():
     germany = _row("SIE.XETRA", "Siemens Aktiengesellschaft", market="XETRA", country="DE")
     unmapped = _row("ZZZ.ZZ", "Unmapped Co", market="ZZ", country="ZZ")
     for row, expected in ((taiwan, "Taiwan"), (hongkong, "Hong Kong"),
-                         (germany, "Germany — XETRA"), (unmapped, "ZZ")):
+                         (germany, "Germany — Xetra"), (unmapped, "ZZ")):
         res = search_companies(row.name, rows=[row], cohorts_root=Path("/nope"))
         assert res.matches[0].where == expected, row.ticker
 
@@ -203,4 +203,58 @@ def test_the_where_property_names_country_and_exchange():
     ``where`` looks it up (FIND-COMPANY-2 item 3)."""
     rows = [_row("SIE.XETRA", "Siemens Aktiengesellschaft", market="XETRA", country="DE")]
     res = search_companies("siemens", rows=rows, cohorts_root=Path("/nope"))
-    assert res.matches[0].where == "Germany — XETRA"
+    assert res.matches[0].where == "Germany — Xetra"
+
+
+# --------------------------------------------------------------------------- #
+# Batch 17 — SEARCH-RANK-1 and EXCHANGE-NAMES-1
+# --------------------------------------------------------------------------- #
+def test_byd_ranks_the_company_whose_name_starts_with_byd_first_not_a_ticker_collision():
+    """Live 2026-10-04: "byd" listed Boyd Gaming (ticker BYD.US) first, Boyd Group second and
+    BYD Company Limited (1211.HK) fourth."""
+    rows = [
+        _row("BYD.US", "Boyd Gaming Corporation", cap_bn=6.0, market="NYSE", country="US"),
+        _row("BYD.TO", "Boyd Group Services Inc.", cap_bn=3.5, market="TO", country="CA"),
+        _row("BYDDF.US", "BYD Electronic International", cap_bn=8.0, market="US", country="US"),
+        _row("1211.HK", "BYD Company Limited", cap_bn=110.0, market="HK", country="HK"),
+    ]
+    res = search_companies("byd", rows=rows, cohorts_root=Path("/nope"))
+    tickers = [m.ticker for m in res.matches]
+    assert tickers[0] == "1211.HK"                       # name starts with "BYD", largest cap
+    assert tickers.index("BYDDF.US") < tickers.index("BYD.US")      # name-prefix ties by cap
+    assert set(tickers[:4]) == {"1211.HK", "BYDDF.US", "BYD.US", "BYD.TO"}
+
+
+def test_novo_and_nestle_rank_the_named_company_first_accents_ignored():
+    rows = [
+        _row("NVO.US", "Novo Nordisk A/S", cap_bn=300.0, market="NYSE", country="US"),
+        _row("NOVO.US", "Novo Resources Corp", cap_bn=0.3, market="US", country="US"),
+        _row("NZYM-B.CO", "Novozymes A/S", cap_bn=14.0, market="CO", country="DK"),
+        _row("ACME.US", "Acme Novotel Holdings", cap_bn=500.0, market="US", country="US"),
+        _row("NESN.SW", "Nestlé S.A.", cap_bn=250.0, market="SW", country="CH"),
+        _row("NEST.US", "Nester Inc", cap_bn=1.0, market="US", country="US"),
+    ]
+    novo = [m.ticker for m in search_companies("novo", rows=rows,
+                                               cohorts_root=Path("/nope")).matches]
+    assert novo[0] == "NVO.US"                           # name starts with novo, biggest cap
+    assert novo[:3] == ["NVO.US", "NZYM-B.CO", "NOVO.US"]
+    assert novo.index("ACME.US") > novo.index("NOVO.US")  # name only CONTAINS it (Novotel word-
+    # start ties with ticker-starts, then cap decides) — never above a name that starts with it
+    nestle = search_companies("nestle", rows=rows, cohorts_root=Path("/nope")).matches
+    assert nestle[0].ticker == "NESN.SW"
+    assert [m.ticker for m in search_companies("NESTLÉ", rows=rows,
+                                               cohorts_root=Path("/nope")).matches][0] == "NESN.SW"
+
+
+def test_where_shows_readable_exchange_names_not_codes():
+    cases = (("NOVO-B.CO", "CO", "DK", "Denmark — Copenhagen"),
+             ("NESN.SW", "SW", "CH", "Switzerland — SIX Swiss"),
+             ("MC.PA", "PA", "FR", "France — Euronext Paris"),
+             ("SIE.XETRA", "XETRA", "DE", "Germany — Xetra"),
+             ("BHP.AU", "AU", "AU", "Australia"),          # code == country: no repeat
+             ("SHOP.TO", "TO", "CA", "Canada — Toronto"),
+             ("1211.HK", "HK", "HK", "Hong Kong"))
+    for ticker, code, country, expected in cases:
+        row = _row(ticker, f"Name of {ticker}", market=code, country=country)
+        res = search_companies(f"Name of {ticker}", rows=[row], cohorts_root=Path("/nope"))
+        assert res.matches[0].where == expected, ticker

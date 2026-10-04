@@ -368,7 +368,7 @@ td.cell-sell { box-shadow: inset 3px 0 0 var(--sell); }
 
 /* TAB-MERGE-1 part 2 commit 2: the company's own row in a peers table — a VISIBLE
    highlight beside the "(this company)" text marker, not instead of it. */
-td.this-company { background: var(--panel) !important; font-weight: 700; }
+td.this-company { background: #f6d86b !important; color: #1d2127 !important; font-weight: 700; }
 
 /* Valuation percentile: a diverging tint behind a cell that ALREADY says the word. */
 td.pct-cheapest { background: var(--pct-cheapest) !important; }
@@ -1053,10 +1053,10 @@ def _narration_line_html(result) -> str:
     Never silent. A run that narrated nothing says which rule produced nothing and how to
     get more, because an absent section is indistinguishable from a feature that was never
     switched on — the corollary this repo has paid for twice."""
-    from ..pipeline import narration_line
+    from ..pipeline import narration_line, narration_was_requested
 
     plan = (getattr(result, "meta", None) or {}).get("narration")
-    if not plan:
+    if not plan or not narration_was_requested(plan):
         return ""
     out = [f'<p class="note">{_esc(narration_line(plan))}</p>']
     missing = plan.get("not_narrated") or []
