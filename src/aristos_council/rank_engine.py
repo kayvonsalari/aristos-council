@@ -197,15 +197,31 @@ def too_few_to_rank_text(cohort_size: int) -> str:
     return f"too few to rank (only {cohort_size} {company} here, not a peer group)"
 
 
+def quintile_end_count(n: int) -> int:
+    """How many names sit at EACH end of an n-name quintile cut: ceil(n / 5), the same
+    number getting BUY at the top and SELL at the bottom. 0 for an empty list."""
+    return -(-n // 5) if n > 0 else 0
+
+
 def _verdict_for_position(i: int, n: int, cut: str, k: int, percentile: float) -> str:
     if cut == "top_k":
         return "buy" if i < k else "hold"
     if cut == "top_percentile":
         return "buy" if i < max(1, round(n * percentile)) else "hold"
-    # quintile (default): top 20% buy, bottom 20% sell, middle hold
-    if i < n / 5.0:
+    # quintile (default): the top fifth buys (rounded UP, so a list of 3 still has a BUY),
+    # and the bottom end sells THE SAME NUMBER of names (QUINTILE-ASYMMETRY-1). The old
+    # bottom cut was `i >= 0.8n`, which did not round up, so #3 of 3 stayed HOLD while #1
+    # of 3 was BUY.
+    if n < MIN_RANKABLE_COHORT:
+        # Under 3 names nothing votes (NO-RANK-NO-VOTE-1): the cut is arithmetic, kept as it
+        # always was so the primitive's stored output for tiny fixtures does not move.
+        if i < n / 5.0:
+            return "buy"
+        return "sell" if i >= n * 4.0 / 5.0 else "hold"
+    ends = quintile_end_count(n)
+    if i < ends:
         return "buy"
-    if i >= n * 4.0 / 5.0:
+    if i >= n - ends:
         return "sell"
     return "hold"
 

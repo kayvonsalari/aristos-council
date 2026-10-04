@@ -58,7 +58,7 @@ One row per name, one column per lens. A ranked cell gives the name's position i
 |---|---|---|---|
 | **A** | too few to rank (only 2 companies here, not a peer group) | #1 of 3 · BUY | too few to rank (only 2 companies here, not a peer group) |
 | **B** | too few to rank (only 2 companies here, not a peer group) | #2 of 3 · HOLD | too few to rank (only 2 companies here, not a peer group) |
-| **C** | excluded — return on invested capital 7.7%; the rule requires at least 12%. | #3 of 3 · HOLD | excluded — return on invested capital 7.7%; the rule requires at least 12%. |
+| **C** | excluded — return on invested capital 7.7%; the rule requires at least 12%. | #3 of 3 · SELL | excluded — return on invested capital 7.7%; the rule requires at least 12%. |
 | **DEAD** | no data | no data | no data |
 
 ## Share price & 52-week position

@@ -95,3 +95,11 @@ Two new stock lenses with no entry rules (Quality, Earnings Power Value) (LE-T1.
 | **LE-T13** | Company Check on a company under the $5bn size floor (use "include small" off) with Magic Formula RAW ticked. | RAW reads "does not apply - below min market cap" with NO would-rank sentence: a size gate is not an entry rule. |
 | **LE-T14** | Same as LE-T10 with the council opinion ticked (paid; needs a key). Read the council's text for the lens that did not apply. | It may say Growth "would rank 9th of 21" but never gives Growth a BUY, HOLD, SELL or a vote. If it does, a "⚠ narration check" annotation names the sentence. The council's headline still restates the agreement table's own words. |
 | **LE-T15** | List mode with the same lenses on a small list. | Nothing about "would rank" appears (Company mode only, by design). Ranks, verdicts and the agreement table are identical to a run before this change. |
+
+## Batch 18A
+
+Hand tests for the overnight batch (IDs are grouped by item: items 1 = T1-T2, 2 = T3-T5, 3 = T6, 4 = T7, 5 = T8-T10, 6 = T11-T16, 7 = T17).
+
+| ID | Steps | Expected result |
+|---|---|---|
+| **B18A-T6** | List mode, TM, GM, F with Magic Formula RAW and Quality ticked, council opinion OFF. Read both lenses' ranked tables. | #1 of 3 reads BUY, #2 reads HOLD, #3 reads SELL in BOTH lenses. The same number of names gets BUY at the top and SELL at the bottom. Then run a 10-name list: 2 BUY, 6 HOLD, 2 SELL. |
