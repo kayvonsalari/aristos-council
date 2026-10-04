@@ -145,8 +145,42 @@ def test_the_block_opens_with_what_the_run_concluded():
     assert "WHAT THE RUN CONCLUDED ABOUT THIS NAME" in block
     assert "BUY votes: 2 of 2 (Cyclical Income, Magic Formula RAW)" in block
     assert "Forensic: doubted" in block
+    assert "a CHECK" in block                       # FORENSIC-NARR-1 — explicit, by name
     assert "MARK: doubted by Forensic" in block
     assert "ADDRESS EVERY MARK ABOVE" in block
+
+
+# --------------------------------------------------------------------------- #
+# FORENSIC-NARR-1 — the verdict-of-record sentence, verbatim, when the agreement is
+# richer than one buy/hold/sell word (Company Check's council opinion)
+# --------------------------------------------------------------------------- #
+def test_the_verdict_of_record_sentence_is_handed_over_verbatim_when_present():
+    from aristos_council.agents.nodes import _agreement_block
+
+    class _State:
+        agreement_row = {"buy_votes": 0, "n_voting": 1, "buy_lenses": [],
+                         "sell_lenses": ["Magic Formula RAW"],
+                         "checks": [], "marks": [],
+                         "headline": "BUY on 0 of 1 vote; Growth does not apply."}
+
+    block = _agreement_block(_State())
+    assert "VERDICT OF RECORD, EXACT WORDS" in block
+    assert "VERBATIM" in block
+    assert "\"BUY on 0 of 1 vote; Growth does not apply.\"" in block
+
+
+def test_no_headline_in_the_row_means_no_verdict_of_record_block():
+    """The Run-tab's own agreement_row_for carries no 'headline' key — this must degrade
+    to nothing extra, not a crash or an empty quoted sentence."""
+    from aristos_council.agents.nodes import _agreement_block
+
+    class _State:
+        agreement_row = {"buy_votes": 2, "n_voting": 2,
+                         "buy_lenses": ["Cyclical Income", "Magic Formula RAW"],
+                         "sell_lenses": [], "checks": [], "marks": []}
+
+    block = _agreement_block(_State())
+    assert "VERDICT OF RECORD" not in block
 
 
 def test_an_unmarked_name_gets_no_address_the_marks_instruction():

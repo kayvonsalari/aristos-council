@@ -247,3 +247,90 @@ def test_the_validator_is_pure_and_makes_no_llm_call(monkeypatch):
     # ...and deterministic: same input, same issues, every time
     n = _broken()
     assert _codes(n, ranker_verdict="buy") == _codes(n, ranker_verdict="buy")
+
+
+# --------------------------------------------------------------------------- #
+# 8. RANK-CHECK-FP-1 — a price PAIR must never read as a malformed rank
+# --------------------------------------------------------------------------- #
+def test_a_forward_pe_price_pair_does_not_trip_the_bad_rank_check():
+    """Live, EL.PA: the forward P/E line '€142.80 / €7.25' was flagged as 'A rank is
+    missing its cohort size: "80 /"' — the old lookahead only asked whether a digit
+    immediately followed the slash, and here one does, just after a space and a
+    currency symbol. The genuinely malformed case ('3/', nothing after it at all) must
+    still be caught."""
+    n = _well_formed()
+    n.neutral_context = ["The forward P/E is €142.80 / €7.25."]
+    assert "unparseable_rank" not in _codes(n, ranker_verdict="buy")
+    assert validate_narration(n, ranker_verdict="buy") == []
+
+    n.neutral_context = ["It placed 3/ in the cohort."]
+    assert "unparseable_rank" in _codes(n, ranker_verdict="buy")
+
+
+# --------------------------------------------------------------------------- #
+# 9. FORENSIC-NARR-1 — the council never invents a verdict
+# --------------------------------------------------------------------------- #
+def test_a_headline_that_restates_the_verdict_of_record_passes():
+    n = _well_formed()
+    n.echoed_verdict = ("BUY on 0 of 1 vote; Growth does not apply. Magic Formula RAW "
+                        "rated it SELL.")
+    assert "headline_does_not_restate_verdict_of_record" not in _codes(
+        n, ranker_verdict="sell",
+        verdict_of_record="BUY on 0 of 1 vote; Growth does not apply.")
+
+
+def test_a_headline_that_invents_a_different_verdict_is_flagged():
+    """Live: EL.PA's headline read 'HOLD — ... Forensic ... anchors the HOLD' while the
+    verdict of record was 'BUY on 0 of 1 vote' — no lens had rated it HOLD at all."""
+    n = _well_formed()
+    n.echoed_verdict = "HOLD — Forensic's clean read and strong technicals argue HOLD."
+    codes = _codes(n, ranker_verdict="sell",
+                   verdict_of_record="BUY on 0 of 1 vote; Growth does not apply.")
+    assert "headline_does_not_restate_verdict_of_record" in codes
+
+
+def test_no_verdict_of_record_supplied_skips_the_check():
+    """Same degrade-rather-than-guess discipline as (d): a single-lens run has no richer
+    verdict-of-record sentence to compare against, and omitting it is not a mismatch."""
+    n = _well_formed()
+    n.echoed_verdict = "Something else entirely."
+    assert "headline_does_not_restate_verdict_of_record" not in _codes(
+        n, ranker_verdict="buy")
+
+
+def test_a_check_lens_given_a_verdict_in_the_lens_table_is_flagged():
+    n = _well_formed()
+    n.lens_verdicts.append(
+        LensVerdictItem(lens="Forensic", verdict="hold", position=12, cohort_size=21))
+    codes = _codes(n, ranker_verdict="buy", check_lens_labels=["Forensic"])
+    assert "check_lens_given_a_verdict" in codes
+
+
+def test_a_check_lens_marked_in_its_own_words_is_not_flagged():
+    n = _well_formed()
+    n.lens_verdicts.append(
+        LensVerdictItem(lens="Forensic", verdict="doubted", position=12, cohort_size=21))
+    codes = _codes(n, ranker_verdict="buy", check_lens_labels=["Forensic"])
+    assert "check_lens_given_a_verdict" not in codes
+
+
+def test_a_check_lens_anchoring_a_verdict_in_prose_is_flagged():
+    """Live: 'Forensic's clean read ... anchors the HOLD' — a check lens's name beside
+    a bare verdict word, in free prose, not just the structured lens table."""
+    n = _well_formed()
+    n.disagreement_note = "Forensic's clean read keeps this closer to a HOLD."
+    codes = _codes(n, ranker_verdict="buy", check_lens_labels=["Forensic"])
+    assert "check_lens_anchors_a_verdict" in codes
+
+
+def test_a_check_lens_named_without_any_verdict_word_nearby_is_not_flagged():
+    n = _well_formed()
+    n.disagreement_note = "Forensic found the accruals clean."
+    codes = _codes(n, ranker_verdict="buy", check_lens_labels=["Forensic"])
+    assert "check_lens_anchors_a_verdict" not in codes
+
+
+def test_no_check_lens_labels_supplied_skips_the_check():
+    n = _well_formed()
+    n.disagreement_note = "Forensic's clean read keeps this closer to a HOLD."
+    assert "check_lens_anchors_a_verdict" not in _codes(n, ranker_verdict="buy")

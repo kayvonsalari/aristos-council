@@ -809,6 +809,86 @@ def check_cross_lens(narrative: str, verdicts: list[dict] | None = None) -> list
     return flags
 
 
+# --------------------------------------------------------------------------- #
+# FORENSIC-NARR-1(c) — a "Nth of M" citation must name the lens it came from
+# --------------------------------------------------------------------------- #
+# Word-ordinal form only ("12th of 21") — the form specialist/narrator prose actually
+# uses; the slash form ("12/21") is narration_schema's own, separate concern (the
+# verdict-WORD-and-shape checker, not this module's rank-PROSE checker — see that
+# module's own docstring for the boundary).
+_WORD_RANK = re.compile(r"\b(\d+)(?:st|nd|rd|th)\s+of\s+(\d+)\b", re.I)
+
+
+def _lens_core(label: str) -> str:
+    return (label or "").split(" (")[0].strip()
+
+
+def _named_lens(sentence: str, lens_labels: list[str]) -> Optional[str]:
+    """The ONE lens label this sentence names, or None (zero or several — an ambiguous
+    sentence is never adjudicated)."""
+    found = [label for label in lens_labels
+            if _lens_core(label) and re.search(rf"\b{re.escape(_lens_core(label))}\b",
+                                               sentence, re.I)]
+    return found[0] if len(found) == 1 else None
+
+
+def _rank_attribution_annotation(claim: str, cite: str, true_lens: str,
+                                 named_lens: Optional[str]) -> str:
+    if named_lens:
+        return (f'[⚠ narration check: "{claim}" attributes {true_lens}\'s {cite} rank '
+                f"to {named_lens} — it belongs to {true_lens}]")
+    return (f'[⚠ narration check: "{claim}" cites a {cite} rank without naming the '
+            f"lens it belongs to ({true_lens})]")
+
+
+def check_rank_attribution(narrative: str, lens_verdicts: list[dict] | None) -> list[str]:
+    """FORENSIC-NARR-1(c) — every "Nth of M" citation must name the lens whose table
+    that exact (position, cohort_size) pair came from.
+
+    Live: on EL.PA, the technical specialist called Forensic's own "12th of 21" "the
+    ranker's" rank — Forensic is a check lens, never "the ranker", and no voting lens on
+    that run had a 21-name cohort either, so the citation was simply misattributed.
+
+    Conservative by construction, matching this module's house style (``check_cross_lens``,
+    ``check_narration_by_lens``): fires ONLY when the (position, cohort_size) pair belongs
+    to exactly ONE lens on this run (two lenses sharing a cohort size makes the pair
+    genuinely ambiguous, and the check never invents a contradiction) and the sentence
+    does not already name that lens somewhere in it."""
+    if not narrative or not lens_verdicts:
+        return []
+    owner: dict[tuple[int, int], str] = {}
+    ambiguous: set[tuple[int, int]] = set()
+    labels: list[str] = []
+    for v in lens_verdicts:
+        label, pos, size = v.get("lens"), v.get("position"), v.get("cohort_size")
+        if not label:
+            continue
+        labels.append(label)
+        if pos and size:
+            key = (int(pos), int(size))
+            if key in owner and owner[key] != label:
+                ambiguous.add(key)
+            else:
+                owner[key] = label
+    flags: list[str] = []
+    seen: set[str] = set()
+    for sentence in _sentences(narrative):
+        for match in _WORD_RANK.finditer(sentence):
+            key = (int(match.group(1)), int(match.group(2)))
+            if key not in owner or key in ambiguous:
+                continue
+            true_lens = owner[key]
+            if re.search(rf"\b{re.escape(_lens_core(true_lens))}\b", sentence, re.I):
+                continue                                  # already correctly attributed
+            claim = _claim(sentence)
+            if claim in seen:
+                continue
+            seen.add(claim)
+            flags.append(_rank_attribution_annotation(
+                claim, match.group(0), true_lens, _named_lens(sentence, labels)))
+    return flags
+
+
 def check_narration_by_lens(narrative: str, tables_by_lens: dict,
                             default_table: dict) -> list[str]:
     """Rank-semantics checking for a CROSS-LENS narration (NARR-UNION-1).

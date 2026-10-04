@@ -59,7 +59,15 @@ _MONEY = re.compile(r"(?:[$€£¥]|\b(?:USD|EUR|GBP|JPY|CHF|KRW|SEK|DKK|NOK|CAD
                     r"(-?[\d][\d,]*(?:\.\d+)?)\s*(tn|bn|m)?", re.I)
 # A malformed numeric token: more than one decimal point, or a stray thousands group.
 _BAD_NUMBER = re.compile(r"(?<![\w.])-?\d[\d,]*\.\d+\.\d+(?![\w])")
-_BAD_RANK = re.compile(r"(?<![\w/])\d+\s*/\s*(?![\d])")
+# RANK-CHECK-FP-1 — the lookahead used to be bare "(?!\d)": a genuinely malformed rank
+# ("3/" — missing cohort size) has NOTHING numeric after the slash, but so does a price
+# PAIR split across a decimal boundary — "€142.80 / €7.25" matched starting at "80 /"
+# ("80" preceded by "." passes the lookbehind; "€" right after is not a digit, so the old
+# lookahead was satisfied too), and the structural banner fired "A rank is missing its
+# cohort size: '80 /'" over a forward P/E line, on a real EL.PA run. The fix: also look
+# PAST an optional currency symbol and whitespace for a digit — a genuine bad rank has no
+# number at all after the slash, by any route; a price pair always does.
+_BAD_RANK = re.compile(r"(?<![\w/])\d+\s*/\s*(?!\s*[$€£¥]?\s*\d)")
 
 
 @dataclass(frozen=True)
@@ -91,12 +99,27 @@ def _verdict_words(text: str) -> set[str]:
 
 
 def validate_narration(narration, *, ranker_verdict: Optional[str] = None,
-                       ticker: str = "") -> list[StructuralIssue]:
+                       ticker: str = "", verdict_of_record: Optional[str] = None,
+                       check_lens_labels=None) -> list[StructuralIssue]:
     """Every structural failure in one narration, in a stable order.
 
     ``ranker_verdict`` enables check (d); omit it and the verdict-word check is SKIPPED
     rather than guessed — a run with no verdict-of-record to compare against is not a
     mismatch, and inventing one would be the opposite of the house rule.
+
+    FORENSIC-NARR-1 — two more checks, same discipline (enabled only when the caller
+    supplies what they need; never guessed):
+      ``verdict_of_record``   the EXACT sentence the page's own agreement table states
+                              (``CompanyAgreement.headline()``) when a run has a
+                              multi-lens company agreement richer than one verdict word
+                              ("BUY on 0 of 1 vote; Growth does not apply"). Check (e).
+      ``check_lens_labels``   labels of lenses ticked this run that MARK, not vote
+                              (Forensic). A check lens never issues BUY/HOLD/SELL — not
+                              in the narration's own lens table, and not anchoring a
+                              sentence in its prose either. Check (f).
+    Both were added after a live EL.PA run: the narration's headline read "HOLD" for a
+    company whose verdict of record was "BUY on 0 of 1 vote", and a check lens
+    (Forensic) was written up as if it had cast that HOLD.
     """
     issues: list[StructuralIssue] = []
     if narration is None:
@@ -178,7 +201,61 @@ def validate_narration(narration, *, ranker_verdict: Optional[str] = None,
                     f"The narration echoes {'/'.join(sorted(said)).upper()} but the "
                     f"ranker's verdict of record{f' for {ticker}' if ticker else ''} "
                     f"is {wanted.upper()}."))
+
+    # (e) the headline restates the agreement table's verdict of record WORD FOR WORD —
+    # a stronger check than (d) above, for the case (d) cannot cover: a multi-lens
+    # company agreement's verdict of record is a vote-count SENTENCE, not one buy/hold/
+    # sell word, so a narration could pass (d) by mentioning the lead lens's own word
+    # while still inventing its own net headline instead of quoting the agreement.
+    if verdict_of_record:
+        wanted_line = re.sub(r"\s+", " ", str(verdict_of_record)).strip().lower()
+        said_line = re.sub(r"\s+", " ", narration.echoed_verdict or "").strip().lower()
+        if wanted_line and wanted_line not in said_line:
+            issues.append(StructuralIssue(
+                "headline_does_not_restate_verdict_of_record",
+                f"The narration's headline does not restate the agreement table's "
+                f"verdict of record word for word: it should state "
+                f"\"{verdict_of_record}\"."))
+
+    # (f) a check lens (marks, never votes) is never given, and never anchors, a
+    # BUY/HOLD/SELL. Two sub-checks: the narration's OWN lens table (structured,
+    # lens_verdicts), and any free-text sentence naming a check lens beside a verdict
+    # word (echoed_verdict, neutral_context, open_questions, disagreement_note, every
+    # lens_attribution/specialist reasoning — _text_fields covers all of them).
+    cores = {c for c in (_check_lens_core(label) for label in (check_lens_labels or ()))
+            if c}
+    if cores:
+        for v in narration.lens_verdicts or []:
+            if _check_lens_core(v.lens) in cores and (v.verdict or "").strip().lower() \
+                    in _VERDICTS:
+                issues.append(StructuralIssue(
+                    "check_lens_given_a_verdict",
+                    f"{v.lens} is a check — it marks, it does not vote — but the "
+                    f"narration's own lens table gives it a verdict of "
+                    f"{v.verdict.strip().upper()}."))
+        seen_sentences: set[tuple[str, str]] = set()
+        for text in _text_fields(narration):
+            for sentence in re.split(r"(?<=[.!?])\s+", text):
+                said = _verdict_words(sentence)
+                if not said:
+                    continue
+                for core in cores:
+                    if re.search(rf"\b{re.escape(core)}\b", sentence, re.I):
+                        key = (core, sentence.strip())
+                        if key in seen_sentences:
+                            continue
+                        seen_sentences.add(key)
+                        issues.append(StructuralIssue(
+                            "check_lens_anchors_a_verdict",
+                            f"{core} is a check, not a vote, but this sentence gives "
+                            f"it a verdict word "
+                            f"({'/'.join(sorted(said)).upper()}): "
+                            f"\"{sentence.strip()}\"."))
     return issues
+
+
+def _check_lens_core(label: str) -> str:
+    return (label or "").split(" (")[0].strip()
 
 
 def _parses(token: str) -> bool:

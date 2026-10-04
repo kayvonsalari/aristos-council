@@ -126,6 +126,16 @@ class CouncilOutcome:
     agreement: Optional[str]             # AGREE | DISAGREE (None when narrating)
     dissent_notes: list[str]             # specialist challenges to the ranker
     report: RunReport
+    # FORENSIC-NARR-1 — the EXACT verdict-of-record sentence the page's own agreement
+    # table states ("BUY on 0 of 1 vote; Growth does not apply"), when the run has a
+    # multi-lens agreement (Company Check's council opinion) richer than the single
+    # ``ranker_verdict`` word. None for a Run-tab per-lens narration, which never needs
+    # it — ``ranker_verdict`` IS its verdict of record there.
+    verdict_of_record: Optional[str] = None
+    # Labels of lenses ticked this run that MARK rather than vote (Forensic). Lets
+    # ``narration_schema.validate_narration`` flag a sentence that gives one of them a
+    # BUY/HOLD/SELL — a check lens never issues a verdict, so it can never anchor one.
+    check_lens_labels: frozenset = field(default_factory=frozenset)
 
 
 @dataclass
@@ -656,10 +666,11 @@ def _narrative_text(outcome: CouncilOutcome) -> str:
         _, stamps = split_stamps(d.rationale or "")
         # NARR-SCHEMA-1 — validated synchronously, on the way into the report. Pure
         # parsing, zero LLM calls. A failing narration still ships, with the banner.
-        issues = validate_narration(narration,
-                                    ranker_verdict=getattr(outcome, "ranker_verdict",
-                                                           None),
-                                    ticker=getattr(outcome, "ticker", ""))
+        issues = validate_narration(
+            narration, ranker_verdict=getattr(outcome, "ranker_verdict", None),
+            ticker=getattr(outcome, "ticker", ""),
+            verdict_of_record=getattr(outcome, "verdict_of_record", None),
+            check_lens_labels=getattr(outcome, "check_lens_labels", None))
         rendered = narration_markdown(narration, stamps=stamps,
                                       issues=issues).strip()
         if rendered:
@@ -4565,12 +4576,17 @@ def _annotate_narration_by_lens(rep, result: MultiStrategyResult, ticker: str,
 
 def _annotate_cross_lens(rep, verdicts: list[dict]) -> None:
     """Append the fact-checker's CROSS-LENS SYNTHESIS annotations in place — the same
-    treatment an unsupported ordinal claim already gets. Never rewrites the prose."""
-    from .narration_check import check_cross_lens
+    treatment an unsupported ordinal claim already gets. Never rewrites the prose.
+
+    FORENSIC-NARR-1(c) — also runs ``check_rank_attribution`` over the same verdicts:
+    a "Nth of M" citation must name the lens it came from (live: Forensic's own
+    "12th of 21" called "the ranker's" rank)."""
+    from .narration_check import check_cross_lens, check_rank_attribution
     d = getattr(rep, "decision", None)
     if d is None or not getattr(d, "rationale", ""):
         return
-    marks = check_cross_lens(d.rationale, verdicts)
+    marks = check_cross_lens(d.rationale, verdicts) + check_rank_attribution(
+        d.rationale, verdicts)
     if marks:
         d.rationale = d.rationale.rstrip() + "\n\n" + "\n".join(marks)
 
@@ -4619,8 +4635,20 @@ def buying_lenses(result: MultiStrategyResult, ticker: str) -> list[str]:
 def cross_lens_verdicts(result: MultiStrategyResult, ticker: str) -> list[dict]:
     """EVERY selected lens's verdict for ``ticker`` — including the lenses that rated it
     HOLD or SELL or excluded it. This is what makes the narration two-sided: a reader is
-    never shown the buying lenses alone."""
-    from .report_language import label_with_id
+    never shown the buying lenses alone.
+
+    FORENSIC-NARR-1 — ``verdict`` stays RAW lowercase for a VOTING lens (unchanged —
+    "buy"/"hold"/"sell", the existing contract several callers match on) but is
+    translated to the check's OWN word (CHECK-WORDS-1: clean/no concern/doubted) for a
+    CHECK lens (``cell.is_check``), exactly as ``cell.render()`` already shows a reader.
+    Before this fix ``verdict`` was ``cell.verdict`` RAW for every lens, check included
+    — so the narrator's own structured evidence told it Forensic's verdict was "hold",
+    and the live EL.PA run wrote that into the narration ("Forensic ... anchors the
+    HOLD") with nothing in the evidence to contradict it. ``votes`` is the explicit,
+    name-independent flag (mirrors ``company_report.LensVote.votes``) so a check added
+    later needs no narration-side update to stay silent about a verdict it never
+    issues."""
+    from .report_language import label_with_id, verdict_word
 
     row = next((r for r in result.rows if r.ticker == ticker), None)
     if row is None:
@@ -4632,7 +4660,10 @@ def cross_lens_verdicts(result: MultiStrategyResult, ticker: str) -> list[dict]:
         out.append({"lens": columns[sid], "lens_id": sid,
                     "lens_label": label_with_id(columns[sid], sid),
                     "cell": cell.render(), "status": cell.status,
-                    "verdict": cell.verdict})
+                    "verdict": (cell.verdict if not cell.is_check
+                               else verdict_word(cell.verdict, check=True)),
+                    "votes": not cell.is_check,
+                    "position": cell.position, "cohort_size": cell.cohort_size or None})
     return out
 
 

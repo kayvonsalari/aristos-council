@@ -454,6 +454,34 @@ def test_a_selector_cell_renders_exactly_as_before():
     assert cell.render() == "#3 of 10 · SELL"
 
 
+def test_cross_lens_verdicts_translates_a_check_cells_verdict_too():
+    """FORENSIC-NARR-1 — the EVIDENCE a narrator reads must carry the same translation
+    cell.render() already does. Before this fix 'verdict' was cell.verdict RAW for
+    every lens including a check, which is exactly how a check lens's buy/hold/sell
+    reached the narrator's structured input with nothing to say it was a check's
+    reading and not a vote."""
+    from aristos_council.pipeline import (MultiStrategyCell, MultiStrategyResult,
+                                          MultiStrategyRow, cross_lens_verdicts)
+
+    result = MultiStrategyResult(
+        strategy_ids=["sel_v1", "chk_v1"],
+        strategy_names={"sel_v1": "Magic Formula RAW", "chk_v1": "Forensic"},
+        results={}, meta={},
+        rows=[MultiStrategyRow(ticker="SU", display="SU", cells={
+            "sel_v1": MultiStrategyCell(strategy_id="sel_v1", status="ranked",
+                                        position=1, cohort_size=3, verdict="sell"),
+            "chk_v1": MultiStrategyCell(strategy_id="chk_v1", status="ranked",
+                                        position=12, cohort_size=21, verdict="hold",
+                                        is_check=True)})])
+    rows = cross_lens_verdicts(result, "SU")
+    voting = next(r for r in rows if r["lens"] == "Magic Formula RAW")
+    check = next(r for r in rows if r["lens"] == "Forensic")
+    assert voting["verdict"] == "sell" and voting["votes"] is True   # unchanged contract
+    assert check["verdict"] == "no concern" and check["votes"] is False
+    assert "hold" not in check["verdict"] and "HOLD" not in check["verdict"]
+    assert check["position"] == 12 and check["cohort_size"] == 21
+
+
 def test_the_grid_keeps_its_COLOUR_for_a_check_cell():
     """doubted red, clean green, no concern neutral — the same three signals, because a
     reader scanning for trouble should find it in the same colour whichever column it is

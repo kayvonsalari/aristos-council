@@ -338,23 +338,42 @@ def _council_agreement_row(agreement: Optional[CompanyAgreement]) -> dict:
     """The same shape ``pipeline.agreement_row_for`` builds for a multi-lens Run-tab
     narration, read off Company Check's OWN agreement instead of a lens-agreement table
     row — so the narrator opens on what the run concluded, in the SAME words the page
-    shows (CHECK-WORDS-1: a check's reading, never its verdict word)."""
+    shows (CHECK-WORDS-1: a check's reading, never its verdict word).
+
+    FORENSIC-NARR-1 — ``headline`` is ``agreement.headline`` VERBATIM: the exact
+    sentence the page's own agreement table states as the verdict of record ("BUY on 0
+    of 1 vote; Growth does not apply"). The narrator is told to open its own headline by
+    restating it; ``narration_schema.validate_narration`` checks that it did. Before
+    this, the narrator had only numbers to work from and had to compose its own opening
+    sentence — which is how the live EL.PA run arrived at "HOLD" for a company whose
+    verdict of record was "BUY on 0 of 1 vote"."""
     if agreement is None:
         return {}
     return {"buy_votes": agreement.buy_votes, "n_voting": agreement.n_voted,
            "buy_lenses": list(agreement.buy), "sell_lenses": list(agreement.sell),
            "checks": [{"lens": label, "reading": word}
                       for label, word in agreement.checks.items()],
-           "marks": list(agreement.marks)}
+           "marks": list(agreement.marks), "headline": agreement.headline}
 
 
 def _council_cross_lens_verdicts(votes: list[LensVote]) -> list[dict]:
     """EVERY ticked lens's verdict for this company, including one that did not apply —
     the same shape ``pipeline.cross_lens_verdicts`` builds, so the narrator's existing
-    cross-lens checks (``narration_check.check_cross_lens``) work unchanged."""
+    cross-lens checks (``narration_check.check_cross_lens``) work unchanged.
+
+    FORENSIC-NARR-1 — ``verdict`` is left RAW lowercase for a VOTING lens (unchanged —
+    "buy"/"hold"/"sell", the existing contract several callers match on) but translated
+    to the check's OWN word (CHECK-WORDS-1: clean/no concern/doubted) for a CHECK lens.
+    Before this, a check lens's raw buy/hold/sell leaked through unchanged — handing the
+    narrator "verdict": "hold" for Forensic, with nothing in the evidence pack to say it
+    was a check's reading and not a vote, which is exactly how the live EL.PA run
+    invented "Forensic ... anchors the HOLD". ``votes`` makes the distinction explicit
+    and structural rather than something the model must infer."""
     return [{"lens": v.label, "lens_id": v.strategy_id,
             "lens_label": f"{v.label} ({v.strategy_id})", "cell": v.result(),
-            "status": v.status, "verdict": v.verdict} for v in votes]
+            "status": v.status, "verdict": v.verdict if v.votes else v.word,
+            "votes": v.votes,
+            "position": v.position, "cohort_size": v.cohort_size or None} for v in votes]
 
 
 def _council_company_facts(report: CompanyReport) -> dict:
@@ -523,9 +542,11 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
     # 6+-word run in two theses is convergent canned phrasing, not analysis. Annotated on
     # the DECISION's own rationale, the same place every other narration check lands.
     _annotate_specialist_repetition(rep, state)
-    outcome = CouncilOutcome(ticker=report.ticker, ranker_verdict=lead.verdict,
-                             council_verdict=None, agreement=None,
-                             dissent_notes=rep.dissent_notes, report=rep)
+    outcome = CouncilOutcome(
+        ticker=report.ticker, ranker_verdict=lead.verdict, council_verdict=None,
+        agreement=None, dissent_notes=rep.dissent_notes, report=rep,
+        verdict_of_record=agreement_row.get("headline") or None,
+        check_lens_labels=frozenset(c["lens"] for c in agreement_row.get("checks", [])))
     cost = _cost_meta(meter, mark)
     return CouncilOpinion(available=True, narrative=_narrative_text(outcome),
                           calls=cost["actual_calls"], cost=cost["actual_cost"],

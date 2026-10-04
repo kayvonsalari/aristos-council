@@ -19,7 +19,9 @@ import pytest
 
 from aristos_council.company_report import (SECTION_ORDER, LensVote, build_agreement,
                                             company_facts_pack, format_company_report,
-                                            run_company_report, votes_from_multi)
+                                            run_company_report, votes_from_multi,
+                                            _council_agreement_row,
+                                            _council_cross_lens_verdicts)
 from aristos_council.data.adapter import (Fundamentals, MarketDataAdapter, PriceBar,
                                           PriceHistory)
 from aristos_council.export.report_html import company_report_html
@@ -614,6 +616,63 @@ def test_no_lens_voted_is_said_in_words_never_0_of_0():
     assert ag.headline == "No lens voted: every ticked lens's rules exclude this company"
     assert "0 of 0" not in ag.headline
     assert ag.table_row("Company Co")["BUY votes"] == "no vote"
+
+
+# =========================================================================== #
+# FORENSIC-NARR-1 — the exact EL.PA shape: a check lens, a 0-of-1 vote, Growth
+# not applying. The council's headline must restate the agreement's verdict of
+# record word for word, and Forensic must never be given or anchor a vote.
+# =========================================================================== #
+def test_the_council_facts_pack_carries_the_exact_headline_and_check_labels():
+    forensic = LensVote("f", "Forensic", kind="check", status="ranked", verdict="buy",
+                        position=3, cohort_size=14)
+    votes = [_ranked("Magic Formula RAW", "sell"), _not_applying("Growth"), forensic]
+    ag = build_agreement(votes)
+    assert ag.headline == "BUY on 0 of 1 vote; 1 lens did not apply to this company"
+
+    row = _council_agreement_row(ag)
+    assert row["headline"] == ag.headline
+
+    cross = _council_cross_lens_verdicts(votes)
+    raw = next(c for c in cross if c["lens"] == "Magic Formula RAW")
+    check = next(c for c in cross if c["lens"] == "Forensic")
+    assert raw["verdict"] == "sell" and raw["votes"] is True        # unchanged contract
+    # Forensic's internal verdict is "buy" but it is a CHECK — the evidence must never
+    # say so; it reads in its own words, and "votes" says plainly that it never voted.
+    assert check["verdict"] == "clean" and check["votes"] is False
+    assert "buy" not in check["verdict"].lower()
+
+
+def test_run_council_opinion_feeds_the_headline_and_check_labels_to_the_outcome(
+        tmp_path, monkeypatch):
+    """The plumbing _narrative_text's validate_narration call depends on: a run with
+    this exact shape must hand CouncilOutcome the agreement's own headline string and
+    Forensic's label as a check, not derive anything looser."""
+    from aristos_council import company_report as cr
+
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    forensic = LensVote("forensic_v1", "Forensic", kind="check", status="ranked",
+                        verdict="buy", position=3, cohort_size=14)
+    report.votes = [report.votes[0], forensic]
+    report.agreement = build_agreement(report.votes)
+
+    import aristos_council.pipeline as pipeline_mod
+
+    captured = {}
+    orig = pipeline_mod.CouncilOutcome
+
+    def _spy(*a, **kw):
+        captured.update(kw)
+        return orig(*a, **kw)
+
+    # run_council_opinion imports CouncilOutcome LOCALLY (`from .pipeline import
+    # CouncilOutcome`) on every call, so patching the pipeline module's own attribute
+    # is what a fresh local import actually picks up.
+    monkeypatch.setattr(pipeline_mod, "CouncilOutcome", _spy)
+    cr.run_council_opinion(report, adapter=_Adapter(), runners=_opinion_runners(),
+                           today=TODAY)
+    assert captured.get("verdict_of_record") == report.agreement.headline
+    assert captured.get("check_lens_labels") == frozenset({"Forensic"})
 
 
 def test_three_votes_is_x_of_3_and_nothing_is_said_about_lenses_that_did_not_apply():
