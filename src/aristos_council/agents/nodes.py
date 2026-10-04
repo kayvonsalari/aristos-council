@@ -843,6 +843,11 @@ def _cross_lens_block(state: ResearchState) -> str:
         return ""
     lines = [f"  - {r.get('lens', '')}: {r.get('cell', '')}"
             + ("" if r.get("votes", True) else " (a CHECK — marks, never votes)")
+            # LENS-EXPAND-1b: a lens that did not apply may carry where the company WOULD have
+            # ranked on its measures — context only, never a verdict, never a vote. Absent (so the
+            # prompt is byte-unchanged) on every run that did not compute one.
+            + (f" — {r['would_rank']} (NOT a vote and NOT a verdict: say \"would rank\", never "
+               "BUY, HOLD or SELL, for this lens)" if r.get("would_rank") else "")
             for r in rows]
     reasons = state.cross_lens_reasons or []
     why = ""

@@ -238,8 +238,21 @@ def screen_with_floor_override(screen_strategy, override: Optional[float]):
     return screen_strategy.model_copy(update={"criteria": swapped}), file_value
 
 
+def _stash_shadow(shadow_pool: Optional[dict], ticker: str, fi, rank_strategy) -> None:
+    """LENS-EXPAND-1b — record the ranking-factor values and sources of a name the lens's ENTRY
+    RULES (its screen / payout cap) excluded, so a "would have ranked" reading can place the
+    company among the whole peer group. Only when a pool was asked for (``None`` -> nothing is
+    computed and a normal run is byte-identical); scope gates (asset kind, size floor, sector)
+    never reach here, because the lens does not measure that kind of company at all."""
+    if shadow_pool is None:
+        return
+    outcomes = compute_factor_outcomes(fi, [fac.name for fac in rank_strategy.factors])
+    shadow_pool[ticker] = ({n: v for n, (v, _) in outcomes.items()},
+                           {n: src for n, (_, src) in outcomes.items()})
+
+
 def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=None,
-                with_valuation_band=False):
+                with_valuation_band=False, shadow_pool: Optional[dict] = None):
     from .data.adapter import TransientFetchError
 
     rows: list[tuple[str, dict]] = []
@@ -305,6 +318,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
             continue
         if f is not None and is_payout_uncovered(f.payout_ratio,
                                                  rank_strategy.max_payout_ratio):
+            _stash_shadow(shadow_pool, t, fi, rank_strategy)
             excluded.append((t, f"payout uncovered ({f.payout_ratio:.0%} > "
                                 f"{rank_strategy.max_payout_ratio:.0%})"))
             continue
@@ -328,6 +342,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
                 flag = price_divergence_flag(fi, prefilter_criteria)
                 if flag:
                     reason = f"{reason} {flag}"
+                _stash_shadow(shadow_pool, t, fi, rank_strategy)
                 excluded.append((t, reason))
                 continue
         outcomes = compute_factor_outcomes(
@@ -609,6 +624,10 @@ class RankPipelineResult:
     # run (no lens declared) or for a hand-built result.
     rank_strategy: object = None
     screen_strategy: object = None
+    # LENS-EXPAND-1b — {ticker: (factor_values, factor_sources)} for every name this lens's ENTRY
+    # RULES excluded, kept only when the run asked for it (``with_shadow``). Display-only input to
+    # the "would have ranked" reading (shadow_rank.py): nothing here is ranked, voted or graded.
+    shadow_pool: dict = field(default_factory=dict)
 
 
 def tie_boundary_notes(ranked: list[RankedTicker]) -> dict[str, str]:
@@ -714,7 +733,7 @@ def run_rank_pipeline(
     use_cache: bool = True, progress: Optional[Callable[[str], None]] = None,
     freeze_dir: str | Path | None = None, replay_run_id: Optional[str] = None,
     with_valuation_band: bool = False, derived_from: str = "",
-    min_market_cap_override: float | None = None,
+    min_market_cap_override: float | None = None, with_shadow: bool = False,
 ) -> RankPipelineResult:
     """Rank a universe under a RANK strategy, then (unless ``ranker_only``) narrate
     the shortlist with the LLM council. The single entrypoint the CLI and Council
@@ -810,9 +829,10 @@ def run_rank_pipeline(
     prefilter = (screen_strategy.criteria
                  if (screen_strategy is not None
                      and getattr(rank_strategy, "prefilter_screen", False)) else None)
+    shadow_pool: Optional[dict] = {} if with_shadow else None
     ranked, prerank_excluded, screen_bases, names, screen_outcomes = _rank_stage(
         universe, rank_strategy, adapter, today=today, prefilter_criteria=prefilter,
-        with_valuation_band=with_valuation_band)
+        with_valuation_band=with_valuation_band, shadow_pool=shadow_pool)
     live = [r for r in ranked if not r.excluded]
     excluded, unrateable, fetch_errors = _split_exclusions(ranked, prerank_excluded)
 
@@ -921,7 +941,7 @@ def run_rank_pipeline(
         # CONFIRM-SPEND-1: the council FRAME this run would narrate under, kept so a
         # later phase-two call narrates the ALREADY-RANKED result without re-deriving
         # (and therefore without any chance of re-ranking) it.
-        council_frame=council_frame)
+        council_frame=council_frame, shadow_pool=shadow_pool or {})
 
     if csv_path and not ranker_only and mode != "narrator":
         _append_agreement_csv(result, Path(csv_path))
@@ -2592,6 +2612,7 @@ def run_multi_strategy_pipeline(
     runners=None, derived_from: str = "",
     min_market_cap_override: float | None = None,
     with_reader: bool = False, reader_runner=None, cohort_thesis: str = "",
+    with_shadow: bool = False,
 ) -> MultiStrategyResult:
     """Grade ONE cohort under N rank strategies and return the combined grid (FUND-RUN-1).
 
@@ -2640,7 +2661,7 @@ def run_multi_strategy_pipeline(
             # alike. Each lens still diffs it against its OWN file value, so a lens whose
             # file already carries the override's number records no override.
             min_market_cap_override=min_market_cap_override,
-            derived_from=derived_from)
+            derived_from=derived_from, with_shadow=with_shadow)
         results[sid] = res
         names[sid] = res.meta.get("rank_strategy_name", "") or sid
 
@@ -4598,12 +4619,14 @@ def _annotate_cross_lens(rep, verdicts: list[dict]) -> None:
     FORENSIC-NARR-1(c) — also runs ``check_rank_attribution`` over the same verdicts:
     a "Nth of M" citation must name the lens it came from (live: Forensic's own
     "12th of 21" called "the ranker's" rank)."""
-    from .narration_check import check_cross_lens, check_rank_attribution
+    from .narration_check import check_cross_lens, check_rank_attribution, check_would_rank
     d = getattr(rep, "decision", None)
     if d is None or not getattr(d, "rationale", ""):
         return
-    marks = check_cross_lens(d.rationale, verdicts) + check_rank_attribution(
-        d.rationale, verdicts)
+    # LENS-EXPAND-1b: a "would rank" reading may be mentioned only as that — never a verdict or vote.
+    marks = (check_cross_lens(d.rationale, verdicts)
+             + check_rank_attribution(d.rationale, verdicts)
+             + check_would_rank(d.rationale, verdicts))
     if marks:
         d.rationale = d.rationale.rstrip() + "\n\n" + "\n".join(marks)
 

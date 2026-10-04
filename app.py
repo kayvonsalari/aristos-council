@@ -4264,7 +4264,7 @@ def _render_company_report(report) -> None:
         # cuts it off and needs horizontal scrolling - and the Result and "What it asks" cells
         # ARE the sentences a reader came for.
         st.table(pd.DataFrame([{"Lens": v.label, "Role": v.role,
-                                "Result": v.result() + v.badge_suffix + _suffix,
+                                "Result": v.result_shown() + v.badge_suffix + _suffix,
                                 "What it asks": v.asks} for v in report.votes]
                               ).set_index("Lens"))
         badged = [v for v in report.votes if v.badge is not None]

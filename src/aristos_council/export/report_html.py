@@ -1593,7 +1593,7 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
         # run; never shown otherwise. No badge bullets follow (attach_track_record is never
         # called for such a run — badged is always empty below).
         suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
-        body = [[_esc(v.label), _esc(v.role), _esc(v.result() + v.badge_suffix + suffix),
+        body = [[_esc(v.label), _esc(v.role), _esc(v.result_shown() + v.badge_suffix + suffix),
                 _esc(v.asks)] for v in report.votes]
         parts.append(_table(["Lens", "Role", "Result", "What it asks"], body))
         from ..backtest import BADGE_MEANINGS

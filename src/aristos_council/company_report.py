@@ -52,6 +52,7 @@ from .data.adapter import normalize_ticker
 from .peer_table import rank_columns
 from .rank_engine import MIN_RANKABLE_COHORT, too_few_to_rank_text
 from .smallcap_band import SMALLCAP_CEILING_USD
+from .shadow_rank import WouldRank, would_rank
 from .tools.valuation_band import ordinal
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -89,6 +90,11 @@ class LensVote:
     # None when no cohort could be matched to the company's industry (never fed back into the
     # vote itself — attached AFTER votes are built, purely display).
     badge: Optional[Badge] = None
+    # LENS-EXPAND-1b — where the company WOULD have ranked on this lens's own factors, set only
+    # for a lens whose ENTRY RULES excluded it. Display and council context only: it is never
+    # counted by ``build_agreement`` (which reads ``status``), never carries a verdict word, never
+    # earns a badge, and the council sees it only as the text "would rank".
+    would_rank: Optional[WouldRank] = None
 
     @property
     def votes(self) -> bool:
@@ -132,6 +138,15 @@ class LensVote:
         if self.status == "no_group":
             return f"not run - {self.reason}"
         return "not reported by this lens"
+
+    def result_shown(self) -> str:
+        """``result()`` plus, for a lens that did not apply, the would-have-ranked reading:
+        "does not apply - revenue growth 5.1% < 10% - on its measures it would rank 9th of 21. Not
+        a vote." (or "... would-rank not available: <reason>"). ``result()`` itself is unchanged:
+        it feeds the agreement, the council's verdict row and the saved record."""
+        if self.status == "excluded" and self.would_rank is not None:
+            return f"{self.result()} - {self.would_rank.text}"
+        return self.result()
 
     @property
     def role(self) -> str:
@@ -374,7 +389,14 @@ def _council_cross_lens_verdicts(votes: list[LensVote]) -> list[dict]:
             "lens_label": f"{v.label} ({v.strategy_id})", "cell": v.result(),
             "status": v.status, "verdict": v.verdict if v.votes else v.word,
             "votes": v.votes,
-            "position": v.position, "cohort_size": v.cohort_size or None} for v in votes]
+            "position": v.position, "cohort_size": v.cohort_size or None,
+            # LENS-EXPAND-1b: carried as its own text, never as a position/verdict — the council
+            # may say "would rank", and narration_check.check_would_rank flags anything else.
+            **({"would_rank": v.would_rank.text,
+                "would_rank_position": v.would_rank.position,
+                "would_rank_of": v.would_rank.cohort_size or None}
+               if v.would_rank is not None and v.status == "excluded" else {})}
+            for v in votes]
 
 
 def _council_company_facts(report: CompanyReport) -> dict:
@@ -622,7 +644,13 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                                   factor_note=cell.factor_note))
         else:
             reason = cell.reason_plain or _plain_reason(cell.reason)
-            votes.append(LensVote(**base, status=cell.status, reason=reason))
+            shadow = None
+            if cell.status == "excluded" and row is not None:
+                # LENS-EXPAND-1b: an ENTRY-RULE exclusion also gets "where it would have ranked"
+                # (a scope-gate exclusion has no pool entry and so no reading). Never a vote.
+                shadow = would_rank(strategy, getattr(result, "ranked", []) or [],
+                                    getattr(result, "shadow_pool", None) or {}, row.ticker)
+            votes.append(LensVote(**base, status=cell.status, reason=reason, would_rank=shadow))
     return votes
 
 
@@ -775,7 +803,7 @@ def run_company_report(
             multi = run_multi_strategy_pipeline(
                 universe, ids, strategies_dir=strategies_dir, universes_dir=universes_dir,
                 adapter=adapter, today=today, freeze_dir=runs_dir, with_valuation_band=False,
-                progress=say, min_market_cap_override=0.0)
+                progress=say, min_market_cap_override=0.0, with_shadow=True)
             report.votes = votes_from_multi(multi, ticker)
             report.lens_ranks = lens_ranks_record(multi)
             report.outside_tested_range = True
@@ -802,7 +830,7 @@ def run_company_report(
         multi = run_multi_strategy_pipeline(
             universe, ids, strategies_dir=strategies_dir, universes_dir=universes_dir,
             adapter=adapter, today=today, freeze_dir=runs_dir, with_valuation_band=False,
-            progress=say)
+            progress=say, with_shadow=True)
         report.votes = votes_from_multi(multi, ticker)
         report.lens_ranks = lens_ranks_record(multi)
         if skipped:
@@ -870,6 +898,8 @@ def report_record(report: CompanyReport) -> dict:
         "votes": [{"lens": v.strategy_id, "label": v.label, "votes": v.votes, "status": v.status,
                    "verdict": v.verdict, "position": v.position, "of": v.cohort_size,
                    "result": v.result(),
+                   # LENS-EXPAND-1b — display only; absent unless the lens's entry rules excluded it.
+                   **({"would_rank": v.would_rank.as_dict()} if v.would_rank is not None else {}),
                    # BACKTEST-2 — display only; None when no cohort was matched.
                    "track_record_badge": (None if v.badge is None else {
                        "label": v.badge.label, "verdict": v.badge.verdict,
@@ -967,7 +997,7 @@ def vote_table_lines(report: CompanyReport) -> list[str]:
     suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
     width = max((len(v.label) for v in report.votes), default=4)
     out = [f"{'Lens'.ljust(width)}  {'Role':<22} Result"]
-    out += [f"{v.label.ljust(width)}  {v.role:<22} {v.result()}{v.badge_suffix}{suffix}"
+    out += [f"{v.label.ljust(width)}  {v.role:<22} {v.result_shown()}{v.badge_suffix}{suffix}"
            for v in report.votes]
     return out
 
