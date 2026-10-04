@@ -86,11 +86,16 @@ def test_a_ranker_only_run_does_not_print_a_narration_line():
     from aristos_council.export.report_html import multi_strategy_report_html
     html = multi_strategy_report_html(res)
     assert "Narrated 0 of" not in html
-    import app
-    assert app._narration_line_markdown(res) == []
     # a narrator run that narrated nothing still says so (NARR-ZERO-1)
     assert narration_was_requested({**plan, "mode": "narrator"})
     assert narration_line({**plan, "mode": "narrator"}).startswith("Narrated 0 of 2")
+
+
+def test_the_markdown_and_screen_builders_omit_the_line_too():
+    pytest.importorskip("streamlit")        # app.py needs the UI extra; CI installs none
+    import app
+    res = _run(weak=True)
+    assert app._narration_line_markdown(res) == []
 
 
 def test_a_ranker_only_record_counts_the_names_the_shortlist_shows(monkeypatch):

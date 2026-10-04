@@ -3,6 +3,8 @@ rule" lost both "$" to LaTeX maths and a "**" stayed raw. Pure string tests plus
 Streamlit run (AppTest) that checks what reaches the element tree."""
 from __future__ import annotations
 
+import pytest
+
 from aristos_council.ui_text import escape_dollars
 
 
@@ -21,6 +23,7 @@ def test_escape_is_idempotent_and_leaves_code_alone():
 
 
 def test_every_markdown_call_is_wrapped_by_install():
+    pytest.importorskip("streamlit")        # CI installs no UI extra
     from streamlit.testing.v1 import AppTest
 
     script = '''
