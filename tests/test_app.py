@@ -779,7 +779,7 @@ def test_find_a_company_search_fills_the_ticker_box(monkeypatch):
     assert not at.exception
     options = next(sb for sb in at.selectbox if str(getattr(sb, "key", "")) == "cc_find_pick"
                   ).options
-    assert options == ["Siemens Aktiengesellschaft (SIE.XETRA) — Germany — XETRA — $236.4bn "
+    assert options == ["Siemens Aktiengesellschaft (SIE.XETRA) — Germany — Xetra — $236.4bn "
                        "— Industrials - Industrial Machinery"]
 
     at.button(key="cc_find_use").click().run()

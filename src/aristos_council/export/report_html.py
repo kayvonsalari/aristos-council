@@ -368,7 +368,7 @@ td.cell-sell { box-shadow: inset 3px 0 0 var(--sell); }
 
 /* TAB-MERGE-1 part 2 commit 2: the company's own row in a peers table — a VISIBLE
    highlight beside the "(this company)" text marker, not instead of it. */
-td.this-company { background: var(--panel) !important; font-weight: 700; }
+td.this-company { background: #f6d86b !important; color: #1d2127 !important; font-weight: 700; }
 
 /* Valuation percentile: a diverging tint behind a cell that ALREADY says the word. */
 td.pct-cheapest { background: var(--pct-cheapest) !important; }

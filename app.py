@@ -3941,7 +3941,8 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
     Report's per-lens ranks, read from the run's saved ranks) the company is the first row and there
     is one sortable rank column per lens."""
     from aristos_council.peer_table import (LOCAL_COLUMN, LOCAL_FORMAT, ONE_SYSTEM_NOTE,
-                                            USD_COLUMN, USD_FORMAT, has_one_system_peers,
+                                            THIS_COMPANY_STYLE, USD_COLUMN, USD_FORMAT,
+                                            has_one_system_peers,
                                             peer_frame_records, peer_rows)
 
     st.subheader("Peers")
@@ -3982,8 +3983,8 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
                                na_rep="does not apply")
         if highlight_company:
             data = data.apply(
-                lambda row: (["background-color: rgba(127,127,127,.14); font-weight: 600"]
-                            * len(row)) if row.name == 0 else [""] * len(row), axis=1)
+                lambda row: ([THIS_COMPANY_STYLE] * len(row)) if row.name == 0
+                else [""] * len(row), axis=1)
     st.dataframe(
         data, hide_index=True, width="stretch",
         column_config={
