@@ -642,7 +642,7 @@ def company_sources(result: "CompanyCheckResult") -> list[SourceLine]:
     if pac_fx is not None:
         out.append(SourceLine("Currency rate in price and cash",
                               f"{pac_fx.from_ccy} converted to {pac_fx.to_ccy} at {pac_fx.rate:.4f}, "
-                              f"month-end rate for {pac_fx.as_of}, source {pac_fx.source}"))
+                              f"latest close in {pac_fx.as_of}, source {pac_fx.source}"))
     if pac is not None and getattr(pac, "news_source", ""):
         out.append(SourceLine("Recent news", pac.news_source))
     statics = sorted({fc.source for fc in getattr(result, "factors", ())
