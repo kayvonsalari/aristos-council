@@ -276,9 +276,30 @@ def verdict_word(verdict: str, *, check: bool = False) -> str:
     return CHECK_WORDS.get(raw, raw) if check else raw.upper()
 
 
+def kind_gated_note(tickers, scope_kinds) -> str:
+    """"1 is a stock, not graded in ETF mode: AAPL" - the plain sentence for names an asset-kind
+    gate turned away (ETF-MODE-1), in place of "1 excluded by the screen" (an ETF lens has no
+    screen: these were not screened out, they are the other kind of thing). "" when none."""
+    names = list(tickers or ())
+    if not names:
+        return ""
+    n = len(names)
+    scope = {str(k).strip().lower() for k in (scope_kinds or ())}
+    listed = ", ".join(names)
+    if scope == {"etf"}:
+        what, where = ("a stock", "stocks"), "ETF mode"
+    elif scope == {"equity"}:
+        what, where = ("a fund", "funds"), "stock mode"
+    else:
+        return (f"{n} {'is' if n == 1 else 'are'} not graded (this lens does not cover that kind "
+                f"of holding): {listed}")
+    return (f"{n} {'is' if n == 1 else 'are'} {what[0] if n == 1 else what[1]}, "
+            f"not graded in {where}: {listed}")
+
+
 def format_summary_line(ranked, *, universe_size: int, excluded: int,
                         unrateable: int = 0, fetch_errors: int = 0,
-                        check: bool = False) -> str:
+                        check: bool = False, kind_gated: str = "") -> str:
     """``"2 BUY · 6 HOLD · 2 SELL — 10 of 16 names ranked, 6 excluded by the screen"``.
 
     Derived from the result, never hardcoded. A category with ZERO names is omitted
@@ -300,6 +321,8 @@ def format_summary_line(ranked, *, universe_size: int, excluded: int,
         tail = [passed_too_few_text(ranked_n)]
     else:
         tail = [f"{ranked_n} of {universe_size} names ranked"]
+    if kind_gated:
+        tail.append(kind_gated)
     if excluded:
         tail.append(f"{excluded} excluded by the screen")
     if unrateable:

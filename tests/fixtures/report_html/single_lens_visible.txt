@@ -13,7 +13,7 @@ Ranked
 Shortlist
 1 names · estimated cost $0.19 · narrating buys_only
 Verdict: deterministic ranker.  Narrative: LLM (non-judging).
-1 BUY · 1 HOLD · 1 SELL — 3 of 5 names ranked, 1 excluded by the screen, 1 with no usable data, 1 whose data fetch failed — re-run to recover
+1 BUY · 1 HOLD · 1 SELL — 3 of 5 names ranked, 1 is not graded (this lens does not cover that kind of holding): IWDA.AS, 1 with no usable data, 1 whose data fetch failed — re-run to recover
 Rules applied
 Screen: none
 This strategy screens nothing: no rule filtered the cohort, and quality enters only through the ranking below.
@@ -32,20 +32,20 @@ Position (score)
 Name
 Verdict
 Expense ratio (low best) (rank, 1 = best)
-Fund size (total assets, EUR) (rank, 1 = best)
+Fund size (total assets, USD) (rank, 1 = best)
 #1 of 3
 · score 2
 iShares Core S&P 500 (SXR8.DE)
 BUY
 1 · 0.07
-1 · €80.0bn
+1 · $80.0bn
 #2 of 3 (tied)
 · score 5
 iShares Core MSCI World (EUNL.DE)
 HOLD
 ⚑ boundary (tied 5 with VWCE.DE — SELL; tie broken alphabetically)
 2 · 0.20
-3 · €50.0bn
+3 · $50.0bn
 #2 of 3 (tied)
 · score 5
 VWCE.DE†
@@ -76,7 +76,7 @@ Abstained
 Expense ratio (low best)
 3 of 3
 —
-Fund size (total assets, EUR)
+Fund size (total assets, USD)
 3 of 3
 —
 Valuation band (absolute — vs each name's own history)

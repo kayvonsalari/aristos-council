@@ -14,6 +14,12 @@ four outcomes and the static-CSV schema they rest on:
   the currency column), never silently reinterpreted as EUR.
 
 Abstention semantics are unchanged throughout: a missing fund_size is still simply missing.
+
+ETF-MODE-1 (2026-10) moved the ONE currency from EUR to USD and tightened the unknown-currency
+case: a fund whose size currency is not stated (and which is not listed in USD) is now WITHHELD
+and abstains with the reason shown, instead of being served unconverted and flagged - an amount
+in an unknown currency must not be ranked against amounts in others. The tests below were
+rewritten for that, keeping what each one guarded (the receipt, the abstention, the schema).
 """
 
 from __future__ import annotations
@@ -42,7 +48,9 @@ from aristos_council.fund_currency import (
 
 TODAY = date(2026, 7, 29)
 IQQH_USD = 4_172_812_800.0          # the live-verified USD figure from the issue
-USD_EUR = 0.86                      # the pinned FX fixture rate (EUR per 1 USD)
+USD_EUR = 0.86                      # (kept for the receipt-format test of the pure layer)
+EUR_FUND = 3_000_000_000.0          # a EUR-denominated fund, to be converted to USD
+EUR_USD = 1.16                      # the pinned FX fixture rate (USD per 1 EUR)
 SOURCE = "EODHD fundamentals API"
 
 
@@ -74,30 +82,40 @@ def test_compact_amount(value, expected):
     assert compact_amount(value) == expected
 
 
+def test_the_one_currency_is_usd():
+    assert FUND_SIZE_CCY == "USD"
+
+
 def test_conversion_value_and_receipt():
-    conv = convert_fund_size(IQQH_USD, "usd", USD_EUR, "2026-07-29")
+    conv = convert_fund_size(EUR_FUND, "eur", EUR_USD, "2026-07-29")
     assert conv is not None
-    assert conv.from_ccy == "USD" and conv.to_ccy == FUND_SIZE_CCY
-    assert conv.value == pytest.approx(IQQH_USD * USD_EUR)
+    assert conv.from_ccy == "EUR" and conv.to_ccy == FUND_SIZE_CCY == "USD"
+    assert conv.value == pytest.approx(EUR_FUND * EUR_USD)
     # the receipt carries SOURCE currency + rate + rate date, so it can be re-checked.
-    assert conv.tag == "4.17bn USD @ 0.86 EUR/USD, 2026-07-29"
+    assert conv.tag == "3bn EUR @ 1.16 USD/EUR, 2026-07-29"
+
+
+def test_the_receipt_names_the_source_of_the_rate_when_given():
+    conv = convert_fund_size(EUR_FUND, "EUR", EUR_USD, "2026-07-29", source="the provider")
+    assert conv.tag == "3bn EUR @ 1.16 USD/EUR, 2026-07-29, rate from the provider"
 
 
 @pytest.mark.parametrize("value,ccy,rate", [
-    (None, "USD", USD_EUR),          # nothing to convert
-    (IQQH_USD, None, USD_EUR),       # unknown currency -> never guessed
-    (IQQH_USD, "NA", USD_EUR),       # sentinel currency is an absence
-    (IQQH_USD, "USD", None),         # no rate -> the caller abstains
-    (IQQH_USD, "USD", 0.0),          # nonsense rate
-    (IQQH_USD, "USD", -1.0),
+    (None, "EUR", EUR_USD),          # nothing to convert
+    (EUR_FUND, None, EUR_USD),       # unknown currency -> never guessed
+    (EUR_FUND, "NA", EUR_USD),       # sentinel currency is an absence
+    (EUR_FUND, "GBp", EUR_USD),      # pence are not pounds: never read as the major unit
+    (EUR_FUND, "EUR", None),         # no rate -> the caller abstains
+    (EUR_FUND, "EUR", 0.0),          # nonsense rate
+    (EUR_FUND, "EUR", -1.0),
 ])
 def test_conversion_refuses_rather_than_guesses(value, ccy, rate):
     assert convert_fund_size(value, ccy, rate, "2026-07-29") is None
 
 
-def test_needs_conversion_only_for_a_known_non_eur_currency():
-    assert needs_conversion("USD") is True
-    assert needs_conversion("eur") is False        # already normalised
+def test_needs_conversion_only_for_a_known_non_usd_currency():
+    assert needs_conversion("EUR") is True
+    assert needs_conversion("usd") is False        # already normalised
     assert needs_conversion(None) is False         # unknown -> flagged, not converted
     assert needs_conversion("NA") is False
 
@@ -126,7 +144,7 @@ def test_fill_reports_no_currency_for_a_pre_column_row():
     _, fill = apply_static_fill(_etf(), kind="etf", row=_row(fund_size_currency=None),
                                 today=TODAY)
     assert "total_assets" in fill.filled           # the value is still served...
-    assert fill.fund_size_currency is None         # ...with no currency -> flagged later
+    assert fill.fund_size_currency is None         # ...with no currency -> withheld later
 
 
 # --------------------------------------------------------------------------- #
@@ -168,54 +186,80 @@ def _fund_size_outcome(fi):
     return compute_factor_outcomes(fi, ["fund_size"])["fund_size"]
 
 
-def test_usd_fund_size_is_converted_to_eur_with_a_dated_receipt():
-    fi = _gather(_row(), rates={"USDEUR=X": USD_EUR})
-    assert fi.fundamentals.total_assets == pytest.approx(IQQH_USD * USD_EUR)
-    value, source = _fund_size_outcome(fi)
-    assert value == pytest.approx(IQQH_USD * USD_EUR)
-    # the static receipt still LEADS the tag (the narrator's static-evidence ledger and the
-    # report's provenance badge both match on the "static:" prefix)...
-    assert source.startswith(f"static: {TODAY.isoformat()}, {SOURCE}")
-    # ...and the conversion rides after it with source currency + rate + date.
-    assert "4.17bn USD @ 0.86 EUR/USD, 2026-07-29" in source
-
-
-def test_eur_fund_size_is_not_converted_and_its_tag_is_unchanged():
-    fi = _gather(_row(fund_size=3.0e9, fund_size_currency="EUR"),
-                 rates={"USDEUR=X": USD_EUR})
-    assert fi.fundamentals.total_assets == 3.0e9
+def test_usd_fund_size_needs_no_conversion_and_its_tag_is_unchanged():
+    fi = _gather(_row(), rates={"EURUSD=X": EUR_USD})
+    assert fi.fundamentals.total_assets == IQQH_USD
     assert fi.fund_size_fx is None and fi.fund_size_fx_failed is False
     assert fi.fund_size_currency_unverified is False
     assert _fund_size_outcome(fi)[1] == f"static: {TODAY.isoformat()}, {SOURCE}"
 
 
+def test_eur_fund_size_is_converted_to_usd_with_a_dated_named_receipt():
+    fi = _gather(_row(fund_size=EUR_FUND, fund_size_currency="EUR"),
+                 rates={"EURUSD=X": EUR_USD})
+    assert fi.fundamentals.total_assets == pytest.approx(EUR_FUND * EUR_USD)
+    value, source = _fund_size_outcome(fi)
+    assert value == pytest.approx(EUR_FUND * EUR_USD)
+    # the static receipt still LEADS the tag (the narrator's static-evidence ledger and the
+    # report's provenance badge both match on the "static:" prefix)...
+    assert source.startswith(f"static: {TODAY.isoformat()}, {SOURCE}")
+    # ...and the conversion rides after it with source currency + rate + date + where the rate
+    # came from.
+    assert "3bn EUR @ 1.16 USD/EUR, 2026-07-29, rate from the market data provider" in source
+    assert "EURUSD=X" in source
+
+
 def test_unavailable_fx_rate_abstains_instead_of_mixing_currencies():
-    fi = _gather(_row(), rates={})                 # currency known, no rate served
+    fi = _gather(_row(fund_size_currency="EUR"), rates={})   # currency known, no rate served
     assert fi.fundamentals.total_assets is None    # WITHHELD
     assert fi.fund_size_fx_failed is True
     value, source = _fund_size_outcome(fi)
     assert value is None                           # the factor abstains, as today
     assert source == FX_UNAVAILABLE_NOTE
+    assert "no USD exchange rate" in FX_UNAVAILABLE_NOTE
 
 
-def test_missing_base_currency_serves_unconverted_and_flags_it():
-    # a static row written before the currency column: unchanged value, explicit flag —
-    # never relabelled EUR.
-    fi = _gather(_row(fund_size_currency=None), rates={"USDEUR=X": USD_EUR})
-    assert fi.fundamentals.total_assets == IQQH_USD
+def test_missing_base_currency_is_withheld_with_the_reason_shown():
+    # a static row written before the currency column, on a fund that is not listed in USD:
+    # the amount cannot be compared, so it is WITHHELD (ETF-MODE-1) rather than ranked as if it
+    # were - the old "served unconverted and flagged" path put amounts in different currencies
+    # side by side.
+    fi = _gather(_row(fund_size_currency=None), rates={"EURUSD=X": EUR_USD})
+    assert fi.fundamentals.total_assets is None
     assert fi.fund_size_currency_unverified is True
+    value, source = _fund_size_outcome(fi)
+    assert value is None
+    assert source == UNVERIFIED_CCY_NOTE
+    assert "not stated" in UNVERIFIED_CCY_NOTE
+
+
+def test_missing_base_currency_on_a_usd_listing_is_taken_as_usd_and_says_so():
+    fi = _gather(_row(fund_size_currency=None), fundamentals=_etf(currency="USD"))
+    assert fi.fundamentals.total_assets == IQQH_USD
+    assert fi.fund_size_usd_from_listing is True and fi.fund_size_currency_unverified is False
     value, source = _fund_size_outcome(fi)
     assert value == IQQH_USD
     assert source.startswith(f"static: {TODAY.isoformat()}, {SOURCE}")
-    assert UNVERIFIED_CCY_NOTE in source
+    assert "USD, taken from the listing currency" in source
 
 
-def test_vendor_served_fund_size_is_flagged_currency_unverified():
+def test_a_pence_listing_is_not_read_as_pounds_or_dollars():
+    fi = _gather(_row(fund_size_currency=None), fundamentals=_etf(currency="GBp"))
+    assert fi.fundamentals.total_assets is None and fi.fund_size_currency_unverified is True
+
+
+def test_vendor_served_fund_size_with_no_currency_is_withheld():
     # no static row at all: the vendor's total_assets has no known base currency.
     fi = _gather(None, fundamentals=_etf(total_assets=9.9e9))
-    assert fi.fundamentals.total_assets == 9.9e9   # behaviour unchanged
+    assert fi.fundamentals.total_assets is None
     assert fi.fund_size_currency_unverified is True
-    assert UNVERIFIED_CCY_NOTE in _fund_size_outcome(fi)[1]
+    assert _fund_size_outcome(fi)[1] == UNVERIFIED_CCY_NOTE
+
+
+def test_vendor_served_fund_size_on_a_usd_listing_is_kept():
+    fi = _gather(None, fundamentals=_etf(total_assets=9.9e9, currency="USD"))
+    assert fi.fundamentals.total_assets == 9.9e9
+    assert "USD, taken from the listing currency" in _fund_size_outcome(fi)[1]
 
 
 def test_absent_fund_size_stays_absent_and_flags_nothing():
@@ -289,4 +333,4 @@ def test_committed_csv_has_the_currency_column_and_flags_legacy_rows():
     # so they are FLAGGED (never reinterpreted). Pre-fix snapshots therefore still mix
     # currencies — see the PR's DOCS PROPOSED note.
     assert rows["EUNL.DE"].fund_size == 1.017e11
-    assert rows["EUNL.DE"].fund_size_currency is None
+    assert rows["EUNL.DE"].fund_size_currency is None   # -> WITHHELD at the fetch edge (ETF-MODE-1)

@@ -645,6 +645,14 @@ def company_sources(result: "CompanyCheckResult") -> list[SourceLine]:
                               f"latest close in {pac_fx.as_of}, source {pac_fx.source}"))
     if pac is not None and getattr(pac, "news_source", ""):
         out.append(SourceLine("Recent news", pac.news_source))
+    # ETF-MODE-1: a fund size converted to USD names the rate and where it came from.
+    import re as _re
+    for fc in getattr(result, "factors", ()):
+        found = _re.search(r"(\d{4}-\d{2}-\d{2}), rate from (.+)$", fc.source or "")
+        if getattr(fc, "factor", "") == "fund_size" and found:
+            out.append(SourceLine("Currency rate for fund size (converted to USD)",
+                                  f"{found.group(2).strip()}, as of {found.group(1)}"))
+            break
     statics = sorted({fc.source for fc in getattr(result, "factors", ())
                       if (fc.source or "").startswith("static:")})
     for tag in statics:

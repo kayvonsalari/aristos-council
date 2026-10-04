@@ -1,5 +1,11 @@
 """DATA-HYGIENE-1 — fund_size base-currency normalisation (the pure layer).
 
+ETF-MODE-1 (2026-10): the ONE currency is now USD, not EUR. A cross-fund ranking needs one
+currency and USD is what the funds' own size figures most often come in; the rate is stated
+and its source named. A fund whose size currency is not stated (and is not a USD listing)
+ABSTAINS on size with the reason shown, instead of being ranked as if it were comparable.
+The rest of this docstring describes the mechanism, which is unchanged apart from the target.
+
 Why this exists
 ---------------
 EODHD reports an ETF's total assets in the FUND'S BASE CURRENCY — not in the currency of
@@ -33,18 +39,22 @@ from typing import Optional
 # Every fund_size is normalised to, stored as, and displayed in this currency. EUR is the
 # reporting currency of the ETF universes this repo ranks (UCITS funds, XETRA/AS/L
 # listings) and of the factsheets a human verifies the static rows against.
-FUND_SIZE_CCY = "EUR"
+FUND_SIZE_CCY = "USD"
 
 # The note surfaced when a SERVED fund_size has no known source currency: the value is
 # passed through UNCONVERTED (its pre-fix behaviour) but is never presented as EUR. Used
 # for the committed static rows written before the currency column existed — flagged, not
 # silently reinterpreted.
-UNVERIFIED_CCY_NOTE = "fund size currency unverified — not normalised to EUR"
+UNVERIFIED_CCY_NOTE = ("fund size withheld — the currency it is reported in is not stated, "
+                       "so it cannot be compared in USD")
 
 # The note surfaced when the source currency IS known but the dated FX rate could not be
 # fetched. The value is then WITHHELD (the factor abstains) — never mixed into a
 # EUR-denominated ranking.
-FX_UNAVAILABLE_NOTE = "fund size FX rate unavailable — abstained"
+FX_UNAVAILABLE_NOTE = "fund size withheld — no USD exchange rate was available"
+
+
+_MINOR_UNIT_CODES = frozenset({"GBp", "GBX", "ZAc", "ZAC", "ILA", "ILa"})
 
 
 def normalize_currency_code(raw: object) -> Optional[str]:
@@ -55,7 +65,10 @@ def normalize_currency_code(raw: object) -> Optional[str]:
     convert with a code we cannot interpret (``"$"``, ``"NA"``, ``"EURO"``)."""
     if not isinstance(raw, str):
         return None
-    code = raw.strip().upper()
+    stripped = raw.strip()
+    if stripped in _MINOR_UNIT_CODES:        # pence / cents: a different unit, never read as the major one
+        return None
+    code = stripped.upper()
     return code if len(code) == 3 and code.isalpha() else None
 
 
@@ -84,6 +97,7 @@ class FundSizeConversion:
     rate: float
     as_of: str
     to_ccy: str = FUND_SIZE_CCY
+    source: str = ""          # where the rate came from, named in the receipt ("" when not given)
 
     @property
     def value(self) -> float:
@@ -95,8 +109,9 @@ class FundSizeConversion:
         """The provenance receipt clause, e.g.
         ``4.17bn USD @ 0.86 EUR/USD, 2026-07-29`` — carries the SOURCE currency, the rate
         and the rate's date, so the conversion can be re-checked by hand."""
-        return (f"{compact_amount(self.source_value)} {self.from_ccy} @ "
+        base = (f"{compact_amount(self.source_value)} {self.from_ccy} @ "
                 f"{self.rate:.4g} {self.to_ccy}/{self.from_ccy}, {self.as_of}")
+        return f"{base}, rate from {self.source}" if self.source else base
 
 
 def needs_conversion(from_ccy: object) -> bool:
@@ -107,7 +122,7 @@ def needs_conversion(from_ccy: object) -> bool:
 
 
 def convert_fund_size(value: Optional[float], from_ccy: object,
-                      rate: Optional[float], as_of: str
+                      rate: Optional[float], as_of: str, source: str = ""
                       ) -> Optional[FundSizeConversion]:
     """The conversion, or None when it cannot be made honestly.
 
@@ -121,4 +136,4 @@ def convert_fund_size(value: Optional[float], from_ccy: object,
     if rate is None or rate <= 0 or rate != rate:      # missing / nonsense / NaN
         return None
     return FundSizeConversion(source_value=float(value), from_ccy=code,
-                              rate=float(rate), as_of=as_of)
+                              rate=float(rate), as_of=as_of, source=source)

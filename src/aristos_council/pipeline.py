@@ -108,6 +108,7 @@ from .report_language import (
     UNIT_RATIO,
     format_signed_change,
     format_summary_line,
+    kind_gated_note,
     format_threshold,
     format_value,
     label_with_id,
@@ -1337,10 +1338,16 @@ def summary_line(result) -> str:
     Derived from the result every time. There was no summary anywhere before this: a
     reader had to count the table by hand to learn what the run had concluded."""
     m = result.meta or {}
+    # ETF-MODE-1: names an asset-kind gate turned away are not "excluded by the screen" (an ETF
+    # lens has no screen); they are said in their own words, with their names.
+    all_excluded = list(getattr(result, "excluded", []) or [])
+    gated = [t for t, why in all_excluded if str(why).startswith("asset kind")]
+    scope = getattr(getattr(result, "rank_strategy", None), "asset_kinds", None) or []
     return format_summary_line(
         result.ranked, check=_is_check_result(result),
         universe_size=m.get("universe_size", len(result.ranked)),
-        excluded=len(getattr(result, "excluded", []) or []),
+        kind_gated=kind_gated_note(gated, scope),
+        excluded=len(all_excluded) - len(gated),
         unrateable=len(getattr(result, "unrateable", []) or []),
         fetch_errors=len(getattr(result, "fetch_errors", []) or []))
 
@@ -1955,6 +1962,14 @@ def _multiple_cell(band) -> str:
     return f"{band.current:.1f}x{tag}"
 
 
+def _fund_only_lens(rank_strategy) -> bool:
+    """True for a lens that ranks ONLY funds (``asset_kinds: [etf]``). The valuation band is a
+    company reading (a multiple of operating profit against the company's own history), so it
+    is not drawn for these (ETF-MODE-1)."""
+    kinds = {str(k).strip().lower() for k in (getattr(rank_strategy, "asset_kinds", None) or ())}
+    return kinds == {"etf"}
+
+
 def valuation_band_table(result) -> Optional[ValuationBandTable]:
     """The valuation-band table for a run, or None when no name carries a band.
 
@@ -1976,6 +1991,9 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
     Display only — nothing here ranks, screens, gates or votes."""
     from .tools.valuation_band import BAND_YEARS, ordinal, percentile_gloss
     from .tools.price_context import format_money
+
+    if _fund_only_lens(getattr(result, "rank_strategy", None)):
+        return None           # ETF-MODE-1: a company reading, never shown for a fund list
 
     # REPORT-1: a row for every rateable name that has EITHER a price or a band. The
     # price is never gated by the valuation-band toggle, so a band-off run still renders
@@ -2087,6 +2105,8 @@ def union_valuation_band_table(multi_result) -> Optional[ValuationBandTable]:
            if s in results]
     if not ids:
         return None
+    if all(_fund_only_lens(getattr(results[s], "rank_strategy", None)) for s in ids):
+        return None           # ETF-MODE-1: every lens ranks funds only
 
     seen: dict[str, object] = {}
     order: list[str] = []

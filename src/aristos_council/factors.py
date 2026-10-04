@@ -108,14 +108,18 @@ class FactorInputs:
     #   fund_size_fx_failed          — source currency known, rate unavailable -> the value
     #                                  is WITHHELD (total_assets set to None) and the
     #                                  factor abstains; never a mixed-currency number.
-    #   fund_size_currency_unverified — no source currency known (a static row written
-    #                                  before the currency column, or a vendor value): the
-    #                                  amount is served UNCONVERTED exactly as before and
-    #                                  FLAGGED, never relabelled EUR.
-    # A fund_size already in EUR needs none of them (nothing to convert).
+    #   fund_size_currency_unverified — no source currency known and not a USD listing (a
+    #                                  static row written before the currency column, or a
+    #                                  vendor value): ETF-MODE-1 - the value is WITHHELD and
+    #                                  the factor abstains with the reason, never ranked as if
+    #                                  it were comparable.
+    # A fund_size already in USD needs none of them (nothing to convert). The one currency is USD.
     fund_size_fx: Optional[FundSizeConversion] = None
     fund_size_fx_failed: bool = False
     fund_size_currency_unverified: bool = False
+    # ETF-MODE-1: no base currency was stated, but the fund is listed in USD, so its size is taken
+    # as USD (no conversion) - and the receipt says the currency was taken from the listing.
+    fund_size_usd_from_listing: bool = False
     # ABSOLUTE valuation context (VALBAND-1): where today's EV/EBIT (or the labelled
     # P/E fallback) sits in this name's OWN 5-year monthly distribution. Every other
     # field here is a RELATIVE measure — ranked within a cohort — so this is the one
@@ -418,10 +422,10 @@ def _fund_size(fi: FactorInputs) -> Optional[float]:
     """ETF fund size (``total_assets``) — net assets, a liquidity + closure-risk proxy;
     higher ranks better. None when absent -> the lens abstains.
 
-    CURRENCY (DATA-HYGIENE-1): the value read here is already normalised — the fetch edge
-    (``gather_factor_inputs``) converted it to EUR at a dated rate, withheld it (None) when
-    its currency was known but the rate wasn't, or left it unconverted-and-FLAGGED when no
-    source currency is known. The receipt rides on ``_fund_size_source``."""
+    CURRENCY (DATA-HYGIENE-1, ETF-MODE-1): the value read here is already in USD — the fetch
+    edge (``gather_factor_inputs``) converted it at a dated, named rate, or withheld it (None)
+    when its currency was unknown or the rate was unavailable. The receipt rides on
+    ``_fund_size_source``."""
     f = fi.fundamentals
     return f.total_assets if f is not None else None
 
@@ -468,11 +472,13 @@ def _fund_size_source(fi: FactorInputs) -> str:
     flag on a value served unconverted. Everything else is unchanged."""
     if fi.fund_size_fx_failed:
         return FX_UNAVAILABLE_NOTE                    # value withheld -> abstained
+    if fi.fund_size_currency_unverified:
+        return UNVERIFIED_CCY_NOTE                    # value withheld -> abstained (ETF-MODE-1)
     base = _etf_field_source(fi, "total_assets", _fund_size(fi))
     if fi.fund_size_fx is not None:
         return _with_fx_receipt(base, fi.fund_size_fx.tag)
-    if fi.fund_size_currency_unverified:
-        return _with_fx_receipt(base, UNVERIFIED_CCY_NOTE)
+    if fi.fund_size_usd_from_listing and _fund_size(fi) is not None:
+        return _with_fx_receipt(base, "USD, taken from the listing currency")
     return base
 
 
@@ -845,11 +851,11 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         source_fn=_expense_ratio_source),
     "fund_size": FactorDef(
         "fund_size", _fund_size, "high",
-        "Fund size (total assets, EUR)",
-        glossary="How much money the fund manages in total.", unit="currency", currency="EUR",
-        fallback_note="ETF net assets — liquidity + closure-risk proxy; normalised to "
-                      "EUR at a dated FX rate (DATA-HYGIENE-1), abstains when the rate "
-                      "is unavailable, flagged when the fund's base currency is unknown",
+        "Fund size (total assets, USD)",
+        glossary="How much money the fund manages in total.", unit="currency", currency="USD",
+        fallback_note="ETF net assets — liquidity + closure-risk proxy; converted to "
+                      "USD at a dated, named FX rate (DATA-HYGIENE-1, ETF-MODE-1), abstains "
+                      "when the rate is unavailable or the fund's size currency is not stated",
         source_fn=_fund_size_source),
     # Forensic lens (FORENSIC-1): earnings quality + distress. Both share their
     # arithmetic with a screen criterion (max_accrual_ratio / min_altman_z) so a ranked
@@ -1217,24 +1223,32 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
     fund_size_fx = None
     fund_size_fx_failed = False
     fund_size_currency_unverified = False
+    fund_size_usd_from_listing = False
     if fundamentals is not None and fundamentals.total_assets is not None:
         fund_ccy = normalize_currency_code(
             static_fill.fund_size_currency if static_fill is not None else None)
+        if fund_ccy is None and normalize_currency_code(fundamentals.currency) == FUND_SIZE_CCY:
+            # No base currency stated, but the fund is LISTED in USD: its size is taken as USD
+            # (ETF-MODE-1) and the receipt says the currency came from the listing.
+            fund_ccy = FUND_SIZE_CCY
+            fund_size_usd_from_listing = True
         if fund_ccy is None:
-            # No known base currency: serve the amount exactly as before, but FLAG it —
-            # never relabel an unknown currency as EUR (the pre-column static rows).
+            # No known base currency and not a USD listing: WITHHOLD (abstain) rather than rank
+            # an amount in an unknown currency against amounts in others (ETF-MODE-1).
+            fundamentals = replace(fundamentals, total_assets=None)
             fund_size_currency_unverified = True
         elif needs_conversion(fund_ccy):
             rate = _fetch_fx_rate(adapter, fund_ccy, FUND_SIZE_CCY, today=today)
-            fund_size_fx = convert_fund_size(fundamentals.total_assets, fund_ccy, rate,
-                                             today.isoformat())
+            fund_size_fx = convert_fund_size(
+                fundamentals.total_assets, fund_ccy, rate, today.isoformat(),
+                source=f"the market data provider's {fund_ccy}{FUND_SIZE_CCY}=X rate")
             if fund_size_fx is not None:
                 fundamentals = replace(fundamentals, total_assets=fund_size_fx.value)
             else:
                 # Currency known, rate unavailable -> WITHHOLD (abstain), never mix.
                 fundamentals = replace(fundamentals, total_assets=None)
                 fund_size_fx_failed = True
-        # else: already EUR — nothing to convert, the static receipt stands alone.
+        # else: already USD — nothing to convert, the static receipt stands alone.
 
     # Currency-consistent EV (VERIFY-2 ITEM 1): if the accounts' currency differs from the
     # price currency, fetch the FX rate (same adapter/cache/freeze path). On a mismatch
@@ -1278,6 +1292,7 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
         static=static_fill, fund_size_fx=fund_size_fx,
         fund_size_fx_failed=fund_size_fx_failed,
         fund_size_currency_unverified=fund_size_currency_unverified,
+        fund_size_usd_from_listing=fund_size_usd_from_listing,
         valuation_band=band, price_context=ctx, technical=snap)
 
 

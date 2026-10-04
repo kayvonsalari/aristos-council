@@ -1363,6 +1363,21 @@ _COUNCIL_HELP = ("The four specialists, a critic and a narrator — the same cou
                 "off unless you tick it.")
 
 
+def equal_vote_caption(choices) -> str:
+    """The sentence under "Lenses". ETF-MODE-1: the Forensic half is only true where Forensic is
+    offered (it is a stock lens; the ETF lenses have no check), so it is said only then."""
+    if any(getattr(c.strategy, "kind", "") == "check" for c in choices):
+        return "Every ticked lens is an equal vote. Forensic marks; it does not vote."
+    return "Every ticked lens is an equal vote."
+
+
+def company_page_offered(mode: str) -> bool:
+    """Whether "Open a company page" is offered under a list's results. ETF-MODE-1: never in ETF
+    mode - there is no company page for a fund, and a stock in an ETF list is already named in the
+    summary line."""
+    return mode != ETFS
+
+
 def render_run_options(choices, *, input_kind: str, show_council: bool,
                        show_validation: bool = False) -> RunOptions:
     """ONE options block, called once per input kind. ``input_kind`` is "list" (the Run
@@ -1379,7 +1394,7 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
     # asset mode; the default lens is seeded once per asset mode, not once per input kind.
     switched = st.session_state.get("_opts_last_kind") != input_kind
     st.markdown("**Lenses**")
-    st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
+    st.caption(equal_vote_caption(choices))
     _preselect_default_lens(choices, seeded_key=f"opt_lenses_seeded_{asset}", key_for=key_for)
     for c in choices:
         _sync_from_store(key_for(c.id), shared_lens_store_key(asset, c.id), switched=switched)
@@ -2873,6 +2888,8 @@ def _render_open_as_company(tickers: list[str], *, make_lines, key_prefix: str,
     with them ticked."""
     if not tickers:
         return
+    if not company_page_offered(asset_mode()):
+        return          # ETF-MODE-1 (see company_page_offered)
     labels = labels or {}
     st.markdown("**Open a company page**")
     col_pick, col_open = st.columns([4, 1])
