@@ -482,10 +482,19 @@ def run_company_check(
                            ticker, start=today - timedelta(days=14), end=today,
                            finnhub_items=(), finnhub_reason="not attempted outside the council",
                            eodhd_fetcher=fetch_eodhd_news, yfinance_fetcher=fetch_yfinance_news))
+        # FX-PRICECASH-1 — accounts and price in DIFFERENT currencies (BYD: CNY vs HKD): fetch the
+        # month-end rate through the valuation band's own FX path so every P/E is formed in ONE
+        # currency. Never raises; no rate means the ratios abstain, not that they mix.
+        from .abs_readings import currency_relation, latest_accounts_fx
+        pc_fx = None
+        if f is not None and currency_relation(getattr(f, "currency", ""),
+                                               getattr(f, "financial_currency", ""))[0] == "mixed":
+            pc_fx = latest_accounts_fx(adapter, f.financial_currency.strip(),
+                                       f.currency.strip(), today)
         readings["price_and_cash"] = _guard(
             "price_and_cash", _price_and_cash,
             getattr(fi, "technical", None), f, trend=readings.get("analyst_trend"),
-            news=news_result)
+            news=news_result, fx=pc_fx)
 
     return CompanyCheckResult(
         ticker=ticker, company_name=company_name,
@@ -629,6 +638,11 @@ def company_sources(result: "CompanyCheckResult") -> list[SourceLine]:
         out.append(SourceLine("Currency rates in the valuation band",
                               f"{result.fx_source}, monthly"))
     pac = getattr(result, "price_and_cash", None)
+    pac_fx = getattr(pac, "fx", None) if pac is not None else None
+    if pac_fx is not None:
+        out.append(SourceLine("Currency rate in price and cash",
+                              f"{pac_fx.from_ccy} converted to {pac_fx.to_ccy} at {pac_fx.rate:.4f}, "
+                              f"month-end rate for {pac_fx.as_of}, source {pac_fx.source}"))
     if pac is not None and getattr(pac, "news_source", ""):
         out.append(SourceLine("Recent news", pac.news_source))
     statics = sorted({fc.source for fc in getattr(result, "factors", ())

@@ -875,6 +875,62 @@ def _pct(value: Optional[float]) -> str:
 
 
 @dataclass(frozen=True)
+class AccountsFx:
+    """FX-PRICECASH-1 — how an ACCOUNTS-currency figure (EPS, consensus EPS) is put into the
+    PRICE (trading) currency before it is compared with the price. ``rate`` is price-currency
+    units per 1 accounts-currency unit. ``source`` names the feed ("" for a pure unit change
+    such as pounds to pence, which needs no feed)."""
+
+    from_ccy: str
+    to_ccy: str
+    rate: float
+    as_of: str = ""
+    source: str = ""
+
+    def tag(self) -> str:
+        when = f" ({self.as_of})" if self.as_of else ""
+        return f"{self.from_ccy}->{self.to_ccy} @ {self.rate:.4f}{when}"
+
+
+def currency_relation(price_ccy: str, acct_ccy: str):
+    """``("same", None)`` when no conversion is needed, ``("unit", AccountsFx)`` when the two
+    codes are the same money in different units (pounds / pence: exact, no feed), else
+    ``("mixed", None)`` — two different currencies, which need an exchange rate. Either code
+    missing is "same": nothing is known to mix (never manufacture a conversion from a gap)."""
+    p, a = (price_ccy or "").strip(), (acct_ccy or "").strip()
+    if not p or not a or p == a:
+        return "same", None
+    p_major, a_major = (_minor(p) or p), (_minor(a) or a)
+    if p_major.upper() == a_major.upper():
+        rate = 100.0 if (_minor(p) and not _minor(a)) else 0.01 if (_minor(a) and not _minor(p)) else 1.0
+        return "unit", AccountsFx(from_ccy=a, to_ccy=p, rate=rate)
+    return "mixed", None
+
+
+def latest_accounts_fx(adapter, from_ccy: str, to_ccy: str, today) -> Optional[AccountsFx]:
+    """The most recent month-end ``from_ccy -> to_ccy`` rate, through the SAME monthly-FX path the
+    valuation band uses (``tools.fx``: direct pair, else the reverse inverted). None when no rate
+    could be had — the caller then abstains rather than guess."""
+    from datetime import timedelta
+    from datetime import date as _date
+    from .tools.fx import monthly_fx_series
+    try:
+        fx = monthly_fx_series(adapter, from_ccy, to_ccy, start=today - timedelta(days=100),
+                               end=today)
+    except Exception:                                  # noqa: BLE001 - abstain, don't crash
+        return None
+    if not fx.available:
+        return None
+    key = max(fx.rates)
+    day = _date(key[0], key[1], 1)
+    pair = fx.reverse_pair if fx.source_for(day) == "inverted" else fx.direct_pair
+    return AccountsFx(from_ccy=from_ccy, to_ccy=to_ccy, rate=fx.rates[key],
+                      as_of=f"{key[0]}-{key[1]:02d}",
+                      source=f"yfinance {pair}" + (" inverted" if fx.source_for(day) == "inverted"
+                                                   else ""))
+
+
+@dataclass(frozen=True)
 class PriceAndCash:
     last_close: Reading = field(default_factory=Reading)
     sma_50: Reading = field(default_factory=Reading)
@@ -891,6 +947,7 @@ class PriceAndCash:
     news: tuple = ()           # tuple[NewsItem, ...], newest first
     news_note: str = ""        # why ``news`` is empty, when it is ("" if genuinely quiet)
     news_source: str = ""      # which source answered ("EODHD news" / "yfinance news")
+    fx: Optional["AccountsFx"] = None   # the accounts->price conversion used, when one was
 
     def lines(self) -> list[str]:
         readings = [self.last_close, self.sma_50, self.sma_200, self.pct_off_high,
@@ -907,16 +964,42 @@ class PriceAndCash:
         return out
 
 
-def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5) -> PriceAndCash:
+def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
+                   fx: Optional[AccountsFx] = None) -> PriceAndCash:
     """``technical`` is a ``tools.technical.TechnicalSnapshot`` (already computed from the
     400-day bars the ranker fetched — ``None`` when there were no price bars at all).
     ``f`` is ``Fundamentals``. ``trend`` is an already-built ``AnalystTrend`` (or None —
     forward P/E then abstains, never guesses an estimate). ``news`` is an already-fetched
     ``data.news_fallback.NewsFetchResult`` (or None — the news line abstains)."""
     currency = str(getattr(f, "currency", "") or "").strip() if f is not None else ""
+    # FX-PRICECASH-1 — the ACCOUNTS (EPS, free cash flow, consensus EPS) and the PRICE can be in
+    # different currencies (BYD: accounts CNY, share price HKD). Each figure is labelled with its
+    # own currency, and every price / EPS ratio is formed only AFTER the EPS is put in the price
+    # currency; with no rate it abstains rather than divide HKD by CNY.
+    acct_ccy = (str(getattr(f, "financial_currency", "") or "").strip() if f is not None else "")
+    relation, unit_fx = currency_relation(currency, acct_ccy)
+    mixed = relation == "mixed"
+    if relation == "unit":
+        fx = unit_fx
+    elif relation == "same":
+        fx = None
+    acct_label = acct_ccy or currency            # unknown accounts currency: as before
 
     def money(v):
         return _money(v, currency) if v is not None else None
+
+    def acct_money(v):
+        return _money(v, acct_label) if v is not None else None
+
+    def to_price(v):
+        """An accounts-currency amount in the price currency, or None when it cannot be."""
+        if relation == "same":
+            return v
+        return v * fx.rate if fx is not None and v is not None else None
+
+    def no_rate() -> str:
+        return (f"accounts are in {acct_ccy} but the price is in {currency}, and no exchange "
+                f"rate was available to put them in one currency")
 
     if technical is None:
         last_close = _abstain("no price history")
@@ -982,25 +1065,49 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5) ->
         packed = pack_series(f, "free_cash_flow_annual", label="Free cash flow",
                              order=ORDER_OLDEST_FIRST)
         if packed_ok(packed):
-            pairs = " ".join(f"{y} {money(v)}" for y, v in zip(packed["years"], packed["values"]))
-            fcf_series = Reading(value=packed["values"][-1], unit=currency,
+            pairs = " ".join(f"{y} {acct_money(v)}"
+                             for y, v in zip(packed["years"], packed["values"]))
+            fcf_series = Reading(value=packed["values"][-1], unit=acct_label,
                                  label=f"free cash flow, oldest first: {pairs}")
         else:
             fcf_series = _abstain(packed.get("note") or "free cash flow series unavailable")
 
-    trailing_eps = (Reading(value=f.eps, unit=currency, label=f"trailing EPS {money(f.eps)}")
-                    if f is not None and f.eps is not None
-                    else _abstain("trailing EPS not reported"))
-    trailing_pe = (Reading(value=f.pe_ratio, unit="x", label=f"trailing P/E {f.pe_ratio:.1f}")
-                  if f is not None and f.pe_ratio is not None
-                  else _abstain("trailing P/E not reported"))
+    last_close_v = technical.last_close if technical is not None else None
+    if f is not None and f.eps is not None:
+        said = (f" ({money(to_price(f.eps))} at {fx.tag()})"
+                if relation == "mixed" and fx is not None else "")
+        trailing_eps = Reading(value=f.eps, unit=acct_label,
+                               label=f"trailing EPS {acct_money(f.eps)}{said}")
+    else:
+        trailing_eps = _abstain("trailing EPS not reported")
+    if relation == "same":
+        trailing_pe = (Reading(value=f.pe_ratio, unit="x", label=f"trailing P/E {f.pe_ratio:.1f}")
+                       if f is not None and f.pe_ratio is not None
+                       else _abstain("trailing P/E not reported"))
+    elif f is None or f.eps is None:
+        trailing_pe = _abstain("trailing P/E not reported")
+    elif fx is None:
+        trailing_pe = _abstain(f"trailing P/E not computed: {no_rate()}")
+    elif last_close_v is None:
+        trailing_pe = _abstain("no current price")
+    elif f.eps <= 0:
+        trailing_pe = _abstain("trailing EPS is not positive; a P/E is undefined")
+    else:
+        eps_p = f.eps * fx.rate
+        pe = last_close_v / eps_p
+        # the vendor's own trailing P/E is NOT used here: it divides the price by the EPS in
+        # whatever currency each was reported in (BYD: HKD price / CNY EPS)
+        trailing_pe = Reading(
+            value=pe, unit="x",
+            label=(f"trailing P/E {pe:.1f} ({money(last_close_v)} / {money(eps_p)} EPS, "
+                   f"{acct_money(f.eps)} converted at {fx.tag()})" if relation == "mixed"
+                   else f"trailing P/E {pe:.1f}"))
 
     # Forward P/E = today's close / analyst consensus EPS — arithmetic over two numbers
     # already shown elsewhere on the page (the price above; the consensus estimate in
     # "What analysts say"). Abstains rather than guesses when either side is missing, or
     # when the estimate is non-positive (a negative-earnings forward multiple is not a
     # number a reader can use the way a P/E is used).
-    last_close_v = technical.last_close if technical is not None else None
 
     def forward_pe(row, when: str) -> Reading:
         if last_close_v is None:
@@ -1009,9 +1116,28 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5) ->
             return _abstain(f"no analyst consensus EPS for {when}")
         if row.now <= 0:
             return _abstain(f"{when}'s consensus EPS is not positive; a forward P/E is undefined")
-        return Reading(value=last_close_v / row.now, unit="x",
-                      label=f"forward P/E ({when}) {last_close_v / row.now:.1f}x "
-                            f"({money(last_close_v)} / {money(row.now)} consensus EPS)")
+        est = row.now
+        converted_from = ""
+        if relation != "same":
+            # the consensus is per-share profit in ITS currency (the accounts' by the feed's
+            # convention): put it in the price currency first, or abstain
+            cc = (getattr(row, "currency", "") or "").strip()
+            if cc and cc == currency:
+                pass
+            elif cc and cc == acct_ccy and fx is not None:
+                est = row.now * fx.rate
+                converted_from = (f", {_money(row.now, cc)} converted at {fx.tag()}"
+                                  if relation == "mixed" else "")
+            elif cc and cc == acct_ccy:
+                return _abstain(f"forward P/E ({when}) not computed: {no_rate()}")
+            else:
+                return _abstain(f"forward P/E ({when}) not computed: the consensus EPS "
+                                f"currency ({cc or 'not stated'}) cannot be matched to the "
+                                f"price currency ({currency})")
+        return Reading(value=last_close_v / est, unit="x",
+                      label=f"forward P/E ({when}) {last_close_v / est:.1f}x "
+                            f"({money(last_close_v)} / {money(est)} consensus EPS"
+                            f"{converted_from})")
 
     rows = tuple(getattr(trend, "rows", ()) or ())
     fwd_this = forward_pe(rows[0] if len(rows) > 0 else None, "this year")
@@ -1037,7 +1163,8 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5) ->
         return_6m=return_6m, return_12m=return_12m, volatility=volatility,
         fcf_series=fcf_series, trailing_eps=trailing_eps, trailing_pe=trailing_pe,
         forward_pe_this_year=fwd_this, forward_pe_next_year=fwd_next,
-        news=news_items, news_note=news_note, news_source=news_source)
+        news=news_items, news_note=news_note, news_source=news_source,
+        fx=(fx if relation == "mixed" else None))
 
 
 # --------------------------------------------------------------------------- #
