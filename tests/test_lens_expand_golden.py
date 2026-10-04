@@ -99,9 +99,22 @@ def build_outputs() -> dict:
     return json.loads(json.dumps(out, sort_keys=True, default=str))
 
 
+def _round(node, places: int = 9):
+    """Raw floats compared to 9 decimal places: the last bits of a volatility (a square root over
+    a long series) are libm-dependent, so the same code gave 1e-16 differences on Linux CI. Ranks,
+    positions, verdicts, exclusion reasons and every non-float stay EXACT - the golden's purpose."""
+    if isinstance(node, float):
+        return round(node, places)
+    if isinstance(node, dict):
+        return {k: _round(v, places) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_round(v, places) for v in node]
+    return node
+
+
 def test_existing_lenses_are_byte_identical_to_the_pre_lens_expand_golden():
-    golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
-    got = build_outputs()
+    golden = _round(json.loads(GOLDEN.read_text(encoding="utf-8")))
+    got = _round(build_outputs())
     assert set(got) == set(golden)
     for lens in EXISTING_LENSES:
         assert got[lens] == golden[lens], f"{lens} no longer matches its pre-LENS-EXPAND-1 output"
