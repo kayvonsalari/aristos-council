@@ -196,6 +196,83 @@ def _as_report(result: CompanyCheckResult) -> CompanyReport:
 # --------------------------------------------------------------------------- #
 # 1 — nothing silently dropped
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# HTML-NARR-MD-1 — no stray markdown marker reaches a reader
+# --------------------------------------------------------------------------- #
+def test_a_markdown_table_renders_as_a_real_table_not_literal_pipe_lines():
+    """Live: the narration's own 'Every lens's verdict' table reached the HTML export
+    as literal '| Lens | Verdict | Position | Note |' text lines — _blocks had no
+    table recognition at all."""
+    from aristos_council.export.report_html import _narration_html
+
+    narrative = ("| Lens | Verdict | Position | Note |\n"
+                "| --- | --- | --- | --- |\n"
+                "| Growth | BUY | 1 of 12 | — |\n"
+                "| Magic Formula RAW | SELL | 9 of 12 | — |\n")
+    html_out = _narration_html(narrative)
+    assert "<table" in html_out and "<th" in html_out
+    assert "<td>Growth</td>" in html_out and "<td>BUY</td>" in html_out
+    assert "| Lens |" not in html_out
+    assert "| --- |" not in html_out
+
+
+def test_a_bold_cell_inside_a_table_still_converts():
+    from aristos_council.export.report_html import _narration_html
+
+    narrative = "| Lens | Note |\n| --- | --- |\n| Growth | **led on ROIC** |\n"
+    html_out = _narration_html(narrative)
+    assert "<strong>led on ROIC</strong>" in html_out
+    assert "**" not in html_out
+
+
+def test_a_lone_pipe_line_with_no_separator_is_not_treated_as_a_table():
+    """A single '|'-containing sentence (not an actual GFM table) must not be eaten —
+    the separator-row check is what tells the two apart."""
+    from aristos_council.export.report_html import _narration_html
+
+    html_out = _narration_html("The ratio reads 3 | 4 depending on the source.\n")
+    assert "<table" not in html_out
+    assert "3 | 4" in html_out
+
+
+def test_a_blockquote_renders_as_a_callout_not_escaped_angle_brackets():
+    """Live: the structural-warning banner's '> **⚠ Structural warning**' lines reached
+    the export as literal '&gt;' — _blocks had no '>' recognition, so each line fell
+    through to the default paragraph branch, which escapes a bare '>' rather than
+    consuming it as the blockquote marker it is."""
+    from aristos_council.export.report_html import _narration_html
+
+    narrative = ("> **⚠ Structural warning**\n"
+                ">\n"
+                "> This narration did not satisfy the report's structural contract.\n"
+                "> - A rank is outside its cohort: \"14/12\".\n")
+    html_out = _narration_html(narrative)
+    assert "&gt;" not in html_out
+    assert '<div class="callout structural">' in html_out
+    assert "<strong>⚠ Structural warning</strong>" in html_out
+    assert "<li>A rank is outside its cohort" in html_out
+
+
+def test_a_whole_sentence_wrapped_in_underscores_renders_as_italics():
+    """Live: '_Each lens ranks only the names that passed its own screen..._' reached
+    the export as literal underscores — the HTML export deliberately never touched '_'
+    at all, since it is load-bearing inside factor keys (fund_size, momentum_12m). The
+    fix only converts a PAIR of underscores wrapping a multi-word span; a bare factor
+    key must stay untouched."""
+    from aristos_council.export.report_html import _inline
+
+    out = _inline("_Each lens ranks only the names that passed its own screen._")
+    assert out == "<em>Each lens ranks only the names that passed its own screen.</em>"
+
+
+def test_a_factor_key_with_an_underscore_is_never_touched():
+    from aristos_council.export.report_html import _inline
+
+    out = _inline("Led on fund_size and momentum_12m this round.")
+    assert out == "Led on fund_size and momentum_12m this round."
+    assert "<em>" not in out
+
+
 def test_universe_html_keeps_every_narration_sentence_in_the_md():
     result = _universe_result()
     md = _universe_md(result)

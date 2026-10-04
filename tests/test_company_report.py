@@ -1240,6 +1240,98 @@ def test_council_opinion_text_and_html_sections_carry_the_narrative(tmp_path):
     assert "<h2>Council opinion</h2>" in html
 
 
+# --------------------------------------------------------------------------- #
+# HTML-NARR-MD-1 — the .txt export strips markdown to plain text
+# --------------------------------------------------------------------------- #
+def test_markdown_to_plain_strips_bold_and_whole_sentence_italic():
+    from aristos_council.company_report import markdown_to_plain
+
+    out = markdown_to_plain(
+        "**SXR8.DE** takes the lead.\n"
+        "_Each lens ranks only the names that passed its own screen._\n"
+        "Led on fund_size and momentum_12m this round.\n")
+    assert out[0] == "SXR8.DE takes the lead."
+    assert out[1] == "Each lens ranks only the names that passed its own screen."
+    assert out[2] == "Led on fund_size and momentum_12m this round."   # untouched
+    assert "*" not in "\n".join(out) and "_" not in out[1]
+
+
+def test_markdown_to_plain_renders_a_table_as_aligned_columns_not_pipes():
+    from aristos_council.company_report import markdown_to_plain
+
+    out = markdown_to_plain(
+        "| Lens | Verdict |\n| --- | --- |\n| Growth | BUY |\n"
+        "| Magic Formula RAW | SELL |\n")
+    assert all("|" not in ln for ln in out)
+    assert out[0].startswith("Lens")
+    # both data rows' second column starts at the SAME offset — genuinely aligned
+    col = out[0].index("Verdict")
+    assert out[1][col:col + 3] == "BUY"
+    assert out[2][col:col + 4] == "SELL"
+
+
+def test_markdown_to_plain_drops_the_blockquote_marker():
+    from aristos_council.company_report import markdown_to_plain
+
+    out = markdown_to_plain("> **⚠ Structural warning**\n> A rank is outside its "
+                            "cohort: \"14/12\".\n")
+    assert out[0] == "⚠ Structural warning"
+    assert out[1] == 'A rank is outside its cohort: "14/12".'
+    assert not any(ln.startswith(">") for ln in out)
+
+
+def test_council_opinion_lines_strips_markdown_from_a_structured_narrative(tmp_path):
+    """The .txt export must never show the council narration's own raw markdown — the
+    live bug this item fixes."""
+    report = _run([RAW], tmp_path=tmp_path, save=False, with_council=True,
+                  council_runners=_opinion_runners())
+    from aristos_council.company_report import council_opinion_lines
+
+    report.council_opinion.narrative = (
+        "**BUY on 1 of 1 vote.**\n\n"
+        "| Lens | Verdict |\n| --- | --- |\n| Magic Formula RAW | BUY |\n\n"
+        "> **⚠ Structural warning**\n> something broke\n")
+    lines = council_opinion_lines(report)
+    blob = "\n".join(lines)
+    assert "**" not in blob and "|" not in blob and ">" not in blob
+    assert "BUY on 1 of 1 vote." in blob
+    assert "⚠ Structural warning" in blob
+
+
+def test_the_on_screen_council_narrative_renders_markdown_not_raw_markers(tmp_path):
+    """HTML-NARR-MD-1 — the on-screen page must render through the same HTML builder
+    as the export, not leave raw '**', '_..._', '|' table syntax or '&gt;' on screen."""
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+
+    report = _run([RAW], tmp_path=tmp_path, save=False, with_council=True,
+                  council_runners=_opinion_runners())
+    report.council_opinion.narrative = (
+        "**BUY on 1 of 1 vote.**\n\n"
+        "_Each lens ranks only the names that passed its own screen._\n\n"
+        "| Lens | Verdict |\n| --- | --- |\n| Magic Formula RAW | BUY |\n\n"
+        "> **⚠ Structural warning**\n> something broke\n")
+
+    def _page():
+        import streamlit as st
+
+        import app
+        app._render_company_report(st.session_state["_report"])
+
+    at = AppTest.from_function(_page, default_timeout=60)
+    at.session_state["_report"] = report
+    at.run()
+    assert not at.exception, at.exception
+
+    block = next(str(getattr(m, "value", "")) for m in at.markdown
+                if "council-narrative" in str(getattr(m, "value", "")))
+    assert "<table" in block and "<strong>BUY on 1 of 1 vote.</strong>" in block
+    assert "<em>Each lens ranks only the names that passed its own screen.</em>" in block
+    assert "&gt;" not in block
+    assert "**" not in block
+    assert "| Lens |" not in block and "| --- |" not in block
+
+
 # =========================================================================== #
 # BATCH-14 SMALLCAP-VIEW-1 — the opt-in peer band for a company below the $5bn lens gate.
 # "Tech - Semiconductors" is a REAL, committed cohort (data/cohort_definitions.yaml: industry

@@ -36,6 +36,7 @@ with no new model call on reopen.
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timezone
@@ -982,6 +983,76 @@ def summary_lines(report: CompanyReport) -> list[str]:
     return out
 
 
+_MD_PLAIN_MARKS = re.compile(r"\*\*(.+?)\*\*|`([^`]+)`")
+_MD_PLAIN_ITALIC = re.compile(r"(?<!\w)_([^_\n]*\s[^_\n]*)_(?!\w)")
+_MD_PLAIN_TABLE_SEP = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$")
+
+
+def _strip_markdown_marks(text: str) -> str:
+    """``**bold**``/`` `code` `` -> plain; a whole-sentence ``_italic_`` span -> plain
+    (a bare factor-key underscore, with no space inside, is left alone — same rule the
+    HTML export's ``_ITALIC_SPAN`` uses, so the two surfaces agree on what counts as
+    markdown italics)."""
+    out = _MD_PLAIN_MARKS.sub(lambda m: m.group(1) or m.group(2), text)
+    return _MD_PLAIN_ITALIC.sub(r"\1", out)
+
+
+def _plain_table(rows: list[str]) -> list[str]:
+    """A GFM table's raw lines (header, separator, data…) -> aligned plain-text
+    columns, matching ``agreement_table_lines``'/``vote_table_lines``' own convention
+    (left-justified, two-space gaps, no pipes)."""
+    def cells(line: str) -> list[str]:
+        inner = line.strip()
+        if inner.startswith("|"):
+            inner = inner[1:]
+        if inner.endswith("|"):
+            inner = inner[:-1]
+        return [_strip_markdown_marks(c.strip()) for c in inner.split("|")]
+
+    head = cells(rows[0])
+    body = [cells(r) for r in rows[2:]]
+    widths = [len(h) for h in head]
+    for row in body:
+        for i, c in enumerate(row):
+            if i < len(widths):
+                widths[i] = max(widths[i], len(c))
+
+    def fmt(row: list[str]) -> str:
+        return "  ".join(c.ljust(widths[i]) if i < len(widths) else c
+                         for i, c in enumerate(row)).rstrip()
+
+    return [fmt(head)] + [fmt(row) for row in body]
+
+
+def markdown_to_plain(text: str) -> list[str]:
+    """HTML-NARR-MD-1 — the council's markdown narration (``**bold**``, a whole-sentence
+    ``_italic_`` span, a GFM table, a ``>`` blockquote) as PLAIN TEXT lines: the .txt
+    report is not a markdown file, and before this fix the narration's own raw markdown
+    (table syntax, blockquote markers, emphasis characters) reached it verbatim."""
+    lines = (text or "").splitlines()
+    out: list[str] = []
+    i, n = 0, len(lines)
+    while i < n:
+        raw = lines[i]
+        stripped = raw.strip()
+        if stripped.startswith("|") and i + 1 < n \
+                and _MD_PLAIN_TABLE_SEP.match(lines[i + 1].strip()):
+            table = [stripped, lines[i + 1].strip()]
+            i += 2
+            while i < n and lines[i].strip().startswith("|"):
+                table.append(lines[i].strip())
+                i += 1
+            out.extend(_plain_table(table))
+            continue
+        if stripped.startswith(">"):
+            out.append(_strip_markdown_marks(stripped[1:].strip()))
+            i += 1
+            continue
+        out.append(_strip_markdown_marks(raw))
+        i += 1
+    return out
+
+
 def council_opinion_lines(report: CompanyReport) -> list[str]:
     """The council's narration, or the one-line reason it is unavailable."""
     op = report.council_opinion
@@ -989,7 +1060,8 @@ def council_opinion_lines(report: CompanyReport) -> list[str]:
         return []
     if not op.available:
         return [f"  {op.note}"]
-    return [f"  {ln}" for ln in op.narrative.splitlines()] or ["  (no narrative produced)"]
+    return [f"  {ln}" for ln in markdown_to_plain(op.narrative)] or \
+        ["  (no narrative produced)"]
 
 
 def format_company_report(report: CompanyReport) -> str:

@@ -235,6 +235,21 @@ def _inject_chrome() -> None:
             visibility: visible !important;
           }
 
+          /* HTML-NARR-MD-1 — the council narrative is rendered as real HTML (the same
+             builder the export uses), not raw markdown text, so give its table and
+             blockquote-callout shapes a presentable style here instead of leaving them
+             to the browser's bare defaults. */
+          .council-narrative table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+          .council-narrative th, .council-narrative td {
+            border: 1px solid rgba(128, 128, 128, .35); padding: 5px 8px; text-align: left;
+          }
+          .council-narrative .callout.structural {
+            margin: 10px 0; padding: 9px 12px; border: 2px solid rgba(178, 59, 59, .6);
+            border-left-width: 6px;
+          }
+          .council-narrative .callout.structural ul { margin: 6px 0 0; padding-left: 18px; }
+          .council-narrative .callout.structural p { margin: 4px 0; }
+
           @media print {
             @page { margin: 1.5cm; }
             /* Light scheme for paper: white bg, near-black text (theme text is
@@ -4082,7 +4097,17 @@ def _render_company_report(report) -> None:
                    "record.")
         op = report.council_opinion
         if op.available:
-            st.markdown(_md(op.narrative) or "_(no narrative produced)_")
+            # HTML-NARR-MD-1 — rendered through the SAME HTML builder the export uses
+            # (tables as tables, bold/italic as bold/italic, a blockquote as a callout),
+            # not st.markdown's own parser: a structural-warning banner's "> **…**"
+            # lines and the narrator's own GFM table were reaching the screen as raw
+            # markdown text (literal "&gt;", "**", "|") rather than rendering.
+            from aristos_council.export.report_html import _narration_html
+
+            html_block = _narration_html(op.narrative) if op.narrative \
+                else "<p><em>(no narrative produced)</em></p>"
+            st.markdown(f'<div class="council-narrative">{html_block}</div>',
+                       unsafe_allow_html=True)
         else:
             st.info(op.note)
 
