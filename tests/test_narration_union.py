@@ -569,10 +569,13 @@ def test_single_lens_narration_is_unchanged():
     """The single-lens path does not go through the union stage at all."""
     from aristos_council.pipeline import run_rank_pipeline
     runners = _CountingRunners()
-    res = run_rank_pipeline(UNIVERSE, SCREENED, ranker_only=False,
+    # NO-RANK-NO-VOTE-1: the screened lens must keep 3 names to vote, hence the 4-name fixture.
+    from tests.test_multi_strategy_run import UNIVERSE4, _Adapter4
+    res = run_rank_pipeline(UNIVERSE4, SCREENED, ranker_only=False,
                             council_mode="narrator", strategies_dir=STRAT_DIR,
-                            adapter=_Adapter(), today=TODAY, runners=runners)
+                            adapter=_Adapter4(), today=TODAY, runners=runners)
     buys = [r.ticker for r in res.ranked if r.verdict == "buy"]
+    assert buys
     assert sorted(res.narratives) == sorted(buys)
     assert runners.call_count == len(buys)
     assert res.meta["council_mode"] == "narrator"

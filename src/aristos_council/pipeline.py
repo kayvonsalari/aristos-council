@@ -81,6 +81,7 @@ from .persistence.reports import RunReport, report_from_state
 from .rank_engine import (
     BOUNDARY_FLAG,
     MIN_RANKABLE_COHORT,
+    passed_too_few_text,
     FactorSpec,
     RankedTicker,
     boundary_tie_facts,
@@ -844,6 +845,8 @@ def run_rank_pipeline(
         shortlist = list(live)                        # every ranked name, best-first
     else:
         shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
+    if 0 < len(live) < MIN_RANKABLE_COHORT:
+        shortlist = []     # NO-RANK-NO-VOTE-1: a lens that kept too few names votes for none
     est = estimate_cost(len(shortlist))
 
     council: list[CouncilOutcome] = []
@@ -3145,7 +3148,10 @@ def _detail_headline(result) -> str:
         ranked = len([r for r in (getattr(result, "ranked", None) or []) if not r.excluded])
     size = meta.get("universe_size", ranked)
     excluded = len(getattr(result, "excluded", None) or [])
-    line = f"Ranked {ranked} of {size} names."
+    if 0 < ranked < MIN_RANKABLE_COHORT:
+        line = f"{passed_too_few_text(ranked).capitalize()}."
+    else:
+        line = f"Ranked {ranked} of {size} names."
     if excluded:
         line += f" Excluded {excluded}: by rule below, worst miss first."
     return line
@@ -3767,13 +3773,20 @@ def lens_agreement(multi_result) -> LensAgreement:
         return LensAgreement(**empty, overlap_note=_overlap_note(results, voting, _label))
 
     # What each voting lens did with each name, read from what the run already produced.
-    ranked_count = {sid: len([r for r in results[sid].ranked if not r.excluded])
-                    for sid in voting}
+    ranked_count_all = {sid: len([r for r in results[sid].ranked if not r.excluded])
+                        for sid in voting + checks}
+    ranked_count = {sid: ranked_count_all[sid] for sid in voting}
     verdict_of: dict = {}
     position_of: dict = {}
     factor_note_of: dict = {}
     display_of: dict = {}
+    # NO-RANK-NO-VOTE-1: a lens that kept fewer than MIN_RANKABLE_COHORT names gave none of
+    # them a position, so it casts no vote - it is treated exactly like "does not apply".
+    too_thin = {sid: ranked_count_all[sid] for sid in voting + checks
+                if 0 < ranked_count_all[sid] < MIN_RANKABLE_COHORT}
     for sid in voting + checks:
+        if sid in too_thin:
+            continue
         for r in results[sid].ranked:
             if r.excluded:
                 continue
@@ -3795,6 +3808,11 @@ def lens_agreement(multi_result) -> LensAgreement:
 
     excluded_reason: dict = {}
     for sid in voting:
+        if sid in too_thin:
+            for r in results[sid].ranked:
+                if not r.excluded:
+                    excluded_reason.setdefault(r.ticker, {})[sid] = passed_too_few_text(
+                        too_thin[sid])
         for ticker, reason in (getattr(results[sid], "excluded", None) or []):
             excluded_reason.setdefault(ticker, {})[sid] = reason
         for ticker, reason in (getattr(results[sid], "unrateable", None) or []):
@@ -4764,8 +4782,7 @@ def comparable_names_line(result, *, tail: str = " - only those rank-sums are co
         kept = len([r for r in (getattr(res, "ranked", None) or ()) if not r.excluded])             if res is not None else 0
         if 0 < kept < MIN_RANKABLE_COHORT:
             label = (getattr(result, "strategy_names", None) or {}).get(sid) or sid
-            thin.append(f"{label} kept only {kept} name{'s' if kept != 1 else ''}, too few "
-                        f"(under {MIN_RANKABLE_COHORT}) to give any a position")
+            thin.append(f"{label}: {passed_too_few_text(kept)}")
     if thin:
         line += " " + "; ".join(thin) + "."
     return line

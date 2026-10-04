@@ -285,13 +285,21 @@ def format_summary_line(ranked, *, universe_size: int, excluded: int,
     rather than printed as "0 SELL" — a zero is not information here, it is noise. The
     non-verdict axes (unrateable, fetch failures) are named only when non-empty, and
     each keeps its own distinct wording: they are not exclusions."""
+    from .rank_engine import MIN_RANKABLE_COHORT, passed_too_few_text
+
     counts = verdict_counts(ranked)
+    too_few = 0 < sum(counts.values()) < MIN_RANKABLE_COHORT
     # CHECK-WORDS-1: "21 clean · 62 no concern · 21 doubted" for a check lens. The counts
     # are the same counts; only the words change.
     verdicts = " · ".join(f"{n} {verdict_word(v, check=check)}"
                           for v, n in counts.items() if n)
     ranked_n = sum(counts.values())
-    tail = [f"{ranked_n} of {universe_size} names ranked"]
+    if too_few:
+        # NO-RANK-NO-VOTE-1: under 3 names there is no vote, so no BUY/HOLD/SELL tally.
+        verdicts = ""
+        tail = [passed_too_few_text(ranked_n)]
+    else:
+        tail = [f"{ranked_n} of {universe_size} names ranked"]
     if excluded:
         tail.append(f"{excluded} excluded by the screen")
     if unrateable:

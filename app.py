@@ -2983,8 +2983,11 @@ def _render_multi_strategy_result(multi_result) -> None:
 
     for sid in ids:
         res = multi_result.results[sid]
+        from aristos_council.rank_engine import (MIN_RANKABLE_COHORT as _MINR,
+                                                 passed_too_few_text as _thin_text)
+        _kept = res.meta['ranked_count']
         with st.expander(f"{lens_labels[sid]} — detail "
-                         f"({res.meta['ranked_count']} ranked, "
+                         f"({_thin_text(_kept) if 0 < _kept < _MINR else f'{_kept} ranked'}, "
                          f"{len(res.excluded)} excluded, "
                          f"{len(res.unrateable)} with no data)"):
             # DETAIL-1: the same groups, in the same order, as the downloaded report.

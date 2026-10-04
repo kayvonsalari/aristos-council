@@ -356,7 +356,7 @@ def test_the_non_verdict_axes_keep_their_own_distinct_wording():
 
 def test_the_summary_line_matches_the_fixture_run(result):
     assert summary_line(result) == (
-        "1 BUY · 1 HOLD — 2 of 4 names ranked, 2 excluded by the screen")
+        "2 passed its rules, too few to rank, 2 excluded by the screen")   # NO-RANK-NO-VOTE-1: 2 names cast no vote
 
 
 # --------------------------------------------------------------------------- #

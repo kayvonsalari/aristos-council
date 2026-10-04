@@ -35,8 +35,11 @@ from aristos_council.pipeline import (
 )
 from aristos_council.reproducibility import estimate_cost
 
+# NO-RANK-NO-VOTE-1: the screened lens now ranks 3 names (A, B and a second B-like D) instead of 2,
+# because a lens that keeps fewer than 3 casts no vote and so narrates nothing - these tests are
+# about the confirm-spend seam, which needs names that vote.
 from tests.test_multi_strategy_run import (
-    RAW, SCREENED, STRAT_DIR, TODAY, UNIVERSE, _Adapter,
+    RAW, SCREENED, STRAT_DIR, TODAY, UNIVERSE4 as UNIVERSE, _Adapter4 as _Adapter,
 )
 from tests.test_narration_union import MOMENTUM, _CountingRunners
 

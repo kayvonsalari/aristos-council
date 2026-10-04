@@ -197,6 +197,13 @@ def too_few_to_rank_text(cohort_size: int) -> str:
     return f"too few to rank (only {cohort_size} {company} here, not a peer group)"
 
 
+def passed_too_few_text(kept: int) -> str:
+    """"2 passed its rules, too few to rank" - the ONE wording for a lens that kept fewer than
+    MIN_RANKABLE_COHORT names (NO-RANK-NO-VOTE-1 / VM-COUNT-WORDING-1). Such a lens casts no vote
+    and gives no name a position; every count line, header and note that says so uses this."""
+    return f"{kept} passed its rules, too few to rank"
+
+
 def quintile_end_count(n: int) -> int:
     """How many names sit at EACH end of an n-name quintile cut: ceil(n / 5), the same
     number getting BUY at the top and SELL at the bottom. 0 for an empty list."""

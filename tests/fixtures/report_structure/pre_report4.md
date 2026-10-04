@@ -8,7 +8,7 @@
 
 _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
 
-### 3 lenses × 4 names — 3 of 4 ranked by at least one — shortlist: 1 name BUY on all 3 voting lenses
+### 3 lenses × 4 names — 3 of 4 ranked by at least one — shortlist: 1 on 1 of 3
 
 **Classic Value** — Quality-value screen, 2 rules · **Magic Formula RAW** — no screen (ranking only) · **Value + Momentum** — Quality-value screen, 2 rules  ([details](#rules-applied--by-lens))
 
@@ -38,7 +38,7 @@ _Names ordered by how many of the 3 voting lenses rated them BUY. The price chec
 
 | Name | BUY votes | SELL votes | Valuation percentile | Marks |
 |---|---|---|---|---|
-| **A** | 3 of 3: Classic Value, Magic Formula RAW, Value + Momentum | — | not evaluated |  |
+| **A** | 1 of 1: Magic Formula RAW (2 did not apply) | — | not evaluated |  |
 
 _2 names had no BUY from any lens, and are not listed here._
 
@@ -129,7 +129,7 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 ## Classic Value (magic_formula_v1) — detail
 
-**Ranked 2 of 4 names. Excluded 1: by rule below, worst miss first.**
+**2 passed its rules, too few to rank. Excluded 1: by rule below, worst miss first.**
 
 **Return on invested capital** `min_roic` · rule: at least 12% · **1 name**
 
@@ -172,7 +172,7 @@ _Cheap and good: high profit on the money invested, a low price for that profit,
 
 _The same as Magic Formula RAW (companies worth at least $5bn, not banks, insurers or utilities), but only for companies earning at least 12% on their capital._
 
-**Ranked 2 of 4 names. Excluded 1: by rule below, worst miss first.**
+**2 passed its rules, too few to rank. Excluded 1: by rule below, worst miss first.**
 
 **Return on invested capital** `min_roic` · rule: at least 12% · **1 name**
 

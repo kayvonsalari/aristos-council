@@ -27,6 +27,16 @@ from aristos_council.pipeline import (DEFAULT_NARRATION_CAP, DEFAULT_NARRATION_L
 from aristos_council.tools.valuation_band import ValuationBand
 
 
+
+@pytest.fixture(autouse=True)
+def _tally_not_the_floor(monkeypatch):
+    """These tests are about how votes are TALLIED, on hand-built one- and two-name lenses.
+    Since NO-RANK-NO-VOTE-1 a lens that kept fewer than 3 names casts no vote, which is not
+    what they are about, so the floor is lowered to 1 here; the floor itself is pinned by
+    tests/test_no_rank_no_vote.py."""
+    from aristos_council import pipeline
+    monkeypatch.setattr(pipeline, "MIN_RANKABLE_COHORT", 1)
+
 # --------------------------------------------------------------------------- #
 # A multi-result shaped exactly as much as the rule reads
 # --------------------------------------------------------------------------- #
