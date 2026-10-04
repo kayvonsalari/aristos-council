@@ -69,10 +69,15 @@ class _Adapter(MarketDataAdapter):
 
     def get_price_history(self, ticker, *, start, end):
         i = TICKERS.index(ticker)
-        drift = 0.0004 * ((i * 5) % 9 - 3)
+        # Only + - * / (correctly rounded on every platform): no pow/exp, whose last bit differs
+        # between libm builds and flipped a momentum tie on Linux CI. A distinct drift per ticker,
+        # so no two momentums are close enough for a last-bit difference to reorder them.
+        drift = 0.00021 * ((i * 7) % 16 - 6)
         bars = []
+        level = 100.0
         for d in range(420):
-            px = 100.0 * (1.0 + drift) ** d * (1.0 + 0.01 * ((d * (i + 3)) % 7 - 3) / 3.0)
+            level = level * (1.0 + drift)
+            px = level * (1.0 + 0.01 * ((d * (i + 3)) % 7 - 3) / 3.0)
             bars.append(PriceBar(day=TODAY - timedelta(days=419 - d), open=px, high=px * 1.01,
                                  low=px * 0.99, close=px, adj_close=px, volume=1000))
         return PriceHistory(ticker=ticker, bars=bars)
