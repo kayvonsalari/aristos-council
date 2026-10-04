@@ -195,7 +195,8 @@ def test_a_subcap_pick_from_the_find_box_shows_the_line_and_runs_small(monkeypat
     assert not at.exception
 
     blob = " ".join(str(getattr(i, "value", "")) for i in at.info)
-    assert "worth $3.2bn, below the $5bn rule" in blob
+    # DOLLAR-MATH-1: the page receives each "$" escaped (a bare pair is read as LaTeX maths)
+    assert r"worth \$3.2bn, below the \$5bn rule" in blob
     assert "not known in advance" not in blob      # the find box already knew the cap
 
     captured = {}
@@ -227,7 +228,7 @@ def test_an_over_5bn_pick_shows_no_line_and_runs_normally(monkeypatch):
     at.button(key="cc_find_use").click().run()
     assert not at.exception
     blob = " ".join(str(getattr(i, "value", "")) for i in at.info)
-    assert "below the $5bn rule" not in blob
+    assert r"below the \$5bn rule" not in blob
 
     captured = {}
     import aristos_council.company_report as cr
@@ -253,7 +254,7 @@ def test_unknown_size_is_decided_after_a_live_fetch_and_the_line_says_so(monkeyp
     at.text_input(key="cc_ticker").set_value("UNKNOWN.XX").run()
     assert not at.exception
     blob = " ".join(str(getattr(i, "value", "")) for i in at.info)
-    assert "worth $1.5bn, below the $5bn rule" in blob
+    assert r"worth \$1.5bn, below the \$5bn rule" in blob
     assert "not known in advance; this was decided once its market cap was read" in blob
 
 
@@ -274,7 +275,7 @@ def test_when_the_cap_cannot_be_determined_at_all_no_line_is_shown(monkeypatch):
     at.text_input(key="cc_ticker").set_value("NOPE.XX").run()
     assert not at.exception
     blob = " ".join(str(getattr(i, "value", "")) for i in at.info)
-    assert "below the $5bn rule" not in blob
+    assert r"below the \$5bn rule" not in blob
 
 
 def test_small_peer_group_wiring_passes_include_small_straight_through():

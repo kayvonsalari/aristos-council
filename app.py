@@ -28,6 +28,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import streamlit as st
+
+from aristos_council.ui_text import escape_dollars, install as install_dollar_safety
 from pydantic import ValidationError
 
 from aristos_council.data.adapter import (
@@ -177,7 +179,7 @@ def _prose(text: str, show_provenance: bool) -> str:
 def _md(text: str) -> str:
     """Escape '$' so st.markdown can't read currency as LaTeX math and eat it
     ("$1.048 trillion" -> "`1.048 trillion"). Financial text must keep its $."""
-    return text.replace("$", "\\$") if text else text
+    return escape_dollars(text) if text else text
 
 
 def _render_prose(text: str, show_provenance: bool) -> str:
@@ -4233,6 +4235,7 @@ def main() -> None:
         st.set_page_config(page_title="Council Station", page_icon="🏛",
                            layout="wide")
     _inject_chrome()
+    install_dollar_safety(st)       # DOLLAR-MATH-1: every markdown-rendering call is $-safe
 
     col_logo, col_title = st.columns([1, 11], vertical_alignment="center")
     with col_logo:
