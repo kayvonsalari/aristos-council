@@ -4076,10 +4076,13 @@ def _render_company_report(report) -> None:
         # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-
         # band run; never shown otherwise.
         _suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
-        st.dataframe(pd.DataFrame([{"Lens": v.label, "Role": v.role,
-                                    "Result": v.result() + v.badge_suffix + _suffix,
-                                    "What it asks": v.asks} for v in report.votes]),
-                     hide_index=True, width="stretch")
+        # LENS-TABLE-WRAP-1: ``st.table`` wraps a long cell where ``st.dataframe`` (a canvas grid)
+        # cuts it off and needs horizontal scrolling - and the Result and "What it asks" cells
+        # ARE the sentences a reader came for.
+        st.table(pd.DataFrame([{"Lens": v.label, "Role": v.role,
+                                "Result": v.result() + v.badge_suffix + _suffix,
+                                "What it asks": v.asks} for v in report.votes]
+                              ).set_index("Lens"))
         badged = [v for v in report.votes if v.badge is not None]
         if badged:
             from aristos_council.backtest import BADGE_MEANINGS

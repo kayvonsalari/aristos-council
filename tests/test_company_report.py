@@ -560,8 +560,10 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     assert "Price and cash" in heads and "Absolute readings" in heads
     frames = [df.value for df in at.dataframe]
     assert any("BUY votes" in list(f.columns) for f in frames)            # the agreement row
-    assert any("Result" in list(f.columns) for f in frames)               # the vote table
-    votes = next(f for f in frames if "Result" in list(f.columns))
+    # LENS-TABLE-WRAP-1: the vote table is a wrapping ``st.table`` now, not a scrolling grid
+    wrapped = [tb.value for tb in at.table]
+    assert any("Result" in list(f.columns) for f in wrapped)              # the vote table
+    votes = next(f for f in wrapped if "Result" in list(f.columns))
     assert any(str(r).startswith("does not apply - ") for r in votes["Result"])
     assert any("Market cap (USD)" in list(f.columns) for f in frames)     # the numeric peers table
     # the page carries no Streamlit-side model call: the summary came from the injected writer
@@ -1542,3 +1544,32 @@ def test_price_and_cash_names_itself_not_requested_when_the_caller_did_not_ask(t
         runs_dir=tmp_path / "runs", today=TODAY)
     assert report.price_and_cash is None
     assert price_and_cash_lines(report) == ["  not requested"]
+
+
+def test_a_check_lens_gets_no_track_record_badge_and_the_summary_counts_voters_only():
+    """FORENSIC-BADGE-1 (Batch 17 item 15, owner's ruling): Forensic marks and does not vote,
+    so beside it there is no "(untested here)" - or any other - badge, and the agreement's
+    "Track record:" count covers only the lenses that voted. Any check lens, not just Forensic."""
+    from types import SimpleNamespace
+
+    from aristos_council.company_report import CompanyReport, attach_track_record
+
+    votes = [LensVote("magic_formula_raw_v1", "Magic Formula RAW", status="ranked",
+                      verdict="buy", position=2, cohort_size=14),
+             LensVote("forensic_v1", "Forensic", kind="check", status="ranked",
+                      verdict="buy", position=3, cohort_size=14),
+             LensVote("some_other_check_v1", "Some other check", kind="check", status="ranked",
+                      verdict="sell", position=9, cohort_size=14)]
+    subject = SimpleNamespace(industry="Semiconductors", gics_subindustry="Semiconductors")
+    report = CompanyReport(ticker="CO", check=SimpleNamespace(peer_group=SimpleNamespace(
+        subject=subject)), votes=votes)
+    attach_track_record(report)
+
+    voter, forensic, other = report.votes
+    assert voter.badge is not None
+    assert forensic.badge is None and forensic.badge_suffix == ""
+    assert other.badge is None and other.badge_suffix == ""
+    summary = report.track_record_summary
+    assert summary.startswith("Track record: ") and "untested" not in summary
+    # exactly one badge was counted, so the summary names exactly one lens-worth of result
+    assert sum(int(tok) for tok in summary.replace(",", " ").split() if tok.isdigit()) == 1
