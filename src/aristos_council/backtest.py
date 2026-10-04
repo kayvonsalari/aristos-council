@@ -917,7 +917,24 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
         # about any one lens: non-empty period_ends means AsOfAdapter served real dated
         # accounts, not its identity-only abstain shell (_abstain, asof_adapter.py). Cheap —
         # MemoAdapter already has the raw fetch cached; this only re-runs the as-of cut.
-        accounts_coverage = (sum(1 for t in eligible if asof.get_fundamentals(t).period_ends)
+        #
+        # BASELINE-CHECK-1 (2026-10-04) — a per-ticker fetch failure (a provider 404, e.g.
+        # EODHD's own ticker code for a Korean listing differing from the cohort's Yahoo
+        # symbol: 034020.KO vs 034020.KS) must count as "not covered", exactly like an
+        # empty period_ends, never crash the round. Before this fix it did: MemoAdapter
+        # caches and RE-RAISES that one ticker's exception on every call, so the FIRST
+        # round that includes it aborted the ENTIRE backtest for this cohort — silently,
+        # for every lens, every round after. run_rank_pipeline's own factor-gathering
+        # (gather_factor_inputs) already degrades a fetch failure to "no data" for that one
+        # name rather than crashing; this line, added alongside it by the same PR, did not.
+        # Live case: Industrials - Grid & Electrical Machinery (member 034020.KO/112610.KO)
+        # — see docs/BACKTEST.md "SIZE-FLOOR-2 and the baseline check" for the full account.
+        def _has_dated_accounts(ticker: str) -> bool:
+            try:
+                return bool(asof.get_fundamentals(ticker).period_ends)
+            except Exception:                                   # noqa: BLE001 — a coverage
+                return False                                     # FACT, never a crash here.
+        accounts_coverage = (sum(1 for t in eligible if _has_dated_accounts(t))
                              / len(eligible)) if eligible else None
         pipeline_result = run_rank_pipeline(
             eligible, lens_id, ranker_only=True, adapter=asof, today=d,

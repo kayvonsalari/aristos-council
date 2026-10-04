@@ -39,3 +39,9 @@ Architecture section and the PR descriptions for the full design.
   ETFs").
 - Download both a list run and a company run as `.md`/`.txt` and `.html`; confirm the two
   formats agree on every figure (one of REPORT-HTML-1's own invariants).
+
+## BATCH 16 (2026-10-04)
+
+| ID | Steps | Expected result |
+|---|---|---|
+| **B16-T1** | Open `docs/BACKTEST.md` and `backtests/SUMMARY.csv`. Run a Company Check on BHP.AX and on ETN. | The Mining and Grid & Electrical Machinery `magic_formula_raw_v1` rows each state ONE agreed number (no separate "grid" figure contradicting the committed row). `docs/BACKTEST.md`'s "SIZE-FLOOR-2 and the baseline check" section names which cause was found (BASELINE-CHECK-1: a per-ticker fetch-failure crash in the accounts-coverage reporting line, not a stale committed row). The badge shown on BHP.AX / ETN's Magic Formula RAW vote matches `SUMMARY.csv`'s verdict for that cohort. |
