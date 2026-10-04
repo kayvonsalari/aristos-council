@@ -1,0 +1,80 @@
+# Aristos Council — RANK strategy: Quality (v1)
+# =============================================
+# A strong, durable business, found by RANKING and not by screening: there is NO entry
+# rule beyond the size floor and the bank/insurer exclusion, so (like Magic Formula RAW) it
+# can give a verdict on almost any large company. That is the point of it — the other lenses
+# have entry rules and so often say "does not apply" about a company this one can read.
+#
+# THREE LEGS, equal rank weight (the same rank-sum combine as every other lens):
+#   1. gross_profitability  — gross profit / total assets (HIGH).
+#   2. worst_year_roic      — the lowest single-year ROIC of the last 5 fiscal years (HIGH).
+#                             A minimum, not a mean: a return that survives the bad year.
+#   3. net_debt_to_ebit     — (debt - cash) / latest EBIT (LOW). Net cash is negative and
+#                             ranks best; zero or negative EBIT ranks LAST with the reason
+#                             shown, because the ratio would otherwise invert.
+#
+# A name that cannot be measured on a leg (a missing line, fewer than 3 years of history)
+# takes the WORST rank on it, with the reason shown — the same convention as Magic Formula
+# RAW — never a zero, a pass or a fail.
+
+id: quality_v1
+name: Quality
+display_name: Quality
+role: durable business — ranks, no entry rules
+version: 1
+
+# CAPTION-1 — what this lens asks of a company, in one sentence, for a reader meeting a
+# verdict without having read the YAML.
+asks: >-
+  A strong, durable business: high gross profit on its assets, a decent return on capital even
+  in its worst recent year, and little debt against its operating profit, for companies worth
+  at least $5bn (not banks or insurers).
+
+kind: selector
+thesis:
+  - quality
+created: "2026-10-04"
+
+description: >-
+  Ranks on three measures of business quality — gross profit relative to assets, the worst
+  single year's return on invested capital over the last five fiscal years, and net debt
+  against operating profit. No entry screens: only the $5bn size floor and the bank/insurer
+  exclusion. Verdicts are the usual top-fifth BUY, middle HOLD, bottom-fifth SELL of the rank.
+
+asset_kinds:
+  - equity
+asset_kind_rationale: >-
+  Gross profit, return on invested capital and net debt describe an operating company; a
+  fund's look-through figures would measure something else under the same heading, so funds
+  are gated out rather than ranked badly.
+
+factors:
+  - name: gross_profitability         # high — gross profit / total assets
+  - name: worst_year_roic             # high — lowest single-year ROIC, last 5 fiscal years
+  - name: net_debt_to_ebit            # low  — net debt / EBIT; net cash best, EBIT <= 0 last
+
+cut: quintile                # top 20% BUY, middle 60% HOLD, bottom 20% SELL
+k: 6
+percentile: 0.2
+missing: worst               # an unmeasurable leg ranks last on it, reason shown
+min_market_cap: 5.0e9
+exclude_sectors:
+  - Financial Services        # yfinance label
+  - Financials                # EODHD / GICS label
+sector_exclusion_rationale: >-
+  Gross profit and net debt are not meaningful for a bank or an insurer: many report no gross
+  profit at all, and borrowing is their raw material rather than a claim ahead of the
+  shareholder, so net-debt-to-operating-profit would rank the most conservatively funded lender
+  worst. financials_v1 ranks them on the measures they are actually priced by.
+# NO council_screen_strategy and NO prefilter_screen: nothing screens a company out but the
+# size and sector gates above.
+
+rationale: >-
+  Quality is asked of the business, not the price: does it earn a lot from what it owns, does
+  it keep earning on capital when a year goes badly, and does it carry little debt against
+  what it earns. Taking the WORST year of return on capital instead of the average is the
+  durable-business test — an average hides the year the business was in trouble. The lens is
+  deliberately price-blind, so a very good business at a very high price can still read BUY;
+  Value + Momentum and Earnings Power Value are the lenses that ask about price. It is the
+  quality factor family of the academic literature (gross profitability, return on capital,
+  leverage), combined by rank-sum with no weights to tune.

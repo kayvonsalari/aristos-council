@@ -204,7 +204,13 @@ _NUM_ORDINAL = re.compile(r"\b(\d+)(?:st|nd|rd|th)\b", re.I)
 _FACTOR_SUBJECTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (r"low[-\s_]?volatilit|volatilit|volatile", ("low_volatility",)),
     (r"revenue[-\s_]?(?:growth|cagr)|revenue", ("revenue_growth", "revenue_cagr")),
+    # LENS-EXPAND-1a: "worst-year" must precede plain ROIC (its label also says "return on
+    # invested capital"); each new subject resolves only against a table that has the factor.
+    (r"worst[-\s_]?year", ("worst_year_roic",)),
     (r"return on (?:invested )?capital|\broic\b", ("roic",)),
+    (r"gross[-\s_]?profitabilit|gross profit", ("gross_profitability",)),
+    (r"earnings[-\s_]?power|\bepv\b|margin of safety", ("epv_margin_of_safety",)),
+    (r"net[-\s_]?debt", ("net_debt_to_ebit",)),
     (r"earnings[-\s_]?yield", ("earnings_yield",)),
     (r"net[-\s_]?payout|payout[-\s_]?yield", ("net_payout_yield",)),
     (r"price[-\s_]?to[-\s_]?book|p/b", ("price_to_book",)),

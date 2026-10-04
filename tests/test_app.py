@@ -639,7 +639,7 @@ def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
     assert any("Forensic" in o for o in rank)                       # forensic lens (FORENSIC-1)
     assert any("Cyclical Income" in o for o in rank)                # CYCLICAL-INCOME-1
     assert not any("ETF" in o for o in rank)                        # ASSET-MODE-1: hidden
-    assert len(rank) == 7                                           # the 7 stock lenses
+    assert len(rank) == 9                                           # the 9 stock lenses
 
     # ...and flipping the switch brings every one of them back. HIDDEN, never deleted.
     _etfs_mode(at)
@@ -690,8 +690,8 @@ def test_both_strategy_pickers_list_the_live_strategies():
         assert not any("_" in o for o in opts)                       # display names, no ids
         assert any("Forensic" in o for o in opts)                    # forensic lens (FORENSIC-1)
         assert any("Cyclical Income" in o for o in opts)             # CYCLICAL-INCOME-1
-        # ASSET-MODE-1: the 7 stock lenses. The app opens on Stocks.
-        assert len(opts) == 7
+        # ASSET-MODE-1: the 9 stock lenses (LENS-EXPAND-1a added two). The app opens on Stocks.
+        assert len(opts) == 9
     # The contract that matters is that the two pickers AGREE on the other side of the
     # switch too — a filter applied to one and not the other is exactly the drift the
     # ONE picker module exists to prevent. ETF mode has no Company Check at all (TAB-
@@ -1349,7 +1349,7 @@ def test_adhoc_cohort_filters_nothing_and_says_so():
     # ASSET-MODE-1: every live lens on THIS side of the switch. The cohort still filters
     # nothing — the switch is a different axis from cohort relevance, and only the switch
     # decides which lenses are on offer at all.
-    assert len(_strategy_picker(at).options) == 7      # the 7 stock lenses
+    assert len(_strategy_picker(at).options) == 9      # the 9 stock lenses
 
 
 def test_every_strategy_stays_offered_even_for_a_cohort_of_the_other_kind():

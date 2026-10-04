@@ -94,10 +94,12 @@ def test_visible_rank_set_is_the_live_strategies():
     # financials lens -> five. FORENSIC-1 adds the forensic lens -> six stock lenses.
     # ETF-1 ITEM 3: the two exploratory ETF lenses are visible too.
     # ETFCORE-1 ITEM 1: the core-market ETF lens joins them.
-    # CYCLICAL-INCOME-1 adds the cyclical-income stock lens -> seven stock lenses.
+    # CYCLICAL-INCOME-1 adds the cyclical-income stock lens -> seven stock lenses;
+    # LENS-EXPAND-1a adds quality_v1 and epv_v1 -> nine.
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
                        "growth_garp_v2", "magic_formula_raw_v1", "financials_v1",
                        "forensic_v1", "cyclical_income_v1",
+                       "quality_v1", "epv_v1",
                        "etf_dividend_v1", "etf_growth_v1", "etf_core_v1"}
 
 

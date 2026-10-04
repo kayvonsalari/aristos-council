@@ -1,0 +1,81 @@
+# Aristos Council — RANK strategy: Earnings Power Value (v1)
+# ==========================================================
+# Cheap for the profit it ALREADY makes — the one absolute valuation question the other lenses
+# do not ask ("is it cheap against what it earns today, with no growth assumed?", rather than
+# "is it the cheapest of this group?").
+#
+#   normalised operating profit = (average EBIT margin, last 5 fiscal years) x (latest revenue)
+#   EPV                         = normalised operating profit x (1 - tax) / cost of capital
+#   margin of safety            = EPV / enterprise value - 1        (HIGHER is better)
+#
+# ONE factor, ranked. NO entry screens beyond the size floor and the bank/insurer exclusion.
+# NEVER gating: it is a ranked lens that votes like the others and has no veto.
+#
+# THE TWO ASSUMPTIONS ARE NAMED CONSTANTS, stated once for the whole universe — one honest
+# assumption rather than forty fake-precise ones (the EPV-1 decision in CLAUDE.md). They are
+# defined in src/aristos_council/tools/quality_epv.py and MIRRORED here; a test fails if the
+# two ever differ, so this file cannot say 25% while the maths uses something else.
+constants:
+  tax_rate: 0.25              # flat tax on operating profit, UNLESS the company's own
+                              # 5-year effective rate is reliable (3+ years, between 5% and
+                              # 40%), in which case that is used and the report says so
+  cost_of_capital: 0.09       # flat required return on the business, the same for every name
+  margin_years: 5             # fiscal years averaged for the normalised EBIT margin
+  min_years: 3                # fewer years of margin than this -> not evaluated, with the reason
+
+id: epv_v1
+name: Earnings Power Value
+display_name: Earnings Power Value
+role: cheap for today's profit — ranks, no entry rules
+version: 1
+
+# CAPTION-1 — what this lens asks of a company, in one sentence.
+asks: >-
+  Cheap for the profit it already makes: what the business is worth if today's operating profit
+  simply continues with no growth, compared with what the market charges for it, for companies
+  worth at least $5bn (not banks or insurers).
+
+kind: selector
+thesis:
+  - value
+created: "2026-10-04"
+
+description: >-
+  Capitalises a normalised operating profit (five-year average EBIT margin times the latest
+  revenue, taxed at a flat 25% unless the company's own effective rate is reliable) at a flat
+  9% cost of capital, and ranks companies on how far that no-growth value sits above the
+  enterprise value the market charges. No entry screens beyond the $5bn size floor and the
+  bank/insurer exclusion. A company whose normalised profit is negative ranks last, with the
+  reason shown.
+
+asset_kinds:
+  - equity
+asset_kind_rationale: >-
+  Operating profit and enterprise value describe an operating company; a fund has neither in its
+  own right, so funds are gated out rather than ranked badly.
+
+factors:
+  - name: epv_margin_of_safety        # high — EPV / EV - 1
+
+cut: quintile                # top 20% BUY, middle 60% HOLD, bottom 20% SELL
+k: 6
+percentile: 0.2
+missing: worst               # normalised profit <= 0, or no enterprise value: ranks last, reason shown
+min_market_cap: 5.0e9
+exclude_sectors:
+  - Financial Services        # yfinance label
+  - Financials                # EODHD / GICS label
+sector_exclusion_rationale: >-
+  Operating profit and enterprise value are not meaningful for a bank or an insurer — borrowing
+  is their raw material, so EBIT/EV-style measures misread them. financials_v1 ranks them on
+  the measures they are actually priced by.
+# NO council_screen_strategy and NO prefilter_screen.
+
+rationale: >-
+  Greenblatt-style lenses ask whether a company is cheap RELATIVE to its group. EPV asks the
+  absolute question: capitalise the profit the business is already earning, assume it never
+  grows, and compare that with the price of the whole company. Normalising the margin over five
+  years keeps a peak (or trough) year from deciding the answer. The two constants are
+  deliberately blunt and identical for every company; a cyclical at a peak or a trough is the
+  case this is weakest on, which is why the margin is averaged. It is never gating — the cost
+  of capital is arguable, so it can rank a name but never veto one.

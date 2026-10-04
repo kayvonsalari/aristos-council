@@ -40,6 +40,12 @@ from .tools.screening import (
     revenue_cagr,
     through_cycle_roic,
 )
+from .tools.quality_epv import (
+    earnings_power_value,
+    gross_profitability,
+    net_debt_to_ebit,
+    worst_year_roic,
+)
 from .tools.technical import (
     _TD_6M,
     _TD_12M,
@@ -236,13 +242,72 @@ def _payout_coverage_source(fi: FactorInputs) -> str:
 
 def _net_debt_to_operating_income(fi: FactorInputs) -> Optional[float]:
     """Net debt measured against THROUGH-CYCLE operating profit. LOW is better; net cash
-    is negative and ranks best. Generic — quality_v1 wants this same measure."""
+    is negative and ranks best. (quality_v1 uses the single-year-EBIT variant,
+    net_debt_to_ebit.)"""
     return net_debt_to_operating_income(fi.fundamentals)[0]
 
 
 def _net_debt_to_oi_source(fi: FactorInputs) -> str:
     value, note = net_debt_to_operating_income(fi.fundamentals)
     return SRC_COMPUTED if value is not None else f"{SRC_ABSTAINED}: {note}"
+
+
+# --- Quality + Earnings Power Value legs (LENS-EXPAND-1a) ------------------- #
+# The arithmetic is in tools/quality_epv.py; these adapt it to the factor contract
+# (None == NOT-EVAL, with a per-name source tag that carries the reason).
+def _gross_profitability(fi: FactorInputs) -> Optional[float]:
+    return gross_profitability(fi.fundamentals)[0]
+
+
+def _gross_profitability_source(fi: FactorInputs) -> str:
+    value, note = gross_profitability(fi.fundamentals)
+    return SRC_COMPUTED if value is not None else f"{SRC_ABSTAINED}: {note}"
+
+
+def _worst_year_roic(fi: FactorInputs) -> Optional[float]:
+    return worst_year_roic(fi.fundamentals)[0]
+
+
+def _worst_year_roic_source(fi: FactorInputs) -> str:
+    value, note = worst_year_roic(fi.fundamentals)
+    return SRC_COMPUTED if value is not None else f"{SRC_ABSTAINED}: {note}"
+
+
+def _net_debt_to_ebit(fi: FactorInputs) -> Optional[float]:
+    return net_debt_to_ebit(fi.fundamentals)[0]
+
+
+def _net_debt_to_ebit_source(fi: FactorInputs) -> str:
+    value, note = net_debt_to_ebit(fi.fundamentals)
+    return SRC_COMPUTED if value is not None else f"{SRC_ABSTAINED}: {note}"
+
+
+def epv_reading_for(fi: FactorInputs):
+    """The full EPV working for one name (the margin of safety AND how it was built), or
+    None when there are no fundamentals. A currency mismatch whose rate could not be
+    fetched abstains — never a mixed-currency enterprise value (VERIFY-2 ITEM 1)."""
+    f = fi.fundamentals
+    if f is None:
+        return None
+    if fi.fx_failed:
+        from .tools.quality_epv import EPVReading
+        return EPVReading(None, note="currency conversion unavailable")
+    return earnings_power_value(f, enterprise_value(f, fi.fx),
+                                fi.fx.rate if fi.fx is not None else 1.0)
+
+
+def _epv_margin_of_safety(fi: FactorInputs) -> Optional[float]:
+    r = epv_reading_for(fi)
+    return r.margin_of_safety if r is not None else None
+
+
+def _epv_margin_of_safety_source(fi: FactorInputs) -> str:
+    r = epv_reading_for(fi)
+    if r is None:
+        return f"{SRC_ABSTAINED}: no fundamentals"
+    if r.margin_of_safety is None:
+        return f"{SRC_ABSTAINED}: {r.note}"
+    return f"{SRC_COMPUTED}, tax {r.tax_source}"
 
 
 def _return_on_capital(fi: FactorInputs) -> Optional[float]:
@@ -638,6 +703,48 @@ FACTOR_REGISTRY: dict[str, FactorDef] = {
         glossary=("The profit the business earns on the money tied up in it. High "
                   "means every euro invested in the company works hard."),
         unit="percent"),
+    # LENS-EXPAND-1a — the Quality lens (three legs) and the Earnings Power Value lens (one).
+    "gross_profitability": FactorDef(
+        "gross_profitability", _gross_profitability, "high",
+        "Gross profit / total assets",
+        glossary=("The sales a company keeps after paying for what it sold, as a share of "
+                  "everything it owns. High means the business earns a lot from its assets "
+                  "before overheads — a sign of a strong, hard-to-copy position."),
+        unit="percent",
+        fallback_note="gross profit / total assets, latest fiscal year, period-matched; "
+                      "abstains when either line is missing or assets are not positive",
+        source_fn=_gross_profitability_source),
+    "worst_year_roic": FactorDef(
+        "worst_year_roic", _worst_year_roic, "high",
+        "Return on invested capital, worst of last 5 years",
+        glossary=("The profit earned on the money tied up in the business, taken from its "
+                  "WORST recent year rather than its average — a business that stays "
+                  "profitable even in a bad year scores well."),
+        unit="percent",
+        fallback_note="minimum single-year ROIC over up to 5 fiscal years; abstains below "
+                      "3 usable years",
+        source_fn=_worst_year_roic_source),
+    "net_debt_to_ebit": FactorDef(
+        "net_debt_to_ebit", _net_debt_to_ebit, "low",
+        "Net debt / operating profit (low best)",
+        glossary=("Borrowings less cash, divided by one year of operating profit — "
+                  "roughly how many years of profit the debt represents. A company holding "
+                  "more cash than debt shows a negative figure, the best result."),
+        unit="multiple",
+        fallback_note="(total debt - cash) / latest-year EBIT; zero or negative EBIT ranks "
+                      "last with the reason shown",
+        source_fn=_net_debt_to_ebit_source),
+    "epv_margin_of_safety": FactorDef(
+        "epv_margin_of_safety", _epv_margin_of_safety, "high",
+        "Earnings power value vs. enterprise value",
+        glossary=("What the business would be worth if today's operating profit simply "
+                  "continued with no growth, compared with what the market charges for it. "
+                  "Positive means the market charges less than that no-growth value."),
+        unit="percent",
+        fallback_note="EPV = 5-year average EBIT margin x latest revenue x (1 - tax) / "
+                      "cost of capital; margin of safety = EPV / EV - 1; non-positive "
+                      "profit or missing EV ranks last with the reason shown",
+        source_fn=_epv_margin_of_safety_source),
     "momentum_12m": FactorDef(
         "momentum_12m", _momentum_12m, "high", "12-month price momentum",
         glossary=("What buying the share twelve months ago would have returned by "
