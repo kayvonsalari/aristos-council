@@ -2741,6 +2741,15 @@ def run_multi_strategy_pipeline(
     _ag = built.lens_agreement
     meta["lens_agreement"] = {"voting": list(_ag.voting_ids), "checks": list(_ag.check_ids),
                          "buckets": _ag.buckets(), "no_buy": _ag.no_buy_count}
+    # LIST-COUNTS-1: a ranker-only run narrates nothing, so what it records as "met the rule" is
+    # the shortlist the reader sees - the agreement table's own names. ``narrated_union`` reads
+    # the grid cells instead, and the two differ exactly when a lens left with fewer than
+    # MIN_RANKABLE_COHORT names still carries a raw BUY (live: "shortlist: 3 on 1 of 2" above
+    # "Narrated 0 of 2"). One definition per record; a narrating run keeps the union, which is
+    # the set it actually narrates.
+    if ranker_only and _ag.available:
+        meta["narration"]["qualified"] = [r.ticker for r in _ag.rows]
+        meta["narration"]["eligible"] = len(_ag.rows)
 
     # READER-1 — LAST, so the facts pack can see the shortlist and the band. Opt-in: off,
     # nothing is built and nothing is called, so a ranker-only run stays free and its
@@ -4280,6 +4289,14 @@ def narration_basis(level: str, skip_marked: bool) -> str:
     return f"{phrase}{tail}"
 
 
+def narration_was_requested(plan: dict) -> bool:
+    """LIST-COUNTS-1: False for a ranker-only run (``narration_record`` stamps ``mode`` "ranker").
+    "Narrated 0 of 2 names that met the rule" under a run that never asked for narration is
+    noise that reads as a failure, and its "2" sat beside a shortlist of 3 with no way to tell
+    why. A narrator run that narrated nothing still says so (NARR-ZERO-1)."""
+    return (plan or {}).get("mode") != "ranker"
+
+
 def narration_line(plan: dict) -> str:
     """The one line under the narrations. Never silent: a run that narrated nothing says
     which rule produced nothing and how to get more, because an absent section is
@@ -4703,6 +4720,34 @@ def narration_evidence_strategies(result: MultiStrategyResult, ticker: str) -> l
     return out
 
 
+def comparable_names_line(result, *, tail: str = " - only those rank-sums are comparable.") -> str:
+    """The sentence under the combined grid about how many names every lens placed.
+
+    LIST-COUNTS-1. It used to read "0 name(s) were ranked by ALL 2 lenses" while the table
+    above showed Value + Momentum ranking 2 names and Magic Formula RAW ranking all 6: the
+    count was right (a lens with fewer than ``MIN_RANKABLE_COHORT`` names to compare gives
+    NONE of them a position, so no rank-sum over both lenses exists) but the wording said
+    "ranked", which contradicted the table. It now says "given a rank position" and names the
+    lens that was too thin to place anyone, with the numbers."""
+    from .rank_engine import MIN_RANKABLE_COHORT
+
+    m = result.meta
+    ids = list(result.strategy_ids)
+    line = (f"{m.get('graded_by_all', 0)} name(s) were given a rank position by ALL "
+            f"{len(ids)} lenses{tail}")
+    thin = []
+    for sid in ids:
+        res = result.results.get(sid)
+        kept = len([r for r in (getattr(res, "ranked", None) or ()) if not r.excluded])             if res is not None else 0
+        if 0 < kept < MIN_RANKABLE_COHORT:
+            label = (getattr(result, "strategy_names", None) or {}).get(sid) or sid
+            thin.append(f"{label} kept only {kept} name{'s' if kept != 1 else ''}, too few "
+                        f"(under {MIN_RANKABLE_COHORT}) to give any a position")
+    if thin:
+        line += " " + "; ".join(thin) + "."
+    return line
+
+
 def format_multi_strategy_grid(result: MultiStrategyResult) -> str:
     """The combined grid as text (the CLI print and the UI download read this ONE
     builder, so they cannot drift). One row per name, one cell per strategy.
@@ -4726,6 +4771,5 @@ def format_multi_strategy_grid(result: MultiStrategyResult) -> str:
         lines.append(f"  {_name_col(row.display, 24):<24} {cells}")
     lines.append("")
     lines.append(f"  ordered by how many lenses graded each name, then by its combined "
-                 f"position; {m.get('graded_by_all', 0)} name(s) were ranked by ALL "
-                 f"{len(ids)} strategies.")
+                 f"position; {comparable_names_line(result, tail='.')}")
     return "\n".join(lines)

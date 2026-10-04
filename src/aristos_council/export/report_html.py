@@ -1053,10 +1053,10 @@ def _narration_line_html(result) -> str:
     Never silent. A run that narrated nothing says which rule produced nothing and how to
     get more, because an absent section is indistinguishable from a feature that was never
     switched on — the corollary this repo has paid for twice."""
-    from ..pipeline import narration_line
+    from ..pipeline import narration_line, narration_was_requested
 
     plan = (getattr(result, "meta", None) or {}).get("narration")
-    if not plan:
+    if not plan or not narration_was_requested(plan):
         return ""
     out = [f'<p class="note">{_esc(narration_line(plan))}</p>']
     missing = plan.get("not_narrated") or []

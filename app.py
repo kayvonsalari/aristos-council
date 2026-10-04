@@ -2030,8 +2030,10 @@ def _render_narration_line(result) -> None:
     """NARR-2's line on screen — the same builder the two reports render."""
     from aristos_council.pipeline import narration_line
 
+    from aristos_council.pipeline import narration_was_requested
+
     plan = (getattr(result, "meta", None) or {}).get("narration")
-    if not plan:
+    if not plan or not narration_was_requested(plan):
         return
     st.caption(narration_line(plan))
     missing = plan.get("not_narrated") or []
@@ -2314,8 +2316,10 @@ def _narration_line_markdown(result) -> list[str]:
     """NARR-2's line in the .md — the same builder the HTML renders."""
     from aristos_council.pipeline import narration_line
 
+    from aristos_council.pipeline import narration_was_requested
+
     plan = (getattr(result, "meta", None) or {}).get("narration")
-    if not plan:
+    if not plan or not narration_was_requested(plan):
         return []
     lines = ["", f"_{narration_line(plan)}_"]
     missing = plan.get("not_narrated") or []
@@ -2872,8 +2876,8 @@ def _render_multi_strategy_result(multi_result) -> None:
     else:
         st.info("No names reported.")
     st.caption(VERDICT_TABLE_NOTE)
-    st.caption(f"{m.get('graded_by_all', 0)} name(s) were ranked by ALL {len(ids)} "
-               "lenses — only those rank-sums are comparable.")
+    from aristos_council.pipeline import comparable_names_line
+    st.caption(comparable_names_line(multi_result))
 
     # PRICE-1 / VALBAND-1: per-NAME context beside the combined grid, never a verdict.
     # It is ALWAYS shown; the band (and the reversion value riding with it) only when the
