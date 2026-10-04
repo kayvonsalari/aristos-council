@@ -34,7 +34,12 @@ TICKERS = [f"T{i:02d}" for i in range(14)] + ["BANK", "TINY"]
 
 
 def _fundamentals(i: int, ticker: str) -> Fundamentals:
-    """Deterministic, varied accounts: arithmetic on the index only, no randomness."""
+    """Deterministic, varied accounts: arithmetic on the index only, no randomness.
+
+    Every ticker's ROIC and drift are DISTINCT on purpose: Python 3.12 changed float ``sum()`` to
+    compensated summation, so two names with mathematically equal means differ in the last bit on
+    3.11 and tie on 3.12 - a tie flip this golden must not depend on.
+    """
     rev0 = 8000.0 + 900.0 * i
     revenue = [rev0 * ((0.86 if i % 2 else 0.97) ** k) for k in range(5)]
     margin = 0.08 + 0.011 * ((i * 7) % 11)
@@ -51,7 +56,7 @@ def _fundamentals(i: int, ticker: str) -> Fundamentals:
         payout_ratio=0.25 + 0.04 * (i % 9), free_cash_flow=oi[0] * 0.6,
         total_debt=oi[0] * (0.5 + 0.35 * (i % 8)), total_cash=oi[0] * (0.2 + 0.1 * (i % 5)),
         total_revenue=revenue, operating_income=oi, ebit=oi, pretax_income=pretax,
-        tax_provision=tax, invested_capital=[o * (5.0 + (i % 4)) for o in oi],
+        tax_provision=tax, invested_capital=[o * (5.0 + (i % 4)) * (1.0 + 0.013 * i) for o in oi],
         net_income=[p - t for p, t in zip(pretax, tax)],
         free_cash_flow_annual=[o * 0.6 for o in oi],
         shareholders_equity=[o * 4.0 for o in oi],

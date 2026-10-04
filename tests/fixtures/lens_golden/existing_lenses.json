@@ -824,7 +824,7 @@
    ],
    [
     "T01",
-    "screen: min_roic (observed 0.1094 vs threshold 0.12)"
+    "screen: min_roic (observed 0.108 vs threshold 0.12)"
    ],
    [
     "T02",
@@ -832,7 +832,7 @@
    ],
    [
     "T03",
-    "screen: min_roic (observed 0.08219 vs threshold 0.12)"
+    "screen: min_roic (observed 0.07911 vs threshold 0.12)"
    ],
    [
     "T04",
@@ -840,7 +840,7 @@
    ],
    [
     "T05",
-    "screen: min_roic (observed 0.1009 vs threshold 0.12)"
+    "screen: min_roic (observed 0.09473 vs threshold 0.12)"
    ],
    [
     "T06",
@@ -848,7 +848,7 @@
    ],
    [
     "T07",
-    "screen: min_roic (observed 0.08202 vs threshold 0.12)"
+    "screen: min_roic (observed 0.07518 vs threshold 0.12)"
    ],
    [
     "T08",
@@ -856,7 +856,7 @@
    ],
    [
     "T09",
-    "screen: min_roic (observed 0.1096 vs threshold 0.12) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
+    "screen: min_roic (observed 0.09811 vs threshold 0.12) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
    ],
    [
     "T10",
@@ -864,7 +864,7 @@
    ],
    [
     "T11",
-    "screen: min_roic (observed 0.07567 vs threshold 0.12) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
+    "screen: min_roic (observed 0.0662 vs threshold 0.12) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
    ],
    [
     "T12",
@@ -872,7 +872,7 @@
    ],
    [
     "T13",
-    "screen: min_roic (observed 0.1094 vs threshold 0.12) [\u26a0 price diverging: +30% 12m \u2014 cyclical inflection or mania; human review]"
+    "screen: min_roic (observed 0.09355 vs threshold 0.12) [\u26a0 price diverging: +30% 12m \u2014 cyclical inflection or mania; human review]"
    ],
    [
     "BANK",
@@ -890,43 +890,43 @@
   "excluded": [
    [
     "T01",
-    "screen: min_roic (observed 0.1094 vs threshold 0.12)"
+    "screen: min_roic (observed 0.108 vs threshold 0.12)"
    ],
    [
     "T02",
-    "screen: min_roic (observed 0.1062 vs threshold 0.12) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
+    "screen: min_roic (observed 0.1035 vs threshold 0.12) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
    ],
    [
     "T03",
-    "screen: min_roic (observed 0.08219 vs threshold 0.12)"
+    "screen: min_roic (observed 0.07911 vs threshold 0.12)"
    ],
    [
     "T05",
-    "screen: min_roic (observed 0.1009 vs threshold 0.12)"
+    "screen: min_roic (observed 0.09473 vs threshold 0.12)"
    ],
    [
     "T06",
-    "screen: min_roic (observed 0.1153 vs threshold 0.12) [borderline]"
+    "screen: min_roic (observed 0.107 vs threshold 0.12)"
    ],
    [
     "T07",
-    "screen: min_roic (observed 0.08202 vs threshold 0.12)"
+    "screen: min_roic (observed 0.07518 vs threshold 0.12)"
    ],
    [
     "T09",
-    "screen: min_roic (observed 0.1096 vs threshold 0.12) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
+    "screen: min_roic (observed 0.09811 vs threshold 0.12) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
    ],
    [
     "T10",
-    "screen: min_roic (observed 0.1065 vs threshold 0.12)"
+    "screen: min_roic (observed 0.09429 vs threshold 0.12)"
    ],
    [
     "T11",
-    "screen: min_roic (observed 0.07567 vs threshold 0.12) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
+    "screen: min_roic (observed 0.0662 vs threshold 0.12) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
    ],
    [
     "T13",
-    "screen: min_roic (observed 0.1094 vs threshold 0.12) [\u26a0 price diverging: +30% 12m \u2014 cyclical inflection or mania; human review]"
+    "screen: min_roic (observed 0.09355 vs threshold 0.12) [\u26a0 price diverging: +30% 12m \u2014 cyclical inflection or mania; human review]"
    ],
    [
     "BANK",
@@ -939,11 +939,11 @@
   ],
   "ranked": [
    {
-    "combined_rank": 5.0,
+    "combined_rank": 4.0,
     "factor_ranks": {
      "earnings_yield": 1.0,
      "momentum_12m": 1.0,
-     "roic": 3.0
+     "roic": 2.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -953,18 +953,18 @@
     "factor_values": {
      "earnings_yield": 1.1008398424596909e-07,
      "momentum_12m": 0.37344218197607826,
-     "roic": 0.149162997
+     "roic": 0.1417899211026616
     },
     "position": 1,
     "ticker": "T04",
     "verdict": "buy"
    },
    {
-    "combined_rank": 7.5,
+    "combined_rank": 7.0,
     "factor_ranks": {
      "earnings_yield": 2.0,
      "momentum_12m": 4.0,
-     "roic": 1.5
+     "roic": 1.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -981,11 +981,11 @@
     "verdict": "hold"
    },
    {
-    "combined_rank": 7.5,
+    "combined_rank": 9.0,
     "factor_ranks": {
      "earnings_yield": 3.0,
      "momentum_12m": 3.0,
-     "roic": 1.5
+     "roic": 3.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -995,9 +995,9 @@
     "factor_values": {
      "earnings_yield": 8.198887880562327e-08,
      "momentum_12m": -0.10045143201574858,
-     "roic": 0.16144344500000002
+     "roic": 0.13965695934256056
     },
-    "position": 2,
+    "position": 3,
     "ticker": "T12",
     "verdict": "hold"
    },
@@ -1016,7 +1016,7 @@
     "factor_values": {
      "earnings_yield": 5.745600000000001e-08,
      "momentum_12m": 0.11161929858313635,
-     "roic": 0.14867492000000002
+     "roic": 0.1346693115942029
     },
     "position": 4,
     "ticker": "T08",
@@ -1038,11 +1038,11 @@
   ],
   "ranked": [
    {
-    "combined_rank": 11.0,
+    "combined_rank": 10.0,
     "factor_ranks": {
      "earnings_yield": 4.0,
      "momentum_12m": 4.0,
-     "roic": 3.0
+     "roic": 2.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -1052,7 +1052,7 @@
     "factor_values": {
      "earnings_yield": 1.1008398424596909e-07,
      "momentum_12m": 0.37344218197607826,
-     "roic": 0.149162997
+     "roic": 0.1417899211026616
     },
     "position": 1,
     "ticker": "T04",
@@ -1061,51 +1061,9 @@
    {
     "combined_rank": 14.0,
     "factor_ranks": {
-     "earnings_yield": 3.0,
-     "momentum_12m": 6.0,
-     "roic": 5.0
-    },
-    "factor_sources": {
-     "earnings_yield": "ev",
-     "momentum_12m": "computed",
-     "roic": "computed"
-    },
-    "factor_values": {
-     "earnings_yield": 1.1421901761327657e-07,
-     "momentum_12m": 0.23564258209644495,
-     "roic": 0.11531674642857143
-    },
-    "position": 2,
-    "ticker": "T06",
-    "verdict": "buy"
-   },
-   {
-    "combined_rank": 14.0,
-    "factor_ranks": {
-     "earnings_yield": 7.0,
-     "momentum_12m": 1.0,
-     "roic": 6.0
-    },
-    "factor_sources": {
-     "earnings_yield": "ev",
-     "momentum_12m": "computed",
-     "roic": "computed"
-    },
-    "factor_values": {
-     "earnings_yield": 9.490526090614254e-08,
-     "momentum_12m": 0.6093501785335653,
-     "roic": 0.10958695666666668
-    },
-    "position": 2,
-    "ticker": "T09",
-    "verdict": "buy"
-   },
-   {
-    "combined_rank": 17.0,
-    "factor_ranks": {
      "earnings_yield": 1.0,
      "momentum_12m": 8.0,
-     "roic": 8.0
+     "roic": 5.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -1115,18 +1073,18 @@
     "factor_values": {
      "earnings_yield": 1.70963748630149e-07,
      "momentum_12m": 0.054339436383126216,
-     "roic": 0.10935967846153848
+     "roic": 0.10795624724732328
     },
-    "position": 4,
+    "position": 2,
     "ticker": "T01",
-    "verdict": "hold"
+    "verdict": "buy"
    },
    {
-    "combined_rank": 17.0,
+    "combined_rank": 14.0,
     "factor_ranks": {
      "earnings_yield": 5.0,
      "momentum_12m": 2.0,
-     "roic": 10.0
+     "roic": 7.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -1136,18 +1094,60 @@
     "factor_values": {
      "earnings_yield": 1.0872653599737694e-07,
      "momentum_12m": 0.5265415857894566,
-     "roic": 0.10619637142857141
+     "roic": 0.10350523531049845
+    },
+    "position": 2,
+    "ticker": "T02",
+    "verdict": "buy"
+   },
+   {
+    "combined_rank": 15.0,
+    "factor_ranks": {
+     "earnings_yield": 3.0,
+     "momentum_12m": 6.0,
+     "roic": 6.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 1.1421901761327657e-07,
+     "momentum_12m": 0.23564258209644495,
+     "roic": 0.10697286310628146
     },
     "position": 4,
-    "ticker": "T02",
+    "ticker": "T06",
     "verdict": "hold"
    },
    {
-    "combined_rank": 21.5,
+    "combined_rank": 16.0,
+    "factor_ranks": {
+     "earnings_yield": 7.0,
+     "momentum_12m": 1.0,
+     "roic": 8.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 9.490526090614254e-08,
+     "momentum_12m": 0.6093501785335653,
+     "roic": 0.09810828707848404
+    },
+    "position": 5,
+    "ticker": "T09",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 21.0,
     "factor_ranks": {
      "earnings_yield": 6.0,
      "momentum_12m": 14.0,
-     "roic": 1.5
+     "roic": 1.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -1164,11 +1164,11 @@
     "verdict": "hold"
    },
    {
-    "combined_rank": 21.5,
+    "combined_rank": 23.0,
     "factor_ranks": {
      "earnings_yield": 9.0,
      "momentum_12m": 11.0,
-     "roic": 1.5
+     "roic": 3.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -1178,9 +1178,9 @@
     "factor_values": {
      "earnings_yield": 8.198887880562327e-08,
      "momentum_12m": -0.10045143201574858,
-     "roic": 0.16144344500000002
+     "roic": 0.13965695934256056
     },
-    "position": 6,
+    "position": 7,
     "ticker": "T12",
     "verdict": "hold"
    },
@@ -1199,7 +1199,7 @@
     "factor_values": {
      "earnings_yield": 1.5059256878056098e-07,
      "momentum_12m": -0.051549384995088765,
-     "roic": 0.0821902175
+     "roic": 0.0791051179018287
     },
     "position": 8,
     "ticker": "T03",
@@ -1220,18 +1220,18 @@
     "factor_values": {
      "earnings_yield": 5.745600000000001e-08,
      "momentum_12m": 0.11161929858313635,
-     "roic": 0.14867492000000002
+     "roic": 0.1346693115942029
     },
     "position": 8,
     "ticker": "T08",
     "verdict": "hold"
    },
    {
-    "combined_rank": 24.0,
+    "combined_rank": 28.0,
     "factor_ranks": {
      "earnings_yield": 12.0,
      "momentum_12m": 5.0,
-     "roic": 7.0
+     "roic": 11.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -1241,18 +1241,18 @@
     "factor_values": {
      "earnings_yield": 6.013360406152162e-08,
      "momentum_12m": 0.3027288530957053,
-     "roic": 0.1093596784615385
+     "roic": 0.09354976771731266
     },
-    "position": 8,
+    "position": 10,
     "ticker": "T13",
     "verdict": "hold"
    },
    {
-    "combined_rank": 29.0,
+    "combined_rank": 30.0,
     "factor_ranks": {
      "earnings_yield": 11.0,
      "momentum_12m": 9.0,
-     "roic": 9.0
+     "roic": 10.0
     },
     "factor_sources": {
      "earnings_yield": "ev",
@@ -1262,10 +1262,31 @@
     "factor_values": {
      "earnings_yield": 7.071999499868196e-08,
      "momentum_12m": 0.0,
-     "roic": 0.10654499785714283
+     "roic": 0.09428760872313527
     },
     "position": 11,
     "ticker": "T10",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 31.0,
+    "factor_ranks": {
+     "earnings_yield": 10.0,
+     "momentum_12m": 12.0,
+     "roic": 9.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 7.443242107505083e-08,
+     "momentum_12m": -0.14684158227296562,
+     "roic": 0.09473047620703648
+    },
+    "position": 12,
+    "ticker": "T05",
     "verdict": "hold"
    },
    {
@@ -1283,31 +1304,10 @@
     "factor_values": {
      "earnings_yield": 4.616596748513289e-08,
      "momentum_12m": 0.4479778445685221,
-     "roic": 0.07566596787037036
+     "roic": 0.0661994469557046
     },
     "position": 12,
     "ticker": "T11",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 33.0,
-    "factor_ranks": {
-     "earnings_yield": 10.0,
-     "momentum_12m": 12.0,
-     "roic": 11.0
-    },
-    "factor_sources": {
-     "earnings_yield": "ev",
-     "momentum_12m": "computed",
-     "roic": "computed"
-    },
-    "factor_values": {
-     "earnings_yield": 7.443242107505083e-08,
-     "momentum_12m": -0.14684158227296562,
-     "roic": 0.10088795716049383
-    },
-    "position": 13,
-    "ticker": "T05",
     "verdict": "sell"
    },
    {
@@ -1325,7 +1325,7 @@
     "factor_values": {
      "earnings_yield": 8.543487500426668e-08,
      "momentum_12m": -0.2325937925897582,
-     "roic": 0.08201975884615384
+     "roic": 0.07517851406613552
     },
     "position": 14,
     "ticker": "T07",
