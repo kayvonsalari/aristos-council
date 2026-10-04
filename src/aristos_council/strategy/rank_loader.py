@@ -118,6 +118,11 @@ class RankStrategy(BaseModel):
     # Display-only rationale for the inclusion gate, rendered by Company Check exactly
     # like sector_exclusion_rationale. Empty -> the gate line renders bare.
     sector_inclusion_rationale: str = ""
+    # PROFIT GUARD (SMALLCAP-BAND-GAP-1): when true, a company whose latest operating profit is
+    # zero or negative "does not apply" instead of being ranked on negative numbers. The five
+    # lenses published before this field existed are named in ``operating_profit.py`` (their
+    # files are immutable); a new lens file simply declares it.
+    requires_operating_profit: bool = False
     # Asset-kind gate (ETF-1 ITEM 2): the asset classes this strategy admits, e.g.
     # ["equity"] or ["etf"]. When non-empty, a name whose CONFIRMED vendor quoteType
     # normalizes to a kind NOT listed here is gated OUT OF SCOPE — the wall between

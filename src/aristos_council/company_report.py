@@ -67,6 +67,11 @@ NO_KEY_NOTE_OPINION = "Council opinion unavailable: no ANTHROPIC_API_KEY set"
 # of a normal peer group (see smallcap_band.py). Never shown for a company at or above the
 # gate, ticked or not (item 1d: identical to unticked).
 OUTSIDE_TESTED_RANGE_LINE = "Outside the tested range (under $5bn): no track record applies."
+# SMALLCAP-BAND-GAP-1 - the line used instead when the company's industry has no small-company band
+# (its tested range starts at or above $5bn, or has no names in the band): it is ranked against the
+# similar-sized companies in its own industry that the peer ladder already found.
+SIZE_MATCHED_LINE = ("Compared with similar-sized companies in its industry; outside the tested "
+                     "range, no track record applies.")
 
 
 # --------------------------------------------------------------------------- #
@@ -313,6 +318,31 @@ class CompanyReport:
     smallcap_floor_usd: Optional[float] = None
     smallcap_band_note: str = ""      # "" unless the band itself was degraded (e.g. the
                                        # cohort's own floor sits at or above $5bn)
+    # SMALLCAP-BAND-GAP-1 - True when no small-company band existed inside the cohort, so the
+    # company was ranked against the size-matched same-industry peers (outside_tested_range is
+    # also True; no badges, no band line).
+    size_matched_peers: bool = False
+
+    @property
+    def tested_range_line(self) -> str:
+        """The one header/verdict caveat for a run outside the tested range ("" otherwise)."""
+        if not self.outside_tested_range:
+            return ""
+        return SIZE_MATCHED_LINE if self.size_matched_peers else OUTSIDE_TESTED_RANGE_LINE
+
+    @property
+    def tested_range_detail_lines(self) -> list:
+        """The lines after the caveat: the band's own range (only when it is a real one - a floor
+        below the $5bn ceiling, never backwards or empty) and the reason the band was degraded."""
+        out = []
+        floor = self.smallcap_floor_usd
+        if (self.outside_tested_range and self.smallcap_cohort and floor
+                and floor < SMALLCAP_CEILING_USD):
+            out.append(f"Small-company peer band: the {self.smallcap_cohort} cohort, "
+                       f"${floor / 1e9:g}bn-$5bn.")
+        if self.outside_tested_range and self.smallcap_band_note:
+            out.append(self.smallcap_band_note[:1].upper() + self.smallcap_band_note[1:] + ".")
+        return out
 
     @property
     def display(self) -> str:
@@ -733,6 +763,16 @@ def lens_ranks_record(multi) -> dict:
     return out
 
 
+def _no_band_reason(band) -> str:
+    """Why there was no small-company band, in plain words (the header's second sentence)."""
+    floor = getattr(band, "floor_usd", None)
+    if floor and floor >= SMALLCAP_CEILING_USD:
+        return f"its industry's tested range starts at ${floor / 1e9:g}bn, above this company"
+    if getattr(band, "cohort_slug", None) is None:
+        return "its industry has no tested range"
+    return "no small-company band could be built for its industry"
+
+
 def run_company_report(
     ticker: str, lens_ids: list[str], *, adapter=None, strategies_dir=None, universes_dir=None,
     runs_dir=None, today: Optional[date] = None,
@@ -807,11 +847,7 @@ def run_company_report(
     elif smallcap_mode:
         from .smallcap_band import build_smallcap_peer_band
         band = build_smallcap_peer_band(subject, adapter=adapter, today=today, store=store)
-        if band.cohort_slug is None:
-            report.no_vote_reason = (
-                f"no peer group, so no lens can vote: {band.reasons[0] if band.reasons else 'no small-company band could be built'}. "
-                f"The valuation band and the readings below do not need one.")
-        else:
+        if band.tickers:
             universe = [ticker] + band.tickers
             report.universe = universe
             say(f"Ranking {ticker} against {len(band.tickers)} small-company peer"
@@ -827,12 +863,38 @@ def run_company_report(
             report.outside_tested_range = True
             report.smallcap_cohort = band.cohort_name
             report.smallcap_floor_usd = band.floor_usd
-            # Live, 2026-10-02 — a cohort whose own floor is at or above $5bn (Biotechnology,
-            # $10bn) leaves no band to rank in; the subject still runs alone through the
-            # pipeline above and the EXISTING too-few guard reports it honestly ("only 1
-            # company"), but the REASON is worth keeping on the record rather than left to
-            # be inferred.
             report.smallcap_band_note = band.reasons[0] if band.reasons else ""
+        elif group is not None and group.available:
+            # SMALLCAP-BAND-GAP-1 (owner's option a): no small-company band exists inside the
+            # cohort (its tested range starts at or above $5bn, or has no names in the band, or
+            # the industry matches no cohort). Rank the company against the size-matched
+            # same-industry peers the peer ladder ALREADY found, with the size gate off for this
+            # run, and say so. No badges (attach_track_record is skipped below) and no band line.
+            peers_, skipped = peers_for_ranking(group)
+            universe = [ticker] + [p for p in peers_ if p.upper() != ticker.upper()]
+            report.universe = universe
+            say(f"Ranking {ticker} against {len(universe) - 1} similar-sized companies in its "
+                f"industry under {len(ids)} lens{'es' if len(ids) != 1 else ''}…")
+            from .pipeline import run_multi_strategy_pipeline
+            multi = run_multi_strategy_pipeline(
+                universe, ids, strategies_dir=strategies_dir, universes_dir=universes_dir,
+                adapter=adapter, today=today, freeze_dir=runs_dir, with_valuation_band=False,
+                progress=say, min_market_cap_override=0.0, with_shadow=True)
+            report.votes = votes_from_multi(multi, ticker)
+            report.lens_ranks = lens_ranks_record(multi)
+            report.outside_tested_range = True
+            report.size_matched_peers = True
+            report.smallcap_band_note = _no_band_reason(band)
+            if skipped:
+                report.check.peer_group.reasons.append(
+                    f"{len(skipped)} peer(s) have no Yahoo symbol and were not ranked: "
+                    + ", ".join(skipped))
+        else:
+            why = ("; ".join(group.reasons) if group is not None and group.reasons
+                   else check.peer_error or "no peer group could be formed")
+            report.no_vote_reason = (f"no peer group, so no lens can vote: {why}; and "
+                                     f"{_no_band_reason(band)}. The valuation "
+                                     f"band and the readings below do not need one.")
     elif group is None or not group.available:
         why = ("; ".join(group.reasons) if group is not None and group.reasons
                else check.peer_error or "no peer group could be formed")
@@ -951,6 +1013,7 @@ def report_record(report: CompanyReport) -> dict:
         "smallcap_cohort": report.smallcap_cohort,
         "smallcap_floor_usd": report.smallcap_floor_usd,
         "smallcap_band_note": report.smallcap_band_note,
+        "size_matched_peers": report.size_matched_peers,
         # RECORD-V2 — COMPANY-FACTS-TABLE-1 (Batch 15): None when the caller never asked
         # for it (``with_price_and_cash=False`` — every caller outside Company Check),
         # exactly like ``council_opinion`` above. The rendered lines, not the raw Reading
@@ -1012,7 +1075,7 @@ def agreement_table_lines(report: CompanyReport) -> list[str]:
 def vote_table_lines(report: CompanyReport) -> list[str]:
     # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-band
     # run (item 1c); never shown otherwise.
-    suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
+    suffix = f" — {report.tested_range_line}" if report.outside_tested_range else ""
     width = max((len(v.label) for v in report.votes), default=4)
     out = [f"{'Lens'.ljust(width)}  {'Role':<22} Result"]
     out += [f"{v.label.ljust(width)}  {v.role:<22} {v.result_shown()}{v.badge_suffix}{suffix}"
@@ -1122,14 +1185,8 @@ def format_company_report(report: CompanyReport) -> str:
     c = report.check
     lines = [f"Company Report - {report.display}", HOUSE_LINE]
     if report.outside_tested_range:
-        lines.append(OUTSIDE_TESTED_RANGE_LINE)
-        if report.smallcap_cohort:
-            floor = (f"${report.smallcap_floor_usd / 1e9:g}bn" if report.smallcap_floor_usd
-                    else "its own floor")
-            lines.append(f"Small-company peer band: the {report.smallcap_cohort} cohort, "
-                         f"{floor}-$5bn.")
-        if report.smallcap_band_note:
-            lines.append(report.smallcap_band_note.capitalize() + ".")
+        lines.append(report.tested_range_line)
+        lines.extend(report.tested_range_detail_lines)
     lines.append("")
     if report.unrateable:
         lines += [f"UNRATEABLE - {c.data_integrity.note}. No data, so no votes and no readings.",

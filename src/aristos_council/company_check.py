@@ -761,6 +761,17 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
             ok = cap >= floor
             gates.append(GateCell("min_market_cap", "PASS" if ok else "FAIL",
                                   f"market cap {cap:,.0f} vs floor {floor:,.0f}"))
+    # PROFIT GUARD (SMALLCAP-BAND-GAP-1): lenses that divide by operating profit.
+    from .operating_profit import (NO_OPERATING_PROFIT_REASON, has_no_operating_profit,
+                                   latest_operating_profit, lens_requires_operating_profit)
+    if lens_requires_operating_profit(rank_strategy):
+        if latest_operating_profit(f) is None:
+            gates.append(GateCell("operating_profit", "NOT-EVALUATED",
+                                  "operating profit unknown"))
+        elif has_no_operating_profit(f):
+            gates.append(GateCell("operating_profit", "FAIL", NO_OPERATING_PROFIT_REASON))
+        else:
+            gates.append(GateCell("operating_profit", "PASS", "operating profit above zero"))
     # Coarse payout gate.
     max_payout = getattr(rank_strategy, "max_payout_ratio", None)
     if max_payout is not None:

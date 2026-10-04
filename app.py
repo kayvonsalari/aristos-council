@@ -4222,12 +4222,8 @@ def _render_company_report(report) -> None:
     # SMALLCAP-VIEW-1 — the header caveat, exactly the line every lens's own vote also
     # carries below. Never shown for a company at or above the $5bn gate.
     if report.outside_tested_range:
-        floor = (f"${report.smallcap_floor_usd / 1e9:g}bn" if report.smallcap_floor_usd
-                else "its own floor")
-        st.warning(f"**{OUTSIDE_TESTED_RANGE_LINE}**" + (
-            f" Small-company peer band: the {report.smallcap_cohort} cohort, {floor}-$5bn."
-            if report.smallcap_cohort else "")
-            + (f" {report.smallcap_band_note.capitalize()}." if report.smallcap_band_note else ""))
+        st.warning(f"**{report.tested_range_line}**"
+                   + "".join(f" {line}" for line in report.tested_range_detail_lines))
     if report.unrateable:
         st.warning(f"⚪ **UNRATEABLE** — {check.data_integrity.note}. No data, so no votes and no "
                    "readings.")
@@ -4262,7 +4258,7 @@ def _render_company_report(report) -> None:
     if report.votes:
         # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-
         # band run; never shown otherwise.
-        _suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
+        _suffix = f" — {report.tested_range_line}" if report.outside_tested_range else ""
         # LENS-TABLE-WRAP-1: ``st.table`` wraps a long cell where ``st.dataframe`` (a canvas grid)
         # cuts it off and needs horizontal scrolling - and the Result and "What it asks" cells
         # ARE the sentences a reader came for.

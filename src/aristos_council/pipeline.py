@@ -78,6 +78,11 @@ from .factors import (
 )
 from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
+from .operating_profit import (
+    NO_OPERATING_PROFIT_REASON,
+    has_no_operating_profit,
+    lens_requires_operating_profit,
+)
 from .rank_engine import (
     BOUNDARY_FLAG,
     MIN_RANKABLE_COHORT,
@@ -316,6 +321,13 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         if f is not None and is_sector_out_of_scope(
                 f.sector, getattr(rank_strategy, "include_sectors", []) or []):
             excluded.append((t, f"sector '{f.sector}' outside this strategy's scope"))
+            continue
+        # PROFIT GUARD: a lens that divides by operating profit does not apply to a company
+        # with none (confirmed zero-or-negative only; unknown never gates). No would-rank:
+        # there is nothing meaningful to rank it on.
+        if (lens_requires_operating_profit(rank_strategy)
+                and has_no_operating_profit(f)):
+            excluded.append((t, NO_OPERATING_PROFIT_REASON))
             continue
         if f is not None and is_payout_uncovered(f.payout_ratio,
                                                  rank_strategy.max_payout_ratio):
@@ -2892,6 +2904,7 @@ def multi_strategy_grid_rows(result: MultiStrategyResult) -> tuple[list[dict], l
 DETAIL_GROUP_FLOOR = "_floor"
 DETAIL_GROUP_SECTOR = "_sector"
 DETAIL_GROUP_KIND = "_kind"
+DETAIL_GROUP_PROFIT = "_profit"
 DETAIL_GROUP_OTHER = "_other"
 
 # The heading each pre-screen gate gets. They are gates, not rules, and the difference
@@ -2901,6 +2914,7 @@ _GATE_TITLES = {
     DETAIL_GROUP_FLOOR: "Company size",
     DETAIL_GROUP_SECTOR: "Sector",
     DETAIL_GROUP_KIND: "Asset kind",
+    DETAIL_GROUP_PROFIT: "Operating profit",
     DETAIL_GROUP_OTHER: "Removed before the screen",
 }
 _GATE_NOTE = "no other rule was tested on these"
@@ -2996,6 +3010,8 @@ def _detail_group_key(criterion: str, reason: str) -> str:
         return DETAIL_GROUP_SECTOR
     if low.startswith("asset kind"):
         return DETAIL_GROUP_KIND
+    if low.startswith(NO_OPERATING_PROFIT_REASON):
+        return DETAIL_GROUP_PROFIT
     return DETAIL_GROUP_OTHER
 
 
@@ -3136,6 +3152,8 @@ def _gate_rule_phrase(key: str, result) -> str:
         kinds = list(getattr(rank, "asset_kinds", None) or [])
         if kinds:
             return "this lens ranks only " + ", ".join(kinds)
+    if key == DETAIL_GROUP_PROFIT:
+        return "latest operating profit above zero (applied before the screen)"
     return "applied before the screen"
 
 

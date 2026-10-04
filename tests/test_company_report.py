@@ -1452,8 +1452,10 @@ def test_no_cohort_match_falls_back_to_a_stated_no_vote_reason(tmp_path):
         include_small=True, save=False, news_fetcher=_no_news)
     assert report.outside_tested_range is False
     assert not report.votes or report.votes[0].status == "no_group"
-    assert "no small-company band" in report.no_vote_reason or "no backtested cohort" \
-        in report.no_vote_reason
+    # SMALLCAP-BAND-GAP-1: with no band AND no size-matched peers there is nothing to rank
+    # against; the reason names both gaps.
+    assert "no peer group" in report.no_vote_reason
+    assert "its industry has no tested range" in report.no_vote_reason
 
 
 def test_a_company_at_or_above_5bn_ignores_include_small(tmp_path):

@@ -1550,14 +1550,9 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     stamp = _local_stamp(run_start)
     header_tail = f'<p class="house">{_esc(HOUSE_LINE)}</p>'
     if report.outside_tested_range:
-        header_tail += f'<p class="note">{_esc(OUTSIDE_TESTED_RANGE_LINE)}</p>'
-        if report.smallcap_cohort:
-            floor = (f"${report.smallcap_floor_usd / 1e9:g}bn" if report.smallcap_floor_usd
-                    else "its own floor")
-            header_tail += (f'<p class="note">Small-company peer band: the '
-                            f'{_esc(report.smallcap_cohort)} cohort, {_esc(floor)}-$5bn.</p>')
-        if report.smallcap_band_note:
-            header_tail += f'<p class="note">{_esc(report.smallcap_band_note.capitalize())}.</p>'
+        header_tail += f'<p class="note">{_esc(report.tested_range_line)}</p>'
+        for line in report.tested_range_detail_lines:
+            header_tail += f'<p class="note">{_esc(line)}</p>'
     parts = ['<header class="doc"><p class="kicker">Aristos Council · company report · one '
              "company against its peer group</p>"
              f"<h1>{_esc(report.display)}</h1>"
@@ -1592,7 +1587,7 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
         # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-band
         # run; never shown otherwise. No badge bullets follow (attach_track_record is never
         # called for such a run — badged is always empty below).
-        suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
+        suffix = f" — {report.tested_range_line}" if report.outside_tested_range else ""
         body = [[_esc(v.label), _esc(v.role), _esc(v.result_shown() + v.badge_suffix + suffix),
                 _esc(v.asks)] for v in report.votes]
         parts.append(_table(["Lens", "Role", "Result", "What it asks"], body))
