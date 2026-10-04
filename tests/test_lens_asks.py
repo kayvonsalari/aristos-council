@@ -40,7 +40,7 @@ EXPECTED = {
     "growth_garp_v2":
         "Growing fast at a fair price: sales up at least 10% a year, earning at least "
         "12% on its capital, and not overpaying for that growth (its price no more than "
-        "twice its growth rate), for companies worth at least $5bn.",
+        "twice its growth rate), for companies worth at least $5bn (not banks or insurers).",   # BANK-PAGE-1
     "conservative_plus_v1":
         "Steady income with the trend intact: a yield of at least 1.5%, paid from cash "
         "(no more than 80% of free cash flow) and raised for 10 years, from a company "

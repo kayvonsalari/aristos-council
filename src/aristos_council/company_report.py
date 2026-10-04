@@ -45,6 +45,7 @@ from typing import Callable, Optional
 
 from .backtest import Badge, cohort_for_industry, format_track_record_summary, track_record
 from .backtest import track_record_caption as _cohort_track_record_caption
+from .backtest import _untested_badge as untested_badge
 from .company_check import (CompanyCheckResult, absolute_reading_lines, analyst_forecast_lines,
                             attach_peers, company_sources, mixed_source_marker, peers_lines,
                             run_company_check)
@@ -70,6 +71,9 @@ OUTSIDE_TESTED_RANGE_LINE = "Outside the tested range (under $5bn): no track rec
 # SMALLCAP-BAND-GAP-1 - the line used instead when the company's industry has no small-company band
 # (its tested range starts at or above $5bn, or has no names in the band): it is ranked against the
 # similar-sized companies in its own industry that the peer ladder already found.
+NO_COHORT_TRACK_RECORD_LINE = ("Track record: untested here - no backtested cohort covers this "
+                               "company's industry.")
+NO_COHORT_BADGE_NOTE = "no backtested cohort covers this company's industry"
 SIZE_MATCHED_LINE = ("Compared with similar-sized companies in its industry; outside the tested "
                      "range, no track record applies.")
 
@@ -359,7 +363,10 @@ class CompanyReport:
     @property
     def track_record_summary(self) -> str:
         """"Track record: 2 proven, 1 promising, 2 no edge shown" over every TICKED lens's badge
-        (BACKTEST-2) - "" when none was matched to a cohort."""
+        (BACKTEST-2) - "" when none was matched to a cohort, and "" when no cohort covers the company
+        at all (the caption already says "untested here" once; a count of the same word repeats it)."""
+        if self.track_record_caption == NO_COHORT_TRACK_RECORD_LINE:
+            return ""
         return format_track_record_summary(v.badge for v in self.votes if v.badge is not None)
 
 
@@ -732,6 +739,13 @@ def attach_track_record(report: CompanyReport) -> None:
                                getattr(subject, "gics_subindustry", None)) if subject else None
     report.cohort_slug = slug
     if slug is None:
+        # BANK-PAGE-1: no backtested cohort covers this company's industry (banks and insurers are in
+        # none), so there is no record for ANY lens. Say so on every voting lens instead of showing
+        # nothing - a missing badge reads as "not looked at", which is not what happened.
+        report.track_record_caption = NO_COHORT_TRACK_RECORD_LINE
+        report.votes = [replace(v, badge=untested_badge(NO_COHORT_BADGE_NOTE))
+                        if v.ranked and v.votes else v
+                        for v in report.votes]
         return
     report.track_record_caption = _cohort_track_record_caption(slug) or ""
     # FORENSIC-BADGE-1 (owner's ruling): a CHECK lens marks and does not vote, so it earns no

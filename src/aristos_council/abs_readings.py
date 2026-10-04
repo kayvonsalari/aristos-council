@@ -69,12 +69,18 @@ class Reading:
     # honest abstention: the figure is undefined) because a crash is a defect to be seen,
     # not a finding about the company; it renders as "not available: <reason>".
     failure: str = ""
+    # BANK-PAGE-1 - set when the measure does not describe this kind of company at all (debt and
+    # free cash flow for a bank or insurer). Neither a figure nor an abstention for missing data:
+    # the sentence itself is printed, with no "not stated" in front of it.
+    not_meaningful: str = ""
 
     @property
     def available(self) -> bool:
         return self.value is not None
 
     def text(self) -> str:
+        if self.not_meaningful:
+            return self.not_meaningful
         if self.failure:
             return f"not available: {self.failure}"
         if not self.available:
@@ -102,6 +108,21 @@ def dedupe_lines(lines) -> list[str]:
         seen.add(key)
         out.append(line)
     return out
+
+
+NOT_MEANINGFUL_FOR_FINANCIALS = ("not meaningful for banks and insurers (deposits and loans are "
+                                 "the business)")
+
+
+def is_financial_sector(f) -> bool:
+    """True only for a CONFIRMED financial-sector company (a missing sector is never one)."""
+    from .factors import is_sector_excluded
+    return f is not None and is_sector_excluded(getattr(f, "sector", None),
+                                                ["Financial Services", "Financials"])
+
+
+def _not_meaningful() -> Reading:
+    return Reading(not_meaningful=NOT_MEANINGFUL_FOR_FINANCIALS)
 
 
 def _abstain(note: str) -> Reading:
@@ -180,6 +201,13 @@ def debt_and_cash(f) -> DebtAndCash:
                            net_debt_to_ocf=_abstain("no fundamentals"),
                            interest_cover=_abstain("no fundamentals"),
                            years_to_repay=_abstain("no fundamentals"))
+
+    # BANK-PAGE-1: a bank's or insurer's "debt" is its funding and its "cash" is customers' money, so
+    # "holds $183bn more cash than debt" says nothing. Say that instead of printing it.
+    if is_financial_sector(f):
+        nm = _not_meaningful()
+        return DebtAndCash(net_debt=nm, net_debt_to_ocf=nm, interest_cover=nm, years_to_repay=nm,
+                           currency=str(getattr(f, "financial_currency", "") or "").strip())
 
     # The currency of the ACCOUNTS, never the listing's: AstraZeneca is quoted in pence and reports
     # in dollars, and Novo's kroner reached a report as "USD 128.3bn" the same way. Absent ->
@@ -954,7 +982,8 @@ class PriceAndCash:
                    self.return_6m, self.return_12m, self.volatility, self.fcf_series,
                    self.trailing_eps, self.trailing_pe, self.forward_pe_this_year,
                    self.forward_pe_next_year]
-        out = dedupe_lines([r.text() for r in readings if r.available or r.note or r.failure])
+        out = dedupe_lines([r.text() for r in readings
+                            if r.available or r.note or r.failure or r.not_meaningful])
         if self.news:
             out.append(f"Recent news ({self.news_source}):")
             out.extend(f"  - {item.published.isoformat()}: {item.headline}"
@@ -1061,6 +1090,8 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
 
     if f is None:
         fcf_series = _abstain("no fundamentals")
+    elif is_financial_sector(f):
+        fcf_series = _not_meaningful()          # BANK-PAGE-1: operating cash flow of a bank is noise
     else:
         packed = pack_series(f, "free_cash_flow_annual", label="Free cash flow",
                              order=ORDER_OLDEST_FIRST)

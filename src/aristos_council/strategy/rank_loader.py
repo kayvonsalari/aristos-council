@@ -223,6 +223,39 @@ class RankStrategy(BaseModel):
         return self
 
 
+# BANK-PAGE-1: scope that postdates a PUBLISHED lens file. Strategy files are immutable (rule 7) and
+# growth_garp_v2 shipped without a financial-sector gate, so the gate is applied here, at the one
+# place a rank strategy is loaded, and every consumer (the rank stage, Company Check's gate rows,
+# the rules table, the lens caption) sees it without a per-site change. It cannot alter any
+# backtest: the 13 backtested cohorts already exclude financials. A new lens file declares
+# ``exclude_sectors`` itself and needs no entry here.
+_FINANCIAL_SECTORS = ["Financial Services", "Financials"]
+_SCOPE_AFTER_PUBLICATION = {
+    "growth_garp_v2": {
+        "exclude_sectors": _FINANCIAL_SECTORS,
+        "sector_exclusion_rationale": (
+            "Revenue growth and return on capital do not measure a bank or an insurer: "
+            "deposits, loans and premiums are the business."),
+        "asks_old": "for companies worth at least $5bn.",
+        "asks_new": "for companies worth at least $5bn (not banks or insurers).",
+    },
+}
+
+
+def _apply_scope_after_publication(raw: dict) -> dict:
+    extra = _SCOPE_AFTER_PUBLICATION.get(raw.get("id", ""))
+    if not extra or raw.get("exclude_sectors"):
+        return raw
+    out = dict(raw)
+    out["exclude_sectors"] = list(extra["exclude_sectors"])
+    out["sector_exclusion_rationale"] = extra["sector_exclusion_rationale"]
+    asks = out.get("asks") or ""
+    flat = " ".join(asks.split())
+    if flat.endswith(extra["asks_old"]):
+        out["asks"] = flat[: -len(extra["asks_old"])] + extra["asks_new"]
+    return out
+
+
 def load_rank_strategy(path: str | Path) -> RankStrategy:
     p = Path(path)
     if not p.exists():
@@ -230,4 +263,4 @@ def load_rank_strategy(path: str | Path) -> RankStrategy:
     raw = yaml.safe_load(p.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"rank-strategy file {p} did not parse to a mapping")
-    return RankStrategy.model_validate(raw)
+    return RankStrategy.model_validate(_apply_scope_after_publication(raw))
