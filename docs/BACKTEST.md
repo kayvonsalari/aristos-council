@@ -498,14 +498,66 @@ threshold is fixed at 9-of-13 (the cohort count `watch.yaml` carried when this r
 written), not rescaled to however many cohorts actually finished a given session: a partial
 grid is read as a partial answer, never a looser bar.
 
-**Not run against real data from this environment** — no EODHD/live-data access here. The
-grid, the decision rule's printed verdict per (lens, gate), and the "4-cohort RAW result"
-a prior report referenced were all measured under the now-replaced SIZE-FLOOR-1 design and
-are not valid under SIZE-FLOOR-2's: eligibility itself may have changed for any cohort
-whose own floor is not $5bn. **Re-run notebook cells 9 and 10** (`run_lens_backtest`,
-`cohort_native_floor`) against real Drive-cached data to get numbers that mean what this
-section says they mean, then record the actual decision-rule lines and any numeric example
-here — not before.
+**The outcome (BATCH 16 item 5, BACKTEST-DOC-1)**: the grid was run against real data under
+this fixed design. Magic Formula RAW's decision rule read **"keep $5bn"** at both the $1bn
+and the $2bn gate — 2 cohorts better by the item 2c bar (≥2 points of annual excess, luck
+≤25%) against 5 worse, of the 13 watched cohorts at each gate; nowhere near the 9-of-13
+"lower the gate" threshold. `growth_garp_v2` could not be scored by the SAME rule at all: it
+held a BUY position in 0 rounds of 9 of the 13 cohorts at $5bn, so most cohorts contribute no
+measured rounds to compare at a lower gate either way.
+
+**The owner's ruling, 2026-10-02: the $5bn gate is KEPT.** Backtests are cyclical — a result
+measured over one ten-year window is a sample, not a law — and are explicitly NOT the
+decider for lowering a lens's own floor; 2-better-5-worse does not clear that bar by any
+reasonable margin regardless. A company under $5bn is not locked out of the product for
+this: it is shown via the labelled SMALL-COMPANY VIEW instead (`smallcap_band.py`,
+Company Check's `outside_tested_range`), which ranks it against its own size band and marks
+every vote with the caveat, rather than by moving the lens's own tested gate.
+
+**Open question, left open deliberately**: `growth_garp_v2` holding a BUY position in 0 of
+9 cohorts' rounds at its OWN $5bn floor is not a size-floor question at all — lowering the
+gate cannot fix a lens that rarely finds three names to rank in the first place. Whether a
+lens this thin belongs in the product, and if so what should change about it (the screen,
+the factor set, or the bar for a verdict), is not decided here.
+
+### SIZE-FLOOR-2 and the baseline check (BASELINE-CHECK-1, 2026-10-04)
+
+The committed `backtests/SUMMARY.csv` disagreed with a fresh default-path run for two
+cohorts: Industrials - Grid & Electrical Machinery (committed +6.1%/not beyond luck/105 of
+108 rounds vs. a fresh crash) and Materials - Diversified Mining (committed +16.0%/proven/62
+of 108 rounds, matched exactly by a fresh run). Diagnosis, not a clean either/or:
+
+**The cause was a crash bug, not a stale committed row.** SIZE-FLOOR-2's own `accounts_coverage`
+reporting line (above) calls `AsOfAdapter.get_fundamentals(ticker)` for every eligible name,
+every round, with no exception handling. Two members of Grid & Electrical Machinery are
+Korean listings whose cohort symbol is Yahoo-style (`034020.KS`, `112610.KS`) while EODHD's
+OWN fundamentals endpoint wants its native code (`034020.KO`, `112610.KO`) — confirmed
+directly against the API (`034020.KO` → 200 OK, `034020.KS` → 404). The resulting exception
+is cached and RE-RAISED by `MemoAdapter` on every later call for that ticker, so the FIRST
+round that included one of these names aborted the ENTIRE backtest for this cohort, for
+every lens, every round after — silently, since the SIZE-FLOOR-2 grid's own `try`/`except`
+around each `run_lens_backtest` call (the Colab notebook's cell 9) turned the crash into a
+truncated, misleadingly-labelled small-sample result rather than a loud failure. The
+committed `SUMMARY.csv` row predates `accounts_coverage`'s existence entirely (it was
+re-saved under the new schema without being recomputed when SIZE-FLOOR-2 shipped), so it
+never hit the bug — which is exactly why the DEFAULT path and the GRID path told two
+different stories for the same cohort and lens.
+
+**The fix**: a fetch failure for one name now counts as "not covered" (the same treatment
+an empty `period_ends` already got), never a crash — matching the discipline
+`run_rank_pipeline`'s own factor-gathering already has for a per-name fetch failure.
+Confirmed: a fresh run for Grid & Electrical Machinery × Magic Formula RAW now completes
+all 108 rounds and reads **proven, +6.3%/yr** — Mining's row is untouched (no member of that
+cohort hits the bug), confirming the diagnosis: only cohorts with an affected member moved.
+
+**All 65 committed cohort × lens pairs were refreshed** against current main (10-year
+window ending 2026-10, 12-month hold, 50bp cost, 500 random baskets per round — the same
+parameters `notebooks/aristos_backtest.ipynb` cells 5–6 use, run locally rather than in
+Colab since this machine already has the cohort data and an EODHD key). 7 of the 13 watched
+cohorts changed — every one with a member the crash could have hit; the other 6, Mining
+included, are byte-identical to the previous refresh. `backtests/SUMMARY.csv`, the 65
+per-cohort-lens CSVs, `backtests/RUN.md` and the 13×5 matrix above are all current as of
+this refresh.
 
 ## The two honesty limits
 
