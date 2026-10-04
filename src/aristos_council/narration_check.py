@@ -895,6 +895,69 @@ def check_rank_attribution(narrative: str, lens_verdicts: list[dict] | None) -> 
     return flags
 
 
+# --------------------------------------------------------------------------- #
+# LENS-EXPAND-1b — a "would have ranked" reading is context, never a verdict or a vote
+# --------------------------------------------------------------------------- #
+# House style prints verdict words in capitals (BUY / HOLD / SELL), so the check reads the
+# capitalised form only: "Growth did not buy it" is a statement about a rule, not a verdict.
+_VERDICT_WORD = re.compile(r"\b(?:BUY|HOLD|SELL)\b")
+_VOTE_WORD = re.compile(r"\bvot(?:e|es|ed|ing)\b", re.I)
+_VOTE_NEGATED = re.compile(r"\b(?:not|no|never|without|n't)\b[^.]{0,24}\bvot", re.I)
+_WOULD_RANK = re.compile(r"\bwould(?:\s+have)?\s+(?:rank|ranked|sit|place|be\s+ranked)\b", re.I)
+
+
+def _would_rank_annotation(claim: str, lens: str, cite: Optional[str]) -> str:
+    if cite:
+        return (f'[⚠ narration check: "{claim}" cites {lens}\'s {cite} without saying it is only '
+                "where the company WOULD rank on that lens's measures — the lens did not apply, "
+                "so it is not a vote and not a verdict]")
+    return (f'[⚠ narration check: "{claim}" gives {lens} a verdict or a vote, but that lens did '
+            "not apply — it has only a would-rank reading, which is not a vote and never a "
+            "verdict]")
+
+
+def check_would_rank(narrative: str, verdicts: list[dict] | None) -> list[str]:
+    """LENS-EXPAND-1b — annotations for a sentence that treats a lens's "would have ranked"
+    reading as more than it is.
+
+    A lens whose entry rules excluded the company may carry where the company WOULD have ranked on
+    that lens's measures (``verdicts[i]["would_rank"]``). The council may mention it only as "would
+    rank". Flagged: (a) a sentence naming such a lens that also carries a capitalised verdict word or
+    a vote ("Growth votes BUY", "Growth ... BUY") without "would rank"; (b) a sentence quoting the
+    reading's own "Nth of M" pair without "would rank". Conservative like its neighbours: it never
+    adjudicates a sentence that says "would rank", and with no would-rank entries it does nothing —
+    so a run that computed none is byte-unchanged."""
+    shadows = [v for v in (verdicts or []) if v.get("would_rank") and v.get("lens")]
+    if not narrative or not shadows:
+        return []
+    flags: list[str] = []
+    seen: set[str] = set()
+    for sentence in _sentences(narrative):
+        parsed = _demark(sentence)
+        if _WOULD_RANK.search(parsed):
+            continue
+        for v in shadows:
+            lens = str(v["lens"])
+            core = _lens_core(lens)
+            named = bool(core and re.search(rf"\b{re.escape(core)}\b", parsed, re.I))
+            gives_verdict = bool(_VERDICT_WORD.search(parsed)
+                                 or (_VOTE_WORD.search(parsed) and not _VOTE_NEGATED.search(parsed)))
+            cite = None
+            pos, size = v.get("would_rank_position"), v.get("would_rank_of")
+            if pos and size:
+                for m in _WORD_RANK.finditer(parsed):
+                    if (int(m.group(1)), int(m.group(2))) == (int(pos), int(size)):
+                        cite = m.group(0)
+            if not ((named and gives_verdict) or cite):
+                continue
+            claim = _claim(sentence)
+            if claim in seen:
+                continue
+            seen.add(claim)
+            flags.append(_would_rank_annotation(claim, lens, None if (named and gives_verdict) else cite))
+    return flags
+
+
 def check_narration_by_lens(narrative: str, tables_by_lens: dict,
                             default_table: dict) -> list[str]:
     """Rank-semantics checking for a CROSS-LENS narration (NARR-UNION-1).

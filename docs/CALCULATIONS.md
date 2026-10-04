@@ -518,6 +518,44 @@ exist, or when no positive enterprise value can be formed. **Never gating**: a r
 veto. Weakest on deep cyclicals at a peak or trough (hence the 5-year average); the constants are blunt
 by design.
 
+### 2.8 "Would have ranked" — a lens that does not apply (LENS-EXPAND-1b, `shadow_rank.py`)
+
+A lens's **entry rules** (a screen floor such as Growth's "revenue growth at least 10%", or Defensive
+Income's payout cap) can exclude a company. The exclusion is the verdict of record and is unchanged.
+Beside it, in **Company mode only**, the lens also says where the company *would* have ranked:
+
+> Growth: does not apply (revenue growth 5.1% < 10%) — on its measures it would rank 9th of 21. Not a vote.
+
+How it is worked out: the company's values on **that lens's own ranking factors** are placed among
+the same factors' values for the peer group, and ranked exactly as the lens ranks (same direction per
+factor, same rank-sum, same tie handling). The peer group is every name that reached the lens's
+entry rules — it passed the lens's *scope* gates (asset kind, size floor, sector) — **whether or not
+it then passed the entry rules**, so a company is compared with the whole group and never only with
+the survivors of the rule that has just excluded it. A company excluded by a *scope* gate (a fund in
+a stock lens, below the size floor, a bank in a lens that leaves banks out) gets no reading: that
+lens does not measure that kind of company at all.
+
+What it is **not**, enforced by shape rather than by wording:
+
+- **Not a vote.** It sits on a `LensVote` whose status stays "excluded"; the agreement counts read the
+  status only, so it never moves "BUY on x of n".
+- **Not a verdict.** It is a position and a cohort size. No BUY / HOLD / SELL is ever derived from it.
+- **Not a track record.** Badges attach only to a vote that ranked.
+- **Not a council verdict.** The council's evidence carries it as the text "would rank …" in its own
+  field (never as the lens's position or verdict), the prompt tells the narrator to say "would rank"
+  and never BUY/HOLD/SELL for that lens, and `narration_check.check_would_rank` annotates a sentence
+  that gives such a lens a verdict or a vote, or quotes its "Nth of M" without saying "would rank".
+
+**Not available — never a guess.** When any of the company's own ranking factors cannot be computed,
+the line reads `would-rank not available: <which factor and why>`. So does a peer group too small to
+call a rank a comparison (fewer than 3 companies).
+
+Shown in the Company page's lens-votes table, the text export, the HTML export and the saved record;
+**not** in the plain-English summary's facts pack (so the summary cannot repeat it). **List mode:** not
+done — the Run tab's grid has no per-company lens-votes table to put it in, and a list's lenses are
+not ranked against a "peer group" of the company in question, so it was not trivial. Computed only
+when the run asks (`with_shadow`, which Company mode does); a run that does not ask is byte-identical.
+
 ## 3. Dividend streak — flat is not a cut (`tools/screening.py`)
 
 Annual dividend totals are built per calendar year (partial current year excluded), then
