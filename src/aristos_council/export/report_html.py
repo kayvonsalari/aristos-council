@@ -69,10 +69,14 @@ _STAMP_OPEN = "[⚠"
 # The claim a stamp quotes, so the callout can be attached to the paragraph stating it.
 _STAMP_CLAIM = re.compile(r'narration check:\s*"(.*)"\s+(?:contradicts|orders)')
 
-# Inline markdown the narrator writes. `_` is NEVER touched — it is load-bearing in the
-# factor keys the prose quotes verbatim (fund_size, momentum_12m), the same reason
-# narration_check._demark leaves it alone.
+# Inline markdown the narrator writes. A BARE `_` is NEVER touched — it is load-bearing
+# in the factor keys the prose quotes verbatim (fund_size, momentum_12m), the same reason
+# narration_check._demark leaves it alone. HTML-NARR-MD-1 — a PAIR of underscores
+# wrapping a whole multi-word span ("_Each lens ranks only..._") is unambiguously
+# markdown italics, never a factor key (no factor key contains a space), so that one
+# shape IS converted; requiring an internal space is what keeps `fund_size` untouched.
 _BOLD = re.compile(r"\*\*(.+?)\*\*")
+_ITALIC_SPAN = re.compile(r"(?<!\w)_([^_\n]*\s[^_\n]*)_(?!\w)")
 _CODE = re.compile(r"`([^`]+)`")
 _MD_MARKS = re.compile(r"[*`]+")
 # A provenance receipt in prose — "[static: 2026-07-21, EODHD]". Rendered as a badge with
@@ -503,11 +507,12 @@ def _norm(text: str) -> str:
 
 
 def _inline(text: str) -> str:
-    """One line of prose -> inline HTML: escaped, then ``**bold**`` and ``` `code` ```
-    markers consumed and provenance receipts badged (brackets kept). No other rewriting —
-    the model's words are the model's words."""
+    """One line of prose -> inline HTML: escaped, then ``**bold**``, a whole-span
+    ``_italic_`` and ``` `code` ``` markers consumed and provenance receipts badged
+    (brackets kept). No other rewriting — the model's words are the model's words."""
     out = _esc(text)
     out = _BOLD.sub(r"<strong>\1</strong>", out)
+    out = _ITALIC_SPAN.sub(r"<em>\1</em>", out)
     out = _CODE.sub(r"<code>\1</code>", out)
     return _PROVENANCE.sub(r'<span class="badge">[\1]</span>', out)
 
@@ -638,10 +643,59 @@ def _split_stamps(narrative: str) -> tuple[str, list[str]]:
     return "\n".join(prose), stamps
 
 
+_TABLE_SEP = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$")
+
+
+def _split_table_row(line: str) -> list[str]:
+    """``"| a | b |"`` -> ``["a", "b"]`` — a leading/trailing pipe is optional, matching
+    every real markdown-table renderer."""
+    inner = line.strip()
+    if inner.startswith("|"):
+        inner = inner[1:]
+    if inner.endswith("|"):
+        inner = inner[:-1]
+    return [cell.strip() for cell in inner.split("|")]
+
+
+def _table_block_html(lines: list[str]) -> str:
+    """A GFM-shaped table (header row, ``| --- | --- |`` separator, data rows) -> a real
+    ``<table>``, cells run through ``_inline`` so a bold mark inside one still converts.
+    HTML-NARR-MD-1 — before this, a markdown table reached the export as literal
+    ``"| Lens | Verdict |"`` text lines: ``_blocks`` had no table recognition at all, so
+    every row fell through to the default paragraph branch."""
+    head = _split_table_row(lines[0])
+    body = [[_inline(c) for c in _split_table_row(row)] for row in lines[2:]]
+    return _table(head, body, cls="narr-table")
+
+
+def _blockquote_block_html(lines: list[str]) -> str:
+    """A markdown blockquote (every line starting with ``>``) -> the SAME callout shape
+    NARR-SCHEMA-1's structural banner already has CSS for (``.callout.structural``).
+    HTML-NARR-MD-1 — before this, ``_blocks`` had no ``>`` recognition, so each line fell
+    through to the default paragraph branch, which ESCAPES a leading ">" to "&gt;"
+    rather than consuming it as the blockquote marker it is."""
+    inner = [ln[1:].lstrip() for ln in lines]           # drop "> " / ">" marker only
+    body: list[str] = []
+    bullets: list[str] = []
+    for line in inner:
+        line = line.strip()
+        if line[:2] == "- ":
+            bullets.append(line[2:].strip())
+            continue
+        if bullets:
+            body.append(f"<ul>{''.join(f'<li>{_inline(b)}</li>' for b in bullets)}</ul>")
+            bullets.clear()
+        if line:
+            body.append(f"<p>{_inline(line)}</p>")
+    if bullets:
+        body.append(f"<ul>{''.join(f'<li>{_inline(b)}</li>' for b in bullets)}</ul>")
+    return f'<div class="callout structural">{"".join(body)}</div>'
+
+
 def _blocks(prose: str) -> list[tuple[str, str]]:
     """Prose -> ``[(plain_text, html)]`` blocks: blank-line-separated paragraphs, ``-``/
-    ``*`` bullet lists, and ``#`` headings. Numbered lists are deliberately left as
-    paragraphs (dropping a "1." would drop content)."""
+    ``*`` bullet lists, ``#`` headings, GFM tables and ``>`` blockquotes. Numbered lists
+    are deliberately left as paragraphs (dropping a "1." would drop content)."""
     blocks: list[tuple[str, str]] = []
     para: list[str] = []
     bullets: list[str] = []
@@ -658,24 +712,53 @@ def _blocks(prose: str) -> list[tuple[str, str]]:
             blocks.append(("\n".join(bullets), f"<ul>{body}</ul>"))
             bullets.clear()
 
-    for raw in prose.splitlines():
-        line = raw.strip()
+    lines = [raw.strip() for raw in prose.splitlines()]
+    i, n = 0, len(lines)
+    while i < n:
+        line = lines[i]
         if not line:
             flush_para()
             flush_bullets()
+            i += 1
+            continue
+        # A table needs its separator row IMMEDIATELY after the header — a lone "|"
+        # line with no separator following was never a real table, and stays a
+        # paragraph line (the default branch below still escapes it correctly).
+        if line.startswith("|") and i + 1 < n and _TABLE_SEP.match(lines[i + 1]):
+            flush_para()
+            flush_bullets()
+            table = [line, lines[i + 1]]
+            i += 2
+            while i < n and lines[i].startswith("|"):
+                table.append(lines[i])
+                i += 1
+            blocks.append(("\n".join(table), _table_block_html(table)))
+            continue
+        if line.startswith(">"):
+            flush_para()
+            flush_bullets()
+            quote = [line]
+            i += 1
+            while i < n and lines[i].startswith(">"):
+                quote.append(lines[i])
+                i += 1
+            blocks.append(("\n".join(quote), _blockquote_block_html(quote)))
             continue
         if line.startswith("#"):
             flush_para()
             flush_bullets()
             heading = line.lstrip("#").strip()
             blocks.append((heading, f"<h4>{_inline(heading)}</h4>"))
+            i += 1
             continue
         if line[:2] in ("- ", "* ", "• "):
             flush_para()
             bullets.append(line[2:].strip())
+            i += 1
             continue
         flush_bullets()
         para.append(line)
+        i += 1
     flush_para()
     flush_bullets()
     return blocks

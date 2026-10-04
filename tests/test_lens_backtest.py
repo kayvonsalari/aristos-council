@@ -1141,6 +1141,41 @@ def test_accounts_coverage_reads_1_0_when_every_eligible_name_has_dated_accounts
     assert all(r.accounts_coverage == 1.0 for r in raw.rounds)
 
 
+def test_a_fetch_failure_for_one_name_degrades_accounts_coverage_rather_than_crashing(
+        tmp_path):
+    """BASELINE-CHECK-1 (2026-10-04) — the live failure: EODHD 404s on a ticker whose
+    provider-native code differs from the cohort's own symbol (034020.KO vs the Yahoo
+    034020.KS a real cohort's members.csv carries) raised DataUnavailable straight out of
+    get_fundamentals, UNCAUGHT, and MemoAdapter caches and RE-RAISES that same exception
+    on every later call for the same ticker — so the FIRST round that included it aborted
+    the entire backtest, for every lens, silently (Industrials - Grid & Electrical
+    Machinery's committed row was generated before this reporting line existed at all;
+    a fresh run on the current code crashed outright until this fix). A fetch failure for
+    ONE eligible name must count the same as an empty period_ends — "not covered" — never
+    abort the round. run_rank_pipeline's own factor-gathering already degrades a fetch
+    failure to no-data for that one name; this is the same discipline for the coverage
+    line that sits beside it."""
+    tickers = sorted(_REAL_LENS_FUND)
+    _write_cohort(tmp_path, "one_broken_ticker_cohort", versions=(1,),
+                 caps={f"{t}.US": 8e9 for t in tickers}, min_market_cap_usd=1e9,
+                 members=[f"{t}.US" for t in tickers])
+
+    class OneBrokenTickerFeed(_RealLensFeed):
+        def get_fundamentals(self, ticker):
+            if ticker == "AAA":
+                raise DataUnavailable("EODHD /fundamentals/AAA HTTP 404")
+            return super().get_fundamentals(ticker)
+
+    raw = run_lens_backtest("One Broken Ticker Cohort", "magic_formula_raw_v1",
+                            start=date(2019, 1, 31), end=date(2020, 6, 30),
+                            adapter=OneBrokenTickerFeed(), cohorts_root=tmp_path,
+                            min_cap_usd=1e9)
+    # the whole run completed — the live bug crashed here, every round, every lens
+    assert len(raw.rounds) > 0
+    n = len(tickers)
+    assert all(abs(r.accounts_coverage - (n - 1) / n) < 1e-9 for r in raw.rounds)
+
+
 # --- excess_drop_best --------------------------------------------------------------------- #
 def test_drop_best_excess_removes_the_single_best_returning_buy_name():
     held = [("A", 0.50), ("B", 0.10), ("C", 0.05), ("D", 0.00)]

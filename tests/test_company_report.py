@@ -19,7 +19,9 @@ import pytest
 
 from aristos_council.company_report import (SECTION_ORDER, LensVote, build_agreement,
                                             company_facts_pack, format_company_report,
-                                            run_company_report, votes_from_multi)
+                                            run_company_report, votes_from_multi,
+                                            _council_agreement_row,
+                                            _council_cross_lens_verdicts)
 from aristos_council.data.adapter import (Fundamentals, MarketDataAdapter, PriceBar,
                                           PriceHistory)
 from aristos_council.export.report_html import company_report_html
@@ -616,6 +618,63 @@ def test_no_lens_voted_is_said_in_words_never_0_of_0():
     assert ag.table_row("Company Co")["BUY votes"] == "no vote"
 
 
+# =========================================================================== #
+# FORENSIC-NARR-1 — the exact EL.PA shape: a check lens, a 0-of-1 vote, Growth
+# not applying. The council's headline must restate the agreement's verdict of
+# record word for word, and Forensic must never be given or anchor a vote.
+# =========================================================================== #
+def test_the_council_facts_pack_carries_the_exact_headline_and_check_labels():
+    forensic = LensVote("f", "Forensic", kind="check", status="ranked", verdict="buy",
+                        position=3, cohort_size=14)
+    votes = [_ranked("Magic Formula RAW", "sell"), _not_applying("Growth"), forensic]
+    ag = build_agreement(votes)
+    assert ag.headline == "BUY on 0 of 1 vote; 1 lens did not apply to this company"
+
+    row = _council_agreement_row(ag)
+    assert row["headline"] == ag.headline
+
+    cross = _council_cross_lens_verdicts(votes)
+    raw = next(c for c in cross if c["lens"] == "Magic Formula RAW")
+    check = next(c for c in cross if c["lens"] == "Forensic")
+    assert raw["verdict"] == "sell" and raw["votes"] is True        # unchanged contract
+    # Forensic's internal verdict is "buy" but it is a CHECK — the evidence must never
+    # say so; it reads in its own words, and "votes" says plainly that it never voted.
+    assert check["verdict"] == "clean" and check["votes"] is False
+    assert "buy" not in check["verdict"].lower()
+
+
+def test_run_council_opinion_feeds_the_headline_and_check_labels_to_the_outcome(
+        tmp_path, monkeypatch):
+    """The plumbing _narrative_text's validate_narration call depends on: a run with
+    this exact shape must hand CouncilOutcome the agreement's own headline string and
+    Forensic's label as a check, not derive anything looser."""
+    from aristos_council import company_report as cr
+
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
+    forensic = LensVote("forensic_v1", "Forensic", kind="check", status="ranked",
+                        verdict="buy", position=3, cohort_size=14)
+    report.votes = [report.votes[0], forensic]
+    report.agreement = build_agreement(report.votes)
+
+    import aristos_council.pipeline as pipeline_mod
+
+    captured = {}
+    orig = pipeline_mod.CouncilOutcome
+
+    def _spy(*a, **kw):
+        captured.update(kw)
+        return orig(*a, **kw)
+
+    # run_council_opinion imports CouncilOutcome LOCALLY (`from .pipeline import
+    # CouncilOutcome`) on every call, so patching the pipeline module's own attribute
+    # is what a fresh local import actually picks up.
+    monkeypatch.setattr(pipeline_mod, "CouncilOutcome", _spy)
+    cr.run_council_opinion(report, adapter=_Adapter(), runners=_opinion_runners(),
+                           today=TODAY)
+    assert captured.get("verdict_of_record") == report.agreement.headline
+    assert captured.get("check_lens_labels") == frozenset({"Forensic"})
+
+
 def test_three_votes_is_x_of_3_and_nothing_is_said_about_lenses_that_did_not_apply():
     ag = build_agreement([_ranked("Alpha", "buy", 2), _ranked("Beta", "buy", 3),
                           _ranked("Gamma", "hold", 8)])
@@ -1179,6 +1238,98 @@ def test_council_opinion_text_and_html_sections_carry_the_narrative(tmp_path):
     html = company_report_html(report)
     assert "COUNCIL OPINION" in text and report.council_opinion.narrative in text
     assert "<h2>Council opinion</h2>" in html
+
+
+# --------------------------------------------------------------------------- #
+# HTML-NARR-MD-1 — the .txt export strips markdown to plain text
+# --------------------------------------------------------------------------- #
+def test_markdown_to_plain_strips_bold_and_whole_sentence_italic():
+    from aristos_council.company_report import markdown_to_plain
+
+    out = markdown_to_plain(
+        "**SXR8.DE** takes the lead.\n"
+        "_Each lens ranks only the names that passed its own screen._\n"
+        "Led on fund_size and momentum_12m this round.\n")
+    assert out[0] == "SXR8.DE takes the lead."
+    assert out[1] == "Each lens ranks only the names that passed its own screen."
+    assert out[2] == "Led on fund_size and momentum_12m this round."   # untouched
+    assert "*" not in "\n".join(out) and "_" not in out[1]
+
+
+def test_markdown_to_plain_renders_a_table_as_aligned_columns_not_pipes():
+    from aristos_council.company_report import markdown_to_plain
+
+    out = markdown_to_plain(
+        "| Lens | Verdict |\n| --- | --- |\n| Growth | BUY |\n"
+        "| Magic Formula RAW | SELL |\n")
+    assert all("|" not in ln for ln in out)
+    assert out[0].startswith("Lens")
+    # both data rows' second column starts at the SAME offset — genuinely aligned
+    col = out[0].index("Verdict")
+    assert out[1][col:col + 3] == "BUY"
+    assert out[2][col:col + 4] == "SELL"
+
+
+def test_markdown_to_plain_drops_the_blockquote_marker():
+    from aristos_council.company_report import markdown_to_plain
+
+    out = markdown_to_plain("> **⚠ Structural warning**\n> A rank is outside its "
+                            "cohort: \"14/12\".\n")
+    assert out[0] == "⚠ Structural warning"
+    assert out[1] == 'A rank is outside its cohort: "14/12".'
+    assert not any(ln.startswith(">") for ln in out)
+
+
+def test_council_opinion_lines_strips_markdown_from_a_structured_narrative(tmp_path):
+    """The .txt export must never show the council narration's own raw markdown — the
+    live bug this item fixes."""
+    report = _run([RAW], tmp_path=tmp_path, save=False, with_council=True,
+                  council_runners=_opinion_runners())
+    from aristos_council.company_report import council_opinion_lines
+
+    report.council_opinion.narrative = (
+        "**BUY on 1 of 1 vote.**\n\n"
+        "| Lens | Verdict |\n| --- | --- |\n| Magic Formula RAW | BUY |\n\n"
+        "> **⚠ Structural warning**\n> something broke\n")
+    lines = council_opinion_lines(report)
+    blob = "\n".join(lines)
+    assert "**" not in blob and "|" not in blob and ">" not in blob
+    assert "BUY on 1 of 1 vote." in blob
+    assert "⚠ Structural warning" in blob
+
+
+def test_the_on_screen_council_narrative_renders_markdown_not_raw_markers(tmp_path):
+    """HTML-NARR-MD-1 — the on-screen page must render through the same HTML builder
+    as the export, not leave raw '**', '_..._', '|' table syntax or '&gt;' on screen."""
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+
+    report = _run([RAW], tmp_path=tmp_path, save=False, with_council=True,
+                  council_runners=_opinion_runners())
+    report.council_opinion.narrative = (
+        "**BUY on 1 of 1 vote.**\n\n"
+        "_Each lens ranks only the names that passed its own screen._\n\n"
+        "| Lens | Verdict |\n| --- | --- |\n| Magic Formula RAW | BUY |\n\n"
+        "> **⚠ Structural warning**\n> something broke\n")
+
+    def _page():
+        import streamlit as st
+
+        import app
+        app._render_company_report(st.session_state["_report"])
+
+    at = AppTest.from_function(_page, default_timeout=60)
+    at.session_state["_report"] = report
+    at.run()
+    assert not at.exception, at.exception
+
+    block = next(str(getattr(m, "value", "")) for m in at.markdown
+                if "council-narrative" in str(getattr(m, "value", "")))
+    assert "<table" in block and "<strong>BUY on 1 of 1 vote.</strong>" in block
+    assert "<em>Each lens ranks only the names that passed its own screen.</em>" in block
+    assert "&gt;" not in block
+    assert "**" not in block
+    assert "| Lens |" not in block and "| --- |" not in block
 
 
 # =========================================================================== #

@@ -25,7 +25,7 @@ from aristos_council import pipeline
 from aristos_council.agents.schemas import CriticOutput, DecisionOutput, SpecialistOutput
 from aristos_council.data.adapter import (
     Fundamentals, MarketDataAdapter, PriceBar, PriceHistory)
-from aristos_council.narration_check import check_cross_lens
+from aristos_council.narration_check import check_cross_lens, check_rank_attribution
 from aristos_council.pipeline import (
     buying_lenses,
     cross_lens_reasons,
@@ -322,6 +322,21 @@ def test_the_evidence_block_states_every_lens_before_any_reason():
         assert cell["cell"] in block
 
 
+def test_a_check_lens_is_marked_in_the_cross_lens_block():
+    """FORENSIC-NARR-1 — a check lens's row says, in the evidence itself, that it
+    marks rather than votes."""
+    from aristos_council.agents.nodes import _cross_lens_block
+    from aristos_council.state import ResearchState
+
+    rows = [{"lens": "Magic Formula RAW", "cell": "#1 of 3 · SELL", "votes": True},
+           {"lens": "Forensic", "cell": "#12 of 21 · no concern", "votes": False}]
+    block = _cross_lens_block(ResearchState(
+        ticker="SU", strategy_id="multi_lens_run", cross_lens_verdicts=rows))
+    assert "Forensic: #12 of 21 · no concern (a CHECK — marks, never votes)" in block
+    assert "Magic Formula RAW: #1 of 3 · SELL" in block
+    assert "Magic Formula RAW: #1 of 3 · SELL (a CHECK" not in block
+
+
 # --------------------------------------------------------------------------- #
 # 4. THE DOCTRINE BOUNDARY — attribute, never adjudicate
 # --------------------------------------------------------------------------- #
@@ -363,6 +378,41 @@ def test_honest_attribution_and_reported_disagreement_pass_untouched(sentence):
     never invents a contradiction."""
     verdicts = [{"lens": "Classic Value"}, {"lens": "Magic Formula RAW"}]
     assert check_cross_lens(sentence, verdicts) == []
+
+
+# --------------------------------------------------------------------------- #
+# FORENSIC-NARR-1(c) — a "Nth of M" citation must name the lens it came from
+# --------------------------------------------------------------------------- #
+def test_an_unambiguous_rank_misattributed_to_a_different_lens_is_flagged():
+    """Live: the technical specialist called Forensic's own '12th of 21' 'the ranker's'
+    rank — no voting lens on that run had a 21-name cohort either."""
+    verdicts = [{"lens": "Forensic", "position": 12, "cohort_size": 21},
+               {"lens": "Magic Formula RAW", "position": 1, "cohort_size": 3}]
+    sentence = "The ranker's 12th of 21 rank reflects weak momentum."
+    marks = check_rank_attribution(sentence, verdicts)
+    assert marks, sentence
+    assert "Forensic" in marks[0] and "12th of 21" in marks[0]
+
+
+def test_a_rank_correctly_attributed_in_the_same_sentence_passes():
+    verdicts = [{"lens": "Forensic", "position": 12, "cohort_size": 21},
+               {"lens": "Magic Formula RAW", "position": 1, "cohort_size": 3}]
+    sentence = "Forensic placed it 12th of 21 on its own accrual checks."
+    assert check_rank_attribution(sentence, verdicts) == []
+
+
+def test_an_ambiguous_shared_cohort_size_is_never_flagged():
+    """Two lenses sharing the exact (position, cohort_size) pair makes the citation
+    genuinely ambiguous — the check never invents a contradiction."""
+    verdicts = [{"lens": "Classic Value", "position": 3, "cohort_size": 22},
+               {"lens": "Magic Formula RAW", "position": 3, "cohort_size": 22}]
+    sentence = "The ranker's 3rd of 22 rank reflects weak momentum."
+    assert check_rank_attribution(sentence, verdicts) == []
+
+
+def test_no_lens_verdicts_supplied_skips_the_check():
+    assert check_rank_attribution("The ranker's 12th of 21 rank.", []) == []
+    assert check_rank_attribution("The ranker's 12th of 21 rank.", None) == []
 
 
 def test_a_synthesised_narration_is_annotated_in_the_finished_report():

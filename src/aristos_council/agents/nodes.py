@@ -841,7 +841,9 @@ def _cross_lens_block(state: ResearchState) -> str:
     rows = state.cross_lens_verdicts or []
     if not rows:
         return ""
-    lines = [f"  - {r.get('lens', '')}: {r.get('cell', '')}" for r in rows]
+    lines = [f"  - {r.get('lens', '')}: {r.get('cell', '')}"
+            + ("" if r.get("votes", True) else " (a CHECK — marks, never votes)")
+            for r in rows]
     reasons = state.cross_lens_reasons or []
     why = ""
     if reasons:
@@ -883,7 +885,9 @@ def _agreement_block(state) -> str:
         lines.append(f"  - SELL votes: {len(row['sell_lenses'])} of {n} "
                      f"({', '.join(row['sell_lenses'])})")
     for check in row.get("checks") or []:
-        lines.append(f"  - {check.get('lens', '')}: {check.get('reading', '')}")
+        lines.append(f"  - {check.get('lens', '')}: {check.get('reading', '')} "
+                     "(a CHECK — it marks, it never votes, and never gets a "
+                     "BUY/HOLD/SELL word)")
     marks = row.get("marks") or []
     for mark in marks:
         lines.append(f"  - MARK: {mark}")
@@ -894,8 +898,19 @@ def _agreement_block(state) -> str:
                 "the distress score, the accounting checks) or what the price mark rests "
                 "on. A mark left unmentioned is a narration that answers a different "
                 "question from the one the reader has, and it is refused.")
-    return ("\nWHAT THE RUN CONCLUDED ABOUT THIS NAME (open with this — it is why the "
-            "name is on the list, and what sits beside it):\n" + "\n".join(lines) + tail)
+    # FORENSIC-NARR-1 — the EXACT verdict-of-record sentence, when this run has a
+    # multi-lens company agreement (one richer than a single buy/hold/sell word). Live,
+    # EL.PA: given only "BUY votes: 0 of 1" to compose from, the narration's own headline
+    # read "HOLD" — a word the agreement never issued. echoed_verdict must now COPY this
+    # sentence, not compose a new one from the numbers above (narration_schema's
+    # validate_narration refuses a headline that does not restate it word for word).
+    headline = row.get("headline") or ""
+    head = (f"\nTHE VERDICT OF RECORD, EXACT WORDS (your echoed_verdict MUST open by "
+            f"restating this sentence VERBATIM — never compose your own summary of the "
+            f"votes above instead): \"{headline}\"\n" if headline else "")
+    return (head + "\nWHAT THE RUN CONCLUDED ABOUT THIS NAME (open with this — it is why "
+            "the name is on the list, and what sits beside it):\n"
+            + "\n".join(lines) + tail)
 
 
 def _boundary_tie_block(state: ResearchState) -> str:
