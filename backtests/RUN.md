@@ -1,6 +1,6 @@
 # Backtest results — last refreshed
 
-Refreshed **2026-10-04** — 65 cohort x lens result(s) in `SUMMARY.csv`.
+Refreshed **2026-10-04** — 91 cohort x lens result(s) in `SUMMARY.csv`.
 
 Regenerate this file, and the matrix in `docs/BACKTEST.md`, with:
 

@@ -284,7 +284,7 @@ The rule, precisely (`track_record()` in `backtest.py`):
   it will do next. The optional plain-English summary is held to the same rule: it may repeat a
   badge's label, but must never turn it into a claim that a lens predicts anything.
 
-### The 13×5 results matrix
+### The 13×7 results matrix
 
 Generated from `backtests/SUMMARY.csv` by `scripts/backtest_badge_matrix.py` — re-run it after
 every refresh (below) and paste its output back in here; never hand-edited, so this table can
@@ -297,26 +297,46 @@ python -m scripts.backtest_badge_matrix
 **P** = proven, **L** = not beyond luck, **N** = not proven, **U** = insufficient (untested — too
 little measured history), each cell's mean annual excess in parentheses:
 
-| Cohort | conservative_plus_v1 | cyclical_income_v1 | growth_garp_v2 | magic_formula_momentum_v1 | magic_formula_raw_v1 |
-|---|---|---|---|---|---|
-| Comms - Interactive Media & Gaming | N (0.4%) | L (2.1%) | P (8.7%) | N (3.1%) | L (2.4%) |
-| Comms - Media & Entertainment | N (-10.2%) | N (-4.4%) | U | P (9.3%) | N (-1.0%) |
-| Consumer - Auto Manufacturers | U (-6.7%) | N (2.5%) | N (-14.6%) | N (-3.4%) | L (6.2%) |
-| Health - Large Pharma | U (6.9%) | N (-5.3%) | U | N (-2.8%) | N (-1.1%) |
-| Health - Medical Devices & Instruments | N (0.9%) | N (-1.5%) | U | N (-2.2%) | N (2.6%) |
-| Industrials - Airlines & Airports | U | N (-9.6%) | U | N (-1.3%) | N (-0.2%) |
-| Industrials - Grid & Electrical Machinery | U | U (-33.6%) | U | U | P (6.3%) |
-| Materials - Diversified Mining | U (-6.0%) | U (-8.5%) | U (2.5%) | U (8.2%) | P (16.0%) |
-| Tech - Hardware | U (-19.2%) | N (-12.4%) | U (37.7%) | N (2.4%) | N (-1.0%) |
-| Tech - IT Services | N (-4.7%) | N (-7.3%) | U (2.0%) | N (-1.8%) | N (-1.4%) |
-| Tech - Semiconductor Equipment | U | U (3.7%) | U (7.5%) | U (-2.5%) | U (9.0%) |
-| Tech - Semiconductors | U (9.0%) | L (4.7%) | U (5.7%) | N (-6.8%) | N (-7.9%) |
-| Tech - Systems Software | N (-6.7%) | N (-2.2%) | U | N (-0.2%) | N (-6.8%) |
+| Cohort | conservative_plus_v1 | cyclical_income_v1 | epv_v1 | growth_garp_v2 | magic_formula_momentum_v1 | magic_formula_raw_v1 | quality_v1 |
+|---|---|---|---|---|---|---|---|
+| Comms - Interactive Media & Gaming | N (0.4%) | L (2.1%) | L (3.0%) | P (8.7%) | N (3.1%) | L (2.4%) | N (0.4%) |
+| Comms - Media & Entertainment | N (-10.2%) | N (-4.4%) | N (-8.9%) | U | P (9.3%) | N (-1.0%) | N (3.2%) |
+| Consumer - Auto Manufacturers | U (-6.7%) | N (2.5%) | N (-1.1%) | N (-14.6%) | N (-3.4%) | L (6.2%) | L (8.5%) |
+| Health - Large Pharma | U (6.9%) | N (-5.3%) | N (-5.6%) | U | N (-2.8%) | N (-1.1%) | N (0.4%) |
+| Health - Medical Devices & Instruments | N (0.9%) | N (-1.5%) | N (-3.2%) | U | N (-2.2%) | N (2.6%) | N (3.5%) |
+| Industrials - Airlines & Airports | U | N (-9.6%) | N (1.5%) | U | N (-1.3%) | N (-0.2%) | N (-1.1%) |
+| Industrials - Grid & Electrical Machinery | U | U (-33.6%) | L (5.6%) | U | U | P (6.3%) | N (-7.8%) |
+| Materials - Diversified Mining | U (-6.0%) | U (-8.5%) | N (12.3%) | U (2.5%) | U (8.2%) | P (16.0%) | P (15.9%) |
+| Tech - Hardware | U (-19.2%) | N (-12.4%) | N (-12.0%) | U (37.7%) | N (2.4%) | N (-1.0%) | N (-3.6%) |
+| Tech - IT Services | N (-4.7%) | N (-7.3%) | N (1.7%) | U (2.0%) | N (-1.8%) | N (-1.4%) | N (-2.6%) |
+| Tech - Semiconductor Equipment | U | U (3.7%) | U (7.7%) | U (7.5%) | U (-2.5%) | U (9.0%) | U (13.3%) |
+| Tech - Semiconductors | U (9.0%) | L (4.7%) | N (-9.2%) | U (5.7%) | N (-6.8%) | N (-7.9%) | N (-2.6%) |
+| Tech - Systems Software | N (-6.7%) | N (-2.2%) | N (-6.6%) | U | N (-0.2%) | N (-6.8%) | N (0.7%) |
 
-As of this run: 4 proven, 4 not beyond luck, 31 not proven, 26 insufficient — consistent with
-"about 2 proven expected by chance" being a floor, not a ceiling, and with most cells reading
-"not proven" or "insufficient" rather than either extreme. (Refreshed 2026-10-04 —
+As of this run: 5 proven, 7 not beyond luck, 51 not proven, 28 insufficient across all 91 cells — consistent with "about 2 proven expected by chance" being a floor, not a ceiling, and with most cells reading "not proven" or "insufficient" rather than either extreme. The two newest columns, quality_v1 and epv_v1 (LENS-EXPAND-1a), were run on the same window, method and bar as the five before them; see "The Quality and Earnings Power Value backtests" below. (Refreshed 2026-10-04 —
 BASELINE-CHECK-1 below is why some numbers moved from the previous refresh.)
+
+## The Quality and Earnings Power Value backtests (LENS-EXPAND-1a)
+
+`quality_v1` and `epv_v1` were run over the same 13 watched cohorts with exactly the method above: ten
+years to 2026-09-01, 12-month holds, monthly steps, 50bp round-trip cost, the as-of size floor, 500
+turnover-matched random baskets per round, the same "proven" bar and luck rule. They ran locally (the
+same way as the last refresh), 26 runs in about ten minutes on a warm cache; the 65 existing results
+were regenerated into `SUMMARY.csv` and are byte-identical to what was committed. Each lens's CSV
+records the commit of its own lens file.
+
+| Lens | proven | not beyond luck | not proven | insufficient |
+|---|---|---|---|---|
+| `quality_v1` | 1 (Materials - Diversified Mining) | 1 (Consumer - Auto Manufacturers) | 10 | 1 (Tech - Semiconductor Equipment) |
+| `epv_v1` | 0 | 2 (Comms - Interactive Media & Gaming, Industrials - Grid & Electrical Machinery) | 10 | 1 (Tech - Semiconductor Equipment) |
+
+Read these the way every other column is read: with 91 tests, a handful of "proven" cells is what
+chance alone would give, and the one proven Quality cell (Mining, only 62 of 108 rounds held a position
+and 6 measured years) is evidence, not proof. Two things specific to these lenses: yfinance serves about
+four annual statements, so Quality's "worst of the last 5 years" is usually the worst of four on a live
+run, while the backtest (EODHD, ten years of statements) can use all five; and the lenses carry no entry
+rules, so they hold a position in nearly every round (108 of 108 in most cohorts) — unlike Growth, they
+are testable almost everywhere.
 
 ## How the universe is chosen per round (BACKTEST-1B)
 
@@ -635,7 +655,7 @@ to_csv(result, "backtests/")
 
 ## Refreshing the results
 
-The 13-cohort × 5-lens run behind the matrix above (and every badge in the app) is only as fresh
+The 13-cohort × 7-lens run behind the matrix above (and every badge in the app) is only as fresh
 as its last refresh — `backtests/RUN.md` states the date (the matrix was last refreshed
 2026-10-04; each refresh moves the window's end date forward with it, so this page deliberately
 does not repeat a date that would go stale). To refresh it:

@@ -48,6 +48,7 @@ def test_v2_is_visible_v1_hidden_and_lens_points_to_v2():
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
                        "growth_garp_v2", "magic_formula_raw_v1", "financials_v1",
                        "forensic_v1", "cyclical_income_v1",
+                       "quality_v1", "epv_v1",
                        "etf_dividend_v1", "etf_growth_v1", "etf_core_v1"}
     v2 = load_rank_strategy(STRAT_DIR / "growth_garp_v2.yaml")
     v1 = load_rank_strategy(STRAT_DIR / "growth_garp_v1.yaml")

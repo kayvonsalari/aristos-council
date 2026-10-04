@@ -324,8 +324,8 @@ def net_debt_to_operating_income(f: Fundamentals, *, window: int = _OI_WINDOW):
 
     Abstains when the mean operating income is non-positive (the ratio would invert: more
     debt would read as better) or either balance-sheet figure is missing. Generic on
-    purpose — the planned quality_v1 lens wants this same measure, so it is built once
-    here rather than inside an income lens.
+    purpose (it reads no dividend field). quality_v1 measures debt against ONE year of EBIT
+    instead — ``quality_epv.net_debt_to_ebit``.
     """
     if f is None:
         return None, "no fundamentals"

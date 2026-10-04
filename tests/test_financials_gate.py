@@ -109,7 +109,8 @@ def test_financials_v1_is_a_visible_rank_strategy():
     # conservative_plus, cyclical_income, financials, forensic, growth_garp_v2,
     # magic_formula_momentum, magic_formula_raw + etf_dividend_v1, etf_growth_v1,
     # etf_core_v1 (growth_garp_v1 / magic_formula_v1 stay hidden).
-    assert len(vis) == 10
+    # LENS-EXPAND-1a adds quality_v1 and epv_v1 (10 -> 12).
+    assert len(vis) == 12
     assert {"etf_dividend_v1", "etf_growth_v1"} <= set(ids)
 
 

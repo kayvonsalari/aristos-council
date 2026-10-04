@@ -80,7 +80,7 @@ def test_the_live_lenses_are_each_named_by_the_name_the_app_shows():
     from scripts.build_architecture_doc import _lens_name, _visible_lenses
 
     lenses = _visible_lenses()
-    assert len(lenses) == 10                       # seven stock lenses and three ETF lenses
+    assert len(lenses) == 12                       # nine stock lenses and three ETF lenses
     text = _text()
     for lens in lenses:
         assert _lens_name(lens) in text, f"missing lens: {_lens_name(lens)!r}"

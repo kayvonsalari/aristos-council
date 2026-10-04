@@ -1,0 +1,1337 @@
+{
+ "conservative_plus_v1": {
+  "excluded": [
+   [
+    "T00",
+    "screen: min_dividend_yield (observed 0.01354 vs threshold 0.015)"
+   ],
+   [
+    "T01",
+    "screen: min_dividend_yield (observed 0.007966 vs threshold 0.015)"
+   ],
+   [
+    "T02",
+    "screen: min_dividend_yield (observed 0.00466 vs threshold 0.015) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T03",
+    "screen: min_dividend_yield (observed 0.01111 vs threshold 0.015)"
+   ],
+   [
+    "T04",
+    "screen: min_dividend_yield (observed 0.006428 vs threshold 0.015) [\u26a0 price diverging: +37% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T05",
+    "screen: min_dividend_yield (observed 0.01484 vs threshold 0.015) [borderline]"
+   ],
+   [
+    "T06",
+    "screen: min_dividend_yield (observed 0.008518 vs threshold 0.015)"
+   ],
+   [
+    "T07",
+    "screen: min_price_momentum (observed -0.2326 vs threshold -0.1)"
+   ],
+   [
+    "T08",
+    "screen: min_dividend_yield (observed 0.0114 vs threshold 0.015)"
+   ],
+   [
+    "T09",
+    "screen: min_dividend_yield (observed 0.006492 vs threshold 0.015) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T11",
+    "screen: min_dividend_yield (observed 0.008557 vs threshold 0.015) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T12",
+    "screen: min_price_momentum (observed -0.1005 vs threshold -0.1) [borderline]"
+   ],
+   [
+    "T13",
+    "screen: min_dividend_yield (observed 0.01093 vs threshold 0.015) [\u26a0 price diverging: +30% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "BANK",
+    "screen: min_price_momentum (observed -0.1908 vs threshold -0.1)"
+   ],
+   [
+    "TINY",
+    "below min market cap ($1.0bn)"
+   ]
+  ],
+  "ranked": [
+   {
+    "combined_rank": 3.0,
+    "factor_ranks": {
+     "low_volatility": 1.0,
+     "momentum_12m": 1.0,
+     "net_payout_yield": 1.0
+    },
+    "factor_sources": {
+     "low_volatility": "computed",
+     "momentum_12m": "computed",
+     "net_payout_yield": "fallback:dividend_yield"
+    },
+    "factor_values": {
+     "low_volatility": 0.12990288100342626,
+     "momentum_12m": 0.0,
+     "net_payout_yield": 0.021
+    },
+    "position": 1,
+    "ticker": "T10",
+    "verdict": "buy"
+   }
+  ],
+  "unrateable": []
+ },
+ "cyclical_income_v1": {
+  "excluded": [
+   [
+    "T00",
+    "screen: min_dividend_yield (observed 0.01354 vs threshold 0.015)"
+   ],
+   [
+    "T01",
+    "screen: min_dividend_yield (observed 0.007966 vs threshold 0.015)"
+   ],
+   [
+    "T02",
+    "screen: min_dividend_yield (observed 0.00466 vs threshold 0.015) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T03",
+    "screen: min_dividend_yield (observed 0.01111 vs threshold 0.015)"
+   ],
+   [
+    "T04",
+    "screen: min_dividend_yield (observed 0.006428 vs threshold 0.015) [\u26a0 price diverging: +37% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T05",
+    "screen: min_dividend_yield (observed 0.01484 vs threshold 0.015) [borderline]"
+   ],
+   [
+    "T06",
+    "screen: min_dividend_yield (observed 0.008518 vs threshold 0.015)"
+   ],
+   [
+    "T08",
+    "screen: min_dividend_yield (observed 0.0114 vs threshold 0.015)"
+   ],
+   [
+    "T09",
+    "screen: min_dividend_yield (observed 0.006492 vs threshold 0.015) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T11",
+    "screen: min_dividend_yield (observed 0.008557 vs threshold 0.015) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T13",
+    "screen: min_dividend_yield (observed 0.01093 vs threshold 0.015) [\u26a0 price diverging: +30% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "BANK",
+    "sector excluded (Financial Services)"
+   ],
+   [
+    "TINY",
+    "below min market cap ($5.0bn)"
+   ]
+  ],
+  "ranked": [
+   {
+    "combined_rank": 6.0,
+    "factor_ranks": {
+     "net_debt_to_operating_income": 1.0,
+     "net_payout_yield": 2.0,
+     "payout_coverage_fcf": 3.0
+    },
+    "factor_sources": {
+     "net_debt_to_operating_income": "computed",
+     "net_payout_yield": "fallback:dividend_yield",
+     "payout_coverage_fcf": "abstained: dividends paid unavailable"
+    },
+    "factor_values": {
+     "net_debt_to_operating_income": 1.0458357845947546,
+     "net_payout_yield": 0.021,
+     "payout_coverage_fcf": null
+    },
+    "position": 1,
+    "ticker": "T10",
+    "verdict": "buy"
+   },
+   {
+    "combined_rank": 6.0,
+    "factor_ranks": {
+     "net_debt_to_operating_income": 2.0,
+     "net_payout_yield": 1.0,
+     "payout_coverage_fcf": 3.0
+    },
+    "factor_sources": {
+     "net_debt_to_operating_income": "computed",
+     "net_payout_yield": "fallback:dividend_yield",
+     "payout_coverage_fcf": "abstained: dividends paid unavailable"
+    },
+    "factor_values": {
+     "net_debt_to_operating_income": 1.5237534109855,
+     "net_payout_yield": 0.027,
+     "payout_coverage_fcf": null
+    },
+    "position": 1,
+    "ticker": "T12",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 9.0,
+    "factor_ranks": {
+     "net_debt_to_operating_income": 3.0,
+     "net_payout_yield": 3.0,
+     "payout_coverage_fcf": 3.0
+    },
+    "factor_sources": {
+     "net_debt_to_operating_income": "computed",
+     "net_payout_yield": "fallback:dividend_yield",
+     "payout_coverage_fcf": "abstained: dividends paid unavailable"
+    },
+    "factor_values": {
+     "net_debt_to_operating_income": 3.1478695332948683,
+     "net_payout_yield": 0.012,
+     "payout_coverage_fcf": null
+    },
+    "position": 3,
+    "ticker": "T07",
+    "verdict": "hold"
+   }
+  ],
+  "unrateable": []
+ },
+ "etf_core_v1": {
+  "excluded": [
+   [
+    "T00",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T01",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T02",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T03",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T04",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T05",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T06",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T07",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T08",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T09",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T10",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T11",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T12",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T13",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "BANK",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "TINY",
+    "asset kind 'Equity' outside this strategy's scope"
+   ]
+  ],
+  "ranked": [],
+  "unrateable": []
+ },
+ "etf_dividend_v1": {
+  "excluded": [
+   [
+    "T00",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T01",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T02",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T03",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T04",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T05",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T06",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T07",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T08",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T09",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T10",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T11",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T12",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T13",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "BANK",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "TINY",
+    "asset kind 'Equity' outside this strategy's scope"
+   ]
+  ],
+  "ranked": [],
+  "unrateable": []
+ },
+ "etf_growth_v1": {
+  "excluded": [
+   [
+    "T00",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T01",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T02",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T03",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T04",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T05",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T06",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T07",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T08",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T09",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T10",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T11",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T12",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "T13",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "BANK",
+    "asset kind 'Equity' outside this strategy's scope"
+   ],
+   [
+    "TINY",
+    "asset kind 'Equity' outside this strategy's scope"
+   ]
+  ],
+  "ranked": [],
+  "unrateable": []
+ },
+ "financials_v1": {
+  "excluded": [
+   [
+    "T00",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T01",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T02",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T03",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T04",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T05",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T06",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T07",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T08",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T09",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T10",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T11",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T12",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "T13",
+    "sector 'Industrials' outside this strategy's scope"
+   ],
+   [
+    "TINY",
+    "below min market cap ($5.0bn)"
+   ]
+  ],
+  "ranked": [
+   {
+    "combined_rank": 3.0,
+    "factor_ranks": {
+     "momentum_12m": 1.0,
+     "price_to_book": 1.0,
+     "return_on_equity": 1.0
+    },
+    "factor_sources": {
+     "momentum_12m": "computed",
+     "price_to_book": "computed",
+     "return_on_equity": "computed"
+    },
+    "factor_values": {
+     "momentum_12m": -0.19084837392993215,
+     "price_to_book": 2424818.789151952,
+     "return_on_equity": 0.2001951219512195
+    },
+    "position": 1,
+    "ticker": "BANK",
+    "verdict": "buy"
+   }
+  ],
+  "unrateable": []
+ },
+ "forensic_v1": {
+  "excluded": [
+   [
+    "BANK",
+    "sector excluded (Financial Services)"
+   ],
+   [
+    "TINY",
+    "below min market cap ($5.0bn)"
+   ]
+  ],
+  "ranked": [
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T00",
+    "verdict": "buy"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T01",
+    "verdict": "buy"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T02",
+    "verdict": "buy"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T03",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T04",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T05",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T06",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T07",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T08",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T09",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T10",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T11",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T12",
+    "verdict": "sell"
+   },
+   {
+    "combined_rank": 42.0,
+    "factor_ranks": {
+     "accrual_ratio": 14.0,
+     "altman_z": 14.0,
+     "piotroski_f_score": 14.0
+    },
+    "factor_sources": {
+     "accrual_ratio": "abstained: operating cash flow missing",
+     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
+     "piotroski_f_score": "abstained"
+    },
+    "factor_values": {
+     "accrual_ratio": null,
+     "altman_z": null,
+     "piotroski_f_score": null
+    },
+    "position": 1,
+    "ticker": "T13",
+    "verdict": "sell"
+   }
+  ],
+  "unrateable": []
+ },
+ "growth_garp_v2": {
+  "excluded": [
+   [
+    "T00",
+    "screen: min_revenue_cagr (observed 0.03093 vs threshold 0.1)"
+   ],
+   [
+    "T01",
+    "screen: min_roic (observed 0.108 vs threshold 0.12)"
+   ],
+   [
+    "T02",
+    "screen: min_revenue_cagr (observed 0.03093 vs threshold 0.1) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T03",
+    "screen: min_roic (observed 0.07911 vs threshold 0.12)"
+   ],
+   [
+    "T04",
+    "screen: min_revenue_cagr (observed 0.03093 vs threshold 0.1) [\u26a0 price diverging: +37% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T05",
+    "screen: min_roic (observed 0.09473 vs threshold 0.12)"
+   ],
+   [
+    "T06",
+    "screen: min_revenue_cagr (observed 0.03093 vs threshold 0.1)"
+   ],
+   [
+    "T07",
+    "screen: min_roic (observed 0.07518 vs threshold 0.12)"
+   ],
+   [
+    "T08",
+    "screen: min_revenue_cagr (observed 0.03093 vs threshold 0.1)"
+   ],
+   [
+    "T09",
+    "screen: min_roic (observed 0.09811 vs threshold 0.12) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T10",
+    "screen: min_revenue_cagr (observed 0.03093 vs threshold 0.1)"
+   ],
+   [
+    "T11",
+    "screen: min_roic (observed 0.0662 vs threshold 0.12) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T12",
+    "screen: min_revenue_cagr (observed 0.03093 vs threshold 0.1)"
+   ],
+   [
+    "T13",
+    "screen: min_roic (observed 0.09355 vs threshold 0.12) [\u26a0 price diverging: +30% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "BANK",
+    "screen: min_revenue_cagr (observed 0.03093 vs threshold 0.1)"
+   ],
+   [
+    "TINY",
+    "below min market cap ($5.0bn)"
+   ]
+  ],
+  "ranked": [],
+  "unrateable": []
+ },
+ "magic_formula_momentum_v1": {
+  "excluded": [
+   [
+    "T01",
+    "screen: min_roic (observed 0.108 vs threshold 0.12)"
+   ],
+   [
+    "T02",
+    "screen: min_roic (observed 0.1035 vs threshold 0.12) [\u26a0 price diverging: +53% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T03",
+    "screen: min_roic (observed 0.07911 vs threshold 0.12)"
+   ],
+   [
+    "T05",
+    "screen: min_roic (observed 0.09473 vs threshold 0.12)"
+   ],
+   [
+    "T06",
+    "screen: min_roic (observed 0.107 vs threshold 0.12)"
+   ],
+   [
+    "T07",
+    "screen: min_roic (observed 0.07518 vs threshold 0.12)"
+   ],
+   [
+    "T09",
+    "screen: min_roic (observed 0.09811 vs threshold 0.12) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T10",
+    "screen: min_roic (observed 0.09429 vs threshold 0.12)"
+   ],
+   [
+    "T11",
+    "screen: min_roic (observed 0.0662 vs threshold 0.12) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T13",
+    "screen: min_roic (observed 0.09355 vs threshold 0.12) [\u26a0 price diverging: +30% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "BANK",
+    "sector excluded (Financial Services)"
+   ],
+   [
+    "TINY",
+    "below min market cap ($5.0bn)"
+   ]
+  ],
+  "ranked": [
+   {
+    "combined_rank": 4.0,
+    "factor_ranks": {
+     "earnings_yield": 1.0,
+     "momentum_12m": 1.0,
+     "roic": 2.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 1.1008398424596909e-07,
+     "momentum_12m": 0.37344218197607826,
+     "roic": 0.1417899211026616
+    },
+    "position": 1,
+    "ticker": "T04",
+    "verdict": "buy"
+   },
+   {
+    "combined_rank": 7.0,
+    "factor_ranks": {
+     "earnings_yield": 2.0,
+     "momentum_12m": 4.0,
+     "roic": 1.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 1.0666666325333344e-07,
+     "momentum_12m": -0.27219360405564663,
+     "roic": 0.16144344500000002
+    },
+    "position": 2,
+    "ticker": "T00",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 9.0,
+    "factor_ranks": {
+     "earnings_yield": 3.0,
+     "momentum_12m": 3.0,
+     "roic": 3.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 8.198887880562327e-08,
+     "momentum_12m": -0.10045143201574858,
+     "roic": 0.13965695934256056
+    },
+    "position": 3,
+    "ticker": "T12",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 10.0,
+    "factor_ranks": {
+     "earnings_yield": 4.0,
+     "momentum_12m": 2.0,
+     "roic": 4.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 5.745600000000001e-08,
+     "momentum_12m": 0.11161929858313635,
+     "roic": 0.1346693115942029
+    },
+    "position": 4,
+    "ticker": "T08",
+    "verdict": "hold"
+   }
+  ],
+  "unrateable": []
+ },
+ "magic_formula_raw_v1": {
+  "excluded": [
+   [
+    "BANK",
+    "sector excluded (Financial Services)"
+   ],
+   [
+    "TINY",
+    "below min market cap ($5.0bn)"
+   ]
+  ],
+  "ranked": [
+   {
+    "combined_rank": 10.0,
+    "factor_ranks": {
+     "earnings_yield": 4.0,
+     "momentum_12m": 4.0,
+     "roic": 2.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 1.1008398424596909e-07,
+     "momentum_12m": 0.37344218197607826,
+     "roic": 0.1417899211026616
+    },
+    "position": 1,
+    "ticker": "T04",
+    "verdict": "buy"
+   },
+   {
+    "combined_rank": 14.0,
+    "factor_ranks": {
+     "earnings_yield": 1.0,
+     "momentum_12m": 8.0,
+     "roic": 5.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 1.70963748630149e-07,
+     "momentum_12m": 0.054339436383126216,
+     "roic": 0.10795624724732328
+    },
+    "position": 2,
+    "ticker": "T01",
+    "verdict": "buy"
+   },
+   {
+    "combined_rank": 14.0,
+    "factor_ranks": {
+     "earnings_yield": 5.0,
+     "momentum_12m": 2.0,
+     "roic": 7.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 1.0872653599737694e-07,
+     "momentum_12m": 0.5265415857894566,
+     "roic": 0.10350523531049845
+    },
+    "position": 2,
+    "ticker": "T02",
+    "verdict": "buy"
+   },
+   {
+    "combined_rank": 15.0,
+    "factor_ranks": {
+     "earnings_yield": 3.0,
+     "momentum_12m": 6.0,
+     "roic": 6.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 1.1421901761327657e-07,
+     "momentum_12m": 0.23564258209644495,
+     "roic": 0.10697286310628146
+    },
+    "position": 4,
+    "ticker": "T06",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 16.0,
+    "factor_ranks": {
+     "earnings_yield": 7.0,
+     "momentum_12m": 1.0,
+     "roic": 8.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 9.490526090614254e-08,
+     "momentum_12m": 0.6093501785335653,
+     "roic": 0.09810828707848404
+    },
+    "position": 5,
+    "ticker": "T09",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 21.0,
+    "factor_ranks": {
+     "earnings_yield": 6.0,
+     "momentum_12m": 14.0,
+     "roic": 1.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 1.0666666325333344e-07,
+     "momentum_12m": -0.27219360405564663,
+     "roic": 0.16144344500000002
+    },
+    "position": 6,
+    "ticker": "T00",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 23.0,
+    "factor_ranks": {
+     "earnings_yield": 9.0,
+     "momentum_12m": 11.0,
+     "roic": 3.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 8.198887880562327e-08,
+     "momentum_12m": -0.10045143201574858,
+     "roic": 0.13965695934256056
+    },
+    "position": 7,
+    "ticker": "T12",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 24.0,
+    "factor_ranks": {
+     "earnings_yield": 2.0,
+     "momentum_12m": 10.0,
+     "roic": 12.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 1.5059256878056098e-07,
+     "momentum_12m": -0.051549384995088765,
+     "roic": 0.0791051179018287
+    },
+    "position": 8,
+    "ticker": "T03",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 24.0,
+    "factor_ranks": {
+     "earnings_yield": 13.0,
+     "momentum_12m": 7.0,
+     "roic": 4.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 5.745600000000001e-08,
+     "momentum_12m": 0.11161929858313635,
+     "roic": 0.1346693115942029
+    },
+    "position": 8,
+    "ticker": "T08",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 28.0,
+    "factor_ranks": {
+     "earnings_yield": 12.0,
+     "momentum_12m": 5.0,
+     "roic": 11.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 6.013360406152162e-08,
+     "momentum_12m": 0.3027288530957053,
+     "roic": 0.09354976771731266
+    },
+    "position": 10,
+    "ticker": "T13",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 30.0,
+    "factor_ranks": {
+     "earnings_yield": 11.0,
+     "momentum_12m": 9.0,
+     "roic": 10.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 7.071999499868196e-08,
+     "momentum_12m": 0.0,
+     "roic": 0.09428760872313527
+    },
+    "position": 11,
+    "ticker": "T10",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 31.0,
+    "factor_ranks": {
+     "earnings_yield": 10.0,
+     "momentum_12m": 12.0,
+     "roic": 9.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 7.443242107505083e-08,
+     "momentum_12m": -0.14684158227296562,
+     "roic": 0.09473047620703648
+    },
+    "position": 12,
+    "ticker": "T05",
+    "verdict": "hold"
+   },
+   {
+    "combined_rank": 31.0,
+    "factor_ranks": {
+     "earnings_yield": 14.0,
+     "momentum_12m": 3.0,
+     "roic": 14.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 4.616596748513289e-08,
+     "momentum_12m": 0.4479778445685221,
+     "roic": 0.0661994469557046
+    },
+    "position": 12,
+    "ticker": "T11",
+    "verdict": "sell"
+   },
+   {
+    "combined_rank": 34.0,
+    "factor_ranks": {
+     "earnings_yield": 8.0,
+     "momentum_12m": 13.0,
+     "roic": 13.0
+    },
+    "factor_sources": {
+     "earnings_yield": "ev",
+     "momentum_12m": "computed",
+     "roic": "computed"
+    },
+    "factor_values": {
+     "earnings_yield": 8.543487500426668e-08,
+     "momentum_12m": -0.2325937925897582,
+     "roic": 0.07517851406613552
+    },
+    "position": 14,
+    "ticker": "T07",
+    "verdict": "sell"
+   }
+  ],
+  "unrateable": []
+ }
+}

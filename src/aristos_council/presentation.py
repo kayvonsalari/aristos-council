@@ -74,6 +74,7 @@ _PERCENT_FIELDS = frozenset({
     "annualized_volatility", "low_volatility", "pct_off_52w_high",
     "distribution_yield", "dividend_yield", "net_payout_yield",
     "earnings_yield", "roic", "revenue_growth", "return_on_equity",
+    "gross_profitability", "worst_year_roic", "epv_margin_of_safety",   # LENS-EXPAND-1a
 })
 # PERCENT-POINT fields: the vendor value is ALREADY in percent points, not a
 # decimal (expense_ratio 0.06 == 0.06%, per factors.py). Rendered as-is with a %.

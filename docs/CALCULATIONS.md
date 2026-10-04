@@ -76,8 +76,12 @@ All factors are pure functions of adapter data; each returns a float or `None`
 | `fund_size` | The fund's net assets (`total_assets`) | high | ETF lenses only — a liquidity and closure-risk proxy. See §2.1. |
 | `piotroski_f_score` | The Piotroski F-Score: nine binary accounting checks over the two most recent annual periods, 0–9 | high | Registered but selected by **no strategy**; shares its arithmetic with the `min_f_score` screen criterion. **Abstains** below 5 computable checks. A coarse integer, so it ties heavily on a small cohort — better as a screen than a rank leg. Full definition in **§4.1**. |
 | `payout_coverage_fcf` | Dividends / free cash flow, **through-cycle**: CURRENT-year `dividends_paid` ÷ the MEAN free cash flow over the last up-to-4 fiscal years | **low** | The cyclical-income lens's coverage leg. Shares ONE helper (`screening.payout_coverage_fcf`) with the `max_payout_ratio_fcf` screen criterion, so the screened number and the ranked number are the same number — asserted by float equality, not by inspection. A non-payer is **0.0** (it pays out none of its cash, a fact rather than a gap). **Abstains** when the 4-year mean FCF is ≤ 0 (the utilities lesson) or the dividend figure is missing — and, unlike the criterion, also where that criterion would take its MARKED EPS fallback: a screen floor may accept a disclosed proxy, a rank COLUMN may not, or names are ordered against two different measures without saying so. |
-| `net_debt_to_operating_income` | (`total_debt` − `total_cash`) ÷ the MEAN operating income over the last 4 fiscal years | **low** | Roughly how many average years of profit the debt represents. The window matches ROIC's and exists for the same reason: against a single peak year a cyclical looks almost debt-free (Valero, 15,751m of operating income in FY2022 against 4,312m in FY2025 — the same balance sheet reads 3.5× heavier on the second). **Net cash is NEGATIVE and ranks best**, which needs no special case under the LOW direction. **Abstains** when the 4-year mean operating income is ≤ 0 (the ratio would invert, making more debt read as better) or either balance-sheet figure is missing. Deliberately generic — it reads no dividend field, so the planned `quality_v1` lens reuses it. |
+| `net_debt_to_operating_income` | (`total_debt` − `total_cash`) ÷ the MEAN operating income over the last 4 fiscal years | **low** | Roughly how many average years of profit the debt represents. The window matches ROIC's and exists for the same reason: against a single peak year a cyclical looks almost debt-free (Valero, 15,751m of operating income in FY2022 against 4,312m in FY2025 — the same balance sheet reads 3.5× heavier on the second). **Net cash is NEGATIVE and ranks best**, which needs no special case under the LOW direction. **Abstains** when the 4-year mean operating income is ≤ 0 (the ratio would invert, making more debt read as better) or either balance-sheet figure is missing. Deliberately generic — it reads no dividend field. (The Quality lens measures debt against ONE year of EBIT instead — `net_debt_to_ebit`, §2.7 — as its brief specified.) |
 | `valuation_band_percentile` | Where today's valuation sits in the name's **OWN** 5-year monthly distribution, 0–100 (15th = historically cheap, 92nd = near its own peak) | **low** | ABSOLUTE, not cohort-relative — the one factor that asks "expensive vs its own past?". Registered but selected by **no strategy**; shares its arithmetic with the `valuation_band_percentile` screen criterion. **Abstains** below 3 years of computable history. Opt-in (an extra 5-year fetch). Full definition in **§2.3**. |
+| `gross_profitability` | Gross profit ÷ total assets, latest fiscal year (both lines period-matched) | high | The Quality lens's first leg (LENS-EXPAND-1a, §2.7). **Abstains** — never zero — when gross profit or total assets is missing, or assets are not positive. |
+| `worst_year_roic` | The **lowest** single-year ROIC over the last up-to-5 fiscal years | high | The Quality lens's second leg (§2.7). Each year is the house ROIC (operating income × (1 − that year's effective tax rate) ÷ provided invested capital). **Abstains** below 3 usable years. |
+| `net_debt_to_ebit` | (`total_debt` − `total_cash`) ÷ latest-year EBIT | **low** | The Quality lens's third leg (§2.7). Net cash is negative and ranks best; zero or negative EBIT **abstains** (and so ranks last under `missing: worst`), with the reason shown. |
+| `epv_margin_of_safety` | EPV ÷ enterprise value − 1, where EPV = 5-year-average EBIT margin × latest revenue × (1 − tax) ÷ cost of capital | high | The Earnings Power Value lens's only leg (§2.7). Flat 25% tax unless a reliable effective rate exists; flat 9% cost of capital. **Abstains** on non-positive normalised profit, fewer than 3 margin years, or no positive enterprise value. |
 
 ### 2.1 ETF factors
 
@@ -453,6 +457,66 @@ footnote too, naming the affected tickers once.
 (already-rendered cells) and the footnotes. The Analyse tab renders them with `st.dataframe`, the
 markdown record as a pipe table, the HTML export as a `<table>`, and the CLI as column-aligned
 fixed-width text — none of them formats a number of its own.
+
+### 2.7 The Quality and Earnings Power Value lenses (LENS-EXPAND-1a, `tools/quality_epv.py`)
+
+Two stock lenses with **no entry rules** beyond the $5bn size floor and the bank/insurer exclusion
+(sectors "Financial Services" and "Financials"; utilities are *not* excluded). Magic Formula RAW was
+usually the only lens that could vote on a single company, because every other lens has entry rules
+(Growth: revenue growth ≥ 10%, ROIC ≥ 12%, PEG ≤ 2; Value + Momentum: ROIC ≥ 12%; the income lenses:
+dividend rules). Both new lenses are `kind: selector` (they vote, one equal vote each like every other
+lens), stock-only (ETFs are gated out and the lenses are hidden in ETF mode), rank by the usual
+rank-sum, and give the usual BUY (top fifth) / HOLD / SELL (bottom fifth). `missing: worst`: a company
+that cannot be measured on a leg ranks last on it, with the reason shown in the factor's source note —
+never a zero, a pass or a fail. All arithmetic is in `tools/quality_epv.py`.
+
+#### Quality (`strategies/quality_v1.yaml`)
+
+*"A strong, durable business: high gross profit on its assets, a decent return on capital even in its
+worst recent year, and little debt against its operating profit, for companies worth at least $5bn
+(not banks or insurers)."* Three equal-weight legs:
+
+1. **Gross profitability** = gross profit ÷ total assets, latest fiscal year. Higher is better.
+2. **Worst-year ROIC** = the minimum, over the last up to 5 fiscal years, of
+   operating income × (1 − that year's effective tax rate) ÷ the provider's invested capital (the same
+   per-year ROIC as the `roic` factor, which averages instead). Higher is better. A year with no
+   invested capital is skipped; fewer than 3 usable years abstains. Years are paired by position in the
+   newest-first statement lists (the convention the through-cycle ROIC already uses); yfinance
+   typically serves 4 annual columns, so on live data this is usually "worst of 4".
+3. **Net debt ÷ EBIT** = (total debt − cash) ÷ latest-year EBIT (operating income when EBIT is absent).
+   Lower is better; net cash is negative and ranks best. Zero or negative EBIT abstains, ranks last
+   and says why ("operating profit (EBIT) is zero or negative, so debt cannot be measured against it").
+
+The lens is deliberately **price-blind**: a superb business at an extreme price can still read BUY.
+Earnings Power Value and Value + Momentum are the lenses that ask about price.
+
+#### Earnings Power Value (`strategies/epv_v1.yaml`)
+
+*"Cheap for the profit it already makes: what the business is worth if today's operating profit simply
+continues with no growth, compared with what the market charges for it, for companies worth at least
+$5bn (not banks or insurers)."* One factor:
+
+```
+normalised operating profit = (average EBIT / revenue over the last 5 fiscal years) × latest revenue
+EPV                         = normalised operating profit × (1 − tax) ÷ cost of capital
+margin of safety            = EPV ÷ enterprise value − 1          (higher is better)
+```
+
+Two **named constants**, one assumption for the whole universe (the EPV-1 decision), defined in
+`tools/quality_epv.py`, mirrored under `constants:` in the lens file and pinned equal by a test:
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `EPV_TAX_RATE` | 25% | Flat tax on operating profit — used unless the company's own 5-year effective rate (Σ tax ÷ Σ pretax) is *reliable*: at least 3 years of both lines, lined up, pretax sum positive, and the rate between 5% and 40%. The factor's source note says which was used ("flat 25%" or "effective 21.3% (5y)"). |
+| `EPV_COST_OF_CAPITAL` | 9% | Flat required return, the same for every company. |
+
+Enterprise value is the same one earnings yield uses (market cap + debt − cash, with the dated FX
+conversion on a foreign listing; a failed FX fetch abstains rather than mix currencies). There is no
+market-cap stand-in: EPV is an enterprise value and is compared with one. **Abstains** — ranks last,
+reason shown — when the normalised profit is zero or negative, when fewer than 3 years of margin
+exist, or when no positive enterprise value can be formed. **Never gating**: a ranked lens with no
+veto. Weakest on deep cyclicals at a peak or trough (hence the 5-year average); the constants are blunt
+by design.
 
 ## 3. Dividend streak — flat is not a cut (`tools/screening.py`)
 
