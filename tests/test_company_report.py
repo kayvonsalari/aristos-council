@@ -347,7 +347,10 @@ def test_a_ticked_summary_makes_one_call_and_is_published_when_it_passes(tmp_pat
     assert writer.calls == 1
     assert report.summary.available, report.summary.note
     text = format_company_report(report)
-    assert text.index("SUMMARY") < text.index("AGREEMENT")   # the summary leads the page
+    # COMPANY-STORY-1: the model's summary REPLACES the code-written story - never two summaries.
+    from aristos_council.company_story import NOT_A_PREDICTION
+    assert "What this run asked." in text and NOT_A_PREDICTION not in text
+    assert text.index("What this run asked.") < text.index("SHOW THE WORKINGS")
     assert "Company Co" in text
 
 
@@ -402,19 +405,25 @@ def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
 # =========================================================================== #
 # page order, exports, the saved run
 # =========================================================================== #
-_TEXT_HEADS = {"summary": "SUMMARY", "council opinion": "COUNCIL OPINION",
-               "agreement": "AGREEMENT", "lens votes": "LENS VOTES",
-               "peers": "PEERS", "price and cash": "PRICE AND CASH",
+_TEXT_HEADS = {"answer": "\n\n", "story": "What this run asked.",
+               "lens table": "Vote or mark", "council opinion": "COUNCIL OPINION",
+               "workings": "SHOW THE WORKINGS", "peers": "PEERS", "price and cash": "PRICE AND CASH",
                "valuation band": "VALUATION BAND",
                "absolute readings": "ABSOLUTE READINGS", "what analysts say": "WHAT ANALYSTS SAY",
                "sources": "SOURCES"}
-_HTML_HEADS = {"summary": "<h2>Summary</h2>", "council opinion": "<h2>Council opinion</h2>",
-               "agreement": "<h2>Agreement</h2>",
-               "lens votes": "<h2>Lens votes</h2>", "peers": "<h2>Peers</h2>",
+_HTML_HEADS = {"answer": "<h2>The answer</h2>", "story": "<h2>Summary</h2>",
+               "lens table": "<h2>Lens by lens</h2>", "council opinion": "<h2>Council opinion</h2>",
+               "workings": 'id="workings"', "peers": "<h2>Peers</h2>",
                "price and cash": "<h2>Price and cash</h2>",
                "valuation band": "<h2>Valuation band</h2>",
                "absolute readings": "<h2>Absolute readings</h2>",
                "what analysts say": "<h2>What analysts say</h2>", "sources": "<h2>Sources</h2>"}
+_MD_HEADS = {"answer": "## The answer", "story": "## Summary", "lens table": "## Lens by lens",
+             "council opinion": "## Council opinion", "workings": "## Show the workings",
+             "valuation band": "### Valuation band", "price and cash": "### Price and cash",
+             "absolute readings": "### Absolute readings",
+             "what analysts say": "### What analysts say", "peers": "### Peers",
+             "sources": "### Sources"}
 
 
 def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
@@ -426,12 +435,15 @@ def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
     # COUNCIL-OPINION-1 — injected directly (no model call): the section's PLACEMENT is what
     # this test pins, not the council itself, which has its own dedicated tests below.
     report.council_opinion = CouncilOpinion(available=True, narrative="It ranked well.")
-    # TAB-MERGE-1 part 2 commit 2 order.
-    assert SECTION_ORDER == ("summary", "agreement", "lens votes", "valuation band",
-                             "price and cash", "absolute readings", "what analysts say",
-                             "council opinion", "peers", "sources")
+    # COMPANY-STORY-1 order: answer, story, one table, the council opinion above the fold, then
+    # the workings (valuation band, price and cash, absolute readings, analysts, peers, sources).
+    assert SECTION_ORDER == ("answer", "story", "lens table", "council opinion", "workings",
+                             "valuation band", "price and cash", "absolute readings",
+                             "what analysts say", "peers", "sources")
+    from aristos_council.company_markdown import company_report_markdown
     text, html = format_company_report(report), company_report_html(report)
-    for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
+    md = company_report_markdown(report)
+    for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html), (_MD_HEADS, md)):
         at = [doc.index(heads[name]) for name in SECTION_ORDER]
         assert at == sorted(at), (heads, at)
 
@@ -441,10 +453,12 @@ def test_an_unticked_summary_leaves_no_section_and_the_order_holds(tmp_path):
     # absent, and the order holds over whatever remains.
     report = _run([RAW], tmp_path=tmp_path, save=False)
     text, html = format_company_report(report), company_report_html(report)
-    order = [n for n in SECTION_ORDER if n not in ("summary", "council opinion")]
-    assert "SUMMARY" not in text and "<h2>Summary</h2>" not in html
+    order = [n for n in SECTION_ORDER if n != "council opinion"]
+    # nothing ticked: the story is the code-written one, and there is no council section at all
+    assert "<h2>Summary</h2>" not in html and "<h2>The story</h2>" in html
     assert "COUNCIL OPINION" not in text and "<h2>Council opinion</h2>" not in html
-    for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html)):
+    heads_html = dict(_HTML_HEADS, story="<h2>The story</h2>")
+    for heads, doc in ((_TEXT_HEADS, text), (heads_html, html)):
         at = [doc.index(heads[name]) for name in order]
         assert at == sorted(at)
 
@@ -554,17 +568,19 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     at.run()
     assert not at.exception
     heads = [str(getattr(h, "value", "")) for h in at.subheader]
-    # TAB-MERGE-1 part 2 commit 2 order (no council opinion here — not ticked).
-    assert heads[:4] == ["Summary", "Agreement", "Lens votes", "Valuation band"], heads
+    # COMPANY-STORY-1 order (no council opinion here - not ticked): the answer, the model's summary
+    # in place of the story, one table, then the workings.
+    assert heads[:3] == ["The answer", "Summary", "Lens by lens"], heads
     assert heads[-3:] == ["What analysts say", "Peers", "Sources"], heads
     assert "Price and cash" in heads and "Absolute readings" in heads
+    assert "Valuation band" in heads
     frames = [df.value for df in at.dataframe]
-    assert any("BUY votes" in list(f.columns) for f in frames)            # the agreement row
-    # LENS-TABLE-WRAP-1: the vote table is a wrapping ``st.table`` now, not a scrolling grid
+    # LENS-TABLE-WRAP-1: the lens table is a wrapping ``st.table`` now, not a scrolling grid
     wrapped = [tb.value for tb in at.table]
-    assert any("Result" in list(f.columns) for f in wrapped)              # the vote table
-    votes = next(f for f in wrapped if "Result" in list(f.columns))
-    assert any(str(r).startswith("does not apply - ") for r in votes["Result"])
+    assert any("Reason" in list(f.columns) for f in wrapped)              # the one lens table
+    votes = next(f for f in wrapped if "Reason" in list(f.columns))
+    assert list(votes.columns) == ["Vote or mark", "Badge", "Reason"]
+    assert any(str(r).startswith("does not apply") for r in votes["Vote or mark"])
     assert any("Market cap (USD)" in list(f.columns) for f in frames)     # the numeric peers table
     # the page carries no Streamlit-side model call: the summary came from the injected writer
     assert report.summary.available
@@ -579,8 +595,8 @@ def test_the_page_says_so_when_there_is_no_peer_group(tmp_path):
     at.session_state["_report"] = report
     at.run()
     assert not at.exception
-    blob = " ".join(str(getattr(i, "value", "")) for i in at.info)
-    assert "No vote:" in blob and "no peer group" in blob
+    blob = " ".join(str(getattr(i, "value", "")) for i in list(at.info) + list(at.markdown))
+    assert "No lens could rank" in blob and "no peer group" in blob
     heads = [str(getattr(h, "value", "")) for h in at.subheader]
     assert "Valuation band" in heads and "Absolute readings" in heads      # they survive
 
@@ -941,13 +957,15 @@ def test_exports_carry_the_badge_text_and_the_cohort_used(tmp_path):
     assert badge is not None
 
     text = format_company_report(report)
-    assert "Track record from the Semiconductors cohort" in text
-    assert f"({badge.label})" in text
+    # COMPANY-STORY-1: the reader-facing caption never says "cohort"; the workings still carry the
+    # badge's own detail line, and the table has a Badge column.
+    assert "Track record from tests on Semiconductors companies" in text
+    assert badge.label in text
     assert report.track_record_summary in text
 
     html = company_report_html(report)
-    assert f"({badge.label})" in html
-    assert "Track record from the Semiconductors cohort" in html
+    assert badge.label in html
+    assert "Track record from tests on Semiconductors companies" in html
 
     from aristos_council.company_report import report_record
     record = report_record(report)

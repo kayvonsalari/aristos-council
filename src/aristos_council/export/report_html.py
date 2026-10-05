@@ -1544,10 +1544,6 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     c = report.check
     stamp = _local_stamp(run_start)
     header_tail = f'<p class="house">{_esc(HOUSE_LINE)}</p>'
-    if report.outside_tested_range:
-        header_tail += f'<p class="note">{_esc(report.tested_range_line)}</p>'
-        for line in report.tested_range_detail_lines:
-            header_tail += f'<p class="note">{_esc(line)}</p>'
     parts = ['<header class="doc"><p class="kicker">Aristos Council · company report · one '
              "company against its peer group</p>"
              f"<h1>{_esc(report.display)}</h1>"
@@ -1560,52 +1556,7 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
         parts.append(_footer())
         return _document(title=f"Company Report — {report.display}", body=_JOIN.join(parts))
 
-    if report.summary is not None:
-        parts.append(_reader_section(report.summary))
-
-    parts.append('<section class="section"><h2>Agreement</h2>')
-    if report.agreement is not None:
-        row = report.agreement.table_row(report.display)
-        parts.append(f"<p><strong>{_esc(report.agreement.headline)}</strong></p>"
-                     + _table(list(row), [[_esc(str(v)) for v in row.values()]]))
-        # BACKTEST-2 — display only, right under the agreement count.
-        if report.track_record_caption:
-            parts.append(f'<p class="note">{_esc(report.track_record_caption)}</p>')
-        if report.track_record_summary:
-            parts.append(f'<p class="note">{_esc(report.track_record_summary)}</p>')
-    else:
-        parts.append(f'<p class="note">No vote: {_esc(report.no_vote_reason)}</p>')
-    parts.append("</section>")
-
-    parts.append('<section class="section"><h2>Lens votes</h2>')
-    if report.votes:
-        # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-band
-        # run; never shown otherwise. No badge bullets follow (attach_track_record is never
-        # called for such a run — badged is always empty below).
-        suffix = f" {report.tested_range_row_tag}" if report.outside_tested_range else ""
-        body = [[_esc(v.label), _esc(v.role), _esc(v.result_shown() + v.badge_suffix + suffix),
-                _esc(v.asks)] for v in report.votes]
-        parts.append(_table(["Lens", "Role", "Result", "What it asks"], body))
-        from ..backtest import BADGE_MEANINGS
-        badged = [v for v in report.votes if v.badge is not None]
-        if badged:
-            parts.append(_bullets(
-                f"<strong>{_esc(v.label)}</strong> — {_esc(v.badge.detail_line())} — "
-                f"{_esc(BADGE_MEANINGS[v.badge.label])}" for v in badged))
-    else:
-        parts.append(f'<p class="note">{_esc(report.no_vote_reason or NO_LENS_REASON)}</p>')
-    parts.append("</section>")
-
-    parts.append('<section class="section"><h2>Valuation band</h2>'
-                 '<p class="note">This company against its own history; a mark, never a veto.</p>'
-                 f"<p>{_esc(c.valuation_band)}</p></section>")
-    parts.append(_price_and_cash_html(c))
-    parts.append(_absolute_readings_html(c, with_analyst=False)
-                 or '<section class="section"><h2>Absolute readings</h2>'
-                    '<p class="note">none available</p></section>')
-    parts.append(_analyst_forecasts_html(c)
-                 or '<section class="section"><h2>What analysts say</h2>'
-                    '<p class="note">not available</p></section>')
+    parts.append(_story_html(report))
 
     if report.council_opinion is not None:
         parts.append('<section class="section"><h2>Council opinion</h2>'
@@ -1613,16 +1564,10 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
                      "the verdict of record.</p>")
         op = report.council_opinion
         parts.append(_narration_html(op.narrative) if op.available
-                    else f'<p class="note">{_esc(op.note)}</p>')
+                     else f'<p class="note">{_esc(op.note)}</p>')
         parts.append("</section>")
 
-    parts.append(_company_peers_html(c, rank_columns(report), report.ticker))
-
-    sources = company_sources(c)
-    if sources:
-        parts.append('<section class="section"><h2>Sources</h2>'
-                     + _bullets(f"<strong>{_esc(s.topic)}:</strong> {_esc(s.text)}"
-                                for s in sources) + "</section>")
+    parts.append(_workings_html(report))
     tail = f"Ran in {report.seconds:.1f}s"
     if report.cache.get("hits") is not None:
         tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"
@@ -1630,6 +1575,85 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     parts.append(_footer())
     return _document(title=f"Company Report — {report.display}" + (f" — {stamp}" if stamp else ""),
                      body=_JOIN.join(parts))
+
+
+def _story_html(report) -> str:
+    """COMPANY-STORY-1 sections 1-3 from the ONE ``StoryPage`` every renderer reads: the two-line
+    answer, the story (or the model's summary in its place), one lens table whose "what it asks"
+    captions are tooltips."""
+    from ..company_story import SECTION_ANSWER, SECTION_STORY, SECTION_TABLE, story_page
+    from ..reader import READER_SECTION_NOTE, READER_SECTION_TITLE
+
+    page = story_page(report)
+    out = [f'<section class="section" id="answer"><h2>{_esc(SECTION_ANSWER)}</h2>'
+           f"<p><strong>{_esc(page.answer[0])}</strong></p><p>{_esc(page.answer[1])}</p></section>"]
+    title = READER_SECTION_TITLE if page.model_summary else SECTION_STORY
+    body = [f'<section class="section" id="story"><h2>{_esc(title)}</h2>']
+    body += [f"<p><strong>{_esc(lead)}</strong> {_esc(text)}</p>" for lead, text in page.paragraphs]
+    if page.model_summary:
+        body.append(f'<p class="note">{_esc(READER_SECTION_NOTE)}</p>')
+    if page.note:
+        body.append(f'<p class="note">{_esc(page.note)}</p>')
+    out.append("".join(body) + "</section>")
+
+    table = [f'<section class="section" id="lenses"><h2>{_esc(SECTION_TABLE)}</h2>']
+    table += [f'<p class="note">{_esc(line)}</p>' for line in page.tag]
+    if page.no_vote:
+        table.append(f'<p class="note">{_esc(page.no_vote)}</p>')
+    else:
+        rows = []
+        for r in page.rows:
+            tip = html.escape(r.asks, quote=True)
+            lens = f'<span title="{tip}">{_esc(r.lens)}</span>' if r.asks else _esc(r.lens)
+            rows.append([lens, _esc(r.outcome), _esc(r.badge), _esc(r.reason)])
+        table.append(_table(list(page.headers), rows))
+    if page.caption:
+        table.append(f'<p class="note">{_esc(page.caption)}</p>')
+    out.append("".join(table) + "</section>")
+    return _JOIN.join(out)
+
+
+def _workings_html(report) -> str:
+    """COMPANY-STORY-1 section 4: everything that supports the answer, folded (open on click; print
+    opens it), in the design's order."""
+    from ..company_check import company_sources
+    from ..company_story import SECTION_WORKINGS, narration_check_line, table_rows
+    from ..peer_table import rank_columns
+
+    c = report.check
+    inner = ['<section class="section"><h2>Valuation band</h2>'
+             '<p class="note">This company against its own history; a mark, never a veto.</p>'
+             f"<p>{_esc(c.valuation_band)}</p></section>"]
+    inner.append(_price_and_cash_html(c))
+    inner.append(_absolute_readings_html(c, with_analyst=False)
+                 or '<section class="section"><h2>Absolute readings</h2>'
+                    '<p class="note">none available</p></section>')
+    inner.append(_analyst_forecasts_html(c)
+                 or '<section class="section"><h2>What analysts say</h2>'
+                    '<p class="note">not available</p></section>')
+    inner.append(_company_peers_html(c, rank_columns(report), report.ticker))
+    line = narration_check_line(report)
+    if line:
+        inner.append(f'<details class="gate"><summary>Narration check</summary>'
+                     f'<p class="note">{_esc(line)}</p></details>')
+    notes = [r for r in table_rows(report) if r.asks or r.badge_detail or r.full_reason]
+    if notes:
+        items = []
+        for r in notes:
+            if r.asks:
+                items.append(f"<strong>{_esc(r.lens)}</strong> asks: {_esc(r.asks)}")
+            if r.full_reason:
+                items.append(f"<strong>{_esc(r.lens)}</strong> did not apply: {_esc(r.full_reason)}")
+            if r.badge_detail:
+                items.append(f"<strong>{_esc(r.lens)}</strong> track record: {_esc(r.badge_detail)}")
+        inner.append('<section class="section"><h2>Lens notes</h2>' + _bullets(items) + "</section>")
+    sources = company_sources(c)
+    if sources:
+        inner.append('<section class="section"><h2>Sources</h2>'
+                     + _bullets(f"<strong>{_esc(s.topic)}:</strong> {_esc(s.text)}"
+                                for s in sources) + "</section>")
+    return (f'<details class="gate workings" id="workings"><summary>{_esc(SECTION_WORKINGS)}</summary>'
+            + _JOIN.join(inner) + "</details>")
 
 
 def _price_and_cash_html(result) -> str:
