@@ -645,6 +645,14 @@ def company_sources(result: "CompanyCheckResult") -> list[SourceLine]:
                               f"latest close in {pac_fx.as_of}, source {pac_fx.source}"))
     if pac is not None and getattr(pac, "news_source", ""):
         out.append(SourceLine("Recent news", pac.news_source))
+    # ETF-MODE-1: a fund size converted to USD names the rate and where it came from.
+    import re as _re
+    for fc in getattr(result, "factors", ()):
+        found = _re.search(r"(\d{4}-\d{2}-\d{2}), rate from (.+)$", fc.source or "")
+        if getattr(fc, "factor", "") == "fund_size" and found:
+            out.append(SourceLine("Currency rate for fund size (converted to USD)",
+                                  f"{found.group(2).strip()}, as of {found.group(1)}"))
+            break
     statics = sorted({fc.source for fc in getattr(result, "factors", ())
                       if (fc.source or "").startswith("static:")})
     for tag in statics:
@@ -761,6 +769,17 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
             ok = cap >= floor
             gates.append(GateCell("min_market_cap", "PASS" if ok else "FAIL",
                                   f"market cap {cap:,.0f} vs floor {floor:,.0f}"))
+    # PROFIT GUARD (SMALLCAP-BAND-GAP-1): lenses that divide by operating profit.
+    from .operating_profit import (NO_OPERATING_PROFIT_REASON, has_no_operating_profit,
+                                   latest_operating_profit, lens_requires_operating_profit)
+    if lens_requires_operating_profit(rank_strategy):
+        if latest_operating_profit(f) is None:
+            gates.append(GateCell("operating_profit", "NOT-EVALUATED",
+                                  "operating profit unknown"))
+        elif has_no_operating_profit(f):
+            gates.append(GateCell("operating_profit", "FAIL", NO_OPERATING_PROFIT_REASON))
+        else:
+            gates.append(GateCell("operating_profit", "PASS", "operating profit above zero"))
     # Coarse payout gate.
     max_payout = getattr(rank_strategy, "max_payout_ratio", None)
     if max_payout is not None:

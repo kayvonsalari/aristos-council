@@ -78,9 +78,15 @@ from .factors import (
 )
 from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
+from .operating_profit import (
+    NO_OPERATING_PROFIT_REASON,
+    has_no_operating_profit,
+    lens_requires_operating_profit,
+)
 from .rank_engine import (
     BOUNDARY_FLAG,
     MIN_RANKABLE_COHORT,
+    passed_too_few_text,
     FactorSpec,
     RankedTicker,
     boundary_tie_facts,
@@ -102,6 +108,7 @@ from .report_language import (
     UNIT_RATIO,
     format_signed_change,
     format_summary_line,
+    kind_gated_note,
     format_threshold,
     format_value,
     label_with_id,
@@ -315,6 +322,13 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         if f is not None and is_sector_out_of_scope(
                 f.sector, getattr(rank_strategy, "include_sectors", []) or []):
             excluded.append((t, f"sector '{f.sector}' outside this strategy's scope"))
+            continue
+        # PROFIT GUARD: a lens that divides by operating profit does not apply to a company
+        # with none (confirmed zero-or-negative only; unknown never gates). No would-rank:
+        # there is nothing meaningful to rank it on.
+        if (lens_requires_operating_profit(rank_strategy)
+                and has_no_operating_profit(f)):
+            excluded.append((t, NO_OPERATING_PROFIT_REASON))
             continue
         if f is not None and is_payout_uncovered(f.payout_ratio,
                                                  rank_strategy.max_payout_ratio):
@@ -844,6 +858,8 @@ def run_rank_pipeline(
         shortlist = list(live)                        # every ranked name, best-first
     else:
         shortlist = _shortlist(ranked, runs_on, rank_strategy.k)
+    if 0 < len(live) < MIN_RANKABLE_COHORT:
+        shortlist = []     # NO-RANK-NO-VOTE-1: a lens that kept too few names votes for none
     est = estimate_cost(len(shortlist))
 
     council: list[CouncilOutcome] = []
@@ -1322,10 +1338,16 @@ def summary_line(result) -> str:
     Derived from the result every time. There was no summary anywhere before this: a
     reader had to count the table by hand to learn what the run had concluded."""
     m = result.meta or {}
+    # ETF-MODE-1: names an asset-kind gate turned away are not "excluded by the screen" (an ETF
+    # lens has no screen); they are said in their own words, with their names.
+    all_excluded = list(getattr(result, "excluded", []) or [])
+    gated = [t for t, why in all_excluded if str(why).startswith("asset kind")]
+    scope = getattr(getattr(result, "rank_strategy", None), "asset_kinds", None) or []
     return format_summary_line(
         result.ranked, check=_is_check_result(result),
         universe_size=m.get("universe_size", len(result.ranked)),
-        excluded=len(getattr(result, "excluded", []) or []),
+        kind_gated=kind_gated_note(gated, scope),
+        excluded=len(all_excluded) - len(gated),
         unrateable=len(getattr(result, "unrateable", []) or []),
         fetch_errors=len(getattr(result, "fetch_errors", []) or []))
 
@@ -1940,6 +1962,14 @@ def _multiple_cell(band) -> str:
     return f"{band.current:.1f}x{tag}"
 
 
+def _fund_only_lens(rank_strategy) -> bool:
+    """True for a lens that ranks ONLY funds (``asset_kinds: [etf]``). The valuation band is a
+    company reading (a multiple of operating profit against the company's own history), so it
+    is not drawn for these (ETF-MODE-1)."""
+    kinds = {str(k).strip().lower() for k in (getattr(rank_strategy, "asset_kinds", None) or ())}
+    return kinds == {"etf"}
+
+
 def valuation_band_table(result) -> Optional[ValuationBandTable]:
     """The valuation-band table for a run, or None when no name carries a band.
 
@@ -1961,6 +1991,9 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
     Display only — nothing here ranks, screens, gates or votes."""
     from .tools.valuation_band import BAND_YEARS, ordinal, percentile_gloss
     from .tools.price_context import format_money
+
+    if _fund_only_lens(getattr(result, "rank_strategy", None)):
+        return None           # ETF-MODE-1: a company reading, never shown for a fund list
 
     # REPORT-1: a row for every rateable name that has EITHER a price or a band. The
     # price is never gated by the valuation-band toggle, so a band-off run still renders
@@ -2072,6 +2105,8 @@ def union_valuation_band_table(multi_result) -> Optional[ValuationBandTable]:
            if s in results]
     if not ids:
         return None
+    if all(_fund_only_lens(getattr(results[s], "rank_strategy", None)) for s in ids):
+        return None           # ETF-MODE-1: every lens ranks funds only
 
     seen: dict[str, object] = {}
     order: list[str] = []
@@ -2889,6 +2924,7 @@ def multi_strategy_grid_rows(result: MultiStrategyResult) -> tuple[list[dict], l
 DETAIL_GROUP_FLOOR = "_floor"
 DETAIL_GROUP_SECTOR = "_sector"
 DETAIL_GROUP_KIND = "_kind"
+DETAIL_GROUP_PROFIT = "_profit"
 DETAIL_GROUP_OTHER = "_other"
 
 # The heading each pre-screen gate gets. They are gates, not rules, and the difference
@@ -2898,6 +2934,7 @@ _GATE_TITLES = {
     DETAIL_GROUP_FLOOR: "Company size",
     DETAIL_GROUP_SECTOR: "Sector",
     DETAIL_GROUP_KIND: "Asset kind",
+    DETAIL_GROUP_PROFIT: "Operating profit",
     DETAIL_GROUP_OTHER: "Removed before the screen",
 }
 _GATE_NOTE = "no other rule was tested on these"
@@ -2993,6 +3030,8 @@ def _detail_group_key(criterion: str, reason: str) -> str:
         return DETAIL_GROUP_SECTOR
     if low.startswith("asset kind"):
         return DETAIL_GROUP_KIND
+    if low.startswith(NO_OPERATING_PROFIT_REASON):
+        return DETAIL_GROUP_PROFIT
     return DETAIL_GROUP_OTHER
 
 
@@ -3133,6 +3172,8 @@ def _gate_rule_phrase(key: str, result) -> str:
         kinds = list(getattr(rank, "asset_kinds", None) or [])
         if kinds:
             return "this lens ranks only " + ", ".join(kinds)
+    if key == DETAIL_GROUP_PROFIT:
+        return "latest operating profit above zero (applied before the screen)"
     return "applied before the screen"
 
 
@@ -3145,7 +3186,10 @@ def _detail_headline(result) -> str:
         ranked = len([r for r in (getattr(result, "ranked", None) or []) if not r.excluded])
     size = meta.get("universe_size", ranked)
     excluded = len(getattr(result, "excluded", None) or [])
-    line = f"Ranked {ranked} of {size} names."
+    if 0 < ranked < MIN_RANKABLE_COHORT:
+        line = f"{passed_too_few_text(ranked).capitalize()}."
+    else:
+        line = f"Ranked {ranked} of {size} names."
     if excluded:
         line += f" Excluded {excluded}: by rule below, worst miss first."
     return line
@@ -3670,6 +3714,7 @@ class LensAgreement:
     check_labels: dict
     rows: list                      # every name with at least one BUY vote, in order
     no_buy_count: int = 0           # names ranked by a voting lens that none rated BUY
+    sell_no_buy_count: int = 0      # of those, names at least one voting lens rated SELL
     overlap_note: str = ""
 
     @property
@@ -3720,7 +3765,7 @@ class LensAgreement:
 
         Zero buckets are omitted, as every other clause on that line omits its zeros: a
         count of nothing is noise, and the section itself states an empty result."""
-        if not self.available or not self.rows:
+        if not self.available or not (self.rows or self.sell_no_buy_count):
             return ""
         parts = []
         for votes, count in self.buckets().items():
@@ -3730,6 +3775,13 @@ class LensAgreement:
                              f"{'lenses' if votes != 1 else 'lens'}")
             else:
                 parts.append(f"{count} on {votes} of {self.n_voting}")
+        if self.sell_no_buy_count:
+            # AGREEMENT-SELL-1: names no lens bought but at least one SELLs are stated too, so a
+            # list of all-SELL names does not read as an empty shortlist.
+            k = self.sell_no_buy_count
+            if not parts:
+                parts.append("no name BUY")
+            parts.append(f"SELL on {k} {'name' if k == 1 else 'names'} no lens bought")
         return " — shortlist: " + ", ".join(parts)
 
 
@@ -3767,13 +3819,20 @@ def lens_agreement(multi_result) -> LensAgreement:
         return LensAgreement(**empty, overlap_note=_overlap_note(results, voting, _label))
 
     # What each voting lens did with each name, read from what the run already produced.
-    ranked_count = {sid: len([r for r in results[sid].ranked if not r.excluded])
-                    for sid in voting}
+    ranked_count_all = {sid: len([r for r in results[sid].ranked if not r.excluded])
+                        for sid in voting + checks}
+    ranked_count = {sid: ranked_count_all[sid] for sid in voting}
     verdict_of: dict = {}
     position_of: dict = {}
     factor_note_of: dict = {}
     display_of: dict = {}
+    # NO-RANK-NO-VOTE-1: a lens that kept fewer than MIN_RANKABLE_COHORT names gave none of
+    # them a position, so it casts no vote - it is treated exactly like "does not apply".
+    too_thin = {sid: ranked_count_all[sid] for sid in voting + checks
+                if 0 < ranked_count_all[sid] < MIN_RANKABLE_COHORT}
     for sid in voting + checks:
+        if sid in too_thin:
+            continue
         for r in results[sid].ranked:
             if r.excluded:
                 continue
@@ -3795,6 +3854,11 @@ def lens_agreement(multi_result) -> LensAgreement:
 
     excluded_reason: dict = {}
     for sid in voting:
+        if sid in too_thin:
+            for r in results[sid].ranked:
+                if not r.excluded:
+                    excluded_reason.setdefault(r.ticker, {})[sid] = passed_too_few_text(
+                        too_thin[sid])
         for ticker, reason in (getattr(results[sid], "excluded", None) or []):
             excluded_reason.setdefault(ticker, {})[sid] = reason
         for ticker, reason in (getattr(results[sid], "unrateable", None) or []):
@@ -3811,12 +3875,15 @@ def lens_agreement(multi_result) -> LensAgreement:
 
     rows = []
     no_buy = 0
+    sell_no_buy = 0
     for ticker in sorted({t for t in verdict_of
                           if any(sid in verdict_of[t] for sid in voting)}):
         votes = {sid: verdict_of[ticker].get(sid) for sid in voting}
         buys = [_label(s) for s in voting if votes.get(s) == "buy"]
         if not buys:
             no_buy += 1
+            if any(votes.get(s) == "sell" for s in voting):
+                sell_no_buy += 1
             continue
         sells = [_label(s) for s in voting if votes.get(s) == "sell"]
         holds = [_label(s) for s in voting if votes.get(s) == "hold"]
@@ -3840,6 +3907,7 @@ def lens_agreement(multi_result) -> LensAgreement:
                              r.mean_rank_pct if r.mean_rank_pct is not None else 1.0,
                              r.ticker))
     return LensAgreement(**{**empty, "rows": rows, "no_buy_count": no_buy,
+                        "sell_no_buy_count": sell_no_buy,
                         "overlap_note": _overlap_note(results, voting, _label)})
 
 
@@ -4764,8 +4832,7 @@ def comparable_names_line(result, *, tail: str = " - only those rank-sums are co
         kept = len([r for r in (getattr(res, "ranked", None) or ()) if not r.excluded])             if res is not None else 0
         if 0 < kept < MIN_RANKABLE_COHORT:
             label = (getattr(result, "strategy_names", None) or {}).get(sid) or sid
-            thin.append(f"{label} kept only {kept} name{'s' if kept != 1 else ''}, too few "
-                        f"(under {MIN_RANKABLE_COHORT}) to give any a position")
+            thin.append(f"{label}: {passed_too_few_text(kept)}")
     if thin:
         line += " " + "; ".join(thin) + "."
     return line

@@ -607,8 +607,9 @@ def test_one_vote_and_two_lenses_that_did_not_apply_is_0_of_1_not_0_of_3():
     ag = build_agreement([_ranked("Magic Formula RAW", "sell"), _not_applying("Value + Momentum"),
                           _not_applying("Growth"), forensic])
     assert (ag.n_ticked, ag.n_voted, ag.n_not_applying, ag.n_checks) == (3, 1, 2, 1)
-    assert ag.headline == "BUY on 0 of 1 vote; 2 lenses did not apply to this company"
+    assert ag.headline == "SELL on 1 of 1 vote; no BUY; 2 lenses did not apply to this company"   # AGREEMENT-SELL-1
     assert ag.table_row("AstraZeneca PLC (AZN.L)")["BUY votes"] == "0 of 1"
+    assert ag.table_row("AstraZeneca PLC (AZN.L)")["SELL votes"] == "1 of 1"
     assert ag.sell == ("Magic Formula RAW",)
 
 
@@ -630,7 +631,7 @@ def test_the_council_facts_pack_carries_the_exact_headline_and_check_labels():
                         position=3, cohort_size=14)
     votes = [_ranked("Magic Formula RAW", "sell"), _not_applying("Growth"), forensic]
     ag = build_agreement(votes)
-    assert ag.headline == "BUY on 0 of 1 vote; 1 lens did not apply to this company"
+    assert ag.headline == "SELL on 1 of 1 vote; no BUY; 1 lens did not apply to this company"
 
     row = _council_agreement_row(ag)
     assert row["headline"] == ag.headline
@@ -884,22 +885,35 @@ def test_a_does_not_apply_vote_gets_no_badge_even_with_a_cohort_match(tmp_path):
         assert f"({raw_vote.badge.label})" in doc            # RAW's badge text appears
 
 
-def test_no_cohort_match_leaves_every_badge_none_and_no_caption():
+def test_no_cohort_match_says_untested_here_on_every_voting_lens():
+    """BANK-PAGE-1 (replaces the old "leaves every badge None and no caption"): a company whose
+    industry no backtested cohort covers (a bank) used to show NOTHING, which reads as "not looked
+    at". Every lens that voted now says "untested here"; a lens that did not rank it, and a check
+    lens, still carry no badge."""
     from types import SimpleNamespace
 
-    from aristos_council.company_report import CompanyReport, attach_track_record
+    from aristos_council.company_report import (NO_COHORT_TRACK_RECORD_LINE, CompanyReport,
+                                                attach_track_record)
 
     votes = [LensVote("magic_formula_raw_v1", "Magic Formula RAW", status="ranked",
-                      verdict="buy", position=2, cohort_size=14)]
+                      verdict="buy", position=2, cohort_size=14),
+             LensVote("financials_v1", "Financials", status="ranked", verdict="hold",
+                      position=5, cohort_size=14),
+             LensVote("growth_garp_v2", "Growth", status="excluded", reason="r"),
+             LensVote("forensic_v1", "Forensic", kind="check", status="ranked",
+                      verdict="buy", position=3, cohort_size=14)]
     subject = SimpleNamespace(industry="Something Nobody Backtested", gics_subindustry="")
     check = SimpleNamespace(peer_group=SimpleNamespace(subject=subject))
     report = CompanyReport(ticker="CO", check=check, votes=votes)
 
     attach_track_record(report)
 
-    assert report.cohort_slug is None and report.track_record_caption == ""
-    assert all(v.badge is None and v.badge_suffix == "" for v in report.votes)
-    assert report.track_record_summary == ""
+    assert report.cohort_slug is None
+    assert report.track_record_caption == NO_COHORT_TRACK_RECORD_LINE
+    raw, fin, growth, forensic = report.votes
+    assert raw.badge.label == "untested here" and raw.badge_suffix == " (untested here)"
+    assert fin.badge.label == "untested here"
+    assert growth.badge is None and forensic.badge is None
 
 
 def test_no_peer_group_at_all_attaches_no_badge(tmp_path):
@@ -1451,8 +1465,10 @@ def test_no_cohort_match_falls_back_to_a_stated_no_vote_reason(tmp_path):
         include_small=True, save=False, news_fetcher=_no_news)
     assert report.outside_tested_range is False
     assert not report.votes or report.votes[0].status == "no_group"
-    assert "no small-company band" in report.no_vote_reason or "no backtested cohort" \
-        in report.no_vote_reason
+    # SMALLCAP-BAND-GAP-1: with no band AND no size-matched peers there is nothing to rank
+    # against; the reason names both gaps.
+    assert "no peer group" in report.no_vote_reason
+    assert "its industry has no tested range" in report.no_vote_reason
 
 
 def test_a_company_at_or_above_5bn_ignores_include_small(tmp_path):

@@ -210,7 +210,7 @@ def test_an_UNGROUPABLE_reason_keeps_every_name_sentence_verbatim():
 # --------------------------------------------------------------------------- #
 def test_the_headline_says_how_to_read_what_follows():
     detail = _detail()
-    assert detail.headline.startswith("Ranked 2 of 5 names.")
+    assert detail.headline.startswith("2 passed its rules, too few to rank.")
     assert "Excluded 3: by rule below, worst miss first." in detail.headline
 
 

@@ -26,6 +26,16 @@ from aristos_council.rank_engine import (RankedTicker, factor_column_label,
                                          format_factor_cell, ranked_table_rows)
 
 
+
+@pytest.fixture(autouse=True)
+def _tally_not_the_floor(monkeypatch):
+    """These tests are about how votes are TALLIED, on hand-built one- and two-name lenses.
+    Since NO-RANK-NO-VOTE-1 a lens that kept fewer than 3 names casts no vote, which is not
+    what they are about, so the floor is lowered to 1 here; the floor itself is pinned by
+    tests/test_no_rank_no_vote.py."""
+    from aristos_council import pipeline
+    monkeypatch.setattr(pipeline, "MIN_RANKABLE_COHORT", 1)
+
 def _row(imputed=("roic",), **over):
     kw = dict(ticker="SU", factor_ranks={"earnings_yield": 1.0, "roic": 2.0,
                                          "momentum_12m": 3.0},

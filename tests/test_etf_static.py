@@ -190,13 +190,13 @@ def test_gather_fills_etf_from_injected_static_rows():
     assert fi.fundamentals.net_expense_ratio == 0.06
     assert compute_factor_outcomes(fi, ["expense_ratio"])["expense_ratio"][1] == \
         "static: 2026-06-01, Schwab factsheet"
-    # fund_size: FRESH predates the fund_size_currency column (DATA-HYGIENE-1), so the
-    # value is served UNCHANGED and its receipt carries the currency-unverified flag — it
-    # is never silently reinterpreted as EUR. See tests/test_fund_size_currency.py.
+    # fund_size: FRESH predates the fund_size_currency column (DATA-HYGIENE-1) and the fund is
+    # not listed in USD in this fixture, so ETF-MODE-1 WITHHOLDS the value and says why - an
+    # amount in an unstated currency is never ranked against others. See
+    # tests/test_fund_size_currency.py.
     value, source = compute_factor_outcomes(fi, ["fund_size"])["fund_size"]
-    assert value == 6.0e10                                   # unconverted, as before
-    assert source.startswith("static: 2026-06-01, Schwab factsheet")
-    assert UNVERIFIED_CCY_NOTE in source
+    assert value is None
+    assert source == UNVERIFIED_CCY_NOTE
 
 
 def test_gather_leaves_stock_untouched():

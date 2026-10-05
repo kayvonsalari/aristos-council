@@ -1,0 +1,287 @@
+"""REPORT-SWEEP-1 - the automatic report checker, run over an awkward set of companies and lists.
+
+Fixtures: ``tests/fixtures/report_sweep/`` (recorded once from a live run by
+``scripts/record_report_sweep_fixtures.py``; replayed here through ``FrozenAdapter``, so nothing in
+this module touches the network). The set:
+
+    F (loss-maker)   VKTX (pre-revenue biotech)   NVCR.US (small cap)   1211.HK (foreign reporting
+    currency)   JPM (bank)   an ETF list SPY, SCHD, VWRL.L, AAPL   stock lists of 1, 3 and 6 names
+
+For each, the company or list report is built and every export the code makes is checked: the screen
+text, the markdown (where streamlit is installed - the markdown builders live in app.py) and the
+HTML. One test per RULE, aggregated over the whole set, so a rule fails with every place it was
+found, and so an ``xfail(strict=True)`` is meaningful: it flips to a failure the moment the owning
+batch fixes the rule, forcing that batch to remove the mark.
+
+THE XFAIL LIST (handed to Batch 18B - each must be flipped by it):
+  * internal ids in reader text        -> 18B (ids in exports)
+  * "$-" / "EUR-" money formatting     -> 18B ("$-")
+  * count grammar ("1 name ... are", "(s)", "(ies)")  -> 18B (grammar)
+Everything Batch 18A fixes (the quintile cut, SELL in the agreement, the band, the lens stated one
+way) passes for real.
+"""
+from __future__ import annotations
+
+import json
+from datetime import date, datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from aristos_council import report_sweep as sweep
+from aristos_council.company_report import (format_company_report, run_company_report)
+from aristos_council.export.report_html import (company_report_html, multi_strategy_report_html,
+                                                universe_report_html)
+from aristos_council.market_index import IndexRow
+from aristos_council.persistence.replay import FrozenAdapter
+from aristos_council.pipeline import (format_cli_report, format_multi_strategy_grid,
+                                      run_multi_strategy_pipeline, run_rank_pipeline)
+
+FIX = Path(__file__).resolve().parent / "fixtures" / "report_sweep"
+META = json.loads((FIX / "meta.json").read_text(encoding="utf-8"))
+TODAY = date.fromisoformat(META["recorded_on"])
+RUN_START = datetime(2026, 10, 5, 9, 0, tzinfo=timezone.utc)
+
+
+class _Store:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def load(self):
+        return list(self._rows)
+
+
+def _no_news(ticker, *, today):
+    from aristos_council.data.news_fallback import NewsFetchResult
+    return NewsFetchResult(items=(), source="", tried=("sweep fixtures: no news recorded",))
+
+
+def _markdown_builders():
+    """The markdown exports live in app.py (they import streamlit). Absent in the CI image, so the
+    markdown column of the sweep runs wherever streamlit is installed and is skipped elsewhere."""
+    try:
+        import app
+    except Exception:                                           # noqa: BLE001
+        return None
+    return app
+
+
+@pytest.fixture(scope="module")
+def sweep_reports(tmp_path_factory):
+    """Every report in the set, built once: ``{name: {"exports": {kind: text}, "company": report |
+    None, "results": [per-lens results]}}``."""
+    adapter = FrozenAdapter(FIX / "frozen")
+    rows = json.loads((FIX / "index_rows.json").read_text(encoding="utf-8"))
+    runs = tmp_path_factory.mktemp("sweep_runs")
+    app_mod = _markdown_builders()
+    out: dict = {}
+
+    for ticker in META["companies"]:
+        store = _Store([IndexRow(**r) for r in rows[ticker]])
+        report = run_company_report(
+            ticker, META["stock_lenses"], adapter=adapter, store=store, today=TODAY,
+            include_small=ticker in META["small"], save=False, news_fetcher=_no_news,
+            runs_dir=runs)
+        out[f"company {ticker}"] = {
+            "company": report, "multi": None, "single": None,
+            "exports": {"text": format_company_report(report),
+                        "html": sweep.visible_text(company_report_html(report))}}
+
+    def list_case(label, names, lenses):
+        multi = run_multi_strategy_pipeline(names, lenses, adapter=adapter, today=TODAY,
+                                            use_cache=False, freeze_dir=runs)
+        single = run_rank_pipeline(names, lenses[0], ranker_only=True, adapter=adapter,
+                                   today=TODAY, use_cache=False, freeze_dir=runs)
+        exports = {
+            "multi text": format_multi_strategy_grid(multi),
+            "multi html": sweep.visible_text(multi_strategy_report_html(multi, run_start=RUN_START)),
+            "single text": format_cli_report(single),
+            "single html": sweep.visible_text(universe_report_html(single, run_start=RUN_START)),
+        }
+        if app_mod is not None:
+            exports["multi md"] = app_mod._multi_strategy_markdown(multi, RUN_START)
+            exports["single md"] = app_mod._universe_markdown(single)
+        out[label] = {"company": None, "multi": multi, "single": single, "exports": exports}
+
+    for size in (1, 3, 6):
+        list_case(f"stock list of {size}", META["car_list"][:size], META["list_lenses"])
+    list_case("ETF list", META["etf_list"], META["etf_lenses"])
+    return out
+
+
+def _each_export(reports):
+    for name, case in reports.items():
+        for kind, text in case["exports"].items():
+            yield f"{name} / {kind}", kind, text
+
+
+def _text_rule(reports, check):
+    found = []
+    for where, kind, text in _each_export(reports):
+        found += check(text, where, kind)
+    return found
+
+
+def _assert_clean(findings, rule):
+    assert not findings, f"{len(findings)} finding(s) for '{rule}':\n" + "\n".join(
+        f"  {f}" for f in findings[:12])
+
+
+# --------------------------------------------------------------------------- #
+# the sweep itself ran
+# --------------------------------------------------------------------------- #
+def test_the_sweep_built_every_report_in_the_set(sweep_reports):
+    assert set(sweep_reports) == {f"company {t}" for t in META["companies"]} | {
+        "stock list of 1", "stock list of 3", "stock list of 6", "ETF list"}
+    for name, case in sweep_reports.items():
+        for kind, text in case["exports"].items():
+            assert len(text) > 400, f"{name} / {kind} is suspiciously short"
+    f = sweep_reports["company F"]["company"]
+    assert f.votes, "the company page ran no lens"
+
+
+def test_the_set_is_actually_awkward(sweep_reports):
+    """A sweep over easy companies proves nothing: pin what makes each one awkward."""
+    f = sweep_reports["company F"]["company"]
+    assert f.check.company_name or f.display
+    jpm = sweep_reports["company JPM"]["company"]
+    assert jpm.cohort_slug is None                              # a bank: no backtested cohort
+    vktx = sweep_reports["company VKTX"]["company"]
+    assert vktx.outside_tested_range is True                    # under $5bn, include-small on
+    etf = sweep_reports["ETF list"]["multi"]
+    assert any(reason.startswith("asset kind") for res in etf.results.values()
+               for _t, reason in res.excluded)                  # the stock in the fund list
+    assert len(sweep_reports["stock list of 1"]["multi"].rows) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Rules owned by Batch 18B - xfail(strict) so 18B must flip them
+# --------------------------------------------------------------------------- #
+@pytest.mark.xfail(strict=True, reason="BATCH 18B: ids in exports - strategy ids, adhoc ids and "
+                   "factor ids still reach reader text (record-key lines, tables, headings)")
+def test_no_internal_ids_in_reader_text(sweep_reports):
+    _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.internal_id_findings(t, w)),
+                  sweep.INTERNAL_IDS)
+
+
+@pytest.mark.xfail(strict=True, reason="BATCH 18B: '$-' formatting - a negative amount is still "
+                   "printed as '$-147.8bn' instead of '-$147.8bn'")
+def test_no_dollar_minus_money_formatting(sweep_reports):
+    _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.money_minus_findings(t, w)),
+                  sweep.MONEY_MINUS)
+
+
+@pytest.mark.xfail(strict=True, reason="BATCH 18B: grammar - '(s)' / '(ies)' / '1 name ... are' "
+                   "counts are still printed (e.g. '0 name(s) were given a rank position')")
+def test_no_count_grammar_slips(sweep_reports):
+    _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.count_grammar_findings(t, w)),
+                  sweep.COUNT_GRAMMAR)
+
+
+# --------------------------------------------------------------------------- #
+# Rules Batch 18A owns - these must pass for real
+# --------------------------------------------------------------------------- #
+def test_no_unmatched_bold_or_stray_underscore(sweep_reports):
+    _assert_clean(_text_rule(
+        sweep_reports,
+        lambda t, w, k: sweep.markup_findings(t, w, markdown=k.endswith("md"))),
+        sweep.UNMATCHED_MARKUP)
+
+
+def test_no_backwards_size_band(sweep_reports):
+    _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.backwards_band_findings(t, w)),
+                  sweep.BACKWARDS_BAND)
+
+
+def _lens_results(case):
+    """``(label, ranked rows)`` for every lens in a case, from the structured results."""
+    out = []
+    if case["company"] is not None:
+        for sid, record in (case["company"].lens_ranks or {}).items():
+            rows = [SimpleNamespace(verdict=r["verdict"], excluded=False)
+                    for r in record.get("ranked", [])]
+            out.append((sid, rows))
+    for key in ("multi",):
+        if case[key] is not None:
+            for sid, res in case[key].results.items():
+                out.append((sid, res.ranked))
+    if case["single"] is not None:
+        out.append((case["single"].meta.get("rank_strategy_id", "single"), case["single"].ranked))
+    return out
+
+
+def test_no_lens_gives_its_top_a_buy_and_its_bottom_no_sell(sweep_reports):
+    found = []
+    for name, case in sweep_reports.items():
+        for label, ranked in _lens_results(case):
+            found += sweep.buy_without_sell_findings(label, ranked, where=name)
+    _assert_clean(found, sweep.BUY_WITHOUT_SELL)
+
+
+def test_sell_votes_are_in_the_agreement(sweep_reports):
+    found = []
+    for name, case in sweep_reports.items():
+        if case["company"] is not None:
+            found += sweep.company_agreement_findings(case["company"], name)
+        if case["multi"] is not None:
+            found += sweep.list_agreement_findings(case["multi"], name)
+    _assert_clean([f for f in found if f.rule == sweep.SELL_MISSING], sweep.SELL_MISSING)
+
+
+def test_a_lens_is_stated_one_way_in_every_section(sweep_reports):
+    found = []
+    for name, case in sweep_reports.items():
+        if case["company"] is not None:
+            found += sweep.company_agreement_findings(case["company"], name)
+            found += sweep.peers_table_findings(case["company"], name)
+        if case["multi"] is not None:
+            found += sweep.list_agreement_findings(case["multi"], name)
+    _assert_clean([f for f in found if f.rule == sweep.LENS_TWO_WAYS], sweep.LENS_TWO_WAYS)
+
+
+# --------------------------------------------------------------------------- #
+# the rules themselves catch what they say they catch (so a clean sweep means something)
+# --------------------------------------------------------------------------- #
+def test_each_rule_fires_on_the_shape_it_names():
+    assert sweep.internal_id_findings("ranked by magic_formula_raw_v1", "x")
+    assert sweep.internal_id_findings("list adhoc:3f9a1c2b ran", "x")
+    assert sweep.internal_id_findings("the distribution_yield factor", "x")
+    assert not sweep.internal_id_findings("Magic Formula RAW ranked it first", "x")
+    assert sweep.money_minus_findings("free cash flow FY2025 $-147.8bn", "x")
+    assert sweep.money_minus_findings("€-3.2bn", "x")
+    assert not sweep.money_minus_findings("-$147.8bn", "x")
+    assert sweep.count_grammar_findings("1 name were ranked", "x")
+    assert sweep.count_grammar_findings("1 of these names are ETFs", "x")
+    assert sweep.count_grammar_findings("0 name(s) were given a position", "x")
+    assert sweep.count_grammar_findings("3 companie(ies)", "x") is not None
+    assert not sweep.count_grammar_findings("1 name was ranked; 2 names were excluded", "x")
+    assert sweep.markup_findings("**bold only on one side", "x", markdown=True)
+    assert sweep.markup_findings("a stray _word", "x", markdown=True)
+    assert not sweep.markup_findings("**bold** and _italic_ and snake_case", "x", markdown=True)
+    assert sweep.markup_findings("**leaked** into html", "x", markdown=False)
+    assert sweep.backwards_band_findings("band $10bn-$5bn", "x")
+    assert sweep.backwards_band_findings("band $5bn-$5bn", "x")
+    assert not sweep.backwards_band_findings("band $3bn-$5bn", "x")
+
+
+def test_the_structured_rules_fire_on_a_contradiction():
+    from aristos_council.company_report import LensVote, build_agreement
+    ranked = [SimpleNamespace(verdict=v, excluded=False) for v in ("buy", "hold", "hold")]
+    assert sweep.buy_without_sell_findings("lens", ranked)
+    ranked[-1] = SimpleNamespace(verdict="sell", excluded=False)
+    assert not sweep.buy_without_sell_findings("lens", ranked)
+    ranked2 = [SimpleNamespace(verdict="buy", excluded=False)] * 2           # under 3: no cut
+    assert not sweep.buy_without_sell_findings("lens", ranked2)
+
+    votes = [LensVote("a", "A", status="ranked", verdict="sell", position=3, cohort_size=3)]
+    report = SimpleNamespace(agreement=build_agreement(votes), votes=votes, peer_group=None)
+    assert not sweep.company_agreement_findings(report, "x")                 # headline says SELL
+    report.agreement = SimpleNamespace(sell=("A",), headline="BUY on 0 of 1 vote", checks={})
+    assert sweep.company_agreement_findings(report, "x")                     # the old line
+    forensic = LensVote("f", "Forensic", kind="check", status="excluded", reason="r")
+    report2 = SimpleNamespace(agreement=SimpleNamespace(sell=(), headline="h",
+                                                        checks={"Forensic": "clean"}),
+                              votes=[forensic], peer_group=None)
+    assert any(f.rule == sweep.LENS_TWO_WAYS
+               for f in sweep.company_agreement_findings(report2, "x"))

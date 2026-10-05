@@ -333,8 +333,14 @@ def test_a_missing_leg_ranks_last_on_it_with_the_reason_shown_never_zero(tmp_pat
     assert row.factor_sources["gross_profitability"].startswith("abstained: gross profit unavailable")
 
 
-def test_negative_operating_profit_ranks_last_on_both_lenses_with_the_reason(tmp_path):
+def test_negative_operating_profit_ranks_last_on_both_lenses_with_the_reason(tmp_path, monkeypatch):
+    """The FACTOR-level handling of a zero-or-negative operating profit (the reason text, the worst
+    rank). Since SMALLCAP-BAND-GAP-1's PROFIT GUARD the two lenses no longer reach it - they say
+    "does not apply: no operating profit" first (pinned by the next test) - so the guard is switched
+    off here to keep exercising the legs themselves."""
+    from aristos_council import operating_profit
     from aristos_council.pipeline import run_rank_pipeline
+    monkeypatch.setattr(operating_profit, "OPERATING_PROFIT_LENS_IDS", frozenset())
     adapter = _Adapter(ebit=[-400.0] * 5, operating_income=[-400.0] * 5)
     tickers = ["CO"] + [f"P{i:02d}" for i in range(13)]
     q_res = run_rank_pipeline(tickers, QUALITY, ranker_only=True, adapter=adapter, today=TODAY,
@@ -347,3 +353,15 @@ def test_negative_operating_profit_ranks_last_on_both_lenses_with_the_reason(tmp
     assert "zero or negative" in qr.factor_sources["net_debt_to_ebit"]
     assert er.verdict == "sell" and er.cohort_position == 14
     assert "negative or zero" in er.factor_sources["epv_margin_of_safety"]
+
+
+def test_negative_operating_profit_now_does_not_apply_on_both_lenses(tmp_path):
+    """PROFIT GUARD (SMALLCAP-BAND-GAP-1): neither lens ranks a company with no operating profit."""
+    from aristos_council.pipeline import run_rank_pipeline
+    adapter = _Adapter(ebit=[-400.0] * 5, operating_income=[-400.0] * 5)
+    tickers = ["CO"] + [f"P{i:02d}" for i in range(13)]
+    for sid in (QUALITY, EPV):
+        res = run_rank_pipeline(tickers, sid, ranker_only=True, adapter=adapter, today=TODAY,
+                                strategies_dir=STRAT_DIR, use_cache=False)
+        assert ("CO", "no operating profit") in [(t, why) for t, why in res.excluded]
+        assert all(r.ticker != "CO" for r in res.ranked)

@@ -40,6 +40,9 @@ _FUND = {
               pretax_income=[480.0, 470, 460, 450], invested_capital=[5000.0] * 4,
               total_revenue=[125.0, 120, 115, 110]),
 }
+# NO-RANK-NO-VOTE-1: a lens that keeps fewer than 3 names casts no vote and narrates nothing, so the
+# narrator tests below add a second B-like healthy name (D): the screened lens then keeps 3.
+_FUND["D"] = dict(_FUND["B"])
 
 
 class _Adapter(MarketDataAdapter):
@@ -87,6 +90,7 @@ def _runners(decision_out):
 
 
 UNIVERSE = ["A", "B", "C", "DEAD"]
+UNIVERSE4 = ["A", "B", "C", "D", "DEAD"]
 
 
 # --------------------------------------------------------------------------- #
@@ -137,12 +141,12 @@ def test_narrator_narrates_the_shortlist():
                                       confidence=0.8,
                                       rationale="ranked #1 on ROIC + earnings yield."))
     result = run_rank_pipeline(
-        UNIVERSE, "magic_formula_v1", council_mode="narrator",
+        UNIVERSE4, "magic_formula_v1", council_mode="narrator",
         strategies_dir=STRAT_DIR, adapter=_Adapter(), runners=runners,
         today=date(2026, 6, 30))
 
     assert result.council_mode == "narrator"
-    assert result.meta["shortlist"] == ["A"]                   # buy quintile of {A,B}
+    assert result.meta["shortlist"] == ["A"]                   # buy quintile of {A,B,D}
     assert "A" in result.narratives
     assert "ROIC" in result.narratives["A"]
     # header + narrative both render through the CLI formatter
@@ -155,7 +159,7 @@ def test_sentiment_provider_status_is_logged(caplog):
     import logging
     with caplog.at_level(logging.INFO, logger="aristos_council.pipeline"):
         run_rank_pipeline(
-            UNIVERSE, "magic_formula_v1", council_mode="narrator",
+            UNIVERSE4, "magic_formula_v1", council_mode="narrator",
             strategies_dir=STRAT_DIR, adapter=_Adapter(), runners=_runners(
                 DecisionOutput(recommendation=Recommendation.BUY, confidence=0.8,
                                rationale="r")), today=date(2026, 6, 30))
@@ -172,7 +176,7 @@ def test_actual_shortlist_cost_disclosed_before_narration():
     # narrator spends — not the pre-run upper-bound estimate.
     msgs: list[str] = []
     run_rank_pipeline(
-        UNIVERSE, "magic_formula_v1", council_mode="narrator", strategies_dir=STRAT_DIR,
+        UNIVERSE4, "magic_formula_v1", council_mode="narrator", strategies_dir=STRAT_DIR,
         adapter=_Adapter(), runners=_runners(DecisionOutput(
             recommendation=Recommendation.BUY, confidence=0.8, rationale="r")),
         today=date(2026, 6, 30), progress=msgs.append)
@@ -218,13 +222,13 @@ def test_ranker_block_includes_rank_semantics_legend():
 
 
 def test_post_check_annotates_a_contradictory_narration():
-    # A ranks BEST (position 1 of 2); a narration calling it "the worst in the cohort"
+    # A ranks BEST (position 1 of 3); a narration calling it "the worst in the cohort"
     # contradicts the rank table and gets the machine annotation appended.
     runners = _runners(DecisionOutput(
         recommendation=Recommendation.BUY, confidence=0.8,
         rationale="A is the worst name in the cohort."))
     result = run_rank_pipeline(
-        UNIVERSE, "magic_formula_v1", council_mode="narrator", strategies_dir=STRAT_DIR,
+        UNIVERSE4, "magic_formula_v1", council_mode="narrator", strategies_dir=STRAT_DIR,
         adapter=_Adapter(), runners=runners, today=date(2026, 6, 30))
     assert "A" in result.narratives
     assert "narration check" in result.narratives["A"]

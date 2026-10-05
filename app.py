@@ -1363,6 +1363,21 @@ _COUNCIL_HELP = ("The four specialists, a critic and a narrator — the same cou
                 "off unless you tick it.")
 
 
+def equal_vote_caption(choices) -> str:
+    """The sentence under "Lenses". ETF-MODE-1: the Forensic half is only true where Forensic is
+    offered (it is a stock lens; the ETF lenses have no check), so it is said only then."""
+    if any(getattr(c.strategy, "kind", "") == "check" for c in choices):
+        return "Every ticked lens is an equal vote. Forensic marks; it does not vote."
+    return "Every ticked lens is an equal vote."
+
+
+def company_page_offered(mode: str) -> bool:
+    """Whether "Open a company page" is offered under a list's results. ETF-MODE-1: never in ETF
+    mode - there is no company page for a fund, and a stock in an ETF list is already named in the
+    summary line."""
+    return mode != ETFS
+
+
 def render_run_options(choices, *, input_kind: str, show_council: bool,
                        show_validation: bool = False) -> RunOptions:
     """ONE options block, called once per input kind. ``input_kind`` is "list" (the Run
@@ -1379,7 +1394,7 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
     # asset mode; the default lens is seeded once per asset mode, not once per input kind.
     switched = st.session_state.get("_opts_last_kind") != input_kind
     st.markdown("**Lenses**")
-    st.caption("Every ticked lens is an equal vote. Forensic marks; it does not vote.")
+    st.caption(equal_vote_caption(choices))
     _preselect_default_lens(choices, seeded_key=f"opt_lenses_seeded_{asset}", key_for=key_for)
     for c in choices:
         _sync_from_store(key_for(c.id), shared_lens_store_key(asset, c.id), switched=switched)
@@ -2873,6 +2888,8 @@ def _render_open_as_company(tickers: list[str], *, make_lines, key_prefix: str,
     with them ticked."""
     if not tickers:
         return
+    if not company_page_offered(asset_mode()):
+        return          # ETF-MODE-1 (see company_page_offered)
     labels = labels or {}
     st.markdown("**Open a company page**")
     col_pick, col_open = st.columns([4, 1])
@@ -2983,8 +3000,11 @@ def _render_multi_strategy_result(multi_result) -> None:
 
     for sid in ids:
         res = multi_result.results[sid]
+        from aristos_council.rank_engine import (MIN_RANKABLE_COHORT as _MINR,
+                                                 passed_too_few_text as _thin_text)
+        _kept = res.meta['ranked_count']
         with st.expander(f"{lens_labels[sid]} — detail "
-                         f"({res.meta['ranked_count']} ranked, "
+                         f"({_thin_text(_kept) if 0 < _kept < _MINR else f'{_kept} ranked'}, "
                          f"{len(res.excluded)} excluded, "
                          f"{len(res.unrateable)} with no data)"):
             # DETAIL-1: the same groups, in the same order, as the downloaded report.
@@ -4219,12 +4239,8 @@ def _render_company_report(report) -> None:
     # SMALLCAP-VIEW-1 — the header caveat, exactly the line every lens's own vote also
     # carries below. Never shown for a company at or above the $5bn gate.
     if report.outside_tested_range:
-        floor = (f"${report.smallcap_floor_usd / 1e9:g}bn" if report.smallcap_floor_usd
-                else "its own floor")
-        st.warning(f"**{OUTSIDE_TESTED_RANGE_LINE}**" + (
-            f" Small-company peer band: the {report.smallcap_cohort} cohort, {floor}-$5bn."
-            if report.smallcap_cohort else "")
-            + (f" {report.smallcap_band_note.capitalize()}." if report.smallcap_band_note else ""))
+        st.warning(f"**{report.tested_range_line}**"
+                   + "".join(f" {line}" for line in report.tested_range_detail_lines))
     if report.unrateable:
         st.warning(f"⚪ **UNRATEABLE** — {check.data_integrity.note}. No data, so no votes and no "
                    "readings.")
@@ -4259,7 +4275,7 @@ def _render_company_report(report) -> None:
     if report.votes:
         # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-
         # band run; never shown otherwise.
-        _suffix = f" — {OUTSIDE_TESTED_RANGE_LINE}" if report.outside_tested_range else ""
+        _suffix = f" — {report.tested_range_line}" if report.outside_tested_range else ""
         # LENS-TABLE-WRAP-1: ``st.table`` wraps a long cell where ``st.dataframe`` (a canvas grid)
         # cuts it off and needs horizontal scrolling - and the Result and "What it asks" cells
         # ARE the sentences a reader came for.

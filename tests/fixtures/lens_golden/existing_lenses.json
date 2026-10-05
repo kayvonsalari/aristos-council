@@ -204,7 +204,7 @@
     },
     "position": 3,
     "ticker": "T07",
-    "verdict": "hold"
+    "verdict": "sell"
    }
   ],
   "unrateable": []
@@ -769,7 +769,7 @@
     },
     "position": 1,
     "ticker": "T11",
-    "verdict": "hold"
+    "verdict": "sell"
    },
    {
     "combined_rank": 42.0,
@@ -876,7 +876,7 @@
    ],
    [
     "BANK",
-    "screen: min_revenue_cagr (observed 0.03093 vs threshold 0.1)"
+    "sector excluded (Financial Services)"
    ],
    [
     "TINY",
@@ -1020,7 +1020,7 @@
     },
     "position": 4,
     "ticker": "T08",
-    "verdict": "hold"
+    "verdict": "sell"
    }
   ],
   "unrateable": []
@@ -1287,7 +1287,7 @@
     },
     "position": 12,
     "ticker": "T05",
-    "verdict": "hold"
+    "verdict": "sell"
    },
    {
     "combined_rank": 31.0,

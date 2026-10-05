@@ -28,7 +28,8 @@ _V1_KEYS = {"kind", "ticker", "company", "run_at", "lenses", "peer_snapshot", "p
            "track_record_caption", "track_record_summary", "lens_ranks", "sources",
            "seconds", "cache", "summary_written", "council_opinion"}
 _V2_NEW_KEYS = {"schema_version", "outside_tested_range", "smallcap_cohort",
-               "smallcap_floor_usd", "smallcap_band_note", "price_and_cash"}
+               "smallcap_floor_usd", "smallcap_band_note", "price_and_cash",
+               "size_matched_peers"}          # SMALLCAP-BAND-GAP-1, additive
 
 
 def test_every_v1_key_is_still_present_unchanged(tmp_path):

@@ -57,7 +57,8 @@ def test_a_lens_left_with_two_names_places_none_and_the_sentence_says_so():
     assert (len(vm), len(raw)) == (2, 6)                     # the table the line sits under
     line = comparable_names_line(res)
     assert "0 name(s) were given a rank position by ALL 2 lenses" in line
-    assert "kept only 2 names, too few (under 3) to give any a position" in line
+    assert "2 passed its rules, too few to rank" in line      # the ONE wording (VM-COUNT-WORDING-1)
+    assert "kept only" not in line
     assert "ranked by ALL" not in line                       # the wording that contradicted it
 
 
