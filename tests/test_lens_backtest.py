@@ -178,7 +178,7 @@ def test_a_name_with_no_price_is_left_out_of_both_baskets_and_counted(monkeypatc
     assert "C" not in r.tickers and r.tickers == ("A", "B", "D") and r.n_buys == 4
     assert r.bench_return == pytest.approx(
         sum(_ret(t, r.date, r.exit_date) for t in ("A", "B", "D", "E")) / 4)
-    assert any("name-round(s) had no usable price" in c for c in result.caveats)
+    assert any("name-round" in c and "had no usable price" in c for c in result.caveats)
 
 
 def test_a_price_series_that_stops_before_the_exit_is_unpriced_not_flat(monkeypatch):
@@ -392,7 +392,7 @@ def test_summary_line_and_directory_summary(monkeypatch, tmp_path):
     to_csv(result, tmp_path)
     line = summary_line(result)
     assert line.startswith("test_cohort x some_lens_v1: insufficient - mean annual excess +")
-    assert "years positive" in line and "6 of 6 rounds held a position" in line
+    assert "year positive" in line or "years positive" in line and "6 of 6 rounds held a position" in line
     assert summarize_directory(tmp_path) == [line]
     (tmp_path / "bad").mkdir()
     (tmp_path / "bad" / "broken.csv").write_text("not a backtest", encoding="utf-8")
@@ -1538,7 +1538,7 @@ def test_multiple_testing_sums_luck_pct_pass_over_non_insufficient_tests():
     assert stats.tests_run == 3                                  # insufficient excluded
     assert stats.proven == 1
     assert stats.expected_by_chance == pytest.approx(0.02 + 0.5 + 0.01)
-    assert "3 test(s)" in stats.sentence() and "1 proven" in stats.sentence()
+    assert "3 tests" in stats.sentence() and "1 proven" in stats.sentence()
 
 
 def test_multiple_testing_for_directory_reads_every_csv(monkeypatch, tmp_path):

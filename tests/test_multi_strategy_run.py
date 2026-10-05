@@ -260,8 +260,9 @@ def test_grid_text_carries_every_lens_column_and_keeps_its_order():
     result = _multi([SCREENED, RAW])
     text = format_multi_strategy_grid(result)
 
-    for sid in result.strategy_ids:                 # one column per lens, still
-        assert sid in text
+    for sid in result.strategy_ids:                 # one column per lens, still - named, not keyed
+        assert result.strategy_names[sid] in text
+        assert sid not in text                      # BATCH 18B: ids are not reader text
     assert "rank-sum" not in text                   # ...and no incomparable column
     assert "\u2021" not in text                        # ...nor its footnote marker
 

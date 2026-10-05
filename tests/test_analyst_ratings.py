@@ -59,7 +59,7 @@ def test_a_listing_with_no_ratings_block_abstains_with_a_reason(block):
 def test_fewer_than_three_analysts_is_not_a_consensus():
     ratings, why = parse_ratings({"StrongBuy": 1, "Buy": 1, "Hold": 0, "Sell": 0, "StrongSell": 0,
                                   "TargetPrice": 10}, "USD", symbol="X.US")
-    assert ratings is None and "only 2 analyst(s)" in why
+    assert ratings is None and "only 2 analysts" in why
     ok, _ = parse_ratings({"StrongBuy": 1, "Buy": 1, "Hold": 1, "Sell": 0, "StrongSell": 0}, "USD")
     assert ok is not None and ok.total == 3
 

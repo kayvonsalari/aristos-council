@@ -17,6 +17,8 @@ many years it actually used rather than how many it wanted.
 """
 from __future__ import annotations
 
+from aristos_council.plurals import plural, verb
+
 import logging
 import statistics
 from dataclasses import dataclass, field
@@ -356,7 +358,7 @@ class GrowthLeg:
             if span in windows:
                 out.append(head)                     # a window was genuinely filled
             else:
-                out.append(f"{head} — only {span} years of accounts are "
+                out.append(f"{head} — only {plural(span, 'year')} of accounts are "
                            f"available, so neither the {asked}year window could be "
                            f"filled")
         else:
@@ -389,7 +391,7 @@ class GrowthRecord:
         out: list[str] = []
         if self.years_on_file:
             used = max(GROWTH_WINDOWS)
-            out.append(f"{self.years_on_file} years on file, last {used} used"
+            out.append(f"{plural(self.years_on_file, 'year')} on file, last {used} used"
                        if self.years_on_file > used
                        else f"{self.years_on_file} year{'s' if self.years_on_file != 1 else ''} "
                             f"on file, all used")
@@ -430,7 +432,7 @@ def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading
     """
     present = [v for v in series if v is not None]
     if len(present) < MIN_GROWTH_YEARS:
-        return _abstain(f"only {len(present)} year(s) of {label} reported; a compound "
+        return _abstain(f"only {plural(len(present), 'year')} of {label} reported; a compound "
                         f"rate needs at least {MIN_GROWTH_YEARS}")
     end = present[0]
     span = min(window, len(present) - 1)
@@ -438,7 +440,7 @@ def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading
     if start is None or start <= 0:
         # A root of a negative ratio is not a number, and a rate off a negative base is
         # not a growth rate. This is the PEG/CAGR discipline the criteria already use.
-        return _abstain(f"{label} was not positive {span} years ago, so a compound rate "
+        return _abstain(f"{label} was not positive {plural(span, 'year')} ago, so a compound rate "
                         f"is not defined")
     if end is None or end <= 0 or end != end:
         # CAGR-CRASH-1 (live: Novocure, Ford): a positive start and a loss in the latest
@@ -449,10 +451,10 @@ def _cagr(series: Sequence[Optional[float]], window: int, label: str) -> Reading
     rate = (end / start) ** (1.0 / span) - 1.0
     if isinstance(rate, complex) or rate != rate:
         return _abstain(f"{label} compound rate is not defined for this series")
-    used = "" if span == window else f" (only {span} of {window} years available)"
+    used = "" if span == window else f" (only {span} of {plural(window, 'year')} available)"
     caution = _BASE_YEAR_CAUTION if _needs_base_year_caution(present, start, rate) else ""
     return Reading(value=rate, unit="/yr", span=span, caution=caution,
-                   label=f"{label} compounded {rate:+.1%} a year over {span} years{used}")
+                   label=f"{label} compounded {rate:+.1%} a year over {plural(span, 'year')}{used}")
 
 
 def _grew_in(series: Sequence[Optional[float]], label: str, window: int = 10) -> Reading:
@@ -463,7 +465,7 @@ def _grew_in(series: Sequence[Optional[float]], label: str, window: int = 10) ->
     pairs = list(zip(present, present[1:]))          # (newer, older)
     rose = sum(1 for newer, older in pairs if newer > older)
     return Reading(value=float(rose), unit="years",
-                   label=f"{label} grew in {rose} of the {len(pairs)} years reported")
+                   label=f"{label} grew in {rose} of the {plural(len(pairs), 'year')} reported")
 
 
 def _eps_series(f) -> tuple[list[Optional[float]], str]:
@@ -626,7 +628,7 @@ class RatingsView:
     def summary_line(self) -> str:
         """"24 analysts: 9 strong buy, 8 buy, 6 hold, 1 sell, 0 strong sell"."""
         sb, b, h, s, ss = self.counts
-        return (f"{self.total} analysts: {sb} strong buy, {b} buy, {h} hold, {s} sell, "
+        return (f"{plural(self.total, 'analyst')}: {sb} strong buy, {b} buy, {h} hold, {s} sell, "
                 f"{ss} strong sell")
 
     def table(self) -> tuple[list[str], list[str]]:
@@ -868,7 +870,7 @@ def analyst_trend(data, currency: Optional[str] = None, *, company: str = "",
     if current.analysts is None:
         return abstain("the number of analysts is not stated, so there is no consensus to read")
     if current.analysts < ANALYST_MIN_ANALYSTS:
-        return abstain(f"only {current.analysts} analyst(s) cover the current year; a consensus "
+        return abstain(f"only {plural(current.analysts, 'analyst')} {verb(current.analysts, 'covers', 'cover')} the current year; a consensus "
                        f"needs at least {ANALYST_MIN_ANALYSTS}")
     if current.now is None:
         return abstain("no current consensus EPS estimate")

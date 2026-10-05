@@ -39,6 +39,8 @@ request could be made. The day-cache follows ``growth_history``: one file per sy
 """
 from __future__ import annotations
 
+from aristos_council.plurals import plural, verb
+
 import json
 import urllib.parse
 import urllib.request
@@ -172,7 +174,7 @@ def parse_ratings(block, currency, *, symbol: str = "") -> tuple[Optional[Analys
         **{k: _int(v) for k, v in counts.items()}, target_price=_as_float(block.get("TargetPrice")),
         rating=_as_float(block.get("Rating")), currency=str(currency or "").strip(), symbol=symbol)
     if ratings.total < MIN_RATING_ANALYSTS:
-        return None, (f"only {ratings.total} analyst(s) rate it{where}; a consensus needs at least "
+        return None, (f"only {plural(ratings.total, 'analyst')} {verb(ratings.total, 'rates', 'rate')} it{where}; a consensus needs at least "
                       f"{MIN_RATING_ANALYSTS}")
     return ratings, ""
 

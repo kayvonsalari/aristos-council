@@ -12,7 +12,7 @@ LENS VOTES
   Lens               Role                   Result
   Magic Formula RAW  votes                  HOLD - 10th of 14 (worked against you here)
     Magic Formula RAW: Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities).
-    Magic Formula RAW track record: mean excess -7.9%/yr · 4 of 10 years positive · luck 94% · 108 round(s) held — In this cohort, picking names at random would have matched or beaten this lens at least 9 times in 10.
+    Magic Formula RAW track record: mean excess -7.9%/yr · 4 of 10 years positive · luck 94% · 108 rounds held — In this cohort, picking names at random would have matched or beaten this lens at least 9 times in 10.
 
 VALUATION BAND (this company against its own history; a mark, never a veto)
   not evaluated — no monthly price history in the 5-year window
@@ -41,7 +41,7 @@ ABSOLUTE READINGS (no comparison group; they do not vote)
   Growth record (see Sources)
     - revenue compounded +6.3% a year over 3 years — only 3 years of accounts are available, so neither the 5- nor the 10-year window could be filled
     - revenue grew in 3 of the 3 years reported
-    - not stated — only 0 year(s) of earnings per share reported; a compound rate needs at least 3
+    - not stated — only 0 years of earnings per share reported; a compound rate needs at least 3
     - not stated — not enough earnings per share history to count growth years
     (4 years on file, all used)
 

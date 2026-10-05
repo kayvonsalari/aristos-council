@@ -12,6 +12,8 @@ take the primary path with no change here.
 """
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import json
 import os
 import re
@@ -256,18 +258,18 @@ def build_pool(defn, source: EODHDSource, probe: SourceProbe,
     if probe.screener_available:
         rows = source.screener_rows(defn.industry, tuple(codes), defn.min_market_cap)
         symbols = [f"{r.get('code')}.{r.get('exchange')}" for r in rows if r.get("code")]
-        log.append(f"Screener returned {len(symbols)} name(s) for "
-                   f"{len(defn.industry)} industry code(s).")
+        log.append(f"Screener returned {plural(len(symbols), 'name')} for "
+                   f"{plural(len(defn.industry), 'industry code')}.")
         path = PATH_SCREENER
     else:
         rows = source.constituents()
-        log.append(f"Pulled {len(rows)} index constituent(s) from "
+        log.append(f"Pulled {plural(len(rows), 'index constituent')} from "
                    f"{', '.join(source.indexes)}.")
         matched = [r for r in rows
                    if str(r.get("Industry") or "") in wanted_industries
                    and str(r.get("Exchange") or "") in codes]
         symbols = [f"{r.get('Code')}.{r.get('Exchange')}" for r in matched if r.get("Code")]
-        log.append(f"{len(matched)} matched the industry code(s) "
+        log.append(f"{plural(len(matched), 'matched the industry code')} "
                    f"{', '.join(sorted(wanted_industries))} on "
                    f"{', '.join(sorted(codes))}.")
         path = PATH_CONSTITUENTS
@@ -334,10 +336,10 @@ def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], s
         f"(snapshot {pool.snapshot or 'unknown'}). No request was made."]
     log.extend(line.strip() for line in pool.lines()[1:])
     if pool.overridden:
-        log.append(f"{len(pool.overridden)} row(s) in the pool carry a corrected label "
+        log.append(f"{plural(len(pool.overridden), 'row')} in the pool carry a corrected label "
                    f"(data/label_overrides.yaml): {', '.join(sorted(pool.overridden))}.")
     if pool.aliased:
-        log.append(f"{len(pool.aliased)} identity alias(es) applied "
+        log.append(f"{plural(len(pool.aliased), 'identity alias', 'identity aliases')} applied "
                    f"(data/identity_aliases.yaml): {', '.join(sorted(pool.aliased))}.")
 
     rows = list(pool.rows)
@@ -345,7 +347,7 @@ def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], s
     left_out = [r for r in rows if r.market in markets]
     rows = [r for r in rows if r.market not in markets]
     named = ", ".join(f"{m} (Sao Paulo)" if m == "SA" else m for m in markets) or "no excluded market"
-    log.append(f"{len(left_out)} company(ies) on {named} left out by the "
+    log.append(f"{plural(len(left_out), 'company')} on {named} left out by the "
                f"peer_exclude_markets setting" + (" - a pool not built with exclude_markets, so they were "
                                            "still in it" if left_out else "") + ".")
     if not defn.all_index_exchanges:
@@ -354,7 +356,7 @@ def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], s
         log.append(f"{len(rows)} on {', '.join(sorted(codes))}.")
     wanted = set(defn.industry)
     matched = [r for r in rows if (r.industry or "").replace("\xa0", " ").strip() in wanted]
-    log.append(f"{len(matched)} matched the industry code(s) {', '.join(sorted(wanted))}"
+    log.append(f"{plural(len(matched), 'matched the industry code')} {', '.join(sorted(wanted))}"
                + (" on every index market except Sao Paulo." if defn.all_index_exchanges
                   else "."))
     from .flags import excluded_for, flags_for
@@ -364,7 +366,7 @@ def build_pool_from_index(defn, pool, progress=None) -> tuple[list[Candidate], s
         cand.flags = flags_for(cand.ticker, pool)
     refused = excluded_for(defn, pool)
     if refused:
-        log.append(f"{len(refused)} company(ies) this cohort would have considered were refused "
+        log.append(f"{plural(len(refused), 'company')} this cohort would have considered were refused "
                    f"for their size and are listed in the report: "
                    f"{', '.join(e.ticker for e in refused)}.")
     return candidates, PATH_INDEX, log

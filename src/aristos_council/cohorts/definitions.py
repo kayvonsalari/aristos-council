@@ -10,6 +10,8 @@ Nothing here imports a model, a runner or langchain. See ``test_cohorts_no_llm.p
 """
 from __future__ import annotations
 
+from aristos_council.plurals import noun
+
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -470,7 +472,7 @@ def definition_from_mapping(raw: dict) -> CohortDefinition:
     unknown = [e for e in exchanges if e not in EXCHANGE_CODES]
     if unknown:
         raise DefinitionError(
-            f"{name}: unknown exchange(s) {unknown} — known: {sorted(EXCHANGE_CODES)}")
+            f"{name}: unknown {noun(len(unknown), 'exchange')} {unknown} — known: {sorted(EXCHANGE_CODES)}")
 
     try:
         min_cap = float(raw.get("min_market_cap", 0) or 0)
@@ -524,7 +526,7 @@ def definition_from_mapping(raw: dict) -> CohortDefinition:
         unknown_ex = [x for x in exclude if x not in _EXCLUDE_SECTORS]
         if unknown_ex:
             raise DefinitionError(
-                f"{name}: unknown exclude keyword(s) {unknown_ex} — known: "
+                f"{name}: unknown exclude {noun(len(unknown_ex), 'keyword')} {unknown_ex} — known: "
                 f"{sorted(_EXCLUDE_SECTORS)}")
     else:
         exclude = DEFAULT_EXCLUDE

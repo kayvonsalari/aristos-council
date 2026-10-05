@@ -225,8 +225,9 @@ Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.
    genuine cutters still break (T 2022 cut, INTC suspension -> streak 0). The
    remaining undercount is DATA DEPTH only (the parked EODHD adapter), not the
    method.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 3,625 tests
-   green as of 2026-09-26 (about six minutes). New behavior ships with regression tests, ideally
+6. Tests run with `python -m pytest` (pythonpath=src configured). 4,448 tests
+   green as of 2026-10-05 (about six minutes; 2 skipped; the report sweep, `tests/test_report_sweep.py`, runs
+   inside it and CI installs the `ui` extra so its Markdown half runs there too). New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
    - **Run the full pytest suite before EVERY commit. A commit with a red suite
      is forbidden, including docs-only commits (imports break through refactors

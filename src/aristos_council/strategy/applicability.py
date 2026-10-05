@@ -31,6 +31,8 @@ so a superseded config stays hidden here too.
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural, verb
+
 from typing import Iterable, Optional
 
 # An ad-hoc cohort id (``universe.adhoc_universe_id``) — a fingerprint, not a declaration.
@@ -90,12 +92,12 @@ def cohort_scope_note(cohort_kind: Optional[str], n_applicable: int,
     the list was curated."""
     if cohort_kind:
         return (f"Cohort asset class: **{cohort_kind}** (derived from the lenses that "
-                f"declare it) · {n_applicable} strategy(ies) apply.")
+                f"declare it) · {plural(n_applicable, 'strategy')} {verb(n_applicable, 'applies', 'apply')}.")
     if adhoc:
         return (f"Ad-hoc cohort — no declared asset class, so nothing is filtered out: "
-                f"all {n_applicable} strategy(ies) stay offered.")
+                f"all {plural(n_applicable, 'strategy')} {verb(n_applicable, 'stays', 'stay')} offered.")
     return (f"Cohort asset class undeclared — nothing is filtered out: all "
-            f"{n_applicable} strategy(ies) stay offered.")
+            f"{plural(n_applicable, 'strategy')} {verb(n_applicable, 'stays', 'stay')} offered.")
 
 
 def out_of_scope_note(strategy, cohort_kind: Optional[str]) -> str:
@@ -107,5 +109,5 @@ def out_of_scope_note(strategy, cohort_kind: Optional[str]) -> str:
     kinds = ", ".join(sorted(strategy_asset_kinds(strategy)))
     label = (getattr(strategy, "display_name", "") or getattr(strategy, "name", "")
              or getattr(strategy, "id", "this strategy"))
-    return (f"{label} grades {kinds} names, but this cohort is {cohort_kind} — every name "
+    return (f"{label} grades {plural(kinds, 'name')}, but this cohort is {cohort_kind} — every name "
             f"would be excluded by the asset-kind gate. Pick a {cohort_kind} lens.")

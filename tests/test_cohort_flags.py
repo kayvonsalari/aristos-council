@@ -156,7 +156,7 @@ def test_the_shipped_self_alias_is_loaded_and_documented():
 # =========================================================================== #
 def test_the_legend_defines_all_four_symbols_in_the_owners_words():
     text = dict(LEGEND)
-    assert text[SYM_MERGED].startswith("counted once, also listed as <other line(s)>; evidence:")
+    assert text[SYM_MERGED].startswith("counted once, also listed as <other lines>; evidence:")
     assert text[SYM_LABEL].startswith("industry label corrected; from <old> to <new>;")
     assert text[SYM_SIZE].startswith("size corrected or excluded; reported <figure>;")
     assert (SYM_MERGED, SYM_LABEL, SYM_SIZE, SYM_IDENTITY) == ("†", "‡", "§", "¶")
@@ -325,7 +325,7 @@ def test_the_plan_shows_symbols_the_legend_and_the_excluded_company():
     defn = _software()
     (entry,) = plan([defn], _flagged_cohort_pool(), root=Path("no/such"))
     text = format_plan([entry])
-    assert "1 of 24 member(s) carry a correction symbol" in text or "of 25 member(s)" in text
+    assert "1 of 25 members carries a correction symbol" in text
     assert "Excluded, not silently dropped:" in text and "QH.US" in text
     full = format_plan([entry], all_members=True)
     assert "members:" in full and "ZS.US †" in full and "top 5:" not in full

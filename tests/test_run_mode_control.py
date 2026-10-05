@@ -17,6 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests._env import needs_local_saved_list
 
 # CI installs test deps only — no streamlit, no network providers. ``app`` imports
 # streamlit at module scope, so importing it unguarded turns a skip into a COLLECTION
@@ -266,6 +267,7 @@ def test_the_button_states_the_deterministic_free_run_in_ranker_only_mode():
     assert _run_button(at).label == "▶ Run 2 lenses — deterministic, free"
 
 
+@needs_local_saved_list
 def test_the_button_states_the_NAME_COUNT_and_cost_before_a_narrated_multi_lens_run():
     """NARR-UNION-1's cost guard, at the point of decision: the bill is proportional to
     the number of NAMES narrated, so that is what the button says — BEFORE the click."""

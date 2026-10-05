@@ -158,7 +158,8 @@ over stocks:
   name whose price has fallen — that is the point of it, and the difference from Defensive Income.
 - **Value + momentum** (`magic_formula_momentum_v1`) — the flagship: Greenblatt's two factors plus
   a 12-month momentum rank (per the value-and-momentum literature), which keeps falling knives out
-  of the top **quintile** (the ranked list cut into fifths; the top fifth is BUY).
+  of the top **quintile** (the ranked list cut into fifths; the top fifth is BUY and the bottom
+  fifth is SELL, the **same number of names at each end**).
 - **Growth at a Reasonable Price** (`growth_garp_v2`) — ranks durable compounders on revenue
   growth, **ROIC** (return on invested capital — the operating profit a business earns per dollar
   of capital put to work; higher is better), valuation, and momentum, over names that pass a growth
@@ -185,6 +186,9 @@ Three rank over ETFs — same engine, fund attributes instead of company fundame
 - **Dividend ETFs** (`etf_dividend_v1`) — distribution yield, expense ratio, fund size, momentum.
 - **Growth ETFs** (`etf_growth_v1`) — expense ratio, momentum, fund size.
 - **ETF Index Tracker** (`etf_core_v1`) — expense ratio, fund size, momentum; **no yield factor**.
+  In every ETF lens **fund size is converted to USD** at a dated, named exchange rate (the receipt
+  says which); a fund whose size currency is not stated, and which is not listed in USD,
+  **abstains on size** with the reason shown rather than being compared in the wrong currency.
 
 A strategy file declares its factors, screen, and verdict cut; the arithmetic behind every factor
 is unit-tested and documented in [The Calculations](docs/CALCULATIONS.md).
@@ -437,6 +441,22 @@ index doesn't know) decides automatically: an info line states the market cap an
 company against other small companies in its own backtested cohort instead of the normal
 size-banded peer group, clearly marked **outside the tested range**. No tick box — the
 trigger is mechanical (a known cap under $5bn), so nothing is a reader's guess.
+
+When the company's industry has no small-company band to rank it in (the industry's own tested
+range starts at or above $5bn, or the band holds no names), it is ranked against the
+**similar-sized companies in its own industry** instead, and says so: *"Compared with
+similar-sized companies in its industry; outside the tested range, no track record applies."*
+There is **no band line and no track-record badge** in that case, because nothing about it was
+ever backtested.
+
+**How votes are counted.** A lens that kept **fewer than 3 names** (reported as "2 passed its
+rules, too few to rank") casts **no vote** anywhere: not in a list's shortlist, not in the
+agreement counts, not on a company page, where it reads exactly like "does not apply". A lens
+that divides by operating profit (Magic Formula RAW, Value + Momentum, Earnings Power Value,
+Quality, Cyclical Income) says **"does not apply - no operating profit"** for a company whose
+latest operating profit is zero or negative, and Growth leaves out banks and insurers. Where
+SELL votes exist the agreement line says so ("SELL on 3 of 3 votes; no BUY"). The formal rules
+are in `docs/CALCULATIONS.md` (§1 and §2.9).
 
 A verdict is a cohort statement, so a diagnostic over a **cohort of one issues no verdict**
 by design — that is a *different*, older tool, kept CLI-only: `examples/company_check.py`

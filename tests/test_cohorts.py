@@ -353,7 +353,7 @@ def test_a_perfectly_ordered_cohort_never_moves_when_one_name_leaves():
     not instability, and the check must not report it as a shift."""
     ranked, setup = _ranked([(f"T{i}", 1.0 - i * 0.01) for i in range(16)])
     check = quality.drop_one_stability(ranked, setup)
-    assert check.figure == "0 place(s)"
+    assert check.figure == "0 places"
     assert check.flagged is False
 
 
@@ -365,7 +365,7 @@ def test_a_tie_that_breaks_differently_when_a_name_leaves_is_reported():
     ranked, setup = _ranked(values)
     check = quality.drop_one_stability(ranked, setup)
     assert check.name == "drop-one stability"
-    assert check.figure.endswith("place(s)")
+    assert check.figure.endswith(("place", "places"))
 
 
 def test_the_flag_scales_with_the_cohort():
@@ -443,7 +443,7 @@ def test_names_the_lens_screened_out_are_their_own_category_and_leave_the_rate()
     screened = [(f"S{i}.US", "below min market cap ($5bn)") for i in range(16)]
     check = quality.abstention_rate(ranked, [], 22, screened)
     assert check.figure == "17%" and check.flagged is True          # 1 / 6, over the 15% line
-    assert "16 of 22 member(s) were screened out by the lens itself" in check.sentence
+    assert "16 of 22 members were screened out by the lens itself" in check.sentence
     assert "(checked on 6 of 22 members)" in check.line()
     assert any(d.startswith("screened out: S0.US") for d in check.detail)
 
@@ -473,7 +473,7 @@ def test_band_spread_never_invents_a_percentile_for_an_abstained_band():
     ranked[1].valuation_band = _Band(None)       # abstained
     ranked[2].valuation_band = None              # not requested
     check = quality.band_spread(ranked)
-    assert "1 name(s)" in check.sentence and "2 abstained" in check.sentence
+    assert "1 name" in check.sentence and "2 abstained" in check.sentence
 
 
 def test_band_spread_flags_a_cohort_sitting_in_one_band():

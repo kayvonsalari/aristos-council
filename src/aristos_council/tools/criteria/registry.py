@@ -29,6 +29,8 @@ name; no runner changes.
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -605,7 +607,7 @@ _CRITERIA: tuple[Criterion, ...] = (
         # is exactly the ambiguity that made it look like one, beside abs_readings.py's OWN
         # differently-windowed (5y/10y, EODHD long history) "revenue compounded X% a year"
         # reading on the same page. Stating the window here does not change this.
-        observation=f"revenue grew {{observed}} a year over the trailing {_REVENUE_CAGR_YEARS} years",
+        observation=f"revenue grew {{observed}} a year over the trailing {plural(_REVENUE_CAGR_YEARS, 'year')}",
         params=(ParamSpec("years", "int", min=1, max=None, step=1.0,
                           default=_REVENUE_CAGR_YEARS, unit="count"),
                 ParamSpec("threshold", "float", min=0.0, max=1.0, step=0.01,

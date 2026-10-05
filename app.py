@@ -20,6 +20,9 @@ writes the verdict log + full run report after it, mirroring run_council.py.
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+from aristos_council.report_language import universe_display_name
+
 import base64
 from collections import Counter
 from dataclasses import dataclass, field
@@ -686,7 +689,7 @@ def render_report(
     if report.veto_flags:
         st.error(
             "**⚠ Human review required** — "
-            f"{len(report.veto_flags)} veto trigger(s) fired."
+            f"{plural(len(report.veto_flags), 'veto trigger')} fired."
         )
         audit = report.provenance_audit or {}
         for f in report.veto_flags:
@@ -1197,7 +1200,7 @@ def saved_list_labels(saved) -> list[str]:
     appended ONLY where two lists would otherwise share a label. Same discipline as the
     strategy picker: a label must name exactly one thing, or picking one silently loads
     another."""
-    base = [f"{universe_label(u)} · {len(u.tickers)} names" for u in saved]
+    base = [f"{universe_label(u)} · {plural(len(u.tickers), 'name')}" for u in saved]
     times = Counter(base)
     return [b if times[b] == 1 else f"{b} ({u.id})" for u, b in zip(saved, base)]
 
@@ -1527,7 +1530,7 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
         if extras == ["council opinion"]:
             return "▶ Run company check + council opinion (~6 model calls)"
         return "▶ Run company check + summary + council opinion (~7 model calls)"
-    what = f"Run {n_strategies} lenses" if n_strategies > 1 else "Run"
+    what = f"Run {plural(n_strategies, 'lens', 'lenses')}" if n_strategies > 1 else "Run"
     # READER-1: the summary is ONE call and is independent of the run mode, so a
     # ranker-only run with it ticked is no longer free and the button must stop saying so.
     reader_tail = f" + summary ~{READER_COST_HINT}" if with_reader else ""
@@ -1553,7 +1556,7 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
         tail = (f" · ≤ {cost_phrase(est_cost, narrated_count)}"
                 if est_cost is not None else "")
         return (f"▶ {what} — free{reader_tail} · then choose whether to narrate "
-                f"up to {narrated_count} names{tail}")
+                f"up to {plural(narrated_count, 'name')}{tail}")
     verb = "narrate" if run_mode == RUN_MODE_NARRATOR else "take a second opinion"
     tail = f" · ≤ ${est_cost:.2f} total" if est_cost is not None else ""
     return f"▶ {what} — free{reader_tail} · then choose whether to {verb}{tail}"
@@ -1734,8 +1737,8 @@ def _ranked_rows(ranked, names: dict | None = None) -> tuple[list[dict], list[st
 def _confirmation_line(m: dict) -> str:
     """The always-rendered pre-run confirmation (ITEM 6): a wrong dropdown is visible in
     the first second and in every exported report. Uses the truthful executed mode."""
-    return (f"Running {m['rank_strategy_id']} on "
-            f"{m.get('universe_id') or 'adhoc'} in {m['council_mode']}.")
+    return (f"Running {m.get('rank_strategy_name') or m['rank_strategy_id']} on "
+            f"{universe_display_name(m)} in {m['council_mode']}.")
 
 
 def _render_valuation_band_table(table) -> None:
@@ -1802,7 +1805,7 @@ def _rules_applied_markdown(result, *, include_title: bool = True) -> list[str]:
         cols = ["Rule", "Limit", "What it did"]
         if any(r.measured for r in block.rules):
             cols.append("Measured on")
-        rows = [{"Rule": f"{r.label} `{r.criterion}`", "Limit": r.threshold_phrase,
+        rows = [{"Rule": r.label, "Limit": r.threshold_phrase,
                  "What it did": r.tally, "Measured on": r.measured or "—"}
                 for r in block.rules]
         lines += _md_table(cols, rows, bold_first=False)
@@ -1881,11 +1884,9 @@ def _universe_markdown(result) -> str:
               f"_{_confirmation_line(m)}_", "",
               f"_{result.header}_", "",
               f"- Screen: {label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id'])}",
-              f"- Ranked: {m['ranked_count']} of {m['universe_size']} names"]
-    if m.get("run_id"):
-        lines.append(f"- Run id: `{m['run_id']}`")
+              f"- Ranked: {m['ranked_count']} of {plural(m['universe_size'], 'name')}"]
     if not m["ranker_only"]:
-        lines.append(f"- Shortlist: {len(m['shortlist'])} names · estimated cost "
+        lines.append(f"- Shortlist: {plural(len(m['shortlist']), 'name')} · estimated cost "
                      f"${m['est_cost']:.2f}")
         lines.append(f"- narration coverage: {m.get('narrate_coverage', 'buys_only')}")
     # BACKTEST-2 — the same track-record lines the UI shows, so the download can't drift from it.
@@ -1912,8 +1913,6 @@ def _universe_markdown(result) -> str:
         labels = [factor_column_label(f) for f in factor_names]
         lines += _md_table(["Position (score)", "Name", "Verdict", *labels], rows,
                            bold_first=False)
-        lines += ["", "Factor ids, in column order: "
-                      + ", ".join(f"`{f}`" for f in factor_names) + "."]
     else:
         lines.append("_(no names survived the screen)_")
 
@@ -1964,7 +1963,7 @@ def _universe_markdown(result) -> str:
             count = f"**{group.count} {'name' if group.count == 1 else 'names'}**"
             rule = f" · rule: {group.rule}" if group.rule else ""
             note = f" ({group.note})" if group.note else ""
-            ident = "" if group.is_gate else f" `{group.key}`"
+            ident = ""
             lines += ["", f"**{group.title}**{ident}{rule} · {count}{note}", ""]
             if group.why:
                 lines += [f"_{group.why}_", ""]
@@ -2000,8 +1999,7 @@ def _cohort_membership_lines(meta: dict) -> list[str]:
     if not members:
         return []
     return ["", "## Cohort graded (exact membership)", "",
-            f"- list: `{meta.get('universe_id') or 'adhoc'}` · {len(members)} names · "
-            f"members `{meta.get('universe_member_hash', '')}`",
+            f"- list: {universe_display_name(meta)} · {plural(len(members), 'name')}",
             "", ", ".join(members), ""]
 
 
@@ -2186,10 +2184,10 @@ def _render_narration_confirmation() -> None:
     # rate or the per-lens rate; it is the total, once, for all the sections.
     priced = cost_phrase(plan["est_cost"], plan["count"])
     st.markdown(_md(
-        f"### {plan['count']} names rated BUY by at least one lens — "
+        f"### {plural(plan['count'], 'name')} rated BUY by at least one lens — "
         f"narrate all {plan['count']} for {priced}?"
         if pending["kind"] == "multi" else
-        f"### {plan['count']} names to narrate — narrate all "
+        f"### {plural(plan['count'], 'name')} to narrate — narrate all "
         f"{plan['count']} for {priced}?"))
     st.caption(f"Exact figures from the ranking that has just run — {plan['basis']}. "
                "Nothing has been charged yet.")
@@ -2284,7 +2282,7 @@ def _offer_or_narrate(pending, *, threshold, status, run_start, display_name) ->
         return
     st.session_state.pop("uni_pending_narration", None)
     status.update(label=_md(
-        f"Ranked — narrating {plan['count']} name(s), "
+        f"Ranked — narrating {plural(plan['count'], 'name')}, "
         f"{cost_phrase(plan['est_cost'], plan['count'])}…"), state="running")
     _run_narration(pending, status=status, run_start=run_start,
                    display_name=display_name)
@@ -2297,7 +2295,7 @@ def _render_last_spend() -> None:
         return
     line = actual_vs_estimate(spend.get("actual"), spend.get("estimated"),
                               spend.get("names") or 0)
-    st.success(_md(f"Narrated {spend.get('names', 0)} names — {line}."))
+    st.success(_md(f"Narrated {plural(spend.get('names', 0), 'name')} — {line}."))
 
 
 def _render_pending_downloads() -> None:
@@ -2476,7 +2474,7 @@ def _lens_detail_markdown(detail) -> list[str]:
         rule = f" · rule: {group.rule}" if group.rule else ""
         note = f" ({group.note})" if group.note else ""
         # The criterion id stays beside the label, as the old per-name bullets carried it.
-        ident = "" if group.is_gate else f" `{group.key}`"
+        ident = ""
         lines += ["", f"**{group.title}**{ident}{rule} · {count}{note}", ""]
         if group.why:
             lines += [f"_{group.why}_", ""]
@@ -2545,8 +2543,8 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     title = cohort_title(m, n_lenses=len(ids))
 
     # 1 — ONE header, not four.
-    lines = [f"# Universe run — {title.headline}", "", f"`{title.record_id}`", ""]
-    lines.append(f"**Cohort: {cohort} — {m.get('universe_size', 0)} names**")
+    lines = [f"# Universe run — {title.headline}", ""]
+    lines.append(f"**Cohort: {cohort} — {plural(m.get('universe_size', 0), 'name')}**")
     lines.append(f"**Lenses: " + "; ".join(
         label_with_id(names.get(sid) or sid, sid) for sid in ids) + "**")
     # FLOOR-1: one line under the lenses when the cohort was widened for this run. Empty
@@ -2923,7 +2921,7 @@ def _render_multi_strategy_result(multi_result) -> None:
         md_path, html_path = persisted
         st.success(f"💾 Saved this run to: `{_shown_path(md_path)}` and "
                    f"`{_shown_path(html_path)}` — ONE merged report covering all "
-                   f"{len(ids)} lenses.")
+                   f"{plural(len(ids), 'lens', 'lenses')}.")
 
     from aristos_council.pipeline import (
         RULES_SECTION_TITLE, VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE,
@@ -2936,7 +2934,7 @@ def _render_multi_strategy_result(multi_result) -> None:
     cohort = _plain(label_with_id(m.get("universe_name", ""), m.get("universe_id") or "adhoc"))
     lens_labels = {sid: _plain(label_with_id(multi_result.strategy_names.get(sid) or sid, sid))
                    for sid in ids}
-    st.markdown(f"#### {cohort} — {len(ids)} lenses × {m.get('universe_size', 0)} names")
+    st.markdown(f"#### {cohort} — {plural(len(ids), 'lens', 'lenses')} × {plural(m.get('universe_size', 0), 'name')}")
     st.caption("Lenses: " + "; ".join(lens_labels.values()))
     st.markdown(f"### {_plain(multi_summary_line(multi_result))}")
     st.caption(_plain(multi_header_line(multi_result)))
@@ -2969,8 +2967,7 @@ def _render_multi_strategy_result(multi_result) -> None:
             if rules.rules:
                 st.dataframe([{"Rule": r.label, "Limit": r.threshold_phrase,
                                "What it did": r.tally,
-                               "Measured on": r.measured or "—",
-                               "Criterion id": r.criterion} for r in rules.rules],
+                               "Measured on": r.measured or "—"} for r in rules.rules],
                              hide_index=True, width="stretch")
             for line in rules.ranker_lines:
                 st.caption(line)
@@ -3014,7 +3011,7 @@ def _render_multi_strategy_result(multi_result) -> None:
             for group in detail.groups:
                 rule = f" · rule: {group.rule}" if group.rule else ""
                 note = f" ({group.note})" if group.note else ""
-                ident = "" if group.is_gate else f" `{group.key}`"
+                ident = ""
                 st.markdown(f"**{group.title}**{ident}{rule} · **{group.count} "
                             f"{'name' if group.count == 1 else 'names'}**{note}")
                 if group.why:
@@ -3114,7 +3111,7 @@ def _render_universe_result(result) -> None:
     st.markdown(f"### {_plain(summary_line(result))}")
     st.caption(result.header)
     meta_bits = (f"Screen: {_plain(label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id']))} · "
-                 f"ranked {m['ranked_count']} of {m['universe_size']} names")
+                 f"ranked {m['ranked_count']} of {plural(m['universe_size'], 'name')}")
     if not m["ranker_only"]:
         meta_bits += (f" · shortlist {len(m['shortlist'])} · "
                       f"estimated cost ${m['est_cost']:.2f} · "
@@ -3137,8 +3134,7 @@ def _render_universe_result(result) -> None:
         if rules.rules:
             st.dataframe([{"Rule": r.label, "Limit": r.threshold_phrase,
                            "What it did": r.tally,
-                           "Measured on": r.measured or "—",
-                           "Criterion id": r.criterion}
+                           "Measured on": r.measured or "—"}
                           for r in rules.rules], hide_index=True, width="stretch")
         for line in rules.ranker_lines:
             st.caption(line)
@@ -3157,8 +3153,6 @@ def _render_universe_result(result) -> None:
             lambda v: f"color: {_verdict_hex(v)}; font-weight: 700",
             subset=["Verdict"])
         st.dataframe(styler, hide_index=True, width="stretch")
-        st.caption("Factor ids, in column order: "
-                   + ", ".join(f"`{f}`" for f in factor_names) + ".")
         for sym, note in used_symbol_notes(result):
             st.caption(f"{sym} — {note}")
     else:
@@ -3212,7 +3206,7 @@ def _render_universe_result(result) -> None:
         st.subheader(f"Excluded — did not pass a rule, so was never ranked · "
                      f"{len(result.excluded)}")
         st.dataframe([{"Name": r["name"], "Why": r["sentence"],
-                       "Warning": r["flag"], "Criterion id": r["criterion"]}
+                       "Warning": r["flag"]}
                       for r in exclusion_rows(result)],
                      hide_index=True, width="stretch")
 
@@ -3620,7 +3614,7 @@ def render_input(*, show_validation: bool) -> InputChoice:
                 st.error(str(exc))
             else:
                 st.success(f"Saved **{name.strip() or path.stem}** → "
-                          f"`{path.relative_to(ROOT)}` ({len(universe)} names).")
+                          f"`{path.relative_to(ROOT)}` ({plural(len(universe), 'name')}).")
 
     return InputChoice(kind=INPUT_LIST, universe=universe, picked_list=picked_list,
                        universe_id=universe_id, universe_display_name=universe_display_name,
@@ -3646,7 +3640,7 @@ def render_run_tab(show_validation: bool = False) -> None:
                                show_validation=show_validation)
     choices = [c for c in choices if _mode_filters()[0](c.strategy)]
     if not choices:
-        st.error(f"No {asset_mode()} strategies found under {STRATEGIES_DIR}")
+        st.error(f"No {plural(asset_mode(), 'strategy', 'strategies')} found under {STRATEGIES_DIR}")
         return
     labels = choice_labels(choices)          # kept, as before (unused; see the Part 2 cleanup)
 
@@ -3868,7 +3862,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
     ranker_only, mode = run_mode_arguments(run_mode)
 
     _cap_now = universe_cap(ranker_only)
-    st.caption(f"**{len(universe)}** ticker(s) — up to **{_cap_now}** for "
+    st.caption(f"**{plural(len(universe), 'ticker')}** — up to **{_cap_now}** for "
                f"{'a ranker-only' if ranker_only else 'a narrated'} run.")
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
@@ -3890,7 +3884,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
             est = estimate_cost(per_lens)
     if multi and not run_mode_narrates(run_mode):
         st.caption(f"Multi-lens re-grade: **{len(strategies)}** strategies × "
-                   f"**{len(universe)}** name(s) — deterministic ranker only "
+                   f"**{plural(len(universe), 'name')}** — deterministic ranker only "
                    f"(no narration, no cost), reported as ONE combined grid.")
 
     for msg in problems:
@@ -3988,7 +3982,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
         _drop_results_from_another_asset(_k, "uni_result_input")
     _list_note = _stale_results_note(
         st.session_state.get("uni_result_input"), (asset_mode(), tuple(universe)),
-        what="these results", now=(f"{len(universe)} name(s)" if universe else "an empty list"))
+        what="these results", now=(f"{plural(len(universe), 'name')}" if universe else "an empty list"))
     if _list_note and (st.session_state.get("uni_multi_result") is not None
                        or st.session_state.get("uni_result") is not None):
         st.warning(_list_note)
@@ -4030,7 +4024,7 @@ def render_scoreboard_tab() -> None:
     if not rows:
         st.info("No snapshots persisted yet.")
         return
-    with st.expander(f"📸 Persisted snapshots (rank-run records) · {len(rows)} rows",
+    with st.expander(f"📸 Persisted snapshots (rank-run records) · {plural(len(rows), 'row')}",
                      expanded=True):
         agg: dict[tuple, int] = {}
         for r in rows:
@@ -4633,7 +4627,7 @@ def _report_tab(ticker: str) -> None:
             ticker if ticker in tickers else tickers[0]
         )
     sel = st.selectbox(
-        f"Runs for · {len(tickers)} ticker(s) on record",
+        f"Runs for · {plural(len(tickers), 'ticker')} on record",
         tickers, key="browse_ticker",
     )
 

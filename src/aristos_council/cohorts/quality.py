@@ -20,6 +20,8 @@ floor (2 places) and a minimum (15 ranked names).
 """
 from __future__ import annotations
 
+from aristos_council.plurals import has_have, is_are, plural, was_were
+
 from dataclasses import dataclass, field
 
 from ..rank_engine import RankedTicker, rank_universe
@@ -78,7 +80,7 @@ class Check:
     def scope(self) -> str:
         if self.checked is None or self.of is None:
             return ""
-        return f"(checked on {self.checked} of {self.of} members)"
+        return f"(checked on {self.checked} of {plural(self.of, 'member')})"
 
     def line(self) -> str:
         tail = f" {self.scope()}" if self.scope() else ""
@@ -114,19 +116,19 @@ def abstention_rate(ranked: list[RankedTicker], unrateable: list[tuple[str, str]
     detail = tuple(sorted([t for t, _ in unrateable] + [r.ticker for r in holes])) + tuple(
         f"screened out: {t} — {why}" for t, why in sorted(screened_out))
     if applicable == 0:
-        sentence = (f"The lens screened out all {total} member(s), so there is nothing to read "
+        sentence = (f"The lens screened out all {plural(total, 'member')}, so there is nothing to read "
                     f"and the abstention rate says nothing here — this lens does not apply to "
                     f"this cohort." if total else
                     "The cohort has no members, so there is nothing to check.")
         return Check("abstention rate", "n/a", False, sentence, detail, checked=0, of=total)
     rate = n_abstain / applicable
     flagged = rate > ABSTENTION_FLAG
-    screened_clause = (f" {screened} of {total} member(s) were screened out by the lens itself "
+    screened_clause = (f" {screened} of {plural(total, 'member')} {was_were(total)} screened out by the lens itself "
                        f"and are not in the rate." if screened else "")
     return Check(
         "abstention rate", f"{rate:.0%}", flagged,
-        f"{rate:.0%} of the {applicable} name(s) the lens applied to abstained: "
-        f"{len(unrateable)} name(s) the ranker could not read at all and {len(holes)} ranked "
+        f"{rate:.0%} of the {plural(applicable, 'name')} the lens applied to abstained: "
+        f"{plural(len(unrateable), 'name')} the ranker could not read at all and {len(holes)} ranked "
         f"with at least one factor missing." + screened_clause
         + (f" Above the {ABSTENTION_FLAG:.0%} line." if flagged else ""),
         detail, checked=applicable, of=total)
@@ -166,7 +168,7 @@ def band_spread(ranked: list[RankedTicker], total: int | None = None) -> Check:
     spread = ", ".join(f"{BAND_LABELS[i].split(' ')[0]}: {shares[i]:.0%}" for i in range(5))
     return Check(
         "band spread", f"{shares[top]:.0%} in {BAND_LABELS[top]}", flagged,
-        f"Valuation bands across {placed} name(s) — {spread}"
+        f"Valuation bands across {plural(placed, 'name')} — {spread}"
         + (f"; {abstained} abstained." if abstained else ".")
         + (f" {shares[top]:.0%} sit in one band ({BAND_LABELS[top]}), above the "
            f"{BAND_CONCENTRATION_FLAG:.0%} line." if flagged else ""),
@@ -222,15 +224,15 @@ def drop_one_stability(ranked: list[RankedTicker], setup: RankSetup,
             shift = abs(seat - expected.get(ticker, seat))
             if shift > worst_shift:
                 worst_shift = shift
-                worst_note = (f"{ticker} moved {shift} place(s) when {removed} was "
+                worst_note = (f"{ticker} moved {plural(shift, 'place')} when {removed} was "
                               f"removed (seat {expected.get(ticker)} → {seat})")
 
     threshold = max(n * STABILITY_FLAG_FRACTION, STABILITY_MIN_LINE)
     flagged = worst_shift > threshold
     return Check(
-        "drop-one stability", f"{worst_shift} place(s)", flagged,
+        "drop-one stability", f"{plural(worst_shift, 'place')}", flagged,
         f"Removing any one of the {n} ranked names moves no other name more than "
-        f"{worst_shift} place(s)."
+        f"{plural(worst_shift, 'place')}."
         + (f" {worst_note}." if worst_note else "")
         + (f" Above the {threshold:.1f}-place line for a cohort of {n}."
            if flagged else ""),
@@ -288,7 +290,7 @@ def source_summary(members: list[Candidate]) -> Check:
     fill = (f"; {filled_total} had a field filled from yfinance ("
             + ", ".join(f"{k} ×{v}" for k, v in sorted(filled_fields.items())) + ")"
             ) if filled_total else "; none needed a yfinance fill"
-    return Check("source summary", f"{len(members)} member(s)", False,
+    return Check("source summary", f"{plural(len(members), 'member')}", False,
                  f"Built from {', '.join(parts) or 'no source'}{fill}.",
                  tuple(f"{c.ticker}: {c.source}"
                        + (f" (+{'/'.join(c.filled)} from {PATH_YFINANCE})" if c.filled else "")

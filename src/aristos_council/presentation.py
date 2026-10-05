@@ -7,6 +7,8 @@ of this is ever applied to stored data (reports keep call_ids for auditability).
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import re
 
 from .state import FailureKind, ResearchState, RunIssue
@@ -336,7 +338,7 @@ def batch_health_summary(rows: list[dict]) -> str:
     insufficient = sum(
         1 for r in rows
         if str(r.get("verdict", "")).lower() == "insufficient_evidence")
-    parts = [f"{n} names: {clean} clean, {len(degraded_rows)} degraded"]
+    parts = [f"{plural(n, 'name')}: {clean} clean, {len(degraded_rows)} degraded"]
     sentiment_missing = _has(FailureKind.MISSING_KEY)
     fetch_errors = _has(FailureKind.FETCH_ERROR) + _has(FailureKind.EMPTY_RESPONSE)
     if sentiment_missing:

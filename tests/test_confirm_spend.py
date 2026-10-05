@@ -23,6 +23,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
+from tests._env import needs_local_saved_list
 
 from aristos_council import pipeline
 from aristos_council.pipeline import (
@@ -242,6 +243,7 @@ def _mode(at):
     return next(r for r in at.radio if str(r.label) == "Run mode")
 
 
+@needs_local_saved_list
 def test_ranker_only_mode_never_shows_the_confirmation_step():
     """One click, no confirmation, no extra state — unchanged."""
     pytest.importorskip("streamlit")
@@ -272,7 +274,8 @@ def test_the_confirmation_carries_the_exact_count_and_estimate_and_the_names():
     assert not at.exception
 
     blob = " ".join(str(getattr(m, "value", "")) for m in at.markdown)
-    assert f"{plan['count']} names rated BUY by at least one lens" in blob
+    from aristos_council.plurals import plural
+    assert f"{plural(plan['count'], 'name')} rated BUY by at least one lens" in blob
     # COST-2: the figure names its scope — total, one charge, and the per-name rate.
     assert f"narrate all {plan['count']} for" in blob
     assert "total (one charge, about \$" in blob
@@ -511,6 +514,7 @@ def _drive_two_phase(monkeypatch, tmp_path, *, confirm: bool):
     return at, counter, sorted(tmp_path.glob("*"))
 
 
+@needs_local_saved_list
 def test_confirming_narrates_and_the_FILE_ON_DISK_carries_the_narration(monkeypatch,
                                                                        tmp_path):
     """Read the file back — not session state. The live failure was invisible in memory:
@@ -535,6 +539,7 @@ def test_confirming_narrates_and_the_FILE_ON_DISK_carries_the_narration(monkeypa
     assert "_narrator_" in md.name
 
 
+@needs_local_saved_list
 def test_one_run_leaves_exactly_one_md_and_one_html(monkeypatch, tmp_path):
     pytest.importorskip("streamlit")        # drives the UI; CI has test deps only
     _, _, files = _drive_two_phase(monkeypatch, tmp_path, confirm=True)
@@ -543,6 +548,7 @@ def test_one_run_leaves_exactly_one_md_and_one_html(monkeypatch, tmp_path):
     assert len(files) == 2
 
 
+@needs_local_saved_list
 def test_keeping_the_free_ranking_writes_a_ranker_report_with_zero_calls(monkeypatch,
                                                                         tmp_path):
     pytest.importorskip("streamlit")

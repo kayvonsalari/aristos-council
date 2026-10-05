@@ -383,10 +383,9 @@ def test_the_title_leads_with_the_description_and_keeps_the_id_muted():
     h1 = re.search(r"<h1>(.*?)</h1>", doc, re.S).group(1)
     assert title.startswith("Pasted list —"), title
     assert "names" in title and "lenses" in title
-    # the id is PRESENT everywhere it was, and muted rather than leading
-    assert "adhoc:" in h1
-    assert '<span class="record-id">' in h1
-    assert not h1.strip().startswith("adhoc:")
+    # BATCH 18B: the record key is not reader text - the heading is the plain description
+    assert "adhoc:" not in h1 and "adhoc:" not in title
+    assert 'record-id' not in h1
 
 
 def test_the_evidence_gap_section_is_rendered_even_when_there_is_nothing_to_report():

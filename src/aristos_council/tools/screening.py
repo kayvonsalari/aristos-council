@@ -16,6 +16,8 @@ to exactly one of these outputs.
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import math
 import statistics
 from dataclasses import dataclass
@@ -491,7 +493,7 @@ def consecutive_dividend_growth_years(
     # Live-run lesson: 'treat as a floor' was ambiguous enough that two
     # agents read it as 'could be shorter'. State the direction explicitly.
     note = (
-        f"estimated from {len(years_sorted)} years of provider dividend data "
+        f"estimated from {plural(len(years_sorted), 'year')} of provider dividend data "
         "by per-payment rate (median), immune to ex-date timing; this is a "
         "floor / LOWER BOUND — the true streak is AT LEAST this many years "
         "(provider history simply ends here); it is NOT a verified aristocrat "
@@ -773,7 +775,7 @@ def dividend_record_staleness(payment_dates, *, today) -> tuple[bool, str]:
     if since <= floor or since <= usual * STALE_GAP_MULTIPLE:
         return False, ""
     return True, (f"dividend record stops {dates[-1].isoformat()}: last payment "
-                  f"{since} days ago against a usual gap of {int(round(usual))} days; "
+                  f"{plural(since, 'day')} ago against a usual gap of {plural(int(round(usual)), 'day')}; "
                   "yield not stated")
 
 

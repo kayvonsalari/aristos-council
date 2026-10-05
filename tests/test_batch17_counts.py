@@ -56,7 +56,7 @@ def test_a_lens_left_with_two_names_places_none_and_the_sentence_says_so():
     raw = [r for r in res.results[IDS[1]].ranked if not r.excluded]
     assert (len(vm), len(raw)) == (2, 6)                     # the table the line sits under
     line = comparable_names_line(res)
-    assert "0 name(s) were given a rank position by ALL 2 lenses" in line
+    assert "0 names were given a rank position by ALL 2 lenses" in line
     assert "2 passed its rules, too few to rank" in line      # the ONE wording (VM-COUNT-WORDING-1)
     assert "kept only" not in line
     assert "ranked by ALL" not in line                       # the wording that contradicted it
@@ -66,7 +66,7 @@ def test_when_every_lens_places_the_names_the_count_is_the_intersection_and_no_a
     res = _run(weak=False)
     assert res.meta["graded_by_all"] == 4
     line = comparable_names_line(res)
-    assert line.startswith("4 name(s) were given a rank position by ALL 2 lenses")
+    assert line.startswith("4 names were given a rank position by ALL 2 lenses")
     assert "too few" not in line
 
 

@@ -17,6 +17,9 @@ second opinion, it is not an oracle.
 
 from __future__ import annotations
 
+from aristos_council.tools.price_context import format_money
+from aristos_council.plurals import has_have, is_are, plural, was_were
+
 import logging
 import os
 import re
@@ -112,6 +115,8 @@ from .report_language import (
     format_threshold,
     format_value,
     label_with_id,
+    label_with_key,
+    universe_display_name,
 )
 from .costs import cost_phrase, final_cost_phrase
 from .reproducibility import estimate_cost
@@ -200,10 +205,10 @@ def format_floor(value: Optional[float]) -> str:
     if value is None:
         return "no floor"
     if abs(value) >= 1e9:
-        return f"${value / 1e9:.1f}bn"
+        return f"{format_money(value / 1e9, 'USD', decimals=1)}bn"
     if abs(value) >= 1e6:
-        return f"${value / 1e6:.0f}m"
-    return f"${value:,.0f}"
+        return f"{format_money(value / 1e6, 'USD', decimals=0)}m"
+    return f"{format_money(value, 'USD', decimals=0)}"
 
 
 def min_market_cap_override_record(file_value: Optional[float],
@@ -1115,7 +1120,7 @@ def _names_clause(tickers: list[str], total: int) -> str:
     if n == total:
         return f"for all {total} name{'s' if total != 1 else ''}"
     named = f" ({', '.join(tickers)})" if n <= 5 else ""
-    return f"for {n} of {total} names{named}"
+    return f"for {n} of {plural(total, 'name')}{named}"
 
 
 def provenance_sentences(result: RankPipelineResult) -> list[dict]:
@@ -1301,7 +1306,7 @@ def price_stale_line(result, *, today: Optional[date] = None) -> str:
         recorded = price_age_days(result, today=today)
     if recorded is None or recorded <= PRICE_STALE_DAYS:
         return ""
-    return (f"Prices are from {newest.isoformat()}, {recorded} days old; the cache may "
+    return (f"Prices are from {newest.isoformat()}, {plural(recorded, 'day')} old; the cache may "
             f"be stale.")
 
 
@@ -1316,7 +1321,7 @@ def header_lines(result) -> list[str]:
     m = result.meta or {}
     size = m.get("universe_size", len(getattr(result, "ranked", []) or []))
     universe = label_with_id(m.get("universe_name", ""), m.get("universe_id", "") or "")
-    lines = [f"{universe} — {size} names" if universe else f"{size} names"]
+    lines = [f"{universe} — {plural(size, 'name')}" if universe else f"{plural(size, 'name')}"]
     strategy = label_with_id(m.get("rank_strategy_name", ""),
                              m.get("rank_strategy_id", "") or "")
     if strategy:
@@ -1514,8 +1519,7 @@ def format_exclusions(result) -> list[str]:
         return []
     lines = ["  EXCLUDED — did not pass a rule, so was never ranked:"]
     for r in rows:
-        muted = f"  [{r['criterion']}]" if r["criterion"] else ""
-        lines.append(f"      {r['name']} — {r['sentence'].rstrip()}{muted}")
+        lines.append(f"      {r['name']} — {r['sentence'].rstrip()}")
         if r["flag"]:
             lines.append(f"          {r['flag']}")
     return lines
@@ -1539,7 +1543,7 @@ def untested_rule_notes(result) -> list[dict]:
         rules = []
         for crit, note in sorted(r.screen_abstentions.items()):
             label = getattr(REGISTRY.get(crit), "label", "") or crit
-            rules.append(f"{label} ({_abstention_reason(note)}) [{crit}]")
+            rules.append(f"{label} ({_abstention_reason(note)})")
         out.append({"ticker": r.ticker, "name": _disp(result, r.ticker),
                     "verdict": r.verdict.upper(), "rules": rules})
     return out
@@ -1751,7 +1755,7 @@ def _measured_phrase(result, criterion: str) -> str:
 
 _CUT_PHRASE = {
     "quintile": "top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut)",
-    "top_k": "the best {k} names BUY, the rest HOLD (top-k cut)",
+    "top_k": "the best {plural(k, 'name')} BUY, the rest HOLD (top-k cut)",
     "top_percentile": "the best {p} BUY, the rest HOLD (top-percentile cut)",
 }
 _MISSING_PHRASE = {
@@ -1828,8 +1832,7 @@ def format_rules_applied(result) -> list[str]:
         phrase_width = max(len(r.threshold_phrase) for r in block.rules)
         for r in block.rules:
             lines.append(f"      {r.label:<{width}}  "
-                         f"{r.threshold_phrase:<{phrase_width}}  {r.tally}"
-                         f"  [{r.criterion}]")
+                         f"{r.threshold_phrase:<{phrase_width}}  {r.tally}")
             if r.measured:
                 lines.append(f"      {'':<{width}}  {'':<{phrase_width}}  "
                              f"measured on {r.measured}")
@@ -2150,7 +2153,7 @@ def _band_footnotes(live, uniform: bool, coverage: set, *,
         # so the note does not drift every day the report is re-opened.
         if age_days is not None and age_days > PRICE_STALE_DAYS:
             newest = max(date.fromisoformat(x) for x in stamps)
-            notes.append(f"Prices are from {newest.isoformat()}, {age_days} days old; "
+            notes.append(f"Prices are from {newest.isoformat()}, {plural(age_days, 'day')} old; "
                          f"the cache may be stale.")
     if not has_band:
         return notes                    # band off: no coverage, no doctrine to state
@@ -2159,7 +2162,7 @@ def _band_footnotes(live, uniform: bool, coverage: set, *,
         if covered < total:
             notes.append(
                 f"Every rated name here is placed on the same {covered} of {total} "
-                f"monthly observations in the window; the other {total - covered} months "
+                f"monthly observations in the window; the other {plural(total - covered, 'month')} "
                 "lack usable statements, so they drop out rather than being filled in.")
         else:
             notes.append(f"Every rated name here is placed on all {total} monthly "
@@ -2258,7 +2261,6 @@ def format_ranked_factor_lines(result) -> list[str]:
         cells = " · ".join(f"{lab.split(' (')[0]} {row[lab]}"
                            for lab in labels if lab in row)
         lines.append(f"      {row['Name']} — {cells}")
-    lines.append("      Factor ids, in order: " + ", ".join(factor_ids) + ".")
     return lines
 
 
@@ -2271,10 +2273,8 @@ def format_cli_report(result: RankPipelineResult) -> str:
     lines = list(header_lines(result))
     lines.append(result.header)
     if not m["ranker_only"]:
-        lines.append(f"Shortlist: {len(m['shortlist'])} of {m['universe_size']} names · "
-                     f"estimated cost ${m['est_cost']:.2f}")
-    if m.get("run_id"):
-        lines.append(f"Run id: {m['run_id']}")
+        lines.append(f"Shortlist: {len(m['shortlist'])} of {plural(m['universe_size'], 'name')} · "
+                     f"estimated cost {format_money(m['est_cost'], 'USD')}")
     lines += ["", f"  {summary_line(result)}"]
 
     rules_block = format_rules_applied(result)        # REPORT-1 Part 1
@@ -2716,7 +2716,7 @@ def run_multi_strategy_pipeline(
     if not ranker_only and union:
         _log_sentiment_status()
         if progress is not None:
-            progress(f"Narrating {len(union)} name(s) — one pass over the union of "
+            progress(f"Narrating {plural(len(union), 'name')} — one pass over the union of "
                      f"every lens's BUYs…")
         if runners is None:
             from .agents.runners import production_runners
@@ -3189,7 +3189,7 @@ def _detail_headline(result) -> str:
     if 0 < ranked < MIN_RANKABLE_COHORT:
         line = f"{passed_too_few_text(ranked).capitalize()}."
     else:
-        line = f"Ranked {ranked} of {size} names."
+        line = f"Ranked {ranked} of {plural(size, 'name')}."
     if excluded:
         line += f" Excluded {excluded}: by rule below, worst miss first."
     return line
@@ -3563,7 +3563,7 @@ def fetch_guard_line(guard: dict) -> str:
     """The warning, or "". One sentence: what happened, and what not to do with the run."""
     if not guard:
         return ""
-    return (f"Data fetch failed for {guard['failed']} of {guard['total']} names; this run "
+    return (f"Data fetch failed for {guard['failed']} of {plural(guard['total'], 'name')}; this run "
             "measured almost nothing. Check the provider and the cache before reading any "
             "verdict.")
 
@@ -3592,7 +3592,7 @@ def multi_summary_line(result: MultiStrategyResult) -> str:
         parts.append(f"{excluded_all} excluded by every lens")
     parts.append(f"{ranked_any} of {size} ranked by at least one")
     lens_word = "lens" if n_lenses == 1 else "lenses"
-    line = f"{n_lenses} {lens_word} × {size} names — " + ", ".join(parts)
+    line = f"{n_lenses} {lens_word} × {plural(size, 'name')} — " + ", ".join(parts)
     # FETCH-GUARD-1: PREFIXED, not appended. A reader who stops after the first clause
     # must not be told a normal-looking summary of a run that measured nothing.
     warning = fetch_guard_line((result.meta or {}).get("fetch_guard") or {})
@@ -4068,7 +4068,7 @@ def _run_council_over(shortlist, council_frame, adapter, runners, mode, *, ranke
     # — the pre-run estimate is an upper bound; this is the real number, from the
     # shortlist we already have (no second screen run).
     if progress is not None:
-        progress(f"Shortlist: {len(shortlist)} name(s) → ${est:.2f} — "
+        progress(f"Shortlist: {plural(len(shortlist), 'name')} → {format_money(est, 'USD')} — "
                  "starting narration…")
     if runners is None:
         from .agents.runners import production_runners
@@ -4396,7 +4396,7 @@ def narration_line(plan: dict) -> str:
         phrase = NARRATION_LEVELS.get(plan.get("level", ""), plan.get("level", ""))
         return (f"No company met the rule ({phrase}); nothing narrated. "
                 "Change the rule to narrate more.")
-    return f"Narrated {n} of {qualified} names that met the rule ({basis})."
+    return f"Narrated {n} of {plural(qualified, 'name')} that met the rule ({basis})."
 
 
 def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners=None,
@@ -4443,7 +4443,7 @@ def narrate_multi_strategy(result: MultiStrategyResult, *, adapter=None, runners
         runners = production_runners()
     _log_sentiment_status()
     if progress is not None:
-        progress(f"Narrating {plan['count']} name(s) — one pass over the union of "
+        progress(f"Narrating {plural(plan['count'], 'name')} — one pass over the union of "
                  f"every lens's BUYs…")
     # COST-3: price THIS PHASE only. The mark/since pair means the figure covers the
     # narration that was just confirmed, not anything the runner set did earlier.
@@ -4603,7 +4603,7 @@ def narration_failure_line(result) -> str:
         return ""
     record = (getattr(result, "meta", None) or {}).get("narration") or {}
     attempted = record.get("attempted") or len(getattr(result, "narratives", {}) or {})
-    return (f"Narration failed for {len(failed)} of {attempted} names; their sections "
+    return (f"Narration failed for {len(failed)} of {plural(attempted, 'name')}; their sections "
             f"say so.")
 
 
@@ -4756,7 +4756,7 @@ def cross_lens_verdicts(result: MultiStrategyResult, ticker: str) -> list[dict]:
     name-independent flag (mirrors ``company_report.LensVote.votes``) so a check added
     later needs no narration-side update to stay silent about a verdict it never
     issues."""
-    from .report_language import label_with_id, verdict_word
+    from .report_language import label_with_key, verdict_word
 
     row = next((r for r in result.rows if r.ticker == ticker), None)
     if row is None:
@@ -4766,7 +4766,7 @@ def cross_lens_verdicts(result: MultiStrategyResult, ticker: str) -> list[dict]:
     for sid in result.strategy_ids:
         cell = row.cells[sid]
         out.append({"lens": columns[sid], "lens_id": sid,
-                    "lens_label": label_with_id(columns[sid], sid),
+                    "lens_label": label_with_key(columns[sid], sid),
                     "cell": cell.render(), "status": cell.status,
                     "verdict": (cell.verdict if not cell.is_check
                                else verdict_word(cell.verdict, check=True)),
@@ -4824,8 +4824,8 @@ def comparable_names_line(result, *, tail: str = " - only those rank-sums are co
 
     m = result.meta
     ids = list(result.strategy_ids)
-    line = (f"{m.get('graded_by_all', 0)} name(s) were given a rank position by ALL "
-            f"{len(ids)} lenses{tail}")
+    line = (f"{plural(m.get('graded_by_all', 0), 'name')} {was_were(m.get('graded_by_all', 0))} given a rank position by ALL "
+            f"{plural(len(ids), 'lens', 'lenses')}{tail}")
     thin = []
     for sid in ids:
         res = result.results.get(sid)
@@ -4848,13 +4848,14 @@ def format_multi_strategy_grid(result: MultiStrategyResult) -> str:
     ids = result.strategy_ids
     m = result.meta
     lines = [
-        f"=== COMBINED GRID \u2014 {len(ids)} strategies over "
-        f"{m.get('universe_size', 0)} name(s) in "
-        f"{m.get('universe_id') or 'adhoc'} ===",
+        f"=== COMBINED GRID \u2014 {plural(len(ids), 'strategy', 'strategies')} over "
+        f"{plural(m.get('universe_size', 0), 'name')} in "
+        f"{universe_display_name(m)} ===",
         "  Verdict: deterministic ranker (no LLM ran \u2014 narration is per-strategy).",
         "",
     ]
-    head = f"  {'name':<24} " + "".join(f"{sid:<34}" for sid in ids)
+    _names = getattr(result, "strategy_names", None) or {}
+    head = f"  {'name':<24} " + "".join(f"{(_names.get(sid) or sid):<34}" for sid in ids)
     lines.append(head)
     for row in result.rows:
         cells = "".join(f"{row.cells[sid].render():<34}" for sid in ids)

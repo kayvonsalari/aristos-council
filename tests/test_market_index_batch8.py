@@ -124,7 +124,7 @@ def test_peers_drops_excluded_markets_and_says_so_in_its_reasons():
                   exclude_markets=("SA",))
     assert group.available
     assert not any(m.market == "SA" for m in group.members)
-    assert "3 candidate(s) skipped: market excluded by setting (SA)" in group.reasons
+    assert "3 candidates skipped: market excluded by setting (SA)" in group.reasons
 
 
 def test_peers_without_the_setting_keeps_the_market():
@@ -197,6 +197,6 @@ def test_status_lists_them_and_excludes_nothing(tmp_path):
     out = status(store, aliases=[])
     assert out.possible_foreign == ["CDE.TO", "TECK-A.TO"]
     text = " ".join(out.lines())
-    assert "2 Toronto row(s) with no identity" in text and "report only" in text
+    assert "2 Toronto rows with no identity" in text and "report only" in text
     assert "CDE.TO" in text
     assert out.rows == len(_toronto_rows())          # the table is untouched

@@ -22,6 +22,8 @@ only the survivors of a rule that has just excluded the company.
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -92,6 +94,6 @@ def would_rank(strategy, ranked, pool: dict, ticker: str) -> Optional[WouldRank]
     positions = cohort_positions(live)
     if ticker not in positions or len(live) < MIN_RANKABLE_COHORT:
         return WouldRank(False, cohort_size=len(live),
-                         reason=f"only {len(live)} companies could be compared "
+                         reason=f"only {plural(len(live), 'company', 'companies')} could be compared "
                                 f"(needs {MIN_RANKABLE_COHORT})")
     return WouldRank(True, position=positions[ticker][0], cohort_size=len(live))

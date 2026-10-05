@@ -246,7 +246,7 @@ def test_status_lists_adr_rows_that_nothing_links_to_a_home(tmp_path):
     store.save(_status_rows())
     out = status(store, aliases=[])
     assert out.orphan_adrs == 2 and out.orphan_adr_examples == ["GSK.US", "ORPH.US"]
-    assert "2 US ADR/ADS row(s) name no home" in " ".join(out.lines())
+    assert "2 US ADR/ADS rows name no home" in " ".join(out.lines())
 
 
 def test_status_counts_aliased_rows_and_stops_calling_them_orphans(tmp_path):
@@ -255,7 +255,7 @@ def test_status_counts_aliased_rows_and_stops_calling_them_orphans(tmp_path):
     out = status(store, aliases=[ALIAS_GSK, ALIAS_SKHY])          # SKHY.US is not in this table
     assert out.aliased == 1 and out.aliased_examples == ["GSK.US"]
     assert out.orphan_adrs == 1 and out.orphan_adr_examples == ["ORPH.US"]
-    assert "1 row(s) carry an identity alias" in " ".join(out.lines())
+    assert "1 row carries an identity alias" in " ".join(out.lines())
 
 
 # =========================================================================== #
@@ -274,7 +274,7 @@ def test_two_members_that_share_a_name_and_no_handle_are_counted_once_and_still_
     members = _tickers(group)
     assert "TWIN.US" in members and "TWIN2.XETRA" in members         # never dropped silently
     assert len(members) == 13 and group.distinct_companies == 12
-    assert "1 member(s) share a company name with another member: counted once, listed twice"         in group.reasons
+    assert "1 member shares a company name with another member: counted once, listed twice"         in group.reasons
     assert "12 distinct companies" in group.sentence()
 
 

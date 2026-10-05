@@ -26,6 +26,8 @@ underscores (``claude-haiku-4-5`` -> ``ARISTOS_PRICE_CLAUDE_HAIKU_4_5``).
 
 from __future__ import annotations
 
+from aristos_council.tools.price_context import format_money
+
 import os
 import re
 from dataclasses import dataclass, field
@@ -162,9 +164,9 @@ def cost_phrase(usd: float, n_names: int) -> str:
     total, says one charge, and gives the per-name figure explicitly rather than leaving
     the reader to divide."""
     if n_names <= 0:
-        return f"${usd:.2f} total"
+        return f"{format_money(usd, 'USD')} total"
     each = usd / n_names
-    return f"${usd:.2f} total (one charge, about ${each:.2f} a name)"
+    return f"{format_money(usd, 'USD')} total (one charge, about {format_money(each, 'USD')} a name)"
 
 
 # A divergence past this is worth saying out loud: the estimate is a flat per-name
@@ -197,13 +199,13 @@ def actual_vs_estimate(actual: Optional[float], estimated: Optional[float],
     """The one-line spend report the RUN FLOW shows — actual against estimate, and the
     divergence flag. Estimator feedback, deliberately NOT in the report (COST-4)."""
     if actual is None:
-        return (f"estimated ${estimated:.2f} total — actual cost not measured"
+        return (f"estimated {format_money(estimated, 'USD')} total — actual cost not measured"
                 if estimated else "actual cost not measured")
     lead = f"actual {cost_phrase(actual, n_names)}"
     if not estimated:
         return lead
     gap = divergence(actual, estimated)
-    tail = f" (estimated ${estimated:.2f})"
+    tail = f" (estimated {format_money(estimated, 'USD')})"
     if gap is not None and abs(gap) > DIVERGENCE_LIMIT:
         direction = "over" if gap > 0 else "under"
         tail += (f" — that is {abs(gap) * 100:.0f}% {direction} the estimate; "

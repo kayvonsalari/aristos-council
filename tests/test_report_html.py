@@ -342,8 +342,7 @@ def test_provenance_receipts_render_as_badges():
 def test_universe_html_header_and_footer_carry_the_shareable_facts():
     doc = universe_report_html(_universe_result(), run_start=_RUN)
     assert "ETF Index Tracker" in doc                     # strategy display name
-    assert "etf_core_v1" in doc                           # strategy id
-    assert "etf_core_5_v1" in doc                          # universe id
+    assert "etf_core_v1" not in doc                       # BATCH 18B: no strategy id in reader text
     assert "09.07.2026 17:30" in doc                       # run timestamp (Europe/Berlin)
     assert "narrator" in doc                               # mode
     assert DOCTRINE in doc                                 # house doctrine line

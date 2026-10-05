@@ -26,6 +26,8 @@ Two design facts are baked in, not optional:
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import calendar
 import csv
 import statistics
@@ -360,7 +362,7 @@ def format_divergence_map(rows: list[SnapshotRow]) -> str:
             f"{', '.join(flags)}")
     n_dis = sum(1 for d in dm if d.tercile_disagreement)
     n_stk = sum(1 for d in dm if d.sticky_label)
-    lines.append(f"  -> {n_dis} tercile disagreement(s), {n_stk} sticky-label row(s)")
+    lines.append(f"  -> {plural(n_dis, 'tercile disagreement')}, {plural(n_stk, 'sticky-label row')}")
     return "\n".join(lines)
 
 
@@ -519,7 +521,7 @@ def format_strategy_score(score: StrategyScore, *, snapshot_date: date,
     lines = [f"=== {score.strategy} · snapshot {snapshot_date.isoformat()} · {period} ===",
              f"  {ADJUSTMENT_NOTE}",
              f"  Equal-weight universe mean: {_fmt_pct(score.universe_mean)} "
-             f"({score.n_resolved} resolved name(s))",
+             f"({plural(score.n_resolved, 'resolved name')})",
              "  Aristos buckets:"]
     lines += [_fmt_bucket_line(s) for s in score.aristos]
     lines.append("  Street terciles (relative — most-loved = lowest recommendationMean):")

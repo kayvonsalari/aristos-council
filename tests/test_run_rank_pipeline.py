@@ -126,11 +126,12 @@ def test_format_cli_report_reflects_the_result():
     assert result.header in text
     # REPORT-1: the section heading leads with the strategy's human name and keeps the
     # id beside it as the record key.
-    assert "RANKED — the verdict of record" in text and "magic_formula_v1" in text
+    assert "RANKED — the verdict of record" in text and "Classic Value" in text
+    assert "magic_formula_v1" not in text                 # BATCH 18B: no id in reader text
     for t in ("A", "B"):
         assert t in text
     assert "UNRATEABLE" in text and "DEAD" in text
-    assert "min_roic" in text                                  # the excluded reason
+    assert "return on invested capital" in text and "min_roic" not in text   # the excluded reason, in words
 
 
 # --------------------------------------------------------------------------- #
@@ -180,7 +181,7 @@ def test_actual_shortlist_cost_disclosed_before_narration():
         adapter=_Adapter(), runners=_runners(DecisionOutput(
             recommendation=Recommendation.BUY, confidence=0.8, rationale="r")),
         today=date(2026, 6, 30), progress=msgs.append)
-    assert any("Shortlist:" in m and "→ $" in m and "name(s)" in m for m in msgs)
+    assert any("Shortlist:" in m and "→ $" in m and "name" in m for m in msgs)
 
 
 def test_mode_stamp_tells_the_truth_on_both_paths():

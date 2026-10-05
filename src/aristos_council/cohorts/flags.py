@@ -7,7 +7,7 @@ so a cohort list marks every company a correction touched, once, with a symbol, 
 bottom says what each symbol means FOR THAT COMPANY. A company excluded because its size cannot be
 trusted is listed under the legend with its reported figure and the reason, never silently dropped.
 
-    †  counted once, also listed as <other line(s)>; evidence: <reason>
+    †  counted once, also listed as <other lines>; evidence: <reason>
     ‡  industry label corrected; from <old> to <new>; reason, date
     §  size corrected or excluded; reported <figure>; reason, date
     ¶  identity corrected: the provider's PrimaryTicker names a different company; reason, date
@@ -24,7 +24,7 @@ SYM_SIZE = "§"            # section sign
 SYM_IDENTITY = "¶"        # pilcrow
 
 LEGEND = (
-    (SYM_MERGED, "counted once, also listed as <other line(s)>; evidence: <reason>"),
+    (SYM_MERGED, "counted once, also listed as <other lines>; evidence: <reason>"),
     (SYM_LABEL, "industry label corrected; from <old> to <new>; reason, date"),
     (SYM_SIZE, "size corrected or excluded; reported <figure>; reason, date"),
     (SYM_IDENTITY, "identity corrected: the provider's PrimaryTicker names a different company; "

@@ -8,6 +8,8 @@ pipeline nor anything that could reach a model at import time — see
 """
 from __future__ import annotations
 
+from aristos_council.plurals import has_have, is_are, noun, plural, verb, was_were
+
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -98,7 +100,7 @@ class BuildOutcome:
             return head + " Not frozen."
         flags = len(self.quality.flags) if self.quality else 0
         return (f"{head} Frozen at v{self.version} in {self.directory}"
-                + (f", {flags} check(s) flagged." if flags else ", no checks flagged."))
+                + (f", {plural(flags, 'check')} flagged." if flags else ", no checks flagged."))
 
 
 # --------------------------------------------------------------------------- #
@@ -263,13 +265,13 @@ def build(defn: CohortDefinition, *, source: EODHDSource | None = None,
     # about a fifth of the requests (2,289 survivors of 12,829 candidates on the live index).
     provider = history_provider if history_provider is not None else default_history_provider
     members, removals = clean(candidates, defn)
-    say(f"{defn.name}: measuring history for {len(members)} of {len(candidates)} name(s)…")
+    say(f"{defn.name}: measuring history for {len(members)} of {plural(len(candidates), 'name')}…")
     years = provider(members) or {}
     for cand in members:
         if cand.ticker in years:
             cand.history_years = years[cand.ticker]
     members, removals = clean(candidates, defn)
-    log.append(f"History established for {len(years)} of {len(candidates)} name(s); it is measured "
+    log.append(f"History established for {len(years)} of {plural(len(candidates), 'name')}; it is measured "
                f"only for the names that passed every other rule.")
     out.members, out.removals = members, removals
     if pool_obj is not None:
@@ -287,7 +289,7 @@ def build(defn: CohortDefinition, *, source: EODHDSource | None = None,
     rank = ranker if ranker is not None else default_ranker
     tickers = [yahoo_symbol(c.ticker) for c in members]
     strategy_id, lens_source = resolve_lens(defn, strategy_id)
-    say(f"{defn.name}: ranking {len(tickers)} name(s) under {strategy_id} (no LLM)…")
+    say(f"{defn.name}: ranking {plural(len(tickers), 'name')} under {strategy_id} (no LLM)…")
     ranked, unrateable, setup, screened = _unpack_ranked(rank(tickers, strategy_id, today=today))
     version = next_version(root, defn.slug, rebuild=rebuild)
     out.quality = run_checks(
@@ -366,14 +368,14 @@ def check(defn: CohortDefinition, *, root: str | Path = DEFAULT_ROOT,
     members = read_members(version_dir(root, defn.slug, version) / MEMBERS_FILE)
     rank = ranker if ranker is not None else default_ranker
     strategy_id, lens_source = resolve_lens(defn, strategy_id)
-    say(f"{defn.name}: ranking {len(members)} frozen member(s) under {strategy_id}…")
+    say(f"{defn.name}: ranking {plural(len(members), 'frozen member')} under {strategy_id}…")
     ranked, unrateable, setup, screened = _unpack_ranked(
         rank([yahoo_symbol(c.ticker) for c in members], strategy_id, today=today))
     report = run_checks(cohort=defn.name, version=version, ranked=ranked,
                         unrateable=unrateable, members=members, setup=setup,
                         anchors=defn.anchors, screened_out=screened, lens=strategy_id,
                         lens_source=lens_source)
-    lines = [f"{defn.name} v{version} — {len(members)} member(s); lens {strategy_id} "
+    lines = [f"{defn.name} v{version} — {plural(len(members), 'member')}; lens {strategy_id} "
              f"({lens_source})"]
     lines += [f"  {c.name}: {c.line()}" for c in report.checks]
     return report, "\n".join(lines)
@@ -472,15 +474,15 @@ def plan(defs: list[CohortDefinition], pool, *, root: str | Path = DEFAULT_ROOT
         entry.matched = len(candidates)
         entry.excluded = excluded_for(defn, pool)
         if not candidates:
-            entry.error = (f"no company in the index carries the code(s) "
-                           f"{', '.join(defn.industry)}")
+            entry.error = (f"no company in the index carries the "
+                           f"{noun(len(defn.industry), 'code')} {', '.join(defn.industry)}")
             entries.append(entry)
             continue
         if defn.gics_subindustry:
             carried = {c.gics_subindustry.lower() for c in candidates}
             missing = [s for s in defn.gics_subindustry if s.lower() not in carried]
             if missing:
-                entry.error = (f"no company under the code(s) {', '.join(defn.industry)} carries "
+                entry.error = (f"no company under the {noun(len(defn.industry), 'code')} {', '.join(defn.industry)} carries "
                                f"the GICS sub-industry {', '.join(missing)}")
                 entries.append(entry)
                 continue
@@ -545,7 +547,7 @@ def format_plan(entries: list[PlanEntry], pool=None, *, all_members: bool = Fals
             listed = e.top
         flagged_all = sum(1 for m in e.members if m.flags)
         if flagged_all:
-            out.append(f"  flagged:   {flagged_all} of {len(e.members)} member(s) carry a "
+            out.append(f"  flagged:   {flagged_all} of {plural(len(e.members), 'member')} {verb(flagged_all, 'carries', 'carry')} a "
                        f"correction symbol"
                        + ("" if all_members else " (--members lists them all, with the legend)"))
         legend = legend_lines(listed, e.excluded)
@@ -557,15 +559,15 @@ def format_plan(entries: list[PlanEntry], pool=None, *, all_members: bool = Fals
             notes.append(f"a cohort with this slug is already frozen at v{e.frozen_version} "
                          f"and will not be touched")
         if e.untranslatable:
-            notes.append(f"{e.untranslatable} member(s) have no Yahoo symbol")
+            notes.append(f"{plural(e.untranslatable, 'member')} {has_have(e.untranslatable)} no Yahoo symbol")
         if notes:
             out.append("  note:      " + "; ".join(notes))
         out.append("")
     tally = Counter(e.status for e in entries)
     watched_n = sum(1 for e in entries if e.definition.watch)
-    out.append(f"{len(entries)} cohort(s): {tally.get('ok', 0)} in band "
+    out.append(f"{plural(len(entries), 'cohort')}: {tally.get('ok', 0)} in band "
                f"({MIN_MEMBERS}-{MAX_MEMBERS}), {tally.get('thin', 0)} thin, "
-               f"{tally.get('wide', 0)} wide, {tally.get('error', 0)} error(s); "
+               f"{tally.get('wide', 0)} wide, {plural(tally.get('error', 0), 'error')}; "
                f"{watched_n} flagged watch.")
     out.append("The history test (5 years) is measured at build time and can only remove "
                "names; a cohort near the bottom of the band can land under it. Nothing is padded "
