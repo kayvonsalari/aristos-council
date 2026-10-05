@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests._env import needs_local_saved_list
 
 pytest.importorskip("streamlit")
 
@@ -316,6 +317,7 @@ def test_company_run_with_summary_and_council_unticked_makes_zero_model_calls(mo
     assert not at.exception, at.exception
 
 
+@needs_local_saved_list
 def test_council_ticked_with_zero_lenses_still_makes_zero_model_calls(monkeypatch):
     """COUNCIL-OPINION-1's own guard (``write_council_opinion``: no votes -> an early
     returned note, never a model call) survives this merge — pinned here at the UI

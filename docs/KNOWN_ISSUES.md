@@ -28,6 +28,15 @@ The Markdown exports are built in `app.py`, which imports streamlit, so the swee
 extra for exactly this reason (Batch 18B), and on CI a missing Markdown export fails the sweep rather
 than skipping it. A bare developer checkout without the extra skips that half.
 
+## Seven app-driving tests need the owner's own saved lists
+
+`test_app.py`, `test_confirm_spend.py`, `test_run_mode_control.py` and `test_tab_merge_commit3.py` each
+have tests that start the real Streamlit app and expect a saved ticker list under
+`universes/local/` (git-ignored). On a fresh checkout and on CI there is none, the Run button is
+disabled, and those seven tests skip with that reason (`tests/_env.py`). They were never exercised on CI
+before the `ui` extra was installed there (Batch 18B). **What changes it:** make them build their own
+saved list in a temp directory.
+
 ## Gap Ledger still prints "(s)" in a few lines
 
 Gap Ledger is a separate tool under a feature freeze (only bug fixes until 40 scored days exist), so

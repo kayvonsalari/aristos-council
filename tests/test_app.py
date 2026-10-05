@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests._env import needs_local_saved_list
 
 pytest.importorskip("streamlit")
 
@@ -1123,6 +1124,7 @@ def test_the_one_ticker_box_saves_in_place_or_as_a_new_list():
     assert any(t.label == "List name" for t in at.text_input)
 
 
+@needs_local_saved_list
 def test_selecting_a_saved_list_loads_its_tickers_into_the_one_box():
     # Load-on-select (no "Load into editor" button any more): picking a list seeds the box,
     # where it is edited before running.
