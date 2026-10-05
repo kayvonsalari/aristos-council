@@ -78,6 +78,7 @@ from .factors import (
     price_divergence_flag,
     reversion_value_for,
     screen_evaluate,
+    screen_unavailable_reason,
 )
 from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
@@ -363,6 +364,15 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
                     reason = f"{reason} {flag}"
                 _stash_shadow(shadow_pool, t, fi, rank_strategy)
                 excluded.append((t, reason))
+                continue
+            # NULL-EXCLUDES-2: a screen rule that could not read its input is not a pass. The
+            # lens does not apply to this name (not a fail, not a vote), exactly as a failed rule
+            # takes it out of the ranked set - it must never be ranked on a gap the screen had
+            # no figure to check.
+            unavailable = screen_unavailable_reason(outcomes, f)
+            if unavailable is not None:
+                _stash_shadow(shadow_pool, t, fi, rank_strategy)
+                excluded.append((t, unavailable))
                 continue
         outcomes = compute_factor_outcomes(
             fi, [fac.name for fac in rank_strategy.factors])

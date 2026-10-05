@@ -1379,6 +1379,41 @@ def price_divergence_flag(fi: FactorInputs, screen_criteria) -> Optional[str]:
             f"human review]")
 
 
+# Screen rules whose NOT-EVAL is a documented keep-and-flag, not a missing input: the payout
+# rules abstain when free cash flow / EPS is zero or negative (a real figure that makes a ratio
+# meaningless, e.g. DUK/SO), and the name still passes with a dagger (ITEM 3).
+_KEEP_ON_ABSTAIN_PREFIXES = ("max_payout_ratio",)
+
+
+def screen_unavailable_reason(outcomes: dict, fundamentals) -> Optional[str]:
+    """NULL-EXCLUDES-2 — the reason a lens DOES NOT APPLY to a name whose screen could not read
+    one of its inputs, or None when every rule had what it needed.
+
+    The screen's rule is that a MISSING figure is NOT-EVAL and never a phantom FAIL (rule 3) — the
+    name is not failed. But a name whose screen rule abstained on a missing input must not then be
+    RANKED as though the rule had cleared it: AMD's ROIC was unavailable, "Return on invested
+    capital" read "passed 1, not tested 1", and AMD was counted among "2 passed its rules". The
+    lens abstains instead: ``"does not apply - <rule> not available"`` (not a fail, not a vote).
+
+    Two abstentions are NOT missing inputs and keep their own handling: a non-USD market cap
+    (rule 8 - the figure is there, only the currency comparison is refused) and the payout rules
+    (above). First not-evaluated rule in screen order names the reason."""
+    from .tools.criteria.registry import REGISTRY
+    from .tools.screening import _non_usd_currency
+    for name, o in outcomes.items():
+        if o.get("passed") is not None:
+            continue
+        if name.startswith(_KEEP_ON_ABSTAIN_PREFIXES):
+            continue
+        if name == "min_market_cap" and _non_usd_currency(fundamentals) is not None:
+            continue
+        label = getattr(REGISTRY.get(name), "label", "") or name
+        if label[1:2].islower():
+            label = label[0].lower() + label[1:]
+        return f"{label} not available"
+    return None
+
+
 def screen_evaluate(screen_criteria, fi: FactorInputs):
     """Run a screen ONCE and return ``(first_confirmed_fail_reason | None, bases,
     abstentions, outcomes)``:
