@@ -1710,7 +1710,8 @@ def rules_applied(result) -> Optional[RulesApplied]:
         screen_label=(result.meta.get("screen_strategy_name", "") if result.meta else ""),
         screen_id=(getattr(screen, "id", "") if screen is not None else ""),
         prefilter=bool((result.meta or {}).get("prefilter_screen")),
-        rules=rules, ranker_lines=_ranker_filter_lines(rank))
+        rules=rules,
+        ranker_lines=_ranker_filter_lines(rank, covered_floor=_prefilter_floor(screen, result)))
 
 
 @dataclass(frozen=True)
@@ -1777,7 +1778,18 @@ _MISSING_PHRASE = {
 }
 
 
-def _ranker_filter_lines(rank) -> list[str]:
+def _prefilter_floor(screen, result) -> Optional[float]:
+    """The size floor the lens's PREFILTER screen already states (its ``min_market_cap`` rule), or
+    None. A prefilter's rule table prints it, so the ranker's own line must not print a second,
+    different-looking floor for the same gate (DEFINC-FLOOR-1: Defensive Income read "at least
+    $5.0bn" in the table and "at least $1.0bn (applied by the ranker)" beneath it)."""
+    if screen is None or not bool((getattr(result, "meta", None) or {}).get("prefilter_screen")):
+        return None
+    return next((c.threshold for c in (getattr(screen, "criteria", None) or [])
+                 if getattr(c, "name", "") == "min_market_cap"), None)
+
+
+def _ranker_filter_lines(rank, covered_floor: Optional[float] = None) -> list[str]:
     """The RANKER's own filters, in the same plain register as the screen's rules — the
     cut, the factors it ranks on, the market-cap floor, any sector scope, and how a
     missing value is treated. These decide outcomes exactly as the screen's rules do, so
@@ -1804,7 +1816,11 @@ def _ranker_filter_lines(rank) -> list[str]:
     if labels:
         lines.append("Names ranked on: " + ", ".join(labels) + ".")
     floor = getattr(rank, "min_market_cap", None)
-    if floor:
+    # DEFINC-FLOOR-1: the floor is stated ONCE. When the prefilter screen carries a floor at
+    # least as high as the ranker's own, the screen's is the one that binds (a name between the
+    # two passes the ranker's gate and fails the screen's), and its row is already in the table
+    # above; the ranker's lower number would be a second floor that never decides anything.
+    if floor and not (covered_floor is not None and covered_floor >= floor):
         lines.append("Company size: at least "
                      + format_value(floor, UNIT_CURRENCY, currency="USD")
                      + " (applied by the ranker, before the screen).")
