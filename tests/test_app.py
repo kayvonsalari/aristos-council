@@ -1135,9 +1135,8 @@ def test_selecting_a_saved_list_loads_its_tickers_into_the_one_box():
     from streamlit.testing.v1 import AppTest
     at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
-    list_dd = _dropdown(at, "List")
-    assert list_dd.options[0] == "New list"
-    first_saved = list_dd.options[1]                     # whatever ships / is saved
+    list_dd = _dropdown(_source(at, "Saved list"), "My lists")
+    first_saved = list_dd.options[0]                     # whatever ships / is saved
     list_dd.set_value(first_saved).run()
     assert not at.exception
     loaded = at.session_state["uni_tickers"].splitlines()

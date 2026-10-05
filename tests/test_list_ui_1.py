@@ -112,7 +112,7 @@ def test_floor_formatting():
 
 
 def test_a_saved_list_label_carries_the_built_for_tag_and_ends_with_the_count():
-    assert li.saved_list_label("Income picks", 16, "income") == "Income picks (income) · 16 names"
+    assert li.saved_list_label("Income picks", 16, "income") == "Income picks · income · 16 names"
     assert li.saved_list_label("Mine", 1) == "Mine · 1 name"
 
 
@@ -270,7 +270,7 @@ def test_the_saved_list_answer_has_its_own_dropdown_and_loads_the_box(monkeypatc
     monkeypatch.setattr(_univ, "list_universes", fake)
     at = _source(_page(), "Saved list")
     dd = next(s for s in at.selectbox if str(s.label) == "My lists")
-    assert dd.options == ["Mine (income) · 2 names"]
+    assert dd.options == ["Mine · income · 2 names"]
     dd.set_value(dd.options[0]).run()
     assert not at.exception
     assert at.session_state["uni_tickers"].splitlines() == ["AAPL", "MSFT"]

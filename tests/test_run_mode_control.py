@@ -277,8 +277,9 @@ def test_the_button_states_the_NAME_COUNT_and_cost_before_a_narrated_multi_lens_
     at = _run_tab(extra_lens=raw)
     # a cohort is needed for an estimate to exist at all (an empty list omits it rather
     # than inventing one) — pick the first saved list.
-    lists = next(s for s in at.selectbox if str(s.label) == "List")
-    lists.set_value(next(o for o in lists.options if "names" in o)).run()  # not "New list"
+    next(r for r in at.radio if str(r.label) == "List source").set_value("Saved list").run()
+    lists = next(s for s in at.selectbox if str(s.label) == "My lists")
+    lists.set_value(next(o for o in lists.options if "name" in o)).run()
     _run_mode_widget(at).set_value(app.RUN_MODE_NARRATOR).run()
     label = _run_button(at).label
     assert label.startswith("▶ Run 2 lenses — ")

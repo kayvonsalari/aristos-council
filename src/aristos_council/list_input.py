@@ -137,9 +137,9 @@ def cohort_labels(options) -> list[str]:
 # saved lists
 # --------------------------------------------------------------------------- #
 def saved_list_label(name: str, n: int, thesis: str = "") -> str:
-    """``Defensive names (income) · 16 names`` — the count LAST (the page and its tests read it
+    """``Defensive names · income · 16 names`` — the count LAST (the page and its tests read it
     there), the built-for tag, when the list states one, beside the name."""
-    tag = f" ({thesis})" if thesis else ""
+    tag = f" · {thesis}" if thesis else ""
     return f"{name}{tag} · {plural(n, 'name')}"
 
 
