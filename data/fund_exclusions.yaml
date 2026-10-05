@@ -1,0 +1,30 @@
+# PEER-FUND-2 (19A) - investment companies and closed-end funds that the market index's name and
+# classification tests cannot recognise, so they passed the "fund, not a company" filter and stood as
+# peers of operating companies. LAST RESORT: add a line here only when no general rule would catch
+# the row, and give the evidence. DATA CORRECTIONS ONLY, same discipline as
+# data/identity_aliases.yaml: the table on disk is not rewritten, and an excluded row is counted in
+# `status` and in a peer group's "skipped: fund, not a company" line, never silently dropped.
+#
+# Each entry needs: ticker (EODHD form), date, reason.
+exclusions:
+  - ticker: BION.SW
+    date: 2026-10-05
+    reason: >-
+      BB Biotech AG is a closed-end investment company (a listed holding of biotech shares, SIX Swiss
+      and Xetra lines) that the provider files under "Biotechnology" with the plain name of an
+      operating company. Found in Viking Therapeutics' biotech peer group on 2026-10-05; its value
+      is the market value of other companies' shares, so it has no earnings of its own to rank.
+  - ticker: BBZA.XETRA
+    date: 2026-10-05
+    reason: >-
+      The Xetra line of BB Biotech AG (see BION.SW): same closed-end investment company.
+  - ticker: HBMN.SW
+    date: 2026-10-05
+    reason: >-
+      HBM Healthcare Investments is a closed-end investment company holding healthcare shares; it
+      carries the name of an operator and no fund word.
+  - ticker: HQH.US
+    date: 2026-10-05
+    reason: >-
+      Tekla Healthcare Investors is a US closed-end fund (the provider lists it as Common Stock under
+      Asset Management); the name carries no fund word.
