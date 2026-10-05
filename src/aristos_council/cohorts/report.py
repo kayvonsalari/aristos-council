@@ -6,6 +6,8 @@ underneath — a cohort you cannot argue with is a cohort you cannot trust.
 """
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 from datetime import date
 
 from .cleanup import RULE_NAMES, Removal, SizeVerdict
@@ -90,7 +92,7 @@ def render_report(*, defn: CohortDefinition, version: int, built_on: date,
             add(f"**{check.name}** — {check.line()}")
             add("")
         flags = quality.flags
-        add(f"{len(flags)} check(s) flagged"
+        add(f"{plural(len(flags), 'check')} flagged"
             + (f": {', '.join(c.name for c in flags)}." if flags else "."))
     add("")
 
@@ -153,9 +155,9 @@ def render_diff(*, defn: CohortDefinition, version: int, added: list[Candidate],
                 removed: list[Candidate], unchanged: int) -> str:
     out = [f"# {defn.name} — what a rebuild would change (against v{version})", ""]
     if not added and not removed:
-        out += [f"Nothing. All {unchanged} member(s) would be rebuilt identically.", ""]
+        out += [f"Nothing. All {plural(unchanged, 'member')} would be rebuilt identically.", ""]
         return "\n".join(out)
-    out += [f"{unchanged} member(s) unchanged, {len(added)} would join, "
+    out += [f"{plural(unchanged, 'member')} unchanged, {len(added)} would join, "
             f"{len(removed)} would leave.", ""]
     if added:
         out += [f"## Would join ({len(added)})", ""]

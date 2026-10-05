@@ -292,8 +292,8 @@ def test_a_taiwan_etf_and_a_suspect_bank_are_never_pharma_peers():
 
 def test_the_peer_reasons_count_what_was_left_out_and_why():
     group = peers("P01.US", rows=_universe())
-    assert f"1 candidate(s) skipped: {FUND_NOT_A_COMPANY}" in group.reasons
-    assert any(f"1 candidate(s) skipped: {CLASSIFICATION_SUSPECT}" in r for r in group.reasons)
+    assert f"1 candidate skipped: {FUND_NOT_A_COMPANY}" in group.reasons
+    assert any(f"1 candidate skipped: {CLASSIFICATION_SUSPECT}" in r for r in group.reasons)
 
 
 def test_the_excluded_rows_are_still_in_the_table():
@@ -335,15 +335,15 @@ def test_status_counts_funds_and_suspects_separately():
 
 def test_status_says_fund_not_a_company_in_those_words():
     text = "\n".join(status(_Store(_universe())).lines())
-    assert "1 row(s) are fund, not a company, excluded from peer groups (e.g. 0052.TW)" in text
-    assert "1 row(s) classification suspect - kept, excluded from peer groups (e.g. BNK.HK)" \
+    assert "1 row is fund, not a company, excluded from peer groups (e.g. 0052.TW)" in text
+    assert "1 row classification suspect - kept, excluded from peer groups (e.g. BNK.HK)" \
         in text
 
 
 def test_status_on_an_index_with_neither_says_zero_not_nothing():
     text = "\n".join(status(_Store([_pharma("P01.US")])).lines())
-    assert "0 row(s) are fund, not a company" in text
-    assert "0 row(s) classification suspect" in text
+    assert "0 rows are fund, not a company" in text
+    assert "0 rows classification suspect" in text
 
 
 def test_status_only_names_a_handful_of_examples():

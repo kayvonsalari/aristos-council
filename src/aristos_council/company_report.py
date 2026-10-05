@@ -35,6 +35,8 @@ with no new model call on reopen.
 """
 from __future__ import annotations
 
+from aristos_council.plurals import has_have, is_are, plural, was_were
+
 import json
 import re
 import time
@@ -385,7 +387,7 @@ def _company_check_frame(report: CompanyReport):
         id="company_check_run", name=f"Company Check: {report.display}", version=1,
         criteria=[],
         description=(f"One company ({report.display}) measured against its peer group by "
-                     f"{len(report.votes)} lens(es): {labels}."),
+                     f"{plural(len(report.votes), 'lens', 'lenses')}: {labels}."),
         rationale=("Each lens reaches its own verdict on its own terms; the equal-vote "
                    "agreement is the verdict of record. This narration ATTRIBUTES what "
                    "each lens found about this company — it never reconciles the lenses "
@@ -901,7 +903,7 @@ def run_company_report(
             report.smallcap_band_note = _no_band_reason(band)
             if skipped:
                 report.check.peer_group.reasons.append(
-                    f"{len(skipped)} peer(s) have no Yahoo symbol and were not ranked: "
+                    f"{plural(len(skipped), 'peer')} {has_have(len(skipped))} no Yahoo symbol and were not ranked: "
                     + ", ".join(skipped))
         else:
             why = ("; ".join(group.reasons) if group is not None and group.reasons
@@ -918,7 +920,7 @@ def run_company_report(
         peers_, skipped = peers_for_ranking(group)
         universe = [ticker] + [p for p in peers_ if p.upper() != ticker.upper()]
         report.universe = universe
-        say(f"Ranking {ticker} against {len(universe) - 1} peers under {len(ids)} lens"
+        say(f"Ranking {ticker} against {plural(len(universe) - 1, 'peer')} under {len(ids)} lens"
             f"{'es' if len(ids) != 1 else ''}…")
         from .pipeline import run_multi_strategy_pipeline
         multi = run_multi_strategy_pipeline(
@@ -929,7 +931,7 @@ def run_company_report(
         report.lens_ranks = lens_ranks_record(multi)
         if skipped:
             report.check.peer_group.reasons.append(
-                f"{len(skipped)} peer(s) have no Yahoo symbol and were not ranked: "
+                f"{plural(len(skipped), 'peer')} {has_have(len(skipped))} no Yahoo symbol and were not ranked: "
                 + ", ".join(skipped))
     if not report.votes and ids:
         report.votes = [LensVote(strategy_id=sid, label=sid, status="no_group",

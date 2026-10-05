@@ -29,6 +29,8 @@ Nothing here reaches a model. The CLI:
 """
 from __future__ import annotations
 
+from aristos_council.plurals import has_have, is_are, plural, verb, was_were
+
 import http.client
 import json
 import os
@@ -756,8 +758,8 @@ class GbxRepair:
     dry_run: bool = False
 
     def lines(self) -> list[str]:
-        out = [f"{'Would repair' if self.dry_run else 'Repaired'} {self.repaired} pence-scaled "
-               f"row(s); {self.already_ok} already correct; {self.skipped} skipped "
+        out = [f"{'Would repair' if self.dry_run else 'Repaired'} {plural(self.repaired, 'pence-scaled row')}; "
+               f"{self.already_ok} already correct; {self.skipped} skipped "
                f"(no cap / no USD figure / an implied rate that does not look like 0.01 x GBPUSD)"
                + (f" e.g. {', '.join(self.skipped_examples)}" if self.skipped_examples else "")]
         if self.backup:
@@ -910,11 +912,11 @@ class BuildOutcome:
     stopped: str = ""
 
     def summary(self) -> str:
-        head = (f"{self.fetched} row(s) fetched ({self.refetched_incomplete} refetched "
+        head = (f"{plural(self.fetched, 'row')} fetched ({self.refetched_incomplete} refetched "
                 f"for a missing cap), {self.skipped_fresh} still fresh, "
                 f"{self.waiting_on_backoff} waiting on the empty-gap backoff, "
                 f"{self.dropped_venue} dropped on venue, {self.failed} failed; "
-                f"{self.requests} request(s) = {self.charged:,} charged of "
+                f"{plural(self.requests, 'request')} = {self.charged:,} charged of "
                 f"{self.budget:,}")
         if self.skipped_exchanges:
             head += f". {self.skipped_sentence()}"
@@ -1017,14 +1019,14 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
     due = [r for r in stale if r.retry_due(today, **backoff)]
     waiting = len(stale) - len(due)
     if stale:
-        say(f"{len(stale)} existing row(s) are incomplete (no market cap, or fetched "
+        say(f"{plural(len(stale), 'existing row')} {is_are(len(stale))} incomplete (no market cap, or fetched "
             f"before PrimaryTicker/ISIN were stored); {len(due)} are due a refetch - about "
             f"{len(due) * CHARGE_FUNDAMENTALS:,} charged units")
     if waiting:
         # INDEX-CAP-RETRY-1 — said up front, because "the build got cheaper" should never be
         # something the owner has to infer from the bill.
-        say(f"{waiting} incomplete row(s) are waiting on the empty-gap backoff "
-            f"({empty_retry_after} empty attempts, retried every {empty_retry_days} days) - "
+        say(f"{plural(waiting, 'incomplete row')} {is_are(waiting)} waiting on the empty-gap backoff "
+            f"({empty_retry_after} empty attempts, retried every {plural(empty_retry_days, 'day')}) - "
             f"about {waiting * CHARGE_FUNDAMENTALS:,} charged units NOT spent")
 
     try:
@@ -1067,12 +1069,12 @@ def build(*, exchanges: Optional[list[str]] = None, store: Optional[IndexStore] 
                         if venue_allowed(str(l.get("Exchange") or ""), allowed)]
             outcome.eligible += len(eligible)
             if allowed:
-                say(f"{exchange}: {len(listings)} common stock(s) listed, "
+                say(f"{exchange}: {plural(len(listings), 'common stock')} listed, "
                     f"{len(eligible)} on {', '.join(allowed)} - "
                     f"{len(listings) - len(eligible)} other venues skipped before any "
                     f"fundamentals call")
             else:
-                say(f"{exchange}: {len(listings)} common stock(s) listed, no venue "
+                say(f"{exchange}: {plural(len(listings), 'common stock')} listed, no venue "
                     f"restriction")
 
             # Rows already in the store whose venue is NOT allowed are removed. They were
@@ -1235,7 +1237,7 @@ class IndexStatus:
         if not self.rows:
             return [f"Market index: EMPTY ({self.path} does not exist yet).",
                     "Build it with:  python -m aristos_council.market_index build"]
-        out = [f"Market index: {self.rows} row(s) in {self.path}",
+        out = [f"Market index: {plural(self.rows, 'row')} in {self.path}",
                f"  complete (usable as peers): {self.complete}",
                f"  no market cap:              {self.missing_cap}"
                f"  ({self.cap_due} due, {self.cap_waiting} waiting)",
@@ -1243,52 +1245,52 @@ class IndexStatus:
                f"  ({self.classification_due} due, "
                f"{self.classification_waiting} waiting)",
                f"  no USD conversion:          {self.missing_usd}",
-               f"  {self.cross_listings} cross-listing(s), excluded from peer groups",
-               f"  {self.unresolved} row(s) with neither PrimaryTicker nor ISIN "
+               f"  {plural(self.cross_listings, 'cross-listing')}, excluded from peer groups",
+               f"  {plural(self.unresolved, 'row')} with neither PrimaryTicker nor ISIN "
                f"(unresolved; treated as home listings)",
-               f"  {self.needs_refetch} row(s) will be REFETCHED by the next build",
-               f"  {self.funds} row(s) are {FUND_NOT_A_COMPANY}, excluded from peer groups"
+               f"  {plural(self.needs_refetch, 'row')} will be REFETCHED by the next build",
+               f"  {plural(self.funds, 'row')} {is_are(self.funds)} {FUND_NOT_A_COMPANY}, excluded from peer groups"
                + (f" (e.g. {', '.join(self.fund_examples)})" if self.fund_examples else ""),
-               f"  {self.suspect} row(s) {CLASSIFICATION_SUSPECT} - kept, excluded from "
+               f"  {plural(self.suspect, 'row')} {CLASSIFICATION_SUSPECT} - kept, excluded from "
                f"peer groups" + (f" (e.g. {', '.join(self.suspect_examples)})"
                                  if self.suspect_examples else ""),
                f"  oldest row: {self.oldest or 'unknown'}",
                "  per exchange:"]
         if self.aliased or self.orphan_adrs:
             out.insert(out.index("  per exchange:"), (
-                f"  {self.aliased} row(s) carry an identity alias (data/identity_aliases.yaml)"
+                f"  {plural(self.aliased, 'row')} {verb(self.aliased, 'carries', 'carry')} an identity alias (data/identity_aliases.yaml)"
                 + (f": {', '.join(self.aliased_examples)}" if self.aliased_examples else "")))
             out.insert(out.index("  per exchange:"), (
-                f"  {self.orphan_adrs} US ADR/ADS row(s) name no home and share their name with "
+                f"  {plural(self.orphan_adrs, 'US ADR/ADS row')} {verb(self.orphan_adrs, 'names', 'name')} no home and {verb(self.orphan_adrs, 'shares its', 'share their')} name with "
                 f"no other row - unlinked, may count a company twice"
                 + (f" (e.g. {', '.join(self.orphan_adr_examples)})"
                    if self.orphan_adr_examples else "")))
         if self.possible_foreign:
             out.insert(out.index("  per exchange:"), (
-                f"  {len(self.possible_foreign)} Toronto row(s) with no identity share a cleaned "
+                f"  {plural(len(self.possible_foreign), 'Toronto row')} with no identity share a cleaned "
                 f"name with a row that has one - possible foreign lines (report only, nothing "
                 f"excluded): {', '.join(self.possible_foreign)}"))
         if self.contradicting_pairs:
             out.insert(out.index("  per exchange:"), (
-                f"  {len(self.contradicting_pairs)} pair(s) of US rows share a cleaned name under "
+                f"  {plural(len(self.contradicting_pairs), 'pair')} of US rows share a cleaned name under "
                 f"different ISINs while EODHD files them under contradicting industries - possibly "
                 f"a bond-like or preferred line read as a company (report only, nothing excluded): "
                 + "; ".join(f"{a} ({ia}) vs {b} ({ib})"
                             for a, ia, b, ib in self.contradicting_pairs)))
         if self.size_disputed:
             out.insert(out.index("  per exchange:"),
-                       f"  {self.size_disputed} company(ies) whose lines differ in size by more "
+                       f"  {plural(self.size_disputed, 'company')} whose lines differ in size by more "
                        f"than the limit and cannot be adjudicated - sizes used as they stand"
                        + (f" (e.g. {', '.join(self.size_disputed_examples)})"
                           if self.size_disputed_examples else ""))
         if self.size_suspect:
             out.insert(out.index("  per exchange:"),
-                       f"  {self.size_suspect} row(s) {SIZE_SUSPECT} - kept, excluded from peer "
+                       f"  {plural(self.size_suspect, 'row')} {SIZE_SUSPECT} - kept, excluded from peer "
                        f"groups" + (f" (e.g. {', '.join(self.size_suspect_examples)})"
                                     if self.size_suspect_examples else ""))
         if self.receipts:
             at = out.index("  per exchange:")
-            out.insert(at, f"  {sum(self.receipts.values())} secondary trading line(s) (receipts "
+            out.insert(at, f"  {plural(sum(self.receipts.values()), 'secondary trading line')} (receipts "
                            f"and foreign lines) - kept, excluded from peer groups; "
                            f"{self.receipts_sole} of them are the ONLY line of their company, so "
                            f"that company is absent from every peer group")
@@ -1305,7 +1307,7 @@ class IndexStatus:
             # INDEX-CAP-RETRY-1 - and they are no longer all refetched. The provider answers
             # "MarketCapitalization": "NA" for these and it does not change, so a row that has
             # come back empty twice waits a month. "Due" is what the next build will spend.
-            out.insert(1, f"  {self.missing_cap} row(s) carry NO MARKET CAP and cannot be "
+            out.insert(1, f"  {plural(self.missing_cap, 'row')} {verb(self.missing_cap, 'carries', 'carry')} NO MARKET CAP and cannot be "
                           f"peers; the next build refetches {self.cap_due} of them "
                           f"(~{self.cap_due * CHARGE_FUNDAMENTALS:,} charged units), "
                           f"{self.cap_waiting} are waiting on the backoff.")
@@ -2334,7 +2336,7 @@ class PeerGroup:
     def sentence(self) -> str:
         if not self.members:
             return "; ".join(self.reasons) or "no peer group could be formed"
-        text = (f"{len(self.members)} peers at {self.rung} ({self.band}), "
+        text = (f"{plural(len(self.members), 'peer')} at {self.rung} ({self.band}), "
                 f"index snapshot {self.snapshot or 'unknown'} - found at step {self.step} of "
                 f"{LADDER_STEPS}, {self.distinct_companies} distinct companies")
         return f"{text} - {BROAD_SECTOR_NOTE}" if self.broad else text
@@ -3006,33 +3008,33 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             group.reasons.append(_alias_line(alias))
 
     if own_lines:
-        group.reasons.append(f"{own_lines} other line(s) of {subject.name or subject.ticker} "
+        group.reasons.append(f"{plural(own_lines, 'other line')} of {subject.name or subject.ticker} "
                              f"left out: a company is never its own peer")
     if receipts:
         group.reasons.append(
-            f"{sum(receipts.values())} candidate(s) skipped: secondary trading line, not a "
+            f"{plural(sum(receipts.values()), 'candidate')} skipped: secondary trading line, not a "
             f"company (" + ", ".join(f"{kind} {n}" for kind, n in sorted(receipts.items()))
             + ")")
     if by_market:
         group.reasons.append(
-            f"{sum(by_market.values())} candidate(s) skipped: market excluded by setting "
+            f"{plural(sum(by_market.values()), 'candidate')} skipped: market excluded by setting "
             f"({', '.join(sorted(by_market))})")
     if size_suspect:
-        group.reasons.append(f"{size_suspect} candidate(s) skipped: {SIZE_SUSPECT} (a market "
+        group.reasons.append(f"{plural(size_suspect, 'candidate')} skipped: {SIZE_SUSPECT} (a market "
                              f"cap more than {size_factor:g}x from the same company's other "
                              f"listings)")
     if funds:
-        group.reasons.append(f"{funds} candidate(s) skipped: {FUND_NOT_A_COMPANY}")
+        group.reasons.append(f"{plural(funds, 'candidate')} skipped: {FUND_NOT_A_COMPANY}")
     if suspect:
-        group.reasons.append(f"{suspect} candidate(s) skipped: {CLASSIFICATION_SUSPECT} "
+        group.reasons.append(f"{plural(suspect, 'candidate')} skipped: {CLASSIFICATION_SUSPECT} "
                              f"(the label contradicts the name)")
     if no_cap:
-        group.reasons.append(f"{no_cap} candidate(s) skipped: no market cap in the index")
+        group.reasons.append(f"{plural(no_cap, 'candidate')} skipped: no market cap in the index")
     if no_usd:
-        group.reasons.append(f"{no_usd} candidate(s) skipped: a local market cap with no "
+        group.reasons.append(f"{plural(no_usd, 'candidate')} skipped: a local market cap with no "
                              f"USD conversion, so not comparable in size")
     if cross_listings:
-        group.reasons.append(f"{cross_listings} cross-listing(s) collapsed into their "
+        group.reasons.append(f"{plural(cross_listings, 'cross-listing')} collapsed into their "
                              f"home listing")
 
     ladder = (
@@ -3081,7 +3083,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             group.distinct_companies, shared = distinct_companies(group.members)
             if shared:
                 group.reasons.append(
-                    f"{shared} member(s) share a company name with another member: counted "
+                    f"{plural(shared, 'member')} {verb(shared, 'shares', 'share')} a company name with another member: counted "
                     f"once, listed twice")
             report_aliases(group.members)
             for member in [subject] + list(group.members):
@@ -3186,12 +3188,12 @@ class CleanPool:
     primary_was: dict = field(default_factory=dict)    # aliased ticker -> the PrimaryTicker given
 
     def lines(self) -> list[str]:
-        out = [f"{self.considered} row(s) in the index; {len(self.rows)} companies in the "
+        out = [f"{plural(self.considered, 'row')} in the index; {plural(len(self.rows), 'company', 'companies')} in the "
                f"cleaned pool (index snapshot {self.snapshot or 'unknown'})"]
         for reason, n in sorted(self.skipped.items()):
             out.append(f"  {n} skipped: {reason}")
         if self.collapsed:
-            out.append(f"  {self.collapsed} line(s) collapsed into their company's own row")
+            out.append(f"  {plural(self.collapsed, 'line')} collapsed into their company's own row")
         return out
 
 
@@ -3443,7 +3445,7 @@ def _cmd_build(args) -> int:
                  or config["exchanges"])
     max_age = getattr(args, "older_than", config["max_age_days"])
     _say(f"Exchanges: {', '.join(exchanges)}")
-    _say(f"Rows younger than {max_age} day(s) are skipped without a call.")
+    _say(f"Rows younger than {plural(max_age, 'day')} {is_are(max_age)} skipped without a call.")
     from .data.provider import select_market_adapter
     try:
         adapter = select_market_adapter("yfinance")

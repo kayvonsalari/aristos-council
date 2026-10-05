@@ -23,6 +23,10 @@ CLI / Colab cell calls to actually spend the runs.
 
 from __future__ import annotations
 
+from aristos_council.tools.price_context import format_money
+
+from aristos_council.plurals import noun, plural
+
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -149,8 +153,8 @@ def estimate_cost(n: int, per_run: float = _COST_PER_RUN_USD) -> float:
 
 
 def cost_guard_line(n: int, per_run: float = _COST_PER_RUN_USD) -> str:
-    return (f"Estimated cost: up to {n} runs x ${per_run:.2f} = "
-            f"${estimate_cost(n, per_run):.2f} (gated names short-circuit to 1 run)")
+    return (f"Estimated cost: up to {n} runs x {format_money(per_run, 'USD')} = "
+            f"{format_money(estimate_cost(n, per_run), 'USD')} (gated names short-circuit to 1 run)")
 
 
 def format_stability(report: StabilityReport) -> str:
@@ -258,7 +262,7 @@ def run_decision_n(
 
 def decision_cost_guard_line(n: int, per_run: float = _COST_PER_RUN_USD) -> str:
     """Cost guard for the MICRO-harness: one full upstream pass + cheap replays."""
-    return (f"Estimated cost: 1 full run (${per_run:.2f}) + up to {max(n - 1, 0)} "
+    return (f"Estimated cost: 1 full run ({format_money(per_run, 'USD')}) + up to {max(n - 1, 0)} "
             f"Decision-node replays (fractions of a cent each); gated names "
             f"short-circuit to the single run")
 
@@ -456,8 +460,8 @@ def _diagnose(agents: list[AgentStability], *, deterministic: bool) -> str:
                 "summary.")
     elif wobbling:
         diag = (f"Instability originates UPSTREAM in {', '.join(wobbling)}: the "
-                f"report itself is not fully stable — read the wobbling layer(s) "
-                f"with the same caution as the verdict.")
+                f"report itself is not fully stable — read the wobbling "
+                f"{noun(len(wobbling), 'layer')} with the same caution as the verdict.")
     else:
         diag = "Fully STABLE: every agent and the final verdict agreed across all runs."
 
@@ -502,7 +506,7 @@ def run_per_agent_n(
 
 def format_per_agent_table(report: PerAgentStabilityReport) -> str:
     """The per-agent stability table + the one-line verdict-on-the-diagnosis."""
-    lines = [f"{report.ticker}: per-agent stability over {report.n_run} full run(s)",
+    lines = [f"{report.ticker}: per-agent stability over {plural(report.n_run, 'full run')}",
              f"  {'agent':<12} {'distribution':<34} stable?"]
     for a in report.agents:
         dist = " / ".join(f"{k} {c}" for k, c in sorted(

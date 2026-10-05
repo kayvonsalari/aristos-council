@@ -244,7 +244,7 @@ def test_the_html_renders_every_group_with_its_rule_its_why_and_its_id():
     assert "Return on invested capital" in doc
     assert "· rule: at least 12%" in doc
     assert REGISTRY.get("min_roic").why in doc
-    assert "min_roic" in doc                      # the machine id, kept beside the label
+    assert "min_roic" not in doc                  # BATCH 18B: the machine id is not reader text
     assert "Where the numbers came from" in doc
 
 

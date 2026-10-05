@@ -12,6 +12,8 @@ that tripped it, so the report can be read as an argument rather than a result.
 """
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import re
 from dataclasses import dataclass
 
@@ -64,10 +66,10 @@ class SizeVerdict:
 
     def sentence(self) -> str:
         if self.status == "ok":
-            return f"{self.count} names, inside the {MIN_MEMBERS}–{MAX_MEMBERS} band."
+            return f"{plural(self.count, 'name')}, inside the {MIN_MEMBERS}–{MAX_MEMBERS} band."
         if self.status == "thin":
-            return f"TOO THIN: {self.count} names, under {MIN_MEMBERS}. {self.suggestion}"
-        return f"TOO WIDE: {self.count} names, over {MAX_MEMBERS}. {self.suggestion}"
+            return f"TOO THIN: {plural(self.count, 'name')}, under {MIN_MEMBERS}. {self.suggestion}"
+        return f"TOO WIDE: {plural(self.count, 'name')}, over {MAX_MEMBERS}. {self.suggestion}"
 
 
 def _company_key(cand: Candidate) -> str:
@@ -309,7 +311,7 @@ def size_verdict(members: list[Candidate], defn: CohortDefinition,
         elif extra:
             best, count = extra[0]
             enough = "would fill it" if count >= need else f"would add {count}, still short"
-            hint = (f"Adding {best} {enough} ({count} more name(s) matched the same "
+            hint = (f"Adding {best} {enough} ({plural(count, 'more name')} matched the same "
                     f"industry there).")
         else:
             hint = ("No other exchange in the source held a matching name — the industry "

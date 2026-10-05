@@ -44,6 +44,8 @@ Nothing here reads a model, and nothing here blocks a run.
 
 from __future__ import annotations
 
+from aristos_council.plurals import noun
+
 import re
 from dataclasses import dataclass, field
 from typing import Optional
@@ -360,7 +362,7 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
 
     missing = [f for f in _FIELDS if not fields[f].strip()]
     if missing:
-        reason = f"missing or empty field(s): {', '.join(missing)}"
+        reason = f"missing or empty {noun(len(missing), 'field')}: {', '.join(missing)}"
         return ReaderCheck(ok=False, reason=reason, problems=[reason])
 
     text = " ".join(fields[f] for f in _FIELDS)

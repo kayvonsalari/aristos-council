@@ -29,6 +29,8 @@ verdict, a rank, a threshold or an abstention — this module only chooses words
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import re
 
 from dataclasses import dataclass
@@ -177,9 +179,32 @@ def format_limit_clause(comparison: str, value, unit: str, *,
 # Ids — never removed, never alone
 # --------------------------------------------------------------------------- #
 def label_with_id(label: str, identifier: str) -> str:
-    """``"Defensive Income (conservative_plus_v1)"`` — the human name first, the stable
-    record key second. Falls back to the bare id when no label exists (never invents
-    one) and to the bare label when there is no id."""
+    """The name a READER sees for a lens, list or strategy: its human label, and never its record
+    key (Batch 18B - an id in reader text is a leak; the keys live in the saved run record).
+    Falls back to the id only when no label exists and the id is a plain word; an ad-hoc list
+    fingerprint reads "Pasted list"."""
+    label = (label or "").strip()
+    identifier = (identifier or "").strip()
+    if label:
+        return label
+    if identifier.startswith("adhoc"):
+        return "Pasted list"
+    return identifier
+
+
+def universe_display_name(meta: dict) -> str:
+    """What a reader calls the list: its saved name, "Edited from <name>", or "Pasted list" - never
+    its record key (``adhoc:...``)."""
+    name = str((meta or {}).get("universe_name") or "").strip()
+    if name:
+        return name
+    parent = str((meta or {}).get("derived_from") or "").strip()
+    return f"Edited from {parent}" if parent else "Pasted list"
+
+
+def label_with_key(label: str, identifier: str) -> str:
+    """``"Defensive Income (conservative_plus_v1)"`` - the old form, for text that is NOT shown to a
+    reader (the narrator's structured evidence, which attributes a verdict to a lens by key)."""
     label = (label or "").strip()
     identifier = (identifier or "").strip()
     if not label:
@@ -320,7 +345,7 @@ def format_summary_line(ranked, *, universe_size: int, excluded: int,
         verdicts = ""
         tail = [passed_too_few_text(ranked_n)]
     else:
-        tail = [f"{ranked_n} of {universe_size} names ranked"]
+        tail = [f"{ranked_n} of {plural(universe_size, 'name')} ranked"]
     if kind_gated:
         tail.append(kind_gated)
     if excluded:

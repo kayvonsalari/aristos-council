@@ -42,6 +42,8 @@ verdict.
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import re
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
@@ -100,10 +102,31 @@ def round_half_up(value: float, decimals: int = 2) -> float:
     return float(Decimal(value).quantize(quantum, rounding=ROUND_HALF_UP))
 
 
+NOT_AVAILABLE = "not available"
+
+
+def _prefixed(currency: Optional[str], amount: str) -> str:
+    """``amount`` with its currency in front and the minus sign OUTSIDE it: ``-$4.5bn``, never
+    ``$-4.5bn`` (Batch 18B). A bare amount when no currency is known."""
+    if not currency:
+        return amount
+    sign = "-" if amount.startswith("-") else ""
+    body = amount[1:] if sign else amount
+    sym = _SYMBOLS.get(currency)
+    return f"{sign}{sym}{body}" if sym else f"{sign}{currency} {body}"
+
+
+def _is_number(value) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and value == value and value not in (float("inf"), float("-inf")))
+
+
 def format_money(value: Optional[float], currency: Optional[str], *,
                  decimals: int = 2, abbreviate: bool = False) -> str:
-    """One money amount as every PRICE-1 surface renders it: ``$27.14``, ``€61.30``,
-    ``CHF 84.20`` — or a BARE ``27.14`` when the provider reported no currency.
+    """One money amount as every surface renders it: ``$27.14``, ``€61.30``, ``CHF 84.20``,
+    ``-$4.5bn`` - or a BARE ``27.14`` when the provider reported no currency - or the literal
+    ``not available`` for a missing, NaN or infinite value. Never ``$-``, ``$nan`` or ``$None``:
+    this is the ONE money formatter (Batch 18B).
 
     NEVER converts. The currency is part of the number, so a EUR-denominated ETF and a
     USD stock in the same table can't be read as comparable amounts. An unknown currency
@@ -115,39 +138,27 @@ def format_money(value: Optional[float], currency: Optional[str], *,
     positive one does — ``-$4.5bn``, never ``-4,501,657,000``. Default off, so every
     existing caller is byte-unchanged.
     """
-    if value is None:
-        return "—"
+    if not _is_number(value):
+        return NOT_AVAILABLE
     if abbreviate:
         size = abs(value)
         for cut, suffix in _MAGNITUDES:
             if size >= cut:
                 places = 2 if suffix == "tn" else 1
-                amount = f"{value / cut:,.{places}f}{suffix}"
-                if not currency:
-                    return amount
-                sym = _SYMBOLS.get(currency)
-                return f"{sym}{amount}" if sym else f"{currency} {amount}"
+                return _prefixed(currency, f"{value / cut:,.{places}f}{suffix}")
         # under a million: thousands separators, unabbreviated, and NO forced decimals —
         # "950,000" reads as money; "950,000.00" reads as a spreadsheet.
         decimals = 0 if float(value).is_integer() else decimals
-    amount = f"{value:,.{decimals}f}"
-    if not currency:
-        return amount
-    sym = _SYMBOLS.get(currency)
-    return f"{sym}{amount}" if sym else f"{currency} {amount}"
+    return _prefixed(currency, f"{value:,.{decimals}f}")
 
 
 def format_money_full(value: Optional[float], currency: Optional[str]) -> str:
     """The UNABBREVIATED amount — what a hover title carries beside an abbreviated one,
     and what the fact-checker resolves an abbreviated figure back to."""
-    if value is None:
-        return "—"
+    if not _is_number(value):
+        return NOT_AVAILABLE
     decimals = 0 if float(value).is_integer() else 2
-    amount = f"{value:,.{decimals}f}"
-    if not currency:
-        return amount
-    sym = _SYMBOLS.get(currency)
-    return f"{sym}{amount}" if sym else f"{currency} {amount}"
+    return _prefixed(currency, f"{value:,.{decimals}f}")
 
 
 @dataclass(frozen=True)
@@ -255,7 +266,7 @@ def price_context(bars: Sequence, *, currency: Optional[str] = None,
                         closes_in_window=len(window))
     if span_weeks < min_weeks:
         return replace(base,
-                       range_note=f"only {round(span_weeks)} weeks of closes")
+                       range_note=f"only {plural(round(span_weeks), 'week')} of closes")
 
     high = max(c for _, c in window)
     low = min(c for _, c in window)

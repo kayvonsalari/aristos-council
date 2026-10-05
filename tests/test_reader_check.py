@@ -140,7 +140,7 @@ def test_over_the_word_target_is_NOTED_with_the_count():
 
 def test_a_missing_field_is_withheld_and_named():
     check = check_summary(_summary(doubt="   "), PACK)
-    assert not check.ok and "missing or empty field(s): doubt" in check.reason
+    assert not check.ok and "missing or empty field: doubt" in check.reason
 
 
 def test_a_ticker_the_run_does_not_carry_is_caught():

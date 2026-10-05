@@ -36,6 +36,10 @@ to white-on-black borders so they stay legible in grayscale.
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
+from aristos_council.tools.price_context import format_money
+
 import html
 import re
 from datetime import datetime, timezone
@@ -861,10 +865,9 @@ def multi_strategy_report_html(multi_result, *,
     parts.append(
         '<header class="doc">'
         '<p class="kicker">Aristos Council · universe run · multi-lens</p>'
-        f"<h1>{_esc(title.headline)} "
-        f'<span class="record-id">{_esc(title.record_id)}</span></h1>'
+        f"<h1>{_esc(title.headline)}</h1>"
         + _kv([
-            ("Cohort", _esc(f'{cohort} — {m.get("universe_size", 0)} names')),
+            ("Cohort", _esc(f'{cohort} — {plural(m.get("universe_size", 0), "name")}')),
             ("Lenses", "<br>".join(_esc(lbl) for lbl in lens_labels)),
             # FLOOR-1: directly under the lenses, and only when the cohort was widened
             # for this run. _kv omits an empty value, so a no-override report is
@@ -994,8 +997,7 @@ def multi_strategy_report_html(multi_result, *,
             continue
         show_basis = any(r.measured for r in rules.rules)
         head = ["Rule", "Limit", "What it did"] + (["Measured on"] if show_basis else [])
-        body = [[f'<strong>{_esc(r.label)}</strong>'
-                 f'<br><code class="muted">{_esc(r.criterion)}</code>',
+        body = [[f'<strong>{_esc(r.label)}</strong>',
                  _esc(r.threshold_phrase), _esc(r.tally)]
                 + ([_esc(r.measured or "—")] if show_basis else [])
                 for r in rules.rules]
@@ -1022,7 +1024,7 @@ def multi_strategy_report_html(multi_result, *,
 
     # ----- 9: ONE common footer.
     parts.append(_footer())
-    return _document(title=title.full(), body="\n".join(parts))
+    return _document(title=title.headline, body="\n".join(parts))
 
 
 
@@ -1175,8 +1177,6 @@ def _detail_heading_html(group) -> str:
     the count. The id is muted and second, never dropped — the old bullet list carried it
     on every name for auditability, and grouping must not cost the document that."""
     return (f"<strong>{_esc(group.title)}</strong>"
-            + (f' <code class="muted">{_esc(group.key)}</code>'
-               if not group.is_gate else "")
             + (f' <span class="muted">· rule: {_esc(group.rule)}</span>'
                if group.rule else "")
             + f' · <strong>{group.count} '
@@ -1361,7 +1361,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         f"<h1>{_esc(title_name)} — {_esc(universe_label)}</h1>"
         + _kv([
             ("Universe", _esc(f'{universe_label} — '
-                              f'{m.get("universe_size", "—")} names')),
+                              f'{plural(m.get("universe_size", "—"), "name")}')),
             ("Strategy", _esc(label_with_id(m.get("rank_strategy_name", ""),
                                             strategy_id))),
             # CAPTION-1 — the question this lens asks, beside the lens's name. _kv omits
@@ -1375,13 +1375,12 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
             # be left dangling behind an em-dash with nothing before it.
             ("Run", _esc(" — ".join(p for p in (stamp, mode_phrase) if p))),
             ("Ranked", _esc(f'{m.get("ranked_count", "—")} of '
-                            f'{m.get("universe_size", "—")} names')),
+                            f'{plural(m.get("universe_size", "—"), "name")}')),
             ("Shortlist", "" if m.get("ranker_only") else
-             _esc(f'{len(m.get("shortlist") or [])} names · estimated cost '
-                  f'${float(m.get("est_cost") or 0.0):.2f} · narrating '
+             _esc(f'{plural(len(m.get("shortlist") or []), "name")} · estimated cost '
+                  f'{format_money(float(m.get("est_cost") or 0.0), "USD")} · narrating '
                   f'{m.get("narrate_coverage", "buys_only")}')),
-            ("Run id", f'<code class="muted">{_esc(m["run_id"])}</code>'
-                       if m.get("run_id") else ""),
+
         ])
         + f'<p class="house">{_esc(result.header)}</p>'
         f'<p class="summary">{_esc(summary_line(result))}</p>'
@@ -1395,8 +1394,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
     if rules is not None:
         show_basis = any(r.measured for r in rules.rules)
         head = ["Rule", "Limit", "What it did"] + (["Measured on"] if show_basis else [])
-        body = [[f'<strong>{_esc(r.label)}</strong>'
-                 f'<br><code class="muted">{_esc(r.criterion)}</code>',
+        body = [[f'<strong>{_esc(r.label)}</strong>',
                  _esc(r.threshold_phrase), _esc(r.tally)]
                 + ([_esc(r.measured or "—")] if show_basis else [])
                 for r in rules.rules]
@@ -1428,9 +1426,6 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
                 for r in rows]
         parts.append(_table(head, body, cls="ranked", titles=[
             "", "", "", *factor_names]))
-        parts.append('<p class="note">Factor ids, in column order: '
-                     + ", ".join(f"<code>{_esc(f)}</code>" for f in factor_names)
-                     + ".</p>")
         symbols = used_symbol_notes(result)
         if symbols:
             parts.append(_bullets(f'<code>{_esc(sym)}</code> — {_esc(note)}'
@@ -1556,7 +1551,7 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     parts = ['<header class="doc"><p class="kicker">Aristos Council · company report · one '
              "company against its peer group</p>"
              f"<h1>{_esc(report.display)}</h1>"
-             + _kv([("lenses", ", ".join(f"<code>{_esc(i)}</code>" for i in report.lens_ids)),
+             + _kv([("lenses", ", ".join(_esc(v.label) for v in report.votes) or "none ticked"),
                     ("run", _esc(stamp))])
              + header_tail + "</header>"]
     if report.unrateable:

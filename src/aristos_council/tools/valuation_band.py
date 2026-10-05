@@ -56,6 +56,8 @@ Pure and deterministic: same inputs -> same percentile. No IO, no LLM, no foreca
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import calendar
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -167,7 +169,7 @@ class ValuationBand:
         fx = f"; {self.fx_note}" if self.fx_note else ""
         return (f"{lead}{ordinal(pct)} percentile ({percentile_gloss(self.percentile)}) "
                 f"of its own {self.window_years}-year range "
-                f"(based on {self.months_covered} of {self.months_total} months"
+                f"(based on {self.months_covered} of {plural(self.months_total, 'month')}"
                 f"{gap}{tail}{fx})")
 
 
@@ -313,7 +315,7 @@ def _statement_note(f, earnings) -> str:
     if len(months) == 1:
         month_note = f", fiscal year ends {calendar.month_name[dates[0].month]}"
     return (f" ({len(dates)} annual statement{'s' if len(dates) != 1 else ''} seen"
-            f"{month_note}; the band needs {BAND_YEARS} years)")
+            f"{month_note}; the band needs {plural(BAND_YEARS, 'year')})")
 
 
 # BAND-STMT-2 — how close the first statement and the first price have to be before we
@@ -436,7 +438,7 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
     stmt = _statement_note(f, earnings)          # BAND-STMT-1
     if covered < 2:
         return _abstain(
-            young or f"insufficient history: band from {covered} of {total} months{stmt}",
+            young or f"insufficient history: band from {covered} of {plural(total, 'month')}{stmt}",
             covered=covered, total=total)
 
     span = (series[-1][0] - series[0][0]).days / 365.25
@@ -446,7 +448,7 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
     months_in_span = sum(1 for d, _ in points if series[0][0] <= d <= series[-1][0])
     if months_in_span and covered / months_in_span < MIN_COVERAGE:
         return _abstain(f"insufficient coverage: band from {covered} of "
-                        f"{months_in_span} months in span", covered=covered,
+                        f"{plural(months_in_span, 'month')} in span", covered=covered,
                         total=total, years=span)
     if (asof - series[-1][0]).days > STALE_CURRENT_DAYS:
         return _abstain("current valuation not computable "
@@ -495,7 +497,7 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
                           if basis == _EV_EBIT else None),
         current_shares=_asof(_dated_series(f, "shares_outstanding"), current_day),
         note=f"{_BASIS_PHRASE[basis]} over {span:.1f}y; "
-             f"{covered} of {total} months computable")
+             f"{covered} of {plural(total, 'month')} computable")
 
 
 def _choose_basis(f):

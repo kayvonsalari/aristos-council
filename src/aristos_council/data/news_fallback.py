@@ -19,6 +19,8 @@ wants its own (``RIO.AU`` -> ``RIO.AX``). Both fetchers translate internally via
 """
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import json
 import urllib.error
 import urllib.parse
@@ -181,19 +183,19 @@ def gather_news_with_fallback(ticker: str, *, start: date, end: date, finnhub_it
     tried: list[str] = []
     if finnhub_items:
         return NewsFetchResult(items=tuple(finnhub_items), source="Finnhub",
-                               tried=(f"Finnhub: {len(finnhub_items)} item(s)",))
+                               tried=(f"Finnhub: {plural(len(finnhub_items), 'item')}",))
     tried.append(f"Finnhub: {finnhub_reason or 'no items'}")
 
     eodhd_items, eodhd_reason = eodhd_fetcher(ticker, start=start, end=end)
     if eodhd_items:
         return NewsFetchResult(items=tuple(eodhd_items), source="EODHD news",
-                               tried=(*tried, f"EODHD news: {len(eodhd_items)} item(s)"))
+                               tried=(*tried, f"EODHD news: {plural(len(eodhd_items), 'item')}"))
     tried.append(f"EODHD news: {eodhd_reason or 'no items in the window'}")
 
     yf_items, yf_reason = yfinance_fetcher(ticker)
     if yf_items:
         return NewsFetchResult(items=tuple(yf_items), source="yfinance news",
-                               tried=(*tried, f"yfinance news: {len(yf_items)} item(s)"))
+                               tried=(*tried, f"yfinance news: {plural(len(yf_items), 'item')}"))
     tried.append(f"yfinance news: {yf_reason or 'no items'}")
 
     return NewsFetchResult(items=(), source="", tried=tuple(tried))

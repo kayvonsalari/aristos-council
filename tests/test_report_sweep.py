@@ -10,15 +10,10 @@ this module touches the network). The set:
 For each, the company or list report is built and every export the code makes is checked: the screen
 text, the markdown (where streamlit is installed - the markdown builders live in app.py) and the
 HTML. One test per RULE, aggregated over the whole set, so a rule fails with every place it was
-found, and so an ``xfail(strict=True)`` is meaningful: it flips to a failure the moment the owning
-batch fixes the rule, forcing that batch to remove the mark.
+found.
 
-THE XFAIL LIST (handed to Batch 18B - each must be flipped by it):
-  * internal ids in reader text        -> 18B (ids in exports)
-  * "$-" / "EUR-" money formatting     -> 18B ("$-")
-  * count grammar ("1 name ... are", "(s)", "(ies)")  -> 18B (grammar)
-Everything Batch 18A fixes (the quintile cut, SELL in the agreement, the band, the lens stated one
-way) passes for real.
+BATCH 18B cleared the three rules that were expected failures in 18A (internal ids, "$-" money,
+count grammar): they are ordinary tests now, and a new leak of any of them fails CI.
 """
 from __future__ import annotations
 
@@ -69,11 +64,14 @@ def _markdown_builders():
 
 @pytest.fixture(scope="module")
 def sweep_reports(tmp_path_factory):
+    return build_sweep(tmp_path_factory.mktemp("sweep_runs"))
+
+
+def build_sweep(runs):
     """Every report in the set, built once: ``{name: {"exports": {kind: text}, "company": report |
-    None, "results": [per-lens results]}}``."""
+    None, "multi": ..., "single": ...}}``. A plain function so scripts can reuse it."""
     adapter = FrozenAdapter(FIX / "frozen")
     rows = json.loads((FIX / "index_rows.json").read_text(encoding="utf-8"))
-    runs = tmp_path_factory.mktemp("sweep_runs")
     app_mod = _markdown_builders()
     out: dict = {}
 
@@ -141,6 +139,18 @@ def test_the_sweep_built_every_report_in_the_set(sweep_reports):
     assert f.votes, "the company page ran no lens"
 
 
+def test_the_markdown_half_of_the_sweep_runs_in_ci(sweep_reports):
+    """CI installs the ``ui`` extra (streamlit) precisely so the markdown exports - which live in
+    app.py - are swept there too. Where streamlit is simply not installed (a bare dev checkout) the
+    markdown half is skipped, but on CI a missing markdown export is a failure, not a skip."""
+    import os
+    if not os.environ.get("CI"):
+        pytest.skip("markdown half is optional outside CI")
+    for name, case in sweep_reports.items():
+        if case["multi"] is not None:
+            assert "multi md" in case["exports"] and "single md" in case["exports"], name
+
+
 def test_the_set_is_actually_awkward(sweep_reports):
     """A sweep over easy companies proves nothing: pin what makes each one awkward."""
     f = sweep_reports["company F"]["company"]
@@ -156,24 +166,18 @@ def test_the_set_is_actually_awkward(sweep_reports):
 
 
 # --------------------------------------------------------------------------- #
-# Rules owned by Batch 18B - xfail(strict) so 18B must flip them
+# Rules cleared by Batch 18B (they were xfail(strict) in 18A) - now ordinary tests
 # --------------------------------------------------------------------------- #
-@pytest.mark.xfail(strict=True, reason="BATCH 18B: ids in exports - strategy ids, adhoc ids and "
-                   "factor ids still reach reader text (record-key lines, tables, headings)")
 def test_no_internal_ids_in_reader_text(sweep_reports):
     _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.internal_id_findings(t, w)),
                   sweep.INTERNAL_IDS)
 
 
-@pytest.mark.xfail(strict=True, reason="BATCH 18B: '$-' formatting - a negative amount is still "
-                   "printed as '$-147.8bn' instead of '-$147.8bn'")
 def test_no_dollar_minus_money_formatting(sweep_reports):
     _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.money_minus_findings(t, w)),
                   sweep.MONEY_MINUS)
 
 
-@pytest.mark.xfail(strict=True, reason="BATCH 18B: grammar - '(s)' / '(ies)' / '1 name ... are' "
-                   "counts are still printed (e.g. '0 name(s) were given a rank position')")
 def test_no_count_grammar_slips(sweep_reports):
     _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.count_grammar_findings(t, w)),
                   sweep.COUNT_GRAMMAR)

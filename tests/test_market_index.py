@@ -617,7 +617,7 @@ def test_charged_units_are_ten_per_fundamentals_and_one_per_listing(tmp_path):
     outcome = _build(tmp_path, source=source)
     assert outcome.requests == 3                      # 1 listing + 2 fundamentals
     assert outcome.charged == CHARGE_LISTING + 2 * CHARGE_FUNDAMENTALS == 21
-    assert "3 request(s) = 21 charged" in outcome.summary()
+    assert "3 requests = 21 charged" in outcome.summary()
 
 
 def test_the_build_stops_before_the_request_that_would_exceed_the_budget(tmp_path):
@@ -655,7 +655,7 @@ def test_ANY_exception_flushes_the_store_and_writes_the_reason(tmp_path):
     log = build_log_path(store).read_text(encoding="utf-8")
     assert "STOPPED: RuntimeError: payload exploded" in log
     assert "Traceback" in log
-    assert "request(s)" in log                                  # the summary went in too
+    assert "requests" in log                                  # the summary went in too
 
 
 def test_the_log_carries_the_progress_lines_too(tmp_path):
@@ -810,7 +810,7 @@ def test_a_cross_listing_is_excluded_from_a_real_peer_group_but_still_resolvable
     tickers = [r.ticker for r in group.members]
     assert tickers.count("AMD.US") == 1
     assert "AMD.XETRA" not in tickers and "AMD.TO" not in tickers
-    assert any("cross-listing(s) collapsed" in r for r in group.reasons)
+    assert any("cross-listing" in r and "collapsed" in r for r in group.reasons)
     # ...and the cross-listing is still IN the table, findable as a subject
     assert peers("AMD.XETRA", rows=rows).subject is not None
 
@@ -917,8 +917,8 @@ def test_status_counts_cross_listings_and_refetches(tmp_path):
         IndexRow(ticker="OLD.US", market_cap=1e9, fetched_at=SNAPSHOT, source="eodhd"),
     ])
     text = "\n".join(status(store).lines())
-    assert "1 cross-listing(s), excluded from peer groups" in text
-    assert "1 row(s) will be REFETCHED" in text
+    assert "1 cross-listing, excluded from peer groups" in text
+    assert "1 row will be REFETCHED" in text
 
 def test_the_peer_abstention_names_the_WIDEST_rung_it_tried_and_its_count():
     """NFLX read "only 6451 comparable companies found in the index for Movies &

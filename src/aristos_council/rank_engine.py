@@ -15,6 +15,8 @@ per-ticker per-factor ranks + the combined rank, so a verdict is fully auditable
 
 from __future__ import annotations
 
+from aristos_council.plurals import noun
+
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -268,7 +270,7 @@ def rank_universe(
                 ticker=ticker, factor_ranks={}, factor_values=dict(vals),
                 combined_rank=float("inf"), universe_size=len(rows),
                 verdict="hold", excluded=True,
-                reason="missing factor(s): " + ", ".join(excl_factors)))
+                reason=f"missing {noun(len(excl_factors), 'factor')}: " + ", ".join(excl_factors)))
         else:
             kept.append((idx, ticker, vals))
 

@@ -272,7 +272,8 @@ def test_the_confirmation_carries_the_exact_count_and_estimate_and_the_names():
     assert not at.exception
 
     blob = " ".join(str(getattr(m, "value", "")) for m in at.markdown)
-    assert f"{plan['count']} names rated BUY by at least one lens" in blob
+    from aristos_council.plurals import plural
+    assert f"{plural(plan['count'], 'name')} rated BUY by at least one lens" in blob
     # COST-2: the figure names its scope — total, one charge, and the per-name rate.
     assert f"narrate all {plan['count']} for" in blob
     assert "total (one charge, about \$" in blob

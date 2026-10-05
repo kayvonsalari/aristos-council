@@ -299,28 +299,32 @@ def test_a_criterion_label_is_direction_free_so_the_limit_is_not_said_twice():
 # --------------------------------------------------------------------------- #
 # 4. IDS — never removed, never alone
 # --------------------------------------------------------------------------- #
-def test_an_id_is_kept_beside_its_label_and_never_replaced_by_it():
-    assert label_with_id("Defensive Income", "conservative_plus_v1") == \
-        "Defensive Income (conservative_plus_v1)"
-    assert label_with_id("", "conservative_plus_v1") == "conservative_plus_v1"
+def test_a_reader_sees_the_label_and_never_the_id():
+    from aristos_council.report_language import label_with_key
+    assert label_with_id("Defensive Income", "conservative_plus_v1") == "Defensive Income"
+    assert label_with_id("", "conservative_plus_v1") == "conservative_plus_v1"   # no label: the id
+    assert label_with_id("", "adhoc:3f9a1c2b") == "Pasted list"
     assert label_with_id("Defensive Income", "") == "Defensive Income"
-    assert label_with_id("same", "same") == "same"        # never "same (same)"
+    assert label_with_id("same", "same") == "same"
+    # the structured evidence the narrator reads still carries the key
+    assert label_with_key("Defensive Income", "conservative_plus_v1") == \
+        "Defensive Income (conservative_plus_v1)"
 
 
-def test_the_header_leads_with_names_and_still_carries_every_id(result):
+def test_the_header_leads_with_names_and_carries_no_id(result):
     lines = header_lines(result)
     text = "\n".join(lines)
     assert "Defensive Income" in text                     # the strategy's human name
-    assert "conservative_plus_v1" in text                 # ...and its id
+    assert "conservative_plus_v1" not in text             # BATCH 18B: ...and not its id
     assert "ranker only, no AI commentary" in text        # the mode, in words
 
 
-def test_the_cli_report_keeps_every_id_it_used_to_print(result):
+def test_the_cli_report_prints_no_machine_id(result):
     text = format_cli_report(result)
     for machine_id in ("conservative_plus_v1", "conservative_screen_v1",
                        "min_dividend_yield", "min_price_momentum",
                        "low_volatility", "net_payout_yield", "momentum_12m"):
-        assert machine_id in text, machine_id
+        assert machine_id not in text, machine_id            # BATCH 18B: ids are not reader text
 
 
 # --------------------------------------------------------------------------- #
@@ -572,7 +576,7 @@ def test_a_rule_that_could_not_be_tested_is_stated_in_words(result):
     joined = " ".join(note["rules"])
     assert "Dividends vs free cash flow" in joined       # the rule, by its human name
     assert "free cash flow" in joined                     # ...and the reason, kept
-    assert "max_payout_ratio_fcf" in joined               # ...and the id, kept
+    assert "max_payout_ratio_fcf" not in joined           # BATCH 18B: ...and no id
 
 
 def test_the_untested_rule_appears_in_the_report_body_not_only_as_a_symbol(result):
@@ -657,7 +661,7 @@ def test_the_three_surfaces_carry_the_same_values(result):
 
     # every rule's label, limit and tally
     for rule in rules_applied(result).rules:
-        for value in (rule.label, rule.threshold_phrase, rule.tally, rule.criterion):
+        for value in (rule.label, rule.threshold_phrase, rule.tally):
             assert value in cli, (value, "cli")
             assert value in md, (value, "md")
             assert _html.escape(value, quote=False) in doc, (value, "html")

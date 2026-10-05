@@ -3,7 +3,7 @@ ETF Index Tracker — etf_core_5_v1
 Universe
 etf_core_5_v1 — 5 names
 Strategy
-ETF Index Tracker (etf_core_v1)
+ETF Index Tracker
 Screen
 none
 Run
@@ -11,7 +11,7 @@ Run
 Ranked
 3 of 5 names
 Shortlist
-1 names · estimated cost $0.19 · narrating buys_only
+1 name · estimated cost $0.19 · narrating buys_only
 Verdict: deterministic ranker.  Narrative: LLM (non-judging).
 1 BUY · 1 HOLD · 1 SELL — 3 of 5 names ranked, 1 is not graded (this lens does not cover that kind of holding): IWDA.AS, 1 with no usable data, 1 whose data fetch failed — re-run to recover
 Rules applied
@@ -22,7 +22,6 @@ Limit
 What it did
 Measured on
 Dividends vs free cash flow
-max_payout_ratio_fcf
 limit not recorded
 not applied to any name
 4-year average free cash flow for 1 name (EUNL.DE)
@@ -53,11 +52,6 @@ SELL
 ⚑ boundary (tied 5 with EUNL.DE — HOLD; tie broken alphabetically)
 3 · 0.22
 2 · imputed
-Factor ids, in column order:
-expense_ratio
-,
-fund_size
-.
 imputed
 — A factor cell reading · imputed had NO value for this name, so the rank shown is the average of the name's other factor ranks rather than the worst rank — the name is judged on what it has, not punished for the gap. The count beside the verdict (“ranked on 2 of 3 factors”) counts these out, so the two always agree.
 †
@@ -67,7 +61,7 @@ imputed
 Rules that could not be tested
 These names PASSED the screen — a rule that cannot be evaluated never excludes anyone (an abstention is not a failure) — but one of its rules returned no answer for them at all, so their pass is thinner than it looks.
 VWCE.DE
-— SELL — 1 rule could not be tested: Dividends vs free cash flow (mean FCF non-positive) [max_payout_ratio_fcf]
+— SELL — 1 rule could not be tested: Dividends vs free cash flow (mean FCF non-positive)
 Where the numbers came from
 How each ranked name's value for each factor was actually produced — a silent fallback (a proxy, a stale cache, a missing field) reads in plain text here instead of looking identical to a real measurement.
 Factor

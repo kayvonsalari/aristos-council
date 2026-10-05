@@ -69,8 +69,21 @@ _ADHOC_ID = re.compile(r"\badhoc:[0-9a-f]{4,}\b")
 
 
 def _factor_ids() -> list[str]:
+    """Every record key a reader could be shown by mistake: factor ids, criterion ids and cohort
+    slugs (those with an underscore - the plain-word ones cannot be told from English)."""
+    from pathlib import Path
+
     from .factors import FACTOR_REGISTRY
-    return sorted((name for name in FACTOR_REGISTRY if "_" in name), key=len, reverse=True)
+    from .tools.criteria.registry import REGISTRY
+    names = set(FACTOR_REGISTRY) | set(REGISTRY)
+    backtests = Path(__file__).resolve().parents[2] / "backtests"
+    if backtests.is_dir():
+        names |= {p.name for p in backtests.iterdir() if p.is_dir()}
+    return sorted((n for n in names if "_" in n), key=len, reverse=True)
+
+
+# Column / heading words that are themselves identifiers ("Criterion id").
+_ID_HEADINGS = re.compile(r"(?:Criterion|Strategy|Lens|Factor|Run|Cohort) ids?")
 
 
 def internal_id_findings(text: str, where: str) -> list[Finding]:
@@ -84,6 +97,10 @@ def internal_id_findings(text: str, where: str) -> list[Finding]:
             if m.group(0) not in seen:
                 seen.add(m.group(0))
                 out.append(Finding(INTERNAL_IDS, where, m.group(0)))
+    for m in _ID_HEADINGS.finditer(text):
+        if m.group(0) not in seen:
+            seen.add(m.group(0))
+            out.append(Finding(INTERNAL_IDS, where, m.group(0)))
     for fid in _factor_ids():
         if fid not in seen and re.search(rf"(?<![\w]){re.escape(fid)}(?![\w])", text):
             seen.add(fid)

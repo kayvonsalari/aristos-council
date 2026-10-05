@@ -67,6 +67,8 @@ percentile is computed from the distribution, not from this arithmetic, and is u
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -151,7 +153,7 @@ class ReversionValue:
         return (f"reversion value {format_money(self.price, self.currency)} "
                 f"({self.gap:+.0%}) if {phrase} returned to its own "
                 f"{self.window_years}-year median of {self.median_multiple:.1f}x; "
-                f"{self.months_covered} of {self.months_total} months usable"
+                f"{self.months_covered} of {plural(self.months_total, 'month')} usable"
                 f"{('; ' + self.fx_note) if self.fx_note else ''}"
                 f"{currency_note(self.currency)}")
 
@@ -292,4 +294,4 @@ def reversion_value(band: Optional[ValuationBand], fundamentals, *,
         currency=currency,
         fx_note=_fx_note(band),
         note=f"{_BASIS_PHRASE.get(band.basis or '', 'multiple')} median "
-             f"{median:.4g} over {band.months_covered} of {band.months_total} months")
+             f"{median:.4g} over {band.months_covered} of {plural(band.months_total, 'month')}")

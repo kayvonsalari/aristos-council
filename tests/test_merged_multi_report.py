@@ -248,8 +248,8 @@ def test_the_header_names_the_cohort_and_every_lens(three):
     doc = multi_strategy_report_html(three, run_start=_RUN)
     for surface in (md, doc):
         assert "3 lenses" in surface
-        for sid in three.strategy_ids:                    # ids present, muted
-            assert sid in surface
+        for sid in three.strategy_ids:                    # BATCH 18B: ids are not reader text
+            assert sid not in surface
         for label in three.strategy_names.values():       # human names lead
             assert label in surface
 

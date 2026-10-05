@@ -141,7 +141,9 @@ def glossary_entries(*, factors=(), criteria=(), text: str = "") -> list[Glossar
         gloss = (getattr(criterion, "glossary", "") or "").strip()
         if gloss:
             label = getattr(criterion, "label", "") or criterion.name
-            entries[f"{label} ({criterion.name})"] = gloss
+            # The label only: an id is not reader text (18B). A criterion shares its label with the
+            # factor it screens (return on invested capital), so the rule's entry says it is the rule.
+            entries[f"{label} (the rule)" if label in entries else label] = gloss
 
     for term, probe, definition in _REPORT_TERMS:
         if _mentions(text, probe):

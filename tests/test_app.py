@@ -300,7 +300,7 @@ def test_saved_list_labels_disambiguate_a_shared_label():
     labels = app.saved_list_labels([a, b, solo])
     assert len(set(labels)) == 3                       # a label names exactly one list
     assert "mine_v1" in labels[0] and "mine_v2" in labels[1]
-    assert labels[2] == "Other (local) · 1 names"      # unique label left alone
+    assert labels[2] == "Other (local) · 1 name"      # unique label left alone
 
 
 def test_estimate_shortlist_size_tracks_the_cut():
@@ -479,11 +479,11 @@ def test_confirmation_line_states_strategy_universe_and_mode():
     m = {"rank_strategy_id": "magic_formula_v1", "universe_id": "growth_40_v1",
          "council_mode": "ranker-only"}
     assert app._confirmation_line(m) == \
-        "Running magic_formula_v1 on growth_40_v1 in ranker-only."
-    # ad-hoc universe id (with its hash) is carried through
+        "Running magic_formula_v1 on Pasted list in ranker-only."
+    # BATCH 18B: an ad-hoc universe id is a record key; the line says "Pasted list"
     m2 = {"rank_strategy_id": "s", "universe_id": "adhoc:abcd1234",
           "council_mode": "narrator"}
-    assert "adhoc:abcd1234" in app._confirmation_line(m2)
+    assert "adhoc" not in app._confirmation_line(m2) and "Pasted list" in app._confirmation_line(m2)
 
 
 def test_confirmation_line_is_in_the_persisted_markdown():
@@ -497,7 +497,7 @@ def test_confirmation_line_is_in_the_persisted_markdown():
               "ranker_only": True, "universe_size": 40, "ranked_count": 0,
               "shortlist": [], "est_cost": 0.0}, council_mode="ranker-only")
     md = app._universe_markdown(result)
-    assert "Running magic_formula_momentum_v1 on growth_40_v1 in ranker-only." in md
+    assert "Running magic_formula_momentum_v1 on Pasted list in ranker-only." in md
 
 
 def test_run_tab_renders_with_the_one_flow():

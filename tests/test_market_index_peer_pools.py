@@ -248,7 +248,7 @@ def test_the_cohort_report_counts_skipped_receipts_by_kind():
     rows = [subject, *_fillers(13), _bdr("A1MD34", "Some Co"), _bdr("AVGO34", "Other Co"),
             _row("AMD.TO", "AMD CDR (CAD Hedged)", primary="", isin="", market="TO")]
     line = next(r for r in peers("SUBJ.US", rows=rows).reasons if "secondary trading line" in r)
-    assert line.startswith("3 candidate(s) skipped")
+    assert line.startswith("3 candidates skipped")
     assert f"{RECEIPT_BDR} 2" in line and f"{RECEIPT_CDR} 1" in line
 
 
@@ -262,7 +262,7 @@ def test_status_counts_receipts_by_kind_and_says_which_leave_a_company_out(tmp_p
     assert out.receipts == {RECEIPT_BDR: 2}
     assert out.receipts_sole == 1
     text = " ".join(out.lines())
-    assert "2 secondary trading line(s)" in text and "1 of them are the ONLY line" in text
+    assert "2 secondary trading lines" in text and "1 of them are the ONLY line" in text
     assert f"{RECEIPT_BDR}: 2" in text
 
 
@@ -358,7 +358,7 @@ def test_a_size_suspect_row_is_kept_out_of_the_pool_and_counted_in_the_report():
     group = peers("SUBJ.US", rows=[subject, *lines, *_fillers(13, cap_bn=30.0)])
     members = _tickers(group)
     assert "VWDRY.US" not in members and "VWS.CO" in members
-    assert any("1 candidate(s) skipped: size suspect" in r for r in group.reasons)
+    assert any("1 candidate skipped: size suspect" in r for r in group.reasons)
 
 
 def test_a_size_suspect_subject_is_kept_but_its_doubtful_size_is_said():
@@ -378,7 +378,7 @@ def test_status_counts_size_suspect_rows_and_undecidable_companies(tmp_path):
     assert out.size_suspect == 1 and out.size_suspect_examples == ["VWDRY.US"]
     assert out.size_disputed == 1
     text = " ".join(out.lines())
-    assert "1 row(s) size suspect" in text and "cannot be adjudicated" in text
+    assert "1 row size suspect" in text and "cannot be adjudicated" in text
 
 
 # =========================================================================== #

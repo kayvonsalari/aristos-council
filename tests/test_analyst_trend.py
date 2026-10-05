@@ -130,7 +130,8 @@ def test_fewer_than_three_analysts_abstains_and_says_so(analysts):
     assert ANALYST_MIN_ANALYSTS == 3
     trend = analyst_trend(_data(now=12.0, ago=10.0, analysts=analysts))
     assert trend.mark == "" and not trend.available
-    assert f"only {analysts} analyst(s)" in trend.direction.text()
+    from aristos_council.plurals import plural
+    assert f"only {plural(analysts, 'analyst')}" in trend.direction.text()
     assert trend.direction.value is None
 
 
@@ -171,7 +172,7 @@ def test_the_next_year_is_shown_even_when_the_mark_abstains():
     data = TrendData(current=TrendPeriod("2026-12-31", 5.0, 5.0, 1),
                      next_year=TrendPeriod("2027-12-31", 6.0, 5.0, 1), as_of="2026-09-25")
     trend = analyst_trend(data)
-    assert trend.mark == "" and "only 1 analyst(s)" in trend.headline
+    assert trend.mark == "" and "only 1 analyst" in trend.headline
     this_year, next_year = trend.rows
     assert next_year.label == "Next year (to Dec 2027)"
     sentences = trend.forecast_sentences()
@@ -201,7 +202,7 @@ def test_the_headline_is_one_sentence_for_each_mark_or_the_reason():
         "Analysts are cutting their profit forecasts")
     assert analyst_trend(_data(now=10.1, ago=10.0)).headline == (
         "Analysts are holding their profit forecasts steady")
-    assert "only 2 analyst(s)" in analyst_trend(_data(analysts=2)).headline
+    assert "only 2 analysts" in analyst_trend(_data(analysts=2)).headline
 
 
 def test_the_forecast_sentences_use_the_accounts_currency_and_say_so_when_it_is_unknown():

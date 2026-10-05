@@ -81,7 +81,7 @@ def test_a_loss_year_is_a_negative_worst_year_not_an_abstention():
 
 def test_worst_year_roic_abstains_below_three_years():
     value, note = q.worst_year_roic(_roic_f([200.0, 210.0], [1000.0, 1000.0]))
-    assert value is None and "only 2 fiscal year(s)" in note and "needs 3" in note
+    assert value is None and "only 2 fiscal years" in note and "needs 3" in note
     assert q.worst_year_roic(_f())[0] is None                        # no series at all
 
 
@@ -194,7 +194,7 @@ def test_the_registry_factors_carry_their_reason_in_the_source_tag():
     assert out["net_debt_to_ebit"][0] is None
     assert out["net_debt_to_ebit"][1].startswith("abstained: operating profit (EBIT) is zero or negative")
     assert out["gross_profitability"][1].startswith("abstained: gross profit unavailable")
-    assert out["worst_year_roic"][1].startswith("abstained: only 0 fiscal year(s)")
+    assert out["worst_year_roic"][1].startswith("abstained: only 0 fiscal years")
     assert out["epv_margin_of_safety"][1].startswith("abstained:")
 
 

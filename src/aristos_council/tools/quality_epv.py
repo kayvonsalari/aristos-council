@@ -12,6 +12,8 @@ profit against a price-currency enterprise value; that function takes the same d
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -81,7 +83,7 @@ def worst_year_roic(f, *, years: int = QUALITY_ROIC_YEARS,
         if roic is not None:
             per_year.append(roic)
     if len(per_year) < min_years:
-        return None, (f"only {len(per_year)} fiscal year(s) of return on capital available "
+        return None, (f"only {plural(len(per_year), 'fiscal year')} of return on capital available "
                       f"(needs {min_years})")
     return min(per_year), f"lowest of {len(per_year)} fiscal years' return on invested capital"
 
@@ -150,7 +152,7 @@ def earnings_power_value(f, ev: Optional[float], fx_rate: float = 1.0) -> EPVRea
     margins = [ebit_series[i] / rev[i] for i in range(n) if rev[i] > 0]
     if len(margins) < EPV_MIN_YEARS:
         return EPVReading(None, margin_years=len(margins),
-                          note=(f"only {len(margins)} fiscal year(s) of operating margin "
+                          note=(f"only {plural(len(margins), 'fiscal year')} of operating margin "
                                 f"available (needs {EPV_MIN_YEARS})"))
     avg_margin = sum(margins) / len(margins)
     normalised = avg_margin * rev[0]

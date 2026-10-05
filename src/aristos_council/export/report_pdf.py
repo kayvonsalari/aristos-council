@@ -13,6 +13,8 @@ markdown the agents wrote (headers, lists, tables) is converted to HTML.
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import html
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -133,7 +135,7 @@ def report_to_html(report: RunReport) -> str:
     if report.veto_flags:
         parts.append(
             f"<p class='flags'>&#9888; Human review required — "
-            f"{len(report.veto_flags)} veto trigger(s):</p>"
+            f"{plural(len(report.veto_flags), 'veto trigger')}:</p>"
         )
         parts.append(_bullets(
             f"{f.trigger.value}: {f.detail}" for f in report.veto_flags))
@@ -248,5 +250,5 @@ def render_report_pdf(report: RunReport) -> bytes:
     result = pisa.CreatePDF(src=report_to_html(report), dest=buf,
                             encoding="utf-8")
     if result.err:
-        raise RuntimeError(f"PDF generation failed with {result.err} error(s)")
+        raise RuntimeError(f"PDF generation failed with {plural(result.err, 'error')}")
     return buf.getvalue()

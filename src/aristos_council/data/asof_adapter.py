@@ -35,6 +35,8 @@ No model is imported or called here.
 """
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import statistics
 from dataclasses import fields, replace
 from datetime import date, timedelta
@@ -60,7 +62,7 @@ _CURRENT_SCALARS = ("market_cap", "dividend_yield", "dividend_per_share", "payou
 
 def provenance_text(as_of: date, lag_days: int, note: str = "") -> str:
     """"as-of 2019-06-28, lag 90 days, restated accounts" (+ what happened on this name)."""
-    base = f"as-of {as_of.isoformat()}, lag {lag_days} days, restated accounts"
+    base = f"as-of {as_of.isoformat()}, lag {plural(lag_days, 'day')}, restated accounts"
     return f"{base}; {note}" if note else base
 
 

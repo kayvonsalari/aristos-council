@@ -108,9 +108,9 @@ def test_pipeline_header_unchanged_for_screened_garp_v2():
         ["A", "B", "C"], "growth_garp_v2", ranker_only=True,
         strategies_dir=STRAT_DIR, adapter=_Adapter(), today=date(2026, 6, 30))
     assert result.meta["screen_strategy_id"] == "growth_screen_v2"
-    # REPORT-1: the id is still there — it is just no longer the only thing shown.
+    # BATCH 18B: the screen is named, not keyed.
     text = format_cli_report(result)
-    assert "growth_screen_v2" in text and "Screen: " in text
+    assert "growth_screen_v2" not in text and "Screen: " in text
 
 
 # --- the resolver default (for genuine council-mode) is untouched ------------ #

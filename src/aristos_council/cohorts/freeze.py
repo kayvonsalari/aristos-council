@@ -10,6 +10,8 @@ nothing and says so, so a nightly job cannot quietly re-cut a cohort under a sco
 """
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 import csv
 from dataclasses import dataclass
 from datetime import date
@@ -227,7 +229,7 @@ def register_universe(frozen: FrozenCohort, defn: CohortDefinition, *,
             f"{', '.join(defn.exchanges)}. Membership of record is "
             f"data/local/cohorts/{frozen.slug}/v{frozen.version}/{MEMBERS_FILE}; this list "
             f"is a copy for the UI."
-            + (f" {len(untranslatable)} name(s) had no Yahoo symbol and are not in this "
+            + (f" {plural(len(untranslatable), 'name')} had no Yahoo symbol and are not in this "
                f"list: {', '.join(untranslatable)}." if untranslatable else "")),
         asset_kind="stocks",
         overwrite=overwrite)

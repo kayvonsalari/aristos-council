@@ -1,9 +1,7 @@
 # Universe run — Pasted list — 4 names · 3 lenses
 
-`adhoc:bc619e1d`
-
-**Cohort: adhoc:bc619e1d — 4 names**
-**Lenses: Classic Value (magic_formula_v1); Magic Formula RAW (magic_formula_raw_v1); Value + Momentum (magic_formula_momentum_v1)**
+**Cohort: Pasted list — 4 names**
+**Lenses: Classic Value; Magic Formula RAW; Value + Momentum**
 **Run: 24.08.2026 13:49 CEST — ranker only, no AI commentary**
 
 _Verdict: deterministic ranker.  Narrative: none (ranker-only — no LLM ran)._
@@ -77,15 +75,15 @@ The last close in the name's OWN quoted currency (never converted) with the date
 
 _Each lens screens on its own rules; a name excluded by one may be ranked by another. The rules below are read from the strategies that actually ran._
 
-### Classic Value (magic_formula_v1)
-**Screen: Quality-value screen (magic_value_screen_v1)**
+### Classic Value
+**Screen: Quality-value screen**
 
 Used as a prefilter — names failing any rule below were never ranked.
 
 | Rule | Limit | What it did |
 |---|---|---|
-| Return on invested capital `min_roic` | at least 12% | passed 2 · failed 1 |
-| Company size `min_market_cap` | at least $5.0bn | passed 3 |
+| Return on invested capital | at least 12% | passed 2 · failed 1 |
+| Company size | at least $5.0bn | passed 3 |
 
 - Ranking: top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut).
 - Names ranked on: Return on invested capital, Earnings yield (EBIT/EV).
@@ -94,7 +92,7 @@ Used as a prefilter — names failing any rule below were never ranked.
 - Asset kinds admitted: equity.
 - Missing factor values are ranked worst.
 
-### Magic Formula RAW (magic_formula_raw_v1)
+### Magic Formula RAW
 
 _Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities)._
 **Screen: none**
@@ -108,17 +106,17 @@ This strategy screens nothing: no rule filtered the cohort, and quality enters o
 - Asset kinds admitted: equity.
 - Missing factor values are ranked worst.
 
-### Value + Momentum (magic_formula_momentum_v1)
+### Value + Momentum
 
 _The same as Magic Formula RAW (companies worth at least $5bn, not banks, insurers or utilities), but only for companies earning at least 12% on their capital._
-**Screen: Quality-value screen (magic_value_screen_v1)**
+**Screen: Quality-value screen**
 
 Used as a prefilter — names failing any rule below were never ranked.
 
 | Rule | Limit | What it did |
 |---|---|---|
-| Return on invested capital `min_roic` | at least 12% | passed 2 · failed 1 |
-| Company size `min_market_cap` | at least $5.0bn | passed 3 |
+| Return on invested capital | at least 12% | passed 2 · failed 1 |
+| Company size | at least $5.0bn | passed 3 |
 
 - Ranking: top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut).
 - Names ranked on: Return on invested capital, Earnings yield (EBIT/EV), 12-month price momentum.
@@ -127,11 +125,11 @@ Used as a prefilter — names failing any rule below were never ranked.
 - Asset kinds admitted: equity.
 - Missing factor values are ranked worst.
 
-## Classic Value (magic_formula_v1) — detail
+## Classic Value — detail
 
 **2 passed its rules, too few to rank. Excluded 1: by rule below, worst miss first.**
 
-**Return on invested capital** `min_roic` · rule: at least 12% · **1 name**
+**Return on invested capital** · rule: at least 12% · **1 name**
 
 _A business that earns less on the capital it employs than that capital costs destroys value by growing, so its growth is a reason for concern rather than for a premium._
 
@@ -150,7 +148,7 @@ _A business that earns less on the capital it employs than that capital costs de
 | **Return on invested capital** | 2 of 2 | — |
 | **Earnings yield (EBIT/EV)** | 2 of 2 | — |
 
-## Magic Formula RAW (magic_formula_raw_v1) — detail
+## Magic Formula RAW — detail
 
 _Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities)._
 
@@ -168,13 +166,13 @@ _Cheap and good: high profit on the money invested, a low price for that profit,
 | **Earnings yield (EBIT/EV)** | 3 of 3 | — |
 | **12-month price momentum** | 0 of 3 | 3 — A, B, C |
 
-## Value + Momentum (magic_formula_momentum_v1) — detail
+## Value + Momentum — detail
 
 _The same as Magic Formula RAW (companies worth at least $5bn, not banks, insurers or utilities), but only for companies earning at least 12% on their capital._
 
 **2 passed its rules, too few to rank. Excluded 1: by rule below, worst miss first.**
 
-**Return on invested capital** `min_roic` · rule: at least 12% · **1 name**
+**Return on invested capital** · rule: at least 12% · **1 name**
 
 _A business that earns less on the capital it employs than that capital costs destroys value by growing, so its growth is a reason for concern rather than for a premium._
 
@@ -196,7 +194,7 @@ _A business that earns less on the capital it employs than that capital costs de
 
 ## Cohort graded (exact membership)
 
-- list: `adhoc:bc619e1d` · 4 names · members `bc619e1d`
+- list: Pasted list · 4 names
 
 A, B, C, DEAD
 
@@ -206,14 +204,14 @@ A, B, C, DEAD
 _Every term this report uses, in plain English. Terms the run did not use are left out._
 
 - **12-month price momentum** — What buying the share twelve months ago would have returned by today. Measures trend, not value.
-- **Company size (min_market_cap)** — The rule requires the company to be worth at least this much in total, so names too small to trade sensibly are skipped.
+- **Company size** — The rule requires the company to be worth at least this much in total, so names too small to trade sensibly are skipped.
 - **Earnings yield (EBIT/EV)** — Operating profit divided by what the whole company costs to buy — shares plus debt. The inverse of how expensive it is: higher means more profit per euro paid.
 - **EPS (earnings per share)** — Annual profit divided by the number of shares.
 - **Not tested / not evaluated** — The data this check needed was missing, so the check was skipped honestly rather than guessed at. It is not a pass and it is not a fail.
 - **Percentile (valuation band)** — Where today's multiple sits in that five-year history. The 10th percentile is cheaper than 90% of the period; the 90th is dearer than 90% of it.
 - **Quintile cut** — The top fifth of ranked names are rated BUY, the bottom fifth SELL, and everything between them HOLD.
 - **Return on invested capital** — The profit the business earns on the money tied up in it. High means every euro invested in the company works hard.
-- **Return on invested capital (min_roic)** — The rule requires the company to earn at least this much profit on the money tied up in it — it screens out businesses that need a lot of capital to make a little profit.
+- **Return on invested capital (the rule)** — The rule requires the company to earn at least this much profit on the money tied up in it — it screens out businesses that need a lot of capital to make a little profit.
 
 ---
 

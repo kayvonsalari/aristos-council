@@ -27,6 +27,8 @@ stated limits of its own - restated accounts and survivorship. See docs/BACKTEST
 
 from __future__ import annotations
 
+from aristos_council.plurals import plural
+
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Callable, Optional
@@ -1199,17 +1201,17 @@ def _caveats(result: BacktestResult, unpriced: int, undersized_rounds: int = 0) 
         "benchmark.",
     ]
     if result.step_months < result.hold_months:
-        out.append(f"Rounds are {result.step_months} month(s) apart with {result.hold_months}-month "
+        out.append(f"Rounds are {plural(result.step_months, 'month')} apart with {result.hold_months}-month "
                    "holds, so they overlap and are not independent; read the calendar years, not "
                    "the round count.")
     out.append("Max drawdown is measured at round ends over non-overlapping chains of rounds (worst "
                "chain, no-position rounds as cash), so it understates a dip inside a hold.")
     s = result.summary
     if s.n_no_position:
-        out.append(f"{s.n_no_position} of {s.n_rounds} rounds had fewer than {MIN_BUYS} priced BUY "
+        out.append(f"{s.n_no_position} of {plural(s.n_rounds, 'round')} had fewer than {MIN_BUYS} priced BUY "
                    "names (no position); they are excluded from every average.")
     if unpriced:
-        out.append(f"{unpriced} name-round(s) had no usable price at the entry or exit date and were "
+        out.append(f"{plural(unpriced, 'name-round')} had no usable price at the entry or exit date and were "
                    "left out of both the BUY basket and the benchmark.")
     if result.random_baskets:
         mode_note = ("redrawn from scratch every round (independent mode)"
@@ -1223,7 +1225,7 @@ def _caveats(result: BacktestResult, unpriced: int, undersized_rounds: int = 0) 
                    "required for \"proven\"; below that a lens that clears the excess/years bar "
                    "reads \"not beyond luck\" instead. See docs/BACKTEST.md, Skill versus luck.")
     if undersized_rounds:
-        out.append(f"{undersized_rounds} round(s) had fewer priced eligible names than the lens's "
+        out.append(f"{plural(undersized_rounds, 'round')} had fewer priced eligible names than the lens's "
                    "own BUY basket size, so that round's random baskets were drawn smaller than "
                    "n_buys (the largest basket the priced pool could support).")
     return out
@@ -1407,8 +1409,8 @@ def summary_line(result: BacktestResult) -> str:
     luck = (f", luck {s.luck_pct_mean:.0%}" if s.luck_pct_mean is not None else "")
     return (f"{result.cohort_slug} x {result.lens_id}: {verdict(result, max_luck=result.max_luck)} "
             f"- mean annual excess {_pct(s.mean_annual_excess)}, {s.years_positive} of "
-            f"{s.years_measured} years positive, hit rate {_pct(s.hit_rate, False)}, "
-            f"{s.n_positions} of {s.n_rounds} rounds held a position, worst round "
+            f"{plural(s.years_measured, 'year')} positive, hit rate {_pct(s.hit_rate, False)}, "
+            f"{s.n_positions} of {plural(s.n_rounds, 'round')} held a position, worst round "
             f"{_pct(s.worst_round_excess)}, max drawdown {_pct(s.max_drawdown, False)}{luck}")
 
 
@@ -1436,7 +1438,7 @@ class MultipleTestingStats:
     expected_by_chance: float          # sum of each test's OWN luck_pct_pass
 
     def sentence(self) -> str:
-        return (f"Multiple testing: {self.tests_run} test(s) run (insufficient excluded), "
+        return (f"Multiple testing: {plural(self.tests_run, 'test')} run (insufficient excluded), "
                f"{self.proven} proven, {self.expected_by_chance:.1f} expected to pass by chance "
                f"alone (sum of each test's own chance pass rate).")
 
@@ -1579,8 +1581,8 @@ class Badge:
             return self.note or "no numbers measured"
         luck = f"{self.luck_pct:.0%}" if self.luck_pct is not None else "n/a"
         return (f"mean excess {_pct(self.mean_excess)}/yr · {self.years_positive} of "
-               f"{self.years_measured} years positive · luck {luck} · {self.rounds_held} "
-               f"round(s) held")
+               f"{plural(self.years_measured, 'year')} positive · luck {luck} · "
+               f"{plural(self.rounds_held, 'round')} held")
 
 
 def _untested_badge(note: str) -> Badge:
@@ -1646,7 +1648,7 @@ def track_record(cohort_slug: str, lens_id: str, *, root=None) -> Badge:
                  rounds_held=s.n_positions)
     if v == "insufficient":
         return Badge(label="untested here", note=(
-            f"only {s.years_measured} year(s) measured, {s.n_positions} round(s) held - not "
+            f"only {plural(s.years_measured, 'year')} measured, {plural(s.n_positions, 'round')} held - not "
             f"enough history yet"), **common)
     if v == "proven":
         return Badge(label="proven here", **common)
@@ -1669,7 +1671,7 @@ def track_record_caption(cohort_slug: str, *, root=None) -> Optional[str]:
     years = round((result.end - result.start).days / 365.25)
     _, sep, short = result.cohort.partition(" - ")
     name = short if sep else result.cohort
-    return f"Track record from the {name} cohort, {years} years to {result.end.strftime('%b %Y')}"
+    return f"Track record from the {name} cohort, {plural(years, 'year')} to {result.end.strftime('%b %Y')}"
 
 
 def format_track_record_summary(badges) -> str:
