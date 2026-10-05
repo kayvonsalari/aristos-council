@@ -1246,6 +1246,28 @@ def _unavailable(kind: str, exc: BaseException):
     raise ValueError(kind)
 
 
+def accounts_context(f) -> dict:
+    """FORENSIC-PACK-1 - which accounts every absolute reading rests on, and their currency.
+
+    The council's own evidence carried ``total_debt`` and ``free_cash_flow`` bare, so the narrator
+    wrote "(no currency stated in the evidence field)" beside a dollar figure and could not say how
+    old the accounts were. Both facts are in the data we already hold; this states them ONCE.
+    The date is the period END of the newest annual statement the provider dated (never guessed);
+    no adapter carries a filing date, so none is printed - the basis says so rather than inventing
+    one. Empty dict when there are no fundamentals."""
+    if f is None:
+        return {}
+    from .operating_profit import operating_profit_basis
+
+    basis = operating_profit_basis(f)
+    if basis.startswith("fiscal year to "):
+        text = f"annual accounts for the {basis} (the filing date is not in the data)"
+    else:
+        text = "the latest annual accounts (their period end date is not in the data)"
+    return {"currency": str(getattr(f, "financial_currency", "") or "").strip(),
+            "listing_currency": str(getattr(f, "currency", "") or "").strip(), "basis": text}
+
+
 def guard(kind: str, fn, *args, **kwargs):
     """Call a section builder; on any exception return its "not available" placeholder."""
     try:

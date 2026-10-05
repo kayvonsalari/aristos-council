@@ -916,6 +916,26 @@ def _would_rank_annotation(claim: str, lens: str, cite: Optional[str]) -> str:
             "verdict]")
 
 
+_EXCLUSION_WORD = re.compile(r"\bexclu\w+", re.I)
+_VOTING_ADJECTIVE = re.compile(r"\bvoting\s+(?:lens|lenses|strateg\w+)\b", re.I)
+
+
+def _gives_verdict_or_vote(parsed: str) -> bool:
+    """NARR-NEGATION-1 - does the sentence ASSERT a verdict or a vote for a lens?
+
+    A denial ("does not produce a BUY, HOLD or SELL verdict", "casts no vote"), the adjective in
+    "excluded from every voting lens", and an exclusion sentence ("Defensive Income excludes it for
+    a 0% yield") state the opposite of a vote, so none of them counts. An exclusion sentence that
+    still carries a capitalised verdict word is judged on that word."""
+    from .narration_schema import _NEGATED_VERDICTS
+
+    text = _VOTING_ADJECTIVE.sub(" ", _NEGATED_VERDICTS.sub(" ", parsed))
+    if _VERDICT_WORD.search(text):
+        return True
+    return bool(_VOTE_WORD.search(text) and not _VOTE_NEGATED.search(text)
+                and not _EXCLUSION_WORD.search(text))
+
+
 def check_would_rank(narrative: str, verdicts: list[dict] | None) -> list[str]:
     """LENS-EXPAND-1b — annotations for a sentence that treats a lens's "would have ranked"
     reading as more than it is.
@@ -940,8 +960,7 @@ def check_would_rank(narrative: str, verdicts: list[dict] | None) -> list[str]:
             lens = str(v["lens"])
             core = _lens_core(lens)
             named = bool(core and re.search(rf"\b{re.escape(core)}\b", parsed, re.I))
-            gives_verdict = bool(_VERDICT_WORD.search(parsed)
-                                 or (_VOTE_WORD.search(parsed) and not _VOTE_NEGATED.search(parsed)))
+            gives_verdict = _gives_verdict_or_vote(parsed)
             cite = None
             pos, size = v.get("would_rank_position"), v.get("would_rank_of")
             if pos and size:

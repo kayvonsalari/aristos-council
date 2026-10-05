@@ -3,6 +3,16 @@
 Things that are true today, known, and deliberately left as they are. Each says what a reader will see
 and what would change it. (Newest first.)
 
+## A long company run can lose the page's connection (Batch 19B)
+
+A company run with the council ticked takes about four to five minutes. In some browsers the
+connection between the page and Streamlit (a websocket) drops during that time while the server keeps
+working and finishes the run. The report is saved under `runs/<time>_company_check_<TICKER>/`
+(`report.txt` and `report.json`), so nothing is lost, but **the page itself does not bring it back**:
+the result a page shows is held in that browser session, and a reconnect starts a new, empty one.
+Open the saved `report.txt` from `runs/` instead. **What changes it:** the Analyse tab loading the
+newest saved company report when it starts with nothing to show, or a keep-alive on the long run.
+
 ## ETF fund size abstains for most funds (ETF-MODE-1, Batch 18A)
 
 Fund sizes are compared in USD. A fund whose size currency is **not stated** and which is **not listed

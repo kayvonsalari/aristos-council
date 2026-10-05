@@ -813,8 +813,22 @@ def _company_facts_block(state) -> str:
                      f"size, not get_fundamentals' own market_cap below, which was fetched "
                      f"on a different day and will read slightly differently): "
                      f"{mc.get('local', '')} local / {mc.get('usd', '')}")
+    accounts = facts.get("accounts") or {}
+    if accounts:
+        ccy = accounts.get("currency") or ""
+        listing = accounts.get("listing_currency") or ""
+        money = (f"Every money figure taken from the company's accounts is in {ccy}"
+                 if ccy else "The currency of the accounts is not stated by the source")
+        if listing and listing != ccy:
+            money += f"; the share price and market cap are quoted in {listing}"
+        lines.append(f"  - Accounts behind the readings below: {accounts.get('basis', '')}. "
+                     f"{money}.")
     for line in facts.get("absolute_readings") or []:
         lines.append(f"  - {line}")
+    for comp in facts.get("check_components") or []:
+        lines.append(f"  - {comp.get('lens', '')} check (marks, never votes), reading "
+                     f"\"{comp.get('reading', '')}\" - the components behind it:")
+        lines += [f"      {ln}" for ln in comp.get("lines") or []]
     # COUNCIL-FIX-1(a)/(d) (Batch 15) — the valuation band (always, whichever side of cheap
     # vs expensive it reads) and the forward P/E, so neither reaches an agent only as a
     # "mark" buried in agreement_row's marks (which today only fires on the EXPENSIVE

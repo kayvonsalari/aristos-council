@@ -107,6 +107,9 @@ class LensVote:
     # counted by ``build_agreement`` (which reads ``status``), never carries a verdict word, never
     # earns a badge, and the council sees it only as the text "would rank".
     would_rank: Optional[WouldRank] = None
+    # FORENSIC-PACK-1 - a CHECK lens's own components ("Accrual ratio 4.2%, rank 12 of 41"), kept so
+    # the council can explain a "doubted" mark. Council context only: never counted, never a vote.
+    components: tuple = ()
 
     @property
     def votes(self) -> bool:
@@ -481,6 +484,21 @@ def _council_company_facts(report: CompanyReport) -> dict:
     if lines:
         facts["absolute_readings"] = lines
 
+    # FORENSIC-PACK-1 - which accounts those readings rest on, and the currency of their money, so
+    # the narrator never has to write "no currency stated in the evidence field" next to a figure
+    # whose currency this run already knows.
+    accounts = getattr(check, "accounts", None)
+    if accounts:
+        facts["accounts"] = dict(accounts)
+
+    # FORENSIC-PACK-1 - a CHECK lens's components and ranks, so its "doubted" mark can be
+    # explained from the numbers behind it (NVCR: the fundamental specialist abstained for want of
+    # them). Context only: the check still never votes.
+    components = [{"lens": v.label, "reading": v.word, "lines": list(v.components)}
+                  for v in report.votes if v.kind == "check" and v.components]
+    if components:
+        facts["check_components"] = components
+
     trend = getattr(check, "analyst_trend", None)
     if trend is not None and trend.available:
         facts["analyst"] = {"available": True, "lines": list(trend.lines()),
@@ -674,6 +692,33 @@ def _default_adapter(today: date):
     return CachingAdapter(select_market_adapter(), cache_dir=DEFAULT_CACHE_DIR, today=today)
 
 
+def _check_components(result, ticker: str) -> tuple:
+    """FORENSIC-PACK-1 - each factor of a check lens as one plain line: the factor's name, the
+    company's own value (from its declared unit) and its rank among the names the lens ranked. A
+    factor the company has no value for is said to be missing, never shown as 0. Never raises."""
+    from .factors import FACTOR_REGISTRY as FACTORS
+    from .report_language import format_value
+
+    try:
+        row = next((r for r in (getattr(result, "ranked", None) or [])
+                    if r.ticker.upper() == ticker.upper() and not r.excluded), None)
+        if row is None:
+            return ()
+        out = []
+        for name, rank in row.factor_ranks.items():
+            fd = FACTORS.get(name)
+            label = (fd.label if fd is not None else name).replace(" (low best)", "")
+            value = row.factor_values.get(name)
+            shown = (format_value(value, fd.unit if fd is not None else "ratio")
+                     if value is not None else "no value on file")
+            note = (" (the factor is missing for this company, so it was given its average rank)"
+                    if name in (row.imputed_factors or []) else "")
+            out.append(f"{label}: {shown}, rank {rank:.0f} of {row.universe_size}{note}")
+        return tuple(out)
+    except Exception:                                    # noqa: BLE001 - context only
+        return ()
+
+
 def votes_from_multi(multi, ticker: str) -> list[LensVote]:
     """The company's outcome under every lens of a ``MultiStrategyResult``."""
     target = ticker.upper()
@@ -705,7 +750,9 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
         elif cell.status == "ranked":
             votes.append(LensVote(**base, status="ranked", verdict=cell.verdict,
                                   position=cell.position, cohort_size=cell.cohort_size,
-                                  factor_note=cell.factor_note))
+                                  factor_note=cell.factor_note,
+                                  components=(_check_components(result, ticker)
+                                              if base["kind"] == "check" else ())))
         else:
             reason = cell.reason_plain or _plain_reason(cell.reason)
             shadow = None
