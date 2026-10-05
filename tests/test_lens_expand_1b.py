@@ -122,10 +122,12 @@ def test_the_page_lens_votes_table_shows_it(tmp_path):
     at.session_state["_report"] = report
     at.run()
     assert not at.exception
-    votes = next(tb.value for tb in at.table if "Result" in list(tb.value.columns))
-    cell = votes.loc[by_id[SCREENED].label, "Result"]
-    assert cell == by_id[SCREENED].result_shown() and "would rank" in cell
-    assert "would rank" not in votes.loc[by_id[RAW].label, "Result"]
+    # COMPANY-STORY-1: the one lens table; the would-rank reading is its compact form in "Reason"
+    # (the full sentence is under the workings).
+    votes = next(tb.value for tb in at.table if "Reason" in list(tb.value.columns))
+    cell = votes.loc[by_id[SCREENED].label, "Reason"]
+    assert "would rank" in cell and "not a vote" in cell
+    assert "would rank" not in votes.loc[by_id[RAW].label, "Reason"]
 
 
 # --------------------------------------------------------------------------- #

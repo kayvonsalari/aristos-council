@@ -4227,7 +4227,8 @@ def _render_analyst_forecasts(result) -> None:
     _render_analyst_body(trend)
 
 
-def _render_peers(result, columns=None, company_ticker: str = "") -> None:
+def _render_peers(result, columns=None, company_ticker: str = "", *,
+                  nested: bool = False) -> None:
     """MARKET-INDEX-1 — who this company would be measured against. With ``columns`` (the Company
     Report's per-lens ranks, read from the run's saved ranks) the company is the first row and there
     is one sortable rank column per lens."""
@@ -4285,9 +4286,14 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
     if has_one_system_peers(peer_rows(group)):
         st.caption(ONE_SYSTEM_NOTE)
     # PEERS-METHOD-1: how the group was built is a diagnostic, collapsed by default.
-    with st.expander(PEER_METHOD_TITLE, expanded=False):
+    if nested:                       # Streamlit cannot nest an expander inside an expander
+        st.markdown(f"**{PEER_METHOD_TITLE}**")
         for line in group.method_lines():
             st.caption(f"· {line}")
+    else:
+        with st.expander(PEER_METHOD_TITLE, expanded=False):
+            for line in group.method_lines():
+                st.caption(f"· {line}")
 
 
 def _render_company_report(report) -> None:
@@ -4321,70 +4327,47 @@ def _render_company_report(report) -> None:
         for line in from_list[1]:
             st.caption(line)
 
-    # SMALLCAP-VIEW-1 — the header caveat, exactly the line every lens's own vote also
-    # carries below. Never shown for a company at or above the $5bn gate.
-    if report.outside_tested_range:
-        st.warning(f"**{report.tested_range_line}**"
-                   + "".join(f" {line}" for line in report.tested_range_detail_lines))
     if report.unrateable:
         st.warning(f"⚪ **UNRATEABLE** — {check.data_integrity.note}. No data, so no votes and no "
                    "readings.")
         return
 
-    if report.summary is not None:                       # only when it was ticked
-        from aristos_council.reader import (READER_SECTION_NOTE, READER_SECTION_TITLE,
-                                            reader_paragraphs)
-        st.subheader(READER_SECTION_TITLE)
-        if report.summary.available:
-            for lead, text in reader_paragraphs(report.summary.summary):
-                st.markdown(f"**{lead}** {text}")
-            st.caption(READER_SECTION_NOTE)
-        else:
-            st.info(report.summary.note)
+    # COMPANY-STORY-1 - the answer, the story (or the model's summary in its place), one table.
+    # ONE ``StoryPage`` feeds the page, the text, the HTML and the Markdown, so they cannot drift.
+    from aristos_council.company_story import (SECTION_ANSWER, SECTION_STORY, SECTION_TABLE,
+                                               SECTION_WORKINGS, narration_check_line,
+                                               story_page, table_rows)
+    from aristos_council.reader import READER_SECTION_NOTE, READER_SECTION_TITLE
 
-    st.subheader("Agreement")
-    if report.agreement is not None:
-        st.markdown(f"**{report.agreement.headline}**")
-        st.dataframe(pd.DataFrame([report.agreement.table_row(report.display)]),
-                     hide_index=True, width="stretch")
-        # BACKTEST-2 — display only, right under the agreement count; no vote, rank or verdict
-        # above is affected by anything here.
-        if report.track_record_caption:
-            st.caption(report.track_record_caption)
-        if report.track_record_summary:
-            st.caption(report.track_record_summary)
+    page = story_page(report)
+    st.subheader(SECTION_ANSWER)
+    st.markdown(f"**{page.answer[0]}**")
+    st.markdown(page.answer[1])
+
+    st.subheader(READER_SECTION_TITLE if page.model_summary else SECTION_STORY)
+    for lead, text in page.paragraphs:
+        st.markdown(f"**{lead}** {text}")
+    if page.model_summary:
+        st.caption(READER_SECTION_NOTE)
+    if page.note:
+        st.caption(page.note)
+
+    st.subheader(SECTION_TABLE)
+    for line in page.tag:
+        st.caption(line)
+    if page.no_vote:
+        st.info(page.no_vote)
     else:
-        st.info(f"No vote: {report.no_vote_reason}")
-
-    st.subheader("Lens votes")
-    if report.votes:
-        # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-
-        # band run; never shown otherwise.
-        _suffix = f" {report.tested_range_row_tag}" if report.outside_tested_range else ""
-        # LENS-TABLE-WRAP-1: ``st.table`` wraps a long cell where ``st.dataframe`` (a canvas grid)
-        # cuts it off and needs horizontal scrolling - and the Result and "What it asks" cells
-        # ARE the sentences a reader came for.
-        st.table(pd.DataFrame([{"Lens": v.label, "Role": v.role,
-                                "Result": v.result_shown() + v.badge_suffix + _suffix,
-                                "What it asks": v.asks} for v in report.votes]
-                              ).set_index("Lens"))
-        badged = [v for v in report.votes if v.badge is not None]
-        if badged:
-            from aristos_council.backtest import BADGE_MEANINGS
-            with st.expander("Track record — what each badge means"):
-                for v in badged:
-                    st.markdown(f"**{v.label} ({v.badge.label})**")
-                    st.caption(f"{v.badge.detail_line()} — {BADGE_MEANINGS[v.badge.label]}")
-    else:
-        st.info(report.no_vote_reason or NO_LENS_REASON)
-
-    st.subheader("Valuation band")
-    st.caption("This company against its own history; a mark, never a veto.")
-    st.write(check.valuation_band)
-
-    _render_price_and_cash(check)
-    _render_absolute_readings(check, with_analyst=False)
-    _render_analyst_forecasts(check)
+        # LENS-TABLE-WRAP-1: ``st.table`` wraps a long cell where ``st.dataframe`` cuts it off.
+        st.table(pd.DataFrame([dict(zip(page.headers, r.cells())) for r in page.rows]
+                              ).set_index(page.headers[0]))
+        asked = [r for r in page.rows if r.asks]
+        if asked:
+            with st.expander("What each lens asks"):
+                for r in asked:
+                    st.markdown(f"**{r.lens}** — {r.asks}")
+    if page.caption:
+        st.caption(page.caption)
 
     if report.council_opinion is not None:                # only when it was ticked
         st.subheader("Council opinion")
@@ -4410,12 +4393,32 @@ def _render_company_report(report) -> None:
         else:
             st.info(op.note)
 
-    from aristos_council.peer_table import rank_columns
-    _render_peers(check, rank_columns(report), report.ticker)
+    with st.expander(SECTION_WORKINGS):
+        st.subheader("Valuation band")
+        st.caption("This company against its own history; a mark, never a veto.")
+        st.write(check.valuation_band)
 
-    _render_sources(check)
-    # BACKTEST-2 — the page footer, so a badge is never on screen without a way to read how it
-    # was earned.
+        _render_price_and_cash(check)
+        _render_absolute_readings(check, with_analyst=False)
+        _render_analyst_forecasts(check)
+
+        from aristos_council.peer_table import rank_columns
+        _render_peers(check, rank_columns(report), report.ticker, nested=True)
+
+        _line = narration_check_line(report)
+        if _line:
+            st.caption(_line)
+        _notes = [r for r in table_rows(report) if r.full_reason or r.badge_detail]
+        if _notes:
+            st.markdown("**Lens notes**")
+            for r in _notes:
+                if r.full_reason:
+                    st.caption(f"{r.lens} did not apply: {r.full_reason}")
+                if r.badge_detail:
+                    st.caption(f"{r.lens} track record: {r.badge_detail}")
+        _render_sources(check)
+        # BACKTEST-2 — the page footer, so a badge is never on screen without a way to read how it
+        # was earned.
     st.caption("How lenses are graded: docs/BACKTEST.md")
 
     # Two exports side by side (REPORT-HTML-1): the text is canonical, the HTML the shareable copy.
@@ -4425,7 +4428,7 @@ def _render_company_report(report) -> None:
     run_start = st.session_state.get("cc_run_start") or datetime.now(timezone.utc)
     txt_name = company_check_download_name(report.ticker, "company_report", run_start)
     html_name = company_check_html_download_name(report.ticker, "company_report", run_start)
-    col_txt, col_html = st.columns(2)
+    col_txt, col_html, col_md = st.columns(3)
     with col_txt:
         st.download_button(f"⬇ Download report as text — {txt_name}",
                            data=format_company_report(report), file_name=txt_name,
@@ -4434,6 +4437,12 @@ def _render_company_report(report) -> None:
         st.download_button(f"⬇ Download report (HTML) — {html_name}",
                            data=company_report_html(report, run_start=run_start),
                            file_name=html_name, mime="text/html", key="cc_report_download_html")
+    with col_md:
+        from aristos_council.company_markdown import company_report_markdown
+        md_name = html_name.rsplit(".", 1)[0] + ".md"
+        st.download_button(f"⬇ Download report (Markdown) — {md_name}",
+                           data=company_report_markdown(report), file_name=md_name,
+                           mime="text/markdown", key="cc_report_download_md")
     tail = f"Ran in {report.seconds:.1f}s"
     if report.cache.get("hits") is not None:
         tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"
