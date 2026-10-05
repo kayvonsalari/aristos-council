@@ -30,6 +30,8 @@ class SentimentSnapshot:
 def sentiment_snapshot(
     news: list[NewsItem],
     trends: list[RecommendationTrend],
+    *,
+    analysts_in_report_block: bool = False,
 ) -> SentimentSnapshot:
     notes: list[str] = []
 
@@ -50,7 +52,11 @@ def sentiment_snapshot(
             latest = t
             break
     if latest is None:
-        notes.append("no analyst recommendation trend with coverage available")
+        # ANALYST-ONE-SOURCE-1: a Company Report council carries its analyst counts in ONE
+        # block (the table's); this snapshot must not say "none" beside it, nor count its own.
+        notes.append("analyst ratings are in the report's analyst block, not counted here"
+                     if analysts_in_report_block
+                     else "no analyst recommendation trend with coverage available")
         return SentimentSnapshot(
             news_count=len(news), headlines=headlines,
             latest_trend_period=None, analysts_total=None,

@@ -1531,20 +1531,22 @@ def test_price_and_cash_is_populated_and_in_its_own_section(tmp_path):
 
     def news(ticker, *, today):
         return NewsFetchResult(
-            items=(NewsItem(published=_date(2026, 9, 24), headline="AI glasses unveiled",
-                            source="EODHD"),),
+            items=(NewsItem(published=_date(2026, 9, 24), headline="CO Corp AI glasses unveiled",
+                            source="EODHD"),
+                   NewsItem(published=_date(2026, 9, 23), headline="CO Corp opens a new plant",
+                            source="EODHD")),
             source="EODHD news", tried=())
 
     report = _run([RAW], tmp_path=tmp_path, save=False, news_fetcher=news)
     pac = report.check.price_and_cash
     assert pac is not None and pac.last_close.available
-    assert pac.news and pac.news[0].headline == "AI glasses unveiled"
+    assert pac.news and pac.news[0].headline == "CO Corp AI glasses unveiled"
 
     text = format_company_report(report)
     html = company_report_html(report)
     assert "PRICE AND CASH" in text and "<h2>Price and cash</h2>" in html
-    assert "2026-09-24: AI glasses unveiled" in text
-    assert "2026-09-24: AI glasses unveiled" in html
+    assert "2026-09-24: CO Corp AI glasses unveiled" in text
+    assert "2026-09-24: CO Corp AI glasses unveiled" in html
     # The news source is named once, in Sources — not repeated per line.
     assert "EODHD news" in text.split("SOURCES")[1]
 

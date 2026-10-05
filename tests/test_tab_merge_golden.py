@@ -91,8 +91,10 @@ def test_price_and_cash_carries_the_rendered_lines_and_news_source(tmp_path):
 
     def news(ticker, *, today):
         return NewsFetchResult(
-            items=(NewsItem(published=_date(2026, 9, 24), headline="A headline",
-                            source="EODHD"),),
+            items=(NewsItem(published=_date(2026, 9, 24), headline="CO Corp A headline",
+                            source="EODHD"),
+                   NewsItem(published=_date(2026, 9, 23), headline="CO Corp other news",
+                            source="EODHD")),
             source="EODHD news", tried=())
 
     report = _run([RAW], tmp_path=tmp_path, save=False, news_fetcher=news)
@@ -101,7 +103,7 @@ def test_price_and_cash_carries_the_rendered_lines_and_news_source(tmp_path):
     assert pac is not None
     assert pac["news_source"] == "EODHD news"
     assert any("last close" in ln for ln in pac["lines"])
-    assert any("2026-09-24: A headline" in ln for ln in pac["lines"])
+    assert any("2026-09-24: CO Corp A headline" in ln for ln in pac["lines"])
 
 
 # --------------------------------------------------------------------------- #

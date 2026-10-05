@@ -30,7 +30,7 @@ def _technical(**over) -> TechnicalSnapshot:
 
 
 def _fundamentals(**over) -> Fundamentals:
-    base = dict(ticker="EL.PA", currency="EUR", eps=5.36, pe_ratio=26.64,
+    base = dict(ticker="EL.PA", name="Estee Lauder Companies Inc", currency="EUR", eps=5.36, pe_ratio=26.64,
                free_cash_flow_annual=[3.8e9, 3.4e9, 3.3e9, 3.2e9],
                aligned_annual={"free_cash_flow": [3.8e9, 3.4e9, 3.3e9, 3.2e9]},
                aligned_period_ends={"free_cash_flow": ["2025-12-31", "2024-12-31",
@@ -49,7 +49,7 @@ def _trend(this_year=7.25, next_year=7.94) -> AnalystTrend:
 
 
 def _news(n=2) -> NewsFetchResult:
-    items = tuple(NewsItem(published=date(2026, 9, 28 - i), headline=f"Headline {i}",
+    items = tuple(NewsItem(published=date(2026, 9, 28 - i), headline=f"Estee Lauder headline {i}",
                            source="EODHD") for i in range(n))
     return NewsFetchResult(items=items, source="EODHD news", tried=())
 
@@ -82,7 +82,7 @@ def test_forward_pe_is_close_over_consensus_eps():
 
 def test_news_is_newest_first_and_capped(tmp_path=None):
     news = NewsFetchResult(
-        items=tuple(NewsItem(published=date(2026, 9, 20 + i), headline=f"H{i}", source="EODHD")
+        items=tuple(NewsItem(published=date(2026, 9, 20 + i), headline=f"Estee Lauder H{i}", source="EODHD")
                    for i in range(8)),
         source="EODHD news", tried=())
     pac = price_and_cash(_technical(), _fundamentals(), trend=_trend(), news=news, max_news=5)
@@ -153,3 +153,55 @@ def test_lines_never_shows_an_unavailable_reading_as_a_blank():
     assert lines           # abstentions still produce text, never an empty table
     assert all(ln.strip() for ln in lines)
     assert "not stated" in " ".join(lines)
+
+
+# --------------------------------------------------------------------------- #
+# NEWS-SUBJECT-1 (Batch 19A A11) — keep a headline only if the company is its subject
+# --------------------------------------------------------------------------- #
+_JPM_FIVE = ("Synopsys Initiates $1 Billion Accelerated Share Repurchase Agreement",
+             "J.P. Morgan adds Givaudan to Positive Catalyst Watch on strong Q3 outlook",
+             "Versana's Digital Loan Voting Platform is Live",
+             "Equities Won't Be Dragged by Spike In Bond Yields",
+             "Should Vanguard Morningstar Value ETF (VTV) Be on Your Investing Radar?")
+
+
+def _news_of(*headlines) -> NewsFetchResult:
+    items = tuple(NewsItem(published=date(2026, 9, 28 - i), headline=h, source="EODHD")
+                  for i, h in enumerate(headlines))
+    return NewsFetchResult(items=items, source="EODHD news", tried=())
+
+
+def _jpm():
+    return _fundamentals(ticker="JPM", name="JPMorgan Chase & Co.", currency="USD")
+
+
+def test_jpms_five_headlines_about_other_companies_are_all_dropped():
+    pac = price_and_cash(_technical(), _jpm(), trend=_trend(), news=_news_of(*_JPM_FIVE))
+    assert pac.news == ()
+    assert pac.news_note == "no headlines about this company in the window"
+    assert "Recent news: no headlines about this company in the window" in pac.lines()
+    assert not any("Givaudan" in ln for ln in pac.lines())
+
+
+def test_headlines_about_the_company_survive_and_the_analyst_note_does_not():
+    news = _news_of("JPMorgan Chase profit beats estimates", _JPM_FIVE[1],
+                    "Layoffs at JPMorgan hit trading desk", "Shares of JPM rise")
+    pac = price_and_cash(_technical(), _jpm(), trend=_trend(), news=news)
+    shown = [item.headline for item in pac.news]
+    assert shown == ["JPMorgan Chase profit beats estimates",
+                     "Layoffs at JPMorgan hit trading desk", "Shares of JPM rise"]
+
+
+def test_one_surviving_headline_is_not_a_news_block():
+    news = _news_of("JPMorgan Chase profit beats estimates", *_JPM_FIVE)
+    pac = price_and_cash(_technical(), _jpm(), trend=_trend(), news=news)
+    assert pac.news == () and "no headlines about this company" in pac.news_note
+
+
+def test_a_company_that_raises_prices_is_still_about_the_company():
+    """Weak verbs ("raises", "adds") are ordinary company actions unless a rating-note word
+    is beside them."""
+    from aristos_council.news_subject import is_about_company
+    assert is_about_company("Tesla raises prices in China", name="Tesla, Inc.", ticker="TSLA")
+    assert not is_about_company("Acme Capital raises price target on Tesla",
+                                name="Acme Capital Group", ticker="ACME")
