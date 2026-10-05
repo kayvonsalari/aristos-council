@@ -29,6 +29,9 @@ SELL_MISSING = "SELL votes missing from the agreement"
 BACKWARDS_BAND = "a backwards size band"
 STRATEGY_WORD = "'strategy' in reader text (the reader's word is 'lens')"
 BADGE_PARAGRAPH = "the price-badge paragraph pasted into a heading"
+STORY_WORDS = "an id, a column name or the word 'cohort' in the answer, the story or the lens table"
+STORY_FIRST_SCREEN = "the first screen runs past the fold"
+FIRST_SCREEN_MAX_LINES = 25
 
 
 @dataclass(frozen=True)
@@ -148,6 +151,45 @@ def badge_paragraph_findings(text: str, where: str) -> list[Finding]:
     body = text if cut < 0 else text[:cut]
     return [Finding(BADGE_PARAGRAPH, where, ln.strip()[:140])
             for ln in _lines(body) if _BADGE_PARAGRAPH.search(ln)]
+
+
+# --------------------------------------------------------------------------- #
+# 1c. COMPANY-STORY-1: sections 1-3 of a company page (the answer, the story, the lens table)
+# --------------------------------------------------------------------------- #
+_FOLD = re.compile(r"show the workings", re.I)
+_COHORT = re.compile(r"\bcohorts?\b", re.I)
+_COLUMN_NAMES = re.compile(r"\b(?:BUY votes|SELL votes|Voted BUY|Voted SELL)\b")
+
+
+def story_sections(text: str) -> str:
+    """Everything above the fold of a company page, in any of its renderings (the text's
+    ``SHOW THE WORKINGS``, the HTML's ``<summary>`` once its tags are dropped, the Markdown's
+    ``## Show the workings``): the answer, the story, the lens table and, when ticked, the council
+    opinion."""
+    m = _FOLD.search(text)
+    return text if m is None else text[:m.start()]
+
+
+def story_findings(text: str, where: str) -> list[Finding]:
+    """No lens id, no column name and never the word "cohort" in sections 1-3 (and, because
+    ``story_word_findings`` below shares the rule, never "strategy" either)."""
+    body = story_sections(text)
+    out = list(internal_id_findings(body, where)) + list(strategy_word_findings(body, where))
+    out += [Finding(STORY_WORDS, where, ln.strip()[:140]) for ln in _lines(body)
+            if _COHORT.search(ln) or _COLUMN_NAMES.search(ln)]
+    return out
+
+
+def first_screen_lines(text: str) -> int:
+    """Lines of the plain-text report before the fold - the design's "at most 25"."""
+    return len(story_sections(text).rstrip("\n").split("\n"))
+
+
+def first_screen_findings(text: str, where: str) -> list[Finding]:
+    n = first_screen_lines(text)
+    return ([Finding(STORY_FIRST_SCREEN, where, f"{n} lines before the fold (max "
+                                                f"{FIRST_SCREEN_MAX_LINES})")]
+            if n > FIRST_SCREEN_MAX_LINES else [])
 
 
 # --------------------------------------------------------------------------- #

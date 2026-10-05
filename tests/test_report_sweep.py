@@ -25,6 +25,7 @@ from types import SimpleNamespace
 import pytest
 
 from aristos_council import report_sweep as sweep
+from aristos_council.company_markdown import company_report_markdown
 from aristos_council.company_report import (format_company_report, run_company_report)
 from aristos_council.export.report_html import (company_report_html, multi_strategy_report_html,
                                                 universe_report_html)
@@ -84,7 +85,8 @@ def build_sweep(runs):
         out[f"company {ticker}"] = {
             "company": report, "multi": None, "single": None,
             "exports": {"text": format_company_report(report),
-                        "html": sweep.visible_text(company_report_html(report))}}
+                        "html": sweep.visible_text(company_report_html(report)),
+                        "company md": company_report_markdown(report)}}
 
     def list_case(label, names, lenses):
         multi = run_multi_strategy_pipeline(names, lenses, adapter=adapter, today=TODAY,
@@ -193,6 +195,39 @@ def test_no_badge_paragraph_outside_the_glossary(sweep_reports):
     """19B B10: the five-sentence price-badge explanation lives in the glossary only."""
     _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.badge_paragraph_findings(t, w)),
                   sweep.BADGE_PARAGRAPH)
+
+
+def test_company_story_sections_carry_no_id_column_name_cohort_or_strategy(sweep_reports):
+    """COMPANY-STORY-1: sections 1-3 (the answer, the story, the lens table) of a company page, in
+    the text, the HTML and the Markdown, name a lens by its display name and say neither "cohort"
+    nor "strategy" nor a column's name."""
+    found = []
+    kinds = set()
+    for where, kind, text in _each_export(sweep_reports):
+        if where.startswith("company "):
+            kinds.add(kind)
+            found += sweep.story_findings(text, where)
+    assert kinds == {"text", "html", "company md"}
+    _assert_clean(found, sweep.STORY_WORDS)
+
+
+def test_the_first_screen_of_every_company_report_is_at_most_25_lines(sweep_reports):
+    found = []
+    for where, kind, text in _each_export(sweep_reports):
+        if where.startswith("company ") and kind == "text":
+            found += sweep.first_screen_findings(text, where)
+    _assert_clean(found, sweep.STORY_FIRST_SCREEN)
+
+
+def test_the_story_rules_fire_on_the_shapes_they_name():
+    fold = "\nSHOW THE WORKINGS\ncohort magic_formula_raw_v1 strategy are fine below the fold\n"
+    assert not sweep.story_findings("The answer is HOLD." + fold, "x")
+    assert sweep.story_findings("Track record from the Autos cohort." + fold, "x")
+    assert sweep.story_findings("Ranked by magic_formula_raw_v1." + fold, "x")
+    assert sweep.story_findings("The strategy voted." + fold, "x")
+    assert sweep.story_findings("BUY votes: 1" + fold, "x")
+    assert sweep.first_screen_findings("\n".join(["line"] * 30) + fold, "x")
+    assert not sweep.first_screen_findings("\n".join(["line"] * 20) + fold, "x")
 
 
 def test_the_multi_lens_progress_line_names_lenses_not_ids(tmp_path):
