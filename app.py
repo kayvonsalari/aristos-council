@@ -1902,14 +1902,14 @@ def _universe_markdown(result) -> str:
         untested_rule_notes, used_symbol_notes,
     )
     from aristos_council.rank_engine import factor_column_label
-    from aristos_council.report_language import format_score_gloss
+    from aristos_council.report_language import score_gloss_with_note
 
     lines += ["", "## Ranked — the verdict of record", ""]
     rows, factor_names = _ranked_rows(result.ranked, result.names)
     if rows:
         n_factors = next((len(r.factor_ranks) for r in result.ranked if r.factor_ranks),
                          0)
-        lines += [format_score_gloss(n_factors, len(result.ranked)), ""]
+        lines += [score_gloss_with_note(n_factors, len(result.ranked)), ""]
         labels = [factor_column_label(f) for f in factor_names]
         lines += _md_table(["Position (score)", "Name", "Verdict", *labels], rows,
                            bold_first=False)
@@ -2464,10 +2464,9 @@ def _lens_detail_markdown(detail) -> list[str]:
     lines: list[str] = []
     if detail.asks:                                          # CAPTION-1
         lines += [f"_{detail.asks}_", ""]
-    headline = detail.headline
-    if detail.badge_note:
-        headline = f"{headline} {detail.badge_note}"
-    lines += [f"**{headline}**"]
+    lines += [f"**{detail.headline}**"]
+    if detail.badge_note:                       # one plain line; the long form is the glossary's
+        lines += ["", detail.badge_note]
 
     for group in detail.groups:
         count = f"**{group.count} {'name' if group.count == 1 else 'names'}**"
@@ -2522,7 +2521,8 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     from aristos_council.pipeline import (
         CONTENTS_TITLE, EVIDENCE_GAPS_NOTE, EVIDENCE_GAPS_TITLE, compact_rules,
         evidence_gaps_clean_note,
-        VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, evidence_gaps, exclusion_rows,
+        VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, verdict_table_note, evidence_gaps,
+        exclusion_rows,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line,
         fetch_guard_line,
         floor_override_line,
@@ -2603,7 +2603,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
         lines.append(f"_{evidence_gaps_clean_note(multi_result)}_")
 
     # 3 — THE VERDICT TABLE: the answer. One row per name, one column per lens.
-    lines += ["", f"## {VERDICT_TABLE_TITLE}", "", VERDICT_TABLE_NOTE, ""]
+    lines += ["", f"## {VERDICT_TABLE_TITLE}", "", verdict_table_note(multi_result), ""]
     rows, head = multi_strategy_grid_rows(multi_result)
     if rows:
         lines += _md_table(head, rows)
@@ -2625,7 +2625,7 @@ def _multi_strategy_markdown(multi_result, run_start=None) -> str:
     # meet three screens' worth of thresholds before learning what the run decided.
     lines += ["", "## Rules applied — by lens", "",
               "_Each lens screens on its own rules; a name excluded by one may be ranked "
-              "by another. The rules below are read from the strategies that actually "
+              "by another. The rules below are read from the lenses that actually "
               "ran._"]
     for sid in ids:
         lines += ["", f"### {label_with_id(names.get(sid) or sid, sid)}"]
@@ -2924,7 +2924,7 @@ def _render_multi_strategy_result(multi_result) -> None:
                    f"{plural(len(ids), 'lens', 'lenses')}.")
 
     from aristos_council.pipeline import (
-        RULES_SECTION_TITLE, VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE,
+        RULES_SECTION_TITLE, VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, verdict_table_note,
         multi_header_line, multi_strategy_grid_rows, multi_summary_line, rules_applied,
     )
     from aristos_council.report_language import label_with_id
@@ -2978,7 +2978,7 @@ def _render_multi_strategy_result(multi_result) -> None:
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.info("No names reported.")
-    st.caption(VERDICT_TABLE_NOTE)
+    st.caption(verdict_table_note(multi_result))
     from aristos_council.pipeline import comparable_names_line
     st.caption(comparable_names_line(multi_result))
 
@@ -3090,7 +3090,7 @@ def _render_universe_result(result) -> None:
         untested_rule_notes, used_symbol_notes,
     )
     from aristos_council.rank_engine import factor_column_label
-    from aristos_council.report_language import format_score_gloss, label_with_id
+    from aristos_council.report_language import label_with_id, score_gloss_with_note
 
     # ITEM 6: the confirmation line first — a wrong dropdown is visible immediately.
     if _ids_visible():
@@ -3147,7 +3147,7 @@ def _render_universe_result(result) -> None:
 
         n_factors = next((len(r.factor_ranks) for r in result.ranked if r.factor_ranks),
                          0)
-        st.caption(format_score_gloss(n_factors, len(result.ranked)))
+        st.caption(score_gloss_with_note(n_factors, len(result.ranked)))
         df = pd.DataFrame(rows)
         styler = df.style.map(
             lambda v: f"color: {_verdict_hex(v)}; font-weight: 700",
@@ -4162,10 +4162,10 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
             st.caption(f"· {reason}")
         return
 
-    st.caption(group.sentence())
+    st.caption(group.reader_sentence())
     import pandas as pd
 
-    from aristos_council.peer_table import rank_display
+    from aristos_council.peer_table import PEER_METHOD_TITLE, rank_display
     # Numbers stay numbers (sortable by size), largest USD cap first. The local column is in the
     # MAJOR unit: a London cap is pounds although its quote code says GBX (INDEX-GBX-SCALE-1).
     columns = list(columns or ())
@@ -4195,8 +4195,10 @@ def _render_peers(result, columns=None, company_ticker: str = "") -> None:
         })
     if has_one_system_peers(peer_rows(group)):
         st.caption(ONE_SYSTEM_NOTE)
-    for reason in group.reasons:
-        st.caption(f"· {reason}")
+    # PEERS-METHOD-1: how the group was built is a diagnostic, collapsed by default.
+    with st.expander(PEER_METHOD_TITLE, expanded=False):
+        for line in group.method_lines():
+            st.caption(f"· {line}")
 
 
 def _render_company_report(report) -> None:
@@ -4269,7 +4271,7 @@ def _render_company_report(report) -> None:
     if report.votes:
         # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-
         # band run; never shown otherwise.
-        _suffix = f" — {report.tested_range_line}" if report.outside_tested_range else ""
+        _suffix = f" {report.tested_range_row_tag}" if report.outside_tested_range else ""
         # LENS-TABLE-WRAP-1: ``st.table`` wraps a long cell where ``st.dataframe`` (a canvas grid)
         # cuts it off and needs horizontal scrolling - and the Result and "What it asks" cells
         # ARE the sentences a reader came for.

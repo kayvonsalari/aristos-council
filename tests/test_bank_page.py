@@ -6,7 +6,9 @@
 (c) "holds $183.1bn more cash than debt" / free cash flow "$-147.8bn" mean nothing for a bank."""
 from __future__ import annotations
 
-from aristos_council.abs_readings import (NOT_MEANINGFUL_FOR_FINANCIALS, debt_and_cash,
+from aristos_council.abs_readings import (DEBT_AND_CASH_NOT_MEANINGFUL,
+                                          FREE_CASH_FLOW_NOT_MEANINGFUL,
+                                          NOT_MEANINGFUL_FOR_FINANCIALS, debt_and_cash,
                                           is_financial_sector, price_and_cash)
 from aristos_council.data.adapter import Fundamentals
 from aristos_council.strategy.rank_loader import load_rank_strategy
@@ -25,7 +27,8 @@ def _f(sector, **kw):
 # --- (c) -------------------------------------------------------------------------------------- #
 def test_a_bank_gets_one_not_meaningful_line_instead_of_cash_beyond_debt():
     lines = debt_and_cash(_f("Financial Services")).lines()
-    assert lines == [NOT_MEANINGFUL_FOR_FINANCIALS]
+    assert lines == [DEBT_AND_CASH_NOT_MEANINGFUL]
+    assert DEBT_AND_CASH_NOT_MEANINGFUL == ("debt and cash: " + NOT_MEANINGFUL_FOR_FINANCIALS)
     assert NOT_MEANINGFUL_FOR_FINANCIALS == ("not meaningful for banks and insurers (deposits "
                                              "and loans are the business)")
     joined = " ".join(lines)
@@ -33,12 +36,14 @@ def test_a_bank_gets_one_not_meaningful_line_instead_of_cash_beyond_debt():
 
 
 def test_an_insurer_is_treated_the_same_way():
-    assert debt_and_cash(_f("Financials")).lines() == [NOT_MEANINGFUL_FOR_FINANCIALS]
+    assert debt_and_cash(_f("Financials")).lines() == [DEBT_AND_CASH_NOT_MEANINGFUL]
 
 
 def test_a_bank_free_cash_flow_line_says_not_meaningful():
     pac = price_and_cash(None, _f("Financial Services"))
-    assert NOT_MEANINGFUL_FOR_FINANCIALS in pac.lines()
+    assert FREE_CASH_FLOW_NOT_MEANINGFUL in pac.lines()
+    assert FREE_CASH_FLOW_NOT_MEANINGFUL.startswith("free cash flow: not meaningful for banks and "
+                                                   "insurers (deposits and loans are the business)")
     assert not any("free cash flow, oldest first" in ln for ln in pac.lines())
 
 

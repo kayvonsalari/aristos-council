@@ -108,6 +108,8 @@ from .report_language import (
     COMPARISON_MIN,
     format_limit_clause,
     format_score_gloss,
+    forced_bottom_note_multi,
+    score_gloss_with_note,
     UNIT_CURRENCY,
     UNIT_PERCENT,
     UNIT_RATIO,
@@ -308,7 +310,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         if f is not None and is_asset_kind_out_of_scope(
                 f.quote_type, getattr(rank_strategy, "asset_kinds", []) or []):
             excluded.append((t, f"asset kind '{asset_kind_display(f.quote_type)}' "
-                                "outside this strategy's scope"))
+                                "outside this lens's scope"))
             continue
         if (rank_strategy.min_market_cap is not None and f is not None
                 and f.market_cap is not None
@@ -328,7 +330,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         # sector never is). Independent of exclude_sectors — a strategy sets one or none.
         if f is not None and is_sector_out_of_scope(
                 f.sector, getattr(rank_strategy, "include_sectors", []) or []):
-            excluded.append((t, f"sector '{f.sector}' outside this strategy's scope"))
+            excluded.append((t, f"not for this sector ({f.sector})"))
             continue
         # PROFIT GUARD: a lens that divides by operating profit does not apply to a company
         # with none (confirmed zero-or-negative only; unknown never gates). No would-rank:
@@ -1336,7 +1338,7 @@ def header_lines(result) -> list[str]:
     strategy = label_with_id(m.get("rank_strategy_name", ""),
                              m.get("rank_strategy_id", "") or "")
     if strategy:
-        lines.append(f"Strategy: {strategy}")
+        lines.append(f"Lens: {strategy}")
     mode = m.get("council_mode", "")
     mode_phrase = ("ranker only, no AI commentary" if mode == "ranker-only"
                    else f"{mode} commentary" if mode else "")
@@ -1583,7 +1585,7 @@ PREFILTER_NOTE = ("Used as a prefilter — names failing any rule below were nev
                   "ranked.")
 NON_PREFILTER_NOTE = ("Applied as a lens for commentary only — a name failing a rule "
                       "below was still ranked.")
-NO_SCREEN_NOTE = ("This strategy screens nothing: no rule filtered the cohort, and "
+NO_SCREEN_NOTE = ("This lens screens nothing: no rule filtered the cohort, and "
                   "quality enters only through the ranking below.")
 
 
@@ -2312,7 +2314,7 @@ def format_cli_report(result: RankPipelineResult) -> str:
     lines += ["", "  RANKED — the verdict of record · "
                   + label_with_id(m.get("rank_strategy_name", ""),
                                   m["rank_strategy_id"])]
-    lines.append(f"      {format_score_gloss(_n_factors(result), len(result.ranked))}")
+    lines.append(f"      {score_gloss_with_note(_n_factors(result), len(result.ranked))}")
     lines.append("")
     tie_notes = boundary_tie_notes(result.ranked)     # VERDICT-TIE-1 boundary marks
     positions = cohort_positions(result.ranked)      # tie-shared #N of M (RANK-DISPLAY-1)
@@ -2662,6 +2664,24 @@ def _multi_floor_override(results: dict, ids: list[str]) -> dict:
     }}}
 
 
+def _lens_display_name(strategy_id: str, strategies_dir=None) -> str:
+    """The reader's name for a lens (``Value + Momentum``), for progress lines. Never the id:
+    "Grading with magic_formula_momentum_v1" put a record key in front of the reader."""
+    try:
+        sdir = Path(strategies_dir) if strategies_dir else _STRATEGIES_DIR
+        strategy = load_rank_strategy_from_id(strategy_id, sdir)
+        return getattr(strategy, "display_name", "") or getattr(strategy, "name", "") or "a lens"
+    except Exception:                                           # noqa: BLE001 - a label only
+        return "a lens"
+
+
+def verdict_table_note(result) -> str:
+    """``VERDICT_TABLE_NOTE`` plus, when a lens ranked under ten names, the forced-bottom line."""
+    sizes = [len(res.ranked) for res in result.results.values()]
+    extra = forced_bottom_note_multi(sizes)
+    return f"{VERDICT_TABLE_NOTE} {extra}" if extra else VERDICT_TABLE_NOTE
+
+
 def run_multi_strategy_pipeline(
     universe: Optional[list[str]] = None, strategy_ids: Optional[list[str]] = None, *,
     universe_id: Optional[str] = None, universes_dir: str | Path | None = None,
@@ -2702,7 +2722,8 @@ def run_multi_strategy_pipeline(
     names: dict[str, str] = {}
     for i, sid in enumerate(ids, 1):
         if progress is not None:
-            progress(f"Grading with {sid} ({i} of {len(ids)})…")
+            progress(f"Grading with {_lens_display_name(sid, strategies_dir)} "
+                     f"({i} of {len(ids)})…")
         res = run_rank_pipeline(
             list(universe) if universe else None, sid, universe_id=universe_id,
             universes_dir=universes_dir, strategies_dir=strategies_dir,
@@ -2981,6 +3002,17 @@ def detail_badge_note() -> str:
     return DETAIL_BADGE_NOTE
 
 
+def detail_badge_line() -> str:
+    """BADGE-LINE-1 (19B B10): the one-line form a lens section prints. The five-sentence
+    ``detail_badge_note`` was pasted into the bold heading of every lens section that had a badge;
+    it now lives in the glossary only, and the section carries this line (threshold read from
+    the code, like the long form's test pins)."""
+    from .factors import _DIVERGENCE_MOMENTUM_THRESHOLD
+
+    return (f"⚠ = the share price is up more than {_DIVERGENCE_MOMENTUM_THRESHOLD:.0%} over "
+            "twelve months (see the glossary).")
+
+
 # A price-divergence flag, shortened to its figure for a table cell. The full sentence is
 # stated once per lens by ``detail_badge_note`` rather than repeated on every row — which
 # is the same reason this section groups at all.
@@ -3053,7 +3085,7 @@ def _detail_group_key(criterion: str, reason: str) -> str:
     low = (reason or "").lower()
     if low.startswith("below min market cap"):
         return DETAIL_GROUP_FLOOR
-    if low.startswith("sector "):
+    if low.startswith("sector ") or low.startswith("not for this sector"):
         return DETAIL_GROUP_SECTOR
     if low.startswith("asset kind"):
         return DETAIL_GROUP_KIND
@@ -3170,7 +3202,7 @@ def lens_detail(result, *, strategy_id: str = "", label: str = "") -> LensDetail
         label=label or meta.get("rank_strategy_name", "") or strategy_id,
         asks=lens_asks(result),
         headline=_detail_headline(result),
-        badge_note=detail_badge_note() if any(
+        badge_note=detail_badge_line() if any(
             b.startswith("⚠") for g in groups for n in g.names for b in n.badges) else "",
         groups=tuple(gates + rest),
         sources=tuple(_detail_sources(result)),
@@ -4875,10 +4907,10 @@ def format_multi_strategy_grid(result: MultiStrategyResult) -> str:
     ids = result.strategy_ids
     m = result.meta
     lines = [
-        f"=== COMBINED GRID \u2014 {plural(len(ids), 'strategy', 'strategies')} over "
+        f"=== COMBINED GRID \u2014 {plural(len(ids), 'lens', 'lenses')} over "
         f"{plural(m.get('universe_size', 0), 'name')} in "
         f"{universe_display_name(m)} ===",
-        "  Verdict: deterministic ranker (no LLM ran \u2014 narration is per-strategy).",
+        "  Verdict: deterministic ranker (no LLM ran \u2014 narration is per-lens).",
         "",
     ]
     _names = getattr(result, "strategy_names", None) or {}
@@ -4890,4 +4922,7 @@ def format_multi_strategy_grid(result: MultiStrategyResult) -> str:
     lines.append("")
     lines.append(f"  ordered by how many lenses graded each name, then by its combined "
                  f"position; {comparable_names_line(result, tail='.')}")
+    small = forced_bottom_note_multi([len(res.ranked) for res in result.results.values()])
+    if small:
+        lines.append(f"  {small}")
     return "\n".join(lines)

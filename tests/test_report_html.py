@@ -131,7 +131,7 @@ def _ranked() -> list[RankedTicker]:
 def _universe_result() -> RankPipelineResult:
     return RankPipelineResult(
         ranked=_ranked(),
-        excluded=[("IWDA.AS", "asset kind 'ETF' outside this strategy's scope")],
+        excluded=[("IWDA.AS", "asset kind 'ETF' outside this lens's scope")],
         unrateable=[("DEAD.DE", "UNRATEABLE: no data — possibly delisted")],
         narratives={"SXR8.DE": _NARRATIVE_A, "EUNL.DE": _NARRATIVE_B},
         header="Verdict: deterministic ranker.  Narrative: LLM (non-judging).",

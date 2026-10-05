@@ -1417,18 +1417,21 @@ def test_a_subcap_company_ranks_against_its_smallcap_band(tmp_path):
     assert report.cohort_slug is None and report.track_record_caption == ""
 
 
-def test_the_outside_tested_range_line_is_on_the_header_and_every_vote(tmp_path):
+def test_the_outside_tested_range_line_is_on_the_header_and_every_vote_carries_the_short_tag(
+        tmp_path):
+    """19B B4: the sentence is said ONCE (header); each lens row carries the short tag."""
     report = _smallcap_run([RAW, SCREENED], tmp_path=tmp_path)
     text = format_company_report(report)
     html = company_report_html(report)
-    assert text.count(OUTSIDE_TESTED_RANGE_LINE) >= 1 + len(report.votes)   # header + each vote
+    assert text.count(OUTSIDE_TESTED_RANGE_LINE) == 1                      # the header, once
     assert OUTSIDE_TESTED_RANGE_LINE in html
     # the vote TABLE row (not result() itself, which stays undecorated — the caveat is added
     # at the rendering layer, same reason _council_cross_lens_verdicts's "cell" text must
     # never carry it: it is a display caveat, not part of the lens's own verdict string).
     from aristos_council.company_report import vote_table_lines
     for line in vote_table_lines(report)[1:]:
-        assert OUTSIDE_TESTED_RANGE_LINE in line
+        assert OUTSIDE_TESTED_RANGE_LINE not in line
+        assert line.rstrip().endswith("(outside tested range)")
 
 
 def test_zero_badge_strings_in_the_html_for_a_smallcap_run(tmp_path):

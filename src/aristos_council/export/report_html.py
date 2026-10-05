@@ -823,6 +823,7 @@ def multi_strategy_report_html(multi_result, *,
         PROVENANCE_SECTION_TITLE,
         RULES_SECTION_TITLE,
         VERDICT_TABLE_NOTE,
+        verdict_table_note,
         VERDICT_TABLE_TITLE,
         evidence_gaps,
         exclusion_rows,
@@ -907,7 +908,7 @@ def multi_strategy_report_html(multi_result, *,
     rows, head = multi_strategy_grid_rows(multi_result)
     parts.append(f'<section class="section" id="verdicts">'
                  f'<h2>{_esc(VERDICT_TABLE_TITLE)}</h2>'
-                 f'<p class="note">{_esc(VERDICT_TABLE_NOTE)}</p>')
+                 f'<p class="note">{_esc(verdict_table_note(multi_result))}</p>')
     if rows:
         body = [[f'<strong>{_esc(row[head[0]])}</strong>']
                 + [_verdict_grid_cell(row[c]) for c in head[1:]]
@@ -979,7 +980,7 @@ def multi_strategy_report_html(multi_result, *,
                  f'<h2>{_esc(RULES_SECTION_TITLE)} — by lens</h2>'
                  '<p class="note">Each lens screens on its own rules; a name excluded by '
                  "one may be ranked by another. The rules below are read from the "
-                 "strategies that actually ran.</p>")
+                 "lenses that actually ran.</p>")
     for i, (sid, label) in enumerate(zip(ids, lens_labels)):
         rules = rules_applied(multi_result.results[sid])
         # Each lens keeps ONE accent in all three places it appears — here, its column in
@@ -1218,10 +1219,9 @@ def _lens_detail_html(detail) -> str:
     out = []
     if detail.asks:
         out.append(f'<p class="note">{_esc(detail.asks)}</p>')          # CAPTION-1
-    line = f'<strong>{_esc(detail.headline)}</strong>'
+    out.append(f'<p class="note"><strong>{_esc(detail.headline)}</strong></p>')
     if detail.badge_note:
-        line += f' {_esc(detail.badge_note)}'
-    out.append(f'<p class="note">{line}</p>')
+        out.append(f'<p class="note">{_esc(detail.badge_note)}</p>')
 
     for group in detail.groups:
         out.append(_detail_group_html(group))
@@ -1337,7 +1337,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         valuation_band_table,
     )
     from ..rank_engine import factor_column_label
-    from ..report_language import format_score_gloss, label_with_id
+    from ..report_language import label_with_id, score_gloss_with_note
     from ..data.adapter import display_name
 
     m = result.meta
@@ -1362,7 +1362,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         + _kv([
             ("Universe", _esc(f'{universe_label} — '
                               f'{plural(m.get("universe_size", "—"), "name")}')),
-            ("Strategy", _esc(label_with_id(m.get("rank_strategy_name", ""),
+            ("Lens", _esc(label_with_id(m.get("rank_strategy_name", ""),
                                             strategy_id))),
             # CAPTION-1 — the question this lens asks, beside the lens's name. _kv omits
             # an empty value, so a strategy with no `asks` renders no row at all.
@@ -1416,7 +1416,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
         n_factors = next((len(r.factor_ranks) for r in result.ranked if r.factor_ranks),
                          0)
         parts.append('<p class="note">'
-                     + _esc(format_score_gloss(n_factors, len(result.ranked)))
+                     + _esc(score_gloss_with_note(n_factors, len(result.ranked)))
                      + "</p>")
         head = ["Position (score)", "Name", "Verdict", *labels]
         body = [[_position_cell(r["Position (score)"]),
@@ -1582,7 +1582,7 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
         # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-band
         # run; never shown otherwise. No badge bullets follow (attach_track_record is never
         # called for such a run — badged is always empty below).
-        suffix = f" — {report.tested_range_line}" if report.outside_tested_range else ""
+        suffix = f" {report.tested_range_row_tag}" if report.outside_tested_range else ""
         body = [[_esc(v.label), _esc(v.role), _esc(v.result_shown() + v.badge_suffix + suffix),
                 _esc(v.asks)] for v in report.votes]
         parts.append(_table(["Lens", "Role", "Result", "What it asks"], body))
@@ -1717,7 +1717,7 @@ def _company_peers_html(result, columns=None, company_ticker: str = "") -> str:
                 if result.peer_error else "")
     out = ['<section class="section"><h2>Peers</h2>']
     if group.available:
-        out.append(f'<p class="note">{_esc(group.sentence())}</p>')
+        out.append(f'<p class="note">{_esc(group.reader_sentence())}</p>')
         columns = list(columns or ())
         rows = peer_rows(group, columns, company_ticker)
         body = [[f'<span class="mono">{_esc(r.marked_ticker)}</span>', _esc(r.name),
@@ -1738,9 +1738,12 @@ def _company_peers_html(result, columns=None, company_ticker: str = "") -> str:
                           cell_classes=cell_classes))
         if has_one_system_peers(rows):
             out.append(f'<p class="note">{_esc(ONE_SYSTEM_NOTE)}</p>')
+        from ..peer_table import PEER_METHOD_TITLE
+        out.append(f'<details class="gate"><summary>{_esc(PEER_METHOD_TITLE)}</summary>'
+                   + _bullets(_esc(line) for line in group.method_lines()) + "</details>")
     else:
         out.append('<p class="note">No peer group for this name.</p>')
-    out.append(_bullets(_esc(reason) for reason in group.reasons))
+        out.append(_bullets(_esc(reason) for reason in group.reasons))
     out.append("</section>")
     return "".join(out)
 

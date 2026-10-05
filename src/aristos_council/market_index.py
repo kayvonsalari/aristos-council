@@ -2509,6 +2509,30 @@ class PeerGroup:
                 f"{LADDER_STEPS}, {self.distinct_companies} distinct companies")
         return f"{text} - {BROAD_SECTOR_NOTE}" if self.broad else text
 
+    def reader_sentence(self) -> str:
+        """PEERS-HEADER-1 (19B B5): what a reader needs above the table - how many peers, the
+        ladder step, and (for a sector group) that it is wider than usual. The size band is said
+        ONCE: the old line printed it twice ("1/4x-4x (0.25x-4x market cap (USD))"). The snapshot
+        date, the distinct-company count and every matching diagnostic moved to ``method_lines``."""
+        if not self.members:
+            return "; ".join(self.reasons) or "no peer group could be formed"
+        level, _sep, ratio = self.rung.partition(", ")
+        size = (f"within {ratio} of its market cap (USD)" if ratio else "").strip()
+        text = (f"{plural(len(self.members), 'peer')}: {level}"
+                + (f", {size}" if size else "") + f" (step {self.step} of {LADDER_STEPS})")
+        return f"{text} - {BROAD_SECTOR_NOTE}" if self.broad else text
+
+    def method_lines(self) -> list[str]:
+        """PEERS-METHOD-1 (19B B6): how the group was built - diagnostics, not reader content (the
+        26 Sep ruling). The renderers put these under a collapsed "How this peer group was built"."""
+        if not self.members:
+            return list(self.reasons)
+        lines = [f"index snapshot {self.snapshot or 'unknown'}; "
+                 f"{plural(self.distinct_companies, 'distinct company', 'distinct companies')} among "
+                 f"{plural(len(self.members), 'peer')}"]
+        lines.extend(self.reasons)
+        return lines
+
 
 def is_financial(row: IndexRow) -> bool:
     """Banks and insurers, by sector then by industry prefix.

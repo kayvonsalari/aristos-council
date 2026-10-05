@@ -73,7 +73,7 @@ The last close in the name's OWN quoted currency (never converted) with the date
 
 ## Rules applied — by lens
 
-_Each lens screens on its own rules; a name excluded by one may be ranked by another. The rules below are read from the strategies that actually ran._
+_Each lens screens on its own rules; a name excluded by one may be ranked by another. The rules below are read from the lenses that actually ran._
 
 ### Classic Value
 **Screen: Quality-value screen**
@@ -96,7 +96,7 @@ Used as a prefilter — names failing any rule below were never ranked.
 _Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities)._
 **Screen: none**
 
-This strategy screens nothing: no rule filtered the cohort, and quality enters only through the ranking below.
+This lens screens nothing: no rule filtered the cohort, and quality enters only through the ranking below.
 
 - Ranking: top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut).
 - Names ranked on: Return on invested capital, Earnings yield (EBIT/EV), 12-month price momentum.

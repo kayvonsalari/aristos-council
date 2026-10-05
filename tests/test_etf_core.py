@@ -181,7 +181,7 @@ def test_core_lens_gates_a_stock_mock_out():
     ranked, excluded, _, _, _ = _rank_stage(
         ["AAPL", "VWCE.DE"], strat, adapter, today=date(2026, 6, 30))
     # the equity is gated out with the verbatim asset-kind message
-    assert ("AAPL", "asset kind 'Equity' outside this strategy's scope") in excluded
+    assert ("AAPL", "asset kind 'Equity' outside this lens's scope") in excluded
     ranked_ids = {r.ticker for r in ranked if not r.excluded}
     assert "VWCE.DE" in ranked_ids           # the ETF is ranked
     assert "AAPL" not in ranked_ids

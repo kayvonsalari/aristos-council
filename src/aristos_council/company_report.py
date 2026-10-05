@@ -76,6 +76,7 @@ OUTSIDE_TESTED_RANGE_LINE = "Outside the tested range (under $5bn): no track rec
 NO_COHORT_TRACK_RECORD_LINE = ("Track record: untested here - no backtested cohort covers this "
                                "company's industry.")
 NO_COHORT_BADGE_NOTE = "no backtested cohort covers this company's industry"
+OUTSIDE_RANGE_ROW_TAG = "(outside tested range)"
 SIZE_MATCHED_LINE = ("Compared with similar-sized companies in its industry; outside the tested "
                      "range, no track record applies.")
 
@@ -335,6 +336,12 @@ class CompanyReport:
         if not self.outside_tested_range:
             return ""
         return SIZE_MATCHED_LINE if self.size_matched_peers else OUTSIDE_TESTED_RANGE_LINE
+
+    @property
+    def tested_range_row_tag(self) -> str:
+        """The short tag on each lens row of a run outside the tested range. The sentence lives
+        once in the header (``tested_range_line``); nine rows repeating it buried the results."""
+        return OUTSIDE_RANGE_ROW_TAG if self.outside_tested_range else ""
 
     @property
     def tested_range_detail_lines(self) -> list:
@@ -1091,7 +1098,7 @@ def agreement_table_lines(report: CompanyReport) -> list[str]:
 def vote_table_lines(report: CompanyReport) -> list[str]:
     # SMALLCAP-VIEW-1 — every lens's own verdict carries the caveat on a small-company-band
     # run (item 1c); never shown otherwise.
-    suffix = f" — {report.tested_range_line}" if report.outside_tested_range else ""
+    suffix = f" {report.tested_range_row_tag}" if report.outside_tested_range else ""
     width = max((len(v.label) for v in report.votes), default=4)
     out = [f"{'Lens'.ljust(width)}  {'Role':<22} Result"]
     out += [f"{v.label.ljust(width)}  {v.role:<22} {v.result_shown()}{v.badge_suffix}{suffix}"

@@ -719,7 +719,7 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
         elif is_asset_kind_out_of_scope(qt, kinds):
             gates.append(GateCell(
                 "asset_kind", "FAIL",
-                f"asset kind '{asset_kind_display(qt)}' outside this strategy's scope",
+                f"asset kind '{asset_kind_display(qt)}' outside this lens's scope",
                 rationale=getattr(rank_strategy, "asset_kind_rationale", "") or ""))
         else:
             gates.append(GateCell("asset_kind", "PASS",
@@ -736,7 +736,7 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
             # here (ITEM 2). Empty -> the gate line renders bare, as before.
             gates.append(GateCell(
                 "sector", "FAIL",
-                f"sector '{sector}' is excluded by this strategy",
+                f"sector '{sector}' is excluded by this lens",
                 rationale=getattr(rank_strategy, "sector_exclusion_rationale", "") or ""))
         else:
             gates.append(GateCell("sector", "PASS",
@@ -753,7 +753,7 @@ def _gate_cells(rank_strategy, f) -> list[GateCell]:
         elif is_sector_out_of_scope(sector, include):
             gates.append(GateCell(
                 "sector_scope", "FAIL",
-                f"sector '{sector}' outside this strategy's scope",
+                f"not for this sector ({sector})",
                 rationale=getattr(rank_strategy, "sector_inclusion_rationale", "") or ""))
         else:
             gates.append(GateCell("sector_scope", "PASS",
@@ -820,10 +820,10 @@ def _pointer(screen: list[ScreenCell], gates: list[GateCell],
     if screen_less:
         if gate_fails:
             return ("Would be EXCLUDED from a universe list (a GATE fail, NOT a SELL) on: "
-                    + ", ".join(gate_fails) + ". This strategy screens nothing — quality "
+                    + ", ".join(gate_fails) + ". This lens screens nothing — quality "
                     "enters via ranking; a rank/verdict is a cohort statement, so run the "
                     "universe to place it.")
-        return ("This strategy screens nothing (quality enters via ranking) and passes "
+        return ("This lens screens nothing (quality enters via ranking) and passes "
                 f"the sector/cap gates — {tail}.")
     fails = [c.name for c in screen if c.status == "FAIL"] + gate_fails
     if fails:
@@ -953,14 +953,18 @@ def peers_lines(result, *, columns=None, company_ticker: str = "") -> list[str]:
     ``columns`` (a Company Report's per-lens rank columns) the company is the first row."""
     group = getattr(result, "peer_group", None)
     if group is not None:
-        from .peer_table import peer_text_lines
+        from .peer_table import PEER_METHOD_TITLE, peer_text_lines
         lines = ["PEERS (who this company would be measured against):"]
         if group.available:
-            lines.append(f"  {group.sentence()}")
+            lines.append(f"  {group.reader_sentence()}")
             lines.extend(f"  {ln}" for ln in peer_text_lines(group, columns, company_ticker))
+            # PEERS-METHOD-1: the diagnostics sit under their own sub-heading at the end (a plain
+            # text file cannot collapse; the HTML page and the app fold the same lines away).
+            lines.append(f"  {PEER_METHOD_TITLE}:")
+            lines.extend(f"    · {line}" for line in group.method_lines())
         else:
             lines.append("  No peer group for this name.")
-        lines.extend(f"  · {reason}" for reason in group.reasons)
+            lines.extend(f"  · {reason}" for reason in group.reasons)
         return lines
     if getattr(result, "peer_error", ""):
         return [f"PEERS: the market index is not available ({result.peer_error})"]

@@ -67,6 +67,33 @@ def _plain(source: str) -> str:
     return source.split(":", 1)[1].strip() if ":" in (source or "") else (source or "").strip()
 
 
+_BARE_REASONS = ("", "abstained", "not computed")
+# Registry labels that read as jargon in a sentence ("Revenue CAGR (3-yr, yfinance)").
+_PLAIN_FACTOR_WORDS = {"revenue_growth": "revenue growth"}
+
+
+def _factor_words(name: str) -> str:
+    """The reader's word for a factor: its registry label without the parenthetical source note
+    ("Revenue CAGR (3-yr, yfinance)" -> "revenue CAGR"). Never the record key ("roic")."""
+    from .factors import FACTOR_REGISTRY
+    if name in _PLAIN_FACTOR_WORDS:
+        return _PLAIN_FACTOR_WORDS[name]
+    fdef = FACTOR_REGISTRY.get(name)
+    label = (getattr(fdef, "label", "") or name.replace("_", " ")).split(" (")[0].strip()
+    return label[0].lower() + label[1:] if label[1:2].islower() else label
+
+
+def _missing_reason(missing: list[str], sources: dict) -> str:
+    """Plain words for "these factors could not be computed": names, never ids or 'abstained'; a
+    specific reason from the provider ("gross profit unavailable") is kept in brackets."""
+    parts = []
+    for n in missing:
+        why = _plain(sources.get(n, ""))
+        parts.append(_factor_words(n) if why in _BARE_REASONS else f"{_factor_words(n)} ({why})")
+    joined = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+    return f"{joined} could not be computed"
+
+
 def would_rank(strategy, ranked, pool: dict, ticker: str) -> Optional[WouldRank]:
     """Where ``ticker`` would rank on ``strategy``'s factors among the peer group, or None when
     the company is not an entry-rule exclusion (nothing to say).
@@ -87,9 +114,7 @@ def would_rank(strategy, ranked, pool: dict, ticker: str) -> Optional[WouldRank]
     names = [f.name for f in strategy.factors]
     missing = [n for n in names if values.get(n) is None]
     if missing:
-        why = "; ".join(f"{n.replace('_', ' ')} - {_plain(sources.get(n, '')) or 'not computed'}"
-                        for n in missing)
-        return WouldRank(False, reason=why)
+        return WouldRank(False, reason=_missing_reason(missing, sources))
     rows = [(r.ticker, dict(r.factor_values)) for r in ranked if not r.excluded]
     rows += [(t, dict(v)) for t, (v, _) in pool.items()]
     specs = [FactorSpec(f.name, f.direction, f.missing) for f in strategy.factors]

@@ -108,7 +108,7 @@ def test_mirror_flagship_on_dividend_etfs_all_kind_gated():
     assert s.kind_gated == 10
     assert s.unrateable == 0
     # every exclusion is the asset-kind wall, verbatim
-    assert all(w == "asset kind 'ETF' outside this strategy's scope"
+    assert all(w == "asset kind 'ETF' outside this lens's scope"
                for _, w in result.excluded)
     md = format_mirror_markdown(result, expectation="0 ranked, 10 kind-gated")
     assert "ranked: **0**" in md and "kind-gated: **10**" in md
@@ -127,5 +127,5 @@ def test_mirror_etf_lens_on_stock_universe():
     assert set(s.unrateable_names) == set(delisted)
     # every other name (the 38 equities) is kind-gated with the verbatim message
     assert s.kind_gated == len(universe.tickers) - len(delisted)
-    assert all(w == "asset kind 'Equity' outside this strategy's scope"
+    assert all(w == "asset kind 'Equity' outside this lens's scope"
                for t, w in result.excluded if t not in delisted)

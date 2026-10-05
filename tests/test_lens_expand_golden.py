@@ -17,6 +17,12 @@ for these effects (the other eight lenses are byte-identical to the original gol
     now excluded as "<rule> not available".
   - DEFINC-BANKS-1: BANK is now excluded from Defensive Income by sector ("sector excluded
     (Financial Services)") instead of failing its momentum rule.
+
+SECOND DELIBERATE EXCEPTION (Batch 19B, B3). WORDING ONLY: the two scope-gate reasons were reworded
+("sector 'X' outside this strategy's scope" -> "not for this sector (X)"; "asset kind 'K' outside
+this strategy's scope" -> "... outside this lens's scope") because reader text says "lens", never
+"strategy". The golden's reason strings were rewritten by that same textual substitution; no rank,
+verdict, factor value or exclusion moved.
 """
 
 from __future__ import annotations
