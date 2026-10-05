@@ -1799,6 +1799,7 @@ def _fake_run_lens_backtest_for_notebook_test(cohort, lens, *, start, end, hold_
         below_cohort_floor=True)
 
 
+@pytest.mark.notebook
 def test_notebook_cell_9_save_path_runs_against_the_current_backtest_py(monkeypatch, tmp_path):
     """Executes cell 9's actual source. A below_cohort_floor result must not raise when
     the cell reads r.below_cohort_floor / r.size_floor; a normal result must round-trip
@@ -1817,6 +1818,7 @@ def test_notebook_cell_9_save_path_runs_against_the_current_backtest_py(monkeypa
     assert saved.rounds[0].accounts_coverage == 0.8
 
 
+@pytest.mark.notebook
 def test_notebook_cell_10_summary_path_runs_against_the_current_backtest_py(
         monkeypatch, tmp_path):
     """Executes cell 9 then cell 10 in the SAME shared namespace, exactly as a real
@@ -1843,6 +1845,7 @@ def test_notebook_cell_10_summary_path_runs_against_the_current_backtest_py(
     assert (table["verdict"] != "below cohort floor").any()
 
 
+@pytest.mark.notebook
 def test_notebook_cell_10_prints_a_plain_message_on_an_empty_frame_instead_of_crashing(
         tmp_path, capsys):
     """SIZE-FLOOR-2 follow-up item 3 - no CSV written and nothing recorded below its own
