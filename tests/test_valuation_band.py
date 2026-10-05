@@ -191,7 +191,9 @@ def test_pe_fallback_is_used_and_labelled_when_ev_components_are_absent():
 
     assert band.available
     assert band.basis == "pe"
-    assert band.display.startswith("P/E (fallback) ")     # the fallback stays LABELLED
+    # PE-CONSISTENCY-1: no "fallback" in reader text; the line states what the P/E divides
+    assert band.display.startswith("P/E 12.5 (market cap over the latest annual net income")
+    assert "fallback" not in band.display and "fallback" not in band.note
     assert band.current == 1_000.0 / 80.0
 
 
@@ -235,7 +237,9 @@ def test_coverage_below_half_the_span_abstains_with_the_count():
     band = valuation_band(bars, f, asof=TODAY)
 
     assert not band.available
-    assert "insufficient coverage" in band.note
+    # BAND-REASON-1: the reason is the missing earnings, said with the counts
+    assert "valuation measure undefined in" in band.note
+    assert "no positive earnings" in band.note and "too few usable months" in band.note
     assert 0 < band.months_covered < 31                # under half of the 61 months
 
 
@@ -702,3 +706,49 @@ def test_a_low_but_believable_multiple_is_still_stated():
     f = _fundamentals(ebit=4e8, debt=0.0, cash=0.0, market_cap=1.2e9)
     band = valuation_band(_bars([100.0] * 61), f, asof=TODAY)
     assert band.available and band.current >= 1.0
+
+
+# --------------------------------------------------------------------------- #
+# BAND-REASON-1 — a short band on negative earnings says so
+# --------------------------------------------------------------------------- #
+def test_all_loss_making_company_names_negative_earnings_not_history():
+    """VKTX/NVCR: 61 of 61 months, decades on file, and the band said "band from 0 of 61
+    months". The multiple is undefined on a loss; that is the reason."""
+    bars = _bars([100.0] * 61)
+    f = _fundamentals(ebit=-50.0, debt=200.0, cash=50.0)
+    band = valuation_band(bars, f, asof=TODAY)
+
+    assert not band.available
+    assert band.note == ("valuation measure undefined in 61 of 61 months "
+                         "(no positive operating profit)")
+    assert "insufficient history" not in band.note and "band from" not in band.note
+
+
+def test_recently_profitable_company_names_losses_and_the_span_it_has():
+    """F: "insufficient history: 1.8y" on a company with 40 years on file. Losses through the
+    older years, profit only recently: the reason names the loss months AND the short span."""
+    bars = _bars([100.0] * 61)
+    # newest-first: FY2025 and FY2024 earn, everything older lost money
+    f = _fundamentals(ebit=[90.0, 90.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0],
+                      debt=200.0, cash=50.0)
+    band = valuation_band(bars, f, asof=TODAY)
+
+    assert not band.available
+    assert band.note.startswith("valuation measure undefined in ")
+    assert "(no positive operating profit)" in band.note
+    assert "the usable months span" in band.note and "needs 3.0y" in band.note
+    assert "insufficient history" not in band.note
+
+
+def test_pe_basis_wording_says_earnings_not_operating_profit():
+    bars = _bars([100.0] * 61)
+    f = _fundamentals(net_income=-5.0)
+    band = valuation_band(bars, f, asof=TODAY)
+    assert band.note == "valuation measure undefined in 61 of 61 months (no positive earnings)"
+
+
+def test_a_short_feed_without_losses_keeps_the_history_wording():
+    """No month lost to a loss -> the cause is the feed/age, and the old sentence stands."""
+    bars, f = _flat_ev_ebit([100.0] * 18)
+    band = valuation_band(bars, f, asof=TODAY)
+    assert band.note.startswith("insufficient history: ")
