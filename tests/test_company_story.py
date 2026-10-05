@@ -403,3 +403,19 @@ def test_story_the_first_screen_fits_in_25_lines_for_a_nine_lens_page(tmp_path):
     rep.votes = [_skip(f"Lens {n}") for n in range(8)] + [_rank("Forensic", "buy", 9, kind="check")]
     rep.agreement = build_agreement(rep.votes)
     assert sweep.first_screen_lines(format_company_report(rep)) <= 25
+
+
+def test_story_a_company_too_small_for_every_lens_is_called_outside_the_tested_range():
+    """Viking, without the small-company band ticked: the flag is off but the market cap is $3.4bn."""
+    check = _check(name="Viking Therapeutics, Inc.")
+    check.peer_group.subject = SimpleNamespace(market_cap_usd=3.4e9)
+    rep = _report([_skip("Quality", "market cap below the $5.0bn minimum"),
+                   _skip("Growth", "market cap below the $5.0bn minimum")], check=check)
+    assert not rep.outside_tested_range
+    first, second = answer_lines(rep)
+    assert first == "No lens voted on Viking Therapeutics."
+    assert second.endswith("It is also outside the tested range (under $5bn): no track record applies.")
+    assert story_page(rep).tag == ()                      # the tag is only for the small-company band
+    assert "under $5bn" in dict(story_paragraphs(rep))["What to doubt."]
+    check.peer_group.subject = SimpleNamespace(market_cap_usd=52.7e9)
+    assert "under $5bn" not in " ".join(answer_lines(_report([_skip("Quality")], check=check)))

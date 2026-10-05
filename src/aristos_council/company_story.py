@@ -155,9 +155,20 @@ def _analyst_asof(report) -> str:
     return str(getattr(trend, "as_of", "") or _fetched(report))
 
 
+def under_5bn(report) -> bool:
+    """True when the company is under the lenses' $5bn gate: ranked on the opt-in small-company band,
+    or simply too small for every lens (its own market cap, from the peer group's subject)."""
+    if report.outside_tested_range:
+        return True
+    from .smallcap_band import SMALLCAP_CEILING_USD
+    subject = getattr(getattr(report, "peer_group", None), "subject", None)
+    cap = getattr(subject, "market_cap_usd", None)
+    return isinstance(cap, (int, float)) and 0 < cap < SMALLCAP_CEILING_USD
+
+
 def untested_sentence(report) -> str:
     """The sentence for a company outside what the lenses were tested on ("" when it applies not)."""
-    if report.outside_tested_range:
+    if under_5bn(report):
         return "It is also outside the tested range (under $5bn): no track record applies."
     from .company_report import NO_COHORT_TRACK_RECORD_LINE
     if report.track_record_caption == NO_COHORT_TRACK_RECORD_LINE:
@@ -372,7 +383,7 @@ def _doubt(report) -> str:
             bits.append("The peer group had to be widened to the whole sector, so its peers differ more.")
         elif group.step >= 3:
             bits.append(f"The peer search needed step {group.step} of 4, so peers are looser matches.")
-    if report.outside_tested_range:
+    if under_5bn(report):
         bits.append("The company is under $5bn, outside what the lenses were tested on.")
     p = getattr(report.check, "band_percentile", None)
     if p is None and str(getattr(report.check, "valuation_band", "")).startswith("not evaluated"):
@@ -468,7 +479,7 @@ def table_rows(report) -> list[TableRow]:
         if v.badge is not None:
             detail = f"{v.badge.detail_line()} - {BADGE_MEANINGS[v.badge.label]}"
         rows.append(TableRow(lens=v.label, outcome=_outcome(v),
-                             badge=v.badge.label if v.badge is not None else "-",
+                             badge=v.badge.label if v.badge is not None else "none",
                              reason=_row_reason(v), asks=v.asks, badge_detail=detail,
                              full_reason=_full_reason(v)))
     return rows

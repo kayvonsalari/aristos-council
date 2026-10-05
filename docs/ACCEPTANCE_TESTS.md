@@ -150,3 +150,22 @@ Wording only: no vote, rank, result or number moved (the sweep's results JSON is
 | **T19-10** | Run the sweep: `python -m pytest tests/test_report_sweep.py -rfxX`. | Passes: no internal id, no "strategy" in reader text, no badge paragraph in a heading. |
 | **T19-11** | Company page for JPM: read the peers header and footer, then open "How this peer group was built". | The header states the size band once. The diagnostics are inside the folded block. |
 | **T19-12** | Company page for NVCR with the council ticked. Read the council text for the Forensic mark. | It names the three components (accrual ratio, Altman Z, F-score) with their ranks, and no "no currency stated" phrase. |
+
+## COMPANY-STORY-1 (T20)
+
+The company page now opens on the answer: two lines, a five-paragraph story, one lens table. Both are written by code from templates (no model call); everything that supports them is under "Show the workings". No vote, rank, badge or number moved; the saved results JSON is byte-identical.
+
+| ID | Steps | Expected result |
+|---|---|---|
+| **T20-1** | Company page for Ford (F) with all nine stock lenses ticked, nothing else. Read the first screen. | Under the heading "The answer": line 1 says "No lens voted on Ford Motor." Line 2 names the reason that kept out the most lenses, with its figure ("no operating profit (fiscal year to Dec 2025)"). Then "The story" with five paragraphs (asked / happened / survived / doubt / cannot tell), then one table: Lens, Vote or mark, Badge, Reason. No model was called and no key is needed. |
+| **T20-2** | Same page: look for the words "cohort", "strategy", a lens id (anything with an underscore and "_v1") and the old columns "BUY votes" / "Voted BUY" above "Show the workings". | None appears. |
+| **T20-3** | Company page for BYD (1211.HK). | Line 1 states the votes and the split with the lens names ("Three of three votes say HOLD (...)"). Line 2 says how many lenses did not apply and the most common reason with its figure, then the track-record count. |
+| **T20-4** | Company page for JPM. | "HOLD, on one lens built for banks (Financials, ...)." "The other seven lenses are not for banks. No track record exists for this industry yet." The debt-and-cash sentence in "What survived" says it does not describe a bank. |
+| **T20-5** | Company page for Viking (VKTX), the "include companies under $5bn" box off, then on. | Off: line 2 ends "It is also outside the tested range (under $5bn): no track record applies." On: the same, plus the small-company line ONCE above the lens table; no row repeats it. |
+| **T20-6** | Every figure in the story: find its date. | Accounts readings say "(fiscal year to Dec 2025)" or "(latest annual accounts)"; analysts carry the as-of date; the peer search names the market-index date; the valuation band names the price date. |
+| **T20-7** | Company page for any company, "Show the workings" closed, then opened. | Closed: only the answer, the story, the table. Open: valuation band, price and cash, absolute readings, what analysts say, peers (with its own folded "How this peer group was built"), lens notes (what each lens asks, its full reason, its track record), sources. |
+| **T20-8** | Tick the plain-English summary (needs a key). | The model's five paragraphs REPLACE the story; the code-written story is not shown beside them. |
+| **T20-9** | Tick the summary with no key (or a summary that fails its checks). | The code-written story stays and ONE line says why the model's summary was withheld. |
+| **T20-10** | Tick the council opinion (needs a key). Then untick it and run again. | Ticked: it sits directly under the lens table, above "Show the workings"; the narration-check line is inside the workings. Unticked: no council section, and no model is called. |
+| **T20-11** | Download the text, the HTML and the Markdown. | All three keep the same order. The text keeps every section; the HTML folds the workings; the Markdown puts them in sub-headings at the end, with "what each lens asks" as footnotes (HTML: a tooltip on the lens name). |
+| **T20-12** | `python -m pytest tests/test_report_sweep.py tests/test_company_story.py -rfxX` | Passes. The sweep checks sections 1-3 of every company report in all three renderings, and that the plain-text first screen is at most 25 lines. |
