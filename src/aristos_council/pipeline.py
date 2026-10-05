@@ -78,12 +78,14 @@ from .factors import (
     price_divergence_flag,
     reversion_value_for,
     screen_evaluate,
+    screen_unavailable_reason,
 )
 from .data.adapter import display_name
 from .persistence.reports import RunReport, report_from_state
 from .operating_profit import (
     NO_OPERATING_PROFIT_REASON,
     has_no_operating_profit,
+    no_operating_profit_reason,
     lens_requires_operating_profit,
 )
 from .rank_engine import (
@@ -333,7 +335,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         # there is nothing meaningful to rank it on.
         if (lens_requires_operating_profit(rank_strategy)
                 and has_no_operating_profit(f)):
-            excluded.append((t, NO_OPERATING_PROFIT_REASON))
+            excluded.append((t, no_operating_profit_reason(f)))
             continue
         if f is not None and is_payout_uncovered(f.payout_ratio,
                                                  rank_strategy.max_payout_ratio):
@@ -363,6 +365,15 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
                     reason = f"{reason} {flag}"
                 _stash_shadow(shadow_pool, t, fi, rank_strategy)
                 excluded.append((t, reason))
+                continue
+            # NULL-EXCLUDES-2: a screen rule that could not read its input is not a pass. The
+            # lens does not apply to this name (not a fail, not a vote), exactly as a failed rule
+            # takes it out of the ranked set - it must never be ranked on a gap the screen had
+            # no figure to check.
+            unavailable = screen_unavailable_reason(outcomes, f)
+            if unavailable is not None:
+                _stash_shadow(shadow_pool, t, fi, rank_strategy)
+                excluded.append((t, unavailable))
                 continue
         outcomes = compute_factor_outcomes(
             fi, [fac.name for fac in rank_strategy.factors])
@@ -1700,7 +1711,8 @@ def rules_applied(result) -> Optional[RulesApplied]:
         screen_label=(result.meta.get("screen_strategy_name", "") if result.meta else ""),
         screen_id=(getattr(screen, "id", "") if screen is not None else ""),
         prefilter=bool((result.meta or {}).get("prefilter_screen")),
-        rules=rules, ranker_lines=_ranker_filter_lines(rank))
+        rules=rules,
+        ranker_lines=_ranker_filter_lines(rank, covered_floor=_prefilter_floor(screen, result)))
 
 
 @dataclass(frozen=True)
@@ -1767,7 +1779,18 @@ _MISSING_PHRASE = {
 }
 
 
-def _ranker_filter_lines(rank) -> list[str]:
+def _prefilter_floor(screen, result) -> Optional[float]:
+    """The size floor the lens's PREFILTER screen already states (its ``min_market_cap`` rule), or
+    None. A prefilter's rule table prints it, so the ranker's own line must not print a second,
+    different-looking floor for the same gate (DEFINC-FLOOR-1: Defensive Income read "at least
+    $5.0bn" in the table and "at least $1.0bn (applied by the ranker)" beneath it)."""
+    if screen is None or not bool((getattr(result, "meta", None) or {}).get("prefilter_screen")):
+        return None
+    return next((c.threshold for c in (getattr(screen, "criteria", None) or [])
+                 if getattr(c, "name", "") == "min_market_cap"), None)
+
+
+def _ranker_filter_lines(rank, covered_floor: Optional[float] = None) -> list[str]:
     """The RANKER's own filters, in the same plain register as the screen's rules — the
     cut, the factors it ranks on, the market-cap floor, any sector scope, and how a
     missing value is treated. These decide outcomes exactly as the screen's rules do, so
@@ -1794,7 +1817,11 @@ def _ranker_filter_lines(rank) -> list[str]:
     if labels:
         lines.append("Names ranked on: " + ", ".join(labels) + ".")
     floor = getattr(rank, "min_market_cap", None)
-    if floor:
+    # DEFINC-FLOOR-1: the floor is stated ONCE. When the prefilter screen carries a floor at
+    # least as high as the ranker's own, the screen's is the one that binds (a name between the
+    # two passes the ranker's gate and fails the screen's), and its row is already in the table
+    # above; the ranker's lower number would be a second floor that never decides anything.
+    if floor and not (covered_floor is not None and covered_floor >= floor):
         lines.append("Company size: at least "
                      + format_value(floor, UNIT_CURRENCY, currency="USD")
                      + " (applied by the ranker, before the screen).")
@@ -3173,7 +3200,7 @@ def _gate_rule_phrase(key: str, result) -> str:
         if kinds:
             return "this lens ranks only " + ", ".join(kinds)
     if key == DETAIL_GROUP_PROFIT:
-        return "latest operating profit above zero (applied before the screen)"
+        return ("latest fiscal year's operating profit above zero (applied before the screen)")
     return "applied before the screen"
 
 

@@ -137,7 +137,9 @@ def test_ranked_table_marks_a_screen_abstention():
         def get_fundamentals(self, t):
             return Fundamentals(ticker=t, name=t, market_cap=2e10,
                                 dividend_per_share=2.0, dividend_yield=0.02,
-                                total_debt=1e9, **self._F[t])
+                                total_debt=1e9,
+                                dividend_streak_years=12,       # NULL-EXCLUDES-2: every other
+                                **self._F[t])                   # rule has its input
 
         def get_price_history(self, t, *, start, end):
             return PriceHistory(ticker=t, bars=[

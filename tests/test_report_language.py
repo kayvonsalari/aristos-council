@@ -424,7 +424,10 @@ def test_the_block_also_states_the_rankers_own_filters(result):
     assert "top 20% BUY, bottom 20% SELL, middle HOLD" in lines
     assert "Names ranked on:" in lines
     assert "Missing factor values are ranked worst." in lines
-    assert "at least $1.0bn" in lines                     # the ranker's own cap floor
+    # DEFINC-FLOOR-1: the size floor is stated once - in the rule table (the prefilter screen's
+    # $5.0bn binds), not again here under the ranker's own, lower $1.0bn
+    assert "Company size" not in lines
+    assert any(r.criterion == "min_market_cap" for r in rules_applied(result).rules)
 
 
 def test_the_block_is_read_from_the_strategy_that_ran_not_hardcoded(tmp_path):

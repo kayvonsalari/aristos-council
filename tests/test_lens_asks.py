@@ -45,7 +45,7 @@ EXPECTED = {
         "Steady income with the trend intact: a yield of at least 1.5%, paid from cash "
         "(no more than 80% of free cash flow) and raised for 10 years, from a company "
         "worth at least $5bn with debt no bigger than its market value and a share "
-        "price not down more than 10%; the calmest share ranks best.",
+        "price not down more than 10%; the calmest share ranks best (not banks or insurers).",   # DEFINC-BANKS-1
     "forensic_v1":
         "Are the profits real: cash behind the earnings, a safe balance sheet, and "
         "improving health checks, for companies worth at least $5bn (not banks or "

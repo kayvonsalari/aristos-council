@@ -239,6 +239,20 @@ _SCOPE_AFTER_PUBLICATION = {
         "asks_old": "for companies worth at least $5bn.",
         "asks_new": "for companies worth at least $5bn (not banks or insurers).",
     },
+    # DEFINC-BANKS-1 (Batch 19A): Defensive Income carries a "total debt no bigger than market
+    # value" rule, and JPM was failed on it ("debt 1.5x") while the bank page calls debt not
+    # meaningful for a bank. Cyclical Income already leaves financials out; this lens now does too.
+    # Unlike growth_garp_v2 this CAN change a backtest ranking of conservative_plus_v1 on any
+    # cohort that holds banks or insurers (they were screened on the debt rule, ranked or failed).
+    "conservative_plus_v1": {
+        "exclude_sectors": _FINANCIAL_SECTORS,
+        "sector_exclusion_rationale": (
+            "Total debt against market value does not measure a bank or an insurer: borrowing "
+            "is their raw material rather than a claim ahead of the shareholder. financials_v1 "
+            "ranks them on the measures they are actually priced by."),
+        "asks_old": "the calmest share ranks best.",
+        "asks_new": "the calmest share ranks best (not banks or insurers).",
+    },
 }
 
 

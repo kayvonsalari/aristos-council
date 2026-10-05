@@ -87,7 +87,6 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 - Ranking: top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut).
 - Names ranked on: Return on invested capital, Earnings yield (EBIT/EV).
-- Company size: at least $5.0bn (applied by the ranker, before the screen).
 - Sectors excluded: Financial Services, Financials, Utilities.
 - Asset kinds admitted: equity.
 - Missing factor values are ranked worst.
@@ -120,7 +119,6 @@ Used as a prefilter — names failing any rule below were never ranked.
 
 - Ranking: top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut).
 - Names ranked on: Return on invested capital, Earnings yield (EBIT/EV), 12-month price momentum.
-- Company size: at least $5.0bn (applied by the ranker, before the screen).
 - Sectors excluded: Financial Services, Financials, Utilities.
 - Asset kinds admitted: equity.
 - Missing factor values are ranked worst.

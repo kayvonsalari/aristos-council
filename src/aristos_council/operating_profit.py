@@ -48,6 +48,47 @@ def latest_operating_profit(fundamentals) -> Optional[float]:
     return None
 
 
+def _latest_series_name(fundamentals) -> Optional[str]:
+    """Which series ``latest_operating_profit`` read: operating income, else EBIT."""
+    for name in ("operating_income", "ebit"):
+        series = getattr(fundamentals, name, None)
+        if series and series[0] is not None:
+            return name
+    return None
+
+
+def operating_profit_basis(fundamentals) -> str:
+    """The period the guard's figure belongs to, in words: ``"fiscal year to Dec 2025"``.
+
+    PROFIT-GUARD-DOC-1. The guard reads the LATEST FISCAL YEAR's operating profit (the newest annual
+    value), not trailing twelve months and not the latest quarter, so a company whose last year was
+    a loss but whose recent quarters recovered reads "no operating profit" until its next annual
+    accounts. The year-end date is printed when the provider carried one (a dated series); without
+    it the reason says "latest fiscal year" and never invents a date."""
+    name = _latest_series_name(fundamentals)
+    ended = None
+    if name is not None:
+        dated = (getattr(fundamentals, "aligned_period_ends", None) or {}).get(name) or []
+        values = (getattr(fundamentals, "aligned_annual", None) or {}).get(name) or []
+        if dated and values:
+            ended = next((d for d, v in zip(dated, values) if v is not None), None)
+        if ended is None:
+            dated = (getattr(fundamentals, "period_ends", None) or {}).get(name) or []
+            ended = dated[0] if dated else None
+    if ended:
+        try:
+            from datetime import date as _date
+            return f"fiscal year to {_date.fromisoformat(str(ended)[:10]).strftime('%b %Y')}"
+        except ValueError:
+            pass
+    return "latest fiscal year"
+
+
+def no_operating_profit_reason(fundamentals) -> str:
+    """``"no operating profit (fiscal year to Dec 2025)"`` - the exclusion reason with its basis."""
+    return f"{NO_OPERATING_PROFIT_REASON} ({operating_profit_basis(fundamentals)})"
+
+
 def has_no_operating_profit(fundamentals) -> bool:
     """True only when the latest operating profit is KNOWN and is zero or negative."""
     latest = latest_operating_profit(fundamentals)

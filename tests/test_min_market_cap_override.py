@@ -52,7 +52,11 @@ _SHAPE = dict(sector="Technology", ebit=[3000.0], pe_ratio=10.0,
               operating_income=[3000.0, 2800, 2600, 2400],
               tax_provision=[600.0, 560, 520, 480],
               pretax_income=[2900.0, 2700, 2500, 2300],
-              invested_capital=[5000.0] * 4, total_revenue=[200.0, 170, 150, 120])
+              invested_capital=[5000.0] * 4, total_revenue=[200.0, 170, 150, 120],
+              # every screen rule has its input - a rule that cannot read one now excludes
+              # the name (NULL-EXCLUDES-2), which would hide what these tests are about
+              dividend_per_share=4.0, payout_ratio=0.5, dividend_streak_years=12,
+              total_debt=1.0e9)
 _FUND = {"BIG": dict(market_cap=2e10, **_SHAPE),
          "MID": dict(market_cap=2e9, **_SHAPE)}
 UNIVERSE = ["BIG", "MID"]
@@ -68,7 +72,7 @@ class _Adapter(MarketDataAdapter):
         return PriceHistory(ticker=ticker, bars=[
             PriceBar(day=date(2026, 1, 1), open=100, high=101, low=99,
                      close=100 + 0.1 * i, adj_close=100 + 0.1 * i, volume=10)
-            for i in range(220)])
+            for i in range(300)])      # >= a year of closes: the momentum rule can read it
 
     def get_dividend_history(self, ticker, *, start, end):
         return []

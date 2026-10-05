@@ -47,8 +47,13 @@ class WouldRank:
     def text(self) -> str:
         """The sentence a surface prints beside the exclusion reason."""
         if self.available:
-            return (f"on its measures it would rank {ordinal(self.position)} of "
-                    f"{self.cohort_size}. {NOT_A_VOTE}")
+            # WOULD-RANK-DENOM-1: say what the base is. "10th of 13" read as if 13 were the
+            # peer group, while the peers table showed "rank (of 1)": the 13 are the names whose
+            # figures could all be computed, with this company slotted in as if its rules had
+            # not excluded it.
+            return (f"on its measures it would rank {ordinal(self.position)} of the "
+                    f"{self.cohort_size} names with usable figures, had the lens's rules not "
+                    f"excluded it. {NOT_A_VOTE}")
         return f"{UNAVAILABLE_PREFIX}: {self.reason}"
 
     def as_dict(self) -> dict:

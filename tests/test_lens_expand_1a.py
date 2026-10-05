@@ -363,5 +363,7 @@ def test_negative_operating_profit_now_does_not_apply_on_both_lenses(tmp_path):
     for sid in (QUALITY, EPV):
         res = run_rank_pipeline(tickers, sid, ranker_only=True, adapter=adapter, today=TODAY,
                                 strategies_dir=STRAT_DIR, use_cache=False)
-        assert ("CO", "no operating profit") in [(t, why) for t, why in res.excluded]
+        # PROFIT-GUARD-DOC-1: the reason carries the basis of the figure it read
+        assert ("CO", "no operating profit (latest fiscal year)") in [
+            (t, why) for t, why in res.excluded]
         assert all(r.ticker != "CO" for r in res.ranked)

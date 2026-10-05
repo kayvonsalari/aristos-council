@@ -42,6 +42,10 @@
     "screen: min_dividend_yield (observed 0.006492 vs threshold 0.015) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
    ],
    [
+    "T10",
+    "consecutive years of dividend increases not available"
+   ],
+   [
     "T11",
     "screen: min_dividend_yield (observed 0.008557 vs threshold 0.015) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
    ],
@@ -55,36 +59,14 @@
    ],
    [
     "BANK",
-    "screen: min_price_momentum (observed -0.1908 vs threshold -0.1)"
+    "sector excluded (Financial Services)"
    ],
    [
     "TINY",
     "below min market cap ($1.0bn)"
    ]
   ],
-  "ranked": [
-   {
-    "combined_rank": 3.0,
-    "factor_ranks": {
-     "low_volatility": 1.0,
-     "momentum_12m": 1.0,
-     "net_payout_yield": 1.0
-    },
-    "factor_sources": {
-     "low_volatility": "computed",
-     "momentum_12m": "computed",
-     "net_payout_yield": "fallback:dividend_yield"
-    },
-    "factor_values": {
-     "low_volatility": 0.12990288100342626,
-     "momentum_12m": 0.0,
-     "net_payout_yield": 0.021
-    },
-    "position": 1,
-    "ticker": "T10",
-    "verdict": "buy"
-   }
-  ],
+  "ranked": [],
   "unrateable": []
  },
  "cyclical_income_v1": {
@@ -118,6 +100,10 @@
     "screen: min_dividend_yield (observed 0.008518 vs threshold 0.015)"
    ],
    [
+    "T07",
+    "dividend cuts in the last N years not available"
+   ],
+   [
     "T08",
     "screen: min_dividend_yield (observed 0.0114 vs threshold 0.015)"
    ],
@@ -126,8 +112,16 @@
     "screen: min_dividend_yield (observed 0.006492 vs threshold 0.015) [\u26a0 price diverging: +61% 12m \u2014 cyclical inflection or mania; human review]"
    ],
    [
+    "T10",
+    "dividend cuts in the last N years not available"
+   ],
+   [
     "T11",
     "screen: min_dividend_yield (observed 0.008557 vs threshold 0.015) [\u26a0 price diverging: +45% 12m \u2014 cyclical inflection or mania; human review]"
+   ],
+   [
+    "T12",
+    "dividend cuts in the last N years not available"
    ],
    [
     "T13",
@@ -142,71 +136,7 @@
     "below min market cap ($5.0bn)"
    ]
   ],
-  "ranked": [
-   {
-    "combined_rank": 6.0,
-    "factor_ranks": {
-     "net_debt_to_operating_income": 1.0,
-     "net_payout_yield": 2.0,
-     "payout_coverage_fcf": 3.0
-    },
-    "factor_sources": {
-     "net_debt_to_operating_income": "computed",
-     "net_payout_yield": "fallback:dividend_yield",
-     "payout_coverage_fcf": "abstained: dividends paid unavailable"
-    },
-    "factor_values": {
-     "net_debt_to_operating_income": 1.0458357845947546,
-     "net_payout_yield": 0.021,
-     "payout_coverage_fcf": null
-    },
-    "position": 1,
-    "ticker": "T10",
-    "verdict": "buy"
-   },
-   {
-    "combined_rank": 6.0,
-    "factor_ranks": {
-     "net_debt_to_operating_income": 2.0,
-     "net_payout_yield": 1.0,
-     "payout_coverage_fcf": 3.0
-    },
-    "factor_sources": {
-     "net_debt_to_operating_income": "computed",
-     "net_payout_yield": "fallback:dividend_yield",
-     "payout_coverage_fcf": "abstained: dividends paid unavailable"
-    },
-    "factor_values": {
-     "net_debt_to_operating_income": 1.5237534109855,
-     "net_payout_yield": 0.027,
-     "payout_coverage_fcf": null
-    },
-    "position": 1,
-    "ticker": "T12",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 9.0,
-    "factor_ranks": {
-     "net_debt_to_operating_income": 3.0,
-     "net_payout_yield": 3.0,
-     "payout_coverage_fcf": 3.0
-    },
-    "factor_sources": {
-     "net_debt_to_operating_income": "computed",
-     "net_payout_yield": "fallback:dividend_yield",
-     "payout_coverage_fcf": "abstained: dividends paid unavailable"
-    },
-    "factor_values": {
-     "net_debt_to_operating_income": 3.1478695332948683,
-     "net_payout_yield": 0.012,
-     "payout_coverage_fcf": null
-    },
-    "position": 3,
-    "ticker": "T07",
-    "verdict": "sell"
-   }
-  ],
+  "ranked": [],
   "unrateable": []
  },
  "etf_core_v1": {
