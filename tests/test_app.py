@@ -524,7 +524,7 @@ def test_run_tab_renders_with_the_one_flow():
     # rather than refusing until you pick something.
     assert len(picker.ticked) == 1
     # ...and the flow is exactly: strategies, a list, its tickers, run.
-    assert any(s.label == "List" for s in at.selectbox)
+    assert any(r.label == "List source" for r in at.radio)
     assert any("Tickers" in str(t.label) for t in at.text_area)
     # ONE run button on this tab (Company Check has its own; the flow used to have two).
     # RUNMODE-1: the button now says WHAT will happen and WHAT IT COSTS on its own line,
@@ -628,9 +628,8 @@ def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
     # ASSET-MODE-1: the app opens on STOCKS, so the shipped lists — all of which are ETF
     # lists — are behind the switch. The validation toggle is a SEPARATE axis and both
     # still apply; this test checks the toggle on each side of the switch in turn.
-    uni = _dropdown(at, "List").options
-    assert uni[0] == "New list"                                      # FUND-UI-2: start blank
-    assert uni == ["New list"]          # every shipped list is a fund list, so: none here
+    uni = _dropdown(_source(at, "Saved list"), "My lists").options
+    assert uni == []                    # every shipped list is a fund list, so: none here
 
     rank = _strategy_picker(at).options
     assert not any("Classic Value" in o for o in rank)              # baseline hidden (ui: hidden)
@@ -644,7 +643,7 @@ def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
 
     # ...and flipping the switch brings every one of them back. HIDDEN, never deleted.
     _etfs_mode(at)
-    uni = _dropdown(at, "List").options
+    uni = _dropdown(_source(at, "Saved list"), "My lists").options
     # FUND-UI-2 deleted the shipped stock cohorts — a list is one YOU save now.
     assert not any("Growth 40" in o for o in uni)
     assert not any("Defensive Income 16" in o for o in uni)
@@ -656,11 +655,11 @@ def test_validation_assets_hidden_by_default(monkeypatch, tmp_path):
     assert any("Growth ETFs (US)" in o for o in uni)                 # ETF-1 exploratory cohort
     assert any("ETF Index Tracker — UCITS" in o for o in uni)        # ETFCORE-1 cohort
     assert not any("Core Market ETFs" in o for o in uni)             # UI-RENAME-1: old label gone
-    # New list + 2 US ETF lists + 3 UCITS ETF lists (dividend + growth [UCITS-1] + core
-    # [ETFCORE-1]) = 6. The universes are isolated to the SHIPPED set above, so this is now
+    # 2 US ETF lists + 3 UCITS ETF lists (dividend + growth [UCITS-1] + core
+    # [ETFCORE-1]) = 5 (the "New list" entry is gone: pasting is its own choice, LIST-UI-1). The universes are isolated to the SHIPPED set above, so this is now
     # exact. (These app tests skip in CI — streamlit is not in dev.)
-    assert len(uni) == 6
-    assert all(o == "New list" or "ETF" in o for o in uni)
+    assert len(uni) == 5
+    assert all("ETF" in o for o in uni)
 
     rank = _strategy_picker(at).options
     assert any("Dividend ETFs" in o for o in rank)                  # ETF-1 dividend lens
@@ -831,7 +830,7 @@ def test_the_run_tab_list_selector_offers_no_suggestion_ordering():
     from streamlit.testing.v1 import AppTest
     at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
-    uni = _dropdown(at, "List").options
+    uni = _dropdown(_source(at, "Saved list"), "My lists").options
     assert not any(str(o).startswith("⭐") for o in uni)
 
 
@@ -1118,7 +1117,12 @@ def test_the_one_ticker_box_saves_in_place_or_as_a_new_list():
     from streamlit.testing.v1 import AppTest
     at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
-    assert any("Save this list" in str(e.label) for e in at.expander)
+    # LIST-UI-1: the save panel appears only AFTER a paste, labelled with the count.
+    assert not any("Save these" in str(e.label) for e in at.expander)
+    at.session_state["uni_tickers"] = "AAPL\nMSFT"
+    at.run()
+    assert not at.exception
+    assert any(str(e.label) == "Save these 2 names as a list (optional)" for e in at.expander)
     assert any(b.label == "Save changes" for b in at.button)
     assert any(b.label == "Save as new list" for b in at.button)
     assert any(t.label == "List name" for t in at.text_input)
@@ -1182,7 +1186,7 @@ def test_saved_local_universe_appears_in_both_selectors():
     try:
         at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
         assert not at.exception
-        uni = _dropdown(at, "List").options
+        uni = _dropdown(_source(at, "Saved list"), "My lists").options
         assert any("Apptest Local (local)" in o for o in uni)
     finally:
         f.unlink(missing_ok=True)
@@ -1313,8 +1317,17 @@ def _caption_blob(at) -> str:
     return "\n".join(c.value for c in at.caption if isinstance(c.value, str))
 
 
+def _source(at, choice):
+    """LIST-UI-1: switch the list half's one question ("what set of companies...") to ``choice``."""
+    radio = next(r for r in at.radio if str(r.label) == "List source")
+    if radio.value != choice:
+        radio.set_value(choice).run()
+    return at
+
+
 def _pick_list(at, needle):
-    dd = _dropdown(at, "List")
+    _source(at, "Saved list")
+    dd = _dropdown(at, "My lists")
     dd.set_value(next(o for o in dd.options if needle in o)).run()
     return at
 
@@ -1341,13 +1354,14 @@ def test_named_etf_cohort_states_its_derived_asset_class():
     assert "Cohort asset class: **etf**" in _caption_blob(at)
 
 
-def test_adhoc_cohort_filters_nothing_and_says_so():
-    # "New list" is the default and declares nothing -> UNKNOWN, so nothing is hidden.
+def test_adhoc_cohort_filters_nothing_and_says_nothing_about_it():
+    # LIST-UI-1: a pasted list declares no asset class -> nothing is hidden, and the old
+    # "Ad-hoc cohort - no declared asset class..." caption is gone.
     from streamlit.testing.v1 import AppTest
     at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
     blob = _caption_blob(at)
-    assert "Ad-hoc cohort" in blob and "nothing is filtered out" in blob
+    assert "Ad-hoc cohort" not in blob and "no declared asset class" not in blob
     # ASSET-MODE-1: every live lens on THIS side of the switch. The cohort still filters
     # nothing — the switch is a different axis from cohort relevance, and only the switch
     # decides which lenses are on offer at all.

@@ -271,3 +271,14 @@ def _current_test(request):
         yield
     finally:
         _CURRENT.update(nodeid="<not in a test>", opted_out=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_market_index_in_list_input(monkeypatch):
+    """LIST-UI-1: the paste box's live resolver reads the local market index. A test must not
+    depend on whether THIS machine has one (the owner's does, CI's does not), so the default
+    lookup is empty (= "nothing to check against", the resolver abstains) unless a test sets its
+    own with ``list_input._LOOKUP_CACHE`` or passes a lookup explicitly."""
+    import aristos_council.list_input as li
+    monkeypatch.setitem(li._LOOKUP_CACHE, "__default__", li.IndexLookup())
+    yield

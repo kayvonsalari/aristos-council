@@ -1200,7 +1200,9 @@ def saved_list_labels(saved) -> list[str]:
     appended ONLY where two lists would otherwise share a label. Same discipline as the
     strategy picker: a label must name exactly one thing, or picking one silently loads
     another."""
-    base = [f"{universe_label(u)} · {plural(len(u.tickers), 'name')}" for u in saved]
+    from aristos_council.list_input import saved_list_label
+    base = [saved_list_label(universe_label(u), len(u.tickers), getattr(u, "thesis", "") or "")
+            for u in saved]
     times = Counter(base)
     return [b if times[b] == 1 else f"{b} ({u.id})" for u, b in zip(saved, base)]
 
@@ -1640,7 +1642,8 @@ def floor_override_from_input(raw, *, file_value: float | None) -> float | None:
     return None if file_value is not None and dollars == file_value else dollars
 
 
-def _company_size_floor_override(rank_strategy, n_strategies: int) -> float | None:
+def _company_size_floor_override(rank_strategy, n_strategies: int, *,
+                                 in_expander: bool = False) -> float | None:
     """The Run tab's ephemeral company-size floor control (FLOOR-1).
 
     Defaults to the FIRST ticked lens's own floor, so the control opens showing what the
@@ -1649,9 +1652,13 @@ def _company_size_floor_override(rank_strategy, n_strategies: int) -> float | No
     lens in the run (SHORTLIST-3: no lens is privileged, so there is no "its" floor to
     prefer, and the first ticked one is simply the one already in hand)."""
     file_value = getattr(rank_strategy, "min_market_cap", None)
-    with st.expander("⚙️ Run overrides — this run only", expanded=False):
-        st.caption("Applied to THIS run only and stamped on the report. The strategy "
-                   "file is never modified.")
+    import contextlib
+    _box = contextlib.nullcontext() if in_expander else st.expander(
+        "⚙️ Run overrides — this run only", expanded=False)
+    with _box:
+        st.caption("Company size floor: the smallest company a lens will accept in this run. "
+                   "Applied to THIS run only and stamped on the report; the lens file is "
+                   "never modified.")
         raw = st.number_input(
             "Company size floor (USD bn)",
             min_value=0.0, max_value=5_000.0, step=0.5, value=None,
@@ -3342,6 +3349,9 @@ class InputChoice:
     universe_id: Optional[str] = None
     universe_display_name: str = ""
     derived_from: str = ""
+    source: str = ""                    # "Built cohort" | "Saved list" | "Paste tickers"
+    cohort_industry: str = ""           # the picked cohort's industry, for the run sentence
+    n_left_out: int = 0                 # pasted tickers the resolver did not recognise
 
 
 def _market_cap_from_index(ticker: str, *, store=None) -> Optional[float]:
@@ -3513,52 +3523,115 @@ def render_input(*, show_validation: bool) -> InputChoice:
         return InputChoice(kind=INPUT_COMPANY, ticker=ticker, include_small=include_small,
                            small_company_line=small_line)
 
-    # --- list input: unchanged from the pre-merge Run tab (saved-list picker, ticker
-    # box, save-list expander) --------------------------------------------------------- #
+    # --- list input (LIST-UI-1, Batch 19B): ONE question — "what set of companies do you want
+    # ranked against each other?" — and three answers: a built cohort, a saved list, or pasted
+    # tickers. The pure parts (cohort options, the resolver, the sentence) live in list_input.py.
+    from aristos_council import list_input as li
     from aristos_council.universe import list_universes
     from aristos_council.universe_editor import (
         existing_universe_ids, graded_universe_ids, list_id_from_name,
         parse_ticker_lines, save_local_universe)
 
-    saved = visible_universes(list_universes(UNIVERSES_DIR), show_validation=show_validation)
-    saved = [u for u in saved if _mode_filters()[1](u)]
-    NEW_LIST = "New list"
-    list_labels = [NEW_LIST] + saved_list_labels(saved)
-    list_choice = st.selectbox("List", list_labels, key="uni_list",
-                               help="Your saved ticker lists. Selecting one loads it "
-                                    "below, where you can edit it before running.")
-    picked_list = (saved[list_labels.index(list_choice) - 1]
-                  if list_choice != NEW_LIST else None)
-    if st.session_state.get("uni_loaded_list") != list_choice:
-        st.session_state["uni_loaded_list"] = list_choice
-        if picked_list is not None:
-            st.session_state["uni_tickers"] = "\n".join(picked_list.tickers)
-            st.session_state["uni_list_name"] = (picked_list.display_name
-                                                 or picked_list.id)
-    remember_text("uni_tickers", "list", scope=asset_mode())    # SHARED-OPTIONS-1
-    raw = st.text_area(
-        "Tickers — one per line; spaces/commas fine, `# comments` allowed",
-        key="uni_tickers", height=180,
-        placeholder="AAPL\nMSFT  # anchor\n# --- energy ---\nXOM")
-    universe = parse_ticker_lines(raw)
-    if len(universe) == 1 and not etf_mode:
-        # ONE-TICKER-BUTTON-1: the hint is now a button. It switches to Company with the
-        # ticker loaded and the ticked lenses kept, and does not run anything. (Hidden in ETF
-        # mode, where there is no Company input to open.)
-        col_hint, col_open = st.columns([4, 1], vertical_alignment="center")
-        with col_hint:
-            st.caption(f"Just **{universe[0]}** — open this as a company page instead?")
-        with col_open:
-            if st.button("Open as company page", key="uni_open_single_as_company"):
-                st.session_state["_pending_open_as_company"] = {
-                    "ticker": normalize_ticker(universe[0]), "lines": [], "lens_ids": None}
-                st.rerun()
-    elif len(universe) == 1:
-        st.caption(f"Just **{universe[0]}** — one fund in the list.")
+    st.markdown("**What set of companies do you want ranked against each other?**")
+    sources = ([li.SOURCE_SAVED, li.SOURCE_PASTE] if etf_mode
+               else [li.SOURCE_COHORT, li.SOURCE_SAVED, li.SOURCE_PASTE])
+    # SHARED-OPTIONS-1: the radio is not drawn in every mode, so keep the choice in the store.
+    _lstore = st.session_state.setdefault(_SHARED_OPTS, {})
+    if st.session_state.get("uni_source") in sources:
+        _lstore["list_source"] = st.session_state["uni_source"]
+    else:
+        st.session_state.pop("uni_source", None)
+        if _lstore.get("list_source") in sources:
+            st.session_state["uni_source"] = _lstore["list_source"]
+    source = st.radio("List source", sources, index=sources.index(li.SOURCE_PASTE),
+                      key="uni_source", horizontal=True, label_visibility="collapsed",
+                      help="Built cohort: a ready-made peer group of listed companies. "
+                           "Saved list: one of your own lists. Paste tickers: any names you "
+                           "type — they become their own peer group.")
 
-    unchanged = picked_list is not None and universe == list(picked_list.tickers)
+    picked_list = None
+    picked_cohort = None
+    unchanged = False
+    n_left_out = 0
+
+    if source == li.SOURCE_COHORT:
+        cohorts = li.cohort_options()
+        if not cohorts:
+            st.info("No cohort has been built on this machine yet. Build them with "
+                    "`python -m aristos_council.cohorts build`, or paste tickers instead.")
+            universe = []
+        else:
+            c_labels = li.cohort_labels(cohorts)
+            c_choice = st.selectbox(
+                "Cohort", c_labels, index=None, key="uni_cohort",
+                placeholder="Search a sector or industry — type to filter",
+                help="Every built cohort, grouped by sector, with its size and the smallest "
+                     "company it admits.")
+            if c_choice is not None:
+                picked_cohort = cohorts[c_labels.index(c_choice)]
+                universe = list(picked_cohort.members)
+                st.caption(f"{picked_cohort.name}: {picked_cohort.detail}, version "
+                           f"{picked_cohort.version}, frozen when it was built.")
+            else:
+                universe = []
+            _unbuilt = li.unbuilt_cohort_count()
+            if _unbuilt:
+                st.caption(f"{plural(_unbuilt, 'more cohort')} defined but not built yet.")
+    else:
+        if source == li.SOURCE_SAVED:
+            saved = visible_universes(list_universes(UNIVERSES_DIR), show_validation=show_validation)
+            saved = [u for u in saved if _mode_filters()[1](u)]
+            list_labels = saved_list_labels(saved)
+            if not saved:
+                st.info("No saved lists yet. Paste tickers and save them to see them here.")
+            list_choice = st.selectbox(
+                "My lists", list_labels, index=None, key="uni_list",
+                placeholder="Choose a saved list",
+                help="Your saved ticker lists. Selecting one loads it below, where you can "
+                     "edit it before running.")
+            picked_list = (saved[list_labels.index(list_choice)]
+                          if list_choice is not None else None)
+            if st.session_state.get("uni_loaded_list") != list_choice:
+                st.session_state["uni_loaded_list"] = list_choice
+                if picked_list is not None:
+                    st.session_state["uni_tickers"] = "\n".join(picked_list.tickers)
+                    st.session_state["uni_list_name"] = (picked_list.display_name
+                                                         or picked_list.id)
+        remember_text("uni_tickers", "list", scope=asset_mode())    # SHARED-OPTIONS-1
+        _dialect = ("fund tickers" if etf_mode else "yfinance style: NVDA, SHEL.L, 1211.HK")
+        raw = st.text_area(
+            f"Tickers — {_dialect}; one per line, spaces/commas fine, `# comments` allowed",
+            key="uni_tickers", height=180, placeholder=_dialect)
+        typed = parse_ticker_lines(raw)
+        if source == li.SOURCE_PASTE and not etf_mode and typed:
+            # The live resolver: checked offline against the market index, BEFORE the run. An
+            # unrecognised ticker is named here and never sent to the provider.
+            resolution = li.resolve_tickers(typed)
+            universe = resolution.send
+            n_left_out = len(resolution.unrecognised)
+            _line = resolution.line()
+            if _line:
+                st.caption(_line.replace("\n", "  \n"))
+        else:
+            universe = typed
+        if len(typed) == 1 and not etf_mode:
+            # ONE-TICKER-BUTTON-1: the hint is a button. It switches to Company with the
+            # ticker loaded and the ticked lenses kept, and does not run anything.
+            col_hint, col_open = st.columns([4, 1], vertical_alignment="center")
+            with col_hint:
+                st.caption(f"Just **{typed[0]}** — open this as a company page instead?")
+            with col_open:
+                if st.button("Open as company page", key="uni_open_single_as_company"):
+                    st.session_state["_pending_open_as_company"] = {
+                        "ticker": normalize_ticker(typed[0]), "lines": [], "lens_ids": None}
+                    st.rerun()
+        elif len(typed) == 1:
+            st.caption(f"Just **{typed[0]}** — one fund in the list.")
+        unchanged = picked_list is not None and universe == list(picked_list.tickers)
+
     universe_id = picked_list.id if unchanged else None
-    universe_display_name = picked_list.display_name if unchanged else ""
+    universe_display_name = (picked_list.display_name if unchanged
+                             else (picked_cohort.name if picked_cohort is not None else ""))
     derived_from = ("" if unchanged or picked_list is None
                     else (picked_list.display_name or picked_list.id))
 
@@ -3571,54 +3644,59 @@ def render_input(*, show_validation: bool) -> InputChoice:
                "It cannot be edited in place — use **Save as new list** to keep the edit.")
         st.caption(f"Edited — this run grades an ad-hoc copy (fingerprinted); "
                   f"**{universe_label(picked_list)}** on disk is untouched. {keep}")
-    with st.expander("💾 Save this list"):
-        st.caption("Lists live in `universes/local/` and are gitignored by default — "
-                  "portfolio-class data never rides a commit.")
-        name = st.text_input("List name", key="uni_list_name",
-                             placeholder="My Portfolio")
-        _theses = ["", "value", "growth", "income", "quality", "funds"]
-        _current = getattr(picked_list, "thesis", "") or ""
-        list_thesis = st.selectbox(
-            "Built for (optional)", _theses,
-            index=_theses.index(_current) if _current in _theses else 0,
-            format_func=lambda t: t or "— not stated —",
-            key="uni_list_thesis",
-            help="What this list was assembled to find. Recorded on the list and stated in "
-               "the run's summary; it never filters a lens or blocks a run. Leave blank "
-               "to make no claim.")
-        col_save, col_saveas = st.columns(2)
-        with col_save:
-            save_over = st.button("Save changes", key="uni_save_over",
-                                  disabled=not (is_mine and universe),
-                                  help=None if is_mine else
-                                  "Only your own saved lists can be updated in place.")
-        with col_saveas:
-            save_new = st.button("Save as new list", key="uni_save_new",
-                                 disabled=not (universe and name.strip()))
-        if save_over or save_new:
-            try:
-                created = datetime.now(ZoneInfo("Europe/Berlin")).date().isoformat()
-                if save_over:
-                    path = save_local_universe(
-                        UNIVERSES_DIR, id=picked_list.id, tickers=universe,
-                        created=created, display_name=name.strip() or picked_list.id,
-                        graded_ids=graded, overwrite=True, thesis=list_thesis,
-                        asset_kind=_mode_asset_kind())
+    # The save panel exists only once there is something to save: after a paste, or after an
+    # edit to a saved list. Collapsed, and optional.
+    if universe and (source == li.SOURCE_PASTE or (picked_list is not None and not unchanged)):
+        with st.expander(f"Save these {plural(len(universe), 'name')} as a list (optional)"):
+            st.caption("Lists live in `universes/local/` and are gitignored by default — "
+                      "portfolio-class data never rides a commit.")
+            name = st.text_input("List name", key="uni_list_name",
+                                 placeholder="My Portfolio")
+            _theses = ["", "value", "growth", "income", "quality", "funds"]
+            _current = getattr(picked_list, "thesis", "") or ""
+            list_thesis = st.selectbox(
+                "Built for (optional)", _theses,
+                index=_theses.index(_current) if _current in _theses else 0,
+                format_func=lambda t: t or "— not stated —",
+                key="uni_list_thesis",
+                help="What this list was assembled to find. Recorded on the list and stated in "
+                   "the run's summary; it never filters a lens or blocks a run. Leave blank "
+                   "to make no claim.")
+            col_save, col_saveas = st.columns(2)
+            with col_save:
+                save_over = st.button("Save changes", key="uni_save_over",
+                                      disabled=not (is_mine and universe),
+                                      help=None if is_mine else
+                                      "Only your own saved lists can be updated in place.")
+            with col_saveas:
+                save_new = st.button("Save as new list", key="uni_save_new",
+                                     disabled=not (universe and name.strip()))
+            if save_over or save_new:
+                try:
+                    created = datetime.now(ZoneInfo("Europe/Berlin")).date().isoformat()
+                    if save_over:
+                        path = save_local_universe(
+                            UNIVERSES_DIR, id=picked_list.id, tickers=universe,
+                            created=created, display_name=name.strip() or picked_list.id,
+                            graded_ids=graded, overwrite=True, thesis=list_thesis,
+                            asset_kind=_mode_asset_kind())
+                    else:
+                        new_id = list_id_from_name(name, existing_universe_ids(UNIVERSES_DIR))
+                        path = save_local_universe(
+                            UNIVERSES_DIR, id=new_id, tickers=universe, created=created,
+                            display_name=name.strip(), graded_ids=graded, thesis=list_thesis,
+                            asset_kind=_mode_asset_kind())
+                except (ValueError, ValidationError) as exc:
+                    st.error(str(exc))
                 else:
-                    new_id = list_id_from_name(name, existing_universe_ids(UNIVERSES_DIR))
-                    path = save_local_universe(
-                        UNIVERSES_DIR, id=new_id, tickers=universe, created=created,
-                        display_name=name.strip(), graded_ids=graded, thesis=list_thesis,
-                        asset_kind=_mode_asset_kind())
-            except (ValueError, ValidationError) as exc:
-                st.error(str(exc))
-            else:
-                st.success(f"Saved **{name.strip() or path.stem}** → "
-                          f"`{path.relative_to(ROOT)}` ({plural(len(universe), 'name')}).")
+                    st.success(f"Saved **{name.strip() or path.stem}** → "
+                              f"`{path.relative_to(ROOT)}` ({plural(len(universe), 'name')}).")
 
     return InputChoice(kind=INPUT_LIST, universe=universe, picked_list=picked_list,
                        universe_id=universe_id, universe_display_name=universe_display_name,
-                       derived_from=derived_from)
+                       derived_from=derived_from, source=source,
+                       cohort_industry=(picked_cohort.industry if picked_cohort is not None else ""),
+                       n_left_out=n_left_out)
 
 
 def render_run_tab(show_validation: bool = False) -> None:
@@ -3747,6 +3825,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
     an "Advanced (list only)" expander."""
     import os
 
+    from aristos_council import list_input as _li
     from aristos_council.pipeline import NARRATION_BASIS
     from aristos_council.reproducibility import estimate_cost
 
@@ -3772,7 +3851,8 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
     all_rank_strategies = [c.strategy for c in choices]
     cohort_kind = cohort_asset_kind(universe_id, all_rank_strategies)
     applicable = applicable_rank_strategies(all_rank_strategies, cohort_kind)
-    st.caption(cohort_scope_note(cohort_kind, len(applicable), adhoc=universe_id is None))
+    if cohort_kind:         # an undeclared class says nothing (LIST-UI-1): nothing is filtered anyway
+        st.caption(cohort_scope_note(cohort_kind, len(applicable), adhoc=False))
     for s in strategies:
         scope_warning = out_of_scope_note(s, cohort_kind)
         if scope_warning:
@@ -3840,7 +3920,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
     # TAB-MERGE-1 commit 3 — list-only, tucked away: the spend-confirmation threshold and
     # the company-size floor override. Same widgets, same keys, same behaviour; only the
     # container is new.
-    with st.expander("Advanced (list only)"):
+    with st.expander(_li.OVERRIDES_TITLE):
         if run_mode_narrates(run_mode):
             confirm_threshold = read_threshold(st.number_input(
                 "Ask before narrating when the estimate exceeds:",
@@ -3852,11 +3932,13 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
                 help="0 = always ask. At or below this figure a narrated run goes straight "
                      "through after the free ranking; above it the run stops and shows the "
                      "exact count and cost for you to confirm."), default=0.0)
+            st.caption(_li.OVERRIDE_CONFIRM_SENTENCE)
         else:
             confirm_threshold = read_threshold(
                 st.session_state.get("uni_confirm_threshold", DEFAULT_CONFIRM_THRESHOLD),
                 default=0.0)
-        min_market_cap_override = _company_size_floor_override(rank_strategy, len(strategies))
+        min_market_cap_override = _company_size_floor_override(
+            rank_strategy, len(strategies), in_expander=True)
 
     # The two pipeline arguments, derived from the mode in force (UI layer only).
     ranker_only, mode = run_mode_arguments(run_mode)
@@ -3864,6 +3946,13 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
     _cap_now = universe_cap(ranker_only)
     st.caption(f"**{plural(len(universe), 'ticker')}** — up to **{_cap_now}** for "
                f"{'a ranker-only' if ranker_only else 'a narrated'} run.")
+
+    # LIST-UI-1: one sentence above Run stating exactly what will happen.
+    if universe:
+        st.markdown(_li.run_sentence(
+            choice.source, n_names=len(universe), n_lenses=len(strategies),
+            deterministic=ranker_only, cohort_industry=choice.cohort_industry,
+            n_left_out=choice.n_left_out))
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     deterministic = ranker_only

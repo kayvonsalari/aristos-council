@@ -126,7 +126,7 @@ def test_company_mode_shows_find_box_and_hides_list_only_controls():
     assert any(str(t.label) == "Find a company" for t in at.text_input)
     assert any(str(t.key) == "cc_ticker" for t in at.text_input)
     # list-only controls are ABSENT, not disabled
-    assert not any(str(s.label) == "List" for s in at.selectbox)
+    assert not any(str(r.label) == "List source" for r in at.radio)
     assert not any("Tickers" in str(t.label) for t in at.text_area)
     assert not any(str(s.label) == "Narrate" for s in at.selectbox)
     assert not any(str(n.label) == "Up to" for n in at.number_input)
@@ -138,7 +138,7 @@ def test_company_mode_shows_find_box_and_hides_list_only_controls():
 
 def test_list_mode_shows_the_list_flow_and_hides_company_only_controls():
     at = _list_mode(_run_tab())
-    assert any(str(s.label) == "List" for s in at.selectbox)
+    assert any(str(r.label) == "List source" for r in at.radio)
     assert any("Tickers" in str(t.label) for t in at.text_area)
     # company-only controls are ABSENT, not disabled
     assert not any(str(t.label) == "Find a company" for t in at.text_input)
@@ -148,7 +148,9 @@ def test_list_mode_shows_the_list_flow_and_hides_company_only_controls():
 
 def test_advanced_list_only_expander_holds_the_spend_threshold_and_size_floor():
     at = _list_mode(_run_tab())
-    assert any("Advanced (list only)" in str(getattr(e, "label", "")) for e in at.expander)
+    assert any("One-off overrides (this run only)" in str(getattr(e, "label", ""))
+               for e in at.expander)
+    assert not any("Advanced (list only)" in str(getattr(e, "label", "")) for e in at.expander)
 
 
 # --------------------------------------------------------------------------- #
@@ -380,7 +382,7 @@ def test_etf_mode_hides_the_company_choice_and_shows_list_input_only():
     assert not at.exception
     assert not any(str(r.label) == "Input" for r in at.radio)
     assert not any(str(t.label) == "Find a company" for t in at.text_input)
-    assert any(str(s.label) == "List" for s in at.selectbox)
+    assert any(str(r.label) == "List source" for r in at.radio)
 
 
 # --------------------------------------------------------------------------- #
