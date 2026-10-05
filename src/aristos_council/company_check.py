@@ -167,6 +167,9 @@ class CompanyCheckResult:
     # (the Company Check tab and CLI do by default — see ``with_price_and_cash``). Display
     # only: no screen, gate, factor or verdict reads it.
     price_and_cash: object = None
+    # FORENSIC-PACK-1 - the date and currency of the accounts the absolute readings rest on
+    # (``abs_readings.accounts_context``): a dict, or None when there were no fundamentals.
+    accounts: object = None
 
     @property
     def display(self) -> str:
@@ -321,6 +324,12 @@ def run_company_check(
     from .abs_readings import guard as _guard
     readings = {"debt_and_cash": _guard("debt_and_cash", _debt_and_cash, f),
                 "growth_record": _guard("growth_record", _growth_record, f, _history)}
+
+    from .abs_readings import accounts_context as _accounts_context
+    try:
+        readings["accounts"] = _accounts_context(f) or None
+    except Exception:                                    # noqa: BLE001 - a context line, never a crash
+        readings["accounts"] = None
 
     providers = _providers_used(adapter, fi, today)
     di = DataIntegrity(
