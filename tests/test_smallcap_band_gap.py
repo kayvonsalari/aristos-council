@@ -61,10 +61,11 @@ def test_the_label_is_the_owners_sentence_on_the_header_and_every_vote(tmp_path)
     assert SIZE_MATCHED_LINE == ("Compared with similar-sized companies in its industry; outside "
                                  "the tested range, no track record applies.")
     text = format_company_report(report)
-    assert text.count(SIZE_MATCHED_LINE) >= 1 + len(report.votes)
+    assert text.count(SIZE_MATCHED_LINE) == 1                  # 19B B4: the header, once
     assert SIZE_MATCHED_LINE in company_report_html(report)
     for line in vote_table_lines(report)[1:]:
-        assert SIZE_MATCHED_LINE in line
+        assert SIZE_MATCHED_LINE not in line
+        assert line.rstrip().endswith("(outside tested range)")
 
 
 def test_a_backwards_or_empty_band_is_never_printed(tmp_path):

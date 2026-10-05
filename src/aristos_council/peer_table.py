@@ -21,6 +21,7 @@ Two facts about the data are handled here so no surface has to know them:
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -28,6 +29,7 @@ from .exchange_names import exchange_name
 from .market_index import MINOR_UNIT_MARKET_CAP, USD_COMPUTED_MAJOR_UNIT
 from .tools.price_context import format_money
 
+PEER_METHOD_TITLE = "How this peer group was built"
 THIS_COMPANY = "(this company)"
 # PEER-ROW-TINT-1: the company's own row needs a tint a reader can SEE. The earlier translucent
 # grey (rgba(127,127,127,.14)) was invisible on a light page and nearly so on a dark one — and a
@@ -46,6 +48,50 @@ MIN_RANKED = 3
 TOO_FEW_TO_RANK = "too few to rank"
 ONE_SYSTEM_MARK = "†"
 ONE_SYSTEM_NOTE = f"{ONE_SYSTEM_MARK} counted as a peer on one industry classification only"
+
+
+# NAME-CLEAN-1 (19B B7): the index carries the exchange's security description, share class and all
+# ("Indivior PLC Ordinary Shares", "MBX Biosciences, Inc. Common", "Alamar Biosciences, Inc. Com").
+# A reader wants the company. Only DESCRIPTORS of the security are stripped, never part of the name
+# ("Class A" stays: it tells two lines of one company apart).
+_SHARE_CLASS_TAIL = re.compile(
+    r"(?:[\s,]+(?:(?:class|cl\.?)\s+[a-z0-9]{1,2}\s+)?"
+    r"(?:ordinary|common|capital)(?:\s+(?:shares?|stock))?"
+    r"|[\s,]+ord\.?\s+shs?"
+    r"|[\s,]+com"
+    r"|[\s,]+(?:american\s+)?depositary\s+(?:shares|receipts?)"
+    r"|[\s,]+ads)\.?$", re.I)
+_KEEP_UPPER_NO = {"co", "ltd", "inc", "plc", "corp", "llc", "the", "and", "of", "company", "limited"}
+
+
+def _title_case_caps(name: str) -> str:
+    """"CALIWAY BIOPHARMACEUTICALS CO., LTD." -> "Caliway Biopharmaceuticals Co., Ltd." Only a name
+    that is ENTIRELY capitals is touched; a mixed-case name ("NVIDIA Corporation", "BYD Company")
+    keeps the capitals it was given."""
+    letters = [c for c in name if c.isalpha()]
+    if not letters or not all(c.isupper() for c in letters) or len(letters) < 5:
+        return name
+    out = []
+    for word in name.split(" "):
+        core = word.strip(",.&()")
+        if core.lower() in _KEEP_UPPER_NO or len(core) > 3 or not core.isalpha():
+            out.append(word[:1].upper() + word[1:].lower() if word else word)
+        else:
+            out.append(word)                      # a short run of capitals is an acronym: keep it
+    return " ".join(out)
+
+
+def clean_company_name(name: str) -> str:
+    """The company's name without its share-class description, title-cased when it was all capitals.
+    Empty in, empty out; never returns an empty string for a non-empty name."""
+    text = (name or "").strip()
+    previous = None
+    while previous != text:
+        previous = text
+        stripped = _SHARE_CLASS_TAIL.sub("", text).strip(" ,")
+        if stripped:
+            text = stripped
+    return _title_case_caps(text) or (name or "").strip()
 
 
 def local_cap_currency(row) -> str:
@@ -171,7 +217,8 @@ def peer_rows(group, columns=None, company_ticker: str = "") -> list[PeerRow]:
     for m in group.members:
         how = (getattr(group, "matched_on", None) or {}).get(m.ticker, "")
         rows.append(PeerRow(
-            ticker=m.ticker, name=m.name or "", exchange=exchange_name(m.exchange or ""),
+            ticker=m.ticker, name=clean_company_name(m.name or ""),
+            exchange=exchange_name(m.exchange or ""),
             sub_industry=getattr(m, "classification", "") or "",
             cap_usd=m.market_cap_usd, cap_local=m.market_cap,
             local_currency=local_cap_currency(m),
@@ -181,12 +228,25 @@ def peer_rows(group, columns=None, company_ticker: str = "") -> list[PeerRow]:
     subject = getattr(group, "subject", None)
     if columns and company_ticker and subject is not None:
         rows.insert(0, PeerRow(
-            ticker=company_ticker, name=subject.name or "", exchange=exchange_name(subject.exchange or ""),
+            ticker=company_ticker, name=clean_company_name(subject.name or ""),
+            exchange=exchange_name(subject.exchange or ""),
             sub_industry=getattr(subject, "classification", "") or "",
             cap_usd=subject.market_cap_usd, cap_local=subject.market_cap,
             local_currency=local_cap_currency(subject), is_company=True,
             ranks=cells(company_ticker.upper())))
     return rows
+
+
+NAME_W = 36
+
+
+def _fit_name(name: str, width: int = NAME_W) -> str:
+    """The name for a fixed-width column: whole if it fits, else cut at a word boundary with an
+    ellipsis - never mid-word ("InSilico Medicine Cayman Top")."""
+    if len(name) <= width:
+        return name
+    cut = name[:width - 1].rsplit(" ", 1)[0].rstrip(" ,") or name[:width - 1]
+    return cut + "…"
 
 
 def _cell_text(value) -> str:
@@ -202,11 +262,11 @@ def peer_text_lines(group, columns=None, company_ticker: str = "") -> list[str]:
     # EXCHANGE-NAMES-1: a readable name ("Euronext Paris") is longer than the old code, so the column
     # widens to fit it (never below the old 7, which keeps a US-only table byte-identical).
     ex_w = max(7, *(len(r.exchange) for r in rows)) if rows else 7
-    head = (f"{'Ticker':<26} {'Name':<28} {'Exch':<{ex_w}} {'Market cap (USD)':>17} {'Local':>15}  "
+    head = (f"{'Ticker':<26} {'Name':<{NAME_W}} {'Exch':<{ex_w}} {'Market cap (USD)':>17} {'Local':>15}  "
             + "".join(f"{c.header:>{w}}  " for c, w in zip(columns, widths)) + "Sub-industry")
     out = [head]
     for r in rows:
-        out.append(f"{r.marked_ticker:<26} {r.name[:28]:<28} {r.exchange:<{ex_w}} "
+        out.append(f"{r.marked_ticker:<26} {_fit_name(r.name):<{NAME_W}} {r.exchange:<{ex_w}} "
                    f"{r.usd_text:>17} {r.local_text:>15}  "
                    + "".join(f"{_cell_text(cell):>{w}}  " for (_h, cell), w in zip(r.ranks, widths))
                    + r.sub_industry)

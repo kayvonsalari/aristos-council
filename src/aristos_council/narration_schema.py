@@ -98,6 +98,23 @@ def _verdict_words(text: str) -> set[str]:
             for m in re.finditer(r"\b(buy|hold|sell)\b", text or "", re.I)}
 
 
+# NARR-NEGATION-1 - a sentence that DENIES a verdict ("does not produce a buy, hold, or sell
+# verdict", "casts no BUY vote") gives the lens nothing. A negation word followed, within the same
+# clause, by a run of verdict words is removed before the check looks for a verdict word. Only a
+# negation that directly governs the verdict words is removed: "Forensic does not apply, but BUY"
+# still flags, because the BUY there is outside the negation's list.
+_VERDICT = r"(?:buy|hold|sell)"
+_NEGATED_VERDICTS = re.compile(
+    rf"\b(?:not|no|never|without|nor|cannot|can't|isn't|aren't|doesn't|don't|n't)\b"
+    rf"(?:\s+\w+){{0,2}}?\s+(?:an?\s+|the\s+|any\s+)?{_VERDICT}\b"
+    rf"(?:\s*,?\s*(?:(?:or|and|nor)\s+)?{_VERDICT}\b)*(?:\s+(?:verdict|vote|rating|call))?", re.I)
+
+
+def _asserted_verdict_words(sentence: str) -> set[str]:
+    """The verdict words a sentence actually ASSERTS - those left once negated ones are removed."""
+    return _verdict_words(_NEGATED_VERDICTS.sub(" ", sentence or ""))
+
+
 def validate_narration(narration, *, ranker_verdict: Optional[str] = None,
                        ticker: str = "", verdict_of_record: Optional[str] = None,
                        check_lens_labels=None) -> list[StructuralIssue]:
@@ -236,7 +253,7 @@ def validate_narration(narration, *, ranker_verdict: Optional[str] = None,
         seen_sentences: set[tuple[str, str]] = set()
         for text in _text_fields(narration):
             for sentence in re.split(r"(?<=[.!?])\s+", text):
-                said = _verdict_words(sentence)
+                said = _asserted_verdict_words(sentence)
                 if not said:
                     continue
                 for core in cores:

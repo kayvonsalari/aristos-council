@@ -27,6 +27,8 @@ LENS_TWO_WAYS = "the same lens stated two ways"
 BUY_WITHOUT_SELL = "a lens list with BUY at the top and no SELL at the bottom"
 SELL_MISSING = "SELL votes missing from the agreement"
 BACKWARDS_BAND = "a backwards size band"
+STRATEGY_WORD = "'strategy' in reader text (the reader's word is 'lens')"
+BADGE_PARAGRAPH = "the price-badge paragraph pasted into a heading"
 
 
 @dataclass(frozen=True)
@@ -83,7 +85,14 @@ def _factor_ids() -> list[str]:
 
 
 # Column / heading words that are themselves identifiers ("Criterion id").
-_ID_HEADINGS = re.compile(r"(?:Criterion|Strategy|Lens|Factor|Run|Cohort) ids?")
+_ID_HEADINGS = re.compile(r"\b(?:Criterion|Strategy|Lens|Factor|Run|Cohort) ids?\b")
+
+
+# A factor key printed with an abstention tag ("roic - abstained", "revenue growth - abstained"):
+# the would-rank line once listed the record key and the provider's tag instead of plain words.
+_ABSTAINED_TAG = re.compile(r"\b[a-z][a-z ]{1,40} - (?:abstained|not computed)\b")
+# The progress line the app shows while a multi-lens run grades ("Grading with <id> (1 of 9)").
+_PROGRESS_ID = re.compile(r"Grading with [a-z][a-z0-9]*(?:_[a-z0-9]+)+")
 
 
 def internal_id_findings(text: str, where: str) -> list[Finding]:
@@ -97,6 +106,11 @@ def internal_id_findings(text: str, where: str) -> list[Finding]:
             if m.group(0) not in seen:
                 seen.add(m.group(0))
                 out.append(Finding(INTERNAL_IDS, where, m.group(0)))
+    for pattern in (_ABSTAINED_TAG, _PROGRESS_ID):
+        for m in pattern.finditer(text):
+            if m.group(0) not in seen:
+                seen.add(m.group(0))
+                out.append(Finding(INTERNAL_IDS, where, m.group(0)))
     for m in _ID_HEADINGS.finditer(text):
         if m.group(0) not in seen:
             seen.add(m.group(0))
@@ -106,6 +120,34 @@ def internal_id_findings(text: str, where: str) -> list[Finding]:
             seen.add(fid)
             out.append(Finding(INTERNAL_IDS, where, fid))
     return out
+
+
+# --------------------------------------------------------------------------- #
+# 1b. the word "strategy" (19B B3) and the badge paragraph in a heading (19B B10)
+# --------------------------------------------------------------------------- #
+_STRATEGY = re.compile(r"\bstrateg(?:y|ies)\b", re.I)
+
+
+def strategy_word_findings(text: str, where: str) -> list[Finding]:
+    """The reader's word for what grades a company is "lens". "Strategy" is the file's word."""
+    return [Finding(STRATEGY_WORD, where, ln.strip()[:140])
+            for ln in _lines(text) if _STRATEGY.search(ln)]
+
+
+# The opening words of ``glossary.DETAIL_BADGE_NOTE`` (the long form that lives in the glossary).
+_BADGE_PARAGRAPH = re.compile(r"cyclical company means one of two things|asks for a human look|"
+                              r"not part of the rule the company failed")
+
+
+def badge_paragraph_findings(text: str, where: str) -> list[Finding]:
+    """The long price-badge explanation belongs to the glossary only. Anywhere before the glossary
+    heading it is that paragraph pasted into a lens section (it once rode inside a bold heading)."""
+    from .glossary import SECTION_TITLE
+
+    cut = text.lower().find(SECTION_TITLE.lower())
+    body = text if cut < 0 else text[:cut]
+    return [Finding(BADGE_PARAGRAPH, where, ln.strip()[:140])
+            for ln in _lines(body) if _BADGE_PARAGRAPH.search(ln)]
 
 
 # --------------------------------------------------------------------------- #

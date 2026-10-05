@@ -502,9 +502,9 @@ def test_an_exclusion_that_is_not_a_screen_rule_keeps_its_own_prose():
         ranked: list = []
         names: dict = {}
         screen_outcomes: dict = {}
-        excluded = [("QQQ", "asset kind 'ETF' outside this strategy's scope")]
+        excluded = [("QQQ", "asset kind 'ETF' outside this lens's scope")]
     row = exclusion_rows(_Result())[0]
-    assert row["sentence"] == "asset kind 'ETF' outside this strategy's scope"
+    assert row["sentence"] == "asset kind 'ETF' outside this lens's scope"
     assert row["criterion"] == ""
 
 

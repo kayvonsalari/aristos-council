@@ -50,7 +50,7 @@ _Evidence channels that returned nothing, stated BEFORE the prose that rests on 
 
 ## Verdict by lens
 
-One row per name, one column per lens. A ranked cell gives the name's position in THAT lens's cohort and its verdict; an excluded cell names the rule it failed; a name with no usable data reads “no data” and keeps its reason in that lens's own section below.
+One row per name, one column per lens. A ranked cell gives the name's position in THAT lens's cohort and its verdict; an excluded cell names the rule it failed; a name with no usable data reads “no data” and keeps its reason in that lens's own section below. On a lens that ranks under 10 names (here as few as 3) the bottom slot is forced; read it as “lowest of these”, not as a warning.
 
 | Name | Classic Value | Magic Formula RAW | Value + Momentum |
 |---|---|---|---|
@@ -73,7 +73,7 @@ The last close in the name's OWN quoted currency (never converted) with the date
 
 ## Rules applied — by lens
 
-_Each lens screens on its own rules; a name excluded by one may be ranked by another. The rules below are read from the strategies that actually ran._
+_Each lens screens on its own rules; a name excluded by one may be ranked by another. The rules below are read from the lenses that actually ran._
 
 ### Classic Value
 **Screen: Quality-value screen**
@@ -96,7 +96,7 @@ Used as a prefilter — names failing any rule below were never ranked.
 _Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities)._
 **Screen: none**
 
-This strategy screens nothing: no rule filtered the cohort, and quality enters only through the ranking below.
+This lens screens nothing: no rule filtered the cohort, and quality enters only through the ranking below.
 
 - Ranking: top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut).
 - Names ranked on: Return on invested capital, Earnings yield (EBIT/EV), 12-month price momentum.

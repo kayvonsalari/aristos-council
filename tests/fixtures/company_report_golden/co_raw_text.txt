@@ -50,23 +50,25 @@ WHAT ANALYSTS SAY (a mark: it does not vote and changes no verdict) (see Sources
     Analyst forecasts are not shown: EODHD_API_KEY is not set, so no analyst data was asked for.
 
 PEERS (who this company would be measured against):
-  13 peers at sub-industry, 1/4x–4x (0.25x-4x market cap (USD)), index snapshot 2026-09-26 - found at step 1 of 4, 13 distinct companies
-  Ticker                     Name                         Exch     Market cap (USD)           Local  Magic Formula RAW rank (of 14)  Sub-industry
-  CO (this company)          Company Co                   US                $20.0bn         $20.0bn                              10  Semiconductors
-  P00.US                     P00 Corp                     US                $20.0bn         $20.0bn                              14  Semiconductors
-  P01.US                     P01 Corp                     US                $20.0bn         $20.0bn                              13  Semiconductors
-  P02.US                     P02 Corp                     US                $20.0bn         $20.0bn                              12  Semiconductors
-  P03.US                     P03 Corp                     US                $20.0bn         $20.0bn                              11  Semiconductors
-  P04.US                     P04 Corp                     US                $20.0bn         $20.0bn                               9  Semiconductors
-  P05.US                     P05 Corp                     US                $20.0bn         $20.0bn                               8  Semiconductors
-  P06.US                     P06 Corp                     US                $20.0bn         $20.0bn                               7  Semiconductors
-  P07.US                     P07 Corp                     US                $20.0bn         $20.0bn                               6  Semiconductors
-  P08.US                     P08 Corp                     US                $20.0bn         $20.0bn                               5  Semiconductors
-  P09.US                     P09 Corp                     US                $20.0bn         $20.0bn                               4  Semiconductors
-  P10.US                     P10 Corp                     US                $20.0bn         $20.0bn                               3  Semiconductors
-  P11.US                     P11 Corp                     US                $20.0bn         $20.0bn                               2  Semiconductors
-  P12.US                     P12 Corp                     US                $20.0bn         $20.0bn                               1  Semiconductors
-  · matched on: GICS only 0, EODHD label only 0, both 13
+  13 peers: sub-industry, within 1/4x–4x of its market cap (USD) (step 1 of 4)
+  Ticker                     Name                                 Exch     Market cap (USD)           Local  Magic Formula RAW rank (of 14)  Sub-industry
+  CO (this company)          Company Co                           US                $20.0bn         $20.0bn                              10  Semiconductors
+  P00.US                     P00 Corp                             US                $20.0bn         $20.0bn                              14  Semiconductors
+  P01.US                     P01 Corp                             US                $20.0bn         $20.0bn                              13  Semiconductors
+  P02.US                     P02 Corp                             US                $20.0bn         $20.0bn                              12  Semiconductors
+  P03.US                     P03 Corp                             US                $20.0bn         $20.0bn                              11  Semiconductors
+  P04.US                     P04 Corp                             US                $20.0bn         $20.0bn                               9  Semiconductors
+  P05.US                     P05 Corp                             US                $20.0bn         $20.0bn                               8  Semiconductors
+  P06.US                     P06 Corp                             US                $20.0bn         $20.0bn                               7  Semiconductors
+  P07.US                     P07 Corp                             US                $20.0bn         $20.0bn                               6  Semiconductors
+  P08.US                     P08 Corp                             US                $20.0bn         $20.0bn                               5  Semiconductors
+  P09.US                     P09 Corp                             US                $20.0bn         $20.0bn                               4  Semiconductors
+  P10.US                     P10 Corp                             US                $20.0bn         $20.0bn                               3  Semiconductors
+  P11.US                     P11 Corp                             US                $20.0bn         $20.0bn                               2  Semiconductors
+  P12.US                     P12 Corp                             US                $20.0bn         $20.0bn                               1  Semiconductors
+  How this peer group was built:
+    · index snapshot 2026-09-26; 13 distinct companies among 13 peers
+    · matched on: GICS only 0, EODHD label only 0, both 13
 
 SOURCES
   Fundamentals and accounts: fake, fetched 2026-06-30

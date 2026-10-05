@@ -375,6 +375,37 @@ def format_score_gloss(n_factors: int, cohort_size: int) -> str:
             f"{n_factors * cohort_size}.")
 
 
+# SMALL-LIST-NOTE-1 (19B B10): under ten names a quintile cut still hands out a bottom slot (the cut
+# gives at least one SELL and one BUY), so the lowest name is "lowest of these", not a finding.
+SMALL_LIST_LIMIT = 10
+
+
+def forced_bottom_note(cohort_size: int) -> str:
+    """One line for a ranked table of 3 to 9 names; "" otherwise. (Under 3 nothing is ranked.)"""
+    from .rank_engine import MIN_RANKABLE_COHORT
+    if MIN_RANKABLE_COHORT <= cohort_size < SMALL_LIST_LIMIT:
+        return (f"With {cohort_size} names the bottom slot is forced; read it as "
+                f"\u201clowest of these\u201d, not as a warning.")
+    return ""
+
+
+def score_gloss_with_note(n_factors: int, cohort_size: int) -> str:
+    """``format_score_gloss`` plus, on a small list, the forced-bottom line."""
+    note = forced_bottom_note(cohort_size)
+    gloss = format_score_gloss(n_factors, cohort_size)
+    return f"{gloss} {note}" if note else gloss
+
+
+def forced_bottom_note_multi(sizes) -> str:
+    """The multi-lens form: one line when ANY lens ranked 3 to 9 names (the smallest is named)."""
+    from .rank_engine import MIN_RANKABLE_COHORT
+    small = [n for n in sizes if MIN_RANKABLE_COHORT <= n < SMALL_LIST_LIMIT]
+    if not small:
+        return ""
+    return (f"On a lens that ranks under {SMALL_LIST_LIMIT} names (here as few as {min(small)}) the "
+            f"bottom slot is forced; read it as \u201clowest of these\u201d, not as a warning.")
+
+
 # The three table symbols, one full sentence each. They used to share a single dense
 # run-on line, which is why none of them was read.
 # FACTOR-MARK-3: the imputed note is keyed by a WORD now, not by "*". Named rather than

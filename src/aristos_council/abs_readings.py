@@ -123,8 +123,14 @@ def is_financial_sector(f) -> bool:
                                                 ["Financial Services", "Financials"])
 
 
-def _not_meaningful() -> Reading:
-    return Reading(not_meaningful=NOT_MEANINGFUL_FOR_FINANCIALS)
+# BANK-LABEL-1 (19B B9): the replaced line says WHICH measure it replaces. A bare "not meaningful for
+# banks and insurers" under a block heading reads as a sentence about nothing in particular.
+FREE_CASH_FLOW_NOT_MEANINGFUL = f"free cash flow: {NOT_MEANINGFUL_FOR_FINANCIALS}"
+DEBT_AND_CASH_NOT_MEANINGFUL = f"debt and cash: {NOT_MEANINGFUL_FOR_FINANCIALS}"
+
+
+def _not_meaningful(measure_line: str = NOT_MEANINGFUL_FOR_FINANCIALS) -> Reading:
+    return Reading(not_meaningful=measure_line)
 
 
 def _abstain(note: str) -> Reading:
@@ -207,7 +213,7 @@ def debt_and_cash(f) -> DebtAndCash:
     # BANK-PAGE-1: a bank's or insurer's "debt" is its funding and its "cash" is customers' money, so
     # "holds $183bn more cash than debt" says nothing. Say that instead of printing it.
     if is_financial_sector(f):
-        nm = _not_meaningful()
+        nm = _not_meaningful(DEBT_AND_CASH_NOT_MEANINGFUL)
         return DebtAndCash(net_debt=nm, net_debt_to_ocf=nm, interest_cover=nm, years_to_repay=nm,
                            currency=str(getattr(f, "financial_currency", "") or "").strip())
 
@@ -591,17 +597,26 @@ _SAME_UNIT_RATIO = (0.25, 4.0)
 
 def plain_company_name(name: str) -> str:
     """"AstraZeneca PLC" -> "AstraZeneca", "Micron Technology, Inc." -> "Micron Technology": the
-    corporate suffix is not how a person says the name. Empty in, empty out."""
+    corporate suffix is not how a person says the name. Empty in, empty out.
+
+    SHORT-NAME-1 (19B B8): cut at the first COMMA or at a legal suffix, never inside a name. "JPMorgan
+    Chase & Co." lost its "Co." and read "JPMorgan Chase &" - a name cannot end on "&". When removing
+    the suffixes would leave a dangling connector, the suffix stays: "JPMorgan Chase & Co."."""
     import re
 
     text = re.sub(r"\s*\(.*?\)\s*$", "", (name or "").strip())
+    head = text.split(",", 1)[0].strip()
+    text = head or text
     suffixes = {"inc", "inc.", "corp", "corp.", "corporation", "plc", "ltd", "ltd.", "limited", "sa",
                 "s.a.", "ag", "nv", "n.v.", "se", "co", "co.", "company", "spa", "s.p.a.", "ab",
                 "asa", "oyj", "as", "a/s", "kgaa", "sab", "holdings", "holding", "group"}
     words = text.replace(",", " ").split()
-    while len(words) > 1 and words[-1].lower() in suffixes:
-        words.pop()
-    return " ".join(words)
+    kept = list(words)
+    while len(kept) > 1 and kept[-1].lower() in suffixes:
+        kept.pop()
+    if kept and kept[-1].lower() in {"&", "and", "+", "/"}:       # never end on a connector
+        return " ".join(words)
+    return " ".join(kept)
 
 
 @dataclass(frozen=True)
@@ -1095,7 +1110,7 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
     if f is None:
         fcf_series = _abstain("no fundamentals")
     elif is_financial_sector(f):
-        fcf_series = _not_meaningful()          # BANK-PAGE-1: operating cash flow of a bank is noise
+        fcf_series = _not_meaningful(FREE_CASH_FLOW_NOT_MEANINGFUL)          # BANK-PAGE-1: operating cash flow of a bank is noise
     else:
         packed = pack_series(f, "free_cash_flow_annual", label="Free cash flow",
                              order=ORDER_OLDEST_FIRST)
@@ -1229,6 +1244,28 @@ def _unavailable(kind: str, exc: BaseException):
     if kind == "price_and_cash":
         return PriceAndCash(last_close=bad)
     raise ValueError(kind)
+
+
+def accounts_context(f) -> dict:
+    """FORENSIC-PACK-1 - which accounts every absolute reading rests on, and their currency.
+
+    The council's own evidence carried ``total_debt`` and ``free_cash_flow`` bare, so the narrator
+    wrote "(no currency stated in the evidence field)" beside a dollar figure and could not say how
+    old the accounts were. Both facts are in the data we already hold; this states them ONCE.
+    The date is the period END of the newest annual statement the provider dated (never guessed);
+    no adapter carries a filing date, so none is printed - the basis says so rather than inventing
+    one. Empty dict when there are no fundamentals."""
+    if f is None:
+        return {}
+    from .operating_profit import operating_profit_basis
+
+    basis = operating_profit_basis(f)
+    if basis.startswith("fiscal year to "):
+        text = f"annual accounts for the {basis} (the filing date is not in the data)"
+    else:
+        text = "the latest annual accounts (their period end date is not in the data)"
+    return {"currency": str(getattr(f, "financial_currency", "") or "").strip(),
+            "listing_currency": str(getattr(f, "currency", "") or "").strip(), "basis": text}
 
 
 def guard(kind: str, fn, *args, **kwargs):

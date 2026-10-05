@@ -85,9 +85,11 @@ def short_reason(rendered: str) -> str:
         return r[len("screen: "):].split(" (")[0] + " screen"
     if r.startswith("sector excluded"):
         return "sector excluded (Financial Services)"
-    if r.startswith("asset kind") and "outside this strategy's scope" in r:
+    if r.startswith("asset kind") and ("outside this strategy's scope" in r
+                                       or "outside this lens's scope" in r):
         return "asset-kind gate (" + r.split("'")[1] + ")"
-    if "outside this strategy's scope" in r:
+    if ("outside this strategy's scope" in r or "outside this lens's scope" in r
+            or r.startswith("not for this sector")):
         return "sector out of scope"
     return r.split(" (")[0]
 

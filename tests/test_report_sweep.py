@@ -183,6 +183,33 @@ def test_no_count_grammar_slips(sweep_reports):
                   sweep.COUNT_GRAMMAR)
 
 
+def test_no_strategy_word_in_reader_text(sweep_reports):
+    """19B B3: "lens" everywhere, never "strategy"."""
+    _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.strategy_word_findings(t, w)),
+                  sweep.STRATEGY_WORD)
+
+
+def test_no_badge_paragraph_outside_the_glossary(sweep_reports):
+    """19B B10: the five-sentence price-badge explanation lives in the glossary only."""
+    _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.badge_paragraph_findings(t, w)),
+                  sweep.BADGE_PARAGRAPH)
+
+
+def test_the_multi_lens_progress_line_names_lenses_not_ids(tmp_path):
+    """19B B2: "Grading with magic_formula_momentum_v1 (1 of 9)" put a record key on the screen."""
+    adapter = FrozenAdapter(FIX / "frozen")
+    lines: list[str] = []
+    run_multi_strategy_pipeline(META["car_list"][:3], META["list_lenses"], adapter=adapter,
+                                today=TODAY, use_cache=False, freeze_dir=tmp_path,
+                                progress=lines.append)
+    graded = [ln for ln in lines if ln.startswith("Grading with")]
+    assert len(graded) == len(META["list_lenses"])
+    for ln in graded:
+        assert not sweep.internal_id_findings(ln, "progress"), ln
+    assert "Grading with Value + Momentum (3 of 3)" in graded[-1] or any(
+        "Value + Momentum" in ln for ln in graded)
+
+
 # --------------------------------------------------------------------------- #
 # Rules Batch 18A owns - these must pass for real
 # --------------------------------------------------------------------------- #
@@ -264,6 +291,18 @@ def test_each_rule_fires_on_the_shape_it_names():
     assert sweep.markup_findings("a stray _word", "x", markdown=True)
     assert not sweep.markup_findings("**bold** and _italic_ and snake_case", "x", markdown=True)
     assert sweep.markup_findings("**leaked** into html", "x", markdown=False)
+    assert sweep.internal_id_findings("would-rank not available: roic - abstained; "
+                                      "revenue growth - abstained", "x")
+    assert sweep.internal_id_findings("Grading with magic_formula_momentum_v1 (1 of 9)", "x")
+    assert not sweep.internal_id_findings("Grading with Value + Momentum (1 of 9)", "x")
+    assert sweep.strategy_word_findings("Strategy: Magic Formula RAW", "x")
+    assert sweep.strategy_word_findings("not in this strategy's scope", "x")
+    assert not sweep.strategy_word_findings("Lens: Magic Formula RAW", "x")
+    from aristos_council.glossary import DETAIL_BADGE_NOTE
+    assert sweep.badge_paragraph_findings("**Growth - 3 names. " + DETAIL_BADGE_NOTE + "**", "x")
+    assert not sweep.badge_paragraph_findings(
+        "**Growth - 3 names.**\n⚠ = the share price is up more than +30% (see the glossary).\n"
+        "What the terms mean\n" + DETAIL_BADGE_NOTE, "x")
     assert sweep.backwards_band_findings("band $10bn-$5bn", "x")
     assert sweep.backwards_band_findings("band $5bn-$5bn", "x")
     assert not sweep.backwards_band_findings("band $3bn-$5bn", "x")

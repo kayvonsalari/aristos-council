@@ -2,7 +2,7 @@
 
 The include_sectors knob is the mirror of exclude_sectors: financials_v1 admits ONLY
 financials (P/B and ROE are their yardstick), gating a confirmed out-of-scope sector
-with "sector '<X>' outside this strategy's scope" while never gating a missing sector
+with "not for this sector (<X>)" while never gating a missing sector
 (confirmed-only, the never-drop-on-unknown discipline). The existing exclude gate is
 untouched. financials_v1 becomes the fifth visible rank strategy and renders on the
 Strategy tab with zero UI-code changes.
@@ -91,7 +91,7 @@ def test_pipeline_gates_out_of_scope_and_ranks_in_scope():
     ranked, excluded, _, _, _ = _rank_stage(
         ["JPM", "MSFT"], fin, _TwoSectorAdapter(), today=date(2026, 6, 30))
     # MSFT (Technology) gated out of scope with the exact message
-    assert ("MSFT", "sector 'Technology' outside this strategy's scope") in excluded
+    assert ("MSFT", "not for this sector (Technology)") in excluded
     # JPM (Financial Services) is ranked, not gated
     ranked_ids = {r.ticker for r in ranked if not r.excluded}
     assert "JPM" in ranked_ids
@@ -177,4 +177,4 @@ def test_company_check_shows_out_of_scope_gate():
         today=date(2026, 6, 30))
     scope = [g for g in r.gates if g.name == "sector_scope"]
     assert scope and scope[0].status == "FAIL"
-    assert "outside this strategy's scope" in scope[0].detail
+    assert scope[0].detail == "not for this sector (Technology)"

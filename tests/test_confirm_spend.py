@@ -234,8 +234,9 @@ def _run_tab(timeout: int = 120):
 
 
 def _pick_cohort(at):
-    lists = next(s for s in at.selectbox if str(s.label) == "List")
-    lists.set_value(next(o for o in lists.options if "names" in o)).run()
+    next(r for r in at.radio if str(r.label) == "List source").set_value("Saved list").run()
+    lists = next(s for s in at.selectbox if str(s.label) == "My lists")
+    lists.set_value(next(o for o in lists.options if "name" in o)).run()
     return at
 
 

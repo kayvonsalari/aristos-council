@@ -348,8 +348,8 @@ class _Run:
 
 def test_the_line_appears_only_when_the_gate_excluded_the_other_kind():
     app = _app()
-    gated = _Run(excluded=[("XLE", "asset kind 'ETF' outside this strategy's scope"),
-                           ("VDE", "asset kind 'ETF' outside this strategy's scope")])
+    gated = _Run(excluded=[("XLE", "asset kind 'ETF' outside this lens's scope"),
+                           ("VDE", "asset kind 'ETF' outside this lens's scope")])
     assert app.wrong_kind_count(gated, mode=STOCKS) == 2
     assert app.wrong_kind_line(2, mode=STOCKS) == (
         "2 of these names are ETFs and were not graded. Switch to ETFs to analyse them.")
@@ -368,7 +368,7 @@ def test_an_ordinary_exclusion_is_NOT_counted():
 
 def test_the_mirror_line_in_ETFs_mode():
     app = _app()
-    gated = _Run(excluded=[("XOM", "asset kind 'Equity' outside this strategy's scope")])
+    gated = _Run(excluded=[("XOM", "asset kind 'Equity' outside this lens's scope")])
     assert app.wrong_kind_count(gated, mode=ETFS) == 1
     assert app.wrong_kind_line(1, mode=ETFS) == (
         "1 of these names are stocks and were not graded. "
@@ -384,7 +384,7 @@ def test_a_name_gated_by_SEVERAL_lenses_is_counted_once():
     class _Multi:
         results: dict
 
-    gate = "asset kind 'ETF' outside this strategy's scope"
+    gate = "asset kind 'ETF' outside this lens's scope"
     multi = _Multi(results={"a": _Run(excluded=[("XLE", gate)]),
                             "b": _Run(excluded=[("XLE", gate)])})
     assert app.wrong_kind_count(multi, mode=STOCKS) == 1

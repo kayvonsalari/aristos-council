@@ -110,7 +110,7 @@ def test_pipeline_gates_etf_out_of_an_equity_lens_with_exact_message():
     ranked, excluded, _, _, _ = _rank_stage(
         ["AAPL", "QQQ"], strat, adapter, today=date(2026, 6, 30))
     # QQQ (ETF) gated out with the verbatim message
-    assert ("QQQ", "asset kind 'ETF' outside this strategy's scope") in excluded
+    assert ("QQQ", "asset kind 'ETF' outside this lens's scope") in excluded
     # AAPL (equity) is ranked, not gated — byte-unchanged behaviour on an equity
     ranked_ids = {r.ticker for r in ranked if not r.excluded}
     assert "AAPL" in ranked_ids
@@ -124,7 +124,7 @@ def test_pipeline_gates_equity_out_of_an_etf_lens():
     adapter = _KindAdapter({"AAPL": "EQUITY", "QQQ": "ETF"})
     _, excluded, _, _, _ = _rank_stage(
         ["AAPL", "QQQ"], strat, adapter, today=date(2026, 6, 30))
-    assert ("AAPL", "asset kind 'Equity' outside this strategy's scope") in excluded
+    assert ("AAPL", "asset kind 'Equity' outside this lens's scope") in excluded
 
 
 def test_pipeline_confirmed_only_missing_kind_never_gates():
@@ -169,7 +169,7 @@ def test_company_check_shows_asset_kind_gate_fail_for_an_etf():
         today=date(2026, 6, 30))
     kind = [g for g in r.gates if g.name == "asset_kind"]
     assert kind and kind[0].status == "FAIL"
-    assert "outside this strategy's scope" in kind[0].detail
+    assert "outside this lens's scope" in kind[0].detail
     assert "'ETF'" in kind[0].detail
 
 

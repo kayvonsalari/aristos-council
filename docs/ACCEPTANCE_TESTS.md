@@ -131,3 +131,22 @@ Wording only: no vote, rank, result or number moved (the sweep's results JSON is
 | **B18A-T20** | Company page for a company with negative free cash flow (e.g. Ford). Read the price-and-cash section, then a bank's page (JPM). | Negative money reads "-$1.4bn" (never "$-1.4bn"); a missing amount reads "not available" (never "$nan", "$None" or a bare dash). The bank page shows the "not meaningful for banks and insurers" line instead of any money figure for cash, debt or free cash flow. |
 | **B18A-T21** | Run `python -m pytest tests/test_report_sweep.py -rfxX`. | 12 tests pass and none is marked XFAIL: internal ids, "$-" money and count grammar are ordinary tests now. (On CI the Markdown half also runs, because CI installs the `ui` extra.) |
 | **B18A-T22** | Open README, `docs/CALCULATIONS.md` (§1, §2.2, §2.7-§2.10), `docs/REPORT_MARKS.md`, `docs/aristos-architecture.html` and `docs/KNOWN_ISSUES.md`. | Each describes: a lens with under 3 names casts no vote; the symmetric ceil(n/5) cut; small companies ranked against similar-sized industry peers with no band and no badges; fund size in USD at a named rate; the operating-profit guard and Growth's bank exclusion, stated as living in code (not in the strategy files) and why; the sweep; and the known issues. |
+
+## Batch 19A and 19B (T19)
+
+19A fixes results and peer groups; 19B reworks the list half of the Analyse tab and the reader wording. No vote, rank or number moves; only reason wording changed.
+
+| ID | Steps | Expected result |
+|---|---|---|
+| **T19-1** | Paste NVDA, AMD, INTC with all nine lenses, ranker only. | AMD is excluded from Value + Momentum with "return on invested capital not available"; the summary line counts 1 passed, not 2. |
+| **T19-2** | Company page for Ford (F) and for BYD (1211.HK). Read the peers table. | Hyundai appears once in each. No "(of 1)" or "(of 2)" column: a voting-lens column with under 3 ranked names reads "too few to rank" in every cell. |
+| **T19-3** | Company page for VKTX with "include companies under $5bn" ticked. | BB Biotech (BION.SW) is not among the peers. The valuation band says "valuation measure undefined in 61 of 61 months (no positive operating profit)" or equivalent. |
+| **T19-4** | Company page for NVCR.US with the same tick. | No Nutex, Aveanna or Sonida among the peers. |
+| **T19-5** | Company page for JPM. | BBVA and ING each appear once. The band line states its P/E basis. The news block lists only headlines about JPMorgan (or "no headlines about this company in the window"). The analyst count on the page matches the count in the council opinion, if ticked. |
+| **T19-6** | Company page for Ford. Read the lens reasons. | They read "no operating profit (fiscal year to Dec 2025)". |
+| **T19-7** | List mode. Open the "Cohort / list" half. | One question, three choices: Built cohort, Saved list, Paste tickers. A built cohort reads like "Consumer · Auto Manufacturers · 29 names · $1bn+". |
+| **T19-8** | Paste "NVDA, AMD, NVDA.US, ZZZZ". | A line under the box lists the recognised names and says ZZZZ is not recognised. NVDA.US is read as NVDA. ZZZZ never reaches the run. |
+| **T19-9** | After a paste, look for the save panel and the overrides. | The save panel is collapsed and reads "Save these N names as a list (optional)". "One-off overrides (this run only)" sits below the lenses, collapsed. The sentence above Run says what will happen. |
+| **T19-10** | Run the sweep: `python -m pytest tests/test_report_sweep.py -rfxX`. | Passes: no internal id, no "strategy" in reader text, no badge paragraph in a heading. |
+| **T19-11** | Company page for JPM: read the peers header and footer, then open "How this peer group was built". | The header states the size band once. The diagnostics are inside the folded block. |
+| **T19-12** | Company page for NVCR with the council ticked. Read the council text for the Forensic mark. | It names the three components (accrual ratio, Altman Z, F-score) with their ranks, and no "no currency stated" phrase. |
