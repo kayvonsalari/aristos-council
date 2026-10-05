@@ -7,6 +7,16 @@ a single rank, verdict, factor value or exclusion of any lens that was already h
 clean checkout of that commit), so it is a real before/after comparison, not a snapshot of whatever
 the code does today. Never regenerate it to make this test pass: a difference here means an existing
 lens changed.
+
+ONE DELIBERATE EXCEPTION (Batch 19A, 2026-10-05). The ``conservative_plus_v1`` and
+``cyclical_income_v1`` entries were re-baselined by hand, on purpose, and ONLY those two, and only
+for these effects (the other eight lenses are byte-identical to the original golden):
+  - NULL-EXCLUDES-2: this fixture's names carry no dividend-streak scalar (conservative) and no
+    dividend year totals (cyclical), so a screen rule could not read its input. Those names used
+    to slip through the abstention and rank (conservative: T10; cyclical: T07, T10, T12); they are
+    now excluded as "<rule> not available".
+  - DEFINC-BANKS-1: BANK is now excluded from Defensive Income by sector ("sector excluded
+    (Financial Services)") instead of failing its momentum rule.
 """
 
 from __future__ import annotations

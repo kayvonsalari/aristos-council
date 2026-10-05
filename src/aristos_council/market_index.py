@@ -1641,10 +1641,55 @@ def _link_groups_by_name(groups: list) -> list:
                         and not _far_apart(a.market_cap_usd, b.market_cap_usd,
                                            NAME_LINK_TOLERANCE)):
                     parent[find(second)] = find(first)
+    # PEER-DEDUP-2 (19A) - a depositary receipt and the listed home line it stands for. The name link
+    # above needs the cleaned names EQUAL, and an ADR's rarely are: "Banco Bilbao Viscaya Argentaria
+    # SA ADR" (the provider's own spelling) against "Banco Bilbao Vizcaya Argentaria SA", "ING
+    # Group NV ADR" ("ing") against "ING Groep NV" ("ing groep"). Each JPM peer group then held BBVA
+    # and ING twice. Guards, all required: the receipt's NAME says it is one (ADR / ADS / GDR /
+    # depositary), the other line is on a DIFFERENT exchange and is not itself a receipt, the cleaned
+    # names are alike (one a word-prefix of the other, or a near-identical spelling), and the USD
+    # caps are within the same tolerance as the name link. A row with no size is never linked.
+    homes: dict[str, list] = {}
+    for number, members in enumerate(groups):
+        for row in members:
+            if _DEPOSITARY_ROW.search(row.name or ""):
+                continue
+            key = _name_key(row.name)
+            if key and row.market_cap_usd is not None and row.market_cap_usd > 0:
+                homes.setdefault(key.split()[0], []).append((number, row, key))
+    for number, members in enumerate(groups):
+        for receipt in members:
+            if (not _DEPOSITARY_ROW.search(receipt.name or "") or receipt.market_cap_usd is None
+                    or receipt.market_cap_usd <= 0):
+                continue
+            key = _name_key(receipt.name)
+            if not key:
+                continue
+            for other, home, home_key in homes.get(key.split()[0], ()):
+                if (find(number) != find(other)
+                        and _code_and_market(receipt)[1] != _code_and_market(home)[1]
+                        and not _far_apart(receipt.market_cap_usd, home.market_cap_usd,
+                                           NAME_LINK_TOLERANCE)
+                        and _names_alike(key, home_key)):
+                    parent[find(other)] = find(number)
     merged: dict[int, list] = {}
     for number, members in enumerate(groups):
         merged.setdefault(find(number), []).extend(members)
     return list(merged.values())
+
+
+def _names_alike(a: str, b: str) -> bool:
+    """Two cleaned company names that read as one company: equal, one a word-prefix of the other
+    with at most two words more (and at least three characters in the shorter), or a near-identical
+    spelling (the provider's "Viscaya" for "Vizcaya")."""
+    if a == b:
+        return True
+    ta, tb = a.split(), b.split()
+    short, long_ = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    if (len(" ".join(short)) >= 3 and long_[:len(short)] == short and len(long_) - len(short) <= 2):
+        return True
+    import difflib
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.92
 
 
 def _listing_rank(row: "IndexRow", *, home_first: bool = False) -> tuple:
@@ -1812,6 +1857,54 @@ _FUND_CODE_PATTERNS = {
 
 FUND_NOT_A_COMPANY = "fund, not a company"
 
+# PEER-FUND-2 (19A) - investment companies and closed-end funds the name patterns above cannot see.
+# BB Biotech AG (BION.SW) is a closed-end investment company filed by the provider under
+# "Biotechnology" with the plain name of an operating company, so it ranked among Viking's biotech
+# peers. Two more tests: an "Investment Company" name with an asset-management classification
+# (Australian Foundation Investment Company, BKI, Hansa), and a small DATED file of names that no
+# pattern can catch (data/fund_exclusions.yaml) - last resort, each entry with its evidence. The
+# index carries no EODHD ``Type`` column (the listing filter admits only "Common Stock", so every
+# row would read the same); storing it needs a rebuild and is not needed for these.
+_INVESTMENT_COMPANY = re.compile(r"\binvestment compan(?:y|ies)\b", re.IGNORECASE)
+DEFAULT_FUND_EXCLUSIONS = Path(__file__).resolve().parents[2] / "data" / "fund_exclusions.yaml"
+
+
+def load_fund_exclusions(path: str | Path = DEFAULT_FUND_EXCLUSIONS) -> dict[str, dict]:
+    """``{normalised ticker: {"date", "reason"}}`` from the exclusions file, or {} when absent. A
+    malformed entry is an error: a typo here would silently let a fund back in."""
+    import yaml
+
+    path = Path(path)
+    if not path.exists():
+        return {}
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    entries = doc.get("exclusions") if isinstance(doc, dict) else None
+    if entries is None:
+        return {}
+    if not isinstance(entries, list):
+        raise MarketIndexError(f"{path}: 'exclusions' must be a list")
+    out: dict[str, dict] = {}
+    for i, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise MarketIndexError(f"{path}: exclusion {i} must be a mapping")
+        missing = [k for k in ("ticker", "date", "reason") if not str(entry.get(k) or "").strip()]
+        if missing:
+            raise MarketIndexError(f"{path}: exclusion {i} is missing {', '.join(missing)}")
+        key = str(entry["ticker"]).strip().upper()
+        if key in out:
+            raise MarketIndexError(f"{path}: {key} is listed twice")
+        out[key] = {"date": str(entry["date"]), "reason": " ".join(str(entry["reason"]).split())}
+    return out
+
+
+_FUND_EXCLUSIONS_CACHE: dict = {}
+
+
+def _fund_exclusions() -> dict[str, dict]:
+    if "v" not in _FUND_EXCLUSIONS_CACHE:
+        _FUND_EXCLUSIONS_CACHE["v"] = load_fund_exclusions()
+    return _FUND_EXCLUSIONS_CACHE["v"]
+
 
 def _code_and_market(row: "IndexRow") -> tuple[str, str]:
     code, _, suffix = (row.ticker or "").upper().rpartition(".")
@@ -1832,6 +1925,10 @@ def fund_reason(row: "IndexRow") -> str:
     for pattern in _FUND_NAME_PATTERNS:
         if pattern.search(name):
             return f"{FUND_NOT_A_COMPANY} (name: {pattern.search(name).group(0).lower()})"
+    listed = _fund_exclusions().get(normalise_symbol(row.ticker))
+    if listed is not None:
+        return (f"{FUND_NOT_A_COMPANY} (investment company: data/fund_exclusions.yaml, "
+                f"{listed['date']})")
     code, market = _code_and_market(row)
     shape = _FUND_CODE_PATTERNS.get(market)
     if shape is not None and shape.search(code):
@@ -1839,6 +1936,8 @@ def fund_reason(row: "IndexRow") -> str:
     classification = _classification_text(row)
     if _FUND_WORD_STRICT.search(name) and _ASSET_MANAGEMENT.search(classification):
         return f"{FUND_NOT_A_COMPANY} (fund in an asset-management classification)"
+    if _INVESTMENT_COMPANY.search(name) and _ASSET_MANAGEMENT.search(classification):
+        return f"{FUND_NOT_A_COMPANY} (investment company in an asset-management classification)"
     if _FUND_WORD.search(name) and not classification.strip() and row.market_cap is None:
         return f"{FUND_NOT_A_COMPANY} (fund word, and no classification or cap)"
     return ""
@@ -1974,6 +2073,7 @@ RECEIPT_LSE_LINE = "London 0xxx line of a foreign company"
 RECEIPT_LSE_GDR = "London depositary receipt (GDR)"
 RECEIPT_SWISS_LINE = "Swiss line of a foreign company"
 RECEIPT_KR_PREF = "Korean preference share"
+RECEIPT_PREF_LINE = "preference share line"
 RECEIPT_HK_RMB = "Hong Kong RMB counter"
 
 # Sao Paulo tickers: a BDR is <4 characters>3<2..9> (A1MD34, AVGO34, E1TN34, TSMC34, NVDC34);
@@ -2114,13 +2214,75 @@ def korean_pref_map(rows) -> dict[str, str]:
         ordinary = by_code.get((market, match.group(1) + "0"))
         if ordinary is None:
             continue
-        key = _name_key(row.name)
+        key = _pref_series_key(row.name)
         if key and key == _name_key(ordinary.name):
             out[normalise_symbol(row.ticker)] = normalise_symbol(ordinary.ticker)
     return out
 
 
-def secondary_lines(rows) -> dict[str, str]:
+# PEER-DEDUP-2 (19A) - a preference series is named by its number: Hyundai Motor's second and third
+# are "Hyundai Motor Co. Ltd. Pfd. Series 1" and "Hyundai Motor S3 Pref", whose cleaned names
+# ("hyundai motor 1", "hyundai motor s3") did not equal the ordinary line's, so only the series
+# whose name happened to read "Pref" folded and Hyundai stood three times in a peer group. A trailing
+# series number or "S3" is the series, not the company, so it is dropped from the PREFERENCE row's
+# key only; the ordinary row's key is untouched and must still match exactly.
+_SERIES_TOKEN = re.compile(r"^(?:s?\d{1,2}|\d{1,2}(?:st|nd|rd|th))$")
+
+
+def _pref_series_key(name: str) -> str:
+    tokens = _name_key(name).split()
+    while len(tokens) > 1 and _SERIES_TOKEN.match(tokens[-1]):
+        tokens.pop()
+    return " ".join(tokens)
+
+
+# A preference line that says so in its NAME and has an ordinary line of the SAME company on the SAME
+# exchange under the identical cleaned name: Draegerwerk AG & Co. KGaA (pref) DRW3 beside the
+# ordinary DRW8, which the name link could not join (its ISIN and primary differ, and the two sizes
+# were 1.33x apart, beyond the 1.25x tolerance). The Korean series are handled by code above; this is
+# the same relation proved by the explicit wording, so a plain name never folds on a size guess.
+_PREF_NAME = re.compile(
+    r"\((?:pref|pfd|preferred|preference|vz|vorzug\w*)\.?\)"
+    r"|\b(?:pref|pfd|preferred|preference|vorzugsaktien|vorzug|vz)\b", re.IGNORECASE)
+
+
+def same_exchange_pref_map(rows) -> dict[str, str]:
+    """``{normalised pref ticker: normalised ordinary ticker}`` for every line whose name says it is
+    a preference share and whose ordinary line (no such wording, same market, same cleaned name) is
+    in ``rows``. Korea is left to ``korean_pref_map``, which proves it by code."""
+    rows = list(rows)
+    ordinary: dict[tuple, list] = {}
+    for row in rows:
+        code, market = _code_and_market(row)
+        if market in ("KO", "KQ") or _PREF_NAME.search(row.name or ""):
+            continue
+        key = _name_key(row.name)
+        if key:
+            ordinary.setdefault((market, key), []).append(row)
+    out: dict[str, str] = {}
+    for row in rows:
+        _code, market = _code_and_market(row)
+        if market in ("KO", "KQ") or not _PREF_NAME.search(row.name or ""):
+            continue
+        key = _name_key(row.name)
+        homes = [r for r in ordinary.get((market, key), ())
+                 if normalise_symbol(r.ticker) != normalise_symbol(row.ticker)]
+        if key and homes:
+            out[normalise_symbol(row.ticker)] = normalise_symbol(
+                min(homes, key=lambda r: normalise_symbol(r.ticker)).ticker)
+    return out
+
+
+def pref_line_map(rows) -> dict[str, str]:
+    """Every preference line in ``rows`` mapped to its ordinary line (Korean by code, others by
+    wording on the same exchange)."""
+    rows = list(rows)
+    out = dict(same_exchange_pref_map(rows))
+    out.update(korean_pref_map(rows))
+    return out
+
+
+def secondary_lines(rows, *, include_name_prefs: bool = False) -> dict[str, str]:
     """``{normalised ticker: kind}`` for every secondary trading line in ``rows``.
 
     ``receipt_kind`` for each row, plus the one case a single row cannot show: a SIX row with
@@ -2132,6 +2294,9 @@ def secondary_lines(rows) -> dict[str, str]:
     out = {normalise_symbol(r.ticker): kind for r in rows if (kind := receipt_kind(r))}
     for pref in korean_pref_map(rows):
         out.setdefault(pref, RECEIPT_KR_PREF)
+    if include_name_prefs:
+        for pref in same_exchange_pref_map(rows):
+            out.setdefault(pref, RECEIPT_PREF_LINE)
     elsewhere: dict[str, list] = {}
     for row in rows:
         if normalise_symbol(row.ticker) not in out and _has_identity(row):
@@ -2153,8 +2318,8 @@ def _receipt_home(row: "IndexRow", rows, secondary: dict) -> Optional["IndexRow"
     Only a row that is not itself a secondary line, has an identity and carries a size is a
     candidate, and the usual home-listing preference decides between several.
     """
-    ordinary = korean_pref_map(rows).get(normalise_symbol(row.ticker))
-    if ordinary is not None:                      # exact: the code names it, no name search
+    ordinary = pref_line_map(rows).get(normalise_symbol(row.ticker))
+    if ordinary is not None:                      # exact: the code or the wording names it
         return next((r for r in rows if normalise_symbol(r.ticker) == ordinary), None)
     key = _name_key(row.name)
     if not key:
@@ -2319,6 +2484,9 @@ class PeerGroup:
     # Batch 8 - every size correction this group actually used (the subject's or a member's), so the
     # page's Sources block can name the correction file it drew on.
     size_corrected: list = field(default_factory=list)
+    # PEER-LABEL-2 (19A) - the candidates the winning rung refused because their other label
+    # contradicted the one they matched on (tickers, so a report can name them).
+    skipped_contradicted: list = field(default_factory=list)
 
     @property
     def available(self) -> bool:
@@ -2767,6 +2935,45 @@ def _label_hits(row: IndexRow, subject: IndexRow, level: str, systems: tuple) ->
     return tuple(hits)
 
 
+# PEER-LABEL-2 (19A, absorbs GICS-NOISE-1). A peer admitted on ONE label system is only as good as the
+# other system's silence. Measured on Novocure (NVCR, $1.9bn), 25 of its 40 peers were single-label
+# matches and they carried the noise: Nutex Health (hospitals), Aveanna (home nursing), Sonida Senior
+# Living, P3 Health Partners filed by GICS as "Health Care Equipment" while EODHD calls them "Medical
+# Care Facilities"; CLASSYS carries the GICS sub-industry "Coal & Consumable Fuels" and Nolato
+# "Commodity Chemicals" while EODHD calls both "Medical Devices". Two rules, by what the other label
+# says (null is not false: a row with NO label in the other system contradicts nothing and is kept):
+#
+#   * ANY size: the other system's SECTOR differs from the subject's in that same system (GICS sector
+#     against GICS sector, EODHD sector against EODHD sector - never across systems, whose words
+#     differ: "Health Care" / "Healthcare"). An Energy-sector label under a medical-device match is a
+#     wrong label, not a second opinion.
+#   * Subject BELOW $5bn: the other system must be ABSENT or agree at this level, so a single-label
+#     match is admitted only when the other label has nothing to say. Above $5bn the one-label match
+#     stays the recall path it was built to be (Siemens Energy's rivals, PEER-LABEL-RECALL-1), because
+#     the big-company labels are the ones the provider keeps right.
+SINGLE_LABEL_STRICT_BELOW_USD = 5e9
+_CONTRADICTION_RULE = "sector differs, or - below $5bn - the other label names a different industry"
+
+
+def _single_label_contradicted(row: IndexRow, subject: IndexRow, level: str, matched: str,
+                               *, strict: bool) -> bool:
+    """True when ``row`` matched ``subject`` in the ONE system ``matched`` while its other system
+    contradicts. A missing label in the other system never contradicts."""
+    other = LABEL_EODHD if matched == LABEL_GICS else LABEL_GICS
+    if other == LABEL_GICS:
+        mine, theirs = _label(row.gics_sector), _label(subject.gics_sector)
+        here, there = _gics_label(row, level), _gics_label(subject, level)
+    else:
+        mine, theirs = _label(row.sector), _label(subject.sector)
+        here, there = _eodhd_label(row, level), _eodhd_label(subject, level)
+    # At the SECTOR rung the matched label IS the sector, so the other system's sector differing is
+    # the recall case that rung exists for (PEER-LABEL-RECALL-1); only the strict small-cap rule
+    # applies there.
+    if level != "sector" and mine and theirs and mine != theirs:
+        return True
+    return bool(strict and here and there and here != there)
+
+
 def _within(cap: Optional[float], subject: float, low: float, high: float) -> bool:
     return cap is not None and subject * low <= cap <= subject * high
 
@@ -2853,7 +3060,7 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
 
     # PEER-RECEIPTS-1 - a receipt looked up by the symbol the reader has is answered for the
     # company it mirrors, found by name because the provider gives it no identity.
-    secondary = secondary_lines(universe)
+    secondary = secondary_lines(universe, include_name_prefs=True)
     subject_kind = secondary.get(normalise_symbol(subject.ticker), "")
     if subject_kind:
         home = _receipt_home(subject, universe, secondary)
@@ -3050,11 +3257,16 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
         if not systems:
             continue
         matched, how = [], {}
+        contradicted: list[str] = []
         for r in pool:
             if not _within(r.market_cap_usd, subject_cap, low, high):
                 continue
             hits = _label_hits(r, subject, level, systems)
             if hits:
+                if len(systems) > 1 and len(hits) == 1 and _single_label_contradicted(
+                        r, subject, level, hits[0], strict=subject_cap < SINGLE_LABEL_STRICT_BELOW_USD):
+                    contradicted.append(r.ticker)
+                    continue
                 matched.append(r)
                 how[r.ticker] = "+".join(hits)
         if len(matched) >= floor:
@@ -3076,6 +3288,11 @@ def peers(ticker: str, *, floor: int = DEFAULT_FLOOR, cap: int = DEFAULT_CAP,
             tally = {}
             for how_matched in group.matched_on.values():
                 tally[how_matched] = tally.get(how_matched, 0) + 1
+            if contradicted:
+                group.reasons.append(
+                    f"{plural(len(contradicted), 'candidate')} skipped: matched on one label but the "
+                    f"other label contradicts it ({_CONTRADICTION_RULE})")
+                group.skipped_contradicted = list(contradicted)
             if len(systems) > 1:
                 group.reasons.append(
                     f"matched on: GICS only {tally.get(LABEL_GICS, 0)}, EODHD label only "
@@ -3165,6 +3382,8 @@ class ExcludedRow:
 EVIDENCE_NAME_LINK = "same reduced company name and USD market caps within 25%"
 EVIDENCE_HK_RMB = ("Hong Kong RMB counter: HKEX reserves codes 80000-89999 for the RMB counter of a "
                    "dual-counter share, and the HKD counter is this line's code without the 8")
+EVIDENCE_PREF_NAME = ("preference line: its name says preference and the ordinary line of the same "
+                      "company, with the identical cleaned name, is listed on the same exchange")
 EVIDENCE_KR_PREF = ("Korean preference series: the ordinary line's code with a trailing 5, 7 or 9, "
                     "under an identical company name")
 
@@ -3316,11 +3535,14 @@ def clean_pool(rows: Optional[list[IndexRow]] = None, *, store: Optional[IndexSt
             partner = normalise_symbol(f"{code[1:]}.HK")
             if partner in kept_keys:
                 add_merged(partner, MergedLine(row.ticker, row.name, kind, EVIDENCE_HK_RMB))
-    for pref_key, ordinary_key in korean_pref_map(universe).items():
+    korean = korean_pref_map(universe)
+    for pref_key, ordinary_key in pref_line_map(universe).items():
         if ordinary_key in kept_keys and pref_key in secondary:
             pref = next(r for r in universe if normalise_symbol(r.ticker) == pref_key)
-            add_merged(ordinary_key, MergedLine(pref.ticker, pref.name, RECEIPT_KR_PREF,
-                                                EVIDENCE_KR_PREF))
+            is_korean = pref_key in korean
+            add_merged(ordinary_key, MergedLine(
+                pref.ticker, pref.name, RECEIPT_KR_PREF if is_korean else RECEIPT_PREF_LINE,
+                EVIDENCE_KR_PREF if is_korean else EVIDENCE_PREF_NAME))
     for lines in pool.merged.values():
         lines.sort(key=lambda m: m.ticker)
     if pool.size_excluded:

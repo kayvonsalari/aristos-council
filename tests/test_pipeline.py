@@ -396,8 +396,12 @@ def test_rank_stage_prefilter_excludes_failing_names_pre_rank():
 
     class _A(MarketDataAdapter):
         name = "fake"
-        _F = {"AAPL": dict(market_cap=1e10, dividend_per_share=0.4, payout_ratio=0.5),
-              "JNJ": dict(market_cap=1e10, dividend_per_share=4.0, payout_ratio=0.6)}
+        # every screen rule has its input (NULL-EXCLUDES-2: a rule that cannot read one
+        # excludes the name instead of letting it rank)
+        _F = {"AAPL": dict(market_cap=1e10, dividend_per_share=0.4, payout_ratio=0.5,
+                           dividend_streak_years=12, total_debt=1e9),
+              "JNJ": dict(market_cap=1e10, dividend_per_share=4.0, payout_ratio=0.6,
+                          dividend_streak_years=12, total_debt=1e9)}
         def get_fundamentals(self, t):
             return Fundamentals(ticker=t, **self._F[t])
         def get_price_history(self, t, *, start, end):

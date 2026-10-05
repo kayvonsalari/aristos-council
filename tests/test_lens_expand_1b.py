@@ -38,7 +38,8 @@ def test_an_entry_rule_exclusion_carries_where_it_would_have_ranked(tmp_path):
     w = screened.would_rank
     assert w is not None and w.available
     assert 1 <= w.position <= w.cohort_size and w.cohort_size == N_PEERS + 1   # the whole peer group
-    assert w.text == (f"on its measures it would rank {_ord(w.position)} of {w.cohort_size}. "
+    assert w.text == (f"on its measures it would rank {_ord(w.position)} of the {w.cohort_size} "
+                      f"names with usable figures, had the lens's rules not excluded it. "
                       f"{NOT_A_VOTE}")
     assert screened.result_shown() == f"{screened.result()} - {w.text}"
     assert screened.result_shown().startswith("does not apply - ")

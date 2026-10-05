@@ -73,8 +73,14 @@ STALE_CURRENT_DAYS = 45     # the newest computable point must be this recent to
 _EV_EBIT = "ev_ebit"
 _PE = "pe"
 
-_BASIS_PHRASE = {_EV_EBIT: "EV/EBIT band", _PE: "P/E band (fallback)"}
-_BASIS_LABEL = {_EV_EBIT: "EV/EBIT", _PE: "P/E (fallback)"}
+# PE-CONSISTENCY-1: reader text never says "fallback"; the P/E band instead states WHAT it
+# divides (market cap by the latest annual net income), because that is a different EPS from
+# the trailing-twelve-month one the Price and cash block uses and the two P/Es can differ.
+_BASIS_PHRASE = {_EV_EBIT: "EV/EBIT band", _PE: "P/E band"}
+_BASIS_LABEL = {_EV_EBIT: "EV/EBIT", _PE: "P/E"}
+_BASIS_DETAIL = {_EV_EBIT: "",
+                 _PE: " (market cap over the latest annual net income, not the trailing "
+                      "twelve months)"}
 
 
 # --------------------------------------------------------------------------- #
@@ -157,8 +163,9 @@ class ValuationBand:
         pct = round(self.percentile)
         tail = "; net debt held at latest reported" \
             if self.net_debt_basis == "latest" else ""
-        lead = f"{self.basis_label} {self.current:.1f} — " \
-            if self.current is not None else ""
+        lead = (f"{self.basis_label} {self.current:.1f}"
+                f"{_BASIS_DETAIL.get(self.basis or '', '')} — "
+                if self.current is not None else "")
         # "42 of 61 months" was the unexplained half of the old line: say WHY the other
         # 19 are absent. When every month IS computable there is no "rest" to explain.
         gap = ", the rest lack usable statements" \
@@ -405,8 +412,11 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
 
     series: list[tuple[date, float]] = []
     fx_missing = 0
+    loss_months = 0                        # BAND-REASON-1: months with no positive earnings
     for day, close in points:
         e = _asof(earnings, day)
+        if e is not None and e <= 0:
+            loss_months += 1
         if e is None or e <= 0:
             continue                       # loss / pre-history month: drops out, counted
         # VALBAND-2: the price side is already in the PRICE currency; the statement side
@@ -436,20 +446,31 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
     # "what the feed returned", because for it the feed returned everything there is.
     young = _young_company_reason(earnings, bars, asof=asof, years=years)
     stmt = _statement_note(f, earnings)          # BAND-STMT-1
+    # BAND-REASON-1 — when months drop out for want of positive earnings, THAT is the reason
+    # the band is short, not the company's age ("insufficient history: 1.8y" on a company with
+    # 40 years on file). ONE sentence for every path below; the old wording stays for the
+    # cases where no month was lost to a loss (a feed that returned too little).
+    undefined = _undefined_months_reason(basis, total, covered, loss_months)
     if covered < 2:
         return _abstain(
-            young or f"insufficient history: band from {covered} of {plural(total, 'month')}{stmt}",
+            young or undefined or
+            f"insufficient history: band from {covered} of {plural(total, 'month')}{stmt}",
             covered=covered, total=total)
 
     span = (series[-1][0] - series[0][0]).days / 365.25
     if span < min_years:
-        return _abstain(young or f"insufficient history: {span:.1f}y{stmt}",
-                        covered=covered, total=total, years=span)
+        return _abstain(
+            young or (f"{undefined}; the usable months span {span:.1f}y and the band needs "
+                      f"{min_years:.1f}y" if undefined else "")
+            or f"insufficient history: {span:.1f}y{stmt}",
+            covered=covered, total=total, years=span)
     months_in_span = sum(1 for d, _ in points if series[0][0] <= d <= series[-1][0])
     if months_in_span and covered / months_in_span < MIN_COVERAGE:
-        return _abstain(f"insufficient coverage: band from {covered} of "
-                        f"{plural(months_in_span, 'month')} in span", covered=covered,
-                        total=total, years=span)
+        return _abstain(
+            f"{undefined}; too few usable months for a band" if undefined else
+            f"insufficient coverage: band from {covered} of "
+            f"{plural(months_in_span, 'month')} in span",
+            covered=covered, total=total, years=span)
     if (asof - series[-1][0]).days > STALE_CURRENT_DAYS:
         return _abstain("current valuation not computable "
                         f"(newest usable month {series[-1][0].isoformat()})",
@@ -498,6 +519,24 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
         current_shares=_asof(_dated_series(f, "shares_outstanding"), current_day),
         note=f"{_BASIS_PHRASE[basis]} over {span:.1f}y; "
              f"{covered} of {plural(total, 'month')} computable")
+
+
+def _undefined_months_reason(basis, total: int, covered: int, loss_months: int) -> str:
+    """"valuation measure undefined in 61 of 61 months (no positive operating profit)", or
+    ``""`` when no month was lost to a loss (BAND-REASON-1).
+
+    The multiple is price over earnings; with earnings at or below zero it has no value, so
+    the band is short because of the COMPANY'S LOSSES, not because history is missing. The
+    same shape as the available band's coverage line ("44 of 61 months, the rest lack usable
+    statements"), so every path states its counts the same way."""
+    if loss_months <= 0:
+        return ""
+    what = "operating profit" if basis == _EV_EBIT else "earnings"
+    undefined = total - covered
+    cause = (f"no positive {what}" if loss_months >= undefined else
+             f"{loss_months} with no positive {what}, the rest lack usable statements")
+    return (f"valuation measure undefined in {undefined} of {plural(total, 'month')} "
+            f"({cause})")
 
 
 def _choose_basis(f):

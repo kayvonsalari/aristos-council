@@ -227,7 +227,7 @@ def company_agreement_findings(report, where: str) -> list[Finding]:
 
 def peers_table_findings(report, where: str) -> list[Finding]:
     """The company's own row in the peers table must agree with its vote for every lens."""
-    from .peer_table import DOES_NOT_APPLY, peer_rows, rank_columns
+    from .peer_table import DOES_NOT_APPLY, TOO_FEW_TO_RANK, peer_rows, rank_columns
 
     out: list[Finding] = []
     group = getattr(report, "peer_group", None)
@@ -240,8 +240,8 @@ def peers_table_findings(report, where: str) -> list[Finding]:
         return out
     for vote in getattr(report, "votes", ()):
         cell = next((v for h, v in mine.ranks if h.startswith(vote.label)), None)
-        if cell is None:
-            continue
+        if cell is None or cell == TOO_FEW_TO_RANK:
+            continue            # no column (nobody ranked), or a column that says "too few to rank"
         says_applies = not (cell == DOES_NOT_APPLY or cell in ("no data", "fetch failed")
                             or cell == "not in this run")
         if vote.ranked != says_applies:

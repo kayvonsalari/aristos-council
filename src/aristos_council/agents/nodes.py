@@ -319,14 +319,23 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
                 # in inputs above), keep the full list for the snapshot count.
                 state.tool_calls[-1].output = news_full[:MAX_NEWS_LOGGED]
                 state.tool_calls[-1].inputs["total_items_fetched"] = len(news_full)
-            trends = log(
-                "get_recommendation_trends",
-                {"ticker": state.ticker, "provider": sentiment_adapter.name},
-                lambda: sentiment_adapter.get_recommendation_trends(
-                    state.ticker
-                ),
-                source="sentiment",
-            )
+            # ANALYST-ONE-SOURCE-1: a Company Report hands the council the SAME analyst block
+            # its own table prints (`company_facts_block["analyst"]`, logged below as
+            # `analyst_block`). A second provider's recommendation counts beside it gave
+            # the narrative two different analyst headcounts (VKTX: table 20, specialist "23
+            # of 26"; NVCR: table 7, specialist 13), so with the report's block present the
+            # provider trend is neither fetched nor logged and the snapshot carries no
+            # analyst count of its own. Runs without that block (a list run, the v1 council)
+            # are byte-unchanged.
+            if (state.company_facts_block or {}).get("analyst") is None:
+                trends = log(
+                    "get_recommendation_trends",
+                    {"ticker": state.ticker, "provider": sentiment_adapter.name},
+                    lambda: sentiment_adapter.get_recommendation_trends(
+                        state.ticker
+                    ),
+                    source="sentiment",
+                )
 
         # SENT-FALLBACK-1 — Finnhub is US-only on this plan (FINNHUB-SKIP-1); without a
         # fallback the Sentiment specialist abstained on EVERY non-US name no matter how
@@ -391,7 +400,10 @@ def make_gather_node(adapter: MarketDataAdapter, strategy: Strategy,
             )
 
         if news is not None or trends is not None:
-            snap = sentiment_snapshot(news or [], trends or [])  # full list: count stays truthful
+            snap = sentiment_snapshot(
+                news or [], trends or [],  # full list: count stays truthful
+                analysts_in_report_block=(
+                    (state.company_facts_block or {}).get("analyst") is not None))
             state.tool_calls.append(
                 ToolCall(
                     call_id=_new_call_id(),

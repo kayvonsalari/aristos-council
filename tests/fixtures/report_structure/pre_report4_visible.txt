@@ -114,7 +114,6 @@ at least $5.0bn
 passed 3
 Ranking: top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut).
 Names ranked on: Return on invested capital, Earnings yield (EBIT/EV).
-Company size: at least $5.0bn (applied by the ranker, before the screen).
 Sectors excluded: Financial Services, Financials, Utilities.
 Asset kinds admitted: equity.
 Missing factor values are ranked worst.
@@ -145,7 +144,6 @@ at least $5.0bn
 passed 3
 Ranking: top 20% BUY, bottom 20% SELL, middle HOLD (quintile cut).
 Names ranked on: Return on invested capital, Earnings yield (EBIT/EV), 12-month price momentum.
-Company size: at least $5.0bn (applied by the ranker, before the screen).
 Sectors excluded: Financial Services, Financials, Utilities.
 Asset kinds admitted: equity.
 Missing factor values are ranked worst.

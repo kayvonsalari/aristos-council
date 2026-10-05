@@ -990,6 +990,8 @@ class PriceAndCash:
             out.append(f"Recent news ({self.news_source}):")
             out.extend(f"  - {item.published.isoformat()}: {item.headline}"
                       for item in self.news)
+        elif self.news_note == "no headlines about this company in the window":
+            out.append(f"Recent news: {self.news_note}")      # NEWS-SUBJECT-1: a finding, not a fault
         elif self.news_note:
             out.append(f"Recent news: not shown — {self.news_note}")
         return out
@@ -1182,9 +1184,18 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
     if news is not None:
         items = list(getattr(news, "items", ()) or ())
         if items:
+            # NEWS-SUBJECT-1: a feed matches on any mention (JPM's five headlines were all
+            # about other companies naming J.P. Morgan as analyst or arranger). Keep a
+            # headline only when this company is its subject; under two, say so.
+            from .news_subject import subject_news
+            items, news_note = subject_news(
+                items, name=(getattr(f, "name", "") or ""), ticker=(getattr(f, "ticker", "") or ""))
+        if items:
             items.sort(key=lambda it: it.published, reverse=True)
             news_items = tuple(items[:max_news])
             news_source = getattr(news, "source", "") or ""
+        elif news_note:
+            pass                                     # the subject filter's own sentence
         else:
             tried = "; ".join(getattr(news, "tried", ()) or ())
             news_note = tried or "no recent news found"
