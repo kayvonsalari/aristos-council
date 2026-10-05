@@ -31,7 +31,7 @@ def test_default_input_mode_is_company():
     radio = next(r for r in at.radio if str(r.label) == "Input")
     assert radio.value == "Company"
     assert any(str(t.label) == "Find a company" for t in at.text_input)
-    assert not any(str(s.label) == "List" for s in at.selectbox)
+    assert not any(str(r.label) == "List source" for r in at.radio)
 
 
 def test_sidebar_switch_is_labelled_asset_type_default_stocks():
