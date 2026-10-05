@@ -39,6 +39,11 @@ THIS_COMPANY_FG = "#1d2127"
 THIS_COMPANY_STYLE = (f"background-color: {THIS_COMPANY_BG}; color: {THIS_COMPANY_FG}; "
                       "font-weight: 700")
 DOES_NOT_APPLY = "does not apply"
+# PEERS-RANK-RULE (19A): the under-3 rule the lens pages already follow. A rank among fewer than
+# three names is not a ranking, so the column says so in every cell; a column nobody was ranked in
+# (every name excluded or unrateable) is dropped rather than printed empty.
+MIN_RANKED = 3
+TOO_FEW_TO_RANK = "too few to rank"
 ONE_SYSTEM_MARK = "†"
 ONE_SYSTEM_NOTE = f"{ONE_SYSTEM_MARK} counted as a peer on one industry classification only"
 
@@ -126,8 +131,14 @@ def rank_columns(report) -> list[RankColumn]:
                           ("fetch_errors", "fetch failed")):
             for entry in record.get(key) or []:
                 values.setdefault(str(entry["ticker"]).upper(), word)
-        header = (f"{vote.label} rank (of {len(ranked)})" if voter
-                  else f"{vote.label} mark (check - does not vote)")
+        if voter and not ranked:
+            continue                                   # (of 0): nothing to show, so no column
+        if voter and len(ranked) < MIN_RANKED:
+            values = {key: TOO_FEW_TO_RANK for key in values}
+            header = f"{vote.label} rank"
+        else:
+            header = (f"{vote.label} rank (of {len(ranked)})" if voter
+                      else f"{vote.label} mark (check - does not vote)")
         columns.append(RankColumn(header=header, kind="rank" if voter else "mark", values=values))
     return columns
 
@@ -217,7 +228,8 @@ LOCAL_FORMAT = "%.1fbn"
 # is NaN (shown "does not apply", sorted last) or - for "no data" / "fetch failed" - a sentinel far above
 # any rank, shown in words. ``rank_display`` turns either back into the words the exports print.
 NO_DATA_SORT = 10 ** 6
-_SENTINELS = {"no data": NO_DATA_SORT, "fetch failed": NO_DATA_SORT + 1}
+_SENTINELS = {"no data": NO_DATA_SORT, "fetch failed": NO_DATA_SORT + 1,
+              TOO_FEW_TO_RANK: NO_DATA_SORT + 2}
 
 
 def _rank_number(value):
@@ -233,7 +245,8 @@ def rank_display(value) -> str:
     if number is None:
         return DOES_NOT_APPLY if value in (DOES_NOT_APPLY, None) else str(value)
     if number >= NO_DATA_SORT:
-        return "no data" if number == NO_DATA_SORT else "fetch failed"
+        return {NO_DATA_SORT: "no data", NO_DATA_SORT + 1: "fetch failed"}.get(
+            int(number), TOO_FEW_TO_RANK)
     return f"{number:.0f}"
 
 
