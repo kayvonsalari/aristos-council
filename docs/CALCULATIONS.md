@@ -19,7 +19,17 @@ summed; **lowest combined rank wins**. This is Greenblatt's Magic-Formula mechan
 van Vliet–Blitz Conservative Formula combine — there are no tuned point-weights anywhere.
 
 **Verdict cut** (config per strategy):
-- `quintile` (default): top 20% BUY · middle 60% HOLD · bottom 20% SELL.
+- `quintile` (default): **ceil(n / 5) names at each end** - the top ceil(n/5) get BUY, the bottom
+  ceil(n/5) get SELL, the rest HOLD (n = names ranked). The same count at both ends (Batch 18A,
+  QUINTILE-ASYMMETRY-1): a list of 3 is 1 BUY, 1 HOLD, 1 SELL; of 10, 2 / 6 / 2; of 40, 8 / 24 / 8.
+  Before 18A the bottom cut did not round up, so #3 of 3 stayed HOLD while #1 of 3 was BUY. The BUY
+  count is unchanged by that fix (so no backtested BUY basket moved); only SELL counts changed, by
+  +1 for every list size not divisible by 5.
+- **Under 3 ranked names nothing votes** (`rank_engine.MIN_RANKABLE_COHORT = 3`, NO-RANK-NO-VOTE-1): a
+  lens that kept fewer than 3 names gives none of them a position, and its verdicts are not counted
+  in a list's shortlist or agreement table nor on a company page, where it reads "does not apply".
+  The report says "2 passed its rules, too few to rank" (one wording everywhere). The ranking
+  primitive itself keeps its old arithmetic for such lists; the rule is applied where votes are counted.
 - `top_k` / `top_percentile`: BUY for the top k / top fraction, HOLD otherwise — for
   small, curated universes where a quintile is an artifact.
 
@@ -152,6 +162,20 @@ Four disciplines, each matching the rest of the codebase:
 4. **Replay-safe.** The CSV is committed, so a frozen run replays it byte-identically — the
    static data lives in the record's world like every other frozen input. A *missing* file is
    tolerated: the layer simply does nothing.
+
+**Fund size is compared in USD** (ETF-MODE-1, `fund_currency.py`). A fund's total assets are
+reported in the fund's own currency, so a cross-fund ranking needs one. The target is **USD**
+(it was EUR before 18A). A fund whose base currency is stated (the static row's
+`fund_size_currency`) is converted at the latest close of the provider's `<FROM>USD=X` pair, and
+the receipt names the amount, the rate, its date and its source (`3bn EUR @ 1.16 USD/EUR,
+2026-07-29, rate from the market data provider's EURUSD=X rate`; the Sources block repeats it).
+Three honest abstentions, each with its reason shown and none ranked as if comparable:
+(1) the currency is stated but **no rate** was available; (2) the currency is **not stated** and the
+fund is not listed in USD; (3) the currency would be a **minor unit** (pence, cents), which is never
+read as the major one. The one inference allowed: a fund **listed in USD** with no stated base
+currency is taken as USD, and the receipt says "USD, taken from the listing currency". Most committed
+static rows predate the currency column, so those funds abstain on size until it is filled; the ETF
+lenses use `missing: neutral`, so an abstaining size never penalises the fund.
 
 **Where the rows come from.** `scripts/generate_etf_static_rows.py <universe_id>` fetches each
 ticker's EODHD `/fundamentals` payload and prints paste-ready CSV rows to STDOUT — it never
@@ -460,8 +484,10 @@ fixed-width text — none of them formats a number of its own.
 
 ### 2.7 The Quality and Earnings Power Value lenses (LENS-EXPAND-1a, `tools/quality_epv.py`)
 
-Two stock lenses with **no entry rules** beyond the $5bn size floor and the bank/insurer exclusion
-(sectors "Financial Services" and "Financials"; utilities are *not* excluded). Magic Formula RAW was
+Two stock lenses with **no entry rules** beyond the $5bn size floor, the **operating-profit guard**
+(§2.9) and the bank/insurer exclusion (sectors "Financial Services" and "Financials"; utilities are
+*not* excluded). A bank or an insurer reads **"does not apply"** under these lenses (a scope gate, so
+no "would have ranked" reading either, §2.8). Magic Formula RAW was
 usually the only lens that could vote on a single company, because every other lens has entry rules
 (Growth: revenue growth ≥ 10%, ROIC ≥ 12%, PEG ≤ 2; Value + Momentum: ROIC ≥ 12%; the income lenses:
 dividend rules). Both new lenses are `kind: selector` (they vote, one equal vote each like every other
@@ -513,8 +539,11 @@ Two **named constants**, one assumption for the whole universe (the EPV-1 decisi
 Enterprise value is the same one earnings yield uses (market cap + debt − cash, with the dated FX
 conversion on a foreign listing; a failed FX fetch abstains rather than mix currencies). There is no
 market-cap stand-in: EPV is an enterprise value and is compared with one. **Abstains** — ranks last,
-reason shown — when the normalised profit is zero or negative, when fewer than 3 years of margin
-exist, or when no positive enterprise value can be formed. **Never gating**: a ranked lens with no
+reason shown — when fewer than 3 years of margin exist or when no positive enterprise value can be
+formed. A company whose **latest operating profit is zero or negative** no longer reaches the factor
+at all: since 18A the lens says "does not apply - no operating profit" (§2.9). (The factor still
+carries its own note for a normalised profit that is zero or negative while the latest year is
+positive.) **Never gating**: a ranked lens with no
 veto. Weakest on deep cyclicals at a peak or trough (hence the 5-year average); the constants are blunt
 by design.
 
@@ -532,8 +561,9 @@ factor, same rank-sum, same tie handling). The peer group is every name that rea
 entry rules — it passed the lens's *scope* gates (asset kind, size floor, sector) — **whether or not
 it then passed the entry rules**, so a company is compared with the whole group and never only with
 the survivors of the rule that has just excluded it. A company excluded by a *scope* gate (a fund in
-a stock lens, below the size floor, a bank in a lens that leaves banks out) gets no reading: that
-lens does not measure that kind of company at all.
+a stock lens, below the size floor, a bank or insurer in a lens that leaves them out, or a company
+with no operating profit under the §2.9 guard) gets no reading: that lens does not measure that kind
+of company at all - it says "does not apply", full stop.
 
 What it is **not**, enforced by shape rather than by wording:
 
@@ -555,6 +585,52 @@ Shown in the Company page's lens-votes table, the text export, the HTML export a
 done — the Run tab's grid has no per-company lens-votes table to put it in, and a list's lenses are
 not ranked against a "peer group" of the company in question, so it was not trivial. Computed only
 when the run asks (`with_shadow`, which Company mode does); a run that does not ask is byte-identical.
+
+### 2.9 The operating-profit guard (SMALLCAP-BAND-GAP-1, `operating_profit.py`)
+
+Five lenses divide by, or capitalise, **operating profit** (EBIT): earnings yield = EBIT / EV, return
+on capital = NOPAT / capital, EPV = normalised EBIT / cost of capital, debt / EBIT. For a company whose
+latest operating profit is zero or negative those numbers are meaningless (a negative yield ranked
+against positive ones), so these lenses **do not apply** to it:
+
+| Lens | Why it needs operating profit |
+|---|---|
+| Magic Formula RAW | earnings yield (EBIT / EV) and return on capital |
+| Value + Momentum | the same two factors |
+| Earnings Power Value | EPV capitalises operating profit |
+| Quality | net debt / EBIT and the worst-year return on capital |
+| Cyclical Income | net debt / mean operating income |
+
+The result reads **"does not apply - no operating profit"**, the company casts no vote under that lens
+(the agreement counts it as "did not apply"), there is no "would have ranked" reading (nothing
+meaningful to rank it on), and Company Check's gate row for the lens says the same. It applies
+**everywhere** a lens runs - a company page, a list, a small company - not only to small companies.
+
+**null is not false.** Only a *confirmed* latest operating profit of zero or below gates. A company
+whose operating profit is simply not known is not gated (a missing number is not a failure). "Latest"
+is the newest annual operating income on file, falling back to the newest EBIT.
+
+**Where this lives, and why it is not in the strategy YAML.** The guard, and Growth's exclusion of
+banks and insurers (§2.10), are applied **in code**, not written into `strategies/*.yaml`. Published
+strategy files are immutable (project rule 7): recorded verdicts and run reports reference a
+strategy's id and must stay reproducible, so editing a published file - or minting a v2 of every
+lens, which would orphan the track-record badges keyed by lens id - was the wrong tool for a scope
+rule that postdates the file. The five lens ids are named in `operating_profit.OPERATING_PROFIT_LENS_IDS`;
+a **new** lens file simply declares `requires_operating_profit: true`. Backtests run the same
+`run_rank_pipeline`, so the guard can move a backtest by dropping a loss-maker from a round's ranking
+(not rerun; upper bound on exposure: 7,020 lens-rounds, 29,177 BUY entries, 295 names, 13 cohorts).
+
+### 2.10 Growth leaves out banks and insurers (BANK-PAGE-1, `strategy/rank_loader.py`)
+
+Return on capital and revenue growth do not measure a bank or an insurer (deposits, loans and
+premiums are the business), so `growth_garp_v2` ranks neither - like Magic Formula RAW, Quality and EPV
+- and says "does not apply - sector excluded (Financial Services)". Implemented in
+`_SCOPE_AFTER_PUBLICATION` at the one place a rank strategy is loaded (the same code-not-YAML reason
+as §2.9), so the rank stage, Company Check's gate rows, the rules table and the lens caption ("...for
+companies worth at least $5bn (not banks or insurers).") all read it. It cannot move a backtest: the
+13 backtested cohorts already exclude financials. On a bank's company page, **debt, cash and free cash
+flow** read "not meaningful for banks and insurers (deposits and loans are the business)" and every
+voting lens with no backtested cohort says "untested here".
 
 ## 3. Dividend streak — flat is not a cut (`tools/screening.py`)
 
@@ -1136,7 +1212,7 @@ same treatment.
   a 0.12 floor). That is what floors do, but two hundredths of a percent is inside
   measurement noise for a computed ROIC. These near-misses are now flagged `[borderline]`
   in the exclusion line (§4) — legible, though the floor still governs.
-- **Small universes**: a quintile cut on 6 survivors makes BUY = top 2 — an artifact. Use
+- **Small universes**: a quintile cut on 6 survivors makes BUY = top 2 (and SELL = bottom 2) — an artifact; under 3 names nothing votes at all (§1). Use
   `top_k`, or treat the screen as the product on curated lists.
 - **Trailing data**: every factor is historical. Momentum is the only forward-leaning
   signal; there is no estimate-revision input on free data.

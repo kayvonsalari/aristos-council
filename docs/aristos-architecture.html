@@ -159,6 +159,16 @@
 <!-- /GEN:LENSES -->
 <p class="note">These two tables are generated from each lens's own caption in the app (the sentence under its tick box), so they cannot drift from what the app says. <code>python -m scripts.build_architecture_doc</code> rewrites them.</p>
 <p class="note">
+  Three scope rules sit in code rather than in the lens files, because a published lens file never
+  changes (past results must stay reproducible). <strong>The operating-profit guard:</strong> Magic
+  Formula RAW, Value + Momentum, Earnings Power Value, Quality and Cyclical Income divide by operating
+  profit, so for a company whose latest operating profit is zero or negative they say "does not apply -
+  no operating profit" instead of ranking it on negative numbers. <strong>Growth leaves out banks and
+  insurers</strong>, like the lenses above that say so. <strong>A lens that kept fewer than three
+  names casts no vote</strong> ("2 passed its rules, too few to rank"). The formulas are in
+  <code>docs/CALCULATIONS.md</code> §1, §2.9 and §2.10.
+</p>
+<p class="note">
   Every ticked lens ranks a company only against the <em>other names it is able to rank</em> —
   so "3rd of 40" under one lens and "3rd of 12" under another are both correct; the
   cohort sizes are allowed to differ. The exact formula behind each lens is in
@@ -207,7 +217,10 @@
       excluded: it is automatically ranked against its own size band instead, and every
       vote for it carries a visible caveat that it sits outside the lens's tested range.
       There is no tick box for this any more — the app detects it and switches
-      automatically.</li>
+      automatically. Where the company's industry has no such size band at all, it is ranked
+      against similar-sized companies in its own industry instead, with no band line and no
+      track-record badge ("Compared with similar-sized companies in its industry; outside the
+      tested range, no track record applies").</li>
 </ul>
 
 <h2 id="analyse">The Analyse tab: one company, or a list</h2>
@@ -313,10 +326,23 @@
       always preferred to a confident-looking wrong one.</li>
 </ul>
 
+<h2 id="sweep">The report sweep — a checker that reads the reports for us</h2>
+<p>
+  Every mistake found by reading a report was a <em>shape</em> a program can look for. A sweep
+  (<code>tests/test_report_sweep.py</code>, rules in <code>src/aristos_council/report_sweep.py</code>)
+  builds the company and list reports for an awkward set — a loss-maker (Ford), a pre-revenue biotech
+  (VKTX), a small cap (NVCR), a foreign reporting currency (1211.HK), a bank (JPM), an ETF list
+  (SPY, SCHD, VWRL.L, AAPL) and stock lists of 1, 3 and 6 names — from recorded data, with no network,
+  and checks every export (screen text, Markdown, HTML) for: a machine id where a plain name belongs,
+  negative money printed with its sign inside the currency symbol, bracketed plurals (a count written with its plural in brackets), unmatched bold or stray underscores, the same lens stated two ways, a lens
+  with BUY at the top and no SELL at the bottom, SELL votes missing from the agreement, and a backwards
+  size band. It runs on every change in CI, so a new leak of any of them fails the build.
+</p>
+
 <footer>
   Research tool, not financial advice. Nothing in this app or this document is a
   recommendation to buy or sell any security. Written from the code on the
-  <code>main</code> branch, Batch 17 (2026-10-04) — ARCH-DOC-2.
+  <code>main</code> branch, Batch 18B (2026-10-05) — ARCH-DOC-2.
 </footer>
 
 </div>

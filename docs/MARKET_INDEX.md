@@ -151,8 +151,8 @@ spent 60,000 of the daily allowance. Every summary prints both numbers, because 
 of them is the one you run out of:
 
 ```
-20 row(s) fetched (20 refetched for a missing cap), 0 still fresh, 337 dropped on venue,
-0 failed; 21 request(s) = 201 charged of 90,000
+20 rows fetched (20 refetched for a missing cap), 0 still fresh, 337 dropped on venue,
+0 failed; 21 requests = 201 charged of 90,000
 ```
 
 `--budget` is in **charged units** (default 90,000). The build stops *before* the request
@@ -346,7 +346,7 @@ company a correction touched carries one symbol, and a legend at the bottom says
 
 | Symbol | Meaning |
 |---|---|
-| † | counted once, also listed as `<other line(s)>`; with the evidence (alias reason, name-and-size link, HK RMB counter, Korean preference line) |
+| † | counted once, also listed as `<other lines>`; with the evidence (alias reason, name-and-size link, HK RMB counter, Korean preference line) |
 | ‡ | industry label corrected: from `<old>` to `<new>`, reason, date |
 | § | size corrected or excluded: the figure the index reported, reason, date. Excluded companies are listed under the legend, never silently dropped |
 | ¶ | identity corrected: the provider's PrimaryTicker names a different company, reason, date |

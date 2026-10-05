@@ -70,7 +70,7 @@ each company:
 
 | Symbol | Meaning, per company |
 |---|---|
-| † | counted once, also listed as `<other line(s)>`; evidence: the reason from `identity_aliases.yaml`, or "same reduced company name and USD market caps within 25%", or the Hong Kong RMB-counter / Korean preference-line rule |
+| † | counted once, also listed as `<other lines>`; evidence: the reason from `identity_aliases.yaml`, or "same reduced company name and USD market caps within 25%", or the Hong Kong RMB-counter / Korean preference-line rule |
 | ‡ | industry label corrected; from `<old>` to `<new>`; reason, date (`label_overrides.yaml`) |
 | § | size corrected or excluded; reported `<figure>`; reason, date (`size_corrections.yaml`) |
 | ¶ | identity corrected: the provider's PrimaryTicker names a different company; reason, date (a self-alias in `identity_aliases.yaml`) |
@@ -90,7 +90,7 @@ code, or too few companies, for a guide entry it was merged into a neighbour or 
 reasons are in the file's header). Frozen as v1 on 2026-09-26 with the history test applied:
 **2,023 members in all, every cohort inside the 20–60 band (smallest 21, largest 58), none thin,
 none wide.** Floors by the tier rule: 17 cohorts at $1bn, 22 at $2bn, 14 at $3bn, 3 at $5bn, 1 at
-$10bn. "Definition" is the EODHD industry code(s), with the GICS sub-industry a code was narrowed to
+$10bn. "Definition" is the EODHD industry codes, with the GICS sub-industry a code was narrowed to
 where the code alone was too wide.
 
 | Sector | Cohort | Floor | Members | Definition |
