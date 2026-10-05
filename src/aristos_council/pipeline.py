@@ -85,6 +85,7 @@ from .persistence.reports import RunReport, report_from_state
 from .operating_profit import (
     NO_OPERATING_PROFIT_REASON,
     has_no_operating_profit,
+    no_operating_profit_reason,
     lens_requires_operating_profit,
 )
 from .rank_engine import (
@@ -334,7 +335,7 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
         # there is nothing meaningful to rank it on.
         if (lens_requires_operating_profit(rank_strategy)
                 and has_no_operating_profit(f)):
-            excluded.append((t, NO_OPERATING_PROFIT_REASON))
+            excluded.append((t, no_operating_profit_reason(f)))
             continue
         if f is not None and is_payout_uncovered(f.payout_ratio,
                                                  rank_strategy.max_payout_ratio):
@@ -3199,7 +3200,7 @@ def _gate_rule_phrase(key: str, result) -> str:
         if kinds:
             return "this lens ranks only " + ", ".join(kinds)
     if key == DETAIL_GROUP_PROFIT:
-        return "latest operating profit above zero (applied before the screen)"
+        return ("latest fiscal year's operating profit above zero (applied before the screen)")
     return "applied before the screen"
 
 

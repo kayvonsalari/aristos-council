@@ -128,5 +128,5 @@ def test_a_loss_maker_does_not_apply_instead_of_ranking_on_negative_numbers(tmp_
         news_fetcher=_no_news)
     vote = report.votes[0]
     assert vote.status == "excluded"
-    assert vote.result() == f"does not apply - {NO_OPERATING_PROFIT_REASON}"
+    assert vote.result() == f"does not apply - {NO_OPERATING_PROFIT_REASON} (latest fiscal year)"
     assert report.agreement.n_not_applying == 1 and report.agreement.n_voted == 0
