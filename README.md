@@ -73,7 +73,7 @@ What costs money, and what does not:
 | [docs/REPORT_MARKS.md](docs/REPORT_MARKS.md) | Every flag or annotation that can appear on a report, and what it does *not* mean |
 | [docs/SCOREBOARD.md](docs/SCOREBOARD.md) | The prospective test of whether the verdicts were also *good* |
 | [docs/BACKTEST.md](docs/BACKTEST.md) | Did a lens's own picks beat its cohort? Ten years, skill-versus-luck, and how to read a lens's track-record badge |
-| [docs/TRACK_RECORD.md](docs/TRACK_RECORD.md) | The backtest results in short, for a reviewer: verdicts per lens, what they mean, caveats, proposed changes |
+| [docs/BACKTEST_RECORD.md](docs/BACKTEST_RECORD.md) | The backtest results in short, for a reviewer: verdicts per lens, what they mean, caveats, proposed changes |
 | [docs/MARKET_INDEX.md](docs/MARKET_INDEX.md) | The local company table: coverage, cost, peer rules, corrections |
 | [docs/COHORTS.md](docs/COHORTS.md) | The 57 cohorts: rules, floors, cleanup, quality checks, correction symbols |
 | [docs/CLASSIFICATION.md](docs/CLASSIFICATION.md) | How companies are classified (GICS and EODHD's own labels), how peer groups are chosen, and the dated correction files |
