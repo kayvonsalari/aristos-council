@@ -80,6 +80,7 @@ What costs money, and what does not:
 | [docs/GAP_LEDGER.md](docs/GAP_LEDGER.md) | The pre-market experiment: pipeline, schedule, freeze, verdict criteria |
 | [docs/TESTING.md](docs/TESTING.md) | How the suite is isolated from the network and from real providers |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Open defects and data gaps a tester may meet, with the current workaround |
+| [docs/DESIGN_company_story.md](docs/DESIGN_company_story.md) | The single-company page: the two-line answer, the code-written story, one lens table, the workings folded (COMPANY-STORY-1) |
 | [CLAUDE.md](CLAUDE.md) | The contributor's working agreement: architecture in reading order, hard rules, sprint history |
 | `docs/diagnosis_*.md` | Two dated post-mortems of specific data defects (kept as case studies) |
 

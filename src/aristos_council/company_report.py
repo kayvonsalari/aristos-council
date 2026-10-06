@@ -1120,9 +1120,9 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # table both moved toward the end; price-and-cash and valuation-band swapped relative
 # order. The text export, the HTML export and the screen renderer (app.py) all follow
 # this SAME order — a test pins it across all three.
-SECTION_ORDER = ("summary", "agreement", "lens votes", "valuation band", "price and cash",
-                 "absolute readings", "what analysts say", "council opinion", "peers",
-                 "sources")
+SECTION_ORDER = ("answer", "story", "lens table", "council opinion", "workings",
+                 "valuation band", "price and cash", "absolute readings", "what analysts say",
+                 "peers", "sources")
 
 
 def price_and_cash_lines(result) -> list[str]:
@@ -1250,50 +1250,46 @@ def council_opinion_lines(report: CompanyReport) -> list[str]:
         ["  (no narrative produced)"]
 
 
-def format_company_report(report: CompanyReport) -> str:
-    """The report as text, in the page order."""
+def _text_table(headers, rows) -> list[str]:
+    """A left-justified plain table, two-space gaps, no pipes (the other text tables' convention)."""
+    widths = [max([len(str(h))] + [len(str(r[i])) for r in rows]) for i, h in enumerate(headers)]
+    out = ["  ".join(str(h).ljust(w) for h, w in zip(headers, widths)).rstrip()]
+    out += ["  ".join(str(c).ljust(w) for c, w in zip(r, widths)).rstrip() for r in rows]
+    return out
+
+
+def story_text_lines(report: CompanyReport) -> list[str]:
+    """Sections 1-3 of the page (COMPANY-STORY-1): the two-line answer, the story (or the model's
+    summary in its place), the one lens table. Everything above the fold, no heading lines - the
+    first screen is the answer, not a table of contents."""
+    from .company_story import story_page
+
+    page = story_page(report)
+    lines = [page.answer[0], page.answer[1], ""]
+    lines += [f"{lead} {text}" for lead, text in page.paragraphs]
+    if page.model_summary:
+        from .reader import READER_SECTION_NOTE
+        lines.append(f"({READER_SECTION_NOTE})")
+    if page.note:
+        lines.append(page.note)
+    lines.append("")
+    lines += list(page.tag)
+    if page.no_vote:
+        lines.append(page.no_vote)
+    else:
+        lines += _text_table(page.headers, [r.cells() for r in page.rows])
+    if page.caption:
+        lines.append(page.caption)
+    return lines
+
+
+def workings_text_lines(report: CompanyReport) -> list[str]:
+    """Section 4 - everything that supports the answer, in the design's order. The text download
+    keeps every section; the fold is a display choice of the other renderers."""
+    from .company_story import narration_check_line, table_rows
+
     c = report.check
-    lines = [f"Company Report - {report.display}", HOUSE_LINE]
-    if report.outside_tested_range:
-        lines.append(report.tested_range_line)
-        lines.extend(report.tested_range_detail_lines)
-    lines.append("")
-    if report.unrateable:
-        lines += [f"UNRATEABLE - {c.data_integrity.note}. No data, so no votes and no readings.",
-                  c.pointer]
-        return "\n".join(lines)
-
-    if report.summary is not None:
-        lines += ["SUMMARY", *summary_lines(report), ""]
-
-    lines.append("AGREEMENT")
-    if report.agreement is not None:
-        lines.append(f"  {report.agreement.headline}")
-        lines.extend(f"  {ln}" for ln in agreement_table_lines(report))
-        # BACKTEST-2 — display only, right under the agreement count; counts the ticked lenses'
-        # badges, never the vote itself.
-        if report.track_record_caption:
-            lines.append(f"  {report.track_record_caption}")
-        if report.track_record_summary:
-            lines.append(f"  {report.track_record_summary}")
-    else:
-        lines.append(f"  No vote: {report.no_vote_reason}")
-    lines.append("")
-
-    lines.append("LENS VOTES")
-    if report.votes:
-        lines.extend(f"  {ln}" for ln in vote_table_lines(report))
-        for v in report.votes:
-            if v.asks:
-                lines.append(f"    {v.label}: {v.asks}")
-            if v.badge is not None:
-                from .backtest import BADGE_MEANINGS
-                lines.append(f"    {v.label} track record: {v.badge.detail_line()} — "
-                             f"{BADGE_MEANINGS[v.badge.label]}")
-    else:
-        lines.append(f"  {report.no_vote_reason or NO_LENS_REASON}")
-    lines.append("")
-
+    lines = ["SHOW THE WORKINGS", ""]
     lines.append("VALUATION BAND (this company against its own history; a mark, never a veto)")
     lines.append(f"  {c.valuation_band}")
     lines.append("")
@@ -1317,16 +1313,47 @@ def format_company_report(report: CompanyReport) -> str:
         lines.append("  not available")
     lines.append("")
 
-    if report.council_opinion is not None:
-        lines += ["COUNCIL OPINION (narration only — never a vote; the agreement above is "
-                  "the verdict of record)", *council_opinion_lines(report), ""]
-
     peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
     lines.extend(peer_block if peer_block else ["PEERS: none computed"])
     lines.append("")
 
+    check_line = narration_check_line(report)
+    if check_line:
+        lines += [check_line, ""]
+
+    notes = [r for r in table_rows(report) if r.asks or r.badge_detail or r.full_reason]
+    if notes:
+        lines.append("LENS NOTES (what each lens asks, its full reason, its track record)")
+        for r in notes:
+            if r.asks:
+                lines.append(f"  {r.lens}: {r.asks}")
+            if r.full_reason:
+                lines.append(f"  {r.lens} did not apply: {r.full_reason}")
+            if r.badge_detail:
+                lines.append(f"  {r.lens} track record: {r.badge_detail}")
+        lines.append("")
+
     lines.append("SOURCES")
     lines.extend(f"  {s.topic}: {s.text}" for s in company_sources(c))
+    return lines
+
+
+def format_company_report(report: CompanyReport) -> str:
+    """The report as text, in the page order: the answer, the story, one table, the council
+    opinion (only when ticked), then the workings (COMPANY-STORY-1)."""
+    c = report.check
+    lines = [f"Company Report - {report.display}", HOUSE_LINE, ""]
+    if report.unrateable:
+        lines += [f"UNRATEABLE - {c.data_integrity.note}. No data, so no votes and no readings.",
+                  c.pointer]
+        return "\n".join(lines)
+
+    lines += story_text_lines(report)
+    lines.append("")
+    if report.council_opinion is not None:
+        lines += ["COUNCIL OPINION (narration only - never a vote; the agreement above is "
+                  "the verdict of record)", *council_opinion_lines(report), ""]
+    lines += workings_text_lines(report)
     tail = f"Ran in {report.seconds:.1f}s"
     if report.cache.get("hits") is not None:
         tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"

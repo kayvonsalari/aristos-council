@@ -292,7 +292,9 @@ def test_small_peer_group_wiring_passes_include_small_straight_through():
     src = inspect.getsource(app._render_company_run)
     assert "include_small=choice.include_small" in src
     render_src = inspect.getsource(app._render_company_report)
-    assert "no_vote_reason" in render_src
+    assert "page.no_vote" in render_src               # COMPANY-STORY-1: via the story page
+    import aristos_council.company_story as story
+    assert "no_vote_reason" in inspect.getsource(story)
 
 
 # --------------------------------------------------------------------------- #

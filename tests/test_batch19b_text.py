@@ -57,15 +57,15 @@ def test_sector_scope_reason_reads_not_for_this_sector(small_company):
 # ----------------------------------------------------------------------------- B4
 def test_the_small_company_sentence_is_in_the_header_once_and_rows_carry_a_short_tag(
         small_company):
+    # COMPANY-STORY-1 supersedes the per-row tag: the caveat sentence is stated ONCE, above the
+    # lens table, and no row repeats it.
     text = format_company_report(small_company)
-    assert text.count("no track record applies") == 1             # the header, once
-    rows = [ln for ln in text.splitlines()
-            if ln.startswith("  ") and "votes" in ln or "marks (does not vote)" in ln]
-    tagged = [ln for ln in rows if ln.rstrip().endswith(OUTSIDE_RANGE_ROW_TAG)]
+    line = small_company.tested_range_line
+    assert text.count(line) == 1
     assert OUTSIDE_RANGE_ROW_TAG == "(outside tested range)"
-    assert len(tagged) >= 5
+    assert OUTSIDE_RANGE_ROW_TAG not in text
     html = company_report_html(small_company)
-    assert html.count("no track record applies") == 1
+    assert html.count(line) == 1 and OUTSIDE_RANGE_ROW_TAG not in html
 
 
 # ----------------------------------------------------------------------------- B5 / B6
