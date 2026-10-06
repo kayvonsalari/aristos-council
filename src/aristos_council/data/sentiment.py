@@ -21,6 +21,13 @@ class SentimentDataUnavailable(Exception):
     empty response) — maps onto the DATA_QUALITY veto trigger."""
 
 
+def clean_headline(text) -> str:
+    """HTML-ENTITIES-1: a provider headline with its character references decoded ("S&amp;P 500" ->
+    "S&P 500"), once, where it enters the system. Every provider's feed escapes them."""
+    import html
+    return html.unescape(str(text or "")).strip()
+
+
 @dataclass(frozen=True)
 class NewsItem:
     published: date

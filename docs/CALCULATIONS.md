@@ -58,6 +58,15 @@ table, the markdown download, and Company mode:
 - **`#N of M`** — the 1-based cohort **position**, leading the cell so the rank-sum can never
   be misread as a position. `M` is the **rateable** cohort size (excluded and UNRATEABLE names
   are not in it). Ties **share** a position (competition ranking) and are marked `(tied)`.
+  On a Company Report the vote reads `19th of 27 (tied with 3)`: three other companies carry the same
+  rank-sum, so all four are 19th.
+- **How a tie is broken.** Two names with the same rank-sum are the same distance from the top, so they
+  **share a position** (1, 2, 3, 3, 3, 3, 7: the next name is 7th, not 4th). The verdict cut, though,
+  is applied down the SORTED list, and the sort breaks a tie **alphabetically by ticker** (a fixed rule
+  that does not look at anything about the company). So tied names can land on either side of a
+  BUY/HOLD/SELL boundary, and the report then says so: `(=21.0 — tie broken alphabetically)`
+  (REPORT_MARKS.md). Example: on 2026-10-06 JPM, BAC, WFC and C all had a Financials rank-sum of 47.0
+  (genuine ties, not a bug); C, BAC and JPM sorted ahead of WFC and read HOLD, WFC read SELL.
 - **`score S`** — the combined rank-sum itself.
 - **`(best B · worst W)`** — the bounds that give the score its scale: `B` = number of factors
   (rank 1 on all of them), `W` = factors × cohort size. Without them, "score 11" says nothing.

@@ -1102,9 +1102,10 @@ def _shortlist_section(ag) -> str:
         body.append('<p class="note">No name was rated BUY by any voting lens. That is a '
                     'result, not a gap.</p>')
     if ag.no_buy_count:
-        body.append(f'<p class="note">{ag.no_buy_count} name'
-                    f'{"s" if ag.no_buy_count != 1 else ""} had no BUY from any lens, and '
-                    "are not listed here.</p>")
+        one = ag.no_buy_count == 1
+        body.append(f'<p class="note">{ag.no_buy_count} name{"" if one else "s"} '
+                    f'had no BUY from any lens, and '
+                    f'{"is" if one else "are"} not listed here.</p>')
     body.append("</section>")
     return "".join(body)
 

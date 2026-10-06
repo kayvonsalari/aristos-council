@@ -24,6 +24,7 @@ from datetime import date, datetime, timezone
 
 from .sentiment import (
     NewsItem,
+    clean_headline,
     RecommendationTrend,
     SentimentAdapter,
     SentimentDataUnavailable,
@@ -123,7 +124,7 @@ class FinnhubAdapter(SentimentAdapter):
                 ts = datetime.fromtimestamp(int(r["datetime"]), tz=timezone.utc)
                 items.append(NewsItem(
                     published=ts.date(),
-                    headline=str(r.get("headline", "")).strip(),
+                    headline=clean_headline(r.get("headline", "")),
                     source=str(r.get("source", "")),
                 ))
             except (KeyError, TypeError, ValueError):

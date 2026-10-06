@@ -177,8 +177,10 @@ def rank_columns(report) -> list[RankColumn]:
                           ("fetch_errors", "fetch failed")):
             for entry in record.get(key) or []:
                 values.setdefault(str(entry["ticker"]).upper(), word)
-        if voter and not ranked:
-            continue                                   # (of 0): nothing to show, so no column
+        if not ranked:
+            # EMPTY-COLUMN-2: nobody carries a rank or a mark - every cell would read "does not apply"
+            # (JPM's Forensic: sector excluded) - so no column, for a voting lens and a check alike
+            continue
         if voter and len(ranked) < MIN_RANKED:
             values = {key: TOO_FEW_TO_RANK for key in values}
             header = f"{vote.label} rank"

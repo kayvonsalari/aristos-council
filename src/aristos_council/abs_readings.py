@@ -1012,6 +1012,18 @@ class PriceAndCash:
         return out
 
 
+def _ttm_basis(f) -> str:
+    """PE-BASIS-2: the earnings window a trailing P/E rests on, so the two P/Es on one page (the band's,
+    on the latest annual accounts; this one, on the last twelve months) explain themselves."""
+    end = str(getattr(f, "trailing_period_end", "") or "") if f is not None else ""
+    try:
+        from datetime import datetime
+        when = datetime.strptime(end[:10], "%Y-%m-%d").strftime("%b %Y")
+    except ValueError:
+        return ", twelve months to the latest reported quarter"
+    return f", twelve months to {when}"
+
+
 def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
                    fx: Optional[AccountsFx] = None) -> PriceAndCash:
     """``technical`` is a ``tools.technical.TechnicalSnapshot`` (already computed from the
@@ -1130,8 +1142,9 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
                                label=f"trailing EPS {acct_money(f.eps)}{said}")
     else:
         trailing_eps = _abstain("trailing EPS not reported")
+    ttm = _ttm_basis(f)
     if relation == "same":
-        trailing_pe = (Reading(value=f.pe_ratio, unit="x", label=f"trailing P/E {f.pe_ratio:.1f}")
+        trailing_pe = (Reading(value=f.pe_ratio, unit="x", label=f"trailing P/E {f.pe_ratio:.1f}{ttm}")
                        if f is not None and f.pe_ratio is not None
                        else _abstain("trailing P/E not reported"))
     elif f is None or f.eps is None:
@@ -1149,9 +1162,9 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
         # whatever currency each was reported in (BYD: HKD price / CNY EPS)
         trailing_pe = Reading(
             value=pe, unit="x",
-            label=(f"trailing P/E {pe:.1f} ({money(last_close_v)} / {money(eps_p)} EPS, "
+            label=(f"trailing P/E {pe:.1f}{ttm} ({money(last_close_v)} / {money(eps_p)} EPS, "
                    f"{acct_money(f.eps)} converted at {fx.tag()})" if relation == "mixed"
-                   else f"trailing P/E {pe:.1f}"))
+                   else f"trailing P/E {pe:.1f}{ttm}"))
 
     # Forward P/E = today's close / analyst consensus EPS — arithmetic over two numbers
     # already shown elsewhere on the page (the price above; the consensus estimate in

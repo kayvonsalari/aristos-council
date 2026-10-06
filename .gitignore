@@ -35,7 +35,13 @@ holdings*.txt
 
 # COHORT-1 — built cohorts are machine-generated local data, rebuilt from the rule.
 # definitions.yaml IS source and stays tracked (the negation below). See docs/COHORTS.md.
-data/local/cohorts/*/
+# LOCAL-IGNORE (Batch 20 C12): ALL of data/local/ is ignored - built cohorts, the market index, run
+# logs, offline docs, anything a tool or the owner drops there - so nothing personal can be added by
+# accident. The ONE tracked file is the cohort rule (a git-ignored directory cannot be un-ignored for a
+# single file, hence the directory-by-directory negation).
+data/local/*
+!data/local/cohorts/
+data/local/cohorts/*
 !data/local/cohorts/definitions.yaml
 # COHORT-3 - which cohorts the owner watches is personal: a local overlay, never committed.
 data/local/cohorts/watch*.yaml

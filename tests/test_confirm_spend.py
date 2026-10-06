@@ -23,8 +23,6 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
-from tests._env import needs_local_saved_list
-
 from aristos_council import pipeline
 from aristos_council.pipeline import (
     narrate_multi_strategy,
@@ -192,6 +190,20 @@ def test_narrating_an_empty_plan_spends_nothing_and_changes_nothing():
 # --------------------------------------------------------------------------- #
 # 3. THE UI — the seam, the two buttons, and the untouched ranker-only path
 # --------------------------------------------------------------------------- #
+@pytest.fixture(autouse=True)
+def _own_saved_lists(tmp_path_factory, monkeypatch):
+    """C11: the UI tests run against a saved-list folder of their OWN (one list, built here), never the
+    owner's universes/local/ - so they pass the same with any number of local lists or none, and need no
+    skip on CI. ``app.UNIVERSES_DIR`` honours ARISTOS_UNIVERSES_DIR; AppTest re-runs app.py per run."""
+    from aristos_council.universe_editor import save_local_universe
+
+    home = tmp_path_factory.mktemp("universes")
+    save_local_universe(home, id="name_demo_v1", tickers=list(UNIVERSE), created="2026-10-06",
+                        display_name="name demo list")
+    monkeypatch.setenv("ARISTOS_UNIVERSES_DIR", str(home))
+    return home
+
+
 def _redirect_reports(monkeypatch, tmp_path):
     """Send the run sink's output to ``tmp_path``.
 
@@ -244,7 +256,6 @@ def _mode(at):
     return next(r for r in at.radio if str(r.label) == "Run mode")
 
 
-@needs_local_saved_list
 def test_ranker_only_mode_never_shows_the_confirmation_step():
     """One click, no confirmation, no extra state — unchanged."""
     pytest.importorskip("streamlit")
@@ -426,9 +437,11 @@ def test_a_plan_with_nothing_to_narrate_never_asks_for_a_confirmation(monkeypatc
 # These tests drive the widgets in that order, so a re-default can never again hide
 # behind a directly-seeded session state.
 def _tick_two_lenses(at):
-    boxes = [c for c in at.checkbox if c.key and c.key.startswith("opt_lens_list_")]
-    for c in boxes[:2]:
-        at.session_state[c.key] = True
+    """Tick RAW and Value + Momentum by id. The fixture's data is built for them; "the first two boxes on
+    screen" drifted to Value + Momentum + Defensive Income, which keeps none of the fake names, so the
+    plan was empty and the confirmation step never appeared."""
+    for sid in (RAW, MOMENTUM):
+        at.session_state[f"opt_lens_list_{sid}"] = True
     at.run()
     return at
 
@@ -515,7 +528,6 @@ def _drive_two_phase(monkeypatch, tmp_path, *, confirm: bool):
     return at, counter, sorted(tmp_path.glob("*"))
 
 
-@needs_local_saved_list
 def test_confirming_narrates_and_the_FILE_ON_DISK_carries_the_narration(monkeypatch,
                                                                        tmp_path):
     """Read the file back — not session state. The live failure was invisible in memory:
@@ -523,7 +535,7 @@ def test_confirming_narrates_and_the_FILE_ON_DISK_carries_the_narration(monkeypa
     pytest.importorskip("streamlit")
     at, counter, files = _drive_two_phase(monkeypatch, tmp_path, confirm=True)
 
-    expected = narration_plan(_ranked_multi([SCREENED, RAW, MOMENTUM]))["count"]
+    expected = narration_plan(_ranked_multi([RAW, MOMENTUM]))["count"]   # the two lenses ticked
     assert counter.call_count == expected > 0
 
     md = next(p for p in files if p.suffix == ".md")
@@ -540,7 +552,6 @@ def test_confirming_narrates_and_the_FILE_ON_DISK_carries_the_narration(monkeypa
     assert "_narrator_" in md.name
 
 
-@needs_local_saved_list
 def test_one_run_leaves_exactly_one_md_and_one_html(monkeypatch, tmp_path):
     pytest.importorskip("streamlit")        # drives the UI; CI has test deps only
     _, _, files = _drive_two_phase(monkeypatch, tmp_path, confirm=True)
@@ -549,7 +560,6 @@ def test_one_run_leaves_exactly_one_md_and_one_html(monkeypatch, tmp_path):
     assert len(files) == 2
 
 
-@needs_local_saved_list
 def test_keeping_the_free_ranking_writes_a_ranker_report_with_zero_calls(monkeypatch,
                                                                         tmp_path):
     pytest.importorskip("streamlit")

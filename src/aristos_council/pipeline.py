@@ -2478,6 +2478,9 @@ class MultiStrategyCell:
     # (0, 0) when the counts are unknown, which renders nothing.
     factors_measured: int = 0
     factors_total: int = 0
+    # TIE-CHECK-1 - how many OTHER ranked names share this one's combined rank-sum (so its position).
+    # Display only: the sort, the cut and the verdicts do not read it.
+    tied_with: int = 0
 
     @property
     def factor_note(self) -> str:
@@ -2601,6 +2604,8 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
             pos, _tied = positions.get(r.ticker, (None, False))
             _cell(r.ticker, MultiStrategyCell(
                 strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,
+                tied_with=(sum(1 for o in res.ranked if not o.excluded and o is not r
+                               and o.combined_rank == r.combined_rank) if _tied else 0),
                 verdict=r.verdict, score=r.combined_rank,
                 is_check=_is_check_result(res),
                 # FACTOR-MARK-1/3: measured = the lens's factors this name actually had a
@@ -4061,10 +4066,19 @@ def cohort_band_line(ag) -> str:
     from .tools.valuation_band import ordinal
     line = (f"The {len(stated)} shortlisted name{'s' if len(stated) != 1 else ''} sit at "
             f"a median {ordinal(round(median))} percentile of their own five-year range.")
-    if median >= COHORT_BAND_EXPENSIVE:
+    # LIST-WORDING-1: "cheap"/"dear" only when at least two-thirds of the names agree AND none of the
+    # rest sits at the opposite extreme (a median hid AAPL at its 97th percentile beside MSFT at the
+    # 9th and NVDA at the 16th, under "this cohort is cheap"); otherwise say it is mixed, with the range.
+    n = len(stated)
+    cheap = sum(1 for p in stated if p <= COHORT_BAND_CHEAP)
+    dear = sum(1 for p in stated if p >= COHORT_BAND_EXPENSIVE)
+    if dear * 3 >= n * 2 and not cheap:
         line = line[:-1] + " — this cohort is expensive against its own history."
-    elif median <= COHORT_BAND_CHEAP:
+    elif cheap * 3 >= n * 2 and not dear:
         line = line[:-1] + " — this cohort is cheap against its own history."
+    elif cheap or dear:
+        line = (line[:-1] + f" — mixed: from {ordinal(round(min(stated)))} to "
+                f"{ordinal(round(max(stated)))} percentile.")
     if missing:
         line += f" ({missing} of {len(rows)} not stated.)"
     return line

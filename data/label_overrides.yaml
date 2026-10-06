@@ -42,3 +42,10 @@ overrides:
       34.10% while the whole Oil & Gas Exploration & Production sub-industry is 2.81% of the index and
       Integrated Oil & Gas is 92.68% - so Shell cannot be E&P. The wrong label put ConocoPhillips,
       EOG, CNQ, PETR3 and CNOOC in Shell's peer group.
+  - ticker: 2276.HK
+    gics_subindustry: Health Care Supplies
+    date: 2026-10-06
+    reason: >-
+      Shanghai Conant Optical makes spectacle lenses (consumer eyewear, not a medical-device maker); the index
+      carries it with AtriCure's labels exactly (Health Care Equipment), so no rule could separate it from
+      device peers. Health Care Supplies is where GICS files eyewear and lens makers.

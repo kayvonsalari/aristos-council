@@ -17,6 +17,7 @@ display label, never its id; no column name; never the word "cohort" or "strateg
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -64,9 +65,36 @@ def _join(names) -> str:
     return ", ".join(names[:-1]) + " and " + names[-1]
 
 
+_SHORT_NAMES_FILE = Path(__file__).resolve().parents[2] / "data" / "short_names.yaml"
+_SHORT_NAMES: Optional[dict] = None
+
+
+def load_short_names(path=_SHORT_NAMES_FILE) -> dict:
+    """``{TICKER: short name}`` from the small dated file ({} when it is absent or unreadable: a
+    missing file only means every company falls back to its cleaned legal name)."""
+    try:
+        import yaml
+        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    except Exception:                                       # noqa: BLE001 - display data, never fatal
+        return {}
+    return {str(e["ticker"]).upper(): str(e["short"]).strip()
+            for e in (doc.get("names") or []) if e.get("ticker") and e.get("short")}
+
+
+def _listed_short_name(ticker: str) -> str:
+    global _SHORT_NAMES
+    if _SHORT_NAMES is None:
+        _SHORT_NAMES = load_short_names()
+    return _SHORT_NAMES.get(str(ticker or "").upper(), "")
+
+
 def short_name(report) -> str:
-    """"Ford", "BYD", "JPMorgan Chase & Co." -> "JPMorgan Chase & Co" is NOT cut at the ampersand: cut
-    at the first comma, then legal suffixes from the end."""
+    """"Ford", "BYD", "JPMorgan": the company's common short name from ``data/short_names.yaml`` when
+    it is listed there (SHORT-NAME-2), else the legal name cut at the first comma, then legal suffixes
+    from the end ("JPMorgan Chase & Co." is NOT cut at the ampersand)."""
+    listed = _listed_short_name(getattr(report, "ticker", ""))
+    if listed:
+        return listed
     name = str(getattr(report.check, "company_name", "") or "").strip() or report.ticker
     text = name.split(",")[0].strip()
     changed = True
@@ -197,7 +225,7 @@ def _vote_line(report) -> str:
     bank = is_bank(report)
     if ag.n_voted == 1:
         v = voters[0]
-        where = f", {ordinal(v.position)} of {v.cohort_size}" if v.position else ""
+        where = f", {ordinal(v.position)} of {v.cohort_size}" + (f", tied with {v.tied_with}" if v.tied_with else "") if v.position else ""
         built = "one lens built for banks" if bank else "the one lens that voted"
         return f"{v.word}, on {built} ({v.label}{where})."
     words = {"buy": "BUY", "hold": "HOLD", "sell": "SELL"}
@@ -302,10 +330,8 @@ def _happened(report) -> str:
     else:
         bits.append("No lens voted.")
     groups = _excluded_groups(report)
-    for reason, vs in groups[:3]:
+    for reason, vs in groups:             # STORY-OTHER-REASON: every reason is named, none left over
         bits.append(f"{_cap(_join([v.label for v in vs]))} did not apply: {reason}.")
-    if len(groups) > 3:
-        bits.append(f"{plural(len(groups) - 3, 'other reason')} also kept lenses out.")
     for v in _checks(report):
         if v.ranked and ag is not None and ag.checks.get(v.label):
             bits.append(f"{v.label} marks it {ag.checks[v.label]} and does not vote.")
@@ -485,12 +511,41 @@ def table_rows(report) -> list[TableRow]:
     return rows
 
 
+_FLOOR_NOTE = re.compile(r"tested range starts at \$(\d+(?:\.\d+)?)bn")
+
+
+def _money_bn(usd: float) -> str:
+    return f"${usd / 1e9:.1f}bn" if usd >= 1e9 else f"${usd / 1e6:.0f}m"
+
+
+def floor_words(report, note: str) -> str:
+    """FLOOR-WORDS-1: ONE sentence for the two size floors that used to read as two contradictory
+    rules ("below the $5bn rule" / "its industry's tested range starts at $10bn"). "" when the note is
+    not the industry-floor note."""
+    m = _FLOOR_NOTE.search(note or "")
+    if not m:
+        return ""
+    from .smallcap_band import SMALLCAP_CEILING_USD
+    floor = float(m.group(1)) * 1e9
+    gate = f"${SMALLCAP_CEILING_USD / 1e9:g}bn"
+    subject = getattr(getattr(report, "peer_group", None), "subject", None)
+    cap = getattr(subject, "market_cap_usd", None)
+    who = short_name(report) + (f" ({_money_bn(cap)})" if isinstance(cap, (int, float)) and cap > 0
+                                else "")
+    if floor <= SMALLCAP_CEILING_USD:
+        return f"Lenses are tested on companies worth {gate} or more. {who} is outside that."
+    return (f"Lenses are tested on companies worth {gate} or more; in this industry the backtest "
+            f"covered companies from ${floor / 1e9:g}bn up. {who} is outside both.")
+
+
 def small_company_tag(report) -> list[str]:
     """The small-company caveat, ONCE, above the table (the old per-row tag is gone)."""
     if not report.outside_tested_range:
         return []
-    detail = [re.sub(r"the (.+?) cohort,", r"the \1 companies,", line).replace(" cohort", " group")
-              for line in report.tested_range_detail_lines]
+    detail = []
+    for line in report.tested_range_detail_lines:
+        line = floor_words(report, line) or line
+        detail.append(re.sub(r"the (.+?) cohort,", r"the \1 companies,", line).replace(" cohort", " group"))
     return [report.tested_range_line, *detail]
 
 

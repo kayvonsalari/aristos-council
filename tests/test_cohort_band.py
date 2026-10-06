@@ -69,7 +69,22 @@ def test_just_inside_the_middle_appends_nothing(median):
 
 def test_an_even_number_of_names_takes_the_midpoint_of_the_middle_two():
     line = cohort_band_line(_ag([10, 20, 40, 60]))          # median = 30
-    assert "30th percentile" in line and "cheap" in line
+    assert "30th percentile" in line
+    assert "mixed: from 10th to 60th percentile" in line    # only half are cheap: not "cheap"
+
+
+# LIST-WORDING-1 - "cheap"/"dear" needs two-thirds of the names to agree and no outlier the other way
+def test_one_name_at_the_97th_beside_two_cheap_ones_is_mixed_not_cheap():
+    """The 2026-10-06 list: MSFT 9th, NVDA 16th, AAPL 97th read "this cohort is cheap"."""
+    line = cohort_band_line(_ag([9, 16, 97]))
+    assert line == ("The 3 shortlisted names sit at a median 16th percentile of their own five-year "
+                    "range — mixed: from 9th to 97th percentile.")
+    assert "cheap" not in line.replace("mixed", "")
+
+
+def test_two_thirds_agreeing_with_nobody_the_other_way_still_says_cheap():
+    assert "this cohort is cheap against its own history" in cohort_band_line(_ag([9, 16, 50]))
+    assert "this cohort is expensive against its own history" in cohort_band_line(_ag([75, 80, 50]))
 
 
 # =========================================================================== #

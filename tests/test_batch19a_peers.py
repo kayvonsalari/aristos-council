@@ -268,3 +268,14 @@ def test_peers_too_few_to_rank_displays_as_words_and_sorts_after_real_ranks():
     assert rank_display(TOO_FEW_TO_RANK) == TOO_FEW_TO_RANK
     from aristos_council.peer_table import _rank_number
     assert _rank_number(TOO_FEW_TO_RANK) > _rank_number(40)
+
+
+def test_peers_a_check_column_nobody_carries_is_dropped_too():
+    """EMPTY-COLUMN-2 (JPM, 2026-10-06): Forensic is "does not apply" for every bank, so its column is
+    dropped like an empty voting column; a check column that does carry a mark stays."""
+    report = _report({"Financials": 4, "Forensic": 0})
+    report.votes[1].votes = False
+    assert [c.header for c in rank_columns(report)] == ["Financials rank (of 4)"]
+    report = _report({"Financials": 4, "Forensic": 3})
+    report.votes[1].votes = False
+    assert [c.header for c in rank_columns(report)][1] == "Forensic mark (check - does not vote)"

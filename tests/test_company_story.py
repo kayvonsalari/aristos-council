@@ -419,3 +419,59 @@ def test_story_a_company_too_small_for_every_lens_is_called_outside_the_tested_r
     assert "under $5bn" in dict(story_paragraphs(rep))["What to doubt."]
     check.peer_group.subject = SimpleNamespace(market_cap_usd=52.7e9)
     assert "under $5bn" not in " ".join(answer_lines(_report([_skip("Quality")], check=check)))
+
+
+# --------------------------------------------------------------------------- #
+# Batch 20: STORY-OTHER-REASON and FLOOR-WORDS-1
+# --------------------------------------------------------------------------- #
+def test_story_names_every_reason_with_no_unnamed_remainder():
+    """Viking (2026-10-06): four reasons, and the fourth read "1 other reason also kept lenses out"."""
+    rep = _report([_skip("Quality"), _skip("Defensive Income", "dividend yield 0%; the rule requires "
+                                                                "at least 1.5%"),
+                   _skip("Financials", "not for this sector (Healthcare)"),
+                   _skip("Growth", "PEG ratio not available; the rule allows at most 2.00")])
+    happened = dict(story_paragraphs(rep))["What happened."]
+    assert "other reason" not in happened
+    assert "Growth did not apply: PEG ratio not available" in happened
+
+
+def test_the_two_size_floors_read_as_one_sentence():
+    rep = _small()
+    rep.size_matched_peers = True
+    rep.smallcap_cohort, rep.smallcap_floor_usd = "", None
+    rep.smallcap_band_note = "its industry's tested range starts at $10bn, above this company"
+    rep.check.peer_group = SimpleNamespace(members=list(range(12)), step=1, snapshot="", thin=False,
+                                           broad=False, subject=SimpleNamespace(market_cap_usd=3.4e9))
+    tag = story_page(rep).tag
+    assert tag[1] == ("Lenses are tested on companies worth $5bn or more; in this industry the "
+                      "backtest covered companies from $10bn up. Tiny Therapeutics ($3.4bn) is "
+                      "outside both.")
+    assert not any("starts at" in line for line in tag)
+
+
+# --------------------------------------------------------------------------- #
+# Batch 20: SHORT-NAME-2
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("ticker,legal,short", [
+    ("F", "Ford Motor Company", "Ford"),
+    ("JPM", "JPMorgan Chase & Co.", "JPMorgan"),
+    ("GOOGL", "Alphabet Inc.", "Alphabet"),
+    ("GOOG", "Alphabet Inc.", "Alphabet"),
+])
+def test_the_dated_short_name_file_names_the_common_name(ticker, legal, short):
+    rep = _report([], check=_check(name=legal))
+    rep.ticker = ticker
+    assert short_name(rep) == short
+
+
+def test_an_unlisted_company_falls_back_to_its_cleaned_legal_name(tmp_path):
+    from aristos_council.company_story import load_short_names
+    rep = _report([], check=_check(name="Ford Motor Company"))        # ticker ACM: not in the file
+    assert short_name(rep) == "Ford Motor"
+    assert load_short_names(tmp_path / "missing.yaml") == {}            # no file: every name falls back
+
+
+def test_ford_answer_uses_the_short_name():
+    rep = _report([_skip("Quality")], check=_check(name="Ford Motor Company"))
+    rep.ticker = "F"
+    assert answer_lines(rep)[0] == "No lens voted on Ford."

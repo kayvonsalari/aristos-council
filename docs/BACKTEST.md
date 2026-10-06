@@ -1,5 +1,7 @@
 # Backtest — did the lens actually beat its own cohort?
 
+For the current results and what they mean, see [BACKTEST_RECORD.md](BACKTEST_RECORD.md).
+
 A lens says BUY on a handful of companies in a cohort. The backtest asks the one question that
 decides whether that vote deserves trust: **if you had held that lens's BUY names, would you have
 done better than holding the whole cohort?**

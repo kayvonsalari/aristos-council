@@ -29,7 +29,7 @@ PRICE AND CASH (no comparison group; they do not vote)
   annualised volatility 1.5%
   not stated — period labels unavailable
   not stated — trailing EPS not reported
-  trailing P/E 22.5
+  trailing P/E 22.5, twelve months to the latest reported quarter
   not stated — no analyst consensus EPS for this year
   not stated — no analyst consensus EPS for next year
   Recent news: not shown — test fixture: no news modelled

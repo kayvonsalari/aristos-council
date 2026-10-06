@@ -74,7 +74,7 @@ def test_a_backwards_or_empty_band_is_never_printed(tmp_path):
     assert "$10bn-$5bn" not in text and "$5bn-$5bn" not in text
     assert "Small-company peer band" not in text
     # the reason is stated in words instead
-    assert "Its industry's tested range starts at $10bn, above this company." in text
+    assert "in this industry the backtest covered companies from $10bn up." in text   # FLOOR-WORDS-1
 
 
 def test_the_peers_table_shows_the_lens_ranks_of_the_size_matched_peers(tmp_path):

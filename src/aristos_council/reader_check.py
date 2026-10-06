@@ -439,6 +439,13 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
     if unnamed_votes:
         problems.append("BUY vote not mentioned: " + ", ".join(unnamed_votes))
 
+    # 5. SUMMARY-COUNT-1 - a count of lenses, or a lens given a reason, that the lens table
+    # contradicts. Live (Ford): "six because ... no operating profit" over a table showing five.
+    from .summary_counts import count_problems
+    miscounts = count_problems(text, pack)
+    if miscounts:
+        problems.append("; ".join(miscounts))
+
     # ------------------------------------------------------------------ ADVISE
     # Detected exactly as before; recorded, never enforced. Each of these withheld a live
     # summary that was otherwise true, which is what READER-5 exists to stop.
