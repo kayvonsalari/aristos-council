@@ -201,6 +201,8 @@ def _own_saved_lists(tmp_path_factory, monkeypatch):
     save_local_universe(home, id="name_demo_v1", tickers=list(UNIVERSE), created="2026-10-06",
                         display_name="name demo list")
     monkeypatch.setenv("ARISTOS_UNIVERSES_DIR", str(home))
+    # narrator mode disables Run without a key (CI has none); the runners are faked, nothing is called
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-never-used")
     return home
 
 
