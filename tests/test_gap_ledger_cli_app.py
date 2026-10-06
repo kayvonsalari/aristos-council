@@ -45,13 +45,13 @@ def _control(ticker="BBB", **kwargs) -> LedgerRow:
 # --------------------------------------------------------------------------- #
 # the CLI
 # --------------------------------------------------------------------------- #
-def test_the_parser_offers_exactly_the_four_verbs():
+def test_the_parser_offers_exactly_the_five_verbs():
     # GAP-BACKFILL-1 added "catch-up" (the manual backfill entry point) alongside the
-    # original three.
+    # original three; GAP-STATUS-1 added "status" (the wrapper's per-run Todoist status task).
     parser = cli.build_parser()
     actions = [a for a in parser._actions if getattr(a, "choices", None)
                and "run" in getattr(a, "choices", {})]
-    assert sorted(actions[0].choices) == ["catch-up", "outcomes", "run", "score"]
+    assert sorted(actions[0].choices) == ["catch-up", "outcomes", "run", "score", "status"]
 
 
 def test_a_verb_is_required():

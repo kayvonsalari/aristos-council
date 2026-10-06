@@ -236,6 +236,25 @@ def cmd_catch_up(args) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# status (GAP-STATUS-1 - called by the scheduled wrapper once the run has ended)
+# --------------------------------------------------------------------------- #
+def cmd_status(args) -> int:
+    from . import status as st
+    day = _parse_date(args.date) if args.date else now_ny().date()
+    facts = st.RunFacts(day=day, exit_code=args.exit_code, timed_out=args.timed_out,
+                        timeout_minutes=args.timeout_minutes, explicit_reason=args.reason or "",
+                        log_text=st.log_slice(args.log, args.log_offset) if args.log else "")
+    client = None if args.no_todoist else RestTodoist()
+    title, outcome = st.post_status(facts, client=client, root=args.root)
+    _say(f"Status: {title}")
+    if outcome.sent:
+        _say(f"Todoist: status task {outcome.task_id} posted in '{st.PROJECT_NAME}'.")
+    else:
+        _say(f"Todoist: status NOT sent - {outcome.error or outcome.skipped}")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # outcomes
 # --------------------------------------------------------------------------- #
 def _unfilled_days(root: str) -> list[date]:
@@ -362,6 +381,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_catchup.add_argument("--no-ibkr", action="store_true",
                            help="backfill on yfinance only (no IBKR history)")
     p_catchup.set_defaults(func=cmd_catch_up)
+
+    p_status = sub.add_parser("status", help="post this run's one-line status task to Todoist "
+                                             "(GAP-STATUS-1; called by the scheduled wrapper)")
+    p_status.add_argument("--date", help="market date (default: today, New York)")
+    p_status.add_argument("--exit-code", type=int, help="the screen process's exit code")
+    p_status.add_argument("--timed-out", action="store_true",
+                          help="the wrapper killed the process at its time limit")
+    p_status.add_argument("--timeout-minutes", type=float)
+    p_status.add_argument("--reason", help="extra reason text to append")
+    p_status.add_argument("--log", help="the run log, to quote on a failure")
+    p_status.add_argument("--log-offset", type=int, default=0,
+                          help="byte offset where this run's output began in --log")
+    p_status.add_argument("--no-todoist", action="store_true")
+    p_status.set_defaults(func=cmd_status)
 
     p_out = sub.add_parser("outcomes", help="after the close, fill open/10:00/11:30/close")
     p_out.add_argument("--date", help="one market date (default: every unfilled day)")
