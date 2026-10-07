@@ -210,3 +210,4 @@ UI fix-ups after Batch 21, plus wording and readings fixes. No rank, vote, verdi
 | **B22-T6** | Run any company with a valuation band; look at the bar in the first stat card. | The bar runs blue (cheapest) - grey - orange (dearest) with a marker at the percentile; there is no green or red in it. |
 | **B22-T7** | Look next to "Lens by lens", "The answer" and the other headings; hover them. | No link/anchor icon appears beside any heading. |
 | **B22-T8** | Look at the sidebar under "Asset type"; then switch to ETFs. | No "... lists and lenses are hidden while ... is selected" line in either mode. |
+| **B22-T9** | Open the app at a wide window, then narrow it to about 800px and then 420px. | The Analyse / Scoreboard tabs sit level with the ARISTOS logo row (no empty band above them) at wide and medium widths; on a phone width they sit just below the sidebar toggle. |

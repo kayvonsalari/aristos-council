@@ -122,8 +122,18 @@ def css(theme: str = "dark") -> str:
 /* STREAMLIT INTERNAL: .stApp is the page root; the font is set here and inherited. Icons keep their own
    font because Streamlit sets it on the icon element itself. */
 .stApp, [data-testid="stSidebar"] {{ font-family: {SANS}; }}
-/* B22-U7. STREAMLIT INTERNAL: stHeaderActionElements is the link icon Streamlit puts beside every heading. */
+/* B22-U7 / U9. STREAMLIT INTERNALS (each hook is a data-testid Streamlit sets; re-check after an upgrade):
+   - stHeaderActionElements: the link icon Streamlit puts beside every heading - hidden.
+   - stHeader: the top bar. It is made transparent and zero-height so it neither paints a band nor
+     intercepts clicks; its sidebar toggle and status widget still render (overflow stays visible).
+   - stMainBlockContainer: the main column; its default 6rem top padding is cut so the Analyse /
+     Scoreboard tabs sit level with the ARISTOS logo row (measured: both at y=12-14px, 400-1300px wide).
+   - the element containers holding our own <style> blocks: each takes a 1rem layout gap, so they are
+     taken out of the layout (the CSS inside still applies). */
 [data-testid="stHeaderActionElements"] {{ display: none !important; }}
+[data-testid="stHeader"] {{ background: transparent !important; height: 0 !important; min-height: 0 !important; }}
+[data-testid="stMainBlockContainer"] {{ padding-top: .75rem !important; }}
+[data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"] style) {{ display: none; }}
 .ar-num, .ar-table td.ar-num {{ font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }}
 .ar-muted {{ color: var(--ar-muted); }}
 
@@ -186,6 +196,7 @@ def css(theme: str = "dark") -> str:
 
 /* phone width: cards stack (the grid already wraps), the header lets the price drop under the name */
 @media (max-width: 640px) {{
+  [data-testid="stMainBlockContainer"] {{ padding-top: 3rem !important; }}   /* room for the sidebar toggle */
   .ar-name {{ font-size: 1.35rem; }}
   .ar-price {{ text-align: left; }}
   .ar-card {{ padding: 14px; }}

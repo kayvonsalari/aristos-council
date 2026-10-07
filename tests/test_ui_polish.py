@@ -442,3 +442,12 @@ def test_u6_the_valuation_bar_is_blue_grey_orange_not_green_amber_red():
 def test_u7_the_heading_link_icons_are_hidden():
     from aristos_council.ui_style import css
     assert 'stHeaderActionElements"] { display: none !important; }' in css("dark")
+
+
+def test_u9_the_css_lifts_the_main_column_level_with_the_logo_row():
+    from aristos_council.ui_style import css
+    c = css("dark")
+    assert 'stMainBlockContainer"] { padding-top: .75rem !important; }' in c
+    assert 'stHeader"] { background: transparent !important; height: 0 !important' in c
+    assert "stElementContainer" in c and "style) { display: none; }" in c
+    assert "max-width: 640px" in c and "padding-top: 3rem" in c        # phone: room for the sidebar toggle
