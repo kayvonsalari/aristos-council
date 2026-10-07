@@ -865,7 +865,7 @@ def multi_strategy_report_html(multi_result, *,
     # ----- 1: ONE header, not one per lens.
     parts.append(
         '<header class="doc">'
-        '<p class="kicker">Aristos Council · universe run · multi-lens</p>'
+        '<p class="kicker">Aristos · universe run · multi-lens</p>'
         f"<h1>{_esc(title.headline)}</h1>"
         + _kv([
             ("Cohort", _esc(f'{cohort} — {plural(m.get("universe_size", 0), "name")}')),
@@ -1358,7 +1358,7 @@ def universe_report_html(result, *, run_start: Optional[datetime] = None,
                    else f"{mode} commentary" if mode else "")
     parts.append(
         '<header class="doc">'
-        '<p class="kicker">Aristos Council · universe run</p>'
+        '<p class="kicker">Aristos · universe run</p>'
         f"<h1>{_esc(title_name)} — {_esc(universe_label)}</h1>"
         + _kv([
             ("Universe", _esc(f'{universe_label} — '
@@ -1545,7 +1545,7 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     c = report.check
     stamp = _local_stamp(run_start)
     header_tail = f'<p class="house">{_esc(HOUSE_LINE)}</p>'
-    parts = ['<header class="doc"><p class="kicker">Aristos Council · company report · one '
+    parts = ['<header class="doc"><p class="kicker">Aristos · company report · one '
              "company against its peer group</p>"
              f"<h1>{_esc(report.display)}</h1>"
              + _kv([("lenses", ", ".join(_esc(v.label) for v in report.votes) or "none ticked"),

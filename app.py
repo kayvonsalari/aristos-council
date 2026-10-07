@@ -1,4 +1,4 @@
-"""Council Station — a local Streamlit UI over the Aristos Council.
+"""Aristos — a local Streamlit UI over the Aristos Council.
 
 Launch:
     pip install -e ".[ui,yfinance,llm]"
@@ -31,6 +31,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import streamlit as st
+
+from aristos_council import ui_style
 
 from aristos_council.ui_text import escape_dollars, install as install_dollar_safety, reader_text
 from pydantic import ValidationError
@@ -114,7 +116,9 @@ REPORTS_DIR = ROOT / "reports"
 UNIVERSE_RUNS_DIR = REPORTS_DIR / "universe_runs"
 SNAPSHOTS_CSV = ROOT / "snapshots" / "verdict_consensus.csv"
 ASSETS_DIR = ROOT / "assets"
-LOGO_PATH = ASSETS_DIR / "aristos_council_logo.svg"
+LOGO_PATH = ASSETS_DIR / "aristos_logo.svg"          # mark + wordmark, letters as outlines
+MARK_PATH = ASSETS_DIR / "aristos_mark.svg"          # the "A" square alone (collapsed sidebar)
+FAVICON_PATH = ASSETS_DIR / "aristos_favicon.png"    # 64px
 
 # Verdict semantic colors — the ONLY semantic colors in the app (everything else
 # is the dark base + the single gold accent). Applied to the verdict banner, the
@@ -206,17 +210,9 @@ def _stance_badge(stance: Stance) -> str:
     return _STANCE_BADGE.get(stance, str(stance))
 
 
-def _logo_markup(px: int) -> str:
-    """Inline SVG logo sized to a px square, for the app header."""
-    return f'<div style="width:{px}px;height:{px}px">' \
-           f'{LOGO_PATH.read_text(encoding="utf-8")}</div>'
-
-
 def _favicon() -> str:
-    """SVG logo as a data URI for set_page_config (PIL can't open an SVG path,
-    so a file path would raise; a data URI is handed straight to the browser)."""
-    b64 = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
-    return f"data:image/svg+xml;base64,{b64}"
+    """Path of the 64px PNG favicon (``set_page_config`` opens it with PIL)."""
+    return str(FAVICON_PATH)
 
 
 def _inject_chrome() -> None:
@@ -4537,23 +4533,14 @@ def main() -> None:
     except Exception:
         pass  # python-dotenv is a runtime extra; browsing past runs doesn't need it
 
-    try:
-        st.set_page_config(page_title="Council Station", page_icon=_favicon(),
-                           layout="wide")
-    except Exception:  # data-URI favicon rejected — fall back to an emoji
-        st.set_page_config(page_title="Council Station", page_icon="🏛",
-                           layout="wide")
+    st.set_page_config(page_title="Aristos", page_icon=_favicon(), layout="wide")
     _inject_chrome()
+    ui_style.inject()               # UI-POLISH-1: the ONE custom-CSS block (chips, cards, fonts)
     install_dollar_safety(st)       # DOLLAR-MATH-1: every markdown-rendering call is $-safe
-
-    col_logo, col_title = st.columns([1, 11], vertical_alignment="center")
-    with col_logo:
-        st.markdown(_logo_markup(52), unsafe_allow_html=True)
-    with col_title:
-        st.title("Council Station")
-    # v2 subtitle: the division of labor is the product's headline (the math judges,
-    # the LLM narrates) — not "control room for the council" (the demoted pre-v2 frame).
-    st.caption("**Verdict: deterministic ranker. Narrative: LLM (non-judging).**")
+    try:                            # the logo; st.logo exists from Streamlit 1.35
+        st.logo(str(LOGO_PATH), icon_image=str(MARK_PATH), size="large")
+    except Exception:               # noqa: BLE001 - a missing image must never stop the app
+        pass
 
     # Legacy surfaces are HIDDEN BY DEFAULT (product decision): the app opens as
     # v2-only. Read the toggle's persisted value FIRST so the pre-v2 flow renders only

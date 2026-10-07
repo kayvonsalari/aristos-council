@@ -105,9 +105,14 @@ def test_verdict_hex_is_the_only_semantic_palette():
     assert "INSUFFICIENT_EVIDENCE" in app._VERDICT_DOT
 
 
-def test_favicon_is_svg_data_uri():
-    uri = app._favicon()
-    assert uri.startswith("data:image/svg+xml;base64,")
+def test_favicon_is_the_64px_png():
+    """UI-POLISH-1: the old SVG data-URI favicon (the bank-building icon) is replaced by the Aristos
+    mark as a real 64px PNG, which ``set_page_config`` opens by path."""
+    from PIL import Image
+    path = Path(app._favicon())
+    assert path.name == "aristos_favicon.png" and path.exists()
+    with Image.open(path) as im:
+        assert im.size == (64, 64)
 
 
 # --------------------------------------------------------------------------- #
@@ -906,14 +911,16 @@ def test_screen_chrome_css_keeps_controls_reachable():
     assert "Sidebar" in screen_css                        # sidebar toggle kept
 
 
-def test_toolbar_mode_keeps_menu_reachable():
-    # The ⋮ menu is gated server-side by toolbarMode: "viewer"/"minimal" hide it
-    # entirely (no CSS restores it). Only "auto" (localhost) / "developer" render
-    # the menu + its Settings/theme switch, so config.toml must use one of those.
+def test_toolbar_mode_hides_deploy_and_the_developer_menu():
+    # UI-POLISH-1 (owner's decision, Batch 21 item 3): the Deploy button and developer menu are
+    # hidden for demos. toolbarMode "minimal"/"viewer" does that SERVER-SIDE - and on Streamlit 1.58 it
+    # takes the whole top-right menu with it, Settings/theme switch included (the earlier version of
+    # this test required "auto"/"developer" to keep that menu). The sidebar toggle stays reachable (the
+    # CSS test above), and the app ships dark with a light palette for a forced light theme.
     import tomllib
     cfg = tomllib.loads(
         (_APP.parent / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
-    assert cfg["client"]["toolbarMode"] in ("auto", "developer")
+    assert cfg["client"]["toolbarMode"] in ("minimal", "viewer")
 
 
 def test_human_number_formats_large_thresholds():
