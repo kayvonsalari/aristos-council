@@ -966,9 +966,18 @@ class AccountsFx:
     as_of: str = ""
     source: str = ""
 
+    def month(self) -> str:
+        """"Oct 2026" from the rate's "2026-10" (the raw text when it is not that shape)."""
+        try:
+            from datetime import datetime
+            return datetime.strptime(self.as_of[:7], "%Y-%m").strftime("%b %Y")
+        except ValueError:
+            return self.as_of
+
     def tag(self) -> str:
-        when = f" ({self.as_of})" if self.as_of else ""
-        return f"{self.from_ccy}->{self.to_ccy} @ {self.rate:.4f}{when}"
+        """B22-B2: "at 1 CNY = 1.1703 HKD, Oct 2026" - read straight, no arrow and no @."""
+        when = f", {self.month()}" if self.as_of else ""
+        return f"at 1 {self.from_ccy} = {self.rate:.4f} {self.to_ccy}{when}"
 
 
 def currency_relation(price_ccy: str, acct_ccy: str):
@@ -1177,7 +1186,7 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
 
     last_close_v = technical.last_close if technical is not None else None
     if f is not None and f.eps is not None:
-        said = (f" ({money(to_price(f.eps))} at {fx.tag()})"
+        said = (f" ({money(to_price(f.eps))}, {fx.tag()})"
                 if relation == "mixed" and fx is not None else "")
         trailing_eps = Reading(value=f.eps, unit=acct_label,
                                label=f"trailing EPS {acct_money(f.eps)}{said}")
@@ -1204,7 +1213,7 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
         trailing_pe = Reading(
             value=pe, unit="x",
             label=(f"trailing P/E {pe:.1f}{ttm} ({money(last_close_v)} / {money(eps_p)} EPS, "
-                   f"{acct_money(f.eps)} converted at {fx.tag()})" if relation == "mixed"
+                   f"{acct_money(f.eps)} converted {fx.tag()})" if relation == "mixed"
                    else f"trailing P/E {pe:.1f}{ttm}"))
 
     # Forward P/E = today's close / analyst consensus EPS — arithmetic over two numbers
@@ -1230,7 +1239,7 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
                 pass
             elif cc and cc == acct_ccy and fx is not None:
                 est = row.now * fx.rate
-                converted_from = (f", {_money(row.now, cc)} converted at {fx.tag()}"
+                converted_from = (f", {_money(row.now, cc)} converted {fx.tag()}"
                                   if relation == "mixed" else "")
             elif cc and cc == acct_ccy:
                 return _abstain(f"forward P/E ({when}) not computed: {no_rate()}")

@@ -58,7 +58,9 @@ def test_each_figure_carries_its_true_currency():
     text = " | ".join(price_and_cash(_tech(), _f(), trend=_trend(), fx=FX).lines())
     assert "trailing EPS CNY 3.77" in text and "HKD 4.11" in text       # 3.77 x 1.0912
     assert "HKD 73.90 / HKD 4.81 consensus EPS" in text                 # 4.41 x 1.0912
-    assert "CNY 4.41 converted at CNY->HKD @ 1.0912 (2026-09)" in text
+    assert "CNY 4.41 converted at 1 CNY = 1.0912 HKD, Sep 2026" in text      # B22-B2 wording
+    assert "CNY 3.77 (HKD 4.11, at 1 CNY = 1.0912 HKD, Sep 2026)" in text
+    assert "->" not in text and " @ " not in text
     assert "free cash flow, oldest first:" in text and "CNY" in text
     assert "HKD 3.77" not in text and "HKD 4.41" not in text
 
@@ -153,3 +155,19 @@ def test_sources_names_the_fx_rate_and_the_page_runs_end_to_end():
     topics = {s.topic: s.text for s in company_sources(res)}
     assert "yfinance CNYHKD=X" in topics["Currency rate in price and cash"]
     assert "CNY" in " ".join(res.price_and_cash.lines())
+
+
+def test_b22_b2_the_rate_tag_reads_straight_and_sources_say_the_same():
+    """"CNY 3.59 (HKD 4.20, at 1 CNY = 1.1703 HKD, Oct 2026)" - no arrow, no @, a month name."""
+    from aristos_council.abs_readings import AccountsFx
+    fx = AccountsFx(from_ccy="CNY", to_ccy="HKD", rate=1.1703, as_of="2026-10", source="yfinance CNYHKD=X")
+    assert fx.tag() == "at 1 CNY = 1.1703 HKD, Oct 2026"
+    assert AccountsFx(from_ccy="CNY", to_ccy="HKD", rate=1.17).tag() == "at 1 CNY = 1.1700 HKD"
+    pac = price_and_cash(_tech(), _f(eps=3.59), trend=_trend(), fx=fx)
+    assert any("CNY 3.59 (HKD 4.20, at 1 CNY = 1.1703 HKD, Oct 2026)" in ln for ln in pac.lines())
+    from types import SimpleNamespace
+    from aristos_council.company_check import company_sources
+    sources = company_sources(SimpleNamespace(price_and_cash=pac, fx_source="", providers={},
+                                              accounts={}, analyst_trend=None, factors=()))
+    fx_line = next(s for s in sources if s.topic == "Currency rate in price and cash")
+    assert fx_line.text == "1 CNY = 1.1703 HKD, Oct 2026 (latest close), source yfinance CNYHKD=X"
