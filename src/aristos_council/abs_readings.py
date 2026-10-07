@@ -235,9 +235,14 @@ def cash_runway(f, *, debt, cash, net, fcf, currency: str) -> Reading:
         return Reading(value=0.0, unit="years",
                        label="no cash cushion: spending is funded by debt")
     years = (-net) / (-fcf)
+    if years >= 1:
+        span = f"about {years:.1f} years"
+    else:                      # BYD: CNY 2.8bn against CNY 97.7bn a year is days, and "0.0 years" says nothing
+        months = years * 12
+        span = "less than a month" if months < 1 else f"about {round(months)} month{'s' if round(months) != 1 else ''}"
     return Reading(value=years, unit="years",
-                   label=(f"at last year's spending ({_money(-fcf, currency)}) that lasts about "
-                          f"{years:.1f} years ({_balance_sheet_date(f)})"))
+                   label=(f"at last year's spending ({_money(-fcf, currency)}) that lasts {span} "
+                          f"({_balance_sheet_date(f)})"))
 
 
 def debt_and_cash(f) -> DebtAndCash:

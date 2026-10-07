@@ -622,3 +622,14 @@ def test_runway_reaches_the_story_the_text_page_and_the_summary_facts(tmp_path):
     assert "lasts about 1.8 years" in company_report_html(report)
     assert any("lasts about 1.8 years" in ln
                for ln in company_facts_pack(report)["absolute_readings"]["debt_and_cash"])
+
+
+def test_runway_under_a_year_is_said_in_months_and_under_a_month_as_such():
+    """BYD (1211.HK): CNY 2.8bn net cash against CNY 97.7bn of spending printed "about 0.0 years"."""
+    five_months = debt_and_cash(_viking(total_cash=5.0e6 + 116.1e6))      # net cash 116.1m / 278.7m
+    assert "that lasts about 5 months (balance sheet of Jun 2026)" in five_months.cash_runway.label
+    one_month = debt_and_cash(_viking(total_cash=5.0e6 + 25.0e6))         # 25m / 278.7m -> 1.08 months
+    assert "that lasts about 1 month (" in one_month.cash_runway.label
+    days = debt_and_cash(_viking(total_cash=5.0e6 + 2.8e6, free_cash_flow=-97.7e9))
+    assert "that lasts less than a month (" in days.cash_runway.label
+    assert "0.0 years" not in days.cash_runway.label
