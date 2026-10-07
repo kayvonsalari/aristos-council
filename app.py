@@ -42,7 +42,7 @@ from aristos_council.data.adapter import (
 from aristos_council.pipeline import (
     DEFAULT_NARRATION_CAP, DEFAULT_NARRATION_LEVEL, NARRATION_LEVELS)
 from aristos_council.demo_surface import (
-    ASSET_MODES, DEFAULT_ASSET_MODE, ETFS, asset_mode_filter, asset_mode_sidebar_note,
+    ASSET_MODES, DEFAULT_ASSET_MODE, ETFS, asset_mode_filter,
     lens_caption, strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
 from aristos_council.costs import actual_vs_estimate, cost_phrase
@@ -4622,7 +4622,6 @@ def main() -> None:
         # Options and default (Stocks, index=0) unchanged.
         st.radio("Asset type", list(ASSET_MODES), horizontal=True, index=0,
                  key="asset_mode")
-        st.caption(asset_mode_sidebar_note(asset_mode()))
         st.divider()
 
         if show_legacy:
