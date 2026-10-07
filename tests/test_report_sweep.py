@@ -201,10 +201,12 @@ def test_the_batch22_wording_rule_fires_on_each_shape_it_names():
 
 
 FOLD_B22 = "\nSHOW THE WORKINGS"
-_B22_BAD = ["The answer\nBYD was ranked against 19 peers, companies in its own industry (step 2 of 4 of the peer search, market index of 2026-09-25).",
+_B22_BAD = ["HOLD - 19th of 27 (tied with 1)",
+            "The answer\nBYD was ranked against 19 peers, companies in its own industry (step 2 of 4 of the peer search, market index of 2026-09-25).",
             "One lens did not apply, all for one reason: no operating profit.",
             "The answer\nWhat survived. Debt and cash (latest annual accounts): it owes $600."]
-_B22_OK = ["The answer\nBYD was ranked against 19 similar-sized companies in its industry, under nine lenses.",
+_B22_OK = ["HOLD - 19th of 27 (tied with one other)", "HOLD - 19th of 27 (tied with 10)",
+           "The answer\nBYD was ranked against 19 similar-sized companies in its industry, under nine lenses.",
            "SHOW THE WORKINGS\n(step 2 of 4 of the peer search)",
            "One lens did not apply: no operating profit.",
            "The answer\nOther facts. Debt and cash (latest annual accounts): it owes $600.",

@@ -119,7 +119,7 @@ def lens_rows(report) -> list[dict]:
     for v, row in zip(report.votes, table_rows(report)):
         if v.status == "ranked":
             where = (f"{ordinal(v.position)} of {v.cohort_size}" if v.position else f"of {v.cohort_size}")
-            detail = where + (f", tied with {v.tied_with}" if v.tied_with else "")
+            detail = where + (f", {v.tie_note.strip(' ()')}" if v.tied_with else "")
             word, kind = v.word, ui.chip_kind(v.word) if v.votes else "na"
         else:
             word, detail, kind = row.outcome, "", "na"

@@ -30,3 +30,17 @@ def test_the_vote_prints_the_tie():
     assert v.result() == "HOLD - 19th of 27 (tied with 3)"
     assert LensVote("financials_v1", "Financials", status="ranked", verdict="hold", position=19,
                     cohort_size=27).result() == "HOLD - 19th of 27"
+
+
+def test_b22_b6_a_pair_reads_tied_with_one_other_and_larger_ties_keep_the_count():
+    mk = lambda n: LensVote("financials_v1", "Financials", status="ranked", verdict="hold",  # noqa: E731
+                            position=9, cohort_size=14, tied_with=n)
+    assert mk(1).result() == "HOLD - 9th of 14 (tied with one other)"
+    assert mk(2).result() == "HOLD - 9th of 14 (tied with 2)"
+    assert mk(3).result() == "HOLD - 9th of 14 (tied with 3)"
+    from aristos_council.company_cards import lens_rows
+    from tests.test_company_story import _report
+    rep = _report([mk(1)])
+    assert lens_rows(rep)[0]["detail"] == "9th of 14, tied with one other"
+    from aristos_council.company_story import answer_lines
+    assert answer_lines(rep)[0].endswith("(Financials, 9th of 14, tied with one other).")

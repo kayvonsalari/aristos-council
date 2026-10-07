@@ -81,6 +81,11 @@ SIZE_MATCHED_LINE = ("Compared with similar-sized companies in its industry; out
                      "range, no track record applies.")
 
 
+def tied_phrase(n: int) -> str:
+    """B22-B6: "tied with one other" for a pair, "tied with 3" for more ("tied with 1" read badly)."""
+    return "tied with one other" if n == 1 else f"tied with {n}"
+
+
 # --------------------------------------------------------------------------- #
 # Votes
 # --------------------------------------------------------------------------- #
@@ -135,8 +140,9 @@ class LensVote:
 
     @property
     def tie_note(self) -> str:
-        """" (tied with 3)" when other companies share this one's rank-sum, else ""."""
-        return f" (tied with {self.tied_with})" if self.tied_with else ""
+        """" (tied with 3)" / " (tied with one other)" when other companies share this one's
+        rank-sum, else ""."""
+        return f" ({tied_phrase(self.tied_with)})" if self.tied_with else ""
 
     def result(self) -> str:
         """"BUY - 3rd of 14", or the reason the lens does not apply."""
