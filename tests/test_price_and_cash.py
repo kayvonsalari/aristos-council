@@ -69,7 +69,15 @@ def test_every_reading_matches_the_el_pa_reference_case():
     assert "annualised volatility 30.3%" in lines
     assert any("FY2022" in ln and "FY2025" in ln and "oldest first" in ln for ln in lines)
     assert "trailing EPS €5.36" in lines
-    assert "trailing P/E 26.6" in lines
+    assert "trailing P/E 26.6, twelve months to the latest reported quarter" in lines   # PE-BASIS-2
+
+
+def test_trailing_pe_names_the_twelve_months_it_rests_on():
+    """PE-BASIS-2: the band's P/E rests on the latest annual accounts, this one on the last twelve
+    months, and the line says which (period from the provider's most recent quarter)."""
+    pac = price_and_cash(_technical(), _fundamentals(trailing_period_end="2026-06-30"),
+                         trend=_trend(), news=_news())
+    assert "trailing P/E 26.6, twelve months to Jun 2026" in pac.lines()
 
 
 def test_forward_pe_is_close_over_consensus_eps():
@@ -205,3 +213,9 @@ def test_a_company_that_raises_prices_is_still_about_the_company():
     assert is_about_company("Tesla raises prices in China", name="Tesla, Inc.", ticker="TSLA")
     assert not is_about_company("Acme Capital raises price target on Tesla",
                                 name="Acme Capital Group", ticker="ACME")
+
+
+def test_yfinance_most_recent_quarter_becomes_an_iso_period_end():
+    from aristos_council.data.yfinance_adapter import _epoch_to_iso
+    assert _epoch_to_iso(1782777600) == "2026-06-30"        # yfinance's epoch seconds
+    assert _epoch_to_iso(None) is None and _epoch_to_iso("n/a") is None and _epoch_to_iso(0) is None

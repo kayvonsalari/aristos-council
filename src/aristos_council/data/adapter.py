@@ -192,6 +192,10 @@ class Fundamentals:
     payout_ratio: float | None = None            # decimal
     eps: float | None = None
     pe_ratio: float | None = None
+    # PE-BASIS-2: the period end of the quarter the trailing figures (EPS, P/E) run to, ISO date
+    # ("2026-06-30"), so the page can say "twelve months to Jun 2026". None when the provider does not
+    # say (old cache entries, a provider without the field): the line then names no month.
+    trailing_period_end: str | None = None
     free_cash_flow: float | None = None
     # Cash-flow-statement lines for the FCF-basis payout criterion (max_payout_ratio_fcf).
     # dividends_paid is the CURRENT-year ABSOLUTE cash paid in dividends (the numerator —

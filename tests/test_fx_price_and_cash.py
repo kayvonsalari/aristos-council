@@ -82,7 +82,8 @@ def test_same_currency_is_unchanged():
     t = AnalystTrend(mark="flat", currency="EUR", rows=(
         ForecastRow(label="This year", now=7.25, currency="EUR"),))
     pac = price_and_cash(_snap(142.80), f, trend=t)
-    assert "trailing EPS €5.36" in pac.lines() and "trailing P/E 26.6" in pac.lines()
+    assert "trailing EPS €5.36" in pac.lines() and any(
+        ln.startswith("trailing P/E 26.6") for ln in pac.lines())
     assert pac.forward_pe_this_year.value == pytest.approx(142.80 / 7.25)
     assert pac.fx is None
 

@@ -1,0 +1,28 @@
+# SHORT-NAME-2 - the name a sentence calls a company, where the cleaned legal name reads oddly.
+# The page strips legal suffixes ("Ford Motor Company" -> "Ford Motor"), which is right for most
+# companies and wrong for a few ("No lens voted on Ford Motor."). Display only: this changes the
+# words of a sentence, never a ticker, a peer, a rank or a label.
+#
+# Each entry needs: ticker (as the report carries it), short (the common name), date, reason.
+# A ticker not listed here falls back to the cleaned legal name.
+names:
+  - ticker: F
+    short: Ford
+    date: 2026-10-06
+    reason: the common name; "Ford Motor" is what is left of the legal name after the suffix is cut
+  - ticker: JPM
+    short: JPMorgan
+    date: 2026-10-06
+    reason: how the company and the press name it; "JPMorgan Chase" is the legal name's front half
+  - ticker: GOOGL
+    short: Alphabet
+    date: 2026-10-06
+    reason: the company is Alphabet; the share class is a ticker detail
+  - ticker: GOOG
+    short: Alphabet
+    date: 2026-10-06
+    reason: the other Alphabet share class
+  - ticker: VKTX
+    short: Viking
+    date: 2026-10-06
+    reason: the company's own short name; "Viking Therapeutics" is the legal name's front half

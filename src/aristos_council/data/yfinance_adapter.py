@@ -211,6 +211,7 @@ class YFinanceAdapter(MarketDataAdapter):
             payout_ratio=_payout_ratio(info, dps),
             eps=_as_float(info.get("trailingEps")),
             pe_ratio=_as_float(info.get("trailingPE")),
+            trailing_period_end=_epoch_to_iso(info.get("mostRecentQuarter")),
             # ABS-READINGS-2 — the STATEMENT figure, not the info blob's.
             #
             # Netflix, 2026-09-20: info['freeCashflow'] = 25,387,552,768 against an
@@ -560,6 +561,18 @@ def _as_float(value: object) -> float | None:
         return None
     # yfinance uses NaN for missing cells; treat NaN as absent.
     return None if f != f else f
+
+
+def _epoch_to_iso(value: object) -> str | None:
+    """yfinance's ``mostRecentQuarter`` (epoch seconds) as an ISO date, or None."""
+    secs = _as_float(value)
+    if secs is None or secs <= 0:
+        return None
+    from datetime import datetime, timezone
+    try:
+        return datetime.fromtimestamp(secs, tz=timezone.utc).date().isoformat()
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def _as_int(value: object) -> int | None:

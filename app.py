@@ -103,7 +103,10 @@ from aristos_council.strategy.versioning import (
 # never the launch cwd — so discovery works no matter where streamlit is started.
 ROOT = Path(__file__).resolve().parent
 STRATEGIES_DIR = ROOT / "strategies"
-UNIVERSES_DIR = ROOT / "universes"
+# TEST-SEAM (C11): a test points the saved-list directory at a tmp dir so it never reads the owner's own
+# lists; unset (always, in real use) it is the repo's universes/ folder.
+import os as _os
+UNIVERSES_DIR = Path(_os.environ.get("ARISTOS_UNIVERSES_DIR") or ROOT / "universes")
 VERDICTS_DIR = ROOT / "verdicts"
 REPORTS_DIR = ROOT / "reports"
 # Auto-persisted universe-run .md/.html (UI-FIX-1) — gitignored, a disposable copy of

@@ -200,3 +200,10 @@ def test_status_lists_them_and_excludes_nothing(tmp_path):
     assert "2 Toronto rows with no identity" in text and "report only" in text
     assert "CDE.TO" in text
     assert out.rows == len(_toronto_rows())          # the table is untouched
+
+
+def test_shanghai_conant_optical_is_filed_as_supplies_not_equipment_with_a_dated_reason():
+    """C10 (2026-10-06): it carried AtriCure's labels exactly, so no rule could tell it from device peers."""
+    conant = {o.ticker: o for o in load_label_overrides()}["2276.HK"]
+    assert conant.gics_subindustry == "Health Care Supplies" and conant.date == "2026-10-06"
+    assert "spectacle lenses" in conant.reason

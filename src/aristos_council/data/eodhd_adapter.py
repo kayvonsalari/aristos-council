@@ -313,6 +313,7 @@ def fundamentals_from_payload(ticker: str, data: dict, *, with_periods: bool = F
         payout_ratio=_coerce_float(highlights.get("PayoutRatio")),
         eps=_coerce_float(highlights.get("EarningsShare")),
         pe_ratio=_coerce_float(highlights.get("PERatio")),
+        trailing_period_end=_clean_str(highlights.get("MostRecentQuarter")) or None,
         free_cash_flow=(fcf_series[0] if fcf_series else None),
         # The streak is computed from the dividend series, not this field.
         years_dividend_growth=None,

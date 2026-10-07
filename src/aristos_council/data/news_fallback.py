@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from .sentiment import NewsItem
+from .sentiment import NewsItem, clean_headline
 
 EODHD_BASE = "https://eodhd.com/api"
 # Finnhub's own cap (MAX_NEWS_LOGGED in agents/nodes.py) sizes the prompt; fallbacks fetch
@@ -124,7 +124,7 @@ def fetch_eodhd_news(ticker: str, *, start: date, end: date, api_key: Optional[s
         if not isinstance(row, dict):
             continue
         published = _as_date(row.get("date"))
-        title = str(row.get("title") or "").strip()
+        title = clean_headline(row.get("title"))
         if published is None or not title:
             continue                                    # malformed row, skip, keep the rest
         items.append(NewsItem(published=published, headline=title,
@@ -162,7 +162,7 @@ def fetch_yfinance_news(ticker: str, *, fetcher=None,
         content = row.get("content") if isinstance(row, dict) else None
         if not isinstance(content, dict):
             content = row if isinstance(row, dict) else {}
-        title = str(content.get("title") or "").strip()
+        title = clean_headline(content.get("title"))
         published = _as_date(content.get("pubDate") or content.get("displayTime"))
         if published is None or not title:
             continue

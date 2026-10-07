@@ -110,6 +110,8 @@ class LensVote:
     # FORENSIC-PACK-1 - a CHECK lens's own components ("Accrual ratio 4.2%, rank 12 of 41"), kept so
     # the council can explain a "doubted" mark. Council context only: never counted, never a vote.
     components: tuple = ()
+    # TIE-CHECK-1 - the number of OTHER companies sharing this one's combined rank-sum (0 = not tied)
+    tied_with: int = 0
 
     @property
     def votes(self) -> bool:
@@ -131,12 +133,17 @@ class LensVote:
         from .report_language import verdict_word
         return verdict_word(self.verdict, check=not self.votes)
 
+    @property
+    def tie_note(self) -> str:
+        """" (tied with 3)" when other companies share this one's rank-sum, else ""."""
+        return f" (tied with {self.tied_with})" if self.tied_with else ""
+
     def result(self) -> str:
         """"BUY - 3rd of 14", or the reason the lens does not apply."""
         if self.status == "ranked":
             where = (f"{ordinal(self.position)} of {self.cohort_size}" if self.position
                      else f"ranked of {self.cohort_size}")
-            return f"{self.word} - {where}{self.factor_note}"
+            return f"{self.word} - {where}{self.tie_note}{self.factor_note}"
         if self.status == "too_few":
             # NOVOTE-1 item 2.3b — a verdict over fewer than MIN_RANKABLE_COHORT names is
             # arithmetic, not a comparison (the HLB case: "1 of 1" instead of an honest
@@ -751,6 +758,7 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
             votes.append(LensVote(**base, status="ranked", verdict=cell.verdict,
                                   position=cell.position, cohort_size=cell.cohort_size,
                                   factor_note=cell.factor_note,
+                                  tied_with=getattr(cell, "tied_with", 0),
                                   components=(_check_components(result, ticker)
                                               if base["kind"] == "check" else ())))
         else:
