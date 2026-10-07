@@ -4477,17 +4477,18 @@ def _render_company_report(report) -> None:
     html_name = company_check_html_download_name(report.ticker, "company_report", run_start)
     col_txt, col_html, col_md = st.columns(3)
     with col_txt:
-        st.download_button(f"⬇ Download report as text — {txt_name}",
+        # B22-U5: short labels; the file name is the tooltip
+        st.download_button("⬇ Download text", help=txt_name,
                            data=format_company_report(report), file_name=txt_name,
                            mime="text/plain", key="cc_report_download")
     with col_html:
-        st.download_button(f"⬇ Download report (HTML) — {html_name}",
+        st.download_button("⬇ Download HTML", help=html_name,
                            data=company_report_html(report, run_start=run_start),
                            file_name=html_name, mime="text/html", key="cc_report_download_html")
     with col_md:
         from aristos_council.company_markdown import company_report_markdown
         md_name = html_name.rsplit(".", 1)[0] + ".md"
-        st.download_button(f"⬇ Download report (Markdown) — {md_name}",
+        st.download_button("⬇ Download Markdown", help=md_name,
                            data=company_report_markdown(report), file_name=md_name,
                            mime="text/markdown", key="cc_report_download_md")
     if _ids_visible():                       # UI-POLISH-1: timings, cache counts and paths are workshop details

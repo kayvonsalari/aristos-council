@@ -418,3 +418,12 @@ def test_u4_the_free_run_buttons_say_free_in_one_short_phrase():
     assert "model call" in app.run_button_label(with_council=False, with_reader=True, n_strategies=1)
     at = _app_test()
     assert any(b.label == "▶ Run company check · free" for b in at.button)
+
+
+def test_u5_the_download_buttons_are_short_and_carry_the_file_name_as_tooltip(tmp_path):
+    at = _render(_company_report(tmp_path))
+    buttons = at.get("download_button")
+    assert [b.proto.label for b in buttons] == ["⬇ Download text", "⬇ Download HTML", "⬇ Download Markdown"]
+    helps = [b.proto.help for b in buttons]
+    assert helps[0].endswith(".txt") and helps[1].endswith(".html") and helps[2].endswith(".md")
+    assert all("company_check_" in h for h in helps)
