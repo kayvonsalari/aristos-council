@@ -201,9 +201,13 @@ def test_story_under_5bn_says_so_in_the_answer_and_states_the_tag_once_above_the
     assert dict(story_paragraphs(rep))["What to doubt."].count("under $5bn") == 1
 
 
-def test_story_under_5bn_cannot_tell_paragraph_repeats_the_untested_range():
-    cannot = dict(story_paragraphs(_small()))["What this cannot tell you."]
-    assert cannot.startswith(NOT_A_PREDICTION) and "outside the tested range" in cannot
+def test_story_under_5bn_says_the_untested_range_once_in_the_answer_not_again_in_cannot_tell():
+    """B22-B9: it used to be said in the answer AND repeated under "What this cannot tell you"."""
+    rep = _small()
+    cannot = dict(story_paragraphs(rep))["What this cannot tell you."]
+    assert cannot == NOT_A_PREDICTION
+    assert "outside the tested range" in answer_lines(rep)[1]
+    assert _story_text(rep).count("outside the tested range (under $5bn): no track record applies") == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -603,3 +607,12 @@ def test_b22_b8_ranked_on_n_of_m_factors_is_in_the_reason_column_only():
         assert doc.count("ranked on 2 of 3 factors") == 1 or "ranked on 2 of 3 factors" in doc
     vote = next(v for v in rep.votes if v.label == "Forensic")
     assert "ranked on 2 of 3 factors" in vote.result()          # the council / agreement keep the full text
+
+
+def test_b22_b9_no_track_record_for_this_industry_is_said_once(tmp_path):
+    rep = _report([_rank("Quality", "hold", 5), _rank("Growth", "hold", 7)])
+    rep.track_record_caption = NO_COHORT_TRACK_RECORD_LINE
+    story = _story_text(rep)
+    assert story.count("No track record exists for this industry yet") == 1
+    assert answer_lines(rep)[1].endswith("No track record exists for this industry yet.")
+    assert dict(story_paragraphs(rep))["What this cannot tell you."] == NOT_A_PREDICTION

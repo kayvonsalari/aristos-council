@@ -425,8 +425,8 @@ def _doubt(report) -> str:
 
 
 def _cannot(report) -> str:
-    tail = untested_sentence(report)
-    return NOT_A_PREDICTION + (f" {tail}" if tail else "")
+    # B22-B9: the "no track record" / "outside the tested range" sentence is said ONCE, in the answer
+    return NOT_A_PREDICTION
 
 
 def story_paragraphs(report) -> list[tuple[str, str]]:

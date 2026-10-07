@@ -203,6 +203,7 @@ _WORDING: list[tuple[re.Pattern, str, bool]] = [
     (re.compile(r"[(]step [0-9] of 4 of the peer search"), "peer-search jargon in the story", True),
     (re.compile(r"[0-9%x][.] [a-z]"), "a sentence starting in lowercase after a figure and a full stop", False),
     (re.compile(r"mean excess|luck [0-9]+%|rounds held"), "backtest jargon (say it in plain words)", False),
+    (re.compile(r"(?s)No track record exists for this industry yet.*No track record exists for this industry yet"), "'no track record' said twice", True),
     (re.compile(r"tied with 1(?![0-9])"), "'tied with 1' (say 'tied with one other')", False),
     (re.compile(r"What survived[.]"), "'What survived.' heading on a company page", True),
 ]
@@ -215,6 +216,10 @@ def wording_findings(text: str, where: str) -> list[Finding]:
         if story_only and not company_page:
             continue
         body = story_sections(text) if story_only else text
+        if pat.flags & re.S:                       # a pattern that spans lines (a sentence said twice)
+            if pat.search(body):
+                out.append(Finding(WORDING, where, what))
+            continue
         for ln in _lines(body):
             if pat.search(ln):
                 out.append(Finding(WORDING, where, f"{what}: {ln.strip()[:120]}"))
