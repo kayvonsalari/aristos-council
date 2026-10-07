@@ -3647,14 +3647,26 @@ def multi_summary_line(result: MultiStrategyResult) -> str:
                           for c in row.cells.values()))
     excluded_all = sum(1 for row in result.rows
                        if ids and all(row.cells[s].status == _EXCLUDED for s in ids))
-    ranked_any = sum(1 for row in result.rows if row.graded)
+    # B22-B10: only VOTING lenses count as "ranking" a name - a check lens (Forensic) marks and does not
+    # vote, so a list ranked only by it was reading "3 of 3 ranked by at least one".
+    ranked_any = sum(1 for row in result.rows
+                     if any(c.status == _RANKED and not c.is_check for c in row.cells.values()))
     parts = []
     if buy_all:
         parts.append(f"{buy_all} name{'s' if buy_all != 1 else ''} rated BUY by every "
                      "lens")
     if excluded_all:
         parts.append(f"{excluded_all} excluded by every lens")
-    parts.append(f"{ranked_any} of {size} ranked by at least one")
+    if ranked_any or not any(c.status == _RANKED for row in result.rows for c in row.cells.values()):
+        parts.append(f"{ranked_any} of {size} ranked by at least one")
+    else:
+        checks = []
+        for sid in ids:
+            n = sum(1 for row in result.rows
+                    if row.cells[sid].status == _RANKED and row.cells[sid].is_check)
+            if n:
+                checks.append(f"{result.strategy_names.get(sid) or sid}, a check, ranked {n}")
+        parts.append(f"no voting lens could rank these names ({'; '.join(checks)})")
     lens_word = "lens" if n_lenses == 1 else "lenses"
     line = f"{n_lenses} {lens_word} × {plural(size, 'name')} — " + ", ".join(parts)
     # FETCH-GUARD-1: PREFIXED, not appended. A reader who stops after the first clause
