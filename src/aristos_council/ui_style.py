@@ -138,7 +138,7 @@ def css(theme: str = "dark") -> str:
   margin: 8px 0 18px; }}
 .ar-stat-title {{ color: var(--ar-muted); font-size: .76rem; text-transform: uppercase;
   letter-spacing: .06em; }}
-.ar-big {{ font-size: 1.35rem; font-weight: 500; margin: 6px 0 2px; }}
+.ar-big {{ font-size: 1.15rem; font-weight: 500; margin: 6px 0 2px; }}
 .ar-stat-sub {{ color: var(--ar-muted); font-size: .8rem; line-height: 1.45; }}
 .ar-abstain {{ color: var(--ar-muted); font-size: .86rem; margin-top: 8px; }}
 .ar-bar {{ position: relative; display: flex; height: 6px; margin: 12px 4px 4px; gap: 2px; }}

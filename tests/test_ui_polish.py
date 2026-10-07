@@ -197,3 +197,113 @@ def test_deploy_and_the_developer_menu_are_hidden_by_the_toolbar_mode():
     assert cfg["theme"]["base"] == "dark" and cfg["theme"]["primaryColor"] == "#7FB2FF"
     assert cfg["theme"]["backgroundColor"] == "#0E1217" and cfg["theme"]["textColor"] == "#E6EAF0"
     assert cfg["theme"]["secondaryBackgroundColor"] == "#161D26"
+
+
+# --------------------------------------------------------------------------- #
+# items 4 and 5 - the company page (cards, chips, table) and the hidden workshop details
+# --------------------------------------------------------------------------- #
+def _company_report(tmp_path, lenses=None):
+    from tests.test_company_report import RAW, SCREENED, _run
+    return _run(lenses or [RAW, SCREENED], tmp_path=tmp_path)
+
+
+def _render(report, *, validation: bool = False):
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+    script = (
+        "import sys, streamlit as st\n"
+        f"sys.path.insert(0, r'{ROOT}')\n"
+        "import app\n"
+        "from aristos_council.ui_text import install\n"
+        "install(st)\n"
+        "app._render_company_report(st.session_state['rep'])\n")
+    at = AppTest.from_string(script, default_timeout=120)
+    at.session_state["rep"] = report
+    if validation:
+        at.session_state["show_legacy"] = True
+    at.run()
+    assert not at.exception, at.exception
+    return at
+
+
+def _html_blob(at) -> str:
+    return "\n".join(str(m.value) for m in at.markdown)
+
+
+def test_the_company_page_has_header_chips_chip_table_and_four_cards(tmp_path):
+    at = _render(_company_report(tmp_path))
+    html = _html_blob(at)
+    assert 'class="ar-card ar-header"' in html and "ar-name" in html
+    assert "compared with" in html and "similar" in html
+    assert "ar-chiprow" in html
+    assert 'class="ar-table"' in html and "Vote or mark" in html
+    for title in ("Valuation vs own history", "Price", "Earnings price", "Balance sheet"):
+        assert f'<div class="ar-stat-title">{title}</div>' in html
+    assert html.count('class="ar-card"') == 4
+
+
+def test_chips_show_the_word_and_the_counts_match_the_agreement(tmp_path):
+    from aristos_council.company_cards import lens_rows, summary_chips
+    report = _company_report(tmp_path)
+    chips = summary_chips(report)
+    ag = report.agreement
+    for key, word in (("buy", "BUY"), ("hold", "HOLD"), ("sell", "SELL")):
+        n = len(getattr(ag, key))
+        assert (f">{n} {word}<" in chips) is bool(n)          # only counts above zero
+    for row in lens_rows(report):
+        assert row["word"], "a vote is never shown by colour alone"
+
+
+def test_the_lens_table_reads_the_same_cells_as_the_story_table(tmp_path):
+    from aristos_council.company_cards import lens_rows
+    from aristos_council.company_story import table_rows
+    report = _company_report(tmp_path)
+    rows, story = lens_rows(report), table_rows(report)
+    assert [r["lens"] for r in rows] == [r.lens for r in story]
+    assert [r["reason"] for r in rows] == [r.reason for r in story]
+    for r, v in zip(rows, report.votes):
+        if v.ranked:
+            assert r["word"] == v.word and v.result().startswith(r["word"])
+
+
+def test_a_card_abstains_with_a_reason_when_its_figure_is_missing(tmp_path):
+    from aristos_council import company_cards as cc
+    report = _company_report(tmp_path)
+    report.check.price_and_cash = None
+    report.check.band_percentile = None
+    report.check.valuation_band = "not evaluated — usable data covers only 1.8 years"
+    html = cc.stat_cards(report)
+    assert "usable data covers only 1.8 years" in html
+    assert "no price history" in html and "no analyst estimate" in html
+    assert html.count("ar-abstain") >= 3                       # three cards abstain; none shows a 0
+
+
+def test_a_bank_balance_sheet_card_says_not_meaningful_for_banks(tmp_path):
+    from aristos_council import company_cards as cc
+    from aristos_council.abs_readings import DebtAndCash, Reading
+    report = _company_report(tmp_path)
+    report.check.debt_and_cash = DebtAndCash(net_debt=Reading(not_meaningful="not meaningful for banks and insurers"))
+    assert "not meaningful for banks" in cc.balance_sheet_card(report)
+
+
+def test_band_wording_follows_the_percentile():
+    from aristos_council.company_cards import band_word
+    assert band_word(12) == "Cheap vs its own 5 years" and band_word(94) == "Dear vs its own 5 years"
+    assert band_word(50) == "Mid-range vs its own 5 years" and band_word(None) == "Valuation band not read"
+
+
+def test_workshop_details_are_hidden_unless_validation_tools_is_on(tmp_path):
+    report = _company_report(tmp_path)
+    report.saved_to = str(tmp_path / "runs" / "x")
+    off = "\n".join(str(c.value) for c in _render(report).caption)
+    assert "Ran in" not in off and "day-cache" not in off and "saved under" not in off
+    on = "\n".join(str(c.value) for c in _render(report, validation=True).caption)
+    assert "Ran in" in on and "saved under" in on
+
+
+def test_how_lenses_are_graded_lives_inside_sources_and_downloads_stay(tmp_path):
+    at = _render(_company_report(tmp_path))
+    assert not any(str(c.value).strip() == "How lenses are graded: docs/BACKTEST.md" for c in at.caption)
+    assert any("How lenses are graded:" in str(m.value) and "docs/BACKTEST.md" in str(m.value)
+               for m in at.markdown)
+    assert len(at.get("download_button")) == 3

@@ -2933,7 +2933,7 @@ def _render_multi_strategy_result(multi_result) -> None:
     ids = multi_result.strategy_ids
 
     persisted = st.session_state.get("uni_multi_persisted")
-    if persisted:
+    if persisted and _ids_visible():             # UI-POLISH-1: file paths are a workshop detail
         md_path, html_path = persisted
         st.success(f"💾 Saved this run to: `{_shown_path(md_path)}` and "
                    f"`{_shown_path(html_path)}` — ONE merged report covering all "
@@ -3095,7 +3095,7 @@ def _render_universe_result(result) -> None:
     # UI-FIX-1: where this run landed on disk, prominent — the first thing a user sees
     # so a completed (possibly paid) run is never mistaken for session-only output.
     persisted = st.session_state.get("uni_persisted_paths")
-    if persisted:
+    if persisted and _ids_visible():             # UI-POLISH-1: file paths are a workshop detail
         md_path, html_path = persisted
         st.success(f"💾 Saved to: `{_shown_path(md_path)}` and "
                   f"`{_shown_path(html_path)}`")
@@ -3985,7 +3985,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
             est = estimate_cost(narrated_count)
         else:
             est = estimate_cost(per_lens)
-    if multi and not run_mode_narrates(run_mode):
+    if multi and not run_mode_narrates(run_mode) and _ids_visible():    # UI-POLISH-1: workshop detail
         st.caption(f"Multi-lens re-grade: **{len(strategies)}** strategies × "
                    f"**{plural(len(universe), 'name')}** — deterministic ranker only "
                    f"(no narration, no cost), reported as ONE combined grid.")
@@ -4324,7 +4324,13 @@ def _render_company_report(report) -> None:
     from aristos_council.export.report_html import company_report_html
 
     check = report.check
-    st.markdown(f"### Company Report — {report.display}")
+    from aristos_council import company_cards
+    if report.unrateable:
+        st.markdown(f"### Company Report — {report.display}")
+    else:
+        # UI-POLISH-1 item 4: a header card (name, where it trades, last price) and a row of chips
+        st.markdown(company_cards.header_card(report), unsafe_allow_html=True)
+        st.markdown(company_cards.summary_chips(report), unsafe_allow_html=True)
     st.caption(HOUSE_LINE)
 
     # TAB-MERGE-1 part 2 commit 4 — click-through from a list result. Shown ONLY when
@@ -4372,9 +4378,10 @@ def _render_company_report(report) -> None:
     if page.no_vote:
         st.info(page.no_vote)
     else:
-        # LENS-TABLE-WRAP-1: ``st.table`` wraps a long cell where ``st.dataframe`` cuts it off.
-        st.table(pd.DataFrame([dict(zip(page.headers, r.cells())) for r in page.rows]
-                              ).set_index(page.headers[0]))
+        # UI-POLISH-1: the vote is a verdict chip (its WORD always shown), the track record a small
+        # outlined label, the reason muted. The same cells as before, in an HTML table that wraps long
+        # reasons (LENS-TABLE-WRAP-1) and scrolls sideways inside its own box on a phone.
+        st.markdown(company_cards.lens_table(report), unsafe_allow_html=True)
         asked = [r for r in page.rows if r.asks]
         if asked:
             with st.expander("What each lens asks"):
@@ -4382,6 +4389,9 @@ def _render_company_report(report) -> None:
                     st.markdown(f"**{r.lens}** — {r.asks}")
     if page.caption:
         st.caption(page.caption)
+
+    if not page.no_vote:                                   # four small cards, above the workings
+        st.markdown(company_cards.stat_cards(report), unsafe_allow_html=True)
 
     if report.council_opinion is not None:                # only when it was ticked
         st.subheader("Council opinion")
@@ -4431,9 +4441,8 @@ def _render_company_report(report) -> None:
                 if r.badge_detail:
                     st.caption(f"{r.lens} track record: {r.badge_detail}")
         _render_sources(check)
-        # BACKTEST-2 — the page footer, so a badge is never on screen without a way to read how it
-        # was earned.
-    st.caption("How lenses are graded: docs/BACKTEST.md")
+        # BACKTEST-2: a badge is never on screen without a way to read how it was earned - that line
+        # now lives inside Sources (UI-POLISH-1), not as a page footer.
 
     # Two exports side by side (REPORT-HTML-1): the text is canonical, the HTML the shareable copy.
     from aristos_council.download_names import (company_check_download_name,
@@ -4457,12 +4466,16 @@ def _render_company_report(report) -> None:
         st.download_button(f"⬇ Download report (Markdown) — {md_name}",
                            data=company_report_markdown(report), file_name=md_name,
                            mime="text/markdown", key="cc_report_download_md")
-    tail = f"Ran in {report.seconds:.1f}s"
-    if report.cache.get("hits") is not None:
-        tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"
-    if report.saved_to:
-        tail += f"; saved under `{report.saved_to}`"
-    st.caption(tail)
+    if _ids_visible():                       # UI-POLISH-1: timings, cache counts and paths are workshop details
+        tail = f"Ran in {report.seconds:.1f}s"
+        if report.cache.get("hits") is not None:
+            tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"
+        if report.saved_to:
+            tail += f"; saved under `{report.saved_to}`"
+        st.caption(tail)
+
+
+HOW_GRADED_TOPIC = "How lenses are graded"
 
 
 def _render_sources(result) -> None:
@@ -4476,6 +4489,7 @@ def _render_sources(result) -> None:
     st.subheader("Sources")
     for s in sources:
         st.markdown(f"- **{s.topic}:** {s.text}")
+    st.markdown(f"- **{HOW_GRADED_TOPIC}:** docs/BACKTEST.md")
 
 
 # --------------------------------------------------------------------------- #

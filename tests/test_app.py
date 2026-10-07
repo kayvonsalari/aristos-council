@@ -1278,6 +1278,11 @@ def test_saved_to_banner_shows_the_persisted_paths():
     at.session_state["uni_universe_display_name"] = "Growth 40"
     at = at.run()
     assert not at.exception
+    # UI-POLISH-1: the path banner is a workshop detail - hidden unless "Show validation tools" is on
+    assert not any("Saved to:" in str(getattr(s, "value", "")) for s in at.success)
+    at.session_state["show_legacy"] = True
+    at = at.run()
+    assert not at.exception
     blob = " ".join(str(getattr(s, "value", "")) for s in at.success)
     assert "Saved to:" in blob
     assert "reports" in blob and "universe_runs" in blob and "x.md" in blob
@@ -1409,6 +1414,11 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     # describe, only exist behind the validation toggle). Nothing to select — the
     # deterministic run this test is about is already what's in force.
     assert not any(str(c.label) == "Council opinion" and c.value for c in at.checkbox)
+    # UI-POLISH-1: the re-grade explainer is a workshop detail - hidden by default, shown behind
+    # "Show validation tools" (same sentence as before).
+    assert "Multi-lens re-grade" not in _caption_blob(at)
+    next(t for t in at.toggle if t.label == "Show validation tools").set_value(True).run()
+    assert not at.exception
     blob = _caption_blob(at)
     assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
     assert "ONE combined grid" in blob
