@@ -300,12 +300,11 @@ def _asked(report) -> str:
         why = _plain_reason(report.no_vote_reason) or "no peer group could be formed"
         return f"The run asked how {name} ranks against its peers, but {why}, so no lens ran."
     n = len(group.members)
-    kind = ("similar-sized companies in its industry" if report.outside_tested_range
-            else "companies in its own industry")
-    snap = f", market index of {group.snapshot}" if getattr(group, "snapshot", "") else ""
     ran = f"{_lenses(len(labels))} ({_join(labels)})" if labels else "no lens"
-    return (f"{name} was ranked against {plural(n, 'peer')}, {kind} (step {group.step} of 4 of the "
-            f"peer search{snap}), under {ran}.")
+    # B22-B5: no "step 2 of 4 of the peer search, market index of ..." here - that detail lives under
+    # "How this peer group was built" in the workings.
+    return (f"{name} was ranked against {plural(n, 'similar-sized company', 'similar-sized companies')} "
+            f"in its industry, under {ran}.")
 
 
 def _band_sentence(report) -> str:

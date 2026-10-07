@@ -277,7 +277,9 @@ def test_story_no_peer_group_says_no_lens_could_rank_and_why():
 def test_story_every_figure_carries_its_as_of_date():
     rep = _report([_rank("Quality", "hold", 5)], check=_check(band=94))
     paras = dict(story_paragraphs(rep))
-    assert "market index of 2026-09-25" in paras["What this run asked."]
+    # B22-B5: the peer-search detail (step, market-index date) moved under "How this peer group was
+    # built" in the workings; the story just says who it was ranked against.
+    assert "market index of" not in paras["What this run asked."]
     survived = paras["Other facts."]
     assert "Debt and cash (fiscal year to Dec 2025)" in survived
     assert "Growth record (fiscal year to Dec 2025)" in survived
@@ -546,3 +548,20 @@ def test_b22_b4_the_company_story_calls_its_facts_paragraph_other_facts(tmp_path
         assert "What survived" not in doc and "Other facts." in doc
     # the LIST summary keeps its own heading: there, names do survive a shortlist
     assert reader_paragraphs(rep.summary.summary)[2][0] == "What survived."
+
+
+def test_b22_b5_the_story_has_no_peer_search_jargon_but_the_workings_keep_it(tmp_path):
+    rep = _byd_like()
+    asked = dict(story_paragraphs(rep))["What this run asked."]
+    assert asked == ("BYD was ranked against 19 similar-sized companies in its industry, under "
+                     "four lenses (Earnings Power Value, Quality, Forensic and Growth).")
+    for bad in ("step", "of 4", "peer search", "market index"):
+        assert bad not in asked
+    real = _run([RAW, SCREENED], tmp_path=tmp_path)
+    assert "step" not in dict(story_paragraphs(real))["What this run asked."]
+    text = format_company_report(real)
+    assert text.index("SHOW THE WORKINGS") < text.index("How this peer group was built")
+    assert "index snapshot" in text[text.index("How this peer group was built"):]
+    one = _report([_rank("Quality", "hold", 5)])
+    one.check.peer_group = SimpleNamespace(members=[1], step=1, snapshot="", thin=True, broad=False)
+    assert "against 1 similar-sized company in its industry" in dict(story_paragraphs(one))["What this run asked."]
