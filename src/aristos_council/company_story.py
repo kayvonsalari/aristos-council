@@ -288,7 +288,7 @@ def answer_lines(report) -> tuple[str, str]:
 # --------------------------------------------------------------------------- #
 # Section 2 - the story (five paragraphs)
 # --------------------------------------------------------------------------- #
-LEADS = ("What this run asked.", "What happened.", "What survived.", "What to doubt.",
+LEADS = ("What this run asked.", "What happened.", "Other facts.", "What to doubt.",
          "What this cannot tell you.")
 
 
@@ -609,7 +609,7 @@ def story_page(report) -> StoryPage:
     summary = report.summary
     if summary is not None and getattr(summary, "available", False):
         from .reader import reader_paragraphs
-        paragraphs = tuple(reader_paragraphs(summary.summary))
+        paragraphs = tuple(reader_paragraphs(summary.summary, company=True))
         model = True
     else:
         paragraphs = tuple(story_paragraphs(report))

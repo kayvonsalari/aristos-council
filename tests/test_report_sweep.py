@@ -201,8 +201,11 @@ def test_the_batch22_wording_rule_fires_on_each_shape_it_names():
 
 
 FOLD_B22 = "\nSHOW THE WORKINGS"
-_B22_BAD = ["One lens did not apply, all for one reason: no operating profit."]
+_B22_BAD = ["One lens did not apply, all for one reason: no operating profit.",
+            "The answer\nWhat survived. Debt and cash (latest annual accounts): it owes $600."]
 _B22_OK = ["One lens did not apply: no operating profit.",
+           "The answer\nOther facts. Debt and cash (latest annual accounts): it owes $600.",
+           "What survived. Two companies were rated BUY by both voting tests.",
            "Five lenses did not apply, all for one reason: no operating profit."]
 
 

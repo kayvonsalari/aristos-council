@@ -200,12 +200,16 @@ def first_screen_findings(text: str, where: str) -> list[Finding]:
 # because the technical wording legitimately lives in the workings.
 _WORDING: list[tuple[re.Pattern, str, bool]] = [
     (re.compile(r"\b(?:One|The one) lens did not apply, all for one reason"), "one lens 'all for one reason'", False),
+    (re.compile(r"What survived[.]"), "'What survived.' heading on a company page", True),
 ]
 
 
 def wording_findings(text: str, where: str) -> list[Finding]:
     out: list[Finding] = []
+    company_page = "The answer" in text            # story-only patterns are about the company page
     for pat, what, story_only in _WORDING:
+        if story_only and not company_page:
+            continue
         body = story_sections(text) if story_only else text
         for ln in _lines(body):
             if pat.search(ln):

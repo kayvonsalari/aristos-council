@@ -172,7 +172,7 @@ def test_story_a_bank_says_which_lens_is_built_for_it_and_that_the_rest_are_not(
     assert first == "HOLD, on one lens built for banks (Financials, 19th of 27)."
     assert second == ("The other two lenses are not for banks. No track record exists for this "
                       "industry yet.")
-    survived = dict(story_paragraphs(rep))["What survived."]
+    survived = dict(story_paragraphs(rep))["Other facts."]
     assert survived.startswith("Debt and cash do not describe a bank or insurer")
     assert story_page(rep).caption == ""          # the Badge column and the answer already say it
 
@@ -249,7 +249,7 @@ def test_story_model_summary_written_replaces_the_story_never_two(tmp_path):
     assert rep.summary.available
     page = story_page(rep)
     assert page.model_summary and not page.note
-    assert list(page.paragraphs) == reader_paragraphs(rep.summary.summary)
+    assert list(page.paragraphs) == reader_paragraphs(rep.summary.summary, company=True)
     for doc in (format_company_report(rep), company_report_html(rep), company_report_markdown(rep)):
         assert "One test may not apply." in doc            # the model's own "doubt" paragraph
         assert NOT_A_PREDICTION not in doc                 # the code-written story is not beside it
@@ -278,7 +278,7 @@ def test_story_every_figure_carries_its_as_of_date():
     rep = _report([_rank("Quality", "hold", 5)], check=_check(band=94))
     paras = dict(story_paragraphs(rep))
     assert "market index of 2026-09-25" in paras["What this run asked."]
-    survived = paras["What survived."]
+    survived = paras["Other facts."]
     assert "Debt and cash (fiscal year to Dec 2025)" in survived
     assert "Growth record (fiscal year to Dec 2025)" in survived
     assert "Analysts (2026-10-05)" in survived
@@ -289,7 +289,7 @@ def test_story_accounts_without_a_dated_series_say_latest_annual_accounts():
     rep = _report([_rank("Quality", "hold", 5)],
                   check=_check(accounts_basis="the latest annual accounts (their period end date is "
                                               "not in the data)"))
-    assert "Debt and cash (latest annual accounts)" in dict(story_paragraphs(rep))["What survived."]
+    assert "Debt and cash (latest annual accounts)" in dict(story_paragraphs(rep))["Other facts."]
 
 
 def test_story_net_cash_is_never_described_as_zero_years_to_repay():
@@ -297,7 +297,7 @@ def test_story_net_cash_is_never_described_as_zero_years_to_repay():
     check.debt_and_cash = DebtAndCash(
         net_debt=Reading(value=5e8, label="holds $500.0m more cash than debt"),
         years_to_repay=Reading(value=0.0, label="has no net debt to repay"))
-    survived = dict(story_paragraphs(_report([_rank("Quality", "hold", 5)], check=check)))["What survived."]
+    survived = dict(story_paragraphs(_report([_rank("Quality", "hold", 5)], check=check)))["Other facts."]
     assert "holds $500.0m more cash than debt." in survived and "0.0 years" not in survived
 
 
@@ -530,3 +530,19 @@ def test_b22_b3_the_story_and_every_export_use_the_same_words(tmp_path):
     assert note[0].upper() + note[1:] in happened
     text, html, md = format_company_report(rep), company_report_html(rep), company_report_markdown(rep)
     assert note in text and note in md and note in html
+
+
+def test_b22_b4_the_company_story_calls_its_facts_paragraph_other_facts(tmp_path):
+    """"What survived." held debt, growth and analysts - facts, not a shortlist's survivors."""
+    from aristos_council.company_story import LEADS
+    assert LEADS == ("What this run asked.", "What happened.", "Other facts.", "What to doubt.",
+                     "What this cannot tell you.")
+    probe = _run([RAW], tmp_path=tmp_path, save=False)
+    rep = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(_fields(probe)),
+               save=False)
+    leads = [lead for lead, _t in story_page(rep).paragraphs]
+    assert leads[2] == "Other facts." and "What survived." not in leads
+    for doc in (format_company_report(rep), company_report_html(rep), company_report_markdown(rep)):
+        assert "What survived" not in doc and "Other facts." in doc
+    # the LIST summary keeps its own heading: there, names do survive a shortlist
+    assert reader_paragraphs(rep.summary.summary)[2][0] == "What survived."

@@ -612,7 +612,7 @@ def test_runway_reaches_the_story_the_text_page_and_the_summary_facts(tmp_path):
     report = _run([RAW], tmp_path=tmp_path)
     report.check.debt_and_cash = debt_and_cash(_viking())
     story = dict(story_paragraphs(report))
-    survived = story.get("What survived.") or story.get("Other facts.")
+    survived = story["Other facts."]
     assert "that lasts about 1.8 years (balance sheet of Jun 2026)" in survived
     assert any("lasts about 1.8 years" in ln for ln in absolute_reading_lines(report.check))
     assert "lasts about 1.8 years" in format_company_report(report)

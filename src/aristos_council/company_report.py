@@ -1170,7 +1170,7 @@ def summary_lines(report: CompanyReport) -> list[str]:
         return []
     out = [f"  ({READER_SECTION_NOTE})"]
     if getattr(result, "available", False):
-        for lead, text in reader_paragraphs(result.summary):
+        for lead, text in reader_paragraphs(result.summary, company=True):
             out.append(f"  {lead} {text}")
     else:
         out.append(f"  {result.note}")
