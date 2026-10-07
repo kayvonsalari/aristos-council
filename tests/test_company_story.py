@@ -589,3 +589,17 @@ def test_b22_b7a_the_lens_note_is_fixed_in_every_rendering(tmp_path):
     row = table_rows(rep)[0]
     assert ". On its measures it would rank 6th" in row.full_reason
     assert ". Total debt 3.4x" in row.full_reason
+
+
+def test_b22_b8_ranked_on_n_of_m_factors_is_in_the_reason_column_only():
+    rep = _report([_rank("Forensic", "buy", 16, of=20, kind="check", factor_note=" · ranked on 2 of 3 factors"),
+                   _rank("Quality", "hold", 4, of=14)])
+    from aristos_council.company_story import table_rows
+    rows = {r.lens: r for r in table_rows(rep)}
+    assert "factors" not in rows["Forensic"].outcome
+    assert "ranked on 2 of 3 factors" in rows["Forensic"].reason
+    assert rows["Forensic"].outcome.endswith("16th of 20")
+    for doc in (_story_text(rep),):
+        assert doc.count("ranked on 2 of 3 factors") == 1 or "ranked on 2 of 3 factors" in doc
+    vote = next(v for v in rep.votes if v.label == "Forensic")
+    assert "ranked on 2 of 3 factors" in vote.result()          # the council / agreement keep the full text

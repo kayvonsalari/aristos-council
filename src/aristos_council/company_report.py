@@ -144,12 +144,14 @@ class LensVote:
         rank-sum, else ""."""
         return f" ({tied_phrase(self.tied_with)})" if self.tied_with else ""
 
-    def result(self) -> str:
-        """"BUY - 3rd of 14", or the reason the lens does not apply."""
+    def result(self, *, with_factor_note: bool = True) -> str:
+        """"BUY - 3rd of 14", or the reason the lens does not apply. ``with_factor_note=False`` leaves
+        off " · ranked on 2 of 3 factors" (the lens table prints that in its Reason column only)."""
         if self.status == "ranked":
             where = (f"{ordinal(self.position)} of {self.cohort_size}" if self.position
                      else f"ranked of {self.cohort_size}")
-            return f"{self.word} - {where}{self.tie_note}{self.factor_note}"
+            note = self.factor_note if with_factor_note else ""
+            return f"{self.word} - {where}{self.tie_note}{note}"
         if self.status == "too_few":
             # NOVOTE-1 item 2.3b — a verdict over fewer than MIN_RANKABLE_COHORT names is
             # arithmetic, not a comparison (the HLB case: "1 of 1" instead of an honest

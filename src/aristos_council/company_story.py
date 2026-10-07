@@ -489,7 +489,7 @@ class TableRow:
 
 def _outcome(v) -> str:
     if v.status == "ranked":
-        return v.result()
+        return v.result(with_factor_note=False)          # B22-B8: "ranked on 2 of 3 factors" is Reason's
     if v.status == "excluded":
         return "does not apply"
     if v.status == "too_few":
