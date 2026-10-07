@@ -1208,7 +1208,7 @@ def saved_list_labels(saved) -> list[str]:
 
 def _ids_visible() -> bool:
     """JARGON-UI-1: strategy ids and list fingerprints show on screen only behind the validation
-    toggle ("Show validation & legacy tools"); the exports and run records always keep them."""
+    toggle ("Show validation tools"); the exports and run records always keep them."""
     return bool(st.session_state.get("show_legacy"))
 
 
@@ -1288,6 +1288,9 @@ def opt_lens_checkbox_key(input_kind: str):
     return _key
 
 
+SHOW_LENS_DESC_KEY = "show_lens_desc"
+
+
 def render_lens_checkboxes(choices, key_for) -> list[tuple[str, bool]]:
     """THE lens tick boxes (SHORTLIST-3 / CAPTION-2): same list, same order, same VISIBLE caption
     under each lens, in up to three contiguous columns. The Run tab and Company Check both call
@@ -1296,16 +1299,23 @@ def render_lens_checkboxes(choices, key_for) -> list[tuple[str, bool]]:
     extras: list[tuple[str, bool]] = []
     if not choices:
         return extras
+    show_desc = bool(st.session_state.get(SHOW_LENS_DESC_KEY, False))   # sidebar > Display
     n_cols = min(3, len(choices))
     per_col = -(-len(choices) // n_cols)             # ceil: contiguous, offer-ordered
     for i, col in enumerate(st.columns(n_cols)):
         with col:
             for c in choices[i * per_col:(i + 1) * per_col]:
-                extras.append((c.label, st.checkbox(c.label, key=key_for(c.id))))
-                # CAPTION-2: a VISIBLE caption, not a hover tooltip — a reader comparing five
-                # checkboxes cannot hover five things at once.
-                if lens_caption(c.strategy):
-                    st.caption(lens_caption(c.strategy))
+                caption = lens_caption(c.strategy)
+                if show_desc:
+                    extras.append((c.label, st.checkbox(c.label, key=key_for(c.id))))
+                    # CAPTION-2: a VISIBLE caption, not a hover tooltip - a reader comparing five
+                    # checkboxes cannot hover five things at once.
+                    if caption:
+                        st.caption(caption)
+                else:
+                    # LENS-DESC-TOGGLE: names and tick boxes only; the one-line summary is the "?" tooltip
+                    extras.append((c.label, st.checkbox(c.label, key=key_for(c.id),
+                                                        help=caption or None)))
     return extras
 
 
@@ -3115,7 +3125,8 @@ def _render_universe_result(result) -> None:
     for line in head[1:]:
         (st.warning if line == _stale else st.caption)(_plain(line))
     st.markdown(f"### {_plain(summary_line(result))}")
-    st.caption(result.header)
+    if _ids_visible():                       # UI-POLISH-1: the machinery line is a validation view
+        st.caption(result.header)
     meta_bits = (f"Screen: {_plain(label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id']))} · "
                  f"ranked {m['ranked_count']} of {plural(m['universe_size'], 'name')}")
     if not m["ranker_only"]:
@@ -3698,6 +3709,11 @@ def render_input(*, show_validation: bool) -> InputChoice:
                        n_left_out=n_left_out)
 
 
+# UI-POLISH-1: the ONE line under the page title (replaces the two "Verdict: deterministic ranker..." /
+# "Screen -> rank -> gates..." lines, which described the machinery to a reader who wants the answer).
+TOP_LINE = "Check one company against its rivals, or rank a list. Every lens is one equal vote."
+
+
 def render_run_tab(show_validation: bool = False) -> None:
     """TAB-MERGE-1 commit 3 — ONE tab, "Analyse": Company or Cohort / list, picked by an
     explicit switch (``render_input``). Options (lenses, summary, council) are shown
@@ -3706,8 +3722,7 @@ def render_run_tab(show_validation: bool = False) -> None:
     result renderers are UNCHANGED — this only decides which one runs and shows its
     EXISTING page, in its EXISTING order (Part 2 reorders the company page)."""
     st.subheader("Analyse — one company, or a cohort")
-    st.caption("Screen → rank → gates issue the verdict of record; the LLM only "
-               "narrates. Pick Company or Cohort / list, pick strategies, run.")
+    st.caption(TOP_LINE)
 
     choice = render_input(show_validation=show_validation)
 
@@ -4605,16 +4620,22 @@ def main() -> None:
                 st.caption("Acknowledge the cost to enable the Run button.")
             st.divider()
 
-        # The toggle — small, at the very bottom of the sidebar, in BOTH states so it
-        # is always the way back. No `value=` so its default is off and tests/session
-        # can set it without a default-conflict warning.
+        # DISPLAY (UI-POLISH-1): the two view switches. The validation toggle stays in BOTH states so it is
+        # always the way back. No `value=`: the default is off, and tests/session can set a key without a
+        # default-conflict warning. Both are session-only.
+        st.markdown("**Display**")
         st.toggle(
-            "Show validation & legacy tools", key="show_legacy",
-            help="Reveal the validation assets — the known-trap bench universe and the "
-                 "Classic Value baseline strategy (for side-by-side comparison) — plus "
+            "Show lens descriptions", key=SHOW_LENS_DESC_KEY,
+            help="Show each lens's full description under its tick box. Off: names and tick boxes "
+                 "only, with the one-line summary on the small ? beside each lens.")
+        st.toggle(
+            "Show validation tools", key="show_legacy",
+            help="Reveal the validation assets - the known-trap bench universe and the "
+                 "Classic Value baseline strategy (for side-by-side comparison) - plus "
                  "the legacy single-ticker council, its Report/History, and the "
-                 "council-strategy editor. Off by default — the app opens on the live "
-                 "scoreboard strategies and universes only.")
+                 "council-strategy editor, and the run's working details (file paths, timings). "
+                 "Off by default - the app opens on the live scoreboard strategies and "
+                 "universes only.")
 
     if show_legacy and run_clicked and selected_path is not None:
         try:

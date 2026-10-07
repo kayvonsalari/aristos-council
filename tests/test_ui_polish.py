@@ -122,3 +122,78 @@ def test_the_css_has_no_gradient_and_a_light_variant_for_every_variable():
     assert "gradient" not in dark and "gradient" not in light
     assert "#0E1217" in dark and "#F5F7FA" in light and "#F5F7FA" not in dark
     assert "IBM Plex Sans" in dark and "IBM Plex Mono" in dark and "Cinzel" not in dark
+
+
+# --------------------------------------------------------------------------- #
+# item 2 - LENS-DESC-TOGGLE
+# --------------------------------------------------------------------------- #
+def _toggle(at, label):
+    return next(t for t in at.toggle if t.label == label)
+
+
+def _lens_boxes(at):
+    return [c for c in at.checkbox if c.key and c.key.startswith("opt_lens_company_")]
+
+
+def _lens_captions(at):
+    return [str(c.value).replace("\$", "$") for c in at.caption]      # undo the $-escape
+
+
+def test_the_display_heading_holds_both_toggles_and_the_old_name_is_gone():
+    at = _app_test()
+    labels = [t.label for t in at.toggle]
+    assert "Show lens descriptions" in labels and "Show validation tools" in labels
+    assert "Show validation & legacy tools" not in labels
+    assert any("**Display**" in str(m.value) for m in at.sidebar.markdown)
+    assert _toggle(at, "Show lens descriptions").value is False       # off by default
+
+
+def test_off_shows_names_only_with_the_summary_as_the_tooltip_and_on_restores_it():
+    import app
+    at = _app_test()
+    boxes = _lens_boxes(at)
+    assert boxes and all(b.help for b in boxes), "every lens keeps its one-line summary as help"
+    first_asks = boxes[0].help
+    assert first_asks not in _lens_captions(at)                        # not printed under the box
+    _toggle(at, "Show lens descriptions").set_value(True).run()
+    assert not at.exception
+    boxes = _lens_boxes(at)
+    assert all(not b.help for b in boxes)
+    assert first_asks in _lens_captions(at)                            # the full text is back
+    # and the choice is remembered for the session: another rerun keeps it
+    at.run()
+    assert _toggle(at, "Show lens descriptions").value is True
+    assert app.SHOW_LENS_DESC_KEY == "show_lens_desc"
+
+
+def test_the_toggle_behaves_the_same_in_cohort_list_mode():
+    at = _app_test()
+    next(r for r in at.radio if r.label == "Input").set_value("Cohort / list").run()
+    assert not at.exception
+    boxes = [c for c in at.checkbox if c.key and c.key.startswith("opt_lens_list_")]
+    assert boxes and all(b.help for b in boxes)
+    _toggle(at, "Show lens descriptions").set_value(True).run()
+    boxes = [c for c in at.checkbox if c.key and c.key.startswith("opt_lens_list_")]
+    assert all(not b.help for b in boxes)
+
+
+# --------------------------------------------------------------------------- #
+# item 3 - the top of the page
+# --------------------------------------------------------------------------- #
+def test_the_top_of_the_page_has_the_one_short_line_and_no_machinery_lines():
+    at = _app_test()
+    text = _everything_on_screen(at)
+    assert ("Check one company against its rivals, or rank a list. "
+            "Every lens is one equal vote.") in text
+    assert "Verdict: deterministic ranker" not in text
+    assert "Narrative: LLM (non-judging)" not in text
+    assert "Screen → rank → gates" not in text and "only narrates" not in text
+
+
+def test_deploy_and_the_developer_menu_are_hidden_by_the_toolbar_mode():
+    import tomllib
+    cfg = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert cfg["client"]["toolbarMode"] in ("minimal", "viewer")
+    assert cfg["theme"]["base"] == "dark" and cfg["theme"]["primaryColor"] == "#7FB2FF"
+    assert cfg["theme"]["backgroundColor"] == "#0E1217" and cfg["theme"]["textColor"] == "#E6EAF0"
+    assert cfg["theme"]["secondaryBackgroundColor"] == "#161D26"

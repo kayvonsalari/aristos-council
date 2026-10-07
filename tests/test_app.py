@@ -560,7 +560,7 @@ def test_legacy_hidden_by_default_and_toggle_defaults_off():
     assert not at.exception
     # the toggle exists and defaults OFF
     legacy_toggle = next(t for t in at.toggle
-                         if t.label == "Show validation & legacy tools")
+                         if t.label == "Show validation tools")
     assert legacy_toggle.value is False
     assert at.session_state["show_legacy"] is False
     # NO legacy surface rendered: no council-run button, no legacy sidebar header, no
