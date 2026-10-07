@@ -367,6 +367,9 @@ def _survived(report) -> str:
         elif dc.net_debt.available:
             yl = getattr(dc.years_to_repay, "label", "") if getattr(dc.years_to_repay, "available", False) else ""
             extra = f", and it {yl.rstrip('.')}" if yl.startswith("would take") else ""
+            rw = getattr(dc, "cash_runway", None)           # CASH-RUNWAY-1
+            if rw is not None and rw.available:
+                extra += (", and " if rw.label.startswith("at ") else "; ") + rw.label.rstrip(".")
             bits.append(f"Debt and cash ({asof}): it {dc.net_debt.label.rstrip('.')}{extra}.")
         else:
             bits.append(f"Debt and cash ({asof}) could not be read: {dc.net_debt.note}.")

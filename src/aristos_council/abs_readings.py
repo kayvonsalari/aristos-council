@@ -186,13 +186,17 @@ class DebtAndCash:
     interest_cover: Reading = field(default_factory=Reading)
     years_to_repay: Reading = field(default_factory=Reading)
     currency: str = ""
+    # CASH-RUNWAY-1: how long the net cash lasts at last year's spending - only for a company that spent
+    # more cash than it made. Empty (no line anywhere) for positive free cash flow, a bank or a gap.
+    cash_runway: Reading = field(default_factory=Reading)
 
     def lines(self) -> list[str]:
         # ABS-READINGS-3 - NVIDIA printed "has no net debt to repay" twice, once for the
         # operating-cash-flow reading and once for the free-cash-flow one.
-        return dedupe_lines([r.text() for r in (self.net_debt, self.net_debt_to_ocf,
-                                                self.interest_cover,
-                                                self.years_to_repay)])
+        readings = [self.net_debt, self.net_debt_to_ocf, self.interest_cover, self.years_to_repay]
+        if self.cash_runway.available:
+            readings.append(self.cash_runway)
+        return dedupe_lines([r.text() for r in readings])
 
 
 def _money(value: float, currency: str) -> str:
@@ -200,6 +204,34 @@ def _money(value: float, currency: str) -> str:
     currency it says so in words rather than printing a bare number that reads as dollars."""
     text = format_money(value, currency or None, abbreviate=True)
     return text if currency else f"{text} ({CURRENCY_NOT_STATED})"
+
+
+def _balance_sheet_date(f) -> str:
+    """"balance sheet of Jun 2026" - or "latest balance sheet" when the provider gave no period end."""
+    end = str(getattr(f, "trailing_period_end", "") or "")
+    try:
+        from datetime import datetime
+        return f"balance sheet of {datetime.strptime(end[:10], '%Y-%m-%d').strftime('%b %Y')}"
+    except ValueError:
+        return "latest balance sheet"
+
+
+def cash_runway(f, *, debt, cash, net, fcf, currency: str) -> Reading:
+    """CASH-RUNWAY-1 (approved 2026-10-04): a fact, never a vote.
+
+    * free cash flow negative AND net cash positive: how long that cash lasts at last year's spending;
+    * free cash flow negative AND net debt: "no cash cushion: spending is funded by debt";
+    * free cash flow positive, missing, or the company a bank: no reading at all.
+    A missing debt or cash figure also gives no reading (null is not false: it cannot be said)."""
+    if fcf is None or fcf >= 0 or net is None or debt is None or cash is None:
+        return Reading()
+    if net > 0:
+        return Reading(value=0.0, unit="years",
+                       label="no cash cushion: spending is funded by debt")
+    years = (-net) / (-fcf)
+    return Reading(value=years, unit="years",
+                   label=(f"at last year's spending ({_money(-fcf, currency)}) that lasts about "
+                          f"{years:.1f} years ({_balance_sheet_date(f)})"))
 
 
 def debt_and_cash(f) -> DebtAndCash:
@@ -319,8 +351,10 @@ def debt_and_cash(f) -> DebtAndCash:
                         label=f"would take {years:.1f} years of free cash flow to repay "
                               f"its debt")
 
+    runway = cash_runway(f, debt=debt, cash=cash, net=net, fcf=fcf, currency=currency)
     return DebtAndCash(net_debt=net_reading, net_debt_to_ocf=ratio,
-                       interest_cover=cover, years_to_repay=repay, currency=currency)
+                       interest_cover=cover, years_to_repay=repay, currency=currency,
+                       cash_runway=runway)
 
 
 # --------------------------------------------------------------------------- #
