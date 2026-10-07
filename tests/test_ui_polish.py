@@ -121,7 +121,9 @@ def test_the_css_has_no_gradient_and_a_light_variant_for_every_variable():
     dark, light = css("dark"), css("light")
     assert "gradient" not in dark and "gradient" not in light
     assert "#0E1217" in dark and "#F5F7FA" in light and "#F5F7FA" not in dark
-    assert "IBM Plex Sans" in dark and "IBM Plex Mono" in dark and "Cinzel" not in dark
+    assert "IBM Plex Sans" in dark and "Cinzel" not in dark
+    # B22-U1: no monospace face at all; numbers are Plex Sans with tabular figures
+    assert "IBM Plex Mono" not in dark and "monospace" not in dark and "tabular-nums" in dark
 
 
 # --------------------------------------------------------------------------- #

@@ -195,3 +195,11 @@ Look and branding only: no rank, vote, verdict, rule or number moved. (T20-10 ab
 | **B21-T16** | Shrink the browser to about 400px wide and open a company result. | The cards stack one under another, the lens table scrolls sideways inside its own box, and the page itself never scrolls sideways. |
 | **B21-T17** | Download the text, HTML and Markdown of a company run. | The HTML header says "Aristos - company report" (was "Aristos Council"). Nothing else in the exports changed. |
 | **B21-T18** | `python -m pytest tests/test_ui_polish.py tests/test_report_sweep.py -q` | Passes (contrast of every chip colour pair >= 4.5:1 in both themes; every builder escapes text; the report sweep stays green). |
+
+## Batch 22
+
+UI fix-ups after Batch 21, plus wording and readings fixes. No rank, vote, verdict, rule or number moved.
+
+| ID | Steps | Expected result |
+|---|---|---|
+| **B22-T1** | Run BYD (1211.HK). Look at the header price, the ranks in the lens table ("10th of 14") and the four stat cards. | All numbers are in the same sans-serif face as the text, digits aligned; nothing looks like a typewriter font. |

@@ -96,10 +96,12 @@ def theme_name() -> str:
 # --------------------------------------------------------------------------- #
 # the one CSS block
 # --------------------------------------------------------------------------- #
+# U1 (Batch 22): numbers were drawn in a Courier-like fallback because IBM Plex Mono never arrived (a
+# second family in the import, fetched lazily). Numbers now use IBM Plex Sans with tabular figures: one
+# family, one request, aligned digits.
 FONT_IMPORT = ("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600"
-               "&family=IBM+Plex+Mono:wght@400;500&display=swap")
+               "&display=swap")
 SANS = "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-MONO = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 
 
 def css(theme: str = "dark") -> str:
@@ -119,7 +121,7 @@ def css(theme: str = "dark") -> str:
 .stApp, [data-testid="stSidebar"] {{ font-family: {SANS}; }}
 /* STREAMLIT INTERNAL: stHeader is the top bar; given the page colour so it never shows a stripe. */
 [data-testid="stHeader"] {{ background: var(--ar-bg); }}
-.ar-num, .ar-table td.ar-num {{ font-family: {MONO}; font-variant-numeric: tabular-nums; }}
+.ar-num, .ar-table td.ar-num {{ font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }}
 .ar-muted {{ color: var(--ar-muted); }}
 
 /* verdict chips: a pill that ALWAYS carries its word */
@@ -239,7 +241,7 @@ def percentile_bar(percentile: float) -> str:
 def table(headers: list[str], rows: list[list[str]], *, raw_cols: Iterable[int] = (),
           num_cols: Iterable[int] = (), reason_col: Optional[int] = None) -> str:
     """A scrolling-inside-its-box table. Cells in ``raw_cols`` are already-built HTML (chips); every
-    other cell is escaped. ``num_cols`` use the mono, tabular face."""
+    other cell is escaped. ``num_cols`` use the tabular-figure style."""
     raw, nums = set(raw_cols), set(num_cols)
     head = "".join(f"<th>{esc(h)}</th>" for h in headers)
     body = []
