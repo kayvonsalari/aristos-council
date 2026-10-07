@@ -235,6 +235,9 @@ _DOCS = {"multi_lens": _multi_doc, "single_lens": _single_doc}
 # --------------------------------------------------------------------------- #
 # 1. VALUE PARITY — the core guard, against a golden captured BEFORE the restyle
 # --------------------------------------------------------------------------- #
+# BASELINE MOVED (2026-10-07, UI-POLISH-1): the product's name in the document kicker is now "Aristos"
+# (was "Aristos Council"). The first line of each golden - and of the pre-REPORT-4 snapshot below - was
+# edited to match; that product-name word is the only thing that moved.
 @pytest.mark.parametrize("name", sorted(_DOCS))
 def test_the_visible_text_is_unchanged_by_the_styling(name):
     """Every number, name, verdict, reason and heading the report showed before the

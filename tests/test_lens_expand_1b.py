@@ -124,10 +124,12 @@ def test_the_page_lens_votes_table_shows_it(tmp_path):
     assert not at.exception
     # COMPANY-STORY-1: the one lens table; the would-rank reading is its compact form in "Reason"
     # (the full sentence is under the workings).
-    votes = next(tb.value for tb in at.table if "Reason" in list(tb.value.columns))
-    cell = votes.loc[by_id[SCREENED].label, "Reason"]
+    # UI-POLISH-1: the same table, now HTML (chips in "Vote or mark"); read its rows back out.
+    from tests._html_table import table_rows
+    votes = {r["Lens"]: r for r in table_rows([m.value for m in at.markdown])}
+    cell = votes[by_id[SCREENED].label]["Reason"]
     assert "would rank" in cell and "not a vote" in cell
-    assert "would rank" not in votes.loc[by_id[RAW].label, "Reason"]
+    assert "would rank" not in votes[by_id[RAW].label]["Reason"]
 
 
 # --------------------------------------------------------------------------- #

@@ -1,4 +1,4 @@
-"""Council Station — a local Streamlit UI over the Aristos Council.
+"""Aristos — a local Streamlit UI over the Aristos Council.
 
 Launch:
     pip install -e ".[ui,yfinance,llm]"
@@ -31,6 +31,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import streamlit as st
+
+from aristos_council import ui_style
 
 from aristos_council.ui_text import escape_dollars, install as install_dollar_safety, reader_text
 from pydantic import ValidationError
@@ -114,7 +116,10 @@ REPORTS_DIR = ROOT / "reports"
 UNIVERSE_RUNS_DIR = REPORTS_DIR / "universe_runs"
 SNAPSHOTS_CSV = ROOT / "snapshots" / "verdict_consensus.csv"
 ASSETS_DIR = ROOT / "assets"
-LOGO_PATH = ASSETS_DIR / "aristos_council_logo.svg"
+LOGO_PATH = ASSETS_DIR / "aristos_logo.svg"          # mark + wordmark, letters as outlines
+LOGO_LIGHT_PATH = ASSETS_DIR / "aristos_logo_light.svg"   # same, dark wordmark for a light theme
+MARK_PATH = ASSETS_DIR / "aristos_mark.svg"          # the "A" square alone (collapsed sidebar)
+FAVICON_PATH = ASSETS_DIR / "aristos_favicon.png"    # 64px
 
 # Verdict semantic colors — the ONLY semantic colors in the app (everything else
 # is the dark base + the single gold accent). Applied to the verdict banner, the
@@ -206,17 +211,9 @@ def _stance_badge(stance: Stance) -> str:
     return _STANCE_BADGE.get(stance, str(stance))
 
 
-def _logo_markup(px: int) -> str:
-    """Inline SVG logo sized to a px square, for the app header."""
-    return f'<div style="width:{px}px;height:{px}px">' \
-           f'{LOGO_PATH.read_text(encoding="utf-8")}</div>'
-
-
 def _favicon() -> str:
-    """SVG logo as a data URI for set_page_config (PIL can't open an SVG path,
-    so a file path would raise; a data URI is handed straight to the browser)."""
-    b64 = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
-    return f"data:image/svg+xml;base64,{b64}"
+    """Path of the 64px PNG favicon (``set_page_config`` opens it with PIL)."""
+    return str(FAVICON_PATH)
 
 
 def _inject_chrome() -> None:
@@ -1212,7 +1209,7 @@ def saved_list_labels(saved) -> list[str]:
 
 def _ids_visible() -> bool:
     """JARGON-UI-1: strategy ids and list fingerprints show on screen only behind the validation
-    toggle ("Show validation & legacy tools"); the exports and run records always keep them."""
+    toggle ("Show validation tools"); the exports and run records always keep them."""
     return bool(st.session_state.get("show_legacy"))
 
 
@@ -1292,6 +1289,9 @@ def opt_lens_checkbox_key(input_kind: str):
     return _key
 
 
+SHOW_LENS_DESC_KEY = "show_lens_desc"
+
+
 def render_lens_checkboxes(choices, key_for) -> list[tuple[str, bool]]:
     """THE lens tick boxes (SHORTLIST-3 / CAPTION-2): same list, same order, same VISIBLE caption
     under each lens, in up to three contiguous columns. The Run tab and Company Check both call
@@ -1300,16 +1300,23 @@ def render_lens_checkboxes(choices, key_for) -> list[tuple[str, bool]]:
     extras: list[tuple[str, bool]] = []
     if not choices:
         return extras
+    show_desc = bool(st.session_state.get(SHOW_LENS_DESC_KEY, False))   # sidebar > Display
     n_cols = min(3, len(choices))
     per_col = -(-len(choices) // n_cols)             # ceil: contiguous, offer-ordered
     for i, col in enumerate(st.columns(n_cols)):
         with col:
             for c in choices[i * per_col:(i + 1) * per_col]:
-                extras.append((c.label, st.checkbox(c.label, key=key_for(c.id))))
-                # CAPTION-2: a VISIBLE caption, not a hover tooltip — a reader comparing five
-                # checkboxes cannot hover five things at once.
-                if lens_caption(c.strategy):
-                    st.caption(lens_caption(c.strategy))
+                caption = lens_caption(c.strategy)
+                if show_desc:
+                    extras.append((c.label, st.checkbox(c.label, key=key_for(c.id))))
+                    # CAPTION-2: a VISIBLE caption, not a hover tooltip - a reader comparing five
+                    # checkboxes cannot hover five things at once.
+                    if caption:
+                        st.caption(caption)
+                else:
+                    # LENS-DESC-TOGGLE: names and tick boxes only; the one-line summary is the "?" tooltip
+                    extras.append((c.label, st.checkbox(c.label, key=key_for(c.id),
+                                                        help=caption or None)))
     return extras
 
 
@@ -2774,16 +2781,17 @@ def _render_shortlist(ag) -> None:
         st.warning(ag.overlap_note)
     cols, rows = lens_agreement_table(ag)
     if rows:
-        st.dataframe(rows, column_order=cols, hide_index=True, width="stretch")
+        from aristos_council import list_cards          # UI-POLISH-1: chips, same cells
+        st.markdown(list_cards.agreement_table(cols, rows), unsafe_allow_html=True)
     else:
         st.info("No name was rated BUY by any voting lens. That is a result, not a gap.")
     band_line = cohort_band_line(ag)            # COHORT-BAND-1
     if band_line:
         st.markdown(f"**{band_line}**")
     if ag.no_buy_count:
-        plural = "s" if ag.no_buy_count != 1 else ""
-        st.caption(f"{ag.no_buy_count} name{plural} had no BUY from any lens, and are not "
-                   "listed here.")
+        one = ag.no_buy_count == 1
+        st.caption(f"{ag.no_buy_count} name{'' if one else 's'} had no BUY from any lens, and "
+                   f"{'is' if one else 'are'} not listed here.")
 
 
 
@@ -2927,7 +2935,7 @@ def _render_multi_strategy_result(multi_result) -> None:
     ids = multi_result.strategy_ids
 
     persisted = st.session_state.get("uni_multi_persisted")
-    if persisted:
+    if persisted and _ids_visible():             # UI-POLISH-1: file paths are a workshop detail
         md_path, html_path = persisted
         st.success(f"💾 Saved this run to: `{_shown_path(md_path)}` and "
                    f"`{_shown_path(html_path)}` — ONE merged report covering all "
@@ -2985,7 +2993,8 @@ def _render_multi_strategy_result(multi_result) -> None:
     st.subheader(VERDICT_TABLE_TITLE)
     rows, _head = multi_strategy_grid_rows(multi_result)
     if rows:
-        st.dataframe(rows, width="stretch", hide_index=True)
+        from aristos_council import list_cards          # UI-POLISH-1: verdict chips, same cells
+        st.markdown(list_cards.grid_table(rows, _head), unsafe_allow_html=True)
     else:
         st.info("No names reported.")
     st.caption(verdict_table_note(multi_result))
@@ -3033,9 +3042,13 @@ def _render_multi_strategy_result(multi_result) -> None:
                 if group.is_gate:
                     st.caption(", ".join(n.name for n in group.names))
                     continue
-                st.dataframe([{"Name": n.name, "Measured": n.measured or "—",
-                               "Note": ", ".join(n.badges)} for n in group.names],
-                             hide_index=True, width="stretch")
+                _group_rows = [{"Name": n.name, "Measured": n.measured or "—",
+                                "Note": ", ".join(n.badges)} for n in group.names]
+                if len(_group_rows) <= 60:               # UI-POLISH-1: the shared table style
+                    from aristos_council import list_cards
+                    st.markdown(list_cards.detail_table(_group_rows), unsafe_allow_html=True)
+                else:                                    # a long group stays a scrolling grid
+                    st.dataframe(_group_rows, hide_index=True, width="stretch")
             if res.unrateable:
                 st.markdown("**No usable data — no verdict was formed**")
                 for t, why in res.unrateable:
@@ -3089,7 +3102,7 @@ def _render_universe_result(result) -> None:
     # UI-FIX-1: where this run landed on disk, prominent — the first thing a user sees
     # so a completed (possibly paid) run is never mistaken for session-only output.
     persisted = st.session_state.get("uni_persisted_paths")
-    if persisted:
+    if persisted and _ids_visible():             # UI-POLISH-1: file paths are a workshop detail
         md_path, html_path = persisted
         st.success(f"💾 Saved to: `{_shown_path(md_path)}` and "
                   f"`{_shown_path(html_path)}`")
@@ -3119,7 +3132,8 @@ def _render_universe_result(result) -> None:
     for line in head[1:]:
         (st.warning if line == _stale else st.caption)(_plain(line))
     st.markdown(f"### {_plain(summary_line(result))}")
-    st.caption(result.header)
+    if _ids_visible():                       # UI-POLISH-1: the machinery line is a validation view
+        st.caption(result.header)
     meta_bits = (f"Screen: {_plain(label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id']))} · "
                  f"ranked {m['ranked_count']} of {plural(m['universe_size'], 'name')}")
     if not m["ranker_only"]:
@@ -3472,7 +3486,7 @@ def render_input(*, show_validation: bool) -> InputChoice:
         st.markdown("**Find a company**")
         find_query = st.text_input(
             "Find a company", value="", key="cc_find", label_visibility="collapsed",
-            placeholder="Type a name or ticker — siemens, novo, rheinmetall, 2330…")
+            placeholder="Name or ticker, e.g. Novo Nordisk or NVO")
         if find_query.strip():
             from aristos_council.company_search import search_companies
             found = search_companies(find_query)
@@ -3702,6 +3716,11 @@ def render_input(*, show_validation: bool) -> InputChoice:
                        n_left_out=n_left_out)
 
 
+# UI-POLISH-1: the ONE line under the page title (replaces the two "Verdict: deterministic ranker..." /
+# "Screen -> rank -> gates..." lines, which described the machinery to a reader who wants the answer).
+TOP_LINE = "Check one company against its rivals, or rank a list. Every lens is one equal vote."
+
+
 def render_run_tab(show_validation: bool = False) -> None:
     """TAB-MERGE-1 commit 3 — ONE tab, "Analyse": Company or Cohort / list, picked by an
     explicit switch (``render_input``). Options (lenses, summary, council) are shown
@@ -3710,8 +3729,7 @@ def render_run_tab(show_validation: bool = False) -> None:
     result renderers are UNCHANGED — this only decides which one runs and shows its
     EXISTING page, in its EXISTING order (Part 2 reorders the company page)."""
     st.subheader("Analyse — one company, or a cohort")
-    st.caption("Screen → rank → gates issue the verdict of record; the LLM only "
-               "narrates. Pick Company or Cohort / list, pick strategies, run.")
+    st.caption(TOP_LINE)
 
     choice = render_input(show_validation=show_validation)
 
@@ -3755,6 +3773,15 @@ def _drop_results_from_another_asset(results_key: str, input_key: str) -> None:
             st.session_state.pop("uni_persisted_paths", None)
         else:
             st.session_state.pop(input_key, None)
+
+
+START_PANEL = (
+    "Check one company against its rivals",
+    "Pick a company and the lenses you trust. Each lens ranks it against similar companies and casts "
+    "one equal vote; the page shows the votes, the reasons and what the numbers say.",
+    ("1. Find a company", "2. Tick lenses", "3. Run, free"),
+    "Want to rank a whole list? Switch to Cohort / list.",
+)
 
 
 def _render_company_run(choice: InputChoice, choices, *, show_validation: bool = False) -> None:
@@ -3808,6 +3835,9 @@ def _render_company_run(choice: InputChoice, choices, *, show_validation: bool =
 
     _drop_results_from_another_asset("cc_report", "cc_report_input")
     report = st.session_state.get("cc_report")
+    if report is None and not run:
+        # UI-POLISH-1 item 6: the start state - a quiet panel where the result will appear
+        st.markdown(ui_style.empty_panel(*START_PANEL), unsafe_allow_html=True)
     if report is not None:
         st.divider()
         _note = _stale_results_note(
@@ -3974,7 +4004,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
             est = estimate_cost(narrated_count)
         else:
             est = estimate_cost(per_lens)
-    if multi and not run_mode_narrates(run_mode):
+    if multi and not run_mode_narrates(run_mode) and _ids_visible():    # UI-POLISH-1: workshop detail
         st.caption(f"Multi-lens re-grade: **{len(strategies)}** strategies × "
                    f"**{plural(len(universe), 'name')}** — deterministic ranker only "
                    f"(no narration, no cost), reported as ONE combined grid.")
@@ -4313,7 +4343,13 @@ def _render_company_report(report) -> None:
     from aristos_council.export.report_html import company_report_html
 
     check = report.check
-    st.markdown(f"### Company Report — {report.display}")
+    from aristos_council import company_cards
+    if report.unrateable:
+        st.markdown(f"### Company Report — {report.display}")
+    else:
+        # UI-POLISH-1 item 4: a header card (name, where it trades, last price) and a row of chips
+        st.markdown(company_cards.header_card(report), unsafe_allow_html=True)
+        st.markdown(company_cards.summary_chips(report), unsafe_allow_html=True)
     st.caption(HOUSE_LINE)
 
     # TAB-MERGE-1 part 2 commit 4 — click-through from a list result. Shown ONLY when
@@ -4361,9 +4397,10 @@ def _render_company_report(report) -> None:
     if page.no_vote:
         st.info(page.no_vote)
     else:
-        # LENS-TABLE-WRAP-1: ``st.table`` wraps a long cell where ``st.dataframe`` cuts it off.
-        st.table(pd.DataFrame([dict(zip(page.headers, r.cells())) for r in page.rows]
-                              ).set_index(page.headers[0]))
+        # UI-POLISH-1: the vote is a verdict chip (its WORD always shown), the track record a small
+        # outlined label, the reason muted. The same cells as before, in an HTML table that wraps long
+        # reasons (LENS-TABLE-WRAP-1) and scrolls sideways inside its own box on a phone.
+        st.markdown(company_cards.lens_table(report), unsafe_allow_html=True)
         asked = [r for r in page.rows if r.asks]
         if asked:
             with st.expander("What each lens asks"):
@@ -4371,6 +4408,9 @@ def _render_company_report(report) -> None:
                     st.markdown(f"**{r.lens}** — {r.asks}")
     if page.caption:
         st.caption(page.caption)
+
+    if not page.no_vote:                                   # four small cards, above the workings
+        st.markdown(company_cards.stat_cards(report), unsafe_allow_html=True)
 
     if report.council_opinion is not None:                # only when it was ticked
         st.subheader("Council opinion")
@@ -4420,9 +4460,8 @@ def _render_company_report(report) -> None:
                 if r.badge_detail:
                     st.caption(f"{r.lens} track record: {r.badge_detail}")
         _render_sources(check)
-        # BACKTEST-2 — the page footer, so a badge is never on screen without a way to read how it
-        # was earned.
-    st.caption("How lenses are graded: docs/BACKTEST.md")
+        # BACKTEST-2: a badge is never on screen without a way to read how it was earned - that line
+        # now lives inside Sources (UI-POLISH-1), not as a page footer.
 
     # Two exports side by side (REPORT-HTML-1): the text is canonical, the HTML the shareable copy.
     from aristos_council.download_names import (company_check_download_name,
@@ -4446,12 +4485,16 @@ def _render_company_report(report) -> None:
         st.download_button(f"⬇ Download report (Markdown) — {md_name}",
                            data=company_report_markdown(report), file_name=md_name,
                            mime="text/markdown", key="cc_report_download_md")
-    tail = f"Ran in {report.seconds:.1f}s"
-    if report.cache.get("hits") is not None:
-        tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"
-    if report.saved_to:
-        tail += f"; saved under `{report.saved_to}`"
-    st.caption(tail)
+    if _ids_visible():                       # UI-POLISH-1: timings, cache counts and paths are workshop details
+        tail = f"Ran in {report.seconds:.1f}s"
+        if report.cache.get("hits") is not None:
+            tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"
+        if report.saved_to:
+            tail += f"; saved under `{report.saved_to}`"
+        st.caption(tail)
+
+
+HOW_GRADED_TOPIC = "How lenses are graded"
 
 
 def _render_sources(result) -> None:
@@ -4465,6 +4508,7 @@ def _render_sources(result) -> None:
     st.subheader("Sources")
     for s in sources:
         st.markdown(f"- **{s.topic}:** {s.text}")
+    st.markdown(f"- **{HOW_GRADED_TOPIC}:** docs/BACKTEST.md")
 
 
 # --------------------------------------------------------------------------- #
@@ -4537,23 +4581,15 @@ def main() -> None:
     except Exception:
         pass  # python-dotenv is a runtime extra; browsing past runs doesn't need it
 
-    try:
-        st.set_page_config(page_title="Council Station", page_icon=_favicon(),
-                           layout="wide")
-    except Exception:  # data-URI favicon rejected — fall back to an emoji
-        st.set_page_config(page_title="Council Station", page_icon="🏛",
-                           layout="wide")
+    st.set_page_config(page_title="Aristos", page_icon=_favicon(), layout="wide")
     _inject_chrome()
+    ui_style.inject()               # UI-POLISH-1: the ONE custom-CSS block (chips, cards, fonts)
     install_dollar_safety(st)       # DOLLAR-MATH-1: every markdown-rendering call is $-safe
-
-    col_logo, col_title = st.columns([1, 11], vertical_alignment="center")
-    with col_logo:
-        st.markdown(_logo_markup(52), unsafe_allow_html=True)
-    with col_title:
-        st.title("Council Station")
-    # v2 subtitle: the division of labor is the product's headline (the math judges,
-    # the LLM narrates) — not "control room for the council" (the demoted pre-v2 frame).
-    st.caption("**Verdict: deterministic ranker. Narrative: LLM (non-judging).**")
+    try:                            # the logo; st.logo exists from Streamlit 1.35
+        st.logo(str(LOGO_LIGHT_PATH if ui_style.theme_name() == "light" else LOGO_PATH),
+                icon_image=str(MARK_PATH), size="large")
+    except Exception:               # noqa: BLE001 - a missing image must never stop the app
+        pass
 
     # Legacy surfaces are HIDDEN BY DEFAULT (product decision): the app opens as
     # v2-only. Read the toggle's persisted value FIRST so the pre-v2 flow renders only
@@ -4618,16 +4654,22 @@ def main() -> None:
                 st.caption("Acknowledge the cost to enable the Run button.")
             st.divider()
 
-        # The toggle — small, at the very bottom of the sidebar, in BOTH states so it
-        # is always the way back. No `value=` so its default is off and tests/session
-        # can set it without a default-conflict warning.
+        # DISPLAY (UI-POLISH-1): the two view switches. The validation toggle stays in BOTH states so it is
+        # always the way back. No `value=`: the default is off, and tests/session can set a key without a
+        # default-conflict warning. Both are session-only.
+        st.markdown("**Display**")
         st.toggle(
-            "Show validation & legacy tools", key="show_legacy",
-            help="Reveal the validation assets — the known-trap bench universe and the "
-                 "Classic Value baseline strategy (for side-by-side comparison) — plus "
+            "Show lens descriptions", key=SHOW_LENS_DESC_KEY,
+            help="Show each lens's full description under its tick box. Off: names and tick boxes "
+                 "only, with the one-line summary on the small ? beside each lens.")
+        st.toggle(
+            "Show validation tools", key="show_legacy",
+            help="Reveal the validation assets - the known-trap bench universe and the "
+                 "Classic Value baseline strategy (for side-by-side comparison) - plus "
                  "the legacy single-ticker council, its Report/History, and the "
-                 "council-strategy editor. Off by default — the app opens on the live "
-                 "scoreboard strategies and universes only.")
+                 "council-strategy editor, and the run's working details (file paths, timings). "
+                 "Off by default - the app opens on the live scoreboard strategies and "
+                 "universes only.")
 
     if show_legacy and run_clicked and selected_path is not None:
         try:

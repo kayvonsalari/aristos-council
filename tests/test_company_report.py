@@ -576,11 +576,12 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     assert "Valuation band" in heads
     frames = [df.value for df in at.dataframe]
     # LENS-TABLE-WRAP-1: the lens table is a wrapping ``st.table`` now, not a scrolling grid
-    wrapped = [tb.value for tb in at.table]
-    assert any("Reason" in list(f.columns) for f in wrapped)              # the one lens table
-    votes = next(f for f in wrapped if "Reason" in list(f.columns))
-    assert list(votes.columns) == ["Vote or mark", "Badge", "Reason"]
-    assert any(str(r).startswith("does not apply") for r in votes["Vote or mark"])
+    # UI-POLISH-1: that table is now an HTML table (verdict chips); its rows are read back out
+    from tests._html_table import table_rows
+    votes = table_rows([m.value for m in at.markdown])
+    assert votes                                                            # the one lens table
+    assert list(votes[0]) == ["Lens", "Vote or mark", "Badge", "Reason"]
+    assert any(str(r["Vote or mark"]).startswith("does not apply") for r in votes)
     assert any("Market cap (USD)" in list(f.columns) for f in frames)     # the numeric peers table
     # the page carries no Streamlit-side model call: the summary came from the injected writer
     assert report.summary.available

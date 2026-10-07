@@ -105,9 +105,14 @@ def test_verdict_hex_is_the_only_semantic_palette():
     assert "INSUFFICIENT_EVIDENCE" in app._VERDICT_DOT
 
 
-def test_favicon_is_svg_data_uri():
-    uri = app._favicon()
-    assert uri.startswith("data:image/svg+xml;base64,")
+def test_favicon_is_the_64px_png():
+    """UI-POLISH-1: the old SVG data-URI favicon (the bank-building icon) is replaced by the Aristos
+    mark as a real 64px PNG, which ``set_page_config`` opens by path."""
+    from PIL import Image
+    path = Path(app._favicon())
+    assert path.name == "aristos_favicon.png" and path.exists()
+    with Image.open(path) as im:
+        assert im.size == (64, 64)
 
 
 # --------------------------------------------------------------------------- #
@@ -555,7 +560,7 @@ def test_legacy_hidden_by_default_and_toggle_defaults_off():
     assert not at.exception
     # the toggle exists and defaults OFF
     legacy_toggle = next(t for t in at.toggle
-                         if t.label == "Show validation & legacy tools")
+                         if t.label == "Show validation tools")
     assert legacy_toggle.value is False
     assert at.session_state["show_legacy"] is False
     # NO legacy surface rendered: no council-run button, no legacy sidebar header, no
@@ -906,14 +911,16 @@ def test_screen_chrome_css_keeps_controls_reachable():
     assert "Sidebar" in screen_css                        # sidebar toggle kept
 
 
-def test_toolbar_mode_keeps_menu_reachable():
-    # The ⋮ menu is gated server-side by toolbarMode: "viewer"/"minimal" hide it
-    # entirely (no CSS restores it). Only "auto" (localhost) / "developer" render
-    # the menu + its Settings/theme switch, so config.toml must use one of those.
+def test_toolbar_mode_hides_deploy_and_the_developer_menu():
+    # UI-POLISH-1 (owner's decision, Batch 21 item 3): the Deploy button and developer menu are
+    # hidden for demos. toolbarMode "minimal"/"viewer" does that SERVER-SIDE - and on Streamlit 1.58 it
+    # takes the whole top-right menu with it, Settings/theme switch included (the earlier version of
+    # this test required "auto"/"developer" to keep that menu). The sidebar toggle stays reachable (the
+    # CSS test above), and the app ships dark with a light palette for a forced light theme.
     import tomllib
     cfg = tomllib.loads(
         (_APP.parent / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
-    assert cfg["client"]["toolbarMode"] in ("auto", "developer")
+    assert cfg["client"]["toolbarMode"] in ("minimal", "viewer")
 
 
 def test_human_number_formats_large_thresholds():
@@ -1271,6 +1278,11 @@ def test_saved_to_banner_shows_the_persisted_paths():
     at.session_state["uni_universe_display_name"] = "Growth 40"
     at = at.run()
     assert not at.exception
+    # UI-POLISH-1: the path banner is a workshop detail - hidden unless "Show validation tools" is on
+    assert not any("Saved to:" in str(getattr(s, "value", "")) for s in at.success)
+    at.session_state["show_legacy"] = True
+    at = at.run()
+    assert not at.exception
     blob = " ".join(str(getattr(s, "value", "")) for s in at.success)
     assert "Saved to:" in blob
     assert "reports" in blob and "universe_runs" in blob and "x.md" in blob
@@ -1402,6 +1414,11 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     # describe, only exist behind the validation toggle). Nothing to select — the
     # deterministic run this test is about is already what's in force.
     assert not any(str(c.label) == "Council opinion" and c.value for c in at.checkbox)
+    # UI-POLISH-1: the re-grade explainer is a workshop detail - hidden by default, shown behind
+    # "Show validation tools" (same sentence as before).
+    assert "Multi-lens re-grade" not in _caption_blob(at)
+    next(t for t in at.toggle if t.label == "Show validation tools").set_value(True).run()
+    assert not at.exception
     blob = _caption_blob(at)
     assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
     assert "ONE combined grid" in blob

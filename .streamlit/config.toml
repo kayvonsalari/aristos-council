@@ -1,25 +1,24 @@
-# Council Station theme — institutional, restrained (Bloomberg-terminal register).
-# Dark base, off-white text, a single muted-gold accent. No gradients. The only
-# OTHER colors in the app are the three semantic verdict colors (BUY/HOLD/SELL),
-# applied in code — never decoratively.
+# Aristos theme (UI-POLISH-1) - calm, dark, professional. One accent; the verdict colours (BUY green,
+# HOLD amber, SELL red) are applied in code by aristos_council/ui_style.py, never decoratively.
+# The custom CSS (chips, cards, fonts) lives in ONE file, ui_style.py; this file is Streamlit's own,
+# supported theming route for the page, panel, text and accent colours.
 
 [theme]
-base = "light"
-backgroundColor = "#0E1117"          # app background
-secondaryBackgroundColor = "#1A1F2B" # cards, sidebar, expanders
-textColor = "#E8E6E3"                # off-white
-primaryColor = "#52B6A4"             # teal — the single accent
-font = "serif"                       # classical, institutional
+base = "dark"
+backgroundColor = "#0E1217"          # page
+secondaryBackgroundColor = "#161D26" # panels, cards, sidebar, inputs
+textColor = "#E6EAF0"
+primaryColor = "#7FB2FF"             # the single accent
+borderColor = "#263241"
+font = "sans-serif"                  # IBM Plex Sans is added by ui_style.py's CSS (Google Fonts)
 
 [client]
-# toolbarMode gates the top-right ⋮ menu SERVER-SIDE (no CSS can restore it):
-#   "viewer"/"minimal" -> the toolbar menu is hidden entirely (this was the bug:
-#     "viewer" does NOT keep a Settings menu, contrary to the old note here).
-#   "auto" (default)   -> shows the full menu (Settings/theme included) on
-#     localhost / for the developer; hides dev options for deployed viewers.
-#   "developer"        -> always shows the full menu.
-# We run locally, so "auto" makes the ⋮ menu (and its theme switch) reachable.
-toolbarMode = "auto"
+# "minimal" hides the Deploy button and the developer menu (measured on Streamlit 1.58: the whole
+# top-right menu goes with them, so the app is dark and stays dark unless a Streamlit light theme is
+# forced, e.g. `streamlit run app.py --theme.base light`). The custom CSS has a light palette for that
+# case (ui_style.LIGHT); we deliberately do NOT define [theme.light] here, because that would make
+# Streamlit follow the visitor's operating-system setting and open the product in light.
+toolbarMode = "minimal"
 
 [browser]
 gatherUsageStats = false
