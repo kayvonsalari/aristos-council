@@ -4219,6 +4219,8 @@ def _render_absolute_readings(result, *, with_analyst: bool = True) -> None:
         st.markdown("**Debt and cash**")
         for line in debt.lines():
             st.markdown(f"- {line}")
+        for note in debt.notes():                    # FINANCE-ARM-1: muted, said once
+            st.caption(note)
     if growth is not None:
         st.markdown("**Growth record**" + mixed_source_marker(result, growth.source_tag))
         for line in growth.lines():
