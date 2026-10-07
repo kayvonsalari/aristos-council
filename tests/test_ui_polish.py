@@ -437,3 +437,8 @@ def test_u6_the_valuation_bar_is_blue_grey_orange_not_green_amber_red():
             assert pal[key] not in (DARK["buy_fg"], DARK["hold_fg"], DARK["sell_fg"], "#3FB68B", "#E6B246", "#E5484D")
     assert "#2E5C8F" in css("dark") and "#8F5A2E" in css("dark")
     assert "left:30.0%" in percentile_bar(30)
+
+
+def test_u7_the_heading_link_icons_are_hidden():
+    from aristos_council.ui_style import css
+    assert 'stHeaderActionElements"] { display: none !important; }' in css("dark")

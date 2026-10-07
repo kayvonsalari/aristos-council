@@ -208,3 +208,4 @@ UI fix-ups after Batch 21, plus wording and readings fixes. No rank, vote, verdi
 | **B22-T4** | Look at the green run button, in Company and in Cohort / list (tick 3 lenses). | Company: "Run company check · free". List: "Run 3 lenses · free". With the summary or council ticked the button still states the model calls. |
 | **B22-T5** | Run a company; look at the three download buttons; hover each. | Three short buttons: "Download text", "Download HTML", "Download Markdown" on one line each; hovering shows the file name. |
 | **B22-T6** | Run any company with a valuation band; look at the bar in the first stat card. | The bar runs blue (cheapest) - grey - orange (dearest) with a marker at the percentile; there is no green or red in it. |
+| **B22-T7** | Look next to "Lens by lens", "The answer" and the other headings; hover them. | No link/anchor icon appears beside any heading. |

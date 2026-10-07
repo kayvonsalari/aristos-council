@@ -15,7 +15,9 @@ Streamlit's markdown would otherwise read two dollar signs as maths (DOLLAR-MATH
 STREAMLIT INTERNALS: Streamlit updates can break custom CSS, so the block uses our own ``ar-`` classes
 wherever it can and only these Streamlit hooks, each commented where it appears in ``css()``:
 ``.stApp`` (page background and font), ``[data-testid="stSidebar"]`` (sidebar font),
-``[data-testid="stHeader"]`` (the top bar's colour), and ``[data-testid="stMarkdownContainer"]``
+``[data-testid="stHeader"]`` (the top bar), ``[data-testid="stMainBlockContainer"]`` (top padding),
+``[data-testid="stHeaderActionElements"]`` (heading link icons), ``[data-testid="stElementContainer"]``
+(our own style blocks), and ``[data-testid="stMarkdownContainer"]``
 (table text size). Nothing else of Streamlit's is restyled; the colours themselves come from
 ``.streamlit/config.toml``, which is Streamlit's supported theming route.
 """
@@ -120,8 +122,8 @@ def css(theme: str = "dark") -> str:
 /* STREAMLIT INTERNAL: .stApp is the page root; the font is set here and inherited. Icons keep their own
    font because Streamlit sets it on the icon element itself. */
 .stApp, [data-testid="stSidebar"] {{ font-family: {SANS}; }}
-/* STREAMLIT INTERNAL: stHeader is the top bar; given the page colour so it never shows a stripe. */
-[data-testid="stHeader"] {{ background: var(--ar-bg); }}
+/* B22-U7. STREAMLIT INTERNAL: stHeaderActionElements is the link icon Streamlit puts beside every heading. */
+[data-testid="stHeaderActionElements"] {{ display: none !important; }}
 .ar-num, .ar-table td.ar-num {{ font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }}
 .ar-muted {{ color: var(--ar-muted); }}
 
