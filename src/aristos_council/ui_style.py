@@ -37,7 +37,8 @@ DARK = {
     "hold_fg": "#EBC46E", "hold_bg": "rgba(230,178,70,.16)",
     "sell_fg": "#F2858A", "sell_bg": "rgba(229,72,77,.18)",
     "na_fg": "#B7C2D0", "na_bg": "#1C2530",
-    "bar_a": "#3FB68B", "bar_b": "#E6B246", "bar_c": "#E5484D",
+    # B22-U6: cheap is not "good" - the valuation bar is blue -> grey -> orange, never green/amber/red
+    "bar_a": "#2E5C8F", "bar_b": "#263241", "bar_c": "#8F5A2E",
 }
 LIGHT = {
     "bg": "#F5F7FA", "panel": "#FFFFFF", "border": "#D3DBE6", "text": "#16202C",
@@ -46,7 +47,7 @@ LIGHT = {
     "hold_fg": "#7A5300", "hold_bg": "rgba(210,150,20,.18)",
     "sell_fg": "#A3202A", "sell_bg": "rgba(210,50,60,.13)",
     "na_fg": "#3F4B5B", "na_bg": "#E8EDF3",
-    "bar_a": "#2C9C74", "bar_b": "#C99A22", "bar_c": "#D0343B",
+    "bar_a": "#2E5C8F", "bar_b": "#C3CCD8", "bar_c": "#B8742E",
 }
 PALETTES = {"dark": DARK, "light": LIGHT}
 

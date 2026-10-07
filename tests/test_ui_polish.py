@@ -427,3 +427,13 @@ def test_u5_the_download_buttons_are_short_and_carry_the_file_name_as_tooltip(tm
     helps = [b.proto.help for b in buttons]
     assert helps[0].endswith(".txt") and helps[1].endswith(".html") and helps[2].endswith(".md")
     assert all("company_check_" in h for h in helps)
+
+
+def test_u6_the_valuation_bar_is_blue_grey_orange_not_green_amber_red():
+    from aristos_council.ui_style import DARK, LIGHT, css, percentile_bar
+    assert (DARK["bar_a"], DARK["bar_b"], DARK["bar_c"]) == ("#2E5C8F", "#263241", "#8F5A2E")
+    for pal in (DARK, LIGHT):
+        for key in ("bar_a", "bar_b", "bar_c"):
+            assert pal[key] not in (DARK["buy_fg"], DARK["hold_fg"], DARK["sell_fg"], "#3FB68B", "#E6B246", "#E5484D")
+    assert "#2E5C8F" in css("dark") and "#8F5A2E" in css("dark")
+    assert "left:30.0%" in percentile_bar(30)
