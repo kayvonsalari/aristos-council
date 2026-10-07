@@ -329,6 +329,9 @@ def _happened(report) -> str:
     ranked = [v for v in _voting(report) if v.ranked]
     if ranked:
         bits.append("Voting: " + "; ".join(f"{v.label} {v.result()}" for v in ranked) + ".")
+        note = usable_figures_note(report)
+        if note:
+            bits.append(note[:1].upper() + note[1:])
     else:
         bits.append("No lens voted.")
     groups = _excluded_groups(report)
@@ -441,6 +444,28 @@ def summary_note(report) -> str:
         return ""
     why = _plain_reason(getattr(s, "note", "")) or "it did not pass its checks"
     return f"{SUMMARY_WITHHELD_PREFIX}: {why}."
+
+
+def usable_figures_note(report) -> str:
+    """B22-B3: the group is the company plus its peers (BYD: 20), but each lens ranks only the companies
+    that had usable figures for IT (14 for three of them, 20 for Forensic). "" when every lens ranked the
+    whole group, so the note appears only where the numbers on the page would otherwise puzzle."""
+    group = getattr(report, "peer_group", None)
+    members = getattr(group, "members", None)
+    if not members:
+        return ""
+    total = len(members) + 1
+    ranked = [(v.label, v.cohort_size) for v in report.votes if v.ranked and v.cohort_size]
+    if not ranked or all(n == total for _l, n in ranked):
+        return ""
+    by_n: dict[int, list[str]] = {}
+    for label, n in ranked:
+        by_n.setdefault(n, []).append(label)
+    parts = []
+    for i, (n, labels) in enumerate(by_n.items()):
+        parts.append(f"{n} of {total} had usable figures for {_join(labels)}" if i == 0
+                     else f"{n} of {total} for {_join(labels)}")
+    return "; ".join(parts) + "."
 
 
 # --------------------------------------------------------------------------- #
@@ -577,6 +602,7 @@ class StoryPage:
     rows: tuple
     caption: str                  # the track-record line under the table
     no_vote: str                  # shown instead of the table when no lens was ticked
+    group_note: str = ""          # "14 of 20 had usable figures for ..." (B22-B3), muted, under the table
 
 
 def story_page(report) -> StoryPage:
@@ -593,7 +619,8 @@ def story_page(report) -> StoryPage:
         answer=answer_lines(report), paragraphs=paragraphs, model_summary=model,
         note=summary_note(report), tag=tuple(small_company_tag(report)),
         headers=tuple(TABLE_HEADERS), rows=tuple(table_rows(report)), caption=track_caption(report),
-        no_vote="" if report.votes else (report.no_vote_reason or NO_LENS_REASON))
+        no_vote="" if report.votes else (report.no_vote_reason or NO_LENS_REASON),
+        group_note=usable_figures_note(report))
 
 
 def narration_check_line(report) -> str:

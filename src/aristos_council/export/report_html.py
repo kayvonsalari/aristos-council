@@ -1610,6 +1610,8 @@ def _story_html(report) -> str:
         table.append(_table(list(page.headers), rows))
     if page.caption:
         table.append(f'<p class="note">{_esc(page.caption)}</p>')
+    if page.group_note:
+        table.append(f'<p class="note">{_esc(page.group_note)}</p>')
     out.append("".join(table) + "</section>")
     return _JOIN.join(out)
 

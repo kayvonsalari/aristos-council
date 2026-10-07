@@ -72,6 +72,8 @@ def company_report_markdown(report) -> str:
         out.append("")
     if page.caption:
         out += [f"*{page.caption}*", ""]
+    if page.group_note:
+        out += [f"*{page.group_note}*", ""]
 
     if report.council_opinion is not None:
         op = report.council_opinion

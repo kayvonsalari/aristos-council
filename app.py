@@ -4413,6 +4413,8 @@ def _render_company_report(report) -> None:
                     st.markdown(f"**{r.lens}** — {r.asks}")
     if page.caption:
         st.caption(page.caption)
+    if page.group_note:                                    # B22-B3
+        st.caption(page.group_note)
 
     if not page.no_vote:                                   # four small cards, above the workings
         st.markdown(company_cards.stat_cards(report), unsafe_allow_html=True)

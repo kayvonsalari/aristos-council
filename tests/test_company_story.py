@@ -487,3 +487,46 @@ def test_b22_u10_one_lens_says_its_reason_and_several_keep_the_old_shapes():
     assert answer_lines(same)[1].startswith("Two lenses did not apply, all for one reason: " + NO_PROFIT)
     mixed = _report([_skip("A"), _skip("B"), _skip("C", "dividend yield 0%; the rule requires at least 1.5%")])
     assert "the most common reason (two of them)" in answer_lines(mixed)[1]
+
+
+# --------------------------------------------------------------------------- #
+# Batch 22 B3 - group sizes explained once
+# --------------------------------------------------------------------------- #
+def _byd_like():
+    chk = _check(name="BYD Company Limited")
+    chk.peer_group = SimpleNamespace(members=list(range(19)), step=2, snapshot="2026-09-25", thin=False,
+                                     broad=False)
+    return _report([_rank("Earnings Power Value", "hold", 10, of=14), _rank("Quality", "hold", 4, of=14),
+                    _rank("Forensic", "buy", 16, of=20, kind="check"),
+                    _skip("Growth", "return on invested capital 9.3%; the rule requires at least 12%")],
+                   check=chk)
+
+
+def test_b22_b3_the_usable_figures_note_says_n_of_total_once_per_group():
+    from aristos_council.company_story import usable_figures_note
+    rep = _byd_like()
+    assert usable_figures_note(rep) == ("14 of 20 had usable figures for Earnings Power Value and Quality; "
+                                        "20 of 20 for Forensic.")
+    assert story_page(rep).group_note == usable_figures_note(rep)
+
+
+def test_b22_b3_no_note_when_every_lens_ranked_the_whole_group():
+    from aristos_council.company_story import usable_figures_note
+    chk = _check()
+    chk.peer_group = SimpleNamespace(members=list(range(13)), step=1, snapshot="", thin=False, broad=False)
+    assert usable_figures_note(_report([_rank("Quality", "hold", 4, of=14)], check=chk)) == ""
+
+
+def test_b22_b3_the_story_and_every_export_use_the_same_words(tmp_path):
+    from dataclasses import replace
+    rep = _run([RAW, SCREENED], tmp_path=tmp_path)
+    total = len(rep.check.peer_group.members) + 1
+    rep.votes = [replace(v, cohort_size=total - 3) if v.ranked and i == 0 else v
+                 for i, v in enumerate(rep.votes)]
+    from aristos_council.company_story import usable_figures_note
+    note = usable_figures_note(rep)
+    assert note.startswith(f"{total - 3} of {total} had usable figures for ")
+    happened = dict(story_paragraphs(rep))["What happened."]
+    assert note[0].upper() + note[1:] in happened
+    text, html, md = format_company_report(rep), company_report_html(rep), company_report_markdown(rep)
+    assert note in text and note in md and note in html

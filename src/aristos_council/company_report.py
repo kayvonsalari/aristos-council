@@ -1288,6 +1288,8 @@ def story_text_lines(report: CompanyReport) -> list[str]:
         lines += _text_table(page.headers, [r.cells() for r in page.rows])
     if page.caption:
         lines.append(page.caption)
+    if page.group_note:
+        lines.append(page.group_note)
     return lines
 
 
