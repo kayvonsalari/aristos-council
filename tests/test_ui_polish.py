@@ -394,3 +394,17 @@ def test_the_theme_follows_the_configured_base_not_the_browser(monkeypatch):
 def test_the_light_logo_has_a_dark_wordmark():
     svg = (ASSETS / "aristos_logo_light.svg").read_text(encoding="utf-8")
     assert 'fill="#16202C"' in svg and 'fill="#E6EAF0"' not in svg and "<text" not in svg
+
+
+# --------------------------------------------------------------------------- #
+# Batch 22
+# --------------------------------------------------------------------------- #
+def test_u3_the_paid_extras_sit_below_the_lens_grid_under_their_own_heading():
+    at = _app_test()
+    html = _html_blob(at)
+    assert "Optional extras (paid AI calls)" in html
+    labels = [c.label for c in at.checkbox]
+    extras = [i for i, l in enumerate(labels) if l in ("Plain-English summary", "Council opinion")]
+    lenses = [i for i, c in enumerate(at.checkbox) if c.key and c.key.startswith("opt_lens_company_")]
+    assert extras and lenses and min(extras) > max(lenses)
+    assert all(c.help for c in at.checkbox if c.label in ("Plain-English summary", "Council opinion"))

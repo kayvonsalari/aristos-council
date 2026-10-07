@@ -1393,6 +1393,9 @@ def company_page_offered(mode: str) -> bool:
     return mode != ETFS
 
 
+OPTIONAL_EXTRAS_HEADING = "Optional extras (paid AI calls)"
+
+
 def render_run_options(choices, *, input_kind: str, show_council: bool,
                        show_validation: bool = False) -> RunOptions:
     """ONE options block, called once per input kind. ``input_kind`` is "list" (the Run
@@ -1422,6 +1425,9 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
     # view; a reader already has each lens's question under its own tick box.
     if show_validation:
         lens_selection_captions(strategies)
+    # B22-U3: the two paid AI extras are not lenses - their own small heading sets them apart from the grid
+    st.markdown(f'<div class="ar-sub" style="margin-top:14px">{OPTIONAL_EXTRAS_HEADING}</div>',
+                unsafe_allow_html=True)
     _sync_from_store(f"opt_summary_{input_kind}", "summary", switched=switched)
     with_summary = st.checkbox(
         "Plain-English summary", value=False, key=f"opt_summary_{input_kind}",
