@@ -408,3 +408,13 @@ def test_u3_the_paid_extras_sit_below_the_lens_grid_under_their_own_heading():
     lenses = [i for i, c in enumerate(at.checkbox) if c.key and c.key.startswith("opt_lens_company_")]
     assert extras and lenses and min(extras) > max(lenses)
     assert all(c.help for c in at.checkbox if c.label in ("Plain-English summary", "Council opinion"))
+
+
+def test_u4_the_free_run_buttons_say_free_in_one_short_phrase():
+    import app
+    assert app.run_button_label(with_council=False, n_strategies=3) == "▶ Run company check · free"
+    assert app.run_button_label(app.RUN_MODE_RANKER, n_strategies=7) == "▶ Run 7 lenses · free"
+    assert app.run_button_label(app.RUN_MODE_RANKER, n_strategies=1) == "▶ Run · free"
+    assert "model call" in app.run_button_label(with_council=False, with_reader=True, n_strategies=1)
+    at = _app_test()
+    assert any(b.label == "▶ Run company check · free" for b in at.button)

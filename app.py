@@ -1524,7 +1524,7 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
                      with_council: bool | None = None) -> str:
     """The button says what will happen and what it costs, on its own line:
 
-        ``▶ Run 5 lenses — deterministic, free``
+        ``▶ Run 5 lenses · free``
         ``▶ Run 5 lenses — up to 13 names narrated, est. ≤ $0.68``
         ``▶ Run — narrated, est. $0.42``
 
@@ -1542,7 +1542,7 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
         extras = [n for n, on in (("summary", with_reader), ("council opinion", with_council))
                  if on]
         if not extras:
-            return "▶ Run company check (free — no LLM)"
+            return "▶ Run company check · free"
         if extras == ["summary"]:
             return "▶ Run company check + summary (one model call)"
         if extras == ["council opinion"]:
@@ -1553,8 +1553,7 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
     # ranker-only run with it ticked is no longer free and the button must stop saying so.
     reader_tail = f" + summary ~{READER_COST_HINT}" if with_reader else ""
     if not run_mode_narrates(run_mode):
-        return (f"▶ {what} — deterministic, free{reader_tail}" if with_reader
-                else f"▶ {what} — deterministic, free")
+        return (f"▶ {what} · free{reader_tail}" if with_reader else f"▶ {what} · free")
     # THIS BUTTON IS FREE. It runs the deterministic ranking and charges nothing —
     # narration is offered afterwards, from a second button carrying the exact figure
     # (CONFIRM-SPEND-1). The label used to read "Run 3 lenses — up to 12 names narrated,
