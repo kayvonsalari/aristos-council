@@ -164,3 +164,18 @@ def test_a_gics_narrowed_cohort_needs_the_right_sub_industry():
            == "industrials_industrial_machinery")
     assert cohort_for_industry("Specialty Industrial Machinery", "Something Unrelated") is None
     assert cohort_for_industry("Specialty Industrial Machinery", None) is None
+
+
+def test_b22_b7b_the_badge_detail_is_in_plain_words():
+    from aristos_council.backtest import Badge
+    line = Badge(label="not proven", verdict="not proven", mean_excess=-0.011, luck_pct=0.51,
+                 years_positive=4, years_measured=10, rounds_held=108).detail_line()
+    assert line == ("beat its group by -1.1% a year on average · 4 of 10 years positive · "
+                    "a random pick did as well 51% of the time · 108 monthly test rounds")
+    for jargon in ("mean excess", "luck", "rounds held", "/yr"):
+        assert jargon not in line
+    assert "no random-pick comparison" in Badge(
+        label="x", verdict="x", mean_excess=0.02, luck_pct=None, years_positive=6, years_measured=10,
+        rounds_held=1).detail_line()
+    assert "1 monthly test round" in Badge(label="x", verdict="x", mean_excess=0.02, luck_pct=0.1,
+                                           years_positive=6, years_measured=10, rounds_held=1).detail_line()

@@ -74,7 +74,7 @@ PEERS (who this company would be measured against):
 
 LENS NOTES (what each lens asks, its full reason, its track record)
   Magic Formula RAW: Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities).
-  Magic Formula RAW track record: mean excess -7.9%/yr · 4 of 10 years positive · luck 94% · 108 rounds held - In this cohort, picking names at random would have matched or beaten this lens at least 9 times in 10.
+  Magic Formula RAW track record: beat its group by -7.9% a year on average · 4 of 10 years positive · a random pick did as well 94% of the time · 108 monthly test rounds - In this cohort, picking names at random would have matched or beaten this lens at least 9 times in 10.
 
 SOURCES
   Fundamentals and accounts: fake, fetched 2026-06-30

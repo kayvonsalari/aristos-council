@@ -1575,14 +1575,16 @@ class Badge:
     note: str = ""                      # why "untested here", when it needs saying; else ""
 
     def detail_line(self) -> str:
-        """"mean excess +4.5%/yr · 7 of 10 years positive · luck 4% · 108 rounds held" - the numbers
-        behind the badge, for a hover/expander; "no numbers measured" when there is nothing to show."""
+        """"beat its group by +4.5% a year on average · 7 of 10 years positive · a random pick did as
+        well 4% of the time · 108 monthly test rounds" - the numbers behind the badge, for a
+        hover/expander, in plain words (B22-B7b); "no numbers measured" when there is nothing to show."""
         if self.years_measured is None:
             return self.note or "no numbers measured"
-        luck = f"{self.luck_pct:.0%}" if self.luck_pct is not None else "n/a"
-        return (f"mean excess {_pct(self.mean_excess)}/yr · {self.years_positive} of "
-               f"{plural(self.years_measured, 'year')} positive · luck {luck} · "
-               f"{plural(self.rounds_held, 'round')} held")
+        luck = (f"a random pick did as well {self.luck_pct:.0%} of the time"
+                if self.luck_pct is not None else "no random-pick comparison")
+        return (f"beat its group by {_pct(self.mean_excess)} a year on average · {self.years_positive} of "
+                f"{plural(self.years_measured, 'year')} positive · {luck} · "
+                f"{plural(self.rounds_held, 'monthly test round')}")
 
 
 def _untested_badge(note: str) -> Badge:

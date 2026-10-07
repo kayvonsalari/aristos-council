@@ -565,3 +565,27 @@ def test_b22_b5_the_story_has_no_peer_search_jargon_but_the_workings_keep_it(tmp
     one = _report([_rank("Quality", "hold", 5)])
     one.check.peer_group = SimpleNamespace(members=[1], step=1, snapshot="", thin=True, broad=False)
     assert "against 1 similar-sized company in its industry" in dict(story_paragraphs(one))["What this run asked."]
+
+
+def test_b22_b7a_a_sentence_after_a_full_stop_starts_with_a_capital():
+    from aristos_council.company_story import sentence_starts_capital
+    raw = ("0 consecutive years of dividend increases; the rule requires at least 10. total debt 3.4x of "
+           "market value; the rule allows at most 1.0x. on its measures it would rank 6th of the 16. "
+           "Not a vote.")
+    fixed = sentence_starts_capital(raw)
+    assert "at least 10. Total debt 3.4x" in fixed and "at most 1.0x. On its measures" in fixed
+    assert "3.4x of market" in fixed and fixed.endswith("Not a vote.")      # figures untouched
+    assert sentence_starts_capital("nothing to fix. Already fine.") == "nothing to fix. Already fine."
+
+
+def test_b22_b7a_the_lens_note_is_fixed_in_every_rendering(tmp_path):
+    from aristos_council.company_story import table_rows
+    rep = _byd_like()
+    rep.votes = [LensVote("d_v1", "Defensive Income", status="excluded", asks="x",
+                          reason="dividend yield 0.55%; the rule requires at least 1.5%. total debt 3.4x; "
+                                 "the rule allows at most 1.0x",
+                          would_rank=SimpleNamespace(available=True, position=6, cohort_size=16,
+                                                     text="on its measures it would rank 6th of the 16 names"))]
+    row = table_rows(rep)[0]
+    assert ". On its measures it would rank 6th" in row.full_reason
+    assert ". Total debt 3.4x" in row.full_reason

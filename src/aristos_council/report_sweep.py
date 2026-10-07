@@ -201,6 +201,8 @@ def first_screen_findings(text: str, where: str) -> list[Finding]:
 _WORDING: list[tuple[re.Pattern, str, bool]] = [
     (re.compile(r"\b(?:One|The one) lens did not apply, all for one reason"), "one lens 'all for one reason'", False),
     (re.compile(r"[(]step [0-9] of 4 of the peer search"), "peer-search jargon in the story", True),
+    (re.compile(r"[0-9%x][.] [a-z]"), "a sentence starting in lowercase after a figure and a full stop", False),
+    (re.compile(r"mean excess|luck [0-9]+%|rounds held"), "backtest jargon (say it in plain words)", False),
     (re.compile(r"tied with 1(?![0-9])"), "'tied with 1' (say 'tied with one other')", False),
     (re.compile(r"What survived[.]"), "'What survived.' heading on a company page", True),
 ]

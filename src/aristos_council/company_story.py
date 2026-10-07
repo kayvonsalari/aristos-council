@@ -516,13 +516,24 @@ def _row_reason(v) -> str:
     return _plain_reason(v.result())
 
 
+_SENTENCE_START = re.compile(r"(?<=[.!?] )([a-z])")
+
+
+def sentence_starts_capital(text: str) -> str:
+    """B22-B7a: a sentence that begins after a full stop begins with a capital ("...at least 12%. On its
+    measures it would rank..."). Only the first letter after ". " changes; figures like "3.4x" have no
+    space after the dot and are untouched."""
+    return _SENTENCE_START.sub(lambda m: m.group(1).upper(), text)
+
+
 def _full_reason(v) -> str:
     if v.status != "excluded":
         return ""
     text = _plain_reason(v.reason)
     if v.would_rank is not None:
         text += f". {v.would_rank.text}"
-    return text if (text != _first_reason(v.reason) or v.would_rank is not None) else ""
+    full = text if (text != _first_reason(v.reason) or v.would_rank is not None) else ""
+    return sentence_starts_capital(full)
 
 
 def table_rows(report) -> list[TableRow]:
