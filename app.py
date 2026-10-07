@@ -2780,16 +2780,17 @@ def _render_shortlist(ag) -> None:
         st.warning(ag.overlap_note)
     cols, rows = lens_agreement_table(ag)
     if rows:
-        st.dataframe(rows, column_order=cols, hide_index=True, width="stretch")
+        from aristos_council import list_cards          # UI-POLISH-1: chips, same cells
+        st.markdown(list_cards.agreement_table(cols, rows), unsafe_allow_html=True)
     else:
         st.info("No name was rated BUY by any voting lens. That is a result, not a gap.")
     band_line = cohort_band_line(ag)            # COHORT-BAND-1
     if band_line:
         st.markdown(f"**{band_line}**")
     if ag.no_buy_count:
-        plural = "s" if ag.no_buy_count != 1 else ""
-        st.caption(f"{ag.no_buy_count} name{plural} had no BUY from any lens, and are not "
-                   "listed here.")
+        one = ag.no_buy_count == 1
+        st.caption(f"{ag.no_buy_count} name{'' if one else 's'} had no BUY from any lens, and "
+                   f"{'is' if one else 'are'} not listed here.")
 
 
 
@@ -2991,7 +2992,8 @@ def _render_multi_strategy_result(multi_result) -> None:
     st.subheader(VERDICT_TABLE_TITLE)
     rows, _head = multi_strategy_grid_rows(multi_result)
     if rows:
-        st.dataframe(rows, width="stretch", hide_index=True)
+        from aristos_council import list_cards          # UI-POLISH-1: verdict chips, same cells
+        st.markdown(list_cards.grid_table(rows, _head), unsafe_allow_html=True)
     else:
         st.info("No names reported.")
     st.caption(verdict_table_note(multi_result))
@@ -3039,9 +3041,13 @@ def _render_multi_strategy_result(multi_result) -> None:
                 if group.is_gate:
                     st.caption(", ".join(n.name for n in group.names))
                     continue
-                st.dataframe([{"Name": n.name, "Measured": n.measured or "—",
-                               "Note": ", ".join(n.badges)} for n in group.names],
-                             hide_index=True, width="stretch")
+                _group_rows = [{"Name": n.name, "Measured": n.measured or "—",
+                                "Note": ", ".join(n.badges)} for n in group.names]
+                if len(_group_rows) <= 60:               # UI-POLISH-1: the shared table style
+                    from aristos_council import list_cards
+                    st.markdown(list_cards.detail_table(_group_rows), unsafe_allow_html=True)
+                else:                                    # a long group stays a scrolling grid
+                    st.dataframe(_group_rows, hide_index=True, width="stretch")
             if res.unrateable:
                 st.markdown("**No usable data — no verdict was formed**")
                 for t, why in res.unrateable:
@@ -3479,7 +3485,7 @@ def render_input(*, show_validation: bool) -> InputChoice:
         st.markdown("**Find a company**")
         find_query = st.text_input(
             "Find a company", value="", key="cc_find", label_visibility="collapsed",
-            placeholder="Type a name or ticker — siemens, novo, rheinmetall, 2330…")
+            placeholder="Name or ticker, e.g. Novo Nordisk or NVO")
         if find_query.strip():
             from aristos_council.company_search import search_companies
             found = search_companies(find_query)
@@ -3768,6 +3774,15 @@ def _drop_results_from_another_asset(results_key: str, input_key: str) -> None:
             st.session_state.pop(input_key, None)
 
 
+START_PANEL = (
+    "Check one company against its rivals",
+    "Pick a company and the lenses you trust. Each lens ranks it against similar companies and casts "
+    "one equal vote; the page shows the votes, the reasons and what the numbers say.",
+    ("1. Find a company", "2. Tick lenses", "3. Run, free"),
+    "Want to rank a whole list? Switch to Cohort / list.",
+)
+
+
 def _render_company_run(choice: InputChoice, choices, *, show_validation: bool = False) -> None:
     """The company-input half of the Analyse tab — unchanged from the pre-merge Company
     Check tab, except: options come from the shared block (commit 1), and
@@ -3819,6 +3834,9 @@ def _render_company_run(choice: InputChoice, choices, *, show_validation: bool =
 
     _drop_results_from_another_asset("cc_report", "cc_report_input")
     report = st.session_state.get("cc_report")
+    if report is None and not run:
+        # UI-POLISH-1 item 6: the start state - a quiet panel where the result will appear
+        st.markdown(ui_style.empty_panel(*START_PANEL), unsafe_allow_html=True)
     if report is not None:
         st.divider()
         _note = _stale_results_note(

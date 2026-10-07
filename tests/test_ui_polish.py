@@ -307,3 +307,72 @@ def test_how_lenses_are_graded_lives_inside_sources_and_downloads_stay(tmp_path)
     assert any("How lenses are graded:" in str(m.value) and "docs/BACKTEST.md" in str(m.value)
                for m in at.markdown)
     assert len(at.get("download_button")) == 3
+
+
+# --------------------------------------------------------------------------- #
+# item 6 - the start state
+# --------------------------------------------------------------------------- #
+def test_the_start_state_is_a_quiet_panel_with_three_steps_and_a_hint():
+    at = _app_test()
+    html = _html_blob(at)
+    assert "Check one company against its rivals" in html
+    for step in ("1. Find a company", "2. Tick lenses", "3. Run, free"):
+        assert f'<span class="ar-step">{step}</span>' in html
+    assert "Want to rank a whole list? Switch to Cohort / list." in html
+    assert "class=\"ar-big" not in html and "class=\"ar-table\"" not in html   # no result chrome before a run
+
+
+def test_the_find_a_company_placeholder_gives_an_example():
+    at = _app_test()
+    find = next(t for t in at.text_input if t.label == "Find a company")
+    assert find.placeholder == "Name or ticker, e.g. Novo Nordisk or NVO"
+
+
+def test_the_start_panel_goes_once_a_result_is_there(tmp_path):
+    at = _render(_company_report(tmp_path))
+    assert "ar-empty" not in _html_blob(at)
+
+
+# --------------------------------------------------------------------------- #
+# item 7 - list results in the same style
+# --------------------------------------------------------------------------- #
+def test_grid_cells_become_a_position_and_a_verdict_chip_and_other_cells_stay_as_written():
+    from aristos_council.list_cards import verdict_cell
+    assert 'ar-chip-buy">BUY<' in verdict_cell("#1 of 9 · BUY") and "#1 of 9" in verdict_cell("#1 of 9 · BUY")
+    assert 'ar-chip-hold">HOLD<' in verdict_cell("#4 of 9 · HOLD · ranked on 2 of 3 factors")
+    assert "ranked on 2 of 3 factors" in verdict_cell("#4 of 9 · HOLD · ranked on 2 of 3 factors")
+    assert 'ar-chip-na">doubted<' in verdict_cell("#2 of 9 · doubted")
+    for text in ("excluded — no operating profit", "no data", "fetch failed (rerun)", "—"):
+        out = verdict_cell(text)
+        assert "ar-chip" not in out and text.replace("—", "—") in out.replace("&#36;", "$")
+
+
+def test_the_agreement_table_marks_buy_and_sell_votes_with_chips_and_keeps_every_cell():
+    from aristos_council.list_cards import agreement_table
+    cols = ["Name", "BUY votes", "SELL votes", "Forensic", "Valuation percentile", "Marks"]
+    rows = [{"Name": "Acme (ACM)", "BUY votes": "2 of 3: Quality, Growth (1 did not apply)",
+             "SELL votes": "—", "Forensic": "no concern", "Valuation percentile": "94th",
+             "Marks": "priced high · one view"}]
+    html = agreement_table(cols, rows)
+    assert 'ar-chip-buy">BUY<' in html and "2 of 3: Quality, Growth (1 did not apply)" in html
+    assert "ar-chip-sell" not in html                               # "—" is no vote
+    assert 'ar-chip-na">no concern<' in html and "94th" in html
+    assert html.count('class="ar-badge"') == 2 and "Acme (ACM)" in html
+
+
+def test_a_list_result_renders_the_chip_grid_and_the_shortlist(tmp_path):
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+    from tests.test_merged_multi_report import MOMENTUM, _multi
+    from tests.test_multi_strategy_run import RAW, SCREENED
+    script = ("import sys, streamlit as st\n" f"sys.path.insert(0, r'{ROOT}')\n"
+              "import app\nfrom aristos_council.ui_text import install\ninstall(st)\n"
+              "app._render_multi_strategy_result(st.session_state['res'])\n")
+    at = AppTest.from_string(script, default_timeout=120)
+    at.session_state["res"] = _multi([SCREENED, RAW, MOMENTUM])
+    at.run()
+    assert not at.exception, at.exception
+    html = _html_blob(at)
+    assert 'class="ar-table"' in html and "ar-chip-buy" in html or "ar-chip-hold" in html
+    assert "Name" in html
+    assert len(at.get("download_button")) == 2                      # downloads stay
