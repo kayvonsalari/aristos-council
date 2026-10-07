@@ -169,3 +169,29 @@ The company page now opens on the answer: two lines, a five-paragraph story, one
 | **T20-10** | Tick the council opinion (needs a key). Then untick it and run again. | Ticked: it sits directly under the lens table, above "Show the workings"; the narration-check line is inside the workings. Unticked: no council section, and no model is called. |
 | **T20-11** | Download the text, the HTML and the Markdown. | All three keep the same order. The text keeps every section; the HTML folds the workings; the Markdown puts them in sub-headings at the end, with "what each lens asks" as footnotes (HTML: a tooltip on the lens name). |
 | **T20-12** | `python -m pytest tests/test_report_sweep.py tests/test_company_story.py -rfxX` | Passes. The sweep checks sections 1-3 of every company report in all three renderings, and that the plain-text first screen is at most 25 lines. |
+
+
+## Batch 21 (UI-POLISH-1)
+
+Look and branding only: no rank, vote, verdict, rule or number moved. (T20-10 above: the four stat cards now sit between the lens table and the council opinion, still above "Show the workings".)
+
+| ID | Steps | Expected result |
+|---|---|---|
+| **B21-T1** | `streamlit run app.py`; look at the browser tab and the top-left of the page. | Tab title "Aristos", the blue "A" favicon. Top-left: the blue rounded "A" square and "ARISTOS" wordmark. The words "Council Station" and the gold bank-building icon appear nowhere. |
+| **B21-T2** | Look at the page colours. | Dark page (#0E1217), slightly lighter panels, one blue accent. No gradients, no emoji in the results. |
+| **B21-T3** | Top-right of the browser window. | No Deploy button and no developer menu. |
+| **B21-T4** | Read the line under "Analyse - one company, or a cohort". | "Check one company against its rivals, or rank a list. Every lens is one equal vote." The lines "Verdict: deterministic ranker..." and "Screen -> rank -> gates..." are gone. |
+| **B21-T5** | Sidebar: find the "Display" heading. | Two toggles under it: "Show lens descriptions" (off) and "Show validation tools" (off). The old name "Show validation & legacy tools" is gone. |
+| **B21-T6** | With "Show lens descriptions" off, hover the small ? beside a lens. Then switch it on. | Off: names and tick boxes only; the ? shows that lens's one-line summary. On: the full description sits under each lens, as before. The choice survives a rerun. Same in Company and Cohort / list. |
+| **B21-T7** | Fresh page, nothing run yet. | A quiet panel "Check one company against its rivals" with the sentence, three step chips ("1. Find a company", "2. Tick lenses", "3. Run, free") and the hint "Want to rank a whole list? Switch to Cohort / list." The find box placeholder reads "Name or ticker, e.g. Novo Nordisk or NVO". The panel disappears once a result is shown. |
+| **B21-T8** | Run BYD (1211.HK), all nine lenses. | A header card: company name large; ticker, exchange, industry and "compared with N similar companies" in muted text; last price and 12-month change on the right. Under it a row of chips ("3 HOLD", "5 does not apply", "Forensic: no concern", "Cheap vs its own 5 years"); only counts above zero appear. |
+| **B21-T9** | Same page: the "Lens by lens" table. | Each vote is a pill that carries its word (BUY green, HOLD amber, SELL red; "does not apply" and the Forensic mark grey) with the position beside it; the track record is a small outlined label; the reason is in smaller muted text. Nothing is shown by colour alone. |
+| **B21-T10** | Same page: the four small cards above "Show the workings". | Valuation vs own history (the multiple and a cheapest-to-dearest bar with a marker at the percentile), Price (% from the 52-week high, 6-month return, volatility), Earnings price (forward P/E, next-year and trailing), Balance sheet (net cash or net debt, interest cover). |
+| **B21-T11** | Run JPM. Look at the Balance sheet card; run a company with no analyst estimate and look at Earnings price. | JPM: "not meaningful for banks". No estimate: a short muted reason. No card ever shows a blank or a 0. |
+| **B21-T12** | Run any company with "Show validation tools" off, then on. | Off: no "saved under C:\...", no "Ran in Xs; day-cache N hits", no "Saved this run to"/"Saved to" banner, no "Multi-lens re-grade" line; the three download buttons stay. On: they all come back. "How lenses are graded: docs/BACKTEST.md" is a line inside Sources (under the workings), not a page footer. |
+| **B21-T13** | Open "Show the workings" and the peers table. | The peers table still has its yellow own-company row, readable on the dark page. |
+| **B21-T14** | Cohort / list: paste TM GM F, tick Quality, Magic Formula RAW, Forensic, run. | The shortlist table shows BUY / SELL vote pills with the lens names beside them, check columns as grey pills, marks as outlined labels; the verdict grid shows "#N of M" plus a verdict pill; per-lens detail groups use the same table style. Layout and content are otherwise as before. |
+| **B21-T15** | Light theme: run `streamlit run app.py --theme.base light --theme.backgroundColor "#F5F7FA" --theme.secondaryBackgroundColor "#FFFFFF" --theme.textColor "#16202C" --theme.primaryColor "#1D5FC0"` and repeat B21-T8 to T10. | Every chip, card and text stays readable (white cards, dark text, a dark wordmark in the logo). |
+| **B21-T16** | Shrink the browser to about 400px wide and open a company result. | The cards stack one under another, the lens table scrolls sideways inside its own box, and the page itself never scrolls sideways. |
+| **B21-T17** | Download the text, HTML and Markdown of a company run. | The HTML header says "Aristos - company report" (was "Aristos Council"). Nothing else in the exports changed. |
+| **B21-T18** | `python -m pytest tests/test_ui_polish.py tests/test_report_sweep.py -q` | Passes (contrast of every chip colour pair >= 4.5:1 in both themes; every builder escapes text; the report sweep stays green). |

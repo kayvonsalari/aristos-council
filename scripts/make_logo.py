@@ -1,4 +1,4 @@
-"""One-off DEV tool (not a project dependency): build assets/aristos_logo.svg and aristos_mark.svg.
+"""One-off DEV tool (not a project dependency): build assets/aristos_logo.svg (+ _light) and aristos_mark.svg.
 
 The capital "A" (Cinzel 700) and the wordmark "Aristos" (Cinzel 600, letter-spacing .08em) are converted
 to outlines, so the logo never depends on a font loading. Needs `pip install fonttools` and the Cinzel
@@ -15,7 +15,7 @@ from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
-ACCENT, INK, TEXT = "#7FB2FF", "#0E1217", "#E6EAF0"
+ACCENT, INK, TEXT, TEXT_LIGHT = "#7FB2FF", "#0E1217", "#E6EAF0", "#16202C"
 
 
 def _fmt(v: float) -> str:
@@ -66,10 +66,11 @@ def main(ttf: str, out: str) -> None:
     (out_dir / "aristos_mark.svg").write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 32 32" '
         f'role="img" aria-label="Aristos">{mark}</svg>\n', encoding="utf-8")
-    (out_dir / "aristos_logo.svg").write_text(
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="32" '
-        f'viewBox="0 0 {width} 32" role="img" aria-label="Aristos">{mark}'
-        f'<path d="{word}" fill="{TEXT}"/></svg>\n', encoding="utf-8")
+    for name, ink in (("aristos_logo.svg", TEXT), ("aristos_logo_light.svg", TEXT_LIGHT)):
+        (out_dir / name).write_text(
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="32" '
+            f'viewBox="0 0 {width} 32" role="img" aria-label="Aristos">{mark}'
+            f'<path d="{word}" fill="{ink}"/></svg>\n', encoding="utf-8")
 
 
 if __name__ == "__main__":

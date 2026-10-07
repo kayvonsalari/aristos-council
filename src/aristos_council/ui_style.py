@@ -76,9 +76,17 @@ def _one_line(markup: str) -> str:
 # theme
 # --------------------------------------------------------------------------- #
 def theme_name() -> str:
-    """"dark" or "light": the theme the browser is showing (``st.context.theme``), dark when unknown."""
+    """"dark" or "light": the Streamlit theme in force, dark when unknown.
+
+    Read from the CONFIGURED base (``theme.base``: ``.streamlit/config.toml`` says dark, a launch flag
+    such as ``--theme.base light`` says light). ``st.context.theme`` is deliberately not used first: in a
+    browser whose own preference is light it reported "light" on top of our dark config, which painted
+    white cards on a dark page. It is only the fallback when no base is configured."""
     try:
         import streamlit as st
+        base = str(st.get_option("theme.base") or "").lower()
+        if base in PALETTES:
+            return base
         kind = str(st.context.theme.type or "").lower()
         return kind if kind in PALETTES else "dark"
     except Exception:                                    # noqa: BLE001 - no runtime, old Streamlit

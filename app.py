@@ -117,6 +117,7 @@ UNIVERSE_RUNS_DIR = REPORTS_DIR / "universe_runs"
 SNAPSHOTS_CSV = ROOT / "snapshots" / "verdict_consensus.csv"
 ASSETS_DIR = ROOT / "assets"
 LOGO_PATH = ASSETS_DIR / "aristos_logo.svg"          # mark + wordmark, letters as outlines
+LOGO_LIGHT_PATH = ASSETS_DIR / "aristos_logo_light.svg"   # same, dark wordmark for a light theme
 MARK_PATH = ASSETS_DIR / "aristos_mark.svg"          # the "A" square alone (collapsed sidebar)
 FAVICON_PATH = ASSETS_DIR / "aristos_favicon.png"    # 64px
 
@@ -4585,7 +4586,8 @@ def main() -> None:
     ui_style.inject()               # UI-POLISH-1: the ONE custom-CSS block (chips, cards, fonts)
     install_dollar_safety(st)       # DOLLAR-MATH-1: every markdown-rendering call is $-safe
     try:                            # the logo; st.logo exists from Streamlit 1.35
-        st.logo(str(LOGO_PATH), icon_image=str(MARK_PATH), size="large")
+        st.logo(str(LOGO_LIGHT_PATH if ui_style.theme_name() == "light" else LOGO_PATH),
+                icon_image=str(MARK_PATH), size="large")
     except Exception:               # noqa: BLE001 - a missing image must never stop the app
         pass
 

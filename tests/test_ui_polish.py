@@ -376,3 +376,19 @@ def test_a_list_result_renders_the_chip_grid_and_the_shortlist(tmp_path):
     assert 'class="ar-table"' in html and "ar-chip-buy" in html or "ar-chip-hold" in html
     assert "Name" in html
     assert len(at.get("download_button")) == 2                      # downloads stay
+
+
+def test_the_theme_follows_the_configured_base_not_the_browser(monkeypatch):
+    """A browser preferring light made st.context.theme report "light" over our dark config (white cards
+    on a dark page, seen on 2026-10-07). The configured base wins."""
+    import streamlit as st
+    from aristos_council import ui_style
+    monkeypatch.setattr(st, "get_option", lambda key: "dark" if key == "theme.base" else None)
+    assert ui_style.theme_name() == "dark"
+    monkeypatch.setattr(st, "get_option", lambda key: "light" if key == "theme.base" else None)
+    assert ui_style.theme_name() == "light"
+
+
+def test_the_light_logo_has_a_dark_wordmark():
+    svg = (ASSETS / "aristos_logo_light.svg").read_text(encoding="utf-8")
+    assert 'fill="#16202C"' in svg and 'fill="#E6EAF0"' not in svg and "<text" not in svg
