@@ -133,7 +133,8 @@ def test_story_votes_with_a_buy_state_the_split_and_name_the_lenses():
                    _skip("Magic Formula RAW")])
     first, second = answer_lines(rep)
     assert first == "One of three votes says BUY (Quality); one says HOLD (Growth); one says SELL (Value)."
-    assert second.startswith("One lens did not apply, all for one reason: " + NO_PROFIT)
+    assert second.startswith("One lens did not apply: " + NO_PROFIT)        # B22-U10
+    assert "all for one reason" not in second
 
 
 def test_story_votes_without_a_buy_say_so_by_leading_with_what_voted():
@@ -475,3 +476,14 @@ def test_ford_answer_uses_the_short_name():
     rep = _report([_skip("Quality")], check=_check(name="Ford Motor Company"))
     rep.ticker = "F"
     assert answer_lines(rep)[0] == "No lens voted on Ford."
+
+
+def test_b22_u10_one_lens_says_its_reason_and_several_keep_the_old_shapes():
+    one = _report([_rank("Quality", "hold", 5), _skip("Growth")])
+    assert answer_lines(one)[1].startswith("One lens did not apply: " + NO_PROFIT)
+    none_voted = _report([_skip("Growth")])
+    assert answer_lines(none_voted)[1].startswith("The one lens did not apply: " + NO_PROFIT)
+    same = _report([_rank("Quality", "hold", 5), _skip("A"), _skip("B")])
+    assert answer_lines(same)[1].startswith("Two lenses did not apply, all for one reason: " + NO_PROFIT)
+    mixed = _report([_skip("A"), _skip("B"), _skip("C", "dividend yield 0%; the rule requires at least 1.5%")])
+    assert "the most common reason (two of them)" in answer_lines(mixed)[1]

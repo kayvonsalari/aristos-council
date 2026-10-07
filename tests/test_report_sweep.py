@@ -185,6 +185,27 @@ def test_no_count_grammar_slips(sweep_reports):
                   sweep.COUNT_GRAMMAR)
 
 
+def test_no_batch22_wording_slips(sweep_reports):
+    """Batch 22: the wording patterns found by hand (one lens "all for one reason", "(tied with 1)",
+    a lowercase sentence start after a full stop, "What survived.", peer-search jargon in the story,
+    backtest jargon in the lens notes) never come back."""
+    _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.wording_findings(t, w)),
+                  sweep.WORDING)
+
+
+def test_the_batch22_wording_rule_fires_on_each_shape_it_names():
+    for bad in _B22_BAD:
+        assert sweep.wording_findings(bad + FOLD_B22, "x"), bad
+    for ok in _B22_OK:
+        assert not sweep.wording_findings(ok + FOLD_B22, "x"), ok
+
+
+FOLD_B22 = "\nSHOW THE WORKINGS"
+_B22_BAD = ["One lens did not apply, all for one reason: no operating profit."]
+_B22_OK = ["One lens did not apply: no operating profit.",
+           "Five lenses did not apply, all for one reason: no operating profit."]
+
+
 def test_no_strategy_word_in_reader_text(sweep_reports):
     """19B B3: "lens" everywhere, never "strategy"."""
     _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.strategy_word_findings(t, w)),

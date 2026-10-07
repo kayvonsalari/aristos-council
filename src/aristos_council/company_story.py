@@ -254,6 +254,8 @@ def _reason_line(report) -> str:
         top_reason, top_votes = groups[0]
         if is_bank(report) and ag.n_voted:
             out.append(f"The other {_lenses(n_excl)} {'is' if n_excl == 1 else 'are'} not for banks.")
+        elif n_excl == 1:                   # B22-U10: one lens has no "all for one reason" to state
+            out.append(f"{'One lens' if ag.n_voted else 'The one lens'} did not apply: {top_reason}.")
         elif len(top_votes) == n_excl:
             if ag.n_voted:
                 out.append(f"{_cap(_lenses(n_excl))} did not apply, all for one reason: {top_reason}.")
