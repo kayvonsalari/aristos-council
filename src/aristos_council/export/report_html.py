@@ -1692,7 +1692,8 @@ def _absolute_readings_html(result, *, with_analyst: bool = True) -> str:
            '<p class="note">No comparison group. These are facts about this company\'s own '
            "accounts - they are not lenses, they do not vote, and nothing here is ranked.</p>"]
     if debt is not None:
-        out.append("<h3>Debt and cash</h3>" + _bullets(_esc(ln) for ln in debt.lines()))
+        out.append("<h3>Debt and cash</h3>" + _bullets(_esc(ln) for ln in debt.lines())
+                   + "".join(f'<p class="note">{_esc(ln)}</p>' for ln in debt.notes()))
     if growth is not None:
         out.append("<h3>Growth record" + _esc(mixed_source_marker(result, growth.source_tag))
                    + "</h3>" + _bullets(_esc(ln) for ln in growth.lines()))

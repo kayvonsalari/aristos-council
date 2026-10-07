@@ -372,7 +372,8 @@ def _survived(report) -> str:
             rw = getattr(dc, "cash_runway", None)           # CASH-RUNWAY-1
             if rw is not None and rw.available:
                 extra += (", and " if rw.label.startswith("at ") else "; ") + rw.label.rstrip(".")
-            bits.append(f"Debt and cash ({asof}): it {dc.net_debt.label.rstrip('.')}{extra}.")
+            bits.append(f"Debt and cash ({asof}): it {dc.net_debt.label.rstrip('.')}{extra}."
+                        + (f" {' '.join(dc.notes())}" if getattr(dc, "notes", None) and dc.notes() else ""))
         else:
             bits.append(f"Debt and cash ({asof}) could not be read: {dc.net_debt.note}.")
     gr = getattr(c, "growth_record", None)

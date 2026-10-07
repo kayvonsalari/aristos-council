@@ -939,6 +939,7 @@ def absolute_reading_lines(result) -> list[str]:
     if result.debt_and_cash is not None:
         lines.append("  Debt and cash")
         lines.extend(f"    - {ln}" for ln in result.debt_and_cash.lines())
+        lines.extend(f"    ({ln})" for ln in result.debt_and_cash.notes())      # FINANCE-ARM-1
     if result.growth_record is not None:
         lines.append("  Growth record"
                      + mixed_source_marker(result, result.growth_record.source_tag))

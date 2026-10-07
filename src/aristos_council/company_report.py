@@ -1428,7 +1428,8 @@ def company_facts_pack(report: CompanyReport) -> dict:
             {"available": False, "reason": report.no_vote_reason}),
         "valuation_band": c.valuation_band,
         "absolute_readings": {
-            "debt_and_cash": c.debt_and_cash.lines() if c.debt_and_cash is not None else [],
+            "debt_and_cash": ((c.debt_and_cash.lines() + c.debt_and_cash.notes())
+                              if c.debt_and_cash is not None else []),
             "growth_record": ((c.growth_record.lines() + c.growth_record.notes())
                               if c.growth_record is not None else [])},
         "what_analysts_say": ({

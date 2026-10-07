@@ -451,3 +451,13 @@ def test_u9_the_css_lifts_the_main_column_level_with_the_logo_row():
     assert 'stHeader"] { background: transparent !important; height: 0 !important' in c
     assert "stElementContainer" in c and "style) { display: none; }" in c
     assert "max-width: 640px" in c and "padding-top: 3rem" in c        # phone: room for the sidebar toggle
+
+
+def test_b11_the_finance_arm_note_is_a_muted_caption_on_the_page(tmp_path):
+    from aristos_council.abs_readings import debt_and_cash
+    from tests.test_abs_readings import _f
+    report = _company_report(tmp_path)
+    report.check.debt_and_cash = debt_and_cash(_f(ticker="F", total_debt=146.2e9, total_cash=5e9,
+                                                  free_cash_flow=12.5e9))
+    at = _render(report)
+    assert any("Includes debt of its car-loan arm" in str(c.value) for c in at.caption)

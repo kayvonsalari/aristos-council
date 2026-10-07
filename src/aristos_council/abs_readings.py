@@ -189,6 +189,12 @@ class DebtAndCash:
     # CASH-RUNWAY-1: how long the net cash lasts at last year's spending - only for a company that spent
     # more cash than it made. Empty (no line anywhere) for positive free cash flow, a bank or a gap.
     cash_runway: Reading = field(default_factory=Reading)
+    # FINANCE-ARM-1: set for a company whose debt is mostly a captive finance arm's (data/finance_arms.yaml)
+    finance_arm_note: str = ""
+
+    def notes(self) -> list[str]:
+        """The muted line(s) under the debt readings, said ONCE (like the growth record's notes)."""
+        return [self.finance_arm_note] if self.finance_arm_note else []
 
     def lines(self) -> list[str]:
         # ABS-READINGS-3 - NVIDIA printed "has no net debt to repay" twice, once for the
@@ -352,9 +358,11 @@ def debt_and_cash(f) -> DebtAndCash:
                               f"its debt")
 
     runway = cash_runway(f, debt=debt, cash=cash, net=net, fcf=fcf, currency=currency)
+    from .finance_arms import finance_arm_note
     return DebtAndCash(net_debt=net_reading, net_debt_to_ocf=ratio,
                        interest_cover=cover, years_to_repay=repay, currency=currency,
-                       cash_runway=runway)
+                       cash_runway=runway,
+                       finance_arm_note=finance_arm_note(getattr(f, "ticker", "")))
 
 
 # --------------------------------------------------------------------------- #

@@ -1,0 +1,61 @@
+# FINANCE-ARM-1 (Batch 22 B11) - companies whose consolidated debt is mostly the borrowings of a captive
+# finance arm (it lends to the customers who buy the product, and those loans are the arm's assets).
+# For these, "owes $141.2bn net of cash" and "years of free cash flow to repay" OVERSTATE the risk:
+# most of that debt is backed by customer loans. The page adds one muted note; no number changes.
+#
+# A DATED, REASONED LIST - no guessing and no detection by name. Add a company only when its filings
+# name the arm and its borrowings are in the consolidated balance sheet. `tickers` are the symbols a
+# report carries (Yahoo form, as the Company Report's ticker box takes them).
+note: >-
+  Includes debt of its car-loan arm, which is backed by customer loans, so this overstates the risk.
+companies:
+  - name: Ford Motor Company
+    arm: Ford Motor Credit Company
+    tickers: [F]
+    date: 2026-10-08
+    reason: Ford Credit finances Ford vehicles for customers and dealers; its borrowings are consolidated.
+  - name: General Motors Company
+    arm: GM Financial
+    tickers: [GM]
+    date: 2026-10-08
+    reason: GM Financial lends and leases to GM customers; its borrowings are consolidated.
+  - name: Toyota Motor Corporation
+    arm: Toyota Financial Services
+    tickers: [TM, 7203.T]
+    date: 2026-10-08
+    reason: Toyota Financial Services (Toyota Motor Credit and peers) funds customer loans and leases; consolidated.
+  - name: Honda Motor Co., Ltd.
+    arm: Honda Finance (American Honda Finance and peers)
+    tickers: [HMC, 7267.T]
+    date: 2026-10-08
+    reason: Honda's finance subsidiaries fund customer and dealer financing; their borrowings are consolidated.
+  - name: Stellantis N.V.
+    arm: Stellantis Financial Services
+    tickers: [STLA, STLAP.PA, STLAM.MI]
+    date: 2026-10-08
+    reason: Stellantis Financial Services (with its bank joint ventures) funds customer and dealer financing.
+  - name: Volkswagen AG
+    arm: Volkswagen Financial Services
+    tickers: [VOW3.DE, VOW.DE]
+    date: 2026-10-08
+    reason: Volkswagen Financial Services funds customer loans, leases and fleet financing; consolidated.
+  - name: Bayerische Motoren Werke AG
+    arm: BMW Financial Services
+    tickers: [BMW.DE]
+    date: 2026-10-08
+    reason: BMW Financial Services funds customer loans and leases; its borrowings are consolidated.
+  - name: Mercedes-Benz Group AG
+    arm: Mercedes-Benz Mobility
+    tickers: [MBG.DE]
+    date: 2026-10-08
+    reason: Mercedes-Benz Mobility funds customer loans and leases; its borrowings are consolidated.
+  - name: Hyundai Motor Company
+    arm: Hyundai Capital
+    tickers: ["005380.KS"]
+    date: 2026-10-08
+    reason: Hyundai Capital (with Hyundai Motor America's finance arm) funds customer financing; consolidated.
+  - name: Nissan Motor Co., Ltd.
+    arm: Nissan Financial Services
+    tickers: ["7201.T"]
+    date: 2026-10-08
+    reason: Nissan's sales-finance subsidiaries fund customer and dealer financing; consolidated.
