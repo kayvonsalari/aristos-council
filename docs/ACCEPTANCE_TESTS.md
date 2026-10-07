@@ -203,3 +203,4 @@ UI fix-ups after Batch 21, plus wording and readings fixes. No rank, vote, verdi
 | ID | Steps | Expected result |
 |---|---|---|
 | **B22-T1** | Run BYD (1211.HK). Look at the header price, the ranks in the lens table ("10th of 14") and the four stat cards. | All numbers are in the same sans-serif face as the text, digits aligned; nothing looks like a typewriter font. |
+| **B22-T2** | Run BYD (1211.HK); read the price at the top right of the header. | Two decimals, e.g. "HKD 74.85"; a close that is a whole number reads "HKD 75.00". |

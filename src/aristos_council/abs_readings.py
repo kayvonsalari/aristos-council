@@ -1046,7 +1046,14 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
     acct_label = acct_ccy or currency            # unknown accounts currency: as before
 
     def money(v):
-        return _money(v, currency) if v is not None else None
+        # B22-U2: a price or per-share figure always shows two decimals ("HKD 75.00", not "HKD 75" when
+        # the close happens to be a whole number); only large amounts abbreviate.
+        if v is None:
+            return None
+        if currency and abs(v) < 1e6:
+            from .tools.price_context import format_money
+            return format_money(v, currency)
+        return _money(v, currency)
 
     def acct_money(v):
         return _money(v, acct_label) if v is not None else None
