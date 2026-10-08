@@ -148,6 +148,11 @@ def narration_prose(narration) -> str:
     if narration.echoed_verdict:
         parts.append(narration.echoed_verdict.strip())
     for a in narration.lens_attribution:
+        # B25-2a: the reader sees "<Lens> - why" as a heading above this block, so the checked prose carries
+        # the SAME heading (a bold-only line the checker reads as one). Without it a sentence like "MSFT's
+        # reading placed it 2nd of 13" looked lens-less to the checker, because the heading existed only in
+        # the rendered page - the Batch 24 heading rule never saw one on live output.
+        parts.append(f"**{a.lens} \u2014 why**")
         ranks = ", ".join(f"{fr.factor} rank {fr.rank} of {fr.cohort_size}"
                           for fr in a.factor_ranks)
         lead = f"{a.lens} lens"
@@ -157,6 +162,8 @@ def narration_prose(narration) -> str:
             parts.append(f"{lead} screens passed: {', '.join(a.screens_passed)}.")
         if a.reasoning:
             parts.append(f"{lead}. {a.reasoning.strip()}")
+    if narration.lens_attribution:
+        parts.append("**Beyond the lenses**")        # B25-2a: closes the last lens section
     if narration.disagreement_note:
         parts.append(narration.disagreement_note.strip())
     # MONEY-ABBREV-1: the checker reads FULL precision. Abbreviation is a display
@@ -642,9 +649,23 @@ _R12 = re.compile(r"12[-\s]?month[^.]{0,40}?(-?\+?\d+(?:\.\d+)?)\s*%", re.I)
 _R6 = re.compile(r"6[-\s]?month[^.]{0,40}?(-?\+?\d+(?:\.\d+)?)\s*%", re.I)
 
 
+# B25-8: "sustained" needs both windows to move by more than this many percent. MSFT 2026-10-08 read "12-month
+# return 1.0%; 6-month return 42.1% ... rising over both windows - a sustained advance": a +1% year is not one.
+SUSTAINED_MOVE_PCT = 10.0
+
+
+def _window_word(x: float) -> str:
+    return "up" if x >= SUSTAINED_MOVE_PCT else "down" if x <= -SUSTAINED_MOVE_PCT else "about flat"
+
+
 def momentum_gloss(return_12m: float, return_6m: float) -> str:
-    """The plain-English clause for one 12m/6m pair. Sign-driven and total."""
-    return _MOMENTUM_GLOSS[(return_12m >= 0, return_6m >= 0)]
+    """The plain-English clause for one 12m/6m pair. A fixed phrase when BOTH windows moved by more than
+    ``SUSTAINED_MOVE_PCT`` (up or down); otherwise each window is described plainly, so a small move is never
+    called a sustained advance or fall."""
+    if abs(return_12m) >= SUSTAINED_MOVE_PCT and abs(return_6m) >= SUSTAINED_MOVE_PCT:
+        return _MOMENTUM_GLOSS[(return_12m >= 0, return_6m >= 0)]
+    w12, w6 = _window_word(return_12m), _window_word(return_6m)
+    return f"{w12} over 12 months, {w6} over the last 6 months"
 
 
 def gloss_momentum_in_text(text: str) -> str:

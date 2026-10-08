@@ -31,6 +31,10 @@ from aristos_council.state import Recommendation
 from tests.test_multi_strategy_run import RAW, SCREENED
 from tests.test_narration_union import _CountingRunners, _narrated
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 
 # =========================================================================== #
 # 1. the repair itself

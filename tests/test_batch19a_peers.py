@@ -255,13 +255,15 @@ def test_peers_rank_columns_under_three_names_read_too_few_to_rank():
 
 
 def test_peers_rank_columns_with_nobody_ranked_are_dropped():
-    columns = rank_columns(_report({"Defensive Income": 0, "Quality": 4}))
-    assert [c.header for c in columns] == ["Quality rank (of 4)"]
+    columns = rank_columns(_report({"Defensive Income": 0, "Quality": 6}))
+    assert [c.header for c in columns] == ["Quality rank (of 6)"]
 
 
-def test_peers_rank_exactly_three_is_a_ranking():
-    columns = rank_columns(_report({"Quality": 3}))
-    assert columns[0].header == "Quality rank (of 3)"
+def test_peers_rank_exactly_five_is_a_ranking_and_four_is_not():
+    """B25-1 (MIN-GROUP-5): the line moved from three to five names."""
+    columns = rank_columns(_report({"Quality": 5}))
+    assert columns[0].header == "Quality rank (of 5)"
+    assert rank_columns(_report({"Quality": 4}))[0].header == "Quality rank"          # too few to rank
 
 
 def test_peers_too_few_to_rank_displays_as_words_and_sorts_after_real_ranks():
@@ -273,9 +275,9 @@ def test_peers_too_few_to_rank_displays_as_words_and_sorts_after_real_ranks():
 def test_peers_a_check_column_nobody_carries_is_dropped_too():
     """EMPTY-COLUMN-2 (JPM, 2026-10-06): Forensic is "does not apply" for every bank, so its column is
     dropped like an empty voting column; a check column that does carry a mark stays."""
-    report = _report({"Financials": 4, "Forensic": 0})
+    report = _report({"Financials": 6, "Forensic": 0})
     report.votes[1].votes = False
-    assert [c.header for c in rank_columns(report)] == ["Financials rank (of 4)"]
-    report = _report({"Financials": 4, "Forensic": 3})
+    assert [c.header for c in rank_columns(report)] == ["Financials rank (of 6)"]
+    report = _report({"Financials": 6, "Forensic": 3})
     report.votes[1].votes = False
     assert [c.header for c in rank_columns(report)][1] == "Forensic mark (check - does not vote)"

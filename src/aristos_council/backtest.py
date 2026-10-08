@@ -1559,6 +1559,9 @@ BADGE_MEANINGS = {
 BADGE_LABELS = tuple(BADGE_MEANINGS)  # display order
 
 
+NO_TEST_HISTORY = "No test history for this lens in this industry yet."
+
+
 @dataclass(frozen=True)
 class Badge:
     """One lens's plain-English track record in one cohort (BACKTEST-2). ``verdict`` is the raw
@@ -1573,6 +1576,12 @@ class Badge:
     years_measured: Optional[int]
     rounds_held: Optional[int]          # Summary.n_positions
     note: str = ""                      # why "untested here", when it needs saying; else ""
+
+    @property
+    def no_history(self) -> bool:
+        """B25-6: the lens has no test rounds in this industry at all (zero years measured or zero rounds held),
+        so there is no edge, no years and no luck figure to quote."""
+        return self.years_measured == 0 or self.rounds_held == 0
 
     def _excess_words(self) -> str:
         """B23-N3: "beat its group by +4.5% a year on average" / "trailed its group by 1.1% a year on
@@ -1589,7 +1598,7 @@ class Badge:
         ``"excess"`` (mean edge under PROOF_MIN_EXCESS a year), ``"years"`` (winning years under
         PROOF_MIN_YEARS of PROOF_OF_YEARS) and ``"luck"`` (a random pick matched it more than MAX_LUCK of
         the time, or luck was never measured). Empty when nothing was measured or all three pass."""
-        if self.years_measured is None or self.mean_excess is None:
+        if self.years_measured is None or self.mean_excess is None or self.no_history:
             return ()
         failed = []
         if self.mean_excess < PROOF_MIN_EXCESS - PROOF_TOLERANCE:
@@ -1654,6 +1663,8 @@ class Badge:
         hover/expander, in plain words (B22-B7b); "no numbers measured" when there is nothing to show."""
         if self.years_measured is None:
             return self.note or "no numbers measured"
+        if self.no_history:                                       # B25-6: no "0 of 0 years positive"
+            return NO_TEST_HISTORY
         luck = (f"a random pick did as well {self.luck_pct:.0%} of the time"
                 if self.luck_pct is not None else "no random-pick comparison")
         return (f"{self._excess_words()} · {self.years_positive} of "
@@ -1722,6 +1733,8 @@ def track_record(cohort_slug: str, lens_id: str, *, root=None) -> Badge:
     common = dict(verdict=v, mean_excess=s.mean_annual_excess, luck_pct=s.luck_pct_mean,
                  years_positive=s.years_positive, years_measured=s.years_measured,
                  rounds_held=s.n_positions)
+    if v == "insufficient" and (s.years_measured == 0 or s.n_positions == 0):
+        return Badge(label="untested here", note=NO_TEST_HISTORY, **common)         # B25-6
     if v == "insufficient":
         return Badge(label="untested here", note=(
             f"only {plural(s.years_measured, 'year')} measured, {plural(s.n_positions, 'round')} held - not "

@@ -883,7 +883,10 @@ def _cross_lens_block(state: ResearchState) -> str:
         factor_rule = ("\nEXPLAIN A LENS'S RANK ONLY FROM THE FACTORS LISTED UNDER THAT LENS ABOVE - every one "
                        "of them, not just the first two. Never explain a rank from the lens's name or from a "
                        "description of the kind of company it usually covers (for example \"within cyclical, "
-                       "capital-intensive businesses\"): nothing in the evidence says that about this company.")
+                       "capital-intensive businesses\"): nothing in the evidence says that about this company. "
+                       "Each factor line says which direction is better, in brackets: describe a reading by THAT "
+                       "direction and never the reverse (a negative earnings-power reading means the price is "
+                       "above the no-growth value, not a discount).")
     reasons = state.cross_lens_reasons or []
     why = ""
     if reasons:

@@ -76,6 +76,8 @@ def company_report_markdown(report) -> str:
         out += [f"*{page.caption}*", ""]
     if page.group_note:
         out += [f"*{page.group_note}*", ""]
+    if page.badge_note:
+        out += [f"*{page.badge_note}*", ""]
 
     if report.council_opinion is not None:
         op = report.council_opinion
@@ -98,7 +100,7 @@ def company_report_markdown(report) -> str:
     out += ["### Peers", "", "```", *(peer_block or ["none computed"]), "```", ""]
     line = narration_check_line(report)
     if line:
-        out += ["### Narration check", "", line, ""]
+        out += ["### AI text check", "", line, ""]
     extra = [r for r in table_rows(report) if r.full_reason or r.badge_detail]
     if extra:
         out += ["### Lens notes", ""]

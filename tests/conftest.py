@@ -282,3 +282,75 @@ def _no_ambient_market_index_in_list_input(monkeypatch):
     import aristos_council.list_input as li
     monkeypatch.setitem(li._LOOKUP_CACHE, "__default__", li.IndexLookup())
     yield
+
+
+# --------------------------------------------------------------------------- #
+# B25-1 - MIN-GROUP-5: a lens that ranks fewer than FIVE companies gives no verdict (it was three).
+# --------------------------------------------------------------------------- #
+# A great many fixtures here are 3-4 name universes built to exercise something ELSE (narration, grids,
+# exports, counts) under the old three-name rule. Those modules say so in writing with
+# ``pytestmark = pytest.mark.min_group(3)`` - the threshold they were designed under is pinned for the whole
+# module - and every test ABOUT the five-name rule lives in tests/test_min_group_5.py, unpinned.
+import sys as _sys
+
+
+def _pin_everywhere(pinned: int):
+    saved = []
+    for name, mod in list(_sys.modules.items()):
+        if mod is not None and (name.startswith("aristos_council") or name == "app")                 and isinstance(getattr(mod, "MIN_RANKABLE_COHORT", None), int):
+            saved.append((mod, mod.MIN_RANKABLE_COHORT))
+            mod.MIN_RANKABLE_COHORT = pinned
+    return saved
+
+
+def _unpin(saved):
+    for mod, value in saved:
+        mod.MIN_RANKABLE_COHORT = value
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _pinned_min_group_module(request):
+    """A module-level ``pytestmark = pytest.mark.min_group(3)`` also covers its MODULE-scoped fixtures."""
+    raw = getattr(request.module, "pytestmark", None) or []
+    raw = raw if isinstance(raw, (list, tuple)) else [raw]
+    marks = [m for m in raw if getattr(m, "name", "") == "min_group"]
+    if not marks:
+        yield
+        return
+    saved = _pin_everywhere(int(marks[-1].args[0]))
+    try:
+        yield
+    finally:
+        _unpin(saved)
+
+
+@pytest.fixture(autouse=True)
+def _pinned_min_group(request):
+    marker = request.node.get_closest_marker("min_group")
+    if marker is None:
+        yield
+        return
+    saved = _pin_everywhere(int(marker.args[0]))
+    try:
+        yield
+    finally:
+        _unpin(saved)
+
+
+# --------------------------------------------------------------------------- #
+# B25-3 - tie_rule(name): pin rank_engine.TIE_VERDICT_RULE for a test written under the old alphabetical
+# tie-break (goldens and disclosure tests). Tests ABOUT the new rule live in tests/test_tie_best_position.py.
+# --------------------------------------------------------------------------- #
+@pytest.fixture(autouse=True)
+def _pinned_tie_rule(request):
+    marker = request.node.get_closest_marker("tie_rule")
+    if marker is None:
+        yield
+        return
+    from aristos_council import rank_engine
+    saved = rank_engine.TIE_VERDICT_RULE
+    rank_engine.TIE_VERDICT_RULE = str(marker.args[0])
+    try:
+        yield
+    finally:
+        rank_engine.TIE_VERDICT_RULE = saved

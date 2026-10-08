@@ -237,10 +237,10 @@ def test_the_full_precision_figure_is_available_on_hover():
 # 5. MOMENTUM-GLOSS-1 — four sign cases, fixed wording, computed not freestyled
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("r12,r6,expect", [
-    (12.0, 8.0, "sustained advance"),
-    (-5.0, -3.0, "sustained weakness"),
+    (12.0, 18.0, "sustained advance"),
+    (-15.0, -13.0, "sustained weakness"),
     (-10.3, 32.4, "fell early, recovering since"),
-    (20.0, -4.0, "rose early, giving it back since"),
+    (20.0, -12.0, "rose early, giving it back since"),
 ])
 def test_every_sign_case_has_fixed_wording(r12, r6, expect):
     assert expect in momentum_gloss(r12, r6)
@@ -292,3 +292,33 @@ def test_b24_e4_a_sentence_that_already_carries_a_reading_is_not_glossed_again()
 def test_b24_e4_outside_a_section_scope_each_field_is_unchanged():
     assert "sustained weakness" in gloss_momentum_in_text(f"{_BOTH}.")
     assert "sustained weakness" in gloss_momentum_in_text(f"{_BOTH}.")           # no memory between calls
+
+
+# --------------------------------------------------------------------------- #
+# B25-8 - "sustained" only when BOTH windows moved by more than SUSTAINED_MOVE_PCT
+# --------------------------------------------------------------------------- #
+def test_b25_8_a_one_percent_year_is_not_a_sustained_advance():
+    """MSFT 2026-10-08: 12-month 1.0%, 6-month 42.1% read "rising over both windows - a sustained advance"."""
+    g = momentum_gloss(1.0, 42.1)
+    assert "sustained" not in g and "both windows" not in g
+    assert g == "about flat over 12 months, up over the last 6 months"
+
+
+def test_b25_8_the_same_rule_for_falls():
+    assert "sustained" not in momentum_gloss(-1.0, -42.0)
+    assert momentum_gloss(-1.0, -42.0) == "about flat over 12 months, down over the last 6 months"
+    assert "sustained weakness" in momentum_gloss(-11.0, -10.0)
+
+
+def test_b25_8_the_threshold_is_one_named_ten_percent_and_the_edge_counts():
+    from aristos_council.narration_render import SUSTAINED_MOVE_PCT
+    assert SUSTAINED_MOVE_PCT == 10.0
+    assert "sustained advance" in momentum_gloss(10.0, 10.0)
+    assert "sustained" not in momentum_gloss(9.9, 30.0)
+
+
+def test_b25_8_the_rendered_msft_sentence_no_longer_says_sustained():
+    text = "The 12-month price return is 1.0% and the 6-month return is 42.1%."
+    out = gloss_momentum_in_text(text)
+    assert "sustained" not in out and "about flat over 12 months, up over the last 6 months" in out
+    assert "1.0%" in out and "42.1%" in out

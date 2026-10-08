@@ -201,7 +201,8 @@ def test_the_batch22_wording_rule_fires_on_each_shape_it_names():
 
 
 FOLD_B22 = "\nSHOW THE WORKINGS"
-_B22_BAD = ["Forensic doubted - 9th of 16 ranked on 1 of 3 factors",
+_B22_BAD = ["matched its group · 0 of 0 years positive · no random-pick comparison · 0 monthly test rounds",
+            "Forensic doubted - 9th of 16 ranked on 1 of 3 factors",
             "not evaluated - multiple implausible (265x); inputs suspect, not stated", "1 name had no BUY from any lens, and are not listed here.",
             "a - falling over both windows - sustained weakness. b - falling over both windows - sustained weakness.",
             "beat its group by +2.6% a year on average - In this cohort, this lens's record does not clear the bar, and does no better than picking names at random.",
@@ -214,7 +215,8 @@ _B22_BAD = ["Forensic doubted - 9th of 16 ranked on 1 of 3 factors",
             "The answer\nBYD was ranked against 19 peers, companies in its own industry (step 2 of 4 of the peer search, market index of 2026-09-25).",
             "One lens did not apply, all for one reason: no operating profit.",
             "The answer\nWhat survived. Debt and cash (latest annual accounts): it owes $600."]
-_B22_OK = ["Forensic doubted (on one test only; two had no data) - 9th of 16 ranked on 1 of 3 factors", "Forensic doubted - 9th of 16 ranked on 3 of 3 factors",
+_B22_OK = ["No test history for this lens in this industry yet.", "beat its group by +4.5% a year on average · 7 of 10 years positive · 108 monthly test rounds",
+           "Forensic doubted (on one test only; two had no data) - 9th of 16 ranked on 1 of 3 factors", "Forensic doubted - 9th of 16 ranked on 3 of 3 factors",
            "not read: the earnings figure looks unreliable", "1 name had no BUY from any lens, and is not listed here.", "2 names had no BUY from any lens, and are not listed here.",
            "a - falling over both windows - sustained weakness. b - rising over both windows - a sustained advance.",
            "beat its group by +2.6% a year on average - Fell short on the winning years (only 5 of 10; the bar is 6).",
@@ -391,11 +393,15 @@ def test_each_rule_fires_on_the_shape_it_names():
 
 def test_the_structured_rules_fire_on_a_contradiction():
     from aristos_council.company_report import LensVote, build_agreement
-    ranked = [SimpleNamespace(verdict=v, excluded=False) for v in ("buy", "hold", "hold")]
+    ranked = [SimpleNamespace(verdict=v, excluded=False, combined_rank=i)
+              for i, v in enumerate(("buy", "hold", "hold", "hold", "hold"))]       # 5 names: a lens needs 5 (B25-1)
     assert sweep.buy_without_sell_findings("lens", ranked)
-    ranked[-1] = SimpleNamespace(verdict="sell", excluded=False)
+    ranked[-1] = SimpleNamespace(verdict="sell", excluded=False, combined_rank=4)
     assert not sweep.buy_without_sell_findings("lens", ranked)
-    ranked2 = [SimpleNamespace(verdict="buy", excluded=False)] * 2           # under 3: no cut
+    tied = [SimpleNamespace(verdict=v, excluded=False, combined_rank=r)            # B25-3: a tied bottom is no SELL
+            for v, r in (("buy", 1), ("hold", 2), ("hold", 3), ("hold", 4), ("hold", 4))]
+    assert not sweep.buy_without_sell_findings("lens", tied)
+    ranked2 = [SimpleNamespace(verdict="buy", excluded=False)] * 2           # under 5: no cut
     assert not sweep.buy_without_sell_findings("lens", ranked2)
 
     votes = [LensVote("a", "A", status="ranked", verdict="sell", position=3, cohort_size=3)]

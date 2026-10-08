@@ -55,6 +55,10 @@ from tests.test_multi_strategy_run import (  # noqa: E402
     _Adapter,
 )
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 MOMENTUM = "magic_formula_momentum_v1"
 _RUN = datetime(2026, 8, 24, 11, 49, tzinfo=timezone.utc)
 

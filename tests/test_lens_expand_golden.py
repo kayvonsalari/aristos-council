@@ -27,6 +27,8 @@ verdict, factor value or exclusion moved.
 
 from __future__ import annotations
 
+import pytest
+
 import json
 import sys
 from datetime import date, timedelta
@@ -138,6 +140,7 @@ def _round(node, places: int = 9):
     return node
 
 
+@pytest.mark.tie_rule("alphabetical")        # written under the old alphabetical tie-break (B25-3)
 def test_existing_lenses_are_byte_identical_to_the_pre_lens_expand_golden():
     golden = _round(json.loads(GOLDEN.read_text(encoding="utf-8")))
     got = _round(build_outputs())

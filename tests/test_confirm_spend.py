@@ -42,6 +42,10 @@ from tests.test_multi_strategy_run import (
 )
 from tests.test_narration_union import MOMENTUM, _CountingRunners
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 _APP = Path(__file__).resolve().parents[1] / "app.py"
 _RUN = datetime(2026, 8, 24, 11, 49, tzinfo=timezone.utc)
 

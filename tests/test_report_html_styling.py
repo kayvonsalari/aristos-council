@@ -194,6 +194,10 @@ from aristos_council.export.report_html import (
     universe_report_html,
 )
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "report_html"
 _RUN = datetime(2026, 8, 24, 11, 49, tzinfo=timezone.utc)
 

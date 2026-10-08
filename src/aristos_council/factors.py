@@ -660,6 +660,26 @@ def reversion_value_display(fi: FactorInputs) -> str:
     return "" if rev is None else rev.display
 
 
+# B25-4 - each factor's DIRECTION in plain words, handed to the specialists and the narrator beside every factor
+# reading. A direction left to inference was read backwards (EPV: -65.4% is NOT a bigger discount). Only the words
+# "rank" must stay out of these lines: the checker reads "rank N of M" from them.
+_DIRECTION_DETAIL: dict[str, str] = {
+    "epv_margin_of_safety": ("higher is better: the price is closer to, or below, what today's operating profit "
+                             "alone is worth with no growth. A NEGATIVE reading means the price is ABOVE that "
+                             "no-growth value - never call it a discount or cheap"),
+}
+
+
+def direction_in_words(name: str) -> str:
+    """"higher is better" / "lower is better" for a registered factor, with its plain detail where one is needed."""
+    fd = FACTOR_REGISTRY.get(name)
+    if name in _DIRECTION_DETAIL:
+        return _DIRECTION_DETAIL[name]
+    if fd is None:
+        return ""
+    return "lower is better" if fd.direction == "low" else "higher is better"
+
+
 @dataclass(frozen=True)
 class FactorDef:
     name: str

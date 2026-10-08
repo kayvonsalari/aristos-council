@@ -173,13 +173,16 @@ def test_a_small_ranked_list_says_the_bottom_slot_is_forced():
     note = forced_bottom_note(6)
     assert note == ("With 6 names the bottom slot is forced; read it as “lowest of these”, "
                     "not as a warning.")
-    assert forced_bottom_note(9) and not forced_bottom_note(10) and not forced_bottom_note(2)
+    # B25-1: the forced-bottom note covers the 5-9 name band (under 5 a lens gives no verdict at all)
+    assert forced_bottom_note(5) and forced_bottom_note(9)
+    assert not forced_bottom_note(10) and not forced_bottom_note(4) and not forced_bottom_note(2)
     assert note in score_gloss_with_note(3, 6)
     assert score_gloss_with_note(3, 12).endswith("worst is 36.")
-    assert "as few as 4" in forced_bottom_note_multi([4, 12, 2])
+    assert "as few as 6" in forced_bottom_note_multi([6, 12, 2])
     assert forced_bottom_note_multi([12, 30]) == ""
 
 
+@pytest.mark.min_group(3)             # the sweep's six-name list was built under the old three-name rule
 def test_the_list_reports_carry_the_small_list_line_and_the_one_line_badge_form():
     """Built from the sweep's six-name list: the sentence is there, the five-sentence badge
     paragraph is not (it lives in the glossary)."""

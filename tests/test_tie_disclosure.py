@@ -28,6 +28,11 @@ from aristos_council.rank_engine import (
     format_verdict_cell,
     rank_universe,
 )
+import pytest  # noqa: E402
+
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
 
 
 def _rt(ticker, verdict, combined, *, n=5, excluded=False):
@@ -133,6 +138,7 @@ _ROWS = [("A", {"f1": 50.0, "f2": 50.0}), ("B", {"f1": 40.0, "f2": 40.0}),
          ("E", {"f1": 10.0, "f2": 20.0})]
 
 
+@pytest.mark.tie_rule("alphabetical")        # written under the old alphabetical tie-break (B25-3)
 def test_flagging_changes_no_verdict_no_score_and_no_position():
     ranked = rank_universe(_ROWS, _SPECS2)
     assert [r.ticker for r in ranked] == ["A", "B", "C", "D", "E"]

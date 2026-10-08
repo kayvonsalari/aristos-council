@@ -187,16 +187,36 @@ def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
 # DISPLAY layer, same as Company Check's own, so a real run's RANKED LIST is unchanged
 # and only how a too-small cohort's position is RENDERED differs. 3 matches the task's
 # own "fewer than 3 rankable names" wording.
-MIN_RANKABLE_COHORT = 3
+#
+# B25-1 (Kayvon's ruling, 2026-10-09, MIN-GROUP-5): a lens that ranks fewer than FIVE companies gives no verdict
+# (it was three). A lens that ranks 5 to SMALL_GROUP_MAX still votes, with a plain "small group: N companies"
+# warning beside the vote. The ranking PRIMITIVE is untouched: ``_ARITHMETIC_CUT_BELOW`` keeps its old
+# three-name boundary, so the stored output for tiny synthetic fixtures does not move.
+MIN_RANKABLE_COHORT = 5
+
+# B25-3 - THE one setting for a tie that straddles a verdict cut. "best_position": every name tied on the
+# combined rank takes the verdict of the tie group's BEST position (MSFT 2026-10-08, Value + Momentum:
+# AAPL 1, TSMC 1, MSFT/ASML/CSCO tied 3rd, NVDA 6th - the three tied names are HOLD, not SELL, because
+# 3rd of 6 is HOLD). Symmetric on the BUY side. "alphabetical" is the old behaviour (ticker order breaks the tie).
+TIE_VERDICT_RULE = "best_position"
+SMALL_GROUP_MIN = 5          # the warning band is 5..9 whatever the voting line is
+SMALL_GROUP_MAX = 9
+_ARITHMETIC_CUT_BELOW = 3
+
+
+def small_group_text(cohort_size: int) -> str:
+    """"small group: 6 companies" - the warning beside a vote that rests on 5 to 9 names ("" otherwise)."""
+    if SMALL_GROUP_MIN <= cohort_size <= SMALL_GROUP_MAX:
+        return f"small group: {cohort_size} companies"
+    return ""
 
 
 def too_few_to_rank_text(cohort_size: int) -> str:
-    """"too few to rank (only 1 company here, not a peer group)" — the ONE wording every
-    surface uses for a cohort below MIN_RANKABLE_COHORT (Company Check's votes_from_multi,
-    the Run tab's combine_rank_results/format_cli_report), so it can never read two
-    different ways on two different pages."""
+    """"too few to rank (3 companies)" — the ONE wording every surface uses for a cohort below
+    MIN_RANKABLE_COHORT (Company Check's votes_from_multi, the Run tab's combine_rank_results/
+    format_cli_report), so it can never read two different ways on two different pages."""
     company = "company" if cohort_size == 1 else "companies"
-    return f"too few to rank (only {cohort_size} {company} here, not a peer group)"
+    return f"too few to rank ({cohort_size} {company})"
 
 
 def passed_too_few_text(kept: int) -> str:
@@ -221,8 +241,8 @@ def _verdict_for_position(i: int, n: int, cut: str, k: int, percentile: float) -
     # and the bottom end sells THE SAME NUMBER of names (QUINTILE-ASYMMETRY-1). The old
     # bottom cut was `i >= 0.8n`, which did not round up, so #3 of 3 stayed HOLD while #1
     # of 3 was BUY.
-    if n < MIN_RANKABLE_COHORT:
-        # Under 3 names nothing votes (NO-RANK-NO-VOTE-1): the cut is arithmetic, kept as it
+    if n < _ARITHMETIC_CUT_BELOW:
+        # Under 3 names the cut is arithmetic (NO-RANK-NO-VOTE-1; display layers now stop at 5): kept as it
         # always was so the primitive's stored output for tiny fixtures does not move.
         if i < n / 5.0:
             return "buy"
@@ -307,8 +327,14 @@ def rank_universe(
 
     # Sort best-first; tie-break by ticker for determinism.
     ranked.sort(key=lambda r: (r.combined_rank, r.ticker))
+    group_start = 0
     for i, r in enumerate(ranked):
-        r.verdict = _verdict_for_position(i, n, cut, k, percentile)
+        if i and ranked[i - 1].combined_rank != r.combined_rank:
+            group_start = i
+        # B25-3 (TIE_VERDICT_RULE): names tied on the combined rank share the verdict of the tie group's BEST
+        # position, so the alphabet never splits a tie across a cut ("alphabetical" restores the old behaviour).
+        at = group_start if TIE_VERDICT_RULE == "best_position" else i
+        r.verdict = _verdict_for_position(at, n, cut, k, percentile)
         r.rank_position = i + 1          # record position (no effect on the sort/cut)
     assign_cohort_positions(ranked)      # display-only #N of M (RANK-DISPLAY-1)
     return ranked + excluded

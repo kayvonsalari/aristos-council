@@ -31,6 +31,10 @@ from aristos_council.data.adapter import (
     PriceHistory,
 )
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 ROOT = Path(__file__).resolve().parents[1]
 STRAT_DIR = ROOT / "strategies"
 TODAY = date(2026, 6, 30)

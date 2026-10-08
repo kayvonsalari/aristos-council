@@ -1,0 +1,290 @@
+{
+ "source": "runs/2026-10-08T09-59-26Z_company_check_MSFT (Kayvon's paid MSFT run, 11:59 Berlin) - company facts only",
+ "narrative_without_flags": "#### Ranker verdict\n\n**BUY on 1 of 5 votes; SELL on 2; 3 lenses did not apply to this company**\n\n#### Every lens's verdict\n\nStated in full before any prose — including the lenses that did not buy.\n\n| Lens | Verdict | Position | Note |\n| --- | --- | --- | --- |\n| Earnings Power Value | BUY | #2 of 13 | — |\n| Value + Momentum | SELL | #3 of 6 | — |\n| Growth | SELL | #3 of 3 | — |\n| Magic Formula RAW | HOLD | #6 of 13 | — |\n| Quality | HOLD | #6 of 13 | — |\n| Forensic | NO CONCERN | #10 of 14 | — |\n| Defensive Income | DOES NOT APPLY | — | Dividend yield 0.74% falls below the lens's required minimum of 1.5%. On its measures MSFT would rank 4th of the 14 names with usable figures, had the lens's rules not excluded it. |\n| Cyclical Income | DOES NOT APPLY | — | Dividend yield 0.74% falls below the lens's required minimum of 1.5%. On its measures MSFT would rank 10th of the 13 names with usable figures, had the lens's rules not excluded it. |\n| Financials | DOES NOT APPLY | — | Not applied to the Technology sector. |\n\n#### Why each lens ranked it there\n\n_Each lens ranks only the names that passed its own screen, so cohort sizes differ per lens._\n\n##### Earnings Power Value — why\n\n| Factor | Rank | Note |\n| --- | --- | --- |\n| Earnings power value vs. enterprise value | 2 of 13 | -65.4% |\n\nFactor score: 2\n\nThe Earnings Power Value lens ranked MSFT 2nd of 13 — the cohort for this lens is 13 names. Its sole factor is earnings power value vs. enterprise value, where MSFT's reading of -65.4% placed it 2nd of 13. A more negative reading on this factor signals that the company's capitalised earnings power trades at a larger discount to enterprise value, which the lens treats as a bullish signal. No other factor enters this lens's ranking.\n\n##### Value + Momentum — why\n\n| Factor | Rank | Note |\n| --- | --- | --- |\n| Return on invested capital | 4 of 6 | 20.3% |\n| Earnings yield (EBIT/EV) | 1 of 6 | 4.2% |\n| 12-month price momentum | 6 of 6 | 1.0% |\n\nFactor score: 11\n\nThe Value + Momentum lens ranked MSFT 3rd of 6 (tied with two others) within its cohort of 6 names. MSFT's earnings yield of 4.2% was the best in the peer set (rank 1 of 6), and its ROIC of 20.3% placed it 4th of 6 — middle of the pack. However, its 12-month price momentum of 1.0% ranked dead last at 6 of 6, dragging the combined factor score to a SELL position. The momentum reading is the decisive drag under this lens.\n\n##### Growth — why\n\n| Factor | Rank | Note |\n| --- | --- | --- |\n| Revenue CAGR (3-yr, yfinance) | 3 of 3 | 16.0% |\n| Return on invested capital | 2 of 3 | 20.3% |\n| Earnings yield (EBIT/EV) | 1 of 3 | 4.2% |\n| 12-month price momentum | 3 of 3 | 1.0% |\n\nFactor score: 9\n\nThe Growth lens ranked MSFT 3rd of 3 — last place — within its cohort of 3 names. MSFT's 3-year revenue CAGR of 16.0% ranked last (3 of 3) and its 12-month price momentum of 1.0% also ranked last (3 of 3). Its ROIC of 20.3% placed it 2nd of 3, and its earnings yield of 4.2% was best in the cohort (1 of 3). The two last-place finishes on revenue growth and momentum were sufficient to push the combined factor score to the bottom of the Growth lens's ranking.\n\n##### Magic Formula RAW — why\n\n| Factor | Rank | Note |\n| --- | --- | --- |\n| Return on invested capital | 4 of 13 | 20.3% |\n| Earnings yield (EBIT/EV) | 3 of 13 | 4.2% |\n| 12-month price momentum | 12 of 13 | 1.0% |\n\nFactor score: 19\n\nMagic Formula RAW ranked MSFT 6th of 13 (tied with one other) within its cohort of 13 names. ROIC of 20.3% placed it 4th of 13 and earnings yield of 4.2% placed it 3rd of 13 — both solid positions. However, 12-month price momentum of 1.0% ranked 12th of 13, second-worst in the entire universe under this lens, and that near-bottom momentum reading pulled the combined factor score to a mid-table HOLD.\n\n##### Quality — why\n\n| Factor | Rank | Note |\n| --- | --- | --- |\n| Gross profit / total assets | 7 of 13 | 29.7% |\n| Return on invested capital, worst of last 5 years | 3 of 13 | 25.9% |\n| Net debt / operating profit | 10 of 13 | 0.3x |\n\nFactor score: 20\n\nThe Quality lens ranked MSFT 6th of 13 within its cohort of 13 names. Its worst-of-5-years ROIC of 25.9% was a strength at rank 3 of 13. Gross profit as a share of total assets at 29.7% placed it 7th of 13 — exactly mid-table. Net debt relative to operating profit at 0.3x ranked 10th of 13, a weaker position within the cohort. The combination of one strong factor, one mid-table factor, and one weaker factor produced a HOLD at 6th of 13.\n\n##### Forensic — why\n\n| Factor | Rank | Note |\n| --- | --- | --- |\n| Accrual ratio | 4 of 14 | -7.1% |\n| Altman Z-Score | 11 of 14 | 9.31 |\n| Piotroski F-Score (0-9) | 11 of 14 | 6 |\n\nThe Forensic lens is a CHECK — it marks, it never votes. It placed MSFT 10th of 14 within its cohort of 14 names and returned a reading of no concern. The accrual ratio of -7.1% ranked 4th of 14 — a relatively strong position suggesting earnings quality is not a concern. The Altman Z-Score of 9.31 ranked 11th of 14 and the Piotroski F-Score of 6 ranked 11th of 14 — both mid-to-lower within the cohort, though neither triggered a concern flag. The Forensic lens's verdict is no concern; it carries no BUY, HOLD, or SELL implication.\n\n#### Where the specialists disagree\n\nThe voting lenses split: Earnings Power Value issued a BUY while Value + Momentum and Growth both issued SELL, and Magic Formula RAW and Quality both issued HOLD — a four-way split across the applied voting lenses. Among the specialists, the disagreement is equally pronounced: the sentiment specialist is bullish at confidence 0.72, the risk specialist is bearish at confidence 0.62, and both the fundamental and technical specialists are neutral at confidence 0.55. The sentiment specialist's bullishness rests on the breadth of positive news flow, the analyst consensus, and rising next-year EPS forecasts. The risk specialist's bearishness rests on the two-year free cash flow decline from the FY2024 peak, dead-last momentum in every peer group that measures it, a crowded analyst consensus already expressed in price, and the Copilot adoption risk. These disagreements — both across lenses and across specialists — are left standing for the reader to resolve.\n\n_Reported and left standing — the ranker's verdicts are unchanged._\n\n#### Neutral context\n\n- Accounts are annual for the fiscal year to June 2026; every monetary figure from the company's accounts is in USD.\n- Market capitalisation as of the index snapshot dated 2026-09-25 is USD 3.67tn.\n- Net debt stands at USD 52.0bn; the company would require 0.3 years of operating cash flow or 0.8 years of free cash flow to repay it.\n- Interest is covered more than 50 times over, making it immaterial.\n- Revenue compounded at 14.6% a year over 5 years and 13.8% a year over 10 years, with growth recorded in 10 of the 10 years reported.\n- Earnings per share compounded at 17.2% a year over 5 years and 21.2% a year over 10 years, with growth in 8 of the 10 years reported.\n- Free cash flow (oldest first): FY2023 $59.5bn; FY2024 $74.1bn; FY2025 $71.6bn; FY2026 $67.0bn.\n- The EV/EBIT valuation band places MSFT at the 12th percentile of its own 5-year range — based on 38 of 61 months, with the remainder lacking usable statements.\n- Forward P/E is 26.8x on this year's consensus EPS of USD 19.77 and 22.4x on next year's consensus EPS of USD 23.68.\n- 55 analysts cover the stock: 39 strong buy, 14 buy, 2 hold, 0 sell, 0 strong sell; average price target USD 587.63, approximately 11% above the last close of USD 529.76.\n- The 12-month price return is 1.0%; the 6-month return is 42.1%; the stock sits 1.5% below its 52-week high — rising over both windows — a sustained advance.\n- The stock trades above its 50-day moving average of USD 495.84 and its 200-day moving average of USD 432.24.\n- Annualised volatility is 31.3%.\n- Dividend yield is 0.74%, below the 1.5% threshold required by both the Defensive Income and Cyclical Income lenses.\n- The Forensic check returned no concern, with an accrual ratio of -7.1% (rank 4 of 14), an Altman Z-Score of 9.31 (rank 11 of 14), and a Piotroski F-Score of 6 (rank 11 of 14).\n\n#### Specialist views\n\n**fundamental** — neutral, confidence 0.55\n_Is this a good business, and can it keep paying what it pays? Reads the company's own accounts: profitability, cash flow, payout._\n\nThe fundamental specialist noted the split verdict across lenses — one BUY from Earnings Power Value, two SELLs from Value + Momentum and Growth, two HOLDs from Magic Formula RAW and Quality — and characterised confidence as moderate at 0.55. The specialist highlighted the free cash flow series (FY2023 through FY2026, oldest first), observing a decline from the FY2024 peak through FY2025 and FY2026, and noted this as a material concern for a company of this scale. The specialist also cited the EV/EBIT valuation band at the 12th percentile as providing some support for the EPV thesis, while acknowledging that weak momentum and the FCF trajectory limit conviction. The specialist's stance is neutral, reflecting the genuine split in the evidence rather than a directional lean.\n\n**technical** — neutral, confidence 0.55\n_What is the price chart doing? Reads price against its own averages, distance from the 52-week high, volatility. A pullback alone is not bearish._\n\nThe technical specialist observed that the stock trades above both its 50-day moving average of USD 495.84 and its 200-day moving average of USD 432.24, and sits only 1.5% below its 52-week high — a constructive price structure. However, the 12-month return of 1.0% is notably weak, and the 6-month return of 42.1% suggests gains were concentrated in a narrow window rather than sustained. Annualised volatility of 31.3% is material. The specialist concluded that the technical setup presents neither a red flag nor a compelling entry signal, and rated the backdrop neutral with elevated execution risk.\n\n**sentiment** — bullish, confidence 0.72\n_What do the news and analysts say? Reads headlines and analyst recommendation counts only. Abstains when no news data exists._\n\nThe sentiment specialist assessed 249 news items and the full analyst block. The headline stream was dominated by product announcements — an Nvidia-powered Surface Ultra laptop, Windows AI revamp, and Copilot ecosystem expansion — alongside bullish analyst commentary naming MSFT as a top AI pick. The analyst block showed 53 of 55 analysts bullish, with an average price target of USD 587.63 implying approximately 11% upside. Next-year EPS forecasts were raised from USD 22.58 to USD 23.68 over three months. The specialist acknowledged two countervailing headlines: one questioning whether the stock is priced for perfection on AI cash flow, and one reporting near-zero Copilot adoption among enterprise employees. These were noted as risks but did not shift the overall stance to neutral, given the breadth and volume of positive coverage. Confidence was set at 0.72, below 0.8, because the adoption concern and the modest analyst upside prevent a fully one-sided read.\n\n**risk** — bearish, confidence 0.62\n_What could go wrong? Reads payout stretch, volatility, data-quality flags, anything unverifiable._\n\nThe risk specialist focused on the free cash flow decline from the FY2024 peak — $74.1bn in FY2024 falling to $71.6bn in FY2025 and $67.0bn in FY2026 — as the central concern, noting this contradicts an AI-driven cash generation narrative. The specialist also flagged that forward P/E multiples of 26.8x (this year) and 22.4x (next year) embed aggressive growth expectations, and that the 12-month momentum of 1.0% ranking dead last in every peer group that measures it suggests the market has had ample time to re-rate a historically cheap stock and has not done so. The specialist noted that the analyst consensus of 53 of 55 bullish is crowded and already expressed in price, with only 11% upside implied. The Copilot adoption headline was cited as a material risk to the AI monetisation thesis. The risk specialist's stance is bearish at confidence 0.62.\n\n_Specialists inform the commentary only — no specialist can change a verdict._\n\n#### Open questions\n\n- Worth checking: what is the capital expenditure trajectory for FY2024 through FY2026? The free cash flow decline from the FY2024 peak may reflect a step-up in AI infrastructure capex — if so, is the Earnings Power Value lens capitalising a peak earnings number rather than a sustainable one?\n- Worth checking: is there a disclosed Copilot attach rate or revenue-per-seat figure that would allow the AI monetisation thesis to be stress-tested against the headline reporting near-zero adoption among enterprise employees?\n- Worth checking: the company has been reported as taking on more debt for AI infrastructure — is the net debt figure of USD 52.0bn likely to increase materially, and if so, what would the revised free-cash-flow payback period be?\n- Worth checking: the free cash flow series covers only four years (FY2023–FY2026). Is a longer series available that would clarify whether the FY2024 peak was a one-time event or the start of a structural decline in cash conversion?\n- Worth checking: the EV/EBIT valuation band is based on 38 of 61 months, with 23 months lacking usable statements. Does the missing data cluster in periods of high or low valuation? If missing months are disproportionately from low-valuation periods, the 12th-percentile reading may overstate cheapness.\n- Worth checking: the Growth lens's revenue CAGR of 16.0% is a 3-year figure sourced from yfinance, while the company facts cite a 5-year CAGR of 14.6% and a 10-year CAGR of 13.8%. Is the 3-year figure elevated by a low base year, and does the Growth lens's SELL verdict reflect a mean-reversion risk in the near-term growth rate?",
+ "original_stamps": [
+  "[⚠ AI text check: \"enterprise value, where MSFT's reading of -65.4% placed it 2nd of 13\" cites a 2nd of 13 rank without naming the lens it belongs to (Earnings Power Value)]",
+  "[⚠ AI text check: \"It placed MSFT 10th of 14 within its cohort of 14 names and returned a reading of no concern\" cites a 10th of 14 rank without naming the lens it belongs to (Forensic)]",
+  "[⚠ AI text check: \"Net debt relative to operating profit at 0.3x ranked 10th of 13, a weaker position within the cohort\" cites Cyclical Income's 10th of 13 without saying it is only where the company WOULD rank on that lens's measures — the lens did not apply, so it is not a vote and not a verdict]",
+  "[⚠ AI text check: \"The accrual ratio of -7.1% ranked 4th of 14 — a relatively strong position suggesting earnings quality is not a concern\" cites Defensive Income's 4th of 14 without saying it is only where the company WOULD rank on that lens's measures — the lens did not apply, so it is not a vote and not a verdict]",
+  "[⚠ AI text check: \"of 26 8x this year and 22 4x next year\" appears near-verbatim in 2 specialists' theses (fundamental, risk) — convergent phrasing on the same figures, not independent domain analysis]",
+  "[⚠ AI text check: \"12 month return of 1 0\" appears near-verbatim in 2 specialists' theses (technical, risk) — convergent phrasing on the same figures, not independent domain analysis]",
+  "[⚠ AI text check: \"is microsoft msft priced for perfection on ai cash flow\" appears near-verbatim in 2 specialists' theses (sentiment, risk) — convergent phrasing on the same figures, not independent domain analysis]"
+ ],
+ "lens_attribution": [
+  {
+   "lens": "Earnings Power Value",
+   "factor_ranks": [
+    {
+     "factor": "Earnings power value vs. enterprise value",
+     "rank": 2,
+     "cohort_size": 13,
+     "note": "-65.4%"
+    }
+   ],
+   "reasoning": "The Earnings Power Value lens ranked MSFT 2nd of 13 — the cohort for this lens is 13 names. Its sole factor is earnings power value vs. enterprise value, where MSFT's reading of -65.4% placed it 2nd of 13. A more negative reading on this factor signals that the company's capitalised earnings power trades at a larger discount to enterprise value, which the lens treats as a bullish signal. No other factor enters this lens's ranking."
+  },
+  {
+   "lens": "Value + Momentum",
+   "factor_ranks": [
+    {
+     "factor": "Return on invested capital",
+     "rank": 4,
+     "cohort_size": 6,
+     "note": "20.3%"
+    },
+    {
+     "factor": "Earnings yield (EBIT/EV)",
+     "rank": 1,
+     "cohort_size": 6,
+     "note": "4.2%"
+    },
+    {
+     "factor": "12-month price momentum",
+     "rank": 6,
+     "cohort_size": 6,
+     "note": "1.0%"
+    }
+   ],
+   "reasoning": "The Value + Momentum lens ranked MSFT 3rd of 6 (tied with two others) within its cohort of 6 names. MSFT's earnings yield of 4.2% was the best in the peer set (rank 1 of 6), and its ROIC of 20.3% placed it 4th of 6 — middle of the pack. However, its 12-month price momentum of 1.0% ranked dead last at 6 of 6, dragging the combined factor score to a SELL position. The momentum reading is the decisive drag under this lens."
+  },
+  {
+   "lens": "Growth",
+   "factor_ranks": [
+    {
+     "factor": "Revenue CAGR (3-yr, yfinance)",
+     "rank": 3,
+     "cohort_size": 3,
+     "note": "16.0%"
+    },
+    {
+     "factor": "Return on invested capital",
+     "rank": 2,
+     "cohort_size": 3,
+     "note": "20.3%"
+    },
+    {
+     "factor": "Earnings yield (EBIT/EV)",
+     "rank": 1,
+     "cohort_size": 3,
+     "note": "4.2%"
+    },
+    {
+     "factor": "12-month price momentum",
+     "rank": 3,
+     "cohort_size": 3,
+     "note": "1.0%"
+    }
+   ],
+   "reasoning": "The Growth lens ranked MSFT 3rd of 3 — last place — within its cohort of 3 names. MSFT's 3-year revenue CAGR of 16.0% ranked last (3 of 3) and its 12-month price momentum of 1.0% also ranked last (3 of 3). Its ROIC of 20.3% placed it 2nd of 3, and its earnings yield of 4.2% was best in the cohort (1 of 3). The two last-place finishes on revenue growth and momentum were sufficient to push the combined factor score to the bottom of the Growth lens's ranking."
+  },
+  {
+   "lens": "Magic Formula RAW",
+   "factor_ranks": [
+    {
+     "factor": "Return on invested capital",
+     "rank": 4,
+     "cohort_size": 13,
+     "note": "20.3%"
+    },
+    {
+     "factor": "Earnings yield (EBIT/EV)",
+     "rank": 3,
+     "cohort_size": 13,
+     "note": "4.2%"
+    },
+    {
+     "factor": "12-month price momentum",
+     "rank": 12,
+     "cohort_size": 13,
+     "note": "1.0%"
+    }
+   ],
+   "reasoning": "Magic Formula RAW ranked MSFT 6th of 13 (tied with one other) within its cohort of 13 names. ROIC of 20.3% placed it 4th of 13 and earnings yield of 4.2% placed it 3rd of 13 — both solid positions. However, 12-month price momentum of 1.0% ranked 12th of 13, second-worst in the entire universe under this lens, and that near-bottom momentum reading pulled the combined factor score to a mid-table HOLD."
+  },
+  {
+   "lens": "Quality",
+   "factor_ranks": [
+    {
+     "factor": "Gross profit / total assets",
+     "rank": 7,
+     "cohort_size": 13,
+     "note": "29.7%"
+    },
+    {
+     "factor": "Return on invested capital, worst of last 5 years",
+     "rank": 3,
+     "cohort_size": 13,
+     "note": "25.9%"
+    },
+    {
+     "factor": "Net debt / operating profit",
+     "rank": 10,
+     "cohort_size": 13,
+     "note": "0.3x"
+    }
+   ],
+   "reasoning": "The Quality lens ranked MSFT 6th of 13 within its cohort of 13 names. Its worst-of-5-years ROIC of 25.9% was a strength at rank 3 of 13. Gross profit as a share of total assets at 29.7% placed it 7th of 13 — exactly mid-table. Net debt relative to operating profit at 0.3x ranked 10th of 13, a weaker position within the cohort. The combination of one strong factor, one mid-table factor, and one weaker factor produced a HOLD at 6th of 13."
+  },
+  {
+   "lens": "Forensic",
+   "factor_ranks": [
+    {
+     "factor": "Accrual ratio",
+     "rank": 4,
+     "cohort_size": 14,
+     "note": "-7.1%"
+    },
+    {
+     "factor": "Altman Z-Score",
+     "rank": 11,
+     "cohort_size": 14,
+     "note": "9.31"
+    },
+    {
+     "factor": "Piotroski F-Score (0-9)",
+     "rank": 11,
+     "cohort_size": 14,
+     "note": "6"
+    }
+   ],
+   "reasoning": "| --- | --- | --- |\n| Accrual ratio | 4 of 14 | -7.1% |\n| Altman Z-Score | 11 of 14 | 9.31 |\n| Piotroski F-Score (0-9) | 11 of 14 | 6 |\n\nThe Forensic lens is a CHECK — it marks, it never votes. It placed MSFT 10th of 14 within its cohort of 14 names and returned a reading of no concern. The accrual ratio of -7.1% ranked 4th of 14 — a relatively strong position suggesting earnings quality is not a concern. The Altman Z-Score of 9.31 ranked 11th of 14 and the Piotroski F-Score of 6 ranked 11th of 14 — both mid-to-lower within the cohort, though neither triggered a concern flag. The Forensic lens's verdict is no concern; it carries no BUY, HOLD, or SELL implication."
+  }
+ ],
+ "disagreement_note": "The voting lenses split: Earnings Power Value issued a BUY while Value + Momentum and Growth both issued SELL, and Magic Formula RAW and Quality both issued HOLD — a four-way split across the applied voting lenses. Among the specialists, the disagreement is equally pronounced: the sentiment specialist is bullish at confidence 0.72, the risk specialist is bearish at confidence 0.62, and both the fundamental and technical specialists are neutral at confidence 0.55. The sentiment specialist's bullishness rests on the breadth of positive news flow, the analyst consensus, and rising next-year EPS forecasts. The risk specialist's bearishness rests on the two-year free cash flow decline from the FY2024 peak, dead-last momentum in every peer group that measures it, a crowded analyst consensus already expressed in price, and the Copilot adoption risk. These disagreements — both across lenses and across specialists — are left standing for the reader to resolve.",
+ "verdicts": [
+  {
+   "lens": "Value + Momentum",
+   "lens_id": "magic_formula_momentum_v1",
+   "lens_label": "Value + Momentum (magic_formula_momentum_v1)",
+   "cell": "SELL - 3rd of 6 (tied with 2)",
+   "status": "ranked",
+   "verdict": "sell",
+   "votes": true,
+   "position": 3,
+   "cohort_size": 6,
+   "factors": [
+    "Return on invested capital: 20.3%, rank 4 of 6",
+    "Earnings yield (EBIT/EV): 4.2%, rank 1 of 6",
+    "12-month price momentum: 1.0%, rank 6 of 6"
+   ]
+  },
+  {
+   "lens": "Defensive Income",
+   "lens_id": "conservative_plus_v1",
+   "lens_label": "Defensive Income (conservative_plus_v1)",
+   "cell": "does not apply - dividend yield 0.74%; the rule requires at least 1.5%.",
+   "status": "excluded",
+   "verdict": "",
+   "votes": true,
+   "position": null,
+   "cohort_size": null,
+   "would_rank": "on its measures it would rank 4th of the 14 names with usable figures, had the lens's rules not excluded it. Not a vote.",
+   "would_rank_position": 4,
+   "would_rank_of": 14
+  },
+  {
+   "lens": "Cyclical Income",
+   "lens_id": "cyclical_income_v1",
+   "lens_label": "Cyclical Income (cyclical_income_v1)",
+   "cell": "does not apply - dividend yield 0.74%; the rule requires at least 1.5%.",
+   "status": "excluded",
+   "verdict": "",
+   "votes": true,
+   "position": null,
+   "cohort_size": null,
+   "would_rank": "on its measures it would rank 10th of the 13 names with usable figures, had the lens's rules not excluded it. Not a vote.",
+   "would_rank_position": 10,
+   "would_rank_of": 13
+  },
+  {
+   "lens": "Earnings Power Value",
+   "lens_id": "epv_v1",
+   "lens_label": "Earnings Power Value (epv_v1)",
+   "cell": "BUY - 2nd of 13",
+   "status": "ranked",
+   "verdict": "buy",
+   "votes": true,
+   "position": 2,
+   "cohort_size": 13,
+   "factors": [
+    "Earnings power value vs. enterprise value: -65.4%, rank 2 of 13"
+   ]
+  },
+  {
+   "lens": "Financials",
+   "lens_id": "financials_v1",
+   "lens_label": "Financials (financials_v1)",
+   "cell": "does not apply - not for this sector (Technology)",
+   "status": "excluded",
+   "verdict": "",
+   "votes": true,
+   "position": null,
+   "cohort_size": null
+  },
+  {
+   "lens": "Forensic",
+   "lens_id": "forensic_v1",
+   "lens_label": "Forensic (forensic_v1)",
+   "cell": "no concern - 10th of 14",
+   "status": "ranked",
+   "verdict": "hold",
+   "votes": false,
+   "position": 10,
+   "cohort_size": 14,
+   "factors": [
+    "Accrual ratio: -7.1%, rank 4 of 14",
+    "Altman Z-Score: 9.31, rank 11 of 14",
+    "Piotroski F-Score (0-9): 6, rank 11 of 14"
+   ]
+  },
+  {
+   "lens": "Growth",
+   "lens_id": "growth_garp_v2",
+   "lens_label": "Growth (growth_garp_v2)",
+   "cell": "SELL - 3rd of 3",
+   "status": "ranked",
+   "verdict": "sell",
+   "votes": true,
+   "position": 3,
+   "cohort_size": 3,
+   "factors": [
+    "Revenue CAGR (3-yr, yfinance): 16.0%, rank 3 of 3",
+    "Return on invested capital: 20.3%, rank 2 of 3",
+    "Earnings yield (EBIT/EV): 4.2%, rank 1 of 3",
+    "12-month price momentum: 1.0%, rank 3 of 3"
+   ]
+  },
+  {
+   "lens": "Magic Formula RAW",
+   "lens_id": "magic_formula_raw_v1",
+   "lens_label": "Magic Formula RAW (magic_formula_raw_v1)",
+   "cell": "HOLD - 6th of 13 (tied with one other)",
+   "status": "ranked",
+   "verdict": "hold",
+   "votes": true,
+   "position": 6,
+   "cohort_size": 13,
+   "factors": [
+    "Return on invested capital: 20.3%, rank 4 of 13",
+    "Earnings yield (EBIT/EV): 4.2%, rank 3 of 13",
+    "12-month price momentum: 1.0%, rank 12 of 13"
+   ]
+  },
+  {
+   "lens": "Quality",
+   "lens_id": "quality_v1",
+   "lens_label": "Quality (quality_v1)",
+   "cell": "HOLD - 6th of 13",
+   "status": "ranked",
+   "verdict": "hold",
+   "votes": true,
+   "position": 6,
+   "cohort_size": 13,
+   "factors": [
+    "Gross profit / total assets: 29.7%, rank 7 of 13",
+    "Return on invested capital, worst of last 5 years: 25.9%, rank 3 of 13",
+    "Net debt / operating profit: 0.3x, rank 10 of 13"
+   ]
+  }
+ ]
+}

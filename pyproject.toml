@@ -88,4 +88,6 @@ addopts = "-q --strict-markers"
 markers = [
     "real_adapter: this test exercises the real provider factory on purpose",
     "notebook: executes cells of notebooks/*.ipynb; CI runs these in their own job",
+    "tie_rule(name): pin rank_engine.TIE_VERDICT_RULE for a test written under the old alphabetical tie-break",
+    "min_group(n): pin MIN_RANKABLE_COHORT to n for this test/module (fixtures built under the old 3-name rule)",
 ]

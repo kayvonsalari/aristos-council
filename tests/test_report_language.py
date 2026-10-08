@@ -209,9 +209,10 @@ def _close(rendered: str, raw: float) -> bool:
 
 
 def test_the_reformat_moved_no_verdict_rank_or_exclusion(result):
-    """The whole point: same names ranked, same verdicts, same names excluded."""
+    """The whole point: same names ranked, same names excluded. (B25-3: the two ranked names are TIED, so they
+    share the tie group's best-position verdict - BUY - where the old alphabetical tie-break gave BUY, HOLD.)"""
     assert [r.ticker for r in result.ranked] == ["GOOD", "UNTESTABLE"]
-    assert [r.verdict for r in result.ranked] == ["buy", "hold"]
+    assert [r.verdict for r in result.ranked] == ["buy", "buy"]
     assert {t for t, _ in result.excluded} == {"THIN", "BROKEN"}
 
 
@@ -344,9 +345,9 @@ def test_the_summary_line_counts_the_actual_verdicts():
 
 
 def test_a_zero_category_is_omitted_rather_than_printed_as_zero():
-    line = format_summary_line(_verdicts("buy", "hold", "hold"),
-                               universe_size=3, excluded=0)
-    assert line == "1 BUY · 2 HOLD — 3 of 3 names ranked"
+    line = format_summary_line(_verdicts("buy", "hold", "hold", "hold", "hold"),
+                               universe_size=5, excluded=0)             # five: a lens needs 5 to vote (B25-1)
+    assert line == "1 BUY · 4 HOLD — 5 of 5 names ranked"
     assert "SELL" not in line and "0 " not in line
 
 

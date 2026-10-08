@@ -226,6 +226,10 @@ def _vote_line(report) -> str:
     if ag.n_voted == 1:
         v = voters[0]
         where = f", {ordinal(v.position)} of {v.cohort_size}" + (f", {v.tie_note.strip(' ()')}" if v.tied_with else "") if v.position else ""
+        if v.small_group_note:
+            where += f", {v.small_group_note}"
+        if v.expensive_note:
+            where += f", {v.expensive_note}"
         built = "one lens built for banks" if bank else "the one lens that voted"
         return f"{v.word}, on {built} ({v.label}{where})."
     words = {"buy": "BUY", "hold": "HOLD", "sell": "SELL"}
@@ -609,6 +613,21 @@ def track_caption(report) -> str:
     return _friendly_caption(report.track_record_caption)
 
 
+def badge_group_note(report) -> str:
+    """B25-7: the track-record badges come from tests on the INDUSTRY cohort, but this run may have compared the
+    company with a wider group (the sector-level step of the peer search). One line says so."""
+    from .company_report import NO_COHORT_TRACK_RECORD_LINE
+    caption = report.track_record_caption or ""
+    group = getattr(report, "peer_group", None)
+    if not caption or caption == NO_COHORT_TRACK_RECORD_LINE or group is None or not getattr(group, "broad", False):
+        return ""
+    m = re.match(r"Track record from the (.+?) cohort", caption)
+    if not m:
+        return ""
+    return (f"Track record is from tests on {m.group(1)} companies; this run compared it with a wider "
+            "sector group, so the badges are a weaker guide.")
+
+
 # --------------------------------------------------------------------------- #
 # The page plan every renderer reads
 # --------------------------------------------------------------------------- #
@@ -625,6 +644,7 @@ class StoryPage:
     no_vote: str                  # shown instead of the table when no lens was ticked
     group_note: str = ""          # "14 of 20 had usable figures for ..." (B22-B3), muted, under the table
     summary_check: str = ""       # "AI text check: no issues found" above a model summary (B24-E9)
+    badge_note: str = ""          # "Track record is from tests on X companies; ... a wider sector group" (B25-7)
 
 
 def story_page(report) -> StoryPage:
@@ -643,7 +663,7 @@ def story_page(report) -> StoryPage:
         headers=tuple(TABLE_HEADERS), rows=tuple(table_rows(report)), caption=track_caption(report),
         no_vote="" if report.votes else (report.no_vote_reason or NO_LENS_REASON),
         group_note=usable_figures_note(report),
-        summary_check=_summary_check_line(model))
+        summary_check=_summary_check_line(model), badge_note=badge_group_note(report))
 
 
 def _summary_check_line(model_summary: bool) -> str:

@@ -8,6 +8,10 @@ from pathlib import Path
 
 import pytest
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets"
 
@@ -567,7 +571,7 @@ def test_b24_e9_the_page_marks_flagged_sentences_and_keeps_the_full_list_in_the_
     assert "gives Value + Momentum a verdict or a vote" not in html
     # ...but the full list is under the workings, quoting the sentence
     workings = "\n".join(str(m.value) for m in at.markdown)
-    assert '"Value + Momentum issued a SELL on EL.PA" - This lens did not vote; the sentence treats it as a vote' in workings
+    assert '"Value + Momentum issued a SELL on EL.PA" - This lens did not vote' in workings
     assert any(c.startswith("AI text check: 1 sentence in the council opinion was flagged") for c in caps)
     report.council_opinion = CouncilOpinion(available=True, narrative=PROSE)
     assert "AI text check: no issues found" in [str(c.value) for c in _render(report).caption]

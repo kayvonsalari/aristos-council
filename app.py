@@ -3277,7 +3277,17 @@ def _render_universe_result(result) -> None:
                 v = verdict_of.get(ticker, "")
                 disp = display_name(ticker, result.names.get(ticker))
                 with st.expander(f"{disp}{(' · ' + v) if v else ''} — narration"):
-                    st.markdown(_md(text) or "_(no narrative produced)_")
+                    # B25-5: the same reader view as the company page - a small amber mark at the end of each
+                    # flagged sentence, one line of count on top; the full wording stays in the downloads
+                    if text:
+                        from aristos_council import ai_text_check as _atc
+                        from aristos_council.export.report_html import narration_reader_html
+                        st.caption(_atc.top_line(_atc.count(text)))
+                        st.markdown('<div class="council-narrative">'
+                                    + narration_reader_html(text).replace("$", "&#36;") + '</div>',
+                                    unsafe_allow_html=True)
+                    else:
+                        st.markdown("_(no narrative produced)_")
         elif not _zero:
             st.caption("No names reached the council.")
 
@@ -4416,6 +4426,8 @@ def _render_company_report(report) -> None:
         st.caption(page.caption)
     if page.group_note:                                    # B22-B3
         st.caption(page.group_note)
+    if page.badge_note:                                    # B25-7
+        st.caption(page.badge_note)
 
     if not page.no_vote:                                   # four small cards, above the workings
         st.markdown(company_cards.stat_cards(report), unsafe_allow_html=True)
