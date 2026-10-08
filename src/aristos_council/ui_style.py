@@ -195,6 +195,8 @@ def css(theme: str = "dark") -> str:
   background: var(--ar-panel); color: var(--ar-text); border: 1px solid var(--ar-border);
   font-size: .8rem; line-height: 1.4; font-weight: 400; box-shadow: 0 4px 14px rgba(0,0,0,.25); }}
 .ar-flag:hover .ar-flag-tip, .ar-flag:focus .ar-flag-tip {{ display: block; }}
+.ar-flagged {{ text-decoration: underline dotted var(--ar-hold-fg); text-underline-offset: 3px;
+  text-decoration-thickness: 1px; }}
 
 /* start state */
 .ar-empty {{ text-align: center; padding: 44px 20px; margin: 18px 0; }}

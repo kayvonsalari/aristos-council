@@ -93,18 +93,18 @@ def test_old_stamps_written_before_the_rename_still_count_and_read():
 
 def test_the_reason_is_plain_english_for_each_kind_of_flag():
     cases = {
-        STAMP: "This lens did not vote; the sentence treats it as a vote",
+        STAMP: "This lens did not vote",
         '[⚠ AI text check: "x" attributes Forensic\'s 12th of 21 rank to Quality - it belongs to Forensic]':
             "This rank belongs to a different lens",
         '[⚠ AI text check: "x" cites a 12th of 21 rank without naming the lens it belongs to (Forensic)]':
             "This rank does not say which lens it belongs to",
         '[⚠ AI text check: "x" cites Value + Momentum\'s 20th of 21 without saying it is only where the '
         "company WOULD rank on that lens's measures - the lens did not apply, so it is not a vote and not a "
-        "verdict]": "This is only where the company would rank on a lens that did not apply; it is not a vote",
+        "verdict]": "Only where the company would rank; that lens did not vote",
         '[⚠ AI text check: "x" weighs the lenses against each other - ...]':
-            "This weighs the lenses against each other; every lens is an equal vote",
+            "This weighs the lenses against each other",
         '[⚠ AI text check: "a b" appears near-verbatim in 2 specialists\' theses (technical, risk) - convergent]':
-            "2 specialists used almost the same words; that is not independent analysis",
+            "Two specialists used the same words",
         '[⚠ AI text check: "x" contradicts rank table - table is authoritative]':
             "This does not match the rank table",
     }
@@ -119,7 +119,7 @@ def test_the_reader_view_marks_the_flagged_sentence_and_lists_nothing_below():
     i_sentence, i_marker, i_next = (html.index("Value + Momentum issued a SELL on EL.PA."),
                                     html.index('class="ar-flag"'), html.index("Quality said HOLD"))
     assert i_sentence < i_marker < i_next
-    assert "This lens did not vote; the sentence treats it as a vote" in html          # hover / tap text
+    assert "This lens did not vote" in html                                               # hover / tap text
     assert 'tabindex="0"' in html                                                       # a tap focuses it
     assert "callout" not in html and "AI text check:" not in html                      # no list at the bottom
     assert "A second paragraph that is fine." in html
@@ -149,3 +149,38 @@ def test_every_section_gets_the_one_line_in_the_page_and_the_downloads(tmp_path)
     assert narration_check_line(rep).startswith("AI text check: 1 sentence in the council opinion")
     rep.council_opinion = CouncilOpinion(available=True, narrative=PROSE)
     assert "AI text check: no issues found" in format_company_report(rep)
+
+
+# --------------------------------------------------------------------------- #
+# B25-5 - the marker design: underlined sentence, small amber mark at its end, ONE plain line on hover/tap
+# --------------------------------------------------------------------------- #
+def test_the_flagged_sentence_is_underlined_and_the_mark_sits_at_its_end():
+    html = narration_reader_html(PROSE + "\n" + STAMP)
+    i_open, i_sentence = html.index('class="ar-flagged"'), html.index("Value + Momentum issued a SELL on EL.PA.")
+    i_close, i_mark = html.index("</span>", i_sentence), html.index('class="ar-flag"')
+    assert i_open < i_sentence < i_close <= i_mark
+    assert "Quality said HOLD" not in html[i_open:i_close]            # only the flagged sentence is underlined
+
+
+def test_the_hover_line_has_no_brackets_no_quoted_sentence_and_no_shouting():
+    html = narration_reader_html(PROSE + "\n" + STAMP)
+    tip = html[html.index('class="ar-flag-tip">') + len('class="ar-flag-tip">'):]
+    tip = tip[:tip.index("</span>")]
+    assert tip == "This lens did not vote"
+    for bad in ("[", "]", '"', "WOULD", "AI text check:"):
+        assert bad not in tip
+    for stamp in ('[⚠ AI text check: "x" cites Value + Momentum\'s 20th of 21 without saying it is only where the '
+                  "company WOULD rank on that lens's measures - the lens did not apply, so it is not a vote]",
+                  '[⚠ AI text check: "a b" appears near-verbatim in 3 specialists\' theses (a, b, c) - convergent]'):
+        line = atc.plain_reason(stamp)
+        assert not any(c in line for c in '[]"') and "WOULD" not in line, line
+    assert atc.plain_reason('[⚠ AI text check: "a b" appears near-verbatim in 3 specialists\' theses (a, b, c) - c]') \
+        == "Three specialists used the same words"
+
+
+def test_the_workings_heading_is_the_ai_text_check_not_the_narration_check():
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[1] / "src" / "aristos_council"
+    for rel in ("company_markdown.py", "export/report_html.py"):
+        text = (root / rel).read_text(encoding="utf-8")
+        assert "Narration check</summary>" not in text and "### Narration check" not in text, rel

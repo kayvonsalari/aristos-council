@@ -1658,7 +1658,7 @@ def _workings_html(report) -> str:
     inner.append(_company_peers_html(c, rank_columns(report), report.ticker))
     line = narration_check_line(report)
     if line:
-        inner.append(f'<details class="gate"><summary>Narration check</summary>'
+        inner.append(f'<details class="gate"><summary>AI text check</summary>'
                      f'<p class="note">{_esc(line)}</p></details>')
     notes = [r for r in table_rows(report) if r.asks or r.badge_detail or r.full_reason]
     if notes:

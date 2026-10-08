@@ -25,6 +25,7 @@ _ANY_LABEL = re.compile(r"(?:narration|AI text) check:")
 
 MARK = "⚠"
 _TOKEN = "⟦FLAG{n}⟧"
+_OPEN_TOKEN = "⟦FLAGSTART{n}⟧"
 
 
 def is_stamp(line: str) -> bool:
@@ -73,12 +74,11 @@ def plain_reason(stamp: str) -> str:
     if "without naming the lens it belongs to" in low:
         return "This rank does not say which lens it belongs to"
     if "would rank" in low and "not a vote" in low and "without saying" in low:
-        return ("This is only where the company would rank on a lens that did not apply; "
-                "it is not a vote")
+        return "Only where the company would rank; that lens did not vote"
     if "gives" in low and "a verdict or a vote" in low:
-        return "This lens did not vote; the sentence treats it as a vote"
+        return "This lens did not vote"
     if "weighs the lenses against each other" in low:
-        return "This weighs the lenses against each other; every lens is an equal vote"
+        return "This weighs the lenses against each other"
     if "orders a tied pair" in low:
         return "This puts one of two tied names ahead of the other"
     if "misstates" in low and "verdict" in low:
@@ -87,8 +87,8 @@ def plain_reason(stamp: str) -> str:
         return "This does not match the rank table"
     if "near-verbatim" in low:
         n = re.search(r"in (\d+) specialists", low)
-        return (f"{n.group(1) if n else 'Several'} specialists used almost the same words; "
-                "that is not independent analysis")
+        words = {2: "Two", 3: "Three", 4: "Four"}
+        return f"{words.get(int(n.group(1)), 'Several') if n else 'Several'} specialists used the same words"
     return "This sentence may not match the figures"
 
 
@@ -123,9 +123,11 @@ def mark_sentences(prose: str, stamps: list[str]) -> tuple[str, dict[str, str], 
         if m is None:
             unplaced.append(stamp)
             continue
-        token = _TOKEN.format(n=i)
-        text = text[:m.end()] + token + text[m.end():]
-        swaps[token] = marker_html(plain_reason(stamp))
+        token, start = _TOKEN.format(n=i), _OPEN_TOKEN.format(n=i)
+        # the sentence is lightly underlined and the amber mark sits at its end (B25-5)
+        text = text[:m.start()] + start + text[m.start():m.end()] + token + text[m.end():]
+        swaps[start] = '<span class="ar-flagged">'
+        swaps[token] = "</span>" + marker_html(plain_reason(stamp))
     return text, swaps, unplaced
 
 
