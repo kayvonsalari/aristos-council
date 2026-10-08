@@ -213,6 +213,7 @@ _WORDING: list[tuple[re.Pattern, str, bool]] = [
     (re.compile(r"\b1 names? had no BUY[^.]*\bare not listed"), "'1 name ... are not listed here'", False),
     (re.compile(r"doubted(?![^\n]*on one test only)[^\n]*ranked on 1 of [0-9] factors"), "a 'doubted' on ONE test that does not say so", False),
     (re.compile(r"[Nn]arration check"), "'narration check' (a reader sees 'AI text check')", False),
+    (re.compile(r"0 of 0 years|0 monthly test rounds"), "a track record with no test rounds quoting zeros (say there is no test history)", False),
     (re.compile(r"tied with 1(?![0-9])"), "'tied with 1' (say 'tied with one other')", False),
     (re.compile(r"What survived[.]"), "'What survived.' heading on a company page", True),
 ]
