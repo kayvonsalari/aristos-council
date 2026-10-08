@@ -1574,6 +1574,16 @@ class Badge:
     rounds_held: Optional[int]          # Summary.n_positions
     note: str = ""                      # why "untested here", when it needs saying; else ""
 
+    def _excess_words(self) -> str:
+        """B23-N3: "beat its group by +4.5% a year on average" / "trailed its group by 1.1% a year on
+        average" / "matched its group" - a negative never reads "beat ... by -1.1%"."""
+        x = self.mean_excess
+        if x is None or round(abs(x) * 100, 1) == 0:
+            return "matched its group"
+        if x < 0:
+            return f"trailed its group by {abs(x) * 100:.1f}% a year on average"
+        return f"beat its group by {_pct(x)} a year on average"
+
     def detail_line(self) -> str:
         """"beat its group by +4.5% a year on average · 7 of 10 years positive · a random pick did as
         well 4% of the time · 108 monthly test rounds" - the numbers behind the badge, for a
@@ -1582,7 +1592,7 @@ class Badge:
             return self.note or "no numbers measured"
         luck = (f"a random pick did as well {self.luck_pct:.0%} of the time"
                 if self.luck_pct is not None else "no random-pick comparison")
-        return (f"beat its group by {_pct(self.mean_excess)} a year on average · {self.years_positive} of "
+        return (f"{self._excess_words()} · {self.years_positive} of "
                 f"{plural(self.years_measured, 'year')} positive · {luck} · "
                 f"{plural(self.rounds_held, 'monthly test round')}")
 

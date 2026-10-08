@@ -170,7 +170,7 @@ def test_b22_b7b_the_badge_detail_is_in_plain_words():
     from aristos_council.backtest import Badge
     line = Badge(label="not proven", verdict="not proven", mean_excess=-0.011, luck_pct=0.51,
                  years_positive=4, years_measured=10, rounds_held=108).detail_line()
-    assert line == ("beat its group by -1.1% a year on average · 4 of 10 years positive · "
+    assert line == ("trailed its group by 1.1% a year on average · 4 of 10 years positive · "
                     "a random pick did as well 51% of the time · 108 monthly test rounds")
     for jargon in ("mean excess", "luck", "rounds held", "/yr"):
         assert jargon not in line
@@ -179,3 +179,14 @@ def test_b22_b7b_the_badge_detail_is_in_plain_words():
         rounds_held=1).detail_line()
     assert "1 monthly test round" in Badge(label="x", verdict="x", mean_excess=0.02, luck_pct=0.1,
                                            years_positive=6, years_measured=10, rounds_held=1).detail_line()
+
+
+def test_b23_n3_a_negative_result_trailed_its_group_zero_matched_it_and_a_positive_one_beat_it():
+    from aristos_council.backtest import Badge
+    mk = lambda x: Badge(label="x", verdict="x", mean_excess=x, luck_pct=0.3, years_positive=5,  # noqa: E731
+                         years_measured=10, rounds_held=100).detail_line()
+    assert mk(-0.011).startswith("trailed its group by 1.1% a year on average")
+    assert "beat its group by -" not in mk(-0.011)
+    assert mk(0.045).startswith("beat its group by +4.5% a year on average")
+    for zero in (0.0, 0.00004, -0.00004):
+        assert mk(zero).startswith("matched its group ·"), zero

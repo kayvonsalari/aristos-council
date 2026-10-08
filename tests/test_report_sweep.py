@@ -201,13 +201,15 @@ def test_the_batch22_wording_rule_fires_on_each_shape_it_names():
 
 
 FOLD_B22 = "\nSHOW THE WORKINGS"
-_B22_BAD = ["The answer\nNo track record exists for this industry yet.\nWhat this cannot tell you. x. No track record exists for this industry yet.",
+_B22_BAD = ["beat its group by -1.1% a year on average",
+            "The answer\nNo track record exists for this industry yet.\nWhat this cannot tell you. x. No track record exists for this industry yet.",
             "the rule allows at most 1.0x. on its measures it would rank 6th", "Quality track record: mean excess -1.1%/yr " + chr(183) + " luck 51% " + chr(183) + " 108 rounds held",
             "HOLD - 19th of 27 (tied with 1)",
             "The answer\nBYD was ranked against 19 peers, companies in its own industry (step 2 of 4 of the peer search, market index of 2026-09-25).",
             "One lens did not apply, all for one reason: no operating profit.",
             "The answer\nWhat survived. Debt and cash (latest annual accounts): it owes $600."]
-_B22_OK = ["the rule allows at most 1.0x. On its measures it would rank 6th", "beat its group by -1.1% a year on average",
+_B22_OK = ["trailed its group by 1.1% a year on average", "beat its group by +4.5% a year on average",
+           "the rule allows at most 1.0x. On its measures it would rank 6th", "trailed its group by 1.1% a year on average",
            "HOLD - 19th of 27 (tied with one other)", "HOLD - 19th of 27 (tied with 10)",
            "The answer\nBYD was ranked against 19 similar-sized companies in its industry, under nine lenses.",
            "SHOW THE WORKINGS\n(step 2 of 4 of the peer search)",
