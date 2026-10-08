@@ -534,3 +534,20 @@ def test_b23_n6_the_list_page_hides_the_machinery_header_unless_validation_tools
         assert jargon not in off, jargon
     assert "Verdict: deterministic ranker" in on and "no LLM ran" in on
     assert "Shortlist" in off or "ranked by at least one" in off      # the real content is still there
+
+
+def test_b23_n7_the_list_page_downloads_are_short_and_carry_the_file_names(tmp_path):
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+    from tests.test_merged_multi_report import _multi
+    from tests.test_multi_strategy_run import RAW, SCREENED
+    script = ("import sys, streamlit as st\n" f"sys.path.insert(0, r'{ROOT}')\n"
+              "import app\nfrom aristos_council.ui_text import install\ninstall(st)\n"
+              "app._render_multi_strategy_result(st.session_state['res'])\n")
+    at = AppTest.from_string(script, default_timeout=120)
+    at.session_state["res"] = _multi([SCREENED, RAW])
+    at.run()
+    assert not at.exception, at.exception
+    buttons = at.get("download_button")
+    assert [b.proto.label for b in buttons] == ["⬇ Download Markdown", "⬇ Download HTML"]
+    assert buttons[0].proto.help.endswith(".md") and buttons[1].proto.help.endswith(".html")

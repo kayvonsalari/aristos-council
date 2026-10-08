@@ -3076,23 +3076,20 @@ def _render_multi_strategy_result(multi_result) -> None:
 
     n = len(ids)
     mode = m.get("council_mode", "ranker-only")
-    c1, c2 = st.columns(2)
-    with c1:
+    md_file = multi_universe_download_name(
+        n, mode, run_start, universe_display_name=display_name_for_file)
+    html_file = multi_universe_download_name(
+        n, mode, run_start, ext="html", universe_display_name=display_name_for_file)
+    with st.container(horizontal=True, gap="small"):        # B23-N7: together, on the left
         st.download_button(
-            "⬇ Download this run (markdown)",
+            "⬇ Download Markdown", help=md_file,
             data=_multi_strategy_markdown(multi_result, run_start).encode("utf-8"),
-            file_name=multi_universe_download_name(
-                n, mode, run_start, universe_display_name=display_name_for_file),
-            mime="text/markdown", key="uni_multi_download")
-    with c2:
+            file_name=md_file, mime="text/markdown", key="uni_multi_download")
         st.download_button(
-            "⬇ Download this run (HTML)",
+            "⬇ Download HTML", help=html_file,
             data=multi_strategy_report_html(
                 multi_result, run_start=run_start).encode("utf-8"),
-            file_name=multi_universe_download_name(
-                n, mode, run_start, ext="html",
-                universe_display_name=display_name_for_file),
-            mime="text/html", key="uni_multi_download_html")
+            file_name=html_file, mime="text/html", key="uni_multi_download_html")
 
     _render_open_as_company(
         sorted({r.ticker for r in multi_result.rows}),
@@ -3299,15 +3296,13 @@ def _render_universe_result(result) -> None:
     html_name = universe_html_download_name(
         m["rank_strategy_id"], m["council_mode"], run_start,
         universe_display_name=uni_display_name)
-    dl_md, dl_html = st.columns(2)
-    with dl_md:
+    with st.container(horizontal=True, gap="small"):        # B23-N7: together, on the left
         st.download_button(
-            f"⬇ Download run as markdown — {md_name}",
+            "⬇ Download Markdown", help=md_name,
             data=_universe_markdown(result), file_name=md_name,
             mime="text/markdown", key="uni_download")
-    with dl_html:
         st.download_button(
-            f"⬇ Download report (HTML) — {html_name}",
+            "⬇ Download HTML", help=html_name,
             data=universe_report_html(result, run_start=run_start), file_name=html_name,
             mime="text/html", key="uni_download_html")
     st.caption("Markdown is the canonical machine-readable record. The HTML is one "
@@ -4480,17 +4475,16 @@ def _render_company_report(report) -> None:
     run_start = st.session_state.get("cc_run_start") or datetime.now(timezone.utc)
     txt_name = company_check_download_name(report.ticker, "company_report", run_start)
     html_name = company_check_html_download_name(report.ticker, "company_report", run_start)
-    col_txt, col_html, col_md = st.columns(3)
-    with col_txt:
+    # B23-N7: the buttons sit together on the left, side by side (a horizontal container sizes each to
+    # its label) instead of spreading left / centre / right across the page
+    with st.container(horizontal=True, gap="small"):
         # B22-U5: short labels; the file name is the tooltip
         st.download_button("⬇ Download text", help=txt_name,
                            data=format_company_report(report), file_name=txt_name,
                            mime="text/plain", key="cc_report_download")
-    with col_html:
         st.download_button("⬇ Download HTML", help=html_name,
                            data=company_report_html(report, run_start=run_start),
                            file_name=html_name, mime="text/html", key="cc_report_download_html")
-    with col_md:
         from aristos_council.company_markdown import company_report_markdown
         md_name = html_name.rsplit(".", 1)[0] + ".md"
         st.download_button("⬇ Download Markdown", help=md_name,
