@@ -479,3 +479,32 @@ def test_b23_n8_the_balance_sheet_card_adds_the_runway_only_for_a_genuine_burn(t
                                 operating_cash_flow=59.1e9, aligned_annual={"operating_cash_flow": [59.1e9]}))
     report.check.debt_and_cash = byd
     assert "lasts" not in cc.balance_sheet_card(report)
+
+
+def test_b23_n2_no_card_ever_shows_text_cut_off_mid_sentence(tmp_path):
+    """VKTX's valuation card read "...(44 with no positive operating profit, the" - cut at 90 characters."""
+    import re
+
+    from aristos_council import company_cards as cc
+    from aristos_council.abs_readings import DebtAndCash, Reading
+    report = _company_report(tmp_path)
+    vktx = ("not evaluated \u2014 valuation measure undefined in 61 of 61 months (44 with no positive "
+            "operating profit, the rest lack usable statements)")
+    ford = ("not evaluated \u2014 valuation measure undefined in 38 of 61 months (21 with no positive operating "
+            "profit, the rest lack usable statements); the usable months span 1.8y and the band needs 3.0y")
+    report.check.band_percentile = None
+    report.check.valuation_band = vktx
+    assert "Not read: no operating profit in most months" in cc.valuation_card(report)
+    report.check.valuation_band = ford
+    assert "Not read: only 1.8 years of usable history (needs 3.0)" in cc.valuation_card(report)
+    report.check.valuation_band = "not evaluated \u2014 " + "something rather long and wordy " * 8
+    assert "Not read: not enough usable history" in cc.valuation_card(report)
+    # every other card: a long reason falls back to a short whole one
+    long_note = "the reported free cash flow is larger than operating cash flow, so the two disagree and neither is used"
+    report.check.debt_and_cash = DebtAndCash(net_debt=Reading(note=long_note))
+    report.check.price_and_cash = None
+    for html in (cc.balance_sheet_card(report), cc.price_card(report), cc.earnings_price_card(report),
+                 cc.valuation_card(report)):
+        for text in re.findall(r'class="ar-abstain">(.*?)</div>', html):
+            assert len(text) <= cc.SHORT_REASON_MAX + 40 and not text.endswith((",", " the", " and", " of"))
+    assert "not reported" in cc.balance_sheet_card(report)
