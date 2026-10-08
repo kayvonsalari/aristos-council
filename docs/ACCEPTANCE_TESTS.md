@@ -237,3 +237,11 @@ Fixes found hand-testing Batch 22. No rank, vote, verdict or rule moved.
 | **B23-T5** | Run BYD with all lenses; search the page for "had usable figures". | The line "14 of 20 had usable figures for ...; 20 of 20 for Forensic." appears once, under the lens table; "What happened" no longer repeats it. Same once-only in the text, HTML and Markdown downloads. |
 | **B23-T6** | Cohort / list: paste TM GM F, tick two lenses, run. Read the lines under the headline. Then switch on Show validation tools. | Off: no "Verdict: deterministic ranker. Narrative: none (ranker-only - no LLM ran)." and no "Multi-lens re-grade ..." line; the shortlist, verdict grid and detail are all still there. On: both lines are back. |
 | **B23-T7** | Run a company and a list; look at the download buttons at the bottom. | Company page: "Download text", "Download HTML", "Download Markdown" sit together at the left, side by side, each as wide as its label (measured: x=380, 517, 665 on one row at 1400px; wrapping at phone width). List page: "Download Markdown" and "Download HTML" the same way; hovering shows the file name. |
+
+## Batch 24
+
+AI text check, track-record wording, data checks. No rank, vote, verdict or lens rule moved. Cases marked (paid) need a council or summary run; the rest are free.
+
+| ID | Steps | Expected result |
+|---|---|---|
+| **B24-T1** | (free) python -m pytest tests/test_ai_text_check.py -v. It replays the check offline on the saved EL.PA run (council text from 2026-10-08 09:40). | The replay raises 0 flags where the live run showed 6 false ones (the four "Magic Formula RAW ... 20th of 21" sentences, the "Forensic - why" sentence, the Defensive Income sentence); the two near-verbatim-in-2-specialists flags were fair and are untouched. Real errors (a sentence giving Value + Momentum a SELL; a rank under another lens's name) are still caught. |
