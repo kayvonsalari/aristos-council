@@ -203,7 +203,10 @@ def _user_message(facts: str, checks: list) -> str:
     ])
 
 
-def reader_paragraphs(summary) -> list[tuple[str, str]]:
+COMPANY_FACTS_LEAD = "Other facts."
+
+
+def reader_paragraphs(summary, *, company: bool = False) -> list[tuple[str, str]]:
     """``[(lead, text)]`` — the five fields with their bold leads, in reading order.
 
     ONE builder, so the HTML and the markdown render the same five paragraphs in the same
@@ -211,7 +214,9 @@ def reader_paragraphs(summary) -> list[tuple[str, str]]:
     return [
         ("What this run asked.", summary.asked),
         ("What happened.", summary.happened),
-        ("What survived.", summary.survived),
+        # B22-B4: on a COMPANY page the third paragraph holds facts (debt, growth, analysts), not what
+        # "survived" a shortlist - the model still fills ``survived``, the heading is code's.
+        (COMPANY_FACTS_LEAD if company else "What survived.", summary.survived),
         ("What to doubt.", summary.doubt),
         ("What this cannot tell you.", summary.cannot_say),
     ]

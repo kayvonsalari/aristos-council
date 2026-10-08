@@ -98,8 +98,10 @@ def test_it_is_in_the_text_export_the_html_export_and_the_saved_record(tmp_path)
     import html
     report, by_id = _votes(tmp_path)
     text = by_id[SCREENED].would_rank.text
-    assert text in format_company_report(report)
-    assert html.escape(text) in company_report_html(report) or text in company_report_html(report)
+    # B22-B7a: in the lens notes the sentence follows a full stop, so it now starts with a capital
+    shown = text[:1].upper() + text[1:]
+    assert shown in format_company_report(report)
+    assert html.escape(shown) in company_report_html(report) or shown in company_report_html(report)
     saved = {v["lens"]: v for v in report_record(report)["votes"]}
     assert saved[SCREENED]["would_rank"]["text"] == text and "would_rank" not in saved[RAW]
     assert saved[SCREENED]["result"] == by_id[SCREENED].result()          # the verdict of record untouched

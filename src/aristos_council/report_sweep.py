@@ -32,6 +32,7 @@ BADGE_PARAGRAPH = "the price-badge paragraph pasted into a heading"
 STORY_WORDS = "an id, a column name or the word 'cohort' in the answer, the story or the lens table"
 STORY_FIRST_SCREEN = "the first screen runs past the fold"
 FIRST_SCREEN_MAX_LINES = 25
+WORDING = "a wording slip the owner already found (Batch 22 patterns)"
 
 
 @dataclass(frozen=True)
@@ -190,6 +191,40 @@ def first_screen_findings(text: str, where: str) -> list[Finding]:
     return ([Finding(STORY_FIRST_SCREEN, where, f"{n} lines before the fold (max "
                                                 f"{FIRST_SCREEN_MAX_LINES})")]
             if n > FIRST_SCREEN_MAX_LINES else [])
+
+
+# --------------------------------------------------------------------------- #
+# Batch 22 - wording patterns found by hand (each one is a shape, so each one is a rule)
+# --------------------------------------------------------------------------- #
+# (pattern, what it was, story_only): a ``story_only`` pattern is looked for above the fold only,
+# because the technical wording legitimately lives in the workings.
+_WORDING: list[tuple[re.Pattern, str, bool]] = [
+    (re.compile(r"\b(?:One|The one) lens did not apply, all for one reason"), "one lens 'all for one reason'", False),
+    (re.compile(r"[(]step [0-9] of 4 of the peer search"), "peer-search jargon in the story", True),
+    (re.compile(r"[0-9%x][.] [a-z]"), "a sentence starting in lowercase after a figure and a full stop", False),
+    (re.compile(r"mean excess|luck [0-9]+%|rounds held"), "backtest jargon (say it in plain words)", False),
+    (re.compile(r"(?s)No track record exists for this industry yet.*No track record exists for this industry yet"), "'no track record' said twice", True),
+    (re.compile(r"tied with 1(?![0-9])"), "'tied with 1' (say 'tied with one other')", False),
+    (re.compile(r"What survived[.]"), "'What survived.' heading on a company page", True),
+]
+
+
+def wording_findings(text: str, where: str) -> list[Finding]:
+    out: list[Finding] = []
+    company_page = "The answer" in text            # story-only patterns are about the company page
+    for pat, what, story_only in _WORDING:
+        if story_only and not company_page:
+            continue
+        body = story_sections(text) if story_only else text
+        if pat.flags & re.S:                       # a pattern that spans lines (a sentence said twice)
+            if pat.search(body):
+                out.append(Finding(WORDING, where, what))
+            continue
+        for ln in _lines(body):
+            if pat.search(ln):
+                out.append(Finding(WORDING, where, f"{what}: {ln.strip()[:120]}"))
+                break
+    return out
 
 
 # --------------------------------------------------------------------------- #

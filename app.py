@@ -42,7 +42,7 @@ from aristos_council.data.adapter import (
 from aristos_council.pipeline import (
     DEFAULT_NARRATION_CAP, DEFAULT_NARRATION_LEVEL, NARRATION_LEVELS)
 from aristos_council.demo_surface import (
-    ASSET_MODES, DEFAULT_ASSET_MODE, ETFS, asset_mode_filter, asset_mode_sidebar_note,
+    ASSET_MODES, DEFAULT_ASSET_MODE, ETFS, asset_mode_filter,
     lens_caption, strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
 from aristos_council.costs import actual_vs_estimate, cost_phrase
@@ -1393,6 +1393,9 @@ def company_page_offered(mode: str) -> bool:
     return mode != ETFS
 
 
+OPTIONAL_EXTRAS_HEADING = "Optional extras (paid AI calls)"
+
+
 def render_run_options(choices, *, input_kind: str, show_council: bool,
                        show_validation: bool = False) -> RunOptions:
     """ONE options block, called once per input kind. ``input_kind`` is "list" (the Run
@@ -1422,6 +1425,9 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
     # view; a reader already has each lens's question under its own tick box.
     if show_validation:
         lens_selection_captions(strategies)
+    # B22-U3: the two paid AI extras are not lenses - their own small heading sets them apart from the grid
+    st.markdown(f'<div class="ar-sub" style="margin-top:14px">{OPTIONAL_EXTRAS_HEADING}</div>',
+                unsafe_allow_html=True)
     _sync_from_store(f"opt_summary_{input_kind}", "summary", switched=switched)
     with_summary = st.checkbox(
         "Plain-English summary", value=False, key=f"opt_summary_{input_kind}",
@@ -1518,7 +1524,7 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
                      with_council: bool | None = None) -> str:
     """The button says what will happen and what it costs, on its own line:
 
-        ``▶ Run 5 lenses — deterministic, free``
+        ``▶ Run 5 lenses · free``
         ``▶ Run 5 lenses — up to 13 names narrated, est. ≤ $0.68``
         ``▶ Run — narrated, est. $0.42``
 
@@ -1536,7 +1542,7 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
         extras = [n for n, on in (("summary", with_reader), ("council opinion", with_council))
                  if on]
         if not extras:
-            return "▶ Run company check (free — no LLM)"
+            return "▶ Run company check · free"
         if extras == ["summary"]:
             return "▶ Run company check + summary (one model call)"
         if extras == ["council opinion"]:
@@ -1547,8 +1553,7 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
     # ranker-only run with it ticked is no longer free and the button must stop saying so.
     reader_tail = f" + summary ~{READER_COST_HINT}" if with_reader else ""
     if not run_mode_narrates(run_mode):
-        return (f"▶ {what} — deterministic, free{reader_tail}" if with_reader
-                else f"▶ {what} — deterministic, free")
+        return (f"▶ {what} · free{reader_tail}" if with_reader else f"▶ {what} · free")
     # THIS BUTTON IS FREE. It runs the deterministic ranking and charges nothing —
     # narration is offered afterwards, from a second button carrying the exact figure
     # (CONFIRM-SPEND-1). The label used to read "Run 3 lenses — up to 12 names narrated,
@@ -4214,6 +4219,8 @@ def _render_absolute_readings(result, *, with_analyst: bool = True) -> None:
         st.markdown("**Debt and cash**")
         for line in debt.lines():
             st.markdown(f"- {line}")
+        for note in debt.notes():                    # FINANCE-ARM-1: muted, said once
+            st.caption(note)
     if growth is not None:
         st.markdown("**Growth record**" + mixed_source_marker(result, growth.source_tag))
         for line in growth.lines():
@@ -4408,6 +4415,8 @@ def _render_company_report(report) -> None:
                     st.markdown(f"**{r.lens}** — {r.asks}")
     if page.caption:
         st.caption(page.caption)
+    if page.group_note:                                    # B22-B3
+        st.caption(page.group_note)
 
     if not page.no_vote:                                   # four small cards, above the workings
         st.markdown(company_cards.stat_cards(report), unsafe_allow_html=True)
@@ -4472,17 +4481,18 @@ def _render_company_report(report) -> None:
     html_name = company_check_html_download_name(report.ticker, "company_report", run_start)
     col_txt, col_html, col_md = st.columns(3)
     with col_txt:
-        st.download_button(f"⬇ Download report as text — {txt_name}",
+        # B22-U5: short labels; the file name is the tooltip
+        st.download_button("⬇ Download text", help=txt_name,
                            data=format_company_report(report), file_name=txt_name,
                            mime="text/plain", key="cc_report_download")
     with col_html:
-        st.download_button(f"⬇ Download report (HTML) — {html_name}",
+        st.download_button("⬇ Download HTML", help=html_name,
                            data=company_report_html(report, run_start=run_start),
                            file_name=html_name, mime="text/html", key="cc_report_download_html")
     with col_md:
         from aristos_council.company_markdown import company_report_markdown
         md_name = html_name.rsplit(".", 1)[0] + ".md"
-        st.download_button(f"⬇ Download report (Markdown) — {md_name}",
+        st.download_button("⬇ Download Markdown", help=md_name,
                            data=company_report_markdown(report), file_name=md_name,
                            mime="text/markdown", key="cc_report_download_md")
     if _ids_visible():                       # UI-POLISH-1: timings, cache counts and paths are workshop details
@@ -4616,7 +4626,6 @@ def main() -> None:
         # Options and default (Stocks, index=0) unchanged.
         st.radio("Asset type", list(ASSET_MODES), horizontal=True, index=0,
                  key="asset_mode")
-        st.caption(asset_mode_sidebar_note(asset_mode()))
         st.divider()
 
         if show_legacy:

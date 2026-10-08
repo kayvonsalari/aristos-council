@@ -81,6 +81,11 @@ SIZE_MATCHED_LINE = ("Compared with similar-sized companies in its industry; out
                      "range, no track record applies.")
 
 
+def tied_phrase(n: int) -> str:
+    """B22-B6: "tied with one other" for a pair, "tied with 3" for more ("tied with 1" read badly)."""
+    return "tied with one other" if n == 1 else f"tied with {n}"
+
+
 # --------------------------------------------------------------------------- #
 # Votes
 # --------------------------------------------------------------------------- #
@@ -135,15 +140,18 @@ class LensVote:
 
     @property
     def tie_note(self) -> str:
-        """" (tied with 3)" when other companies share this one's rank-sum, else ""."""
-        return f" (tied with {self.tied_with})" if self.tied_with else ""
+        """" (tied with 3)" / " (tied with one other)" when other companies share this one's
+        rank-sum, else ""."""
+        return f" ({tied_phrase(self.tied_with)})" if self.tied_with else ""
 
-    def result(self) -> str:
-        """"BUY - 3rd of 14", or the reason the lens does not apply."""
+    def result(self, *, with_factor_note: bool = True) -> str:
+        """"BUY - 3rd of 14", or the reason the lens does not apply. ``with_factor_note=False`` leaves
+        off " · ranked on 2 of 3 factors" (the lens table prints that in its Reason column only)."""
         if self.status == "ranked":
             where = (f"{ordinal(self.position)} of {self.cohort_size}" if self.position
                      else f"ranked of {self.cohort_size}")
-            return f"{self.word} - {where}{self.tie_note}{self.factor_note}"
+            note = self.factor_note if with_factor_note else ""
+            return f"{self.word} - {where}{self.tie_note}{note}"
         if self.status == "too_few":
             # NOVOTE-1 item 2.3b — a verdict over fewer than MIN_RANKABLE_COHORT names is
             # arithmetic, not a comparison (the HLB case: "1 of 1" instead of an honest
@@ -1170,7 +1178,7 @@ def summary_lines(report: CompanyReport) -> list[str]:
         return []
     out = [f"  ({READER_SECTION_NOTE})"]
     if getattr(result, "available", False):
-        for lead, text in reader_paragraphs(result.summary):
+        for lead, text in reader_paragraphs(result.summary, company=True):
             out.append(f"  {lead} {text}")
     else:
         out.append(f"  {result.note}")
@@ -1288,6 +1296,8 @@ def story_text_lines(report: CompanyReport) -> list[str]:
         lines += _text_table(page.headers, [r.cells() for r in page.rows])
     if page.caption:
         lines.append(page.caption)
+    if page.group_note:
+        lines.append(page.group_note)
     return lines
 
 
@@ -1418,7 +1428,8 @@ def company_facts_pack(report: CompanyReport) -> dict:
             {"available": False, "reason": report.no_vote_reason}),
         "valuation_band": c.valuation_band,
         "absolute_readings": {
-            "debt_and_cash": c.debt_and_cash.lines() if c.debt_and_cash is not None else [],
+            "debt_and_cash": ((c.debt_and_cash.lines() + c.debt_and_cash.notes())
+                              if c.debt_and_cash is not None else []),
             "growth_record": ((c.growth_record.lines() + c.growth_record.notes())
                               if c.growth_record is not None else [])},
         "what_analysts_say": ({

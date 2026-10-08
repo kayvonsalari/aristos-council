@@ -186,13 +186,23 @@ class DebtAndCash:
     interest_cover: Reading = field(default_factory=Reading)
     years_to_repay: Reading = field(default_factory=Reading)
     currency: str = ""
+    # CASH-RUNWAY-1: how long the net cash lasts at last year's spending - only for a company that spent
+    # more cash than it made. Empty (no line anywhere) for positive free cash flow, a bank or a gap.
+    cash_runway: Reading = field(default_factory=Reading)
+    # FINANCE-ARM-1: set for a company whose debt is mostly a captive finance arm's (data/finance_arms.yaml)
+    finance_arm_note: str = ""
+
+    def notes(self) -> list[str]:
+        """The muted line(s) under the debt readings, said ONCE (like the growth record's notes)."""
+        return [self.finance_arm_note] if self.finance_arm_note else []
 
     def lines(self) -> list[str]:
         # ABS-READINGS-3 - NVIDIA printed "has no net debt to repay" twice, once for the
         # operating-cash-flow reading and once for the free-cash-flow one.
-        return dedupe_lines([r.text() for r in (self.net_debt, self.net_debt_to_ocf,
-                                                self.interest_cover,
-                                                self.years_to_repay)])
+        readings = [self.net_debt, self.net_debt_to_ocf, self.interest_cover, self.years_to_repay]
+        if self.cash_runway.available:
+            readings.append(self.cash_runway)
+        return dedupe_lines([r.text() for r in readings])
 
 
 def _money(value: float, currency: str) -> str:
@@ -200,6 +210,39 @@ def _money(value: float, currency: str) -> str:
     currency it says so in words rather than printing a bare number that reads as dollars."""
     text = format_money(value, currency or None, abbreviate=True)
     return text if currency else f"{text} ({CURRENCY_NOT_STATED})"
+
+
+def _balance_sheet_date(f) -> str:
+    """"balance sheet of Jun 2026" - or "latest balance sheet" when the provider gave no period end."""
+    end = str(getattr(f, "trailing_period_end", "") or "")
+    try:
+        from datetime import datetime
+        return f"balance sheet of {datetime.strptime(end[:10], '%Y-%m-%d').strftime('%b %Y')}"
+    except ValueError:
+        return "latest balance sheet"
+
+
+def cash_runway(f, *, debt, cash, net, fcf, currency: str) -> Reading:
+    """CASH-RUNWAY-1 (approved 2026-10-04): a fact, never a vote.
+
+    * free cash flow negative AND net cash positive: how long that cash lasts at last year's spending;
+    * free cash flow negative AND net debt: "no cash cushion: spending is funded by debt";
+    * free cash flow positive, missing, or the company a bank: no reading at all.
+    A missing debt or cash figure also gives no reading (null is not false: it cannot be said)."""
+    if fcf is None or fcf >= 0 or net is None or debt is None or cash is None:
+        return Reading()
+    if net > 0:
+        return Reading(value=0.0, unit="years",
+                       label="no cash cushion: spending is funded by debt")
+    years = (-net) / (-fcf)
+    if years >= 1:
+        span = f"about {years:.1f} years"
+    else:                      # BYD: CNY 2.8bn against CNY 97.7bn a year is days, and "0.0 years" says nothing
+        months = years * 12
+        span = "less than a month" if months < 1 else f"about {round(months)} month{'s' if round(months) != 1 else ''}"
+    return Reading(value=years, unit="years",
+                   label=(f"at last year's spending ({_money(-fcf, currency)}) that lasts {span} "
+                          f"({_balance_sheet_date(f)})"))
 
 
 def debt_and_cash(f) -> DebtAndCash:
@@ -319,8 +362,12 @@ def debt_and_cash(f) -> DebtAndCash:
                         label=f"would take {years:.1f} years of free cash flow to repay "
                               f"its debt")
 
+    runway = cash_runway(f, debt=debt, cash=cash, net=net, fcf=fcf, currency=currency)
+    from .finance_arms import finance_arm_note
     return DebtAndCash(net_debt=net_reading, net_debt_to_ocf=ratio,
-                       interest_cover=cover, years_to_repay=repay, currency=currency)
+                       interest_cover=cover, years_to_repay=repay, currency=currency,
+                       cash_runway=runway,
+                       finance_arm_note=finance_arm_note(getattr(f, "ticker", "")))
 
 
 # --------------------------------------------------------------------------- #
@@ -932,9 +979,18 @@ class AccountsFx:
     as_of: str = ""
     source: str = ""
 
+    def month(self) -> str:
+        """"Oct 2026" from the rate's "2026-10" (the raw text when it is not that shape)."""
+        try:
+            from datetime import datetime
+            return datetime.strptime(self.as_of[:7], "%Y-%m").strftime("%b %Y")
+        except ValueError:
+            return self.as_of
+
     def tag(self) -> str:
-        when = f" ({self.as_of})" if self.as_of else ""
-        return f"{self.from_ccy}->{self.to_ccy} @ {self.rate:.4f}{when}"
+        """B22-B2: "at 1 CNY = 1.1703 HKD, Oct 2026" - read straight, no arrow and no @."""
+        when = f", {self.month()}" if self.as_of else ""
+        return f"at 1 {self.from_ccy} = {self.rate:.4f} {self.to_ccy}{when}"
 
 
 def currency_relation(price_ccy: str, acct_ccy: str):
@@ -1046,7 +1102,14 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
     acct_label = acct_ccy or currency            # unknown accounts currency: as before
 
     def money(v):
-        return _money(v, currency) if v is not None else None
+        # B22-U2: a price or per-share figure always shows two decimals ("HKD 75.00", not "HKD 75" when
+        # the close happens to be a whole number); only large amounts abbreviate.
+        if v is None:
+            return None
+        if currency and abs(v) < 1e6:
+            from .tools.price_context import format_money
+            return format_money(v, currency)
+        return _money(v, currency)
 
     def acct_money(v):
         return _money(v, acct_label) if v is not None else None
@@ -1136,7 +1199,7 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
 
     last_close_v = technical.last_close if technical is not None else None
     if f is not None and f.eps is not None:
-        said = (f" ({money(to_price(f.eps))} at {fx.tag()})"
+        said = (f" ({money(to_price(f.eps))}, {fx.tag()})"
                 if relation == "mixed" and fx is not None else "")
         trailing_eps = Reading(value=f.eps, unit=acct_label,
                                label=f"trailing EPS {acct_money(f.eps)}{said}")
@@ -1163,7 +1226,7 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
         trailing_pe = Reading(
             value=pe, unit="x",
             label=(f"trailing P/E {pe:.1f}{ttm} ({money(last_close_v)} / {money(eps_p)} EPS, "
-                   f"{acct_money(f.eps)} converted at {fx.tag()})" if relation == "mixed"
+                   f"{acct_money(f.eps)} converted {fx.tag()})" if relation == "mixed"
                    else f"trailing P/E {pe:.1f}{ttm}"))
 
     # Forward P/E = today's close / analyst consensus EPS — arithmetic over two numbers
@@ -1189,7 +1252,7 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
                 pass
             elif cc and cc == acct_ccy and fx is not None:
                 est = row.now * fx.rate
-                converted_from = (f", {_money(row.now, cc)} converted at {fx.tag()}"
+                converted_from = (f", {_money(row.now, cc)} converted {fx.tag()}"
                                   if relation == "mixed" else "")
             elif cc and cc == acct_ccy:
                 return _abstain(f"forward P/E ({when}) not computed: {no_rate()}")

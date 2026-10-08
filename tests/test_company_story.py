@@ -133,7 +133,8 @@ def test_story_votes_with_a_buy_state_the_split_and_name_the_lenses():
                    _skip("Magic Formula RAW")])
     first, second = answer_lines(rep)
     assert first == "One of three votes says BUY (Quality); one says HOLD (Growth); one says SELL (Value)."
-    assert second.startswith("One lens did not apply, all for one reason: " + NO_PROFIT)
+    assert second.startswith("One lens did not apply: " + NO_PROFIT)        # B22-U10
+    assert "all for one reason" not in second
 
 
 def test_story_votes_without_a_buy_say_so_by_leading_with_what_voted():
@@ -171,7 +172,7 @@ def test_story_a_bank_says_which_lens_is_built_for_it_and_that_the_rest_are_not(
     assert first == "HOLD, on one lens built for banks (Financials, 19th of 27)."
     assert second == ("The other two lenses are not for banks. No track record exists for this "
                       "industry yet.")
-    survived = dict(story_paragraphs(rep))["What survived."]
+    survived = dict(story_paragraphs(rep))["Other facts."]
     assert survived.startswith("Debt and cash do not describe a bank or insurer")
     assert story_page(rep).caption == ""          # the Badge column and the answer already say it
 
@@ -200,9 +201,13 @@ def test_story_under_5bn_says_so_in_the_answer_and_states_the_tag_once_above_the
     assert dict(story_paragraphs(rep))["What to doubt."].count("under $5bn") == 1
 
 
-def test_story_under_5bn_cannot_tell_paragraph_repeats_the_untested_range():
-    cannot = dict(story_paragraphs(_small()))["What this cannot tell you."]
-    assert cannot.startswith(NOT_A_PREDICTION) and "outside the tested range" in cannot
+def test_story_under_5bn_says_the_untested_range_once_in_the_answer_not_again_in_cannot_tell():
+    """B22-B9: it used to be said in the answer AND repeated under "What this cannot tell you"."""
+    rep = _small()
+    cannot = dict(story_paragraphs(rep))["What this cannot tell you."]
+    assert cannot == NOT_A_PREDICTION
+    assert "outside the tested range" in answer_lines(rep)[1]
+    assert _story_text(rep).count("outside the tested range (under $5bn): no track record applies") == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -248,7 +253,7 @@ def test_story_model_summary_written_replaces_the_story_never_two(tmp_path):
     assert rep.summary.available
     page = story_page(rep)
     assert page.model_summary and not page.note
-    assert list(page.paragraphs) == reader_paragraphs(rep.summary.summary)
+    assert list(page.paragraphs) == reader_paragraphs(rep.summary.summary, company=True)
     for doc in (format_company_report(rep), company_report_html(rep), company_report_markdown(rep)):
         assert "One test may not apply." in doc            # the model's own "doubt" paragraph
         assert NOT_A_PREDICTION not in doc                 # the code-written story is not beside it
@@ -276,8 +281,10 @@ def test_story_no_peer_group_says_no_lens_could_rank_and_why():
 def test_story_every_figure_carries_its_as_of_date():
     rep = _report([_rank("Quality", "hold", 5)], check=_check(band=94))
     paras = dict(story_paragraphs(rep))
-    assert "market index of 2026-09-25" in paras["What this run asked."]
-    survived = paras["What survived."]
+    # B22-B5: the peer-search detail (step, market-index date) moved under "How this peer group was
+    # built" in the workings; the story just says who it was ranked against.
+    assert "market index of" not in paras["What this run asked."]
+    survived = paras["Other facts."]
     assert "Debt and cash (fiscal year to Dec 2025)" in survived
     assert "Growth record (fiscal year to Dec 2025)" in survived
     assert "Analysts (2026-10-05)" in survived
@@ -288,7 +295,7 @@ def test_story_accounts_without_a_dated_series_say_latest_annual_accounts():
     rep = _report([_rank("Quality", "hold", 5)],
                   check=_check(accounts_basis="the latest annual accounts (their period end date is "
                                               "not in the data)"))
-    assert "Debt and cash (latest annual accounts)" in dict(story_paragraphs(rep))["What survived."]
+    assert "Debt and cash (latest annual accounts)" in dict(story_paragraphs(rep))["Other facts."]
 
 
 def test_story_net_cash_is_never_described_as_zero_years_to_repay():
@@ -296,7 +303,7 @@ def test_story_net_cash_is_never_described_as_zero_years_to_repay():
     check.debt_and_cash = DebtAndCash(
         net_debt=Reading(value=5e8, label="holds $500.0m more cash than debt"),
         years_to_repay=Reading(value=0.0, label="has no net debt to repay"))
-    survived = dict(story_paragraphs(_report([_rank("Quality", "hold", 5)], check=check)))["What survived."]
+    survived = dict(story_paragraphs(_report([_rank("Quality", "hold", 5)], check=check)))["Other facts."]
     assert "holds $500.0m more cash than debt." in survived and "0.0 years" not in survived
 
 
@@ -475,3 +482,137 @@ def test_ford_answer_uses_the_short_name():
     rep = _report([_skip("Quality")], check=_check(name="Ford Motor Company"))
     rep.ticker = "F"
     assert answer_lines(rep)[0] == "No lens voted on Ford."
+
+
+def test_b22_u10_one_lens_says_its_reason_and_several_keep_the_old_shapes():
+    one = _report([_rank("Quality", "hold", 5), _skip("Growth")])
+    assert answer_lines(one)[1].startswith("One lens did not apply: " + NO_PROFIT)
+    none_voted = _report([_skip("Growth")])
+    assert answer_lines(none_voted)[1].startswith("The one lens did not apply: " + NO_PROFIT)
+    same = _report([_rank("Quality", "hold", 5), _skip("A"), _skip("B")])
+    assert answer_lines(same)[1].startswith("Two lenses did not apply, all for one reason: " + NO_PROFIT)
+    mixed = _report([_skip("A"), _skip("B"), _skip("C", "dividend yield 0%; the rule requires at least 1.5%")])
+    assert "the most common reason (two of them)" in answer_lines(mixed)[1]
+
+
+# --------------------------------------------------------------------------- #
+# Batch 22 B3 - group sizes explained once
+# --------------------------------------------------------------------------- #
+def _byd_like():
+    chk = _check(name="BYD Company Limited")
+    chk.peer_group = SimpleNamespace(members=list(range(19)), step=2, snapshot="2026-09-25", thin=False,
+                                     broad=False)
+    return _report([_rank("Earnings Power Value", "hold", 10, of=14), _rank("Quality", "hold", 4, of=14),
+                    _rank("Forensic", "buy", 16, of=20, kind="check"),
+                    _skip("Growth", "return on invested capital 9.3%; the rule requires at least 12%")],
+                   check=chk)
+
+
+def test_b22_b3_the_usable_figures_note_says_n_of_total_once_per_group():
+    from aristos_council.company_story import usable_figures_note
+    rep = _byd_like()
+    assert usable_figures_note(rep) == ("14 of 20 had usable figures for Earnings Power Value and Quality; "
+                                        "20 of 20 for Forensic.")
+    assert story_page(rep).group_note == usable_figures_note(rep)
+
+
+def test_b22_b3_no_note_when_every_lens_ranked_the_whole_group():
+    from aristos_council.company_story import usable_figures_note
+    chk = _check()
+    chk.peer_group = SimpleNamespace(members=list(range(13)), step=1, snapshot="", thin=False, broad=False)
+    assert usable_figures_note(_report([_rank("Quality", "hold", 4, of=14)], check=chk)) == ""
+
+
+def test_b22_b3_the_story_and_every_export_use_the_same_words(tmp_path):
+    from dataclasses import replace
+    rep = _run([RAW, SCREENED], tmp_path=tmp_path)
+    total = len(rep.check.peer_group.members) + 1
+    rep.votes = [replace(v, cohort_size=total - 3) if v.ranked and i == 0 else v
+                 for i, v in enumerate(rep.votes)]
+    from aristos_council.company_story import usable_figures_note
+    note = usable_figures_note(rep)
+    assert note.startswith(f"{total - 3} of {total} had usable figures for ")
+    happened = dict(story_paragraphs(rep))["What happened."]
+    assert note[0].upper() + note[1:] in happened
+    text, html, md = format_company_report(rep), company_report_html(rep), company_report_markdown(rep)
+    assert note in text and note in md and note in html
+
+
+def test_b22_b4_the_company_story_calls_its_facts_paragraph_other_facts(tmp_path):
+    """"What survived." held debt, growth and analysts - facts, not a shortlist's survivors."""
+    from aristos_council.company_story import LEADS
+    assert LEADS == ("What this run asked.", "What happened.", "Other facts.", "What to doubt.",
+                     "What this cannot tell you.")
+    probe = _run([RAW], tmp_path=tmp_path, save=False)
+    rep = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(_fields(probe)),
+               save=False)
+    leads = [lead for lead, _t in story_page(rep).paragraphs]
+    assert leads[2] == "Other facts." and "What survived." not in leads
+    for doc in (format_company_report(rep), company_report_html(rep), company_report_markdown(rep)):
+        assert "What survived" not in doc and "Other facts." in doc
+    # the LIST summary keeps its own heading: there, names do survive a shortlist
+    assert reader_paragraphs(rep.summary.summary)[2][0] == "What survived."
+
+
+def test_b22_b5_the_story_has_no_peer_search_jargon_but_the_workings_keep_it(tmp_path):
+    rep = _byd_like()
+    asked = dict(story_paragraphs(rep))["What this run asked."]
+    assert asked == ("BYD was ranked against 19 similar-sized companies in its industry, under "
+                     "four lenses (Earnings Power Value, Quality, Forensic and Growth).")
+    for bad in ("step", "of 4", "peer search", "market index"):
+        assert bad not in asked
+    real = _run([RAW, SCREENED], tmp_path=tmp_path)
+    assert "step" not in dict(story_paragraphs(real))["What this run asked."]
+    text = format_company_report(real)
+    assert text.index("SHOW THE WORKINGS") < text.index("How this peer group was built")
+    assert "index snapshot" in text[text.index("How this peer group was built"):]
+    one = _report([_rank("Quality", "hold", 5)])
+    one.check.peer_group = SimpleNamespace(members=[1], step=1, snapshot="", thin=True, broad=False)
+    assert "against 1 similar-sized company in its industry" in dict(story_paragraphs(one))["What this run asked."]
+
+
+def test_b22_b7a_a_sentence_after_a_full_stop_starts_with_a_capital():
+    from aristos_council.company_story import sentence_starts_capital
+    raw = ("0 consecutive years of dividend increases; the rule requires at least 10. total debt 3.4x of "
+           "market value; the rule allows at most 1.0x. on its measures it would rank 6th of the 16. "
+           "Not a vote.")
+    fixed = sentence_starts_capital(raw)
+    assert "at least 10. Total debt 3.4x" in fixed and "at most 1.0x. On its measures" in fixed
+    assert "3.4x of market" in fixed and fixed.endswith("Not a vote.")      # figures untouched
+    assert sentence_starts_capital("nothing to fix. Already fine.") == "nothing to fix. Already fine."
+
+
+def test_b22_b7a_the_lens_note_is_fixed_in_every_rendering(tmp_path):
+    from aristos_council.company_story import table_rows
+    rep = _byd_like()
+    rep.votes = [LensVote("d_v1", "Defensive Income", status="excluded", asks="x",
+                          reason="dividend yield 0.55%; the rule requires at least 1.5%. total debt 3.4x; "
+                                 "the rule allows at most 1.0x",
+                          would_rank=SimpleNamespace(available=True, position=6, cohort_size=16,
+                                                     text="on its measures it would rank 6th of the 16 names"))]
+    row = table_rows(rep)[0]
+    assert ". On its measures it would rank 6th" in row.full_reason
+    assert ". Total debt 3.4x" in row.full_reason
+
+
+def test_b22_b8_ranked_on_n_of_m_factors_is_in_the_reason_column_only():
+    rep = _report([_rank("Forensic", "buy", 16, of=20, kind="check", factor_note=" · ranked on 2 of 3 factors"),
+                   _rank("Quality", "hold", 4, of=14)])
+    from aristos_council.company_story import table_rows
+    rows = {r.lens: r for r in table_rows(rep)}
+    assert "factors" not in rows["Forensic"].outcome
+    assert "ranked on 2 of 3 factors" in rows["Forensic"].reason
+    assert rows["Forensic"].outcome.endswith("16th of 20")
+    for doc in (_story_text(rep),):
+        assert doc.count("ranked on 2 of 3 factors") == 1 or "ranked on 2 of 3 factors" in doc
+    vote = next(v for v in rep.votes if v.label == "Forensic")
+    assert "ranked on 2 of 3 factors" in vote.result()          # the council / agreement keep the full text
+
+
+def test_b22_b9_no_track_record_for_this_industry_is_said_once(tmp_path):
+    rep = _report([_rank("Quality", "hold", 5), _rank("Growth", "hold", 7)])
+    rep.track_record_caption = NO_COHORT_TRACK_RECORD_LINE
+    story = _story_text(rep)
+    assert story.count("No track record exists for this industry yet") == 1
+    assert answer_lines(rep)[1].endswith("No track record exists for this industry yet.")
+    assert dict(story_paragraphs(rep))["What this cannot tell you."] == NOT_A_PREDICTION

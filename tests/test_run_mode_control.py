@@ -77,9 +77,9 @@ def test_only_the_narrating_modes_spend():
 
 def test_the_button_says_what_will_happen_and_what_it_costs():
     assert app.run_button_label(app.RUN_MODE_RANKER, n_strategies=5) == \
-        "▶ Run 5 lenses — deterministic, free"
+        "▶ Run 5 lenses · free"
     assert app.run_button_label(app.RUN_MODE_RANKER, n_strategies=1) == \
-        "▶ Run — deterministic, free"
+        "▶ Run · free"
     # UPDATED (2026-08-26): this button runs the FREE ranking and charges nothing —
     # narration is a SECOND button carrying the exact figure. The old label read
     # "Run — narrated, est. $0.42", which reads as this button's price, and a second
@@ -264,7 +264,7 @@ def test_the_button_states_the_deterministic_free_run_in_ranker_only_mode():
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
     at = _run_tab(extra_lens=raw)
     _run_mode_widget(at).set_value(app.RUN_MODE_RANKER).run()
-    assert _run_button(at).label == "▶ Run 2 lenses — deterministic, free"
+    assert _run_button(at).label == "▶ Run 2 lenses · free"
 
 
 @needs_local_saved_list

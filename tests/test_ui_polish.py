@@ -121,7 +121,9 @@ def test_the_css_has_no_gradient_and_a_light_variant_for_every_variable():
     dark, light = css("dark"), css("light")
     assert "gradient" not in dark and "gradient" not in light
     assert "#0E1217" in dark and "#F5F7FA" in light and "#F5F7FA" not in dark
-    assert "IBM Plex Sans" in dark and "IBM Plex Mono" in dark and "Cinzel" not in dark
+    assert "IBM Plex Sans" in dark and "Cinzel" not in dark
+    # B22-U1: no monospace face at all; numbers are Plex Sans with tabular figures
+    assert "IBM Plex Mono" not in dark and "monospace" not in dark and "tabular-nums" in dark
 
 
 # --------------------------------------------------------------------------- #
@@ -392,3 +394,70 @@ def test_the_theme_follows_the_configured_base_not_the_browser(monkeypatch):
 def test_the_light_logo_has_a_dark_wordmark():
     svg = (ASSETS / "aristos_logo_light.svg").read_text(encoding="utf-8")
     assert 'fill="#16202C"' in svg and 'fill="#E6EAF0"' not in svg and "<text" not in svg
+
+
+# --------------------------------------------------------------------------- #
+# Batch 22
+# --------------------------------------------------------------------------- #
+def test_u3_the_paid_extras_sit_below_the_lens_grid_under_their_own_heading():
+    at = _app_test()
+    html = _html_blob(at)
+    assert "Optional extras (paid AI calls)" in html
+    labels = [c.label for c in at.checkbox]
+    extras = [i for i, l in enumerate(labels) if l in ("Plain-English summary", "Council opinion")]
+    lenses = [i for i, c in enumerate(at.checkbox) if c.key and c.key.startswith("opt_lens_company_")]
+    assert extras and lenses and min(extras) > max(lenses)
+    assert all(c.help for c in at.checkbox if c.label in ("Plain-English summary", "Council opinion"))
+
+
+def test_u4_the_free_run_buttons_say_free_in_one_short_phrase():
+    import app
+    assert app.run_button_label(with_council=False, n_strategies=3) == "▶ Run company check · free"
+    assert app.run_button_label(app.RUN_MODE_RANKER, n_strategies=7) == "▶ Run 7 lenses · free"
+    assert app.run_button_label(app.RUN_MODE_RANKER, n_strategies=1) == "▶ Run · free"
+    assert "model call" in app.run_button_label(with_council=False, with_reader=True, n_strategies=1)
+    at = _app_test()
+    assert any(b.label == "▶ Run company check · free" for b in at.button)
+
+
+def test_u5_the_download_buttons_are_short_and_carry_the_file_name_as_tooltip(tmp_path):
+    at = _render(_company_report(tmp_path))
+    buttons = at.get("download_button")
+    assert [b.proto.label for b in buttons] == ["⬇ Download text", "⬇ Download HTML", "⬇ Download Markdown"]
+    helps = [b.proto.help for b in buttons]
+    assert helps[0].endswith(".txt") and helps[1].endswith(".html") and helps[2].endswith(".md")
+    assert all("company_check_" in h for h in helps)
+
+
+def test_u6_the_valuation_bar_is_blue_grey_orange_not_green_amber_red():
+    from aristos_council.ui_style import DARK, LIGHT, css, percentile_bar
+    assert (DARK["bar_a"], DARK["bar_b"], DARK["bar_c"]) == ("#2E5C8F", "#263241", "#8F5A2E")
+    for pal in (DARK, LIGHT):
+        for key in ("bar_a", "bar_b", "bar_c"):
+            assert pal[key] not in (DARK["buy_fg"], DARK["hold_fg"], DARK["sell_fg"], "#3FB68B", "#E6B246", "#E5484D")
+    assert "#2E5C8F" in css("dark") and "#8F5A2E" in css("dark")
+    assert "left:30.0%" in percentile_bar(30)
+
+
+def test_u7_the_heading_link_icons_are_hidden():
+    from aristos_council.ui_style import css
+    assert 'stHeaderActionElements"] { display: none !important; }' in css("dark")
+
+
+def test_u9_the_css_lifts_the_main_column_level_with_the_logo_row():
+    from aristos_council.ui_style import css
+    c = css("dark")
+    assert 'stMainBlockContainer"] { padding-top: .75rem !important; }' in c
+    assert 'stHeader"] { background: transparent !important; height: 0 !important' in c
+    assert "stElementContainer" in c and "style) { display: none; }" in c
+    assert "max-width: 640px" in c and "padding-top: 3rem" in c        # phone: room for the sidebar toggle
+
+
+def test_b11_the_finance_arm_note_is_a_muted_caption_on_the_page(tmp_path):
+    from aristos_council.abs_readings import debt_and_cash
+    from tests.test_abs_readings import _f
+    report = _company_report(tmp_path)
+    report.check.debt_and_cash = debt_and_cash(_f(ticker="F", total_debt=146.2e9, total_cash=5e9,
+                                                  free_cash_flow=12.5e9))
+    at = _render(report)
+    assert any("Includes debt of its car-loan arm" in str(c.value) for c in at.caption)

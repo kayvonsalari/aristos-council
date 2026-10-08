@@ -15,7 +15,9 @@ Streamlit's markdown would otherwise read two dollar signs as maths (DOLLAR-MATH
 STREAMLIT INTERNALS: Streamlit updates can break custom CSS, so the block uses our own ``ar-`` classes
 wherever it can and only these Streamlit hooks, each commented where it appears in ``css()``:
 ``.stApp`` (page background and font), ``[data-testid="stSidebar"]`` (sidebar font),
-``[data-testid="stHeader"]`` (the top bar's colour), and ``[data-testid="stMarkdownContainer"]``
+``[data-testid="stHeader"]`` (the top bar), ``[data-testid="stMainBlockContainer"]`` (top padding),
+``[data-testid="stHeaderActionElements"]`` (heading link icons), ``[data-testid="stElementContainer"]``
+(our own style blocks), and ``[data-testid="stMarkdownContainer"]``
 (table text size). Nothing else of Streamlit's is restyled; the colours themselves come from
 ``.streamlit/config.toml``, which is Streamlit's supported theming route.
 """
@@ -37,7 +39,8 @@ DARK = {
     "hold_fg": "#EBC46E", "hold_bg": "rgba(230,178,70,.16)",
     "sell_fg": "#F2858A", "sell_bg": "rgba(229,72,77,.18)",
     "na_fg": "#B7C2D0", "na_bg": "#1C2530",
-    "bar_a": "#3FB68B", "bar_b": "#E6B246", "bar_c": "#E5484D",
+    # B22-U6: cheap is not "good" - the valuation bar is blue -> grey -> orange, never green/amber/red
+    "bar_a": "#2E5C8F", "bar_b": "#263241", "bar_c": "#8F5A2E",
 }
 LIGHT = {
     "bg": "#F5F7FA", "panel": "#FFFFFF", "border": "#D3DBE6", "text": "#16202C",
@@ -46,7 +49,7 @@ LIGHT = {
     "hold_fg": "#7A5300", "hold_bg": "rgba(210,150,20,.18)",
     "sell_fg": "#A3202A", "sell_bg": "rgba(210,50,60,.13)",
     "na_fg": "#3F4B5B", "na_bg": "#E8EDF3",
-    "bar_a": "#2C9C74", "bar_b": "#C99A22", "bar_c": "#D0343B",
+    "bar_a": "#2E5C8F", "bar_b": "#C3CCD8", "bar_c": "#B8742E",
 }
 PALETTES = {"dark": DARK, "light": LIGHT}
 
@@ -96,10 +99,12 @@ def theme_name() -> str:
 # --------------------------------------------------------------------------- #
 # the one CSS block
 # --------------------------------------------------------------------------- #
+# U1 (Batch 22): numbers were drawn in a Courier-like fallback because IBM Plex Mono never arrived (a
+# second family in the import, fetched lazily). Numbers now use IBM Plex Sans with tabular figures: one
+# family, one request, aligned digits.
 FONT_IMPORT = ("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600"
-               "&family=IBM+Plex+Mono:wght@400;500&display=swap")
+               "&display=swap")
 SANS = "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-MONO = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 
 
 def css(theme: str = "dark") -> str:
@@ -117,9 +122,19 @@ def css(theme: str = "dark") -> str:
 /* STREAMLIT INTERNAL: .stApp is the page root; the font is set here and inherited. Icons keep their own
    font because Streamlit sets it on the icon element itself. */
 .stApp, [data-testid="stSidebar"] {{ font-family: {SANS}; }}
-/* STREAMLIT INTERNAL: stHeader is the top bar; given the page colour so it never shows a stripe. */
-[data-testid="stHeader"] {{ background: var(--ar-bg); }}
-.ar-num, .ar-table td.ar-num {{ font-family: {MONO}; font-variant-numeric: tabular-nums; }}
+/* B22-U7 / U9. STREAMLIT INTERNALS (each hook is a data-testid Streamlit sets; re-check after an upgrade):
+   - stHeaderActionElements: the link icon Streamlit puts beside every heading - hidden.
+   - stHeader: the top bar. It is made transparent and zero-height so it neither paints a band nor
+     intercepts clicks; its sidebar toggle and status widget still render (overflow stays visible).
+   - stMainBlockContainer: the main column; its default 6rem top padding is cut so the Analyse /
+     Scoreboard tabs sit level with the ARISTOS logo row (measured: both at y=12-14px, 400-1300px wide).
+   - the element containers holding our own <style> blocks: each takes a 1rem layout gap, so they are
+     taken out of the layout (the CSS inside still applies). */
+[data-testid="stHeaderActionElements"] {{ display: none !important; }}
+[data-testid="stHeader"] {{ background: transparent !important; height: 0 !important; min-height: 0 !important; }}
+[data-testid="stMainBlockContainer"] {{ padding-top: .75rem !important; }}
+[data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"] style) {{ display: none; }}
+.ar-num, .ar-table td.ar-num {{ font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }}
 .ar-muted {{ color: var(--ar-muted); }}
 
 /* verdict chips: a pill that ALWAYS carries its word */
@@ -181,6 +196,7 @@ def css(theme: str = "dark") -> str:
 
 /* phone width: cards stack (the grid already wraps), the header lets the price drop under the name */
 @media (max-width: 640px) {{
+  [data-testid="stMainBlockContainer"] {{ padding-top: 3rem !important; }}   /* room for the sidebar toggle */
   .ar-name {{ font-size: 1.35rem; }}
   .ar-price {{ text-align: left; }}
   .ar-card {{ padding: 14px; }}
@@ -239,7 +255,7 @@ def percentile_bar(percentile: float) -> str:
 def table(headers: list[str], rows: list[list[str]], *, raw_cols: Iterable[int] = (),
           num_cols: Iterable[int] = (), reason_col: Optional[int] = None) -> str:
     """A scrolling-inside-its-box table. Cells in ``raw_cols`` are already-built HTML (chips); every
-    other cell is escaped. ``num_cols`` use the mono, tabular face."""
+    other cell is escaped. ``num_cols`` use the tabular-figure style."""
     raw, nums = set(raw_cols), set(num_cols)
     head = "".join(f"<th>{esc(h)}</th>" for h in headers)
     body = []

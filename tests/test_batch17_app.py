@@ -148,20 +148,15 @@ def test_the_one_ticker_hint_has_an_open_as_company_button_that_does_not_run():
 # --------------------------------------------------------------------------- #
 # SIDEBAR-ETF-TEXT-1
 # --------------------------------------------------------------------------- #
-def test_the_sidebar_note_follows_the_current_asset_choice():
-    from aristos_council.demo_surface import asset_mode_sidebar_note
-
-    assert asset_mode_sidebar_note("Stocks") == (
-        "ETF lists and lenses are hidden while Stocks is selected.")
-    assert asset_mode_sidebar_note("ETFs") == (
-        "Stock lists and lenses are hidden while ETFs is selected.")
+def test_the_sidebar_carries_no_hidden_lists_note_in_either_mode():
+    """B22-U8: the line "ETF lists and lenses are hidden while Stocks is selected." (and its ETFs mirror,
+    SIDEBAR-ETF-TEXT-1) is gone - the switch says what it does."""
     at = _run_tab()
     side = " ".join(str(c.value) for c in at.sidebar.caption)
-    assert "ETF lists and lenses are hidden while Stocks is selected." in side
+    assert "are hidden while" not in side
     at.radio(key="asset_mode").set_value("ETFs").run()
     side = " ".join(str(c.value) for c in at.sidebar.caption)
-    assert "Stock lists and lenses are hidden while ETFs is selected." in side
-    assert "while Stocks is selected" not in side
+    assert "are hidden while" not in side
 
 
 def test_stale_results_rule_is_pure():

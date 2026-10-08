@@ -219,3 +219,13 @@ def test_yfinance_most_recent_quarter_becomes_an_iso_period_end():
     from aristos_council.data.yfinance_adapter import _epoch_to_iso
     assert _epoch_to_iso(1782777600) == "2026-06-30"        # yfinance's epoch seconds
     assert _epoch_to_iso(None) is None and _epoch_to_iso("n/a") is None and _epoch_to_iso(0) is None
+
+
+def test_a_whole_number_price_still_shows_two_decimals():
+    """B22-U2 (BYD, 1211.HK: the header read "HKD 75" for a close of exactly 75)."""
+    from aristos_council.abs_readings import price_and_cash
+    pac = price_and_cash(_technical(last_close=75.0, sma_50=80.0),
+                         _fundamentals(currency="HKD", financial_currency="HKD"),
+                         trend=_trend(), news=_news())
+    assert pac.last_close.label == "last close HKD 75.00"
+    assert pac.sma_50.label == "50-day average price HKD 80.00"

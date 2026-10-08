@@ -650,8 +650,8 @@ def company_sources(result: "CompanyCheckResult") -> list[SourceLine]:
     pac_fx = getattr(pac, "fx", None) if pac is not None else None
     if pac_fx is not None:
         out.append(SourceLine("Currency rate in price and cash",
-                              f"{pac_fx.from_ccy} converted to {pac_fx.to_ccy} at {pac_fx.rate:.4f}, "
-                              f"latest close in {pac_fx.as_of}, source {pac_fx.source}"))
+                              f"1 {pac_fx.from_ccy} = {pac_fx.rate:.4f} {pac_fx.to_ccy}, "
+                              f"{pac_fx.month()} (latest close), source {pac_fx.source}"))
     if pac is not None and getattr(pac, "news_source", ""):
         out.append(SourceLine("Recent news", pac.news_source))
     # ETF-MODE-1: a fund size converted to USD names the rate and where it came from.
@@ -939,6 +939,7 @@ def absolute_reading_lines(result) -> list[str]:
     if result.debt_and_cash is not None:
         lines.append("  Debt and cash")
         lines.extend(f"    - {ln}" for ln in result.debt_and_cash.lines())
+        lines.extend(f"    ({ln})" for ln in result.debt_and_cash.notes())      # FINANCE-ARM-1
     if result.growth_record is not None:
         lines.append("  Growth record"
                      + mixed_source_marker(result, result.growth_record.source_tag))

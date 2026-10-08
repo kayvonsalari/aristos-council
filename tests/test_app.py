@@ -535,12 +535,12 @@ def test_run_tab_renders_with_the_one_flow():
     # RUNMODE-1: the button now says WHAT will happen and WHAT IT COSTS on its own line,
     # so it is matched on its stem rather than on the bare word.
     # (Company Check has its own "▶ Run company check" button on another tab.)
-    run_buttons = [b.label for b in at.button if b.label.startswith("▶ Run —")]
+    run_buttons = [b.label for b in at.button if b.label.startswith("▶ Run ·")]
     assert len(run_buttons) == 1, run_buttons
     # TAB-MERGE-1 commit 3: "Council opinion" (unticked by default) now drives list
     # mode, replacing the old lens-count default (which started a single lens on
     # Narrator). Unticked -> Ranker only, deterministic and free.
-    assert run_buttons[0] == "▶ Run — deterministic, free"
+    assert run_buttons[0] == "▶ Run · free"
 
 
 # --------------------------------------------------------------------------- #
@@ -729,7 +729,7 @@ def test_company_check_has_no_strategy_dropdown_and_no_reference_universe_picker
     assert not any("Valuation band" in str(c.label) for c in at.checkbox)
     assert not any(str(getattr(c, "key", "")) in ("cc_valuation_band", "uni_valuation_band")
                    for c in at.checkbox)
-    assert any(b.label.startswith("▶ Run company check (free — no LLM)") for b in at.button)
+    assert any(b.label.startswith("▶ Run company check · free") for b in at.button)
 
 
 def test_ticking_the_summary_says_the_run_calls_a_model_once():
@@ -1424,7 +1424,7 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     assert "ONE combined grid" in blob
     # the run button says how many lenses will run and what it costs, and is not gated
     # on an API key (RUNMODE-1 moved the estimate onto the button's own line).
-    assert any("Run 2 lenses — deterministic, free" in b.label for b in at.button)
+    assert any("Run 2 lenses · free" in b.label for b in at.button)
     assert not any("ANTHROPIC_API_KEY" in str(getattr(i, "value", "")) for i in at.info)
 
 

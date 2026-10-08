@@ -553,3 +553,83 @@ def test_spacing_and_capitalisation_do_not_smuggle_a_duplicate_through():
     assert dedupe_lines(["has no net debt to repay",
                          "has  no net debt  to repay",
                          "Has no net debt to repay"]) == ["has no net debt to repay"]
+
+
+# =========================================================================== #
+# CASH-RUNWAY-1 (approved 2026-10-04; Viking VKTX had negative free cash flow and net cash, no line)
+# =========================================================================== #
+def _viking(**kw):
+    base = dict(total_debt=5.0e6, total_cash=502.6e6, free_cash_flow=-278.7e6,
+                financial_currency="USD", trailing_period_end="2026-06-30")
+    base.update(kw)
+    return _f(**base)
+
+
+def test_runway_negative_fcf_and_net_cash_says_how_long_the_cash_lasts():
+    out = debt_and_cash(_viking())
+    assert out.net_debt.label == "holds $497.6m more cash than debt"
+    assert out.cash_runway.available
+    assert out.cash_runway.label == ("at last year's spending ($278.7m) that lasts about 1.8 years "
+                                     "(balance sheet of Jun 2026)")
+    assert out.cash_runway.value == pytest.approx(497.6 / 278.7)
+    assert out.cash_runway.label in out.lines()
+
+
+def test_runway_without_a_period_end_says_latest_balance_sheet():
+    out = debt_and_cash(_viking(trailing_period_end=None))
+    assert out.cash_runway.label.endswith("(latest balance sheet)")
+
+
+def test_runway_negative_fcf_and_net_debt_says_there_is_no_cushion():
+    out = debt_and_cash(_viking(total_debt=900e6, total_cash=100e6))
+    assert out.cash_runway.label == "no cash cushion: spending is funded by debt"
+    assert "no cash cushion: spending is funded by debt" in out.lines()
+
+
+def test_runway_positive_or_missing_fcf_gives_no_line():
+    for fcf in (278.7e6, 0.0, None):
+        out = debt_and_cash(_viking(free_cash_flow=fcf))
+        assert not out.cash_runway.available
+        assert not any("lasts about" in ln or "cushion" in ln for ln in out.lines())
+
+
+def test_runway_missing_cash_or_debt_gives_no_line():
+    assert not debt_and_cash(_viking(total_cash=None)).cash_runway.available
+    assert not debt_and_cash(_viking(total_debt=None)).cash_runway.available
+
+
+def test_runway_a_bank_gets_no_line():
+    out = debt_and_cash(_viking(sector="Financial Services"))
+    assert out.net_debt.not_meaningful and not out.cash_runway.available
+
+
+def test_runway_reaches_the_story_the_text_page_and_the_summary_facts(tmp_path):
+    from aristos_council.abs_readings import DebtAndCash  # noqa: F401
+    from aristos_council.company_check import absolute_reading_lines
+    from aristos_council.company_report import company_facts_pack, format_company_report
+    from aristos_council.company_story import story_paragraphs
+    from tests.test_company_report import RAW, _run
+    report = _run([RAW], tmp_path=tmp_path)
+    report.check.debt_and_cash = debt_and_cash(_viking())
+    story = dict(story_paragraphs(report))
+    survived = story["Other facts."]
+    assert "that lasts about 1.8 years (balance sheet of Jun 2026)" in survived
+    assert any("lasts about 1.8 years" in ln for ln in absolute_reading_lines(report.check))
+    assert "lasts about 1.8 years" in format_company_report(report)
+    from aristos_council.company_markdown import company_report_markdown
+    from aristos_council.export.report_html import company_report_html
+    assert "lasts about 1.8 years" in company_report_markdown(report)
+    assert "lasts about 1.8 years" in company_report_html(report)
+    assert any("lasts about 1.8 years" in ln
+               for ln in company_facts_pack(report)["absolute_readings"]["debt_and_cash"])
+
+
+def test_runway_under_a_year_is_said_in_months_and_under_a_month_as_such():
+    """BYD (1211.HK): CNY 2.8bn net cash against CNY 97.7bn of spending printed "about 0.0 years"."""
+    five_months = debt_and_cash(_viking(total_cash=5.0e6 + 116.1e6))      # net cash 116.1m / 278.7m
+    assert "that lasts about 5 months (balance sheet of Jun 2026)" in five_months.cash_runway.label
+    one_month = debt_and_cash(_viking(total_cash=5.0e6 + 25.0e6))         # 25m / 278.7m -> 1.08 months
+    assert "that lasts about 1 month (" in one_month.cash_runway.label
+    days = debt_and_cash(_viking(total_cash=5.0e6 + 2.8e6, free_cash_flow=-97.7e9))
+    assert "that lasts less than a month (" in days.cash_runway.label
+    assert "0.0 years" not in days.cash_runway.label

@@ -185,6 +185,38 @@ def test_no_count_grammar_slips(sweep_reports):
                   sweep.COUNT_GRAMMAR)
 
 
+def test_no_batch22_wording_slips(sweep_reports):
+    """Batch 22: the wording patterns found by hand (one lens "all for one reason", "(tied with 1)",
+    a lowercase sentence start after a full stop, "What survived.", peer-search jargon in the story,
+    backtest jargon in the lens notes) never come back."""
+    _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.wording_findings(t, w)),
+                  sweep.WORDING)
+
+
+def test_the_batch22_wording_rule_fires_on_each_shape_it_names():
+    for bad in _B22_BAD:
+        assert sweep.wording_findings(bad + FOLD_B22, "x"), bad
+    for ok in _B22_OK:
+        assert not sweep.wording_findings(ok + FOLD_B22, "x"), ok
+
+
+FOLD_B22 = "\nSHOW THE WORKINGS"
+_B22_BAD = ["The answer\nNo track record exists for this industry yet.\nWhat this cannot tell you. x. No track record exists for this industry yet.",
+            "the rule allows at most 1.0x. on its measures it would rank 6th", "Quality track record: mean excess -1.1%/yr " + chr(183) + " luck 51% " + chr(183) + " 108 rounds held",
+            "HOLD - 19th of 27 (tied with 1)",
+            "The answer\nBYD was ranked against 19 peers, companies in its own industry (step 2 of 4 of the peer search, market index of 2026-09-25).",
+            "One lens did not apply, all for one reason: no operating profit.",
+            "The answer\nWhat survived. Debt and cash (latest annual accounts): it owes $600."]
+_B22_OK = ["the rule allows at most 1.0x. On its measures it would rank 6th", "beat its group by -1.1% a year on average",
+           "HOLD - 19th of 27 (tied with one other)", "HOLD - 19th of 27 (tied with 10)",
+           "The answer\nBYD was ranked against 19 similar-sized companies in its industry, under nine lenses.",
+           "SHOW THE WORKINGS\n(step 2 of 4 of the peer search)",
+           "One lens did not apply: no operating profit.",
+           "The answer\nOther facts. Debt and cash (latest annual accounts): it owes $600.",
+           "What survived. Two companies were rated BUY by both voting tests.",
+           "Five lenses did not apply, all for one reason: no operating profit."]
+
+
 def test_no_strategy_word_in_reader_text(sweep_reports):
     """19B B3: "lens" everywhere, never "strategy"."""
     _assert_clean(_text_rule(sweep_reports, lambda t, w, k: sweep.strategy_word_findings(t, w)),

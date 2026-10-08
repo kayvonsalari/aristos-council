@@ -225,7 +225,7 @@ def _vote_line(report) -> str:
     bank = is_bank(report)
     if ag.n_voted == 1:
         v = voters[0]
-        where = f", {ordinal(v.position)} of {v.cohort_size}" + (f", tied with {v.tied_with}" if v.tied_with else "") if v.position else ""
+        where = f", {ordinal(v.position)} of {v.cohort_size}" + (f", {v.tie_note.strip(' ()')}" if v.tied_with else "") if v.position else ""
         built = "one lens built for banks" if bank else "the one lens that voted"
         return f"{v.word}, on {built} ({v.label}{where})."
     words = {"buy": "BUY", "hold": "HOLD", "sell": "SELL"}
@@ -254,6 +254,8 @@ def _reason_line(report) -> str:
         top_reason, top_votes = groups[0]
         if is_bank(report) and ag.n_voted:
             out.append(f"The other {_lenses(n_excl)} {'is' if n_excl == 1 else 'are'} not for banks.")
+        elif n_excl == 1:                   # B22-U10: one lens has no "all for one reason" to state
+            out.append(f"{'One lens' if ag.n_voted else 'The one lens'} did not apply: {top_reason}.")
         elif len(top_votes) == n_excl:
             if ag.n_voted:
                 out.append(f"{_cap(_lenses(n_excl))} did not apply, all for one reason: {top_reason}.")
@@ -286,7 +288,7 @@ def answer_lines(report) -> tuple[str, str]:
 # --------------------------------------------------------------------------- #
 # Section 2 - the story (five paragraphs)
 # --------------------------------------------------------------------------- #
-LEADS = ("What this run asked.", "What happened.", "What survived.", "What to doubt.",
+LEADS = ("What this run asked.", "What happened.", "Other facts.", "What to doubt.",
          "What this cannot tell you.")
 
 
@@ -298,12 +300,11 @@ def _asked(report) -> str:
         why = _plain_reason(report.no_vote_reason) or "no peer group could be formed"
         return f"The run asked how {name} ranks against its peers, but {why}, so no lens ran."
     n = len(group.members)
-    kind = ("similar-sized companies in its industry" if report.outside_tested_range
-            else "companies in its own industry")
-    snap = f", market index of {group.snapshot}" if getattr(group, "snapshot", "") else ""
     ran = f"{_lenses(len(labels))} ({_join(labels)})" if labels else "no lens"
-    return (f"{name} was ranked against {plural(n, 'peer')}, {kind} (step {group.step} of 4 of the "
-            f"peer search{snap}), under {ran}.")
+    # B22-B5: no "step 2 of 4 of the peer search, market index of ..." here - that detail lives under
+    # "How this peer group was built" in the workings.
+    return (f"{name} was ranked against {plural(n, 'similar-sized company', 'similar-sized companies')} "
+            f"in its industry, under {ran}.")
 
 
 def _band_sentence(report) -> str:
@@ -327,6 +328,9 @@ def _happened(report) -> str:
     ranked = [v for v in _voting(report) if v.ranked]
     if ranked:
         bits.append("Voting: " + "; ".join(f"{v.label} {v.result()}" for v in ranked) + ".")
+        note = usable_figures_note(report)
+        if note:
+            bits.append(note[:1].upper() + note[1:])
     else:
         bits.append("No lens voted.")
     groups = _excluded_groups(report)
@@ -365,7 +369,11 @@ def _survived(report) -> str:
         elif dc.net_debt.available:
             yl = getattr(dc.years_to_repay, "label", "") if getattr(dc.years_to_repay, "available", False) else ""
             extra = f", and it {yl.rstrip('.')}" if yl.startswith("would take") else ""
-            bits.append(f"Debt and cash ({asof}): it {dc.net_debt.label.rstrip('.')}{extra}.")
+            rw = getattr(dc, "cash_runway", None)           # CASH-RUNWAY-1
+            if rw is not None and rw.available:
+                extra += (", and " if rw.label.startswith("at ") else "; ") + rw.label.rstrip(".")
+            bits.append(f"Debt and cash ({asof}): it {dc.net_debt.label.rstrip('.')}{extra}."
+                        + (f" {' '.join(dc.notes())}" if getattr(dc, "notes", None) and dc.notes() else ""))
         else:
             bits.append(f"Debt and cash ({asof}) could not be read: {dc.net_debt.note}.")
     gr = getattr(c, "growth_record", None)
@@ -418,8 +426,8 @@ def _doubt(report) -> str:
 
 
 def _cannot(report) -> str:
-    tail = untested_sentence(report)
-    return NOT_A_PREDICTION + (f" {tail}" if tail else "")
+    # B22-B9: the "no track record" / "outside the tested range" sentence is said ONCE, in the answer
+    return NOT_A_PREDICTION
 
 
 def story_paragraphs(report) -> list[tuple[str, str]]:
@@ -436,6 +444,28 @@ def summary_note(report) -> str:
         return ""
     why = _plain_reason(getattr(s, "note", "")) or "it did not pass its checks"
     return f"{SUMMARY_WITHHELD_PREFIX}: {why}."
+
+
+def usable_figures_note(report) -> str:
+    """B22-B3: the group is the company plus its peers (BYD: 20), but each lens ranks only the companies
+    that had usable figures for IT (14 for three of them, 20 for Forensic). "" when every lens ranked the
+    whole group, so the note appears only where the numbers on the page would otherwise puzzle."""
+    group = getattr(report, "peer_group", None)
+    members = getattr(group, "members", None)
+    if not members:
+        return ""
+    total = len(members) + 1
+    ranked = [(v.label, v.cohort_size) for v in report.votes if v.ranked and v.cohort_size]
+    if not ranked or all(n == total for _l, n in ranked):
+        return ""
+    by_n: dict[int, list[str]] = {}
+    for label, n in ranked:
+        by_n.setdefault(n, []).append(label)
+    parts = []
+    for i, (n, labels) in enumerate(by_n.items()):
+        parts.append(f"{n} of {total} had usable figures for {_join(labels)}" if i == 0
+                     else f"{n} of {total} for {_join(labels)}")
+    return "; ".join(parts) + "."
 
 
 # --------------------------------------------------------------------------- #
@@ -460,7 +490,7 @@ class TableRow:
 
 def _outcome(v) -> str:
     if v.status == "ranked":
-        return v.result()
+        return v.result(with_factor_note=False)          # B22-B8: "ranked on 2 of 3 factors" is Reason's
     if v.status == "excluded":
         return "does not apply"
     if v.status == "too_few":
@@ -487,13 +517,24 @@ def _row_reason(v) -> str:
     return _plain_reason(v.result())
 
 
+_SENTENCE_START = re.compile(r"(?<=[.!?] )([a-z])")
+
+
+def sentence_starts_capital(text: str) -> str:
+    """B22-B7a: a sentence that begins after a full stop begins with a capital ("...at least 12%. On its
+    measures it would rank..."). Only the first letter after ". " changes; figures like "3.4x" have no
+    space after the dot and are untouched."""
+    return _SENTENCE_START.sub(lambda m: m.group(1).upper(), text)
+
+
 def _full_reason(v) -> str:
     if v.status != "excluded":
         return ""
     text = _plain_reason(v.reason)
     if v.would_rank is not None:
         text += f". {v.would_rank.text}"
-    return text if (text != _first_reason(v.reason) or v.would_rank is not None) else ""
+    full = text if (text != _first_reason(v.reason) or v.would_rank is not None) else ""
+    return sentence_starts_capital(full)
 
 
 def table_rows(report) -> list[TableRow]:
@@ -572,13 +613,14 @@ class StoryPage:
     rows: tuple
     caption: str                  # the track-record line under the table
     no_vote: str                  # shown instead of the table when no lens was ticked
+    group_note: str = ""          # "14 of 20 had usable figures for ..." (B22-B3), muted, under the table
 
 
 def story_page(report) -> StoryPage:
     summary = report.summary
     if summary is not None and getattr(summary, "available", False):
         from .reader import reader_paragraphs
-        paragraphs = tuple(reader_paragraphs(summary.summary))
+        paragraphs = tuple(reader_paragraphs(summary.summary, company=True))
         model = True
     else:
         paragraphs = tuple(story_paragraphs(report))
@@ -588,7 +630,8 @@ def story_page(report) -> StoryPage:
         answer=answer_lines(report), paragraphs=paragraphs, model_summary=model,
         note=summary_note(report), tag=tuple(small_company_tag(report)),
         headers=tuple(TABLE_HEADERS), rows=tuple(table_rows(report)), caption=track_caption(report),
-        no_vote="" if report.votes else (report.no_vote_reason or NO_LENS_REASON))
+        no_vote="" if report.votes else (report.no_vote_reason or NO_LENS_REASON),
+        group_note=usable_figures_note(report))
 
 
 def narration_check_line(report) -> str:

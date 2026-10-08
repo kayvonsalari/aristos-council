@@ -235,12 +235,3 @@ def lens_caption(strategy) -> str:
     (not in ``app.py``) so ``docs/aristos-architecture.html`` is generated from the SAME text
     the app shows (ARCH-DOC-2)."""
     return (getattr(strategy, "asks", "") or "").strip()
-
-
-def asset_mode_sidebar_note(mode) -> str:
-    """The sidebar's one-line note under the Stocks / ETFs switch — said for the CURRENT choice
-    (SIDEBAR-ETF-TEXT-1: it kept reading "ETF lists and lenses are hidden while Stocks is
-    selected" with ETFs selected)."""
-    etfs = str(mode or "").strip().lower() == "etfs"
-    hidden, chosen = ("Stock", "ETFs") if etfs else ("ETF", "Stocks")
-    return f"{hidden} lists and lenses are hidden while {chosen} is selected."
