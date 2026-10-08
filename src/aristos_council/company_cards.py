@@ -132,9 +132,10 @@ def summary_chips(report) -> str:
                 chips.append(ui.chip(f"{n} {word}", word.lower()))
         if getattr(ag, "n_not_applying", 0):
             chips.append(ui.chip(f"{ag.n_not_applying} does not apply", "na"))
+        notes = getattr(ag, "check_notes", None) or {}
         for label, mark in (getattr(ag, "checks", None) or {}).items():
             if mark:
-                chips.append(ui.chip(f"{label}: {mark}", "na"))
+                chips.append(ui.chip(f"{label}: {mark}{notes.get(label, '')}", "na"))
     chips.append(ui.chip(band_word(getattr(report.check, "band_percentile", None)), "na"))
     return ui.chip_row(chips)
 
@@ -151,6 +152,8 @@ def lens_rows(report) -> list[dict]:
         if v.status == "ranked":
             where = (f"{ordinal(v.position)} of {v.cohort_size}" if v.position else f"of {v.cohort_size}")
             detail = where + (f", {v.tie_note.strip(' ()')}" if v.tied_with else "")
+            if v.thin_check_note:                       # B24-D4: said plainly, beside the chip
+                detail += "," + v.thin_check_note
             word, kind = v.word, ui.chip_kind(v.word) if v.votes else "na"
         else:
             word, detail, kind = row.outcome, "", "na"

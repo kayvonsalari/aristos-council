@@ -269,7 +269,7 @@ def _reason_line(report) -> str:
                        f"({_count(len(top_votes))} of them): {top_reason}.")
     for v in _checks(report):
         if v.ranked and ag is not None and ag.checks.get(v.label):
-            out.append(f"{v.label} reads {ag.checks[v.label]}.")
+            out.append(f"{v.label} reads {ag.checks[v.label]}{ag.check_notes.get(v.label, '')}.")
     tail = untested_sentence(report)
     if tail:
         out.append(tail)
@@ -336,7 +336,8 @@ def _happened(report) -> str:
         bits.append(f"{_cap(_join([v.label for v in vs]))} did not apply: {reason}.")
     for v in _checks(report):
         if v.ranked and ag is not None and ag.checks.get(v.label):
-            bits.append(f"{v.label} marks it {ag.checks[v.label]} and does not vote.")
+            bits.append(f"{v.label} marks it {ag.checks[v.label]}{ag.check_notes.get(v.label, '')} "
+                        "and does not vote.")
     band = _band_sentence(report)
     if band:
         bits.append(band)

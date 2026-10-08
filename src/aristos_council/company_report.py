@@ -119,6 +119,10 @@ class LensVote:
     # 21"), handed to the council's narrator so it explains a rank from the lens's real factors only.
     # Council context only: never counted, never a vote.
     factors: tuple = ()
+    # B24-D4 - how many of the lens's factors this company was actually measured on, so a "doubted" mark
+    # that stands on ONE test says so plainly
+    factors_measured: int = 0
+    factors_total: int = 0
     # TIE-CHECK-1 - the number of OTHER companies sharing this one's combined rank-sum (0 = not tied)
     tied_with: int = 0
 
@@ -143,6 +147,18 @@ class LensVote:
         return verdict_word(self.verdict, check=not self.votes)
 
     @property
+    def thin_check_note(self) -> str:
+        """B24-D4: " (on one test only; two had no data)" for a CHECK lens that marked the company "doubted"
+        while ranking it on a single one of its factors; "" in every other case. The rule is untouched - this
+        only says, in words, how little the mark stands on."""
+        if (self.votes or not self.ranked or self.verdict != "sell"
+                or self.factors_measured != 1 or self.factors_total < 2):
+            return ""
+        words = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+        missing = self.factors_total - self.factors_measured
+        return f" (on one test only; {words.get(missing, missing)} had no data)"
+
+    @property
     def tie_note(self) -> str:
         """" (tied with 3)" / " (tied with one other)" when other companies share this one's
         rank-sum, else ""."""
@@ -155,7 +171,7 @@ class LensVote:
             where = (f"{ordinal(self.position)} of {self.cohort_size}" if self.position
                      else f"ranked of {self.cohort_size}")
             note = self.factor_note if with_factor_note else ""
-            return f"{self.word} - {where}{self.tie_note}{note}"
+            return f"{self.word}{self.thin_check_note} - {where}{self.tie_note}{note}"
         if self.status == "too_few":
             # NOVOTE-1 item 2.3b — a verdict over fewer than MIN_RANKABLE_COHORT names is
             # arithmetic, not a comparison (the HLB case: "1 of 1" instead of an honest
@@ -203,6 +219,7 @@ class CompanyAgreement:
     not_applicable: tuple = ()        # ((label, reason), ...) - not a vote either way
     checks: dict = field(default_factory=dict)      # check label -> "clean" | "no concern" | "doubted"
     marks: tuple = ()                 # every caution, each a statement the run already made
+    check_notes: dict = field(default_factory=dict)  # check label -> " (on one test only; two had no data)"
 
     @property
     def buy_votes(self) -> int:
@@ -277,9 +294,12 @@ def build_agreement(votes: list[LensVote], *,
     ranked = [v for v in voting if v.ranked]
     marks: list[str] = []
     check_words: dict = {}
+    check_notes: dict = {}
     for v in checks:
         if v.ranked:
             check_words[v.label] = verdict_word(v.verdict, check=True)
+            if v.thin_check_note:
+                check_notes[v.label] = v.thin_check_note
             marks.append(check_mark(v.label, v.verdict))
         else:
             check_words[v.label] = "does not apply"
@@ -291,7 +311,7 @@ def build_agreement(votes: list[LensVote], *,
         hold=tuple(v.label for v in ranked if v.verdict == "hold"),
         sell=tuple(v.label for v in ranked if v.verdict == "sell"),
         not_applicable=tuple((v.label, v.reason or v.result()) for v in voting if not v.ranked),
-        checks=check_words, marks=tuple(m for m in marks if m))
+        checks=check_words, marks=tuple(m for m in marks if m), check_notes=check_notes)
 
 
 # --------------------------------------------------------------------------- #
@@ -454,7 +474,7 @@ def _council_agreement_row(agreement: Optional[CompanyAgreement]) -> dict:
     return {"buy_votes": agreement.buy_votes, "n_voting": agreement.n_voted,
            "buy_lenses": list(agreement.buy), "sell_lenses": list(agreement.sell),
            "checks": [{"lens": label, "reading": word}
-                      for label, word in agreement.checks.items()],
+                      for label, word in agreement.checks.items()],       # (readings carry B24-D4's note)
            "marks": list(agreement.marks), "headline": agreement.headline}
 
 
@@ -805,6 +825,8 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                                   position=cell.position, cohort_size=cell.cohort_size,
                                   factor_note=cell.factor_note,
                                   tied_with=getattr(cell, "tied_with", 0),
+                                  factors_measured=getattr(cell, "factors_measured", 0),
+                                  factors_total=getattr(cell, "factors_total", 0),
                                   components=(_check_components(result, ticker)
                                               if base["kind"] == "check" else ()),
                                   factors=_check_components(result, ticker)))
