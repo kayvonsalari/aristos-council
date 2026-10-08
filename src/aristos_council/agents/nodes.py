@@ -874,7 +874,16 @@ def _cross_lens_block(state: ResearchState) -> str:
             # prompt is byte-unchanged) on every run that did not compute one.
             + (f" — {r['would_rank']} (NOT a vote and NOT a verdict: say \"would rank\", never "
                "BUY, HOLD or SELL, for this lens)" if r.get("would_rank") else "")
+            # B24-E8: this lens's OWN factors and the company's value and rank on each - absent (so the
+            # prompt is byte-unchanged) on every run that does not carry them
+            + "".join(f"\n      factor: {f}" for f in (r.get("factors") or []))
             for r in rows]
+    factor_rule = ""
+    if any(r.get("factors") for r in rows):
+        factor_rule = ("\nEXPLAIN A LENS'S RANK ONLY FROM THE FACTORS LISTED UNDER THAT LENS ABOVE - every one "
+                       "of them, not just the first two. Never explain a rank from the lens's name or from a "
+                       "description of the kind of company it usually covers (for example \"within cyclical, "
+                       "capital-intensive businesses\"): nothing in the evidence says that about this company.")
     reasons = state.cross_lens_reasons or []
     why = ""
     if reasons:
@@ -887,7 +896,7 @@ def _cross_lens_block(state: ResearchState) -> str:
                    for r in reasons))
     return ("\nEVERY SELECTED LENS'S VERDICT FOR THIS NAME (state ALL of these before any "
             "prose — the lenses that did NOT buy it are part of the record):\n"
-            + "\n".join(lines) + why)
+            + "\n".join(lines) + factor_rule + why)
 
 
 

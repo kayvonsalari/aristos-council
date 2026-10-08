@@ -115,6 +115,10 @@ class LensVote:
     # FORENSIC-PACK-1 - a CHECK lens's own components ("Accrual ratio 4.2%, rank 12 of 41"), kept so
     # the council can explain a "doubted" mark. Council context only: never counted, never a vote.
     components: tuple = ()
+    # B24-E8 - EVERY ranked lens's own factors as plain lines ("Return on invested capital: 5.1%, rank 18 of
+    # 21"), handed to the council's narrator so it explains a rank from the lens's real factors only.
+    # Council context only: never counted, never a vote.
+    factors: tuple = ()
     # TIE-CHECK-1 - the number of OTHER companies sharing this one's combined rank-sum (0 = not tied)
     tied_with: int = 0
 
@@ -472,6 +476,8 @@ def _council_cross_lens_verdicts(votes: list[LensVote]) -> list[dict]:
             "status": v.status, "verdict": v.verdict if v.votes else v.word,
             "votes": v.votes,
             "position": v.position, "cohort_size": v.cohort_size or None,
+            # B24-E8: the lens's actual factors and the company's rank on each (ranked lenses only)
+            **({"factors": list(v.factors)} if v.factors and v.status == "ranked" else {}),
             # LENS-EXPAND-1b: carried as its own text, never as a position/verdict — the council
             # may say "would rank", and narration_check.check_would_rank flags anything else.
             **({"would_rank": v.would_rank.text,
@@ -800,7 +806,8 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                                   factor_note=cell.factor_note,
                                   tied_with=getattr(cell, "tied_with", 0),
                                   components=(_check_components(result, ticker)
-                                              if base["kind"] == "check" else ())))
+                                              if base["kind"] == "check" else ()),
+                                  factors=_check_components(result, ticker)))
         else:
             reason = cell.reason_plain or _plain_reason(cell.reason)
             shadow = None
