@@ -64,3 +64,88 @@ def test_a_section_heading_that_names_the_lens_counts_as_naming_it():
 def test_a_real_misattribution_by_name_is_still_caught():
     flags = check_rank_attribution("Quality ranked EL.PA 12th of 21.", VERDICTS)
     assert flags and "Forensic" in flags[0]
+
+
+# --------------------------------------------------------------------------- #
+# B24-E9 - how a reader sees the check
+# --------------------------------------------------------------------------- #
+from aristos_council import ai_text_check as atc  # noqa: E402
+from aristos_council.export.report_html import _narration_html, narration_reader_html  # noqa: E402
+
+STAMP = ('[⚠ AI text check: "Value + Momentum issued a SELL on EL.PA" gives Value + Momentum a verdict '
+         "or a vote, but that lens did not apply - it has only a would-rank reading, which is not a vote "
+         "and never a verdict]")
+PROSE = ("##### Cyclical Income - why\n\nValue + Momentum issued a SELL on EL.PA. Quality said HOLD.\n\n"
+         "A second paragraph that is fine.")
+
+
+def test_the_top_line_counts_or_says_no_issues():
+    assert atc.top_line(0) == "AI text check: no issues found"
+    assert atc.top_line(1) == "AI text check: 1 sentence flagged, marked below"
+    assert atc.top_line(3) == "AI text check: 3 sentences flagged, marked below"
+
+
+def test_old_stamps_written_before_the_rename_still_count_and_read():
+    old = STAMP.replace("AI text check", "narration check")
+    assert atc.count(PROSE + "\n" + old) == 1 == atc.count(PROSE + "\n" + STAMP)
+    assert atc.claim_of(old) == "Value + Momentum issued a SELL on EL.PA"
+
+
+def test_the_reason_is_plain_english_for_each_kind_of_flag():
+    cases = {
+        STAMP: "This lens did not vote; the sentence treats it as a vote",
+        '[⚠ AI text check: "x" attributes Forensic\'s 12th of 21 rank to Quality - it belongs to Forensic]':
+            "This rank belongs to a different lens",
+        '[⚠ AI text check: "x" cites a 12th of 21 rank without naming the lens it belongs to (Forensic)]':
+            "This rank does not say which lens it belongs to",
+        '[⚠ AI text check: "x" cites Value + Momentum\'s 20th of 21 without saying it is only where the '
+        "company WOULD rank on that lens's measures - the lens did not apply, so it is not a vote and not a "
+        "verdict]": "This is only where the company would rank on a lens that did not apply; it is not a vote",
+        '[⚠ AI text check: "x" weighs the lenses against each other - ...]':
+            "This weighs the lenses against each other; every lens is an equal vote",
+        '[⚠ AI text check: "a b" appears near-verbatim in 2 specialists\' theses (technical, risk) - convergent]':
+            "2 specialists used almost the same words; that is not independent analysis",
+        '[⚠ AI text check: "x" contradicts rank table - table is authoritative]':
+            "This does not match the rank table",
+    }
+    for stamp, expected in cases.items():
+        assert atc.plain_reason(stamp) == expected
+
+
+def test_the_reader_view_marks_the_flagged_sentence_and_lists_nothing_below():
+    html = narration_reader_html(PROSE + "\n" + STAMP)
+    assert html.count('class="ar-flag"') == 1
+    # the marker sits right after the flagged sentence (and its full stop), before the next sentence
+    i_sentence, i_marker, i_next = (html.index("Value + Momentum issued a SELL on EL.PA."),
+                                    html.index('class="ar-flag"'), html.index("Quality said HOLD"))
+    assert i_sentence < i_marker < i_next
+    assert "This lens did not vote; the sentence treats it as a vote" in html          # hover / tap text
+    assert 'tabindex="0"' in html                                                       # a tap focuses it
+    assert "callout" not in html and "AI text check:" not in html                      # no list at the bottom
+    assert "A second paragraph that is fine." in html
+
+
+def test_a_flag_whose_sentence_cannot_be_found_is_still_marked_at_the_end():
+    html = narration_reader_html("Only prose here.\n" + STAMP)
+    assert html.count('class="ar-flag"') == 1 and "Only prose here." in html
+
+
+def test_the_downloaded_report_keeps_the_full_list_and_quotes_each_sentence():
+    html = _narration_html(PROSE + "\n" + STAMP)
+    assert "AI text check" in html and "Value + Momentum issued a SELL on EL.PA" in html
+    assert "narration check" not in html
+
+
+def test_every_section_gets_the_one_line_in_the_page_and_the_downloads(tmp_path):
+    from aristos_council.company_markdown import company_report_markdown
+    from aristos_council.company_report import CouncilOpinion, format_company_report
+    from aristos_council.company_story import narration_check_line
+    from aristos_council.export.report_html import company_report_html
+    from tests.test_company_report import RAW, _run
+    rep = _run([RAW], tmp_path=tmp_path)
+    rep.council_opinion = CouncilOpinion(available=True, narrative=PROSE + "\n" + STAMP)
+    for doc in (format_company_report(rep), company_report_markdown(rep), company_report_html(rep)):
+        assert "AI text check: 1 sentence flagged, marked below" in doc
+    assert narration_check_line(rep).startswith("AI text check: 1 sentence in the council opinion")
+    rep.council_opinion = CouncilOpinion(available=True, narrative=PROSE)
+    assert "AI text check: no issues found" in format_company_report(rep)

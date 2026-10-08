@@ -588,7 +588,7 @@ def narration_html(narration, *, anchor_prefix: str = "",
                    f"<ul>{items}</ul></section>")
 
     if callout is not None:
-        out.extend(callout(s, label="narration check") for s in (stamps or []))
+        out.extend(callout(s, label="AI text check") for s in (stamps or []))
 
     return "".join(out) or "<p>(no narrative produced)</p>"
 

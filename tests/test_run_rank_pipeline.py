@@ -232,5 +232,5 @@ def test_post_check_annotates_a_contradictory_narration():
         UNIVERSE4, "magic_formula_v1", council_mode="narrator", strategies_dir=STRAT_DIR,
         adapter=_Adapter(), runners=runners, today=date(2026, 6, 30))
     assert "A" in result.narratives
-    assert "narration check" in result.narratives["A"]
+    assert "AI text check" in result.narratives["A"]
     assert "A is the worst name in the cohort" in result.narratives["A"]

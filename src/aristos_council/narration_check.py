@@ -694,18 +694,18 @@ def _heading_at(headings: list[tuple[int, str]], offset: int) -> str:
 
 
 def _annotation(claim: str) -> str:
-    return (f'[⚠ narration check: "{claim}" contradicts rank table — '
+    return (f'[⚠ AI text check: "{claim}" contradicts rank table — '
             f'table is authoritative]')
 
 
 def _tie_annotation(claim: str, partner: str, score: str) -> str:
-    return (f'[⚠ narration check: "{claim}" orders a TIED pair — tied with {partner} at '
+    return (f'[⚠ AI text check: "{claim}" orders a TIED pair — tied with {partner} at '
             f'combined rank-sum {score}; the verdict split on the alphabetical tie-break, '
             f'not a score difference — table is authoritative]')
 
 
 def _verdict_annotation(claim: str, peer: str, claimed: str, actual: str) -> str:
-    return (f'[⚠ narration check: "{claim}" misstates {peer}\'s verdict — it says '
+    return (f'[⚠ AI text check: "{claim}" misstates {peer}\'s verdict — it says '
             f'{claimed.upper()}, the table says {actual.upper()}; table is authoritative]')
 
 
@@ -815,7 +815,7 @@ def _names_two_lenses(sentence: str, lens_labels: list[str]) -> bool:
 
 
 def _cross_lens_annotation(claim: str) -> str:
-    return (f'[⚠ narration check: "{claim}" weighs the lenses against each other — '
+    return (f'[⚠ AI text check: "{claim}" weighs the lenses against each other — '
             "the narrator attributes, it does not adjudicate; each lens's verdict stands "
             "as issued]")
 
@@ -874,9 +874,9 @@ def _named_lens(sentence: str, lens_labels: list[str]) -> Optional[str]:
 def _rank_attribution_annotation(claim: str, cite: str, true_lens: str,
                                  named_lens: Optional[str]) -> str:
     if named_lens:
-        return (f'[⚠ narration check: "{claim}" attributes {true_lens}\'s {cite} rank '
+        return (f'[⚠ AI text check: "{claim}" attributes {true_lens}\'s {cite} rank '
                 f"to {named_lens} — it belongs to {true_lens}]")
-    return (f'[⚠ narration check: "{claim}" cites a {cite} rank without naming the '
+    return (f'[⚠ AI text check: "{claim}" cites a {cite} rank without naming the '
             f"lens it belongs to ({true_lens})]")
 
 
@@ -946,10 +946,10 @@ _WOULD_RANK = re.compile(r"\bwould(?:\s+have)?\s+(?:rank|ranked|sit|place|be\s+r
 
 def _would_rank_annotation(claim: str, lens: str, cite: Optional[str]) -> str:
     if cite:
-        return (f'[⚠ narration check: "{claim}" cites {lens}\'s {cite} without saying it is only '
+        return (f'[⚠ AI text check: "{claim}" cites {lens}\'s {cite} without saying it is only '
                 "where the company WOULD rank on that lens's measures — the lens did not apply, "
                 "so it is not a vote and not a verdict]")
-    return (f'[⚠ narration check: "{claim}" gives {lens} a verdict or a vote, but that lens did '
+    return (f'[⚠ AI text check: "{claim}" gives {lens} a verdict or a vote, but that lens did '
             "not apply — it has only a would-rank reading, which is not a vote and never a "
             "verdict]")
 
@@ -1202,7 +1202,7 @@ def check_specialist_repetition(theses: dict) -> list[str]:
                     holders.append(who)
     for phrase, holders in seen_phrases.items():
         flags.append(
-            f'[⚠ narration check: "{phrase}" appears near-verbatim in {len(holders)} '
+            f'[⚠ AI text check: "{phrase}" appears near-verbatim in {len(holders)} '
             f'specialists\' theses ({", ".join(holders)}) — convergent phrasing on the '
             f'same figures, not independent domain analysis]')
     return flags

@@ -1166,7 +1166,7 @@ def test_identical_specialist_phrasing_is_flagged_in_the_final_narrative(tmp_pat
     op = run_council_opinion(report, adapter=_Adapter(company_ebit=10.0), runners=runners,
                              today=TODAY)
     assert op.available
-    assert "narration check" in op.narrative
+    assert "AI text check" in op.narrative
     assert "convergent phrasing" in op.narrative
     assert phrase in op.narrative
     # the verdict of record is UNCHANGED by the opinion having run

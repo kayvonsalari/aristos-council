@@ -1262,8 +1262,9 @@ def council_opinion_lines(report: CompanyReport) -> list[str]:
         return []
     if not op.available:
         return [f"  {op.note}"]
-    return [f"  {ln}" for ln in markdown_to_plain(op.narrative)] or \
-        ["  (no narrative produced)"]
+    from .ai_text_check import count, top_line
+    body = [f"  {ln}" for ln in markdown_to_plain(op.narrative)] or ["  (no narrative produced)"]
+    return [f"  {top_line(count(op.narrative or ''))}", *body]
 
 
 def _text_table(headers, rows) -> list[str]:
@@ -1282,6 +1283,8 @@ def story_text_lines(report: CompanyReport) -> list[str]:
 
     page = story_page(report)
     lines = [page.answer[0], page.answer[1], ""]
+    if page.summary_check:
+        lines.append(page.summary_check)
     lines += [f"{lead} {text}" for lead, text in page.paragraphs]
     if page.model_summary:
         from .reader import READER_SECTION_NOTE

@@ -392,8 +392,8 @@ def test_story_the_narration_check_is_one_folded_line_and_only_with_a_council_op
     rep = _real(tmp_path)
     assert narration_check_line(rep) == ""
     rep.council_opinion = CouncilOpinion(available=True, narrative="Fine. [⚠ narration check: \"x\" is wrong]")
-    assert narration_check_line(rep) == ("Narration check: 1 statement in the council opinion was "
-                                         "flagged; each is marked where it appears.")
+    assert narration_check_line(rep) == ("AI text check: 1 sentence in the council opinion was "
+                                         "flagged; each is marked where it appears.")   # B24-E9 rename
     assert narration_check_line(rep) in format_company_report(rep).split("SHOW THE WORKINGS")[1]
 
 

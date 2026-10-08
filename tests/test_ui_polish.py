@@ -551,3 +551,38 @@ def test_b23_n7_the_list_page_downloads_are_short_and_carry_the_file_names(tmp_p
     buttons = at.get("download_button")
     assert [b.proto.label for b in buttons] == ["⬇ Download Markdown", "⬇ Download HTML"]
     assert buttons[0].proto.help.endswith(".md") and buttons[1].proto.help.endswith(".html")
+
+
+def test_b24_e9_the_page_marks_flagged_sentences_and_keeps_the_full_list_in_the_workings(tmp_path):
+    from aristos_council.company_report import CouncilOpinion
+    from tests.test_ai_text_check import PROSE, STAMP
+    report = _company_report(tmp_path)
+    report.council_opinion = CouncilOpinion(available=True, narrative=PROSE + "\n" + STAMP)
+    at = _render(report)
+    html = _html_blob(at)
+    assert html.count('class="ar-flag"') == 1                       # the marker, at the sentence
+    caps = [str(c.value) for c in at.caption]
+    assert "AI text check: 1 sentence flagged, marked below" in caps          # the one line at the top
+    # no flag list under the council text in the reader view: the callout/stamp text is not on the page
+    assert "gives Value + Momentum a verdict or a vote" not in html
+    # ...but the full list is under the workings, quoting the sentence
+    workings = "\n".join(str(m.value) for m in at.markdown)
+    assert '"Value + Momentum issued a SELL on EL.PA" - This lens did not vote; the sentence treats it as a vote' in workings
+    assert any(c.startswith("AI text check: 1 sentence in the council opinion was flagged") for c in caps)
+    report.council_opinion = CouncilOpinion(available=True, narrative=PROSE)
+    assert "AI text check: no issues found" in [str(c.value) for c in _render(report).caption]
+
+
+def test_b24_e9_a_model_summary_gets_the_ai_text_check_line(tmp_path):
+    from tests.test_company_report import RAW, _Writer, _fields, _run
+    probe = _run([RAW], tmp_path=tmp_path, save=False)
+    rep = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(_fields(probe)), save=False)
+    assert rep.summary.available
+    assert "AI text check: no issues found" in [str(c.value) for c in _render(rep).caption]
+
+
+def test_b24_e9_the_marker_has_amber_css_and_reads_on_hover_or_tap():
+    from aristos_council.ui_style import css
+    c = css("dark")
+    assert ".ar-flag:hover .ar-flag-tip, .ar-flag:focus .ar-flag-tip { display: block; }" in c
+    assert "var(--ar-hold-fg)" in c.split(".ar-flag {")[1].split("}")[0]
