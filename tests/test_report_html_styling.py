@@ -235,6 +235,9 @@ _DOCS = {"multi_lens": _multi_doc, "single_lens": _single_doc}
 # --------------------------------------------------------------------------- #
 # 1. VALUE PARITY — the core guard, against a golden captured BEFORE the restyle
 # --------------------------------------------------------------------------- #
+# BASELINE MOVED (2026-10-08, B24-E9): the callout label on a flagged sentence reads "AI text check"
+# (it was "narration check"); the single-lens golden's two label lines were edited to match. The stamp text a
+# fixture feeds in keeps its old label on purpose: an older saved report must still read.
 # BASELINE MOVED (2026-10-07, UI-POLISH-1): the product's name in the document kicker is now "Aristos"
 # (was "Aristos Council"). The first line of each golden - and of the pre-REPORT-4 snapshot below - was
 # edited to match; that product-name word is the only thing that moved.

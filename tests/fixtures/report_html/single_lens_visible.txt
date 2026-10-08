@@ -138,11 +138,11 @@ Cost: expense_ratio 0.07
 — the cheapest leg.
 Size: fund_size is rank 1 of 3.
 Momentum is the weakest leg at rank 3 of 3.
-narration check
+AI text check
 [⚠ narration check: "Momentum is the weakest leg at rank 3 of 3" contradicts rank table — table is authoritative]
 iShares Core MSCI World (EUNL.DE) · HOLD
 EUNL.DE is tied on the combined rank-sum and the verdict split alphabetically.
-narration check
+AI text check
 [⚠ narration check: "a claim nowhere in the prose" contradicts rank table — table is authoritative]
 Verdicts are deterministic — math judges, the LLM only writes; a fact-checker annotates the prose.
 Research tool, not financial advice. Nothing here is a recommendation to buy or sell any security. Figures come from third-party vendor data and may be incomplete, stale or wrong; abstentions and warnings in this document are part of the record, not noise.
