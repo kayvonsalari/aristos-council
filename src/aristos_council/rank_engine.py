@@ -193,6 +193,12 @@ def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
 # warning beside the vote. The ranking PRIMITIVE is untouched: ``_ARITHMETIC_CUT_BELOW`` keeps its old
 # three-name boundary, so the stored output for tiny synthetic fixtures does not move.
 MIN_RANKABLE_COHORT = 5
+
+# B25-3 - THE one setting for a tie that straddles a verdict cut. "best_position": every name tied on the
+# combined rank takes the verdict of the tie group's BEST position (MSFT 2026-10-08, Value + Momentum:
+# AAPL 1, TSMC 1, MSFT/ASML/CSCO tied 3rd, NVDA 6th - the three tied names are HOLD, not SELL, because
+# 3rd of 6 is HOLD). Symmetric on the BUY side. "alphabetical" is the old behaviour (ticker order breaks the tie).
+TIE_VERDICT_RULE = "best_position"
 SMALL_GROUP_MIN = 5          # the warning band is 5..9 whatever the voting line is
 SMALL_GROUP_MAX = 9
 _ARITHMETIC_CUT_BELOW = 3
@@ -321,8 +327,14 @@ def rank_universe(
 
     # Sort best-first; tie-break by ticker for determinism.
     ranked.sort(key=lambda r: (r.combined_rank, r.ticker))
+    group_start = 0
     for i, r in enumerate(ranked):
-        r.verdict = _verdict_for_position(i, n, cut, k, percentile)
+        if i and ranked[i - 1].combined_rank != r.combined_rank:
+            group_start = i
+        # B25-3 (TIE_VERDICT_RULE): names tied on the combined rank share the verdict of the tie group's BEST
+        # position, so the alphabet never splits a tie across a cut ("alphabetical" restores the old behaviour).
+        at = group_start if TIE_VERDICT_RULE == "best_position" else i
+        r.verdict = _verdict_for_position(at, n, cut, k, percentile)
         r.rank_position = i + 1          # record position (no effect on the sort/cut)
     assign_cohort_positions(ranked)      # display-only #N of M (RANK-DISPLAY-1)
     return ranked + excluded

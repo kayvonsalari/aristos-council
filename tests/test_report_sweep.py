@@ -391,11 +391,15 @@ def test_each_rule_fires_on_the_shape_it_names():
 
 def test_the_structured_rules_fire_on_a_contradiction():
     from aristos_council.company_report import LensVote, build_agreement
-    ranked = [SimpleNamespace(verdict=v, excluded=False) for v in ("buy", "hold", "hold")]
+    ranked = [SimpleNamespace(verdict=v, excluded=False, combined_rank=i)
+              for i, v in enumerate(("buy", "hold", "hold", "hold", "hold"))]       # 5 names: a lens needs 5 (B25-1)
     assert sweep.buy_without_sell_findings("lens", ranked)
-    ranked[-1] = SimpleNamespace(verdict="sell", excluded=False)
+    ranked[-1] = SimpleNamespace(verdict="sell", excluded=False, combined_rank=4)
     assert not sweep.buy_without_sell_findings("lens", ranked)
-    ranked2 = [SimpleNamespace(verdict="buy", excluded=False)] * 2           # under 3: no cut
+    tied = [SimpleNamespace(verdict=v, excluded=False, combined_rank=r)            # B25-3: a tied bottom is no SELL
+            for v, r in (("buy", 1), ("hold", 2), ("hold", 3), ("hold", 4), ("hold", 4))]
+    assert not sweep.buy_without_sell_findings("lens", tied)
+    ranked2 = [SimpleNamespace(verdict="buy", excluded=False)] * 2           # under 5: no cut
     assert not sweep.buy_without_sell_findings("lens", ranked2)
 
     votes = [LensVote("a", "A", status="ranked", verdict="sell", position=3, cohort_size=3)]

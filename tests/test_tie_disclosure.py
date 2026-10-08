@@ -138,6 +138,7 @@ _ROWS = [("A", {"f1": 50.0, "f2": 50.0}), ("B", {"f1": 40.0, "f2": 40.0}),
          ("E", {"f1": 10.0, "f2": 20.0})]
 
 
+@pytest.mark.tie_rule("alphabetical")        # written under the old alphabetical tie-break (B25-3)
 def test_flagging_changes_no_verdict_no_score_and_no_position():
     ranked = rank_universe(_ROWS, _SPECS2)
     assert [r.ticker for r in ranked] == ["A", "B", "C", "D", "E"]

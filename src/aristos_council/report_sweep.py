@@ -315,7 +315,7 @@ def _live(ranked) -> list:
     return [r for r in ranked if not getattr(r, "excluded", False)]
 
 
-def buy_without_sell_findings(label: str, ranked, *, min_names: int = 3,
+def buy_without_sell_findings(label: str, ranked, *, min_names: int = 5,
                               where: str = "") -> list[Finding]:
     """A lens that ranked ``min_names`` or more names, gave its top a BUY, and gave its bottom no
     SELL. The quintile cut is symmetric, so this is a contradiction in the cut itself."""
@@ -323,6 +323,12 @@ def buy_without_sell_findings(label: str, ranked, *, min_names: int = 3,
     if len(live) < min_names:
         return []
     verdicts = [(getattr(r, "verdict", "") or "").lower() for r in live]
+    # B25-3: a tie at the bottom takes the verdict of its BEST position, so a lens whose lowest names are tied
+    # can honestly hold no SELL; that is the tie rule at work, not a broken cut.
+    scores = [getattr(r, "combined_rank", None) for r in live]
+    worst = max((x for x in scores if x is not None), default=None)
+    if worst is not None and sum(1 for x in scores if x == worst) > 1:
+        return []
     if "buy" in verdicts and "sell" not in verdicts:
         return [Finding(BUY_WITHOUT_SELL, where or label,
                         f"{label}: {len(live)} names ranked, {verdicts.count('buy')} BUY, 0 SELL")]

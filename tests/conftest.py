@@ -335,3 +335,22 @@ def _pinned_min_group(request):
         yield
     finally:
         _unpin(saved)
+
+
+# --------------------------------------------------------------------------- #
+# B25-3 - tie_rule(name): pin rank_engine.TIE_VERDICT_RULE for a test written under the old alphabetical
+# tie-break (goldens and disclosure tests). Tests ABOUT the new rule live in tests/test_tie_best_position.py.
+# --------------------------------------------------------------------------- #
+@pytest.fixture(autouse=True)
+def _pinned_tie_rule(request):
+    marker = request.node.get_closest_marker("tie_rule")
+    if marker is None:
+        yield
+        return
+    from aristos_council import rank_engine
+    saved = rank_engine.TIE_VERDICT_RULE
+    rank_engine.TIE_VERDICT_RULE = str(marker.args[0])
+    try:
+        yield
+    finally:
+        rank_engine.TIE_VERDICT_RULE = saved
