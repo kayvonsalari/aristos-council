@@ -508,3 +508,29 @@ def test_b23_n2_no_card_ever_shows_text_cut_off_mid_sentence(tmp_path):
         for text in re.findall(r'class="ar-abstain">(.*?)</div>', html):
             assert len(text) <= cc.SHORT_REASON_MAX + 40 and not text.endswith((",", " the", " and", " of"))
     assert "not reported" in cc.balance_sheet_card(report)
+
+
+def _list_page(validation: bool):
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+    from tests.test_merged_multi_report import _multi
+    from tests.test_multi_strategy_run import RAW, SCREENED
+    script = ("import sys, streamlit as st\n" f"sys.path.insert(0, r'{ROOT}')\n"
+              "import app\nfrom aristos_council.ui_text import install\ninstall(st)\n"
+              "app._render_multi_strategy_result(st.session_state['res'])\n")
+    at = AppTest.from_string(script, default_timeout=120)
+    at.session_state["res"] = _multi([SCREENED, RAW])
+    if validation:
+        at.session_state["show_legacy"] = True
+    at.run()
+    assert not at.exception, at.exception
+    return "\n".join(str(getattr(e, "value", "")) for k in ("caption", "markdown", "info", "warning", "success")
+                     for e in at.get(k))
+
+
+def test_b23_n6_the_list_page_hides_the_machinery_header_unless_validation_tools_is_on():
+    off, on = _list_page(False), _list_page(True)
+    for jargon in ("Verdict: deterministic ranker", "Narrative: none", "no LLM ran", "Multi-lens re-grade"):
+        assert jargon not in off, jargon
+    assert "Verdict: deterministic ranker" in on and "no LLM ran" in on
+    assert "Shortlist" in off or "ranked by at least one" in off      # the real content is still there

@@ -2960,7 +2960,8 @@ def _render_multi_strategy_result(multi_result) -> None:
     st.markdown(f"#### {cohort} — {plural(len(ids), 'lens', 'lenses')} × {plural(m.get('universe_size', 0), 'name')}")
     st.caption("Lenses: " + "; ".join(lens_labels.values()))
     st.markdown(f"### {_plain(multi_summary_line(multi_result))}")
-    st.caption(_plain(multi_header_line(multi_result)))
+    if _ids_visible():            # B23-N6: "Verdict: deterministic ranker..." is a validation view
+        st.caption(_plain(multi_header_line(multi_result)))
 
     # SHORTLIST-1/2 — the answer, on screen, ahead of the evidence for it. Both reports
     # have carried this section since SHORTLIST-1; the Run tab carried only the summary
