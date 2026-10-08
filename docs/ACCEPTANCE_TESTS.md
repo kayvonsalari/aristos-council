@@ -223,3 +223,12 @@ UI fix-ups after Batch 21, plus wording and readings fixes. No rank, vote, verdi
 | **B22-T19** | Run JPM with all lenses; read line 2 of "The answer" and the last paragraph "What this cannot tell you". Then run Viking (include small companies). | "No track record exists for this industry yet." appears once, in the answer; "What this cannot tell you" holds only the not-a-prediction sentence. Same for Viking's "outside the tested range (under $5bn)" sentence. |
 | **B22-T20** | Cohort / list: paste three names that every voting lens excludes but Forensic can rank (e.g. three banks with Forensic and a value lens ticked); read the headline above the shortlist. | "2 lenses x 3 names - no voting lens could rank these names (Forensic, a check, ranked 3)" instead of "3 of 3 ranked by at least one". For an ordinary list the headline reads as before ("N of M ranked by at least one"), counting names ranked by a voting lens. |
 | **B22-T21** | Run Ford (F), then GM, then Apple; open Show the workings > Absolute readings > Debt and cash, and read "Other facts". | Ford and GM: a muted line under the debt readings (and at the end of the debt sentence in "Other facts"): "Includes debt of its car-loan arm, which is backed by customer loans, so this overstates the risk." Same in the text, HTML and Markdown downloads. Apple: no such note. The debt and cash numbers are identical with or without the note. |
+
+## Batch 23
+
+Fixes found hand-testing Batch 22. No rank, vote, verdict or rule moved.
+
+| ID | Steps | Expected result |
+|---|---|---|
+| **B23-T1** | Run BYD (1211.HK), all lenses; read "Other facts", the Balance sheet card and Show the workings > Debt and cash. | No "lasts less than a month" and no runway line anywhere: BYD's operating cash flow is positive, so its negative free cash flow is investment, not a cash burn. The balance-sheet card shows net cash and interest cover only. |
+| **B23-T2** | Run Viking (VKTX). Read the Debt and cash sentence in "Other facts", the Balance sheet card, and the workings. | "Debt and cash: it holds $497.6m more cash than debt (balance sheet, Jun 2026); at FY2025's spending ($278.7m) that lasts about 1.8 years." (each figure dated once). The card has a second line "lasts about 1.8 years at FY2025's spending". A company with negative operating cash flow and net debt reads "no cash cushion: spending is funded by debt"; positive operating cash flow, a bank, or a missing figure: no runway line. |

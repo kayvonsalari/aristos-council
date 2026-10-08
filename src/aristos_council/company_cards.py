@@ -204,6 +204,10 @@ def balance_sheet_card(report) -> str:
         sub = ["interest immaterial" if "immaterial" in cover.label else f"interest cover {cover.value:.1f}x"]
     else:
         sub = [f"interest cover: {_why(cover, 'not stated')}"]
+    rw = getattr(dc, "cash_runway", None)                  # B23-N8: only for a genuine cash burn (N1)
+    if rw is not None and rw.available:
+        sub.append(f"lasts {dc.runway_span} at {dc.runway_basis}" if dc.runway_span
+                   else rw.label)
     return ui.stat_card(title, big, sub)
 
 

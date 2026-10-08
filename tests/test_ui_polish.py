@@ -461,3 +461,21 @@ def test_b11_the_finance_arm_note_is_a_muted_caption_on_the_page(tmp_path):
                                                   free_cash_flow=12.5e9))
     at = _render(report)
     assert any("Includes debt of its car-loan arm" in str(c.value) for c in at.caption)
+
+
+# --------------------------------------------------------------------------- #
+# Batch 23
+# --------------------------------------------------------------------------- #
+def test_b23_n8_the_balance_sheet_card_adds_the_runway_only_for_a_genuine_burn(tmp_path):
+    from aristos_council import company_cards as cc
+    from aristos_council.abs_readings import debt_and_cash
+    from tests.test_abs_readings import _viking
+    report = _company_report(tmp_path)
+    report.check.debt_and_cash = debt_and_cash(_viking())
+    card = cc.balance_sheet_card(report)
+    assert "net cash &#36;497.6m" in card and "lasts about 1.8 years at FY2025&#x27;s spending" in card
+    assert "interest cover" in card                                    # the first line is still there
+    byd = debt_and_cash(_viking(total_debt=1.0e9, total_cash=3.8e9, free_cash_flow=-97.7e9,
+                                operating_cash_flow=59.1e9, aligned_annual={"operating_cash_flow": [59.1e9]}))
+    report.check.debt_and_cash = byd
+    assert "lasts" not in cc.balance_sheet_card(report)
