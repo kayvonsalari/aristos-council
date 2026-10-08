@@ -328,9 +328,7 @@ def _happened(report) -> str:
     ranked = [v for v in _voting(report) if v.ranked]
     if ranked:
         bits.append("Voting: " + "; ".join(f"{v.label} {v.result()}" for v in ranked) + ".")
-        note = usable_figures_note(report)
-        if note:
-            bits.append(note[:1].upper() + note[1:])
+        # B23-N5: "14 of 20 had usable figures..." is said ONCE, under the lens table (it was also here)
     else:
         bits.append("No lens voted.")
     groups = _excluded_groups(report)

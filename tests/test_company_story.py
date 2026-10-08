@@ -533,9 +533,10 @@ def test_b22_b3_the_story_and_every_export_use_the_same_words(tmp_path):
     note = usable_figures_note(rep)
     assert note.startswith(f"{total - 3} of {total} had usable figures for ")
     happened = dict(story_paragraphs(rep))["What happened."]
-    assert note[0].upper() + note[1:] in happened
+    assert "had usable figures" not in happened                     # B23-N5: under the table only
     text, html, md = format_company_report(rep), company_report_html(rep), company_report_markdown(rep)
-    assert note in text and note in md and note in html
+    for doc in (text, md, html):
+        assert doc.count(note) == 1, "said once, under the lens table"
 
 
 def test_b22_b4_the_company_story_calls_its_facts_paragraph_other_facts(tmp_path):
