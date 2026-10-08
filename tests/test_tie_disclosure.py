@@ -28,6 +28,11 @@ from aristos_council.rank_engine import (
     format_verdict_cell,
     rank_universe,
 )
+import pytest  # noqa: E402
+
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
 
 
 def _rt(ticker, verdict, combined, *, n=5, excluded=False):

@@ -27,6 +27,10 @@ from aristos_council.data.adapter import (Fundamentals, MarketDataAdapter, Price
 from aristos_council.export.report_html import company_report_html
 from aristos_council.market_index import SOURCE_EODHD_LISTING, IndexRow
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 UNIV_DIR = Path(__file__).resolve().parents[1] / "universes"
 RAW = "magic_formula_raw_v1"
@@ -1060,7 +1064,7 @@ def test_a_lens_that_ranked_only_one_name_reports_too_few_not_rank_1_of_1():
     votes = votes_from_multi(_multi(cohort_size=1), "HLB")
     v = votes[0]
     assert v.status == "too_few" and v.ranked is False
-    assert v.result() == "too few to rank (only 1 company here, not a peer group)"
+    assert v.result() == "too few to rank (1 company)"
     # not counted as a vote in the agreement, but visible as why it did not vote
     agreement = build_agreement(votes)
     assert agreement.buy == () and agreement.hold == () and agreement.sell == ()

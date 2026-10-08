@@ -5,6 +5,11 @@ the agreement line said only "BUY on 0 of 3 votes; 1 lens did not apply"."""
 from aristos_council.company_report import LensVote, build_agreement
 from aristos_council.pipeline import lens_agreement
 from tests.test_agreement import _Row, _multi
+import pytest  # noqa: E402
+
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
 
 
 def _v(label, verdict):

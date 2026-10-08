@@ -62,6 +62,7 @@ def test_a_lens_left_with_two_names_places_none_and_the_sentence_says_so():
     assert "ranked by ALL" not in line                       # the wording that contradicted it
 
 
+@pytest.mark.min_group(3)             # four-name fixture, built under the old three-name rule
 def test_when_every_lens_places_the_names_the_count_is_the_intersection_and_no_aside():
     res = _run(weak=False)
     assert res.meta["graded_by_all"] == 4

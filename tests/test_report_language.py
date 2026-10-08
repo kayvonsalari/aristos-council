@@ -344,9 +344,9 @@ def test_the_summary_line_counts_the_actual_verdicts():
 
 
 def test_a_zero_category_is_omitted_rather_than_printed_as_zero():
-    line = format_summary_line(_verdicts("buy", "hold", "hold"),
-                               universe_size=3, excluded=0)
-    assert line == "1 BUY · 2 HOLD — 3 of 3 names ranked"
+    line = format_summary_line(_verdicts("buy", "hold", "hold", "hold", "hold"),
+                               universe_size=5, excluded=0)             # five: a lens needs 5 to vote (B25-1)
+    assert line == "1 BUY · 4 HOLD — 5 of 5 names ranked"
     assert "SELL" not in line and "0 " not in line
 
 

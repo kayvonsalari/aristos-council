@@ -152,6 +152,8 @@ def lens_rows(report) -> list[dict]:
         if v.status == "ranked":
             where = (f"{ordinal(v.position)} of {v.cohort_size}" if v.position else f"of {v.cohort_size}")
             detail = where + (f", {v.tie_note.strip(' ()')}" if v.tied_with else "")
+            if v.small_group_note:                      # B25-1: a vote on 5-9 companies says so
+                detail += ", " + v.small_group_note
             if v.thin_check_note:                       # B24-D4: said plainly, beside the chip
                 detail += "," + v.thin_check_note
             word, kind = v.word, ui.chip_kind(v.word) if v.votes else "na"

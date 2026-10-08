@@ -2501,8 +2501,11 @@ class MultiStrategyCell:
             pos = f"#{self.position} of {self.cohort_size}" if self.position else "ranked"
             from .report_language import verdict_word
 
+            from .rank_engine import small_group_text
+            small = "" if self.is_check or not small_group_text(self.cohort_size) \
+                else f" · {small_group_text(self.cohort_size)}"          # B25-1
             return (f"{pos} · {verdict_word(self.verdict, check=self.is_check)}"
-                    f"{self.factor_note}")
+                    f"{small}{self.factor_note}")
         if self.status == _EXCLUDED:
             return f"excluded — {self.reason_plain or self.reason}"
         if self.status == _UNRATEABLE:
@@ -2682,10 +2685,26 @@ def _lens_display_name(strategy_id: str, strategies_dir=None) -> str:
         return "a lens"
 
 
+def small_group_line(result) -> str:
+    """B25-1: one sentence naming each VOTING lens whose vote rests on 5 to 9 companies ("" when none)."""
+    from .rank_engine import small_group_text
+    names = getattr(result, "strategy_names", {}) or {}
+    small = []
+    for sid, res in result.results.items():
+        n = len([r for r in res.ranked if not r.excluded])
+        if small_group_text(n) and not _is_check_result(res):
+            small.append(f"{names.get(sid) or sid} ({n})")
+    if not small:
+        return ""
+    return ("Small group: " + ", ".join(small) + " voted on so few companies that the vote is a weak guide; "
+            "each such vote says so beside it.")
+
+
 def verdict_table_note(result) -> str:
-    """``VERDICT_TABLE_NOTE`` plus, when a lens ranked under ten names, the forced-bottom line."""
+    """``VERDICT_TABLE_NOTE`` plus, when a lens ranked under ten names, the forced-bottom line and (B25-1)
+    the small-group sentence."""
     sizes = [len(res.ranked) for res in result.results.values()]
-    extra = forced_bottom_note_multi(sizes)
+    extra = " ".join(x for x in (forced_bottom_note_multi(sizes), small_group_line(result)) if x)
     return f"{VERDICT_TABLE_NOTE} {extra}" if extra else VERDICT_TABLE_NOTE
 
 

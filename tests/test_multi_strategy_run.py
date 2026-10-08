@@ -34,6 +34,10 @@ from aristos_council.pipeline import (
     run_rank_pipeline,
 )
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 SCREENED = "magic_formula_v1"          # prefilters on the magic_value quality/value screen
 RAW = "magic_formula_raw_v1"           # canonical Greenblatt + momentum, NO screens
@@ -163,7 +167,7 @@ def test_a_cohort_under_three_shows_too_few_to_rank_not_a_fake_position():
     from aristos_council.rank_engine import too_few_to_rank_text
 
     expected = too_few_to_rank_text(2)
-    assert expected == "too few to rank (only 2 companies here, not a peer group)"
+    assert expected == "too few to rank (2 companies)"
 
     # The multi-lens grid (combine_rank_results / MultiStrategyCell.render()).
     multi = _multi([SCREENED, RAW])

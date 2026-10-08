@@ -1,4 +1,5 @@
-"""NO-RANK-NO-VOTE-1 — a lens that kept fewer than 3 names casts no vote.
+"""NO-RANK-NO-VOTE-1 — a lens that kept fewer than 5 names casts no vote (it was 3 until B25-1, the
+MIN-GROUP-5 ruling).
 
 Seen: car-maker list TM, GM, F, STLA, HMC, TSLA. Value + Momentum kept 2 names and gave no
 positions, yet its BUY still counted in the shortlist. Such a lens is treated exactly like
@@ -38,10 +39,20 @@ def test_a_two_name_lens_casts_no_vote_in_the_agreement_table():
     assert "(1 did not apply)" in table[0]["BUY votes"]
 
 
-def test_a_lens_with_three_names_still_votes():
+def test_a_lens_with_five_names_still_votes():
     ag = lens_agreement(_multi(
-        a_v1=[_Row("TM", "buy", 1), _Row("GM", "hold", 2), _Row("F", "sell", 3)]))
+        a_v1=[_Row("TM", "buy", 1), _Row("GM", "hold", 2), _Row("F", "hold", 3), _Row("STLA", "hold", 4),
+              _Row("HMC", "sell", 5)]))
     assert [r.ticker for r in ag.rows] == ["TM"] and ag.rows[0].voted == 1
+
+
+def test_a_lens_with_three_or_four_names_casts_no_vote():
+    """B25-1 (MIN-GROUP-5): the line moved from 3 to 5."""
+    for n in (3, 4):
+        names = ["TM", "GM", "F", "STLA"][:n]
+        verdicts = ["buy"] + ["hold"] * (n - 2) + ["sell"]
+        ag = lens_agreement(_multi(a_v1=[_Row(t, v, i) for i, (t, v) in enumerate(zip(names, verdicts), 1)]))
+        assert ag.rows == [] or all(r.voted == 0 for r in ag.rows), n
 
 
 def test_a_lens_that_kept_two_is_a_does_not_apply_on_the_company_page():
@@ -70,11 +81,13 @@ def test_the_count_sentence_and_the_summary_line_use_the_one_wording():
                for r in multi.lens_agreement.rows)
 
 
-def test_summary_line_of_three_or_more_is_unchanged():
+def test_summary_line_of_five_or_more_is_unchanged_and_under_five_says_too_few():
     class R:
         def __init__(self, v): self.verdict, self.excluded = v, False
+    assert format_summary_line([R("buy"), R("hold"), R("hold"), R("hold"), R("sell")], universe_size=5,
+                               excluded=0) == "1 BUY · 3 HOLD · 1 SELL — 5 of 5 names ranked"
     assert format_summary_line([R("buy"), R("hold"), R("sell")], universe_size=3, excluded=0) \
-        == "1 BUY · 1 HOLD · 1 SELL — 3 of 3 names ranked"
+        == "3 passed its rules, too few to rank"
 
 
 def test_a_single_lens_that_kept_two_names_narrates_nothing():

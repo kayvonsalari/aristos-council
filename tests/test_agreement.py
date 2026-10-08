@@ -27,6 +27,10 @@ from aristos_council.pipeline import (SHORTLIST_BAND_CUTOFF, lens_agreement, len
                                       band_mark, check_mark)
 from aristos_council.tools.valuation_band import ValuationBand
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 
 
 @pytest.fixture(autouse=True)

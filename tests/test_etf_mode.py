@@ -20,6 +20,10 @@ from aristos_council.pipeline import (run_multi_strategy_pipeline, run_rank_pipe
                                       valuation_band_table)
 from aristos_council.report_language import kind_gated_note
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 TODAY = date(2026, 6, 30)
 ETF = "etf_dividend_v1"

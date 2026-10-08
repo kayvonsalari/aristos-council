@@ -53,7 +53,7 @@ from .company_check import (CompanyCheckResult, absolute_reading_lines, analyst_
                             run_company_check)
 from .data.adapter import normalize_ticker
 from .peer_table import rank_columns
-from .rank_engine import MIN_RANKABLE_COHORT, too_few_to_rank_text
+from .rank_engine import MIN_RANKABLE_COHORT, small_group_text, too_few_to_rank_text
 from .smallcap_band import SMALLCAP_CEILING_USD
 from .shadow_rank import WouldRank, would_rank
 from .tools.valuation_band import ordinal
@@ -159,6 +159,12 @@ class LensVote:
         return f" (on one test only; {words.get(missing, missing)} had no data)"
 
     @property
+    def small_group_note(self) -> str:
+        """B25-1: "small group: 6 companies" for a lens that voted on 5 to 9 names ("" otherwise). It sits
+        beside the vote everywhere the vote is read: the lens table, the story, the list results, the exports."""
+        return small_group_text(self.cohort_size) if self.ranked and self.votes else ""
+
+    @property
     def tie_note(self) -> str:
         """" (tied with 3)" / " (tied with one other)" when other companies share this one's
         rank-sum, else ""."""
@@ -171,7 +177,8 @@ class LensVote:
             where = (f"{ordinal(self.position)} of {self.cohort_size}" if self.position
                      else f"ranked of {self.cohort_size}")
             note = self.factor_note if with_factor_note else ""
-            return f"{self.word}{self.thin_check_note} - {where}{self.tie_note}{note}"
+            small = f" \u00b7 {self.small_group_note}" if self.small_group_note else ""
+            return f"{self.word}{self.thin_check_note} - {where}{self.tie_note}{small}{note}"
         if self.status == "too_few":
             # NOVOTE-1 item 2.3b — a verdict over fewer than MIN_RANKABLE_COHORT names is
             # arithmetic, not a comparison (the HLB case: "1 of 1" instead of an honest

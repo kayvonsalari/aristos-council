@@ -44,7 +44,7 @@ DOES_NOT_APPLY = "does not apply"
 # PEERS-RANK-RULE (19A): the under-3 rule the lens pages already follow. A rank among fewer than
 # three names is not a ranking, so the column says so in every cell; a column nobody was ranked in
 # (every name excluded or unrateable) is dropped rather than printed empty.
-MIN_RANKED = 3
+from .rank_engine import MIN_RANKABLE_COHORT as MIN_RANKED     # B25-1: under 5 names a column reads "too few to rank"
 TOO_FEW_TO_RANK = "too few to rank"
 ONE_SYSTEM_MARK = "†"
 ONE_SYSTEM_NOTE = f"{ONE_SYSTEM_MARK} counted as a peer on one industry classification only"

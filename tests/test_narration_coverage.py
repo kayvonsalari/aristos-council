@@ -18,6 +18,11 @@ from aristos_council.data.adapter import (
     Fundamentals, MarketDataAdapter, PriceBar, PriceHistory)
 from aristos_council.pipeline import run_rank_pipeline
 from aristos_council.state import Recommendation, Stance
+import pytest  # noqa: E402
+
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
 
 STRAT_DIR = Path(__file__).resolve().parents[1] / "strategies"
 

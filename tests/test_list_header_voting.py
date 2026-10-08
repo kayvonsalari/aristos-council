@@ -3,6 +3,11 @@ them. Only voting lenses count as ranking a name."""
 from aristos_council.pipeline import multi_summary_line
 from tests.test_merged_multi_report import _multi
 from tests.test_multi_strategy_run import RAW, SCREENED
+import pytest  # noqa: E402
+
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
 
 
 def _only_a_check_ranked():

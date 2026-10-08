@@ -47,6 +47,10 @@ from tests.test_multi_strategy_run import (  # the established multi-lens fixtur
     _Adapter4,
 )
 
+# B25-1: built under the old three-name rule; every test ABOUT the five-name rule is in test_min_group_5.py
+pytestmark = pytest.mark.min_group(3)
+
+
 MOMENTUM = "magic_formula_momentum_v1"
 
 
