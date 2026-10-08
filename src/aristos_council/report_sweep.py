@@ -207,6 +207,8 @@ _WORDING: list[tuple[re.Pattern, str, bool]] = [
     (re.compile(r"beat its group by -"), "'beat its group by -x%' (say 'trailed its group by x%')", False),
     (re.compile(r"(?s)of [0-9]+ had usable figures for.*of [0-9]+ had usable figures for"), "'N of M had usable figures' said twice", False),
     (re.compile(r"beat its group by [+][^\n]*no better than picking names at random"), "a record that beat its group called no better than random", False),
+    (re.compile(r"(?s)(falling over both windows|rising over both windows|fell early, recovering since|"
+                r"rose early, giving it back since).*"+chr(92)+"1"), "a fixed reading phrase used twice in one AI section", False),
     (re.compile(r"[Nn]arration check"), "'narration check' (a reader sees 'AI text check')", False),
     (re.compile(r"tied with 1(?![0-9])"), "'tied with 1' (say 'tied with one other')", False),
     (re.compile(r"What survived[.]"), "'What survived.' heading on a company page", True),
