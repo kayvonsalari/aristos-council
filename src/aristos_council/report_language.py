@@ -92,7 +92,9 @@ def format_value(value, unit: str, *, currency: Optional[str] = None) -> str:
     if unit == UNIT_COUNT:
         return f"{int(round(v)):,}"
     if unit == UNIT_SCORE:
-        return f"{v:g}"
+        # B24-E5: a whole score stays whole ("5", "80"); a fractional one (Altman Z) shows two decimals -
+        # "2.33", never the "2.32852" a six-digit %g printed
+        return f"{v:g}" if v == int(v) else f"{v:.2f}"
     return f"{v:,.2f}"                                   # UNIT_RATIO and anything else
 
 

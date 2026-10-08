@@ -185,6 +185,17 @@ def css(theme: str = "dark") -> str:
 .ar-table .ar-reason {{ color: var(--ar-muted); font-size: .8rem; min-width: 220px; }}
 .ar-table .ar-detail {{ color: var(--ar-muted); font-size: .8rem; margin-left: 8px; }}
 
+/* AI text check: a small amber marker at the end of a flagged sentence. The reason shows on hover (desktop)
+   and on focus, i.e. a tap (phone); it is also the title and the aria-label. */
+.ar-flag {{ position: relative; display: inline-block; margin-left: 4px; cursor: help; outline: none;
+  color: var(--ar-hold-fg); background: var(--ar-hold-bg); border-radius: 999px; padding: 0 6px;
+  font-size: .72rem; line-height: 1.5; vertical-align: baseline; }}
+.ar-flag .ar-flag-tip {{ display: none; position: absolute; z-index: 20; left: 0; top: 130%;
+  min-width: 220px; max-width: 320px; white-space: normal; padding: 8px 10px; border-radius: 8px;
+  background: var(--ar-panel); color: var(--ar-text); border: 1px solid var(--ar-border);
+  font-size: .8rem; line-height: 1.4; font-weight: 400; box-shadow: 0 4px 14px rgba(0,0,0,.25); }}
+.ar-flag:hover .ar-flag-tip, .ar-flag:focus .ar-flag-tip {{ display: block; }}
+
 /* start state */
 .ar-empty {{ text-align: center; padding: 44px 20px; margin: 18px 0; }}
 .ar-empty h3 {{ margin: 0 0 8px; font-weight: 600; }}

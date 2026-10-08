@@ -25,7 +25,7 @@ def test_check_components_name_each_factor_value_and_rank():
                               "NVCR")
     assert len(lines) == 3
     assert lines[0].startswith("Accrual ratio: 14.2%, rank 30 of 41")
-    assert "Altman Z-Score: 2.5, rank 12 of 41" in lines[1]
+    assert "Altman Z-Score: 2.50, rank 12 of 41" in lines[1]          # B24-E5: two decimals
     assert "no value on file" in lines[2] and "average rank" in lines[2]
 
 

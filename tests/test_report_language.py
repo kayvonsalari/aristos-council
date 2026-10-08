@@ -719,3 +719,23 @@ def test_the_rules_block_titles_agree_across_surfaces(result):
     assert RULES_SECTION_TITLE.upper() in format_cli_report(result)
     assert f"## {RULES_SECTION_TITLE}" in _markdown(result)
     assert f"<h2>{RULES_SECTION_TITLE}</h2>" in universe_report_html(result)
+
+
+def test_b24_e5_a_fractional_score_shows_two_decimals_and_a_whole_one_stays_whole():
+    """EL.PA's Forensic table printed the Altman Z-Score as "2.32852"."""
+    assert format_value(2.32852, "score") == "2.33"
+    assert format_value(0.5, "score") == "0.50"
+    assert format_value(-1.236, "score") == "-1.24"
+    assert format_value(5.0, "score") == "5" and format_value(80, "score") == "80"
+
+
+def test_b24_e5_the_forensic_components_line_carries_the_rounded_altman_z():
+    from types import SimpleNamespace
+
+    from aristos_council.company_report import _check_components
+    row = SimpleNamespace(ticker="EL.PA", excluded=False, universe_size=21, imputed_factors=[],
+                          factor_ranks={"altman_z": 15.0, "piotroski_f_score": 16.0},
+                          factor_values={"altman_z": 2.32852, "piotroski_f_score": 5.0})
+    lines = _check_components(SimpleNamespace(ranked=[row]), "EL.PA")
+    assert any("Altman Z-Score: 2.33, rank 15 of 21" in ln for ln in lines)
+    assert not any("2.3285" in ln for ln in lines)

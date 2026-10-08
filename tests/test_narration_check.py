@@ -555,5 +555,5 @@ def test_the_annotation_names_both_specialists_and_never_rewrites():
         "sentiment": "News flow is thin but earnings per share grew nicely and the balance.",
     }
     flags = check_specialist_repetition(theses)
-    assert flags and flags[0].startswith("[⚠ narration check:")
+    assert flags and flags[0].startswith("[⚠ AI text check:")
     assert "fundamental" in flags[0] and "sentiment" in flags[0]

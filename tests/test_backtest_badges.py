@@ -190,3 +190,78 @@ def test_b23_n3_a_negative_result_trailed_its_group_zero_matched_it_and_a_positi
     assert mk(0.045).startswith("beat its group by +4.5% a year on average")
     for zero in (0.0, 0.00004, -0.00004):
         assert mk(zero).startswith("matched its group ·"), zero
+
+
+# --------------------------------------------------------------------------- #
+# B24-E2 - the explanation is generated from the test(s) that actually failed
+# --------------------------------------------------------------------------- #
+def _badge(excess, luck, yp, years=10, label="no edge shown here"):
+    from aristos_council.backtest import Badge
+    return Badge(label=label, verdict="not proven", mean_excess=excess, luck_pct=luck, years_positive=yp,
+                 years_measured=years, rounds_held=108)
+
+
+def test_b24_e2_failed_on_years_only():
+    b = _badge(0.0257, 0.03, 5)            # beat its group by 2.6%, a random pick matched it 3% of the time
+    assert b.failed_tests() == ("years",)
+    assert b.why_line() == "Beat its group and most random picks, but in only 5 of 10 years (the bar is 6)."
+
+
+def test_b24_e2_failed_on_luck_only():
+    b = _badge(0.03, 0.30, 7)
+    assert b.failed_tests() == ("luck",)
+    assert b.why_line() == ("Beat its group in most years, but a random pick did as well 30% of the time, "
+                            "so the edge may be luck (the bar is 5%).")
+
+
+def test_b24_e2_failed_on_the_excess_return_only():
+    b = _badge(0.01, 0.04, 7)
+    assert b.failed_tests() == ("excess",)
+    assert b.why_line() == ("Won in most years and beat most random picks, but beat its group by only 1.0% a "
+                            "year (the bar is 2%).")
+    assert "trailed its group by 1.5% a year" in _badge(-0.015, 0.04, 7).why_line()
+
+
+def test_b24_e2_failed_on_several_lists_them_all():
+    b = _badge(-0.015, 0.66, 4)
+    assert b.failed_tests() == ("excess", "years", "luck")
+    assert b.why_line() == ("Fell short on the average edge (trailed its group by 1.5% a year; the bar is 2%), "
+                            "the winning years (only 4 of 10; the bar is 6) and luck (a random pick did as "
+                            "well 66% of the time; the bar is 5%).")
+
+
+def test_b24_e2_the_el_pa_magic_formula_raw_and_quality_records_no_longer_contradict_themselves():
+    """EL.PA 2026-10-08: "+2.6% a year ... a random pick did as well 6% of the time - ... does no better than
+    picking names at random". It beat its group; it failed the winning-years test (5 of 10; the bar is 6) and
+    missed the luck bar by a hair (5.6% against 5%)."""
+    for edge, luck in ((0.025736, 0.056), (0.034783, 0.058)):
+        b = _badge(edge, luck, 5)
+        text = b.explanation()
+        assert b.failed_tests() == ("years", "luck")
+        assert "no better than picking names at random" not in text
+        assert "the winning years (only 5 of 10; the bar is 6)" in text and "luck (a random pick did as well" in text
+
+
+def test_b24_e2_a_missing_luck_figure_is_said_not_hidden():
+    assert "luck was never measured" in _badge(0.03, None, 7).why_line()
+
+
+def test_b24_e2_other_labels_keep_their_own_meaning_and_nothing_failed_gives_no_line():
+    from aristos_council.backtest import BADGE_MEANINGS
+    assert _badge(0.03, 0.01, 7, label="proven here").explanation() == BADGE_MEANINGS["proven here"]
+    assert _badge(0.03, 0.01, 7).why_line() == ""
+    assert _badge(0.05, 0.95, 4, label="worked against you here").explanation() == BADGE_MEANINGS[
+        "worked against you here"]
+
+
+def test_b24_e2_the_lens_note_uses_the_generated_sentence(tmp_path):
+    from dataclasses import replace
+
+    from aristos_council.company_story import table_rows
+    from tests.test_company_report import RAW, _run
+    rep = _run([RAW], tmp_path=tmp_path)
+    rep.votes = [replace(v, badge=_badge(0.0257, 0.056, 5)) if v.ranked else v for v in rep.votes]
+    notes = [r.badge_detail for r in table_rows(rep) if r.badge_detail]
+    assert notes and "beat its group by +2.6% a year" in notes[0]
+    assert "Fell short on the winning years (only 5 of 10; the bar is 6)" in notes[0]
+    assert "no better than picking names at random" not in notes[0]

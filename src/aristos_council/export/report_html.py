@@ -71,7 +71,7 @@ _STATUS_HEX = {"PASS": "#2E7D32", "FAIL": "#B23B3B", "NOT-EVALUATED": "#B8860B"}
 # callout — the text itself is never altered.
 _STAMP_OPEN = "[⚠"
 # The claim a stamp quotes, so the callout can be attached to the paragraph stating it.
-_STAMP_CLAIM = re.compile(r'narration check:\s*"(.*)"\s+(?:contradicts|orders)')
+_STAMP_CLAIM = re.compile(r'(?:narration|AI text) check:\s*"(.*?)"\s+')
 
 # Inline markdown the narrator writes. A BARE `_` is NEVER touched — it is load-bearing
 # in the factor keys the prose quotes verbatim (fund_size, momentum_12m), the same reason
@@ -768,6 +768,22 @@ def _blocks(prose: str) -> list[tuple[str, str]]:
     return blocks
 
 
+def narration_reader_html(narrative: str) -> str:
+    """B24-E9 - the READER view of an AI section: the prose with a small amber marker at the end of each
+    flagged sentence (hover or tap for the reason) and NO list of flags below it. The full list lives
+    under "Show the workings" and in the downloaded reports (``_narration_html``)."""
+    from .. import ai_text_check as atc
+
+    prose, stamps = atc.split(narrative)
+    marked, swaps, unplaced = atc.mark_sentences(prose, stamps)
+    blocks = _blocks(marked)
+    out = "".join(block_html for _plain, block_html in blocks)
+    out = atc.apply_swaps(out, swaps)
+    if unplaced:             # a flag whose sentence cannot be found is still marked, at the section's end
+        out += "<p>" + "".join(atc.marker_html(atc.plain_reason(s)) for s in unplaced) + "</p>"
+    return out or "<p>(no narrative produced)</p>"
+
+
 def _narration_html(narrative: str) -> str:
     """One name's narration as HTML: the prose in blocks, each ⚠ stamp rendered as a
     warning callout DIRECTLY AFTER the block stating the sentence it quotes. A stamp whose
@@ -786,11 +802,11 @@ def _narration_html(narrative: str) -> str:
             m = _STAMP_CLAIM.search(stamp)
             claim = _norm(m.group(1)) if m else ""
             if claim and claim in haystack:
-                out.append(_callout(stamp, label="narration check"))
+                out.append(_callout(stamp, label="AI text check"))
             else:
                 still.append(stamp)
         pending = still
-    out.extend(_callout(s, label="narration check") for s in pending)
+    out.extend(_callout(s, label="AI text check") for s in pending)
     if not out:
         out.append("<p>(no narrative produced)</p>")
     return "".join(out)
@@ -1564,6 +1580,9 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
                      '<p class="note">Narration only — never a vote; the agreement above is '
                      "the verdict of record.</p>")
         op = report.council_opinion
+        if op.available:
+            from .. import ai_text_check as _atc
+            parts.append(f'<p class="note">{_esc(_atc.top_line(_atc.count(op.narrative or "")))}</p>')
         parts.append(_narration_html(op.narrative) if op.available
                      else f'<p class="note">{_esc(op.note)}</p>')
         parts.append("</section>")
@@ -1590,6 +1609,8 @@ def _story_html(report) -> str:
            f"<p><strong>{_esc(page.answer[0])}</strong></p><p>{_esc(page.answer[1])}</p></section>"]
     title = READER_SECTION_TITLE if page.model_summary else SECTION_STORY
     body = [f'<section class="section" id="story"><h2>{_esc(title)}</h2>']
+    if page.summary_check:
+        body.append(f'<p class="note">{_esc(page.summary_check)}</p>')
     body += [f"<p><strong>{_esc(lead)}</strong> {_esc(text)}</p>" for lead, text in page.paragraphs]
     if page.model_summary:
         body.append(f'<p class="note">{_esc(READER_SECTION_NOTE)}</p>')

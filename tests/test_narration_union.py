@@ -660,7 +660,7 @@ def test_the_multi_lens_stage_routes_the_check_per_lens():
     runners = _CountingRunners()
     runners.rationale = " ".join(citations)
     narrated, _ = _narrated([SCREENED, RAW], runners=runners)
-    assert "narration check" not in narrated.narratives[ticker], \
+    assert "AI text check" not in narrated.narratives[ticker], \
         narrated.narratives[ticker]
 
 

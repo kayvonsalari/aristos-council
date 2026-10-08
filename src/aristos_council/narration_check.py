@@ -660,19 +660,52 @@ def _claim(sentence: str) -> str:
     return re.sub(r"\s+", " ", sentence).strip()
 
 
+_SPLIT = re.compile(r"(?<!\w)\.|\.(?!\w)|[!?\n]+")
+_HEADING_LINE = re.compile(r"^[ \t]{0,3}(?:#{1,6}[ \t]+(?P<h>.+?)|\*\*(?P<b>[^*\n]+?)\*\*)[ \t]*$", re.M)
+
+
+def _sentences_at(text: str) -> list[tuple[int, str]]:
+    """``[(offset, sentence)]`` - the same split as ``_sentences``, with where each starts."""
+    out, last = [], 0
+    for m in list(_SPLIT.finditer(text)) + [None]:
+        end = m.start() if m is not None else len(text)
+        seg = text[last:end]
+        if seg.strip():
+            out.append((last + (len(seg) - len(seg.lstrip())), seg.strip()))
+        last = m.end() if m is not None else len(text)
+    return out
+
+
+def _headings(text: str) -> list[tuple[int, str]]:
+    """``[(offset, heading text)]`` for the markdown headings (and bold-only lines) of a narrative."""
+    return [(m.start(), (m.group("h") or m.group("b") or "").strip())
+            for m in _HEADING_LINE.finditer(text)]
+
+
+def _heading_at(headings: list[tuple[int, str]], offset: int) -> str:
+    """The heading in force at ``offset`` ("" before the first one)."""
+    current = ""
+    for pos, title in headings:
+        if pos <= offset:
+            current = title
+        else:
+            break
+    return current
+
+
 def _annotation(claim: str) -> str:
-    return (f'[⚠ narration check: "{claim}" contradicts rank table — '
+    return (f'[⚠ AI text check: "{claim}" contradicts rank table — '
             f'table is authoritative]')
 
 
 def _tie_annotation(claim: str, partner: str, score: str) -> str:
-    return (f'[⚠ narration check: "{claim}" orders a TIED pair — tied with {partner} at '
+    return (f'[⚠ AI text check: "{claim}" orders a TIED pair — tied with {partner} at '
             f'combined rank-sum {score}; the verdict split on the alphabetical tie-break, '
             f'not a score difference — table is authoritative]')
 
 
 def _verdict_annotation(claim: str, peer: str, claimed: str, actual: str) -> str:
-    return (f'[⚠ narration check: "{claim}" misstates {peer}\'s verdict — it says '
+    return (f'[⚠ AI text check: "{claim}" misstates {peer}\'s verdict — it says '
             f'{claimed.upper()}, the table says {actual.upper()}; table is authoritative]')
 
 
@@ -782,7 +815,7 @@ def _names_two_lenses(sentence: str, lens_labels: list[str]) -> bool:
 
 
 def _cross_lens_annotation(claim: str) -> str:
-    return (f'[⚠ narration check: "{claim}" weighs the lenses against each other — '
+    return (f'[⚠ AI text check: "{claim}" weighs the lenses against each other — '
             "the narrator attributes, it does not adjudicate; each lens's verdict stands "
             "as issued]")
 
@@ -841,9 +874,9 @@ def _named_lens(sentence: str, lens_labels: list[str]) -> Optional[str]:
 def _rank_attribution_annotation(claim: str, cite: str, true_lens: str,
                                  named_lens: Optional[str]) -> str:
     if named_lens:
-        return (f'[⚠ narration check: "{claim}" attributes {true_lens}\'s {cite} rank '
+        return (f'[⚠ AI text check: "{claim}" attributes {true_lens}\'s {cite} rank '
                 f"to {named_lens} — it belongs to {true_lens}]")
-    return (f'[⚠ narration check: "{claim}" cites a {cite} rank without naming the '
+    return (f'[⚠ AI text check: "{claim}" cites a {cite} rank without naming the '
             f"lens it belongs to ({true_lens})]")
 
 
@@ -878,14 +911,19 @@ def check_rank_attribution(narrative: str, lens_verdicts: list[dict] | None) -> 
                 owner[key] = label
     flags: list[str] = []
     seen: set[str] = set()
-    for sentence in _sentences(narrative):
+    headings = _headings(narrative)
+    for offset, sentence in _sentences_at(narrative):
+        heading = _heading_at(headings, offset)
         for match in _WORD_RANK.finditer(sentence):
             key = (int(match.group(1)), int(match.group(2)))
             if key not in owner or key in ambiguous:
                 continue
             true_lens = owner[key]
-            if re.search(rf"\b{re.escape(_lens_core(true_lens))}\b", sentence, re.I):
+            core = re.escape(_lens_core(true_lens))
+            if re.search(rf"\b{core}\b", sentence, re.I):
                 continue                                  # already correctly attributed
+            if heading and re.search(rf"\b{core}\b", heading, re.I):
+                continue                  # E1: the section heading ("Forensic - why") names the lens
             claim = _claim(sentence)
             if claim in seen:
                 continue
@@ -908,10 +946,10 @@ _WOULD_RANK = re.compile(r"\bwould(?:\s+have)?\s+(?:rank|ranked|sit|place|be\s+r
 
 def _would_rank_annotation(claim: str, lens: str, cite: Optional[str]) -> str:
     if cite:
-        return (f'[⚠ narration check: "{claim}" cites {lens}\'s {cite} without saying it is only '
+        return (f'[⚠ AI text check: "{claim}" cites {lens}\'s {cite} without saying it is only '
                 "where the company WOULD rank on that lens's measures — the lens did not apply, "
                 "so it is not a vote and not a verdict]")
-    return (f'[⚠ narration check: "{claim}" gives {lens} a verdict or a vote, but that lens did '
+    return (f'[⚠ AI text check: "{claim}" gives {lens} a verdict or a vote, but that lens did '
             "not apply — it has only a would-rank reading, which is not a vote and never a "
             "verdict]")
 
@@ -936,44 +974,92 @@ def _gives_verdict_or_vote(parsed: str) -> bool:
                 and not _EXCLUSION_WORD.search(text))
 
 
+def _blank(m: "re.Match") -> str:
+    return " " * len(m.group(0))
+
+
+def _tokens_by_lens(parsed: str, lens_cores: dict[str, str]) -> dict[str, bool]:
+    """``{lens label: True}`` for each lens that a verdict word (BUY/HOLD/SELL) or a vote is attached to
+    in this sentence. A token belongs to the nearest named lens BEFORE it, so "the Defensive Income lens cited the
+    fall, and the Magic Formula RAW SELL and Earnings Power Value HOLD are consistent" gives the SELL to
+    Magic Formula RAW and the HOLD to Earnings Power Value, never to Defensive Income (E1)."""
+    from .narration_schema import _NEGATED_VERDICTS
+
+    cleaned = _VOTING_ADJECTIVE.sub(_blank, _NEGATED_VERDICTS.sub(_blank, parsed))
+    spots = []
+    for label, core in lens_cores.items():
+        for m in re.finditer(rf"\b{re.escape(core)}\b", cleaned, re.I):
+            spots.append((m.start(), m.end(), label))
+    tokens = [m.start() for m in _VERDICT_WORD.finditer(cleaned)]
+    if (_VOTE_WORD.search(cleaned) and not _VOTE_NEGATED.search(cleaned)
+            and not _EXCLUSION_WORD.search(cleaned)):
+        tokens += [m.start() for m in _VOTE_WORD.finditer(cleaned)]
+    owners: dict[str, bool] = {}
+    for t in tokens:
+        if not spots:
+            continue
+        before = [sp for sp in spots if sp[0] <= t]
+        # the lens a verdict word FOLLOWS is its subject ("Cyclical Income issued a BUY while Magic Formula
+        # RAW issued a SELL"); only a verdict that precedes every lens name ("SELL from Value + Momentum")
+        # falls to the first one after it
+        owner = max(before, key=lambda sp: sp[0]) if before else min(spots, key=lambda sp: sp[0])
+        owners[owner[2]] = True
+    return owners
+
+
 def check_would_rank(narrative: str, verdicts: list[dict] | None) -> list[str]:
-    """LENS-EXPAND-1b — annotations for a sentence that treats a lens's "would have ranked"
+    """LENS-EXPAND-1b - annotations for a sentence that treats a lens's "would have ranked"
     reading as more than it is.
 
     A lens whose entry rules excluded the company may carry where the company WOULD have ranked on
     that lens's measures (``verdicts[i]["would_rank"]``). The council may mention it only as "would
-    rank". Flagged: (a) a sentence naming such a lens that also carries a capitalised verdict word or
-    a vote ("Growth votes BUY", "Growth ... BUY") without "would rank"; (b) a sentence quoting the
-    reading's own "Nth of M" pair without "would rank". Conservative like its neighbours: it never
-    adjudicates a sentence that says "would rank", and with no would-rank entries it does nothing —
-    so a run that computed none is byte-unchanged."""
+    rank". Flagged: (a) a sentence that gives such a lens a vote or a verdict (a capitalised BUY/HOLD/SELL
+    or "votes" attached to THAT lens's name, not to another lens named in the same sentence); (b) a
+    sentence quoting the reading's own "Nth of M" pair without "would rank" - unless a lens the sentence
+    (or its section heading) names really holds that pair (E1: Magic Formula RAW genuinely was 20th of
+    21 and so was Value + Momentum's would-rank; "Magic Formula RAW ranked it 20th of 21" is TRUE).
+    Describing why a lens excluded the company is not a verdict. With no would-rank entries it does
+    nothing - so a run that computed none is byte-unchanged."""
     shadows = [v for v in (verdicts or []) if v.get("would_rank") and v.get("lens")]
     if not narrative or not shadows:
         return []
+    lens_cores = {str(v["lens"]): _lens_core(str(v["lens"])) for v in (verdicts or [])
+                  if v.get("lens") and _lens_core(str(v["lens"]))}
+    real = {str(v["lens"]): (int(v["position"]), int(v["cohort_size"])) for v in (verdicts or [])
+            if v.get("lens") and v.get("position") and v.get("cohort_size")}
     flags: list[str] = []
     seen: set[str] = set()
-    for sentence in _sentences(narrative):
+    headings = _headings(narrative)
+    for offset, sentence in _sentences_at(narrative):
         parsed = _demark(sentence)
         if _WOULD_RANK.search(parsed):
             continue
+        heading = _heading_at(headings, offset)
+        named_now = {label for label, core in lens_cores.items()
+                     if re.search(rf"\b{re.escape(core)}\b", parsed, re.I)}
+        named_any = named_now | {label for label, core in lens_cores.items()
+                                 if heading and re.search(rf"\b{re.escape(core)}\b", heading, re.I)}
+        owners = _tokens_by_lens(parsed, lens_cores)
         for v in shadows:
             lens = str(v["lens"])
-            core = _lens_core(lens)
-            named = bool(core and re.search(rf"\b{re.escape(core)}\b", parsed, re.I))
-            gives_verdict = _gives_verdict_or_vote(parsed)
+            gives_verdict = lens in named_now and bool(owners.get(lens))
             cite = None
             pos, size = v.get("would_rank_position"), v.get("would_rank_of")
             if pos and size:
                 for m in _WORD_RANK.finditer(parsed):
-                    if (int(m.group(1)), int(m.group(2))) == (int(pos), int(size)):
-                        cite = m.group(0)
-            if not ((named and gives_verdict) or cite):
+                    pair = (int(m.group(1)), int(m.group(2)))
+                    if pair != (int(pos), int(size)):
+                        continue
+                    if any(real.get(other) == pair for other in named_any if other != lens):
+                        continue          # E1: a lens the sentence names really holds this rank
+                    cite = m.group(0)
+            if not (gives_verdict or cite):
                 continue
             claim = _claim(sentence)
             if claim in seen:
                 continue
             seen.add(claim)
-            flags.append(_would_rank_annotation(claim, lens, None if (named and gives_verdict) else cite))
+            flags.append(_would_rank_annotation(claim, lens, None if gives_verdict else cite))
     return flags
 
 
@@ -1116,7 +1202,7 @@ def check_specialist_repetition(theses: dict) -> list[str]:
                     holders.append(who)
     for phrase, holders in seen_phrases.items():
         flags.append(
-            f'[⚠ narration check: "{phrase}" appears near-verbatim in {len(holders)} '
+            f'[⚠ AI text check: "{phrase}" appears near-verbatim in {len(holders)} '
             f'specialists\' theses ({", ".join(holders)}) — convergent phrasing on the '
             f'same figures, not independent domain analysis]')
     return flags

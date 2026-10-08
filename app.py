@@ -1375,7 +1375,7 @@ _COUNCIL_HELP = ("The four specialists, a critic and a narrator — the same cou
                 "rest of Aristos uses — read this company's votes, marks and readings "
                 "and write about them. They never vote: the agreement above stays the "
                 "verdict of record. About six model calls, mostly on the cheap tier; "
-                "off unless you tick it.")
+                "off unless you tick it. Adds a few minutes to the run.")
 
 
 def equal_vote_caption(choices) -> str:
@@ -1394,6 +1394,7 @@ def company_page_offered(mode: str) -> bool:
 
 
 OPTIONAL_EXTRAS_HEADING = "Optional extras (paid AI calls)"
+OPTIONAL_EXTRAS_TIME = "Adds a few minutes to the run."          # B24-E6: a council + summary run took 6.6 min
 
 
 def render_run_options(choices, *, input_kind: str, show_council: bool,
@@ -1426,8 +1427,8 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
     if show_validation:
         lens_selection_captions(strategies)
     # B22-U3: the two paid AI extras are not lenses - their own small heading sets them apart from the grid
-    st.markdown(f'<div class="ar-sub" style="margin-top:14px">{OPTIONAL_EXTRAS_HEADING}</div>',
-                unsafe_allow_html=True)
+    st.markdown(f'<div class="ar-sub" style="margin-top:14px">{OPTIONAL_EXTRAS_HEADING}<br>'
+                f"{OPTIONAL_EXTRAS_TIME}</div>", unsafe_allow_html=True)
     _sync_from_store(f"opt_summary_{input_kind}", "summary", switched=switched)
     with_summary = st.checkbox(
         "Plain-English summary", value=False, key=f"opt_summary_{input_kind}",
@@ -2467,9 +2468,9 @@ def _shortlist_markdown(ag, lens_agreement_table) -> list[str]:
     if band_line:
         lines += ["", f"**{band_line}**"]
     if ag.no_buy_count:
-        plural = "s" if ag.no_buy_count != 1 else ""
-        lines += ["", f"_{ag.no_buy_count} name{plural} had no BUY from any lens, and "
-                      "are not listed here._"]
+        one = ag.no_buy_count == 1                 # the Markdown line had the grammar slip fixed elsewhere
+        lines += ["", f"_{ag.no_buy_count} name{'' if one else 's'} had no BUY from any lens, and "
+                      f"{'is' if one else 'are'} not listed here._"]
     return lines
 
 
@@ -4387,6 +4388,8 @@ def _render_company_report(report) -> None:
     st.markdown(page.answer[1])
 
     st.subheader(READER_SECTION_TITLE if page.model_summary else SECTION_STORY)
+    if page.summary_check:                                  # B24-E9: one line at the top of an AI section
+        st.caption(page.summary_check)
     for lead, text in page.paragraphs:
         st.markdown(f"**{lead}** {text}")
     if page.model_summary:
@@ -4428,9 +4431,13 @@ def _render_company_report(report) -> None:
             # not st.markdown's own parser: a structural-warning banner's "> **…**"
             # lines and the narrator's own GFM table were reaching the screen as raw
             # markdown text (literal "&gt;", "**", "|") rather than rendering.
-            from aristos_council.export.report_html import _narration_html
+            from aristos_council import ai_text_check as _atc
+            from aristos_council.export.report_html import narration_reader_html
 
-            html_block = _narration_html(op.narrative) if op.narrative \
+            # B24-E9: flagged sentences carry a small amber marker (hover or tap for the reason) and there
+            # is no list of flags below the text - the full list is under "Show the workings"
+            st.caption(_atc.top_line(_atc.count(op.narrative or "")))
+            html_block = narration_reader_html(op.narrative) if op.narrative \
                 else "<p><em>(no narrative produced)</em></p>"
             # DOLLAR-MATH-1: an HTML block is not escaped by the app-wide wrapper (a backslash
             # would print), so a "$" here becomes its character reference, which the maths
@@ -4456,6 +4463,9 @@ def _render_company_report(report) -> None:
         _line = narration_check_line(report)
         if _line:
             st.caption(_line)
+            from aristos_council.company_story import ai_flag_list
+            for _claim_text, _why in ai_flag_list(report):    # the full list, each flag quoting its sentence
+                st.markdown(f"- \"{_claim_text}\" - {_why}")
         _notes = [r for r in table_rows(report) if r.full_reason or r.badge_detail]
         if _notes:
             st.markdown("**Lens notes**")

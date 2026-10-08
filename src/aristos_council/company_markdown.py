@@ -47,6 +47,8 @@ def company_report_markdown(report) -> str:
 
     from .reader import READER_SECTION_NOTE, READER_SECTION_TITLE
     out += [f"## {READER_SECTION_TITLE if page.model_summary else SECTION_STORY}", ""]
+    if page.summary_check:
+        out += [f"*{page.summary_check}*", ""]
     for lead, text in page.paragraphs:
         out += [f"**{lead}** {text}", ""]
     if page.model_summary:
@@ -79,6 +81,9 @@ def company_report_markdown(report) -> str:
         op = report.council_opinion
         out += [f"## {'Council opinion'}", "",
                 "*Narration only — never a vote; the agreement above is the verdict of record.*", ""]
+        if op.available:
+            from .ai_text_check import count, top_line
+            out += [f"*{top_line(count(op.narrative or ''))}*", ""]
         out += [(op.narrative or "(no narrative produced)") if op.available else op.note, ""]
 
     out += [f"## {SECTION_WORKINGS}", "", "### Valuation band", "",

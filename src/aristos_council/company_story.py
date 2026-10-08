@@ -269,7 +269,7 @@ def _reason_line(report) -> str:
                        f"({_count(len(top_votes))} of them): {top_reason}.")
     for v in _checks(report):
         if v.ranked and ag is not None and ag.checks.get(v.label):
-            out.append(f"{v.label} reads {ag.checks[v.label]}.")
+            out.append(f"{v.label} reads {ag.checks[v.label]}{ag.check_notes.get(v.label, '')}.")
     tail = untested_sentence(report)
     if tail:
         out.append(tail)
@@ -336,7 +336,8 @@ def _happened(report) -> str:
         bits.append(f"{_cap(_join([v.label for v in vs]))} did not apply: {reason}.")
     for v in _checks(report):
         if v.ranked and ag is not None and ag.checks.get(v.label):
-            bits.append(f"{v.label} marks it {ag.checks[v.label]} and does not vote.")
+            bits.append(f"{v.label} marks it {ag.checks[v.label]}{ag.check_notes.get(v.label, '')} "
+                        "and does not vote.")
     band = _band_sentence(report)
     if band:
         bits.append(band)
@@ -553,7 +554,7 @@ def table_rows(report) -> list[TableRow]:
     for v in report.votes:
         detail = ""
         if v.badge is not None:
-            detail = f"{v.badge.detail_line()} - {BADGE_MEANINGS[v.badge.label]}"
+            detail = f"{v.badge.detail_line()} - {v.badge.explanation()}"      # B24-E2
         rows.append(TableRow(lens=v.label, outcome=_outcome(v),
                              badge=v.badge.label if v.badge is not None else "none",
                              reason=_row_reason(v), asks=v.asks, badge_detail=detail,
@@ -623,6 +624,7 @@ class StoryPage:
     caption: str                  # the track-record line under the table
     no_vote: str                  # shown instead of the table when no lens was ticked
     group_note: str = ""          # "14 of 20 had usable figures for ..." (B22-B3), muted, under the table
+    summary_check: str = ""       # "AI text check: no issues found" above a model summary (B24-E9)
 
 
 def story_page(report) -> StoryPage:
@@ -640,17 +642,40 @@ def story_page(report) -> StoryPage:
         note=summary_note(report), tag=tuple(small_company_tag(report)),
         headers=tuple(TABLE_HEADERS), rows=tuple(table_rows(report)), caption=track_caption(report),
         no_vote="" if report.votes else (report.no_vote_reason or NO_LENS_REASON),
-        group_note=usable_figures_note(report))
+        group_note=usable_figures_note(report),
+        summary_check=_summary_check_line(model))
+
+
+def _summary_check_line(model_summary: bool) -> str:
+    """The AI text check's line above a model summary. A summary that reaches the page has already passed
+    the READER-5 checks (a number, a name, a role or a count it got wrong WITHHOLDS it), so it reads "no
+    issues found"; a withheld summary shows nothing here."""
+    from .ai_text_check import top_line
+    return top_line(0) if model_summary else ""
 
 
 def narration_check_line(report) -> str:
-    """One line for the folded workings: how many statements the narration check flagged in the
-    council opinion ("" when no council opinion was asked for or none was written)."""
+    """One line for the folded workings: how the AI text check read the council opinion ("" when no
+    council opinion was asked for or none was written). B24-E9: it is called the AI text check, and the
+    sentences it flagged are marked where they appear; the full list sits under the workings."""
+    from .ai_text_check import LABEL, count
+
     op = report.council_opinion
     if op is None or not getattr(op, "available", False):
         return ""
-    n = (op.narrative or "").count("narration check:")
+    n = count(op.narrative or "")
     if not n:
-        return "Narration check: no statement in the council opinion was flagged."
-    return (f"Narration check: {plural(n, 'statement')} in the council opinion "
+        return f"{LABEL}: no issues found in the council opinion."
+    return (f"{LABEL}: {plural(n, 'sentence')} in the council opinion "
             f"{'was' if n == 1 else 'were'} flagged; each is marked where it appears.")
+
+
+def ai_flag_list(report) -> list[tuple[str, str]]:
+    """``[(quoted sentence, plain reason)]`` for every sentence the AI text check flagged in the council
+    opinion - the full list kept under "Show the workings" (the reader view only marks the sentences)."""
+    from .ai_text_check import flag_list
+
+    op = report.council_opinion
+    if op is None or not getattr(op, "available", False):
+        return []
+    return flag_list(op.narrative or "")

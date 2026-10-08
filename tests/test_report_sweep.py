@@ -201,7 +201,12 @@ def test_the_batch22_wording_rule_fires_on_each_shape_it_names():
 
 
 FOLD_B22 = "\nSHOW THE WORKINGS"
-_B22_BAD = ["The answer\nWhat happened. 14 of 20 had usable figures for Quality.\nLens by lens\n14 of 20 had usable figures for Quality.",
+_B22_BAD = ["Forensic doubted - 9th of 16 ranked on 1 of 3 factors",
+            "not evaluated - multiple implausible (265x); inputs suspect, not stated", "1 name had no BUY from any lens, and are not listed here.",
+            "a - falling over both windows - sustained weakness. b - falling over both windows - sustained weakness.",
+            "beat its group by +2.6% a year on average - In this cohort, this lens's record does not clear the bar, and does no better than picking names at random.",
+            "Narration check: 1 statement in the council opinion was flagged.",
+            "The answer\nWhat happened. 14 of 20 had usable figures for Quality.\nLens by lens\n14 of 20 had usable figures for Quality.",
             "beat its group by -1.1% a year on average",
             "The answer\nNo track record exists for this industry yet.\nWhat this cannot tell you. x. No track record exists for this industry yet.",
             "the rule allows at most 1.0x. on its measures it would rank 6th", "Quality track record: mean excess -1.1%/yr " + chr(183) + " luck 51% " + chr(183) + " 108 rounds held",
@@ -209,7 +214,12 @@ _B22_BAD = ["The answer\nWhat happened. 14 of 20 had usable figures for Quality.
             "The answer\nBYD was ranked against 19 peers, companies in its own industry (step 2 of 4 of the peer search, market index of 2026-09-25).",
             "One lens did not apply, all for one reason: no operating profit.",
             "The answer\nWhat survived. Debt and cash (latest annual accounts): it owes $600."]
-_B22_OK = ["Lens by lens\n14 of 20 had usable figures for Quality; 20 of 20 for Forensic.",
+_B22_OK = ["Forensic doubted (on one test only; two had no data) - 9th of 16 ranked on 1 of 3 factors", "Forensic doubted - 9th of 16 ranked on 3 of 3 factors",
+           "not read: the earnings figure looks unreliable", "1 name had no BUY from any lens, and is not listed here.", "2 names had no BUY from any lens, and are not listed here.",
+           "a - falling over both windows - sustained weakness. b - rising over both windows - a sustained advance.",
+           "beat its group by +2.6% a year on average - Fell short on the winning years (only 5 of 10; the bar is 6).",
+           "AI text check: no issues found",
+           "Lens by lens\n14 of 20 had usable figures for Quality; 20 of 20 for Forensic.",
            "trailed its group by 1.1% a year on average", "beat its group by +4.5% a year on average",
            "the rule allows at most 1.0x. On its measures it would rank 6th", "trailed its group by 1.1% a year on average",
            "HOLD - 19th of 27 (tied with one other)", "HOLD - 19th of 27 (tied with 10)",

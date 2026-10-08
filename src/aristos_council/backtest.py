@@ -1584,6 +1584,70 @@ class Badge:
             return f"trailed its group by {abs(x) * 100:.1f}% a year on average"
         return f"beat its group by {_pct(x)} a year on average"
 
+    def failed_tests(self) -> tuple:
+        """B24-E2: which of the three proof tests this record failed, in the order the bar names them:
+        ``"excess"`` (mean edge under PROOF_MIN_EXCESS a year), ``"years"`` (winning years under
+        PROOF_MIN_YEARS of PROOF_OF_YEARS) and ``"luck"`` (a random pick matched it more than MAX_LUCK of
+        the time, or luck was never measured). Empty when nothing was measured or all three pass."""
+        if self.years_measured is None or self.mean_excess is None:
+            return ()
+        failed = []
+        if self.mean_excess < PROOF_MIN_EXCESS - PROOF_TOLERANCE:
+            failed.append("excess")
+        if self.years_positive * PROOF_OF_YEARS < PROOF_MIN_YEARS * self.years_measured:
+            failed.append("years")
+        if self.luck_pct is None or self.luck_pct > MAX_LUCK:
+            failed.append("luck")
+        return tuple(failed)
+
+    def why_line(self) -> str:
+        """B24-E2: the explanation, generated from the test(s) that actually failed - never a fixed
+        sentence that contradicts the numbers beside it (EL.PA's Magic Formula RAW beat its group by +2.6%
+        a year and a random pick matched it only 6% of the time, yet read "does no better than picking
+        names at random"; it failed ONE test: 5 winning years of 10 against a bar of 6)."""
+        failed = self.failed_tests()
+        if not failed:
+            return ""
+        years_bar = f"the bar is {PROOF_MIN_YEARS}"
+        edge = self.mean_excess
+        beat = edge > 0
+        won = f"in only {self.years_positive} of {self.years_measured} years ({years_bar})"
+        luck = (f"a random pick did as well {self.luck_pct:.0%} of the time" if self.luck_pct is not None
+                else "luck was never measured")
+        if failed == ("years",):
+            lead = "Beat its group" if beat else "Did not beat its group"
+            more = " and most random picks" if (self.luck_pct is not None and self.luck_pct <= 0.5) else ""
+            return f"{lead}{more}, but {won}."
+        if failed == ("luck",):
+            return (f"Beat its group in most years, but {luck}, so the edge may be luck "
+                    f"(the bar is {MAX_LUCK:.0%}).")
+        if failed == ("excess",):
+            how = (f"trailed its group by {abs(edge) * 100:.1f}% a year" if edge < 0
+                   else "matched its group" if round(abs(edge) * 100, 1) == 0
+                   else f"beat its group by only {edge * 100:.1f}% a year")
+            return (f"Won in most years and beat most random picks, but {how} "
+                    f"(the bar is {PROOF_MIN_EXCESS:.0%}).")
+        parts = []
+        for f in failed:
+            if f == "excess":
+                parts.append("the average edge (" + (f"trailed its group by {abs(edge) * 100:.1f}% a year"
+                             if edge < 0 else "matched its group" if round(abs(edge) * 100, 1) == 0
+                             else f"beat it by only {edge * 100:.1f}% a year")
+                             + f"; the bar is {PROOF_MIN_EXCESS:.0%})")
+            elif f == "years":
+                parts.append(f"the winning years (only {self.years_positive} of {self.years_measured}; "
+                             f"{years_bar})")
+            else:
+                parts.append(f"luck ({luck}; the bar is {MAX_LUCK:.0%})")
+        return "Fell short on " + ", ".join(parts[:-1]) + (" and " if len(parts) > 1 else "") + parts[-1] + "."
+
+    def explanation(self) -> str:
+        """The sentence under the numbers in the lens notes: the generated reason for a label that is
+        about a record that FELL SHORT ("no edge shown here"), the label's own meaning otherwise."""
+        if self.label == "no edge shown here":
+            return self.why_line() or BADGE_MEANINGS[self.label]
+        return BADGE_MEANINGS[self.label]
+
     def detail_line(self) -> str:
         """"beat its group by +4.5% a year on average · 7 of 10 years positive · a random pick did as
         well 4% of the time · 108 monthly test rounds" - the numbers behind the badge, for a

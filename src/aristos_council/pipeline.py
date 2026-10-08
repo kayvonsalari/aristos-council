@@ -2073,7 +2073,8 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
             cells[median_col] = (f"{band.median_multiple:.1f}x"
                                  if band.median_multiple is not None else _EMPTY)
             cells[_COL_PERCENTILE] = (f"{ordinal(round(band.percentile))} "
-                                      f"({percentile_gloss(band.percentile)})")
+                                      f"({percentile_gloss(band.percentile)})"
+                                      + (f" \u2014 {band.caution}" if band.caution else ""))
             if not uniform:
                 cells[_COL_MONTHS] = f"{band.months_covered} of {band.months_total}"
             if rev is not None and rev.available:
@@ -2085,8 +2086,9 @@ def valuation_band_table(result) -> Optional[ValuationBandTable]:
                 cells[_COL_REVERSION] = f"{_NOT_EVALUATED} — {rev.note}" if rev.note \
                     else _NOT_EVALUATED
         else:
-            cells[_COL_PERCENTILE] = f"{_NOT_EVALUATED} — {band.note}" if band.note \
-                else _NOT_EVALUATED
+            cells[_COL_PERCENTILE] = (band.display if band.implausible
+                                      else f"{_NOT_EVALUATED} — {band.note}" if band.note
+                                      else _NOT_EVALUATED)
         rows.append(cells)
 
     return ValuationBandTable(
@@ -3947,7 +3949,7 @@ def lens_agreement(multi_result) -> LensAgreement:
             if band is None or r.ticker in pct:
                 continue
             pct[r.ticker] = ((band.percentile, "") if band.available
-                             else (None, band.note or ""))
+                             else (None, band.reason_plain or ""))
 
     rows = []
     no_buy = 0
@@ -4125,10 +4127,13 @@ def lens_agreement_table(ag) -> tuple:
             # a "SELL" there reads as a vote against, which it is not.
             cells[label] = (verdict_word(r.check_verdicts.get(label, ""), check=True)
                             or "not ranked")
+        from .tools.valuation_band import UNRELIABLE_EARNINGS
         cells["Valuation percentile"] = (
             f"{ordinal(round(r.band_percentile))}" if r.band_percentile is not None
-            else ("not evaluated" + (f" — {r.band_note}" if r.band_note else "")))
-        cells["Marks"] = " · ".join(r.marks)
+            else (f"not read: {UNRELIABLE_EARNINGS}" if r.band_note == UNRELIABLE_EARNINGS
+                  else "not evaluated" + (f" — {r.band_note}" if r.band_note else "")))
+        # D3: the reason a band was not read is printed ONCE - in its own column, not again as a mark
+        cells["Marks"] = " · ".join(m for m in r.marks if not m.startswith("band not evaluated"))
         rows.append(cells)
     return cols, rows
 

@@ -23,6 +23,7 @@ from aristos_council.glossary import glossary_entries, glossary_markdown
 from aristos_council.narration_render import (
     gloss_momentum_in_text,
     momentum_gloss,
+    narration_html,
     narration_markdown,
 )
 from aristos_council.tools.criteria.registry import REGISTRY
@@ -263,3 +264,31 @@ def test_the_gloss_reaches_the_rendered_narration():
     n = Narration(echoed_verdict="x", neutral_context=[
         "The 12-month price return is -10.3% and the 6-month return is +32.4%."])
     assert "fell early, recovering since" in narration_markdown(n)
+
+
+# --------------------------------------------------------------------------- #
+# B24-E4 - a fixed reading phrase appears ONCE in an AI section
+# --------------------------------------------------------------------------- #
+_BOTH = "The 12-month return is -46.0% and the 6-month return is -27.9%"
+
+
+def test_b24_e4_the_gloss_phrase_is_used_once_in_a_section_not_once_per_sentence():
+    """EL.PA 2026-10-08: "falling over both windows - sustained weakness" four times in one council text."""
+    n = Narration(echoed_verdict="x", neutral_context=[f"{_BOTH}.", f"{_BOTH} again.", f"{_BOTH} once more."],
+                  open_questions=[f"{_BOTH}?"])
+    for rendered in (narration_markdown(n), narration_html(n)):
+        assert rendered.count("falling over both windows") == 1
+    # a separate section gets its own single use
+    assert narration_markdown(n).count("sustained weakness") == 1
+
+
+def test_b24_e4_a_sentence_that_already_carries_a_reading_is_not_glossed_again():
+    text = f"{_BOTH}, a technical deterioration - falling over both windows - sustained weakness."
+    assert gloss_momentum_in_text(text) == text
+    n = Narration(echoed_verdict="x", neutral_context=[text])
+    assert narration_markdown(n).count("falling over both windows") == 1
+
+
+def test_b24_e4_outside_a_section_scope_each_field_is_unchanged():
+    assert "sustained weakness" in gloss_momentum_in_text(f"{_BOTH}.")
+    assert "sustained weakness" in gloss_momentum_in_text(f"{_BOTH}.")           # no memory between calls

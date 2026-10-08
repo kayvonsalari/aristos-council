@@ -21,10 +21,39 @@ for in a prompt.
 from __future__ import annotations
 
 import html as _html
+import contextlib
+import contextvars
+import functools
 import re
 from typing import Iterable, Optional
 
 from .report_language import scrub_check_cell
+
+
+# B24-E4: the gloss is a fixed phrase, so it may appear ONCE in an AI section. It used to be appended to every
+# sentence that stated both returns - four times in one EL.PA council text, once doubled ("...technical
+# deterioration - falling over both windows - sustained weakness"). A rendering scope remembers which phrases
+# it has already used; outside a scope (a single field rendered alone) nothing changes.
+_GLOSS_SEEN: "contextvars.ContextVar[Optional[set]]" = contextvars.ContextVar("gloss_seen", default=None)
+
+
+@contextlib.contextmanager
+def gloss_scope():
+    """One AI section: each momentum gloss phrase is used at most once inside it."""
+    token = _GLOSS_SEEN.set(set())
+    try:
+        yield
+    finally:
+        _GLOSS_SEEN.reset(token)
+
+
+def _glossed_once(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with gloss_scope():
+            return fn(*args, **kwargs)
+    return wrapper
+
 
 # A specialist that could not assess renders with NO stance word and NO confidence
 # number. "abstain, confidence 0.00" reads as a measured neutral; the truth is that the
@@ -360,6 +389,7 @@ def narration_sections(narration) -> list[tuple[str, str]]:
 # ----------------------------------------------------------------------------- #
 # Markdown — the canonical record, so it carries the whole structure unaided
 # ----------------------------------------------------------------------------- #
+@_glossed_once
 def narration_markdown(narration, *, level: int = 4,
                        stamps: Optional[Iterable[str]] = None,
                        issues: Optional[Iterable] = None) -> str:
@@ -481,6 +511,7 @@ def _table(headers: list[str], rows: list[list[str]], *, cls: str = "") -> str:
             f"<tbody>{body}</tbody></table></div>")
 
 
+@_glossed_once
 def narration_html(narration, *, anchor_prefix: str = "",
                    stamps: Optional[Iterable[str]] = None,
                    issues: Optional[Iterable] = None,
@@ -588,7 +619,7 @@ def narration_html(narration, *, anchor_prefix: str = "",
                    f"<ul>{items}</ul></section>")
 
     if callout is not None:
-        out.extend(callout(s, label="narration check") for s in (stamps or []))
+        out.extend(callout(s, label="AI text check") for s in (stamps or []))
 
     return "".join(out) or "<p>(no narrative produced)</p>"
 
@@ -635,7 +666,11 @@ def gloss_momentum_in_text(text: str) -> str:
                 out.append(sentence)
                 continue
             gloss = momentum_gloss(r12, r6)
-            if gloss not in sentence:
+            seen = _GLOSS_SEEN.get()
+            already = (seen is not None and gloss in seen) or "over both windows" in sentence
+            if gloss not in sentence and not already:
                 sentence = sentence.rstrip(". ") + f" — {gloss}."
+                if seen is not None:
+                    seen.add(gloss)
         out.append(sentence)
     return " ".join(out)

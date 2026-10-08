@@ -1166,7 +1166,7 @@ def test_identical_specialist_phrasing_is_flagged_in_the_final_narrative(tmp_pat
     op = run_council_opinion(report, adapter=_Adapter(company_ebit=10.0), runners=runners,
                              today=TODAY)
     assert op.available
-    assert "narration check" in op.narrative
+    assert "AI text check" in op.narrative
     assert "convergent phrasing" in op.narrative
     assert phrase in op.narrative
     # the verdict of record is UNCHANGED by the opinion having run
@@ -1613,3 +1613,28 @@ def test_a_check_lens_gets_no_track_record_badge_and_the_summary_counts_voters_o
     assert summary.startswith("Track record: ") and "untested" not in summary
     # exactly one badge was counted, so the summary names exactly one lens-worth of result
     assert sum(int(tok) for tok in summary.replace(",", " ").split() if tok.isdigit()) == 1
+
+
+def test_b24_e6_the_council_names_the_specialist_that_is_working(tmp_path):
+    from aristos_council.company_report import council_progress_label
+    assert council_progress_label("gather") == "Council: fundamental specialist 1 of 4\u2026"
+    assert council_progress_label("fundamental") == "Council: technical specialist 2 of 4\u2026"
+    assert council_progress_label("technical") == "Council: sentiment specialist 3 of 4\u2026"
+    assert council_progress_label("sentiment") == "Council: risk specialist 4 of 4\u2026"
+    assert council_progress_label("risk") == "Council: critic\u2026"
+    assert council_progress_label("critic") == "Council: narrator writing the opinion\u2026"
+    assert council_progress_label("decision") == "" == council_progress_label("veto")
+
+
+def test_b24_e6_a_council_run_streams_those_steps_in_order_and_still_returns_the_opinion(tmp_path):
+    steps = []
+    report = _run([RAW, SCREENED], tmp_path=tmp_path, with_council=True, save=False,
+                  council_runners=_opinion_runners(), progress=steps.append, news_fetcher=_no_news)
+    council_steps = [m for m in steps if m.startswith("Council:")]
+    assert council_steps == ["Council: gathering the evidence\u2026",
+                             "Council: fundamental specialist 1 of 4\u2026",
+                             "Council: technical specialist 2 of 4\u2026",
+                             "Council: sentiment specialist 3 of 4\u2026",
+                             "Council: risk specialist 4 of 4\u2026",
+                             "Council: critic\u2026", "Council: narrator writing the opinion\u2026"]
+    assert report.council_opinion is not None and report.council_opinion.available
