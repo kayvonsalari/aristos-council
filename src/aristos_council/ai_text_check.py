@@ -66,6 +66,8 @@ def plain_reason(stamp: str) -> str:
     m = _STAMP.match(stamp or "")
     why = (m.group("why") if m else stamp or "").strip()
     low = why.lower()
+    if "negative earnings-power reading" in low:
+        return "A negative reading means the price is above its no-growth value, not a discount"
     if "attributes" in low and "rank" in low:
         return "This rank belongs to a different lens"
     if "without naming the lens it belongs to" in low:

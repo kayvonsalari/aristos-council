@@ -228,6 +228,8 @@ def _vote_line(report) -> str:
         where = f", {ordinal(v.position)} of {v.cohort_size}" + (f", {v.tie_note.strip(' ()')}" if v.tied_with else "") if v.position else ""
         if v.small_group_note:
             where += f", {v.small_group_note}"
+        if v.expensive_note:
+            where += f", {v.expensive_note}"
         built = "one lens built for banks" if bank else "the one lens that voted"
         return f"{v.word}, on {built} ({v.label}{where})."
     words = {"buy": "BUY", "hold": "HOLD", "sell": "SELL"}

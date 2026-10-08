@@ -1103,6 +1103,40 @@ def check_would_rank(narrative: str, verdicts: list[dict] | None) -> list[str]:
     return flags
 
 
+# --------------------------------------------------------------------------- #
+# B25-4 - a NEGATIVE Earnings Power Value reading is not a discount
+# --------------------------------------------------------------------------- #
+# MSFT 2026-10-08: the council wrote that a more negative EPV-vs-EV reading (-65.4%) "signals a larger discount,
+# which the lens treats as bullish". It is the reverse: -65.4% means the price is far ABOVE what today's operating
+# profit alone is worth. MSFT ranked 2nd only because its peers were dearer.
+_EPV_TERM = re.compile(r"\bearnings[- ]power\b|\bEPV\b", re.I)
+_NEGATIVE_READING = re.compile(r"(?<![\w.])[-−]\s?\d|\bnegative\b|\bbelow zero\b", re.I)
+_CHEAP_WORD = re.compile(r"\bdiscount\w*|\bcheap\w*|\bbargain\w*|\bundervalu\w*", re.I)
+_CHEAP_DENIED = re.compile(r"\b(?:not|never|no|isn't|rather than|instead of)\b[^.]{0,24}\b(?:discount\w*|cheap\w*|bargain\w*"
+                           r"|undervalu\w*)|\bpremium\b|\babove\b|\bdearer\b|\bexpensive\b", re.I)
+
+
+def _epv_direction_annotation(claim: str) -> str:
+    return (f'[⚠ AI text check: "{claim}" calls a negative earnings-power reading a discount or cheap - '
+            "a negative reading means the price is ABOVE what today's operating profit alone is worth]")
+
+
+def check_epv_direction(narrative: str) -> list[str]:
+    """Flag a sentence that links the earnings-power-value reading when NEGATIVE to a discount / cheapness."""
+    flags: list[str] = []
+    seen: set[str] = set()
+    for sentence in _sentences(narrative or ""):
+        if not (_EPV_TERM.search(sentence) and _NEGATIVE_READING.search(sentence)):
+            continue
+        if not _CHEAP_WORD.search(sentence) or _CHEAP_DENIED.search(sentence):
+            continue
+        claim = _claim(sentence)
+        if claim not in seen:
+            seen.add(claim)
+            flags.append(_epv_direction_annotation(claim))
+    return flags
+
+
 def check_narration_by_lens(narrative: str, tables_by_lens: dict,
                             default_table: dict) -> list[str]:
     """Rank-semantics checking for a CROSS-LENS narration (NARR-UNION-1).

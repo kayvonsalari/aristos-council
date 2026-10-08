@@ -154,6 +154,8 @@ def lens_rows(report) -> list[dict]:
             detail = where + (f", {v.tie_note.strip(' ()')}" if v.tied_with else "")
             if v.small_group_note:                      # B25-1: a vote on 5-9 companies says so
                 detail += ", " + v.small_group_note
+            if v.expensive_note:                        # B25-4: a BUY on a negative EPV reading
+                detail += ", " + v.expensive_note
             if v.thin_check_note:                       # B24-D4: said plainly, beside the chip
                 detail += "," + v.thin_check_note
             word, kind = v.word, ui.chip_kind(v.word) if v.votes else "na"

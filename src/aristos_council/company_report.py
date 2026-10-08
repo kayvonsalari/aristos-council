@@ -119,6 +119,8 @@ class LensVote:
     # 21"), handed to the council's narrator so it explains a rank from the lens's real factors only.
     # Council context only: never counted, never a vote.
     factors: tuple = ()
+    # B25-4 - a BUY whose own EPV reading is negative: the best of an expensive group, not a bargain
+    buy_above_value: bool = False
     # B24-D4 - how many of the lens's factors this company was actually measured on, so a "doubted" mark
     # that stands on ONE test says so plainly
     factors_measured: int = 0
@@ -165,6 +167,12 @@ class LensVote:
         return small_group_text(self.cohort_size) if self.ranked and self.votes else ""
 
     @property
+    def expensive_note(self) -> str:
+        """B25-4: shown beside an Earnings Power Value BUY whose reading is negative."""
+        return ("best of an expensive group: still priced above its no-growth value"
+                if self.buy_above_value else "")
+
+    @property
     def tie_note(self) -> str:
         """" (tied with 3)" / " (tied with one other)" when other companies share this one's
         rank-sum, else ""."""
@@ -178,7 +186,8 @@ class LensVote:
                      else f"ranked of {self.cohort_size}")
             note = self.factor_note if with_factor_note else ""
             small = f" \u00b7 {self.small_group_note}" if self.small_group_note else ""
-            return f"{self.word}{self.thin_check_note} - {where}{self.tie_note}{small}{note}"
+            dear = f" \u00b7 {self.expensive_note}" if self.expensive_note else ""
+            return f"{self.word}{self.thin_check_note} - {where}{self.tie_note}{small}{dear}{note}"
         if self.status == "too_few":
             # NOVOTE-1 item 2.3b — a verdict over fewer than MIN_RANKABLE_COHORT names is
             # arithmetic, not a comparison (the HLB case: "1 of 1" instead of an honest
@@ -772,11 +781,23 @@ def _default_adapter(today: date):
     return CachingAdapter(select_market_adapter(), cache_dir=DEFAULT_CACHE_DIR, today=today)
 
 
-def _check_components(result, ticker: str) -> tuple:
+def _epv_reading(result, ticker: str):
+    """The company's own EPV-vs-EV reading (a fraction) in this lens result, or None."""
+    try:
+        row = next((r for r in (getattr(result, "ranked", None) or [])
+                    if r.ticker.upper() == ticker.upper() and not r.excluded), None)
+        value = None if row is None else row.factor_values.get("epv_margin_of_safety")
+        return float(value) if value is not None else None
+    except Exception:                                    # noqa: BLE001 - context only
+        return None
+
+
+def _check_components(result, ticker: str, *, with_direction: bool = False) -> tuple:
     """FORENSIC-PACK-1 - each factor of a check lens as one plain line: the factor's name, the
     company's own value (from its declared unit) and its rank among the names the lens ranked. A
     factor the company has no value for is said to be missing, never shown as 0. Never raises."""
     from .factors import FACTOR_REGISTRY as FACTORS
+    from .factors import direction_in_words
     from .report_language import format_value
 
     try:
@@ -793,7 +814,8 @@ def _check_components(result, ticker: str) -> tuple:
                      if value is not None else "no value on file")
             note = (" (the factor is missing for this company, so it was given its average rank)"
                     if name in (row.imputed_factors or []) else "")
-            out.append(f"{label}: {shown}, rank {rank:.0f} of {row.universe_size}{note}")
+            way = f" ({direction_in_words(name)})" if with_direction and direction_in_words(name) else ""
+            out.append(f"{label}: {shown}, rank {rank:.0f} of {row.universe_size}{note}{way}")
         return tuple(out)
     except Exception:                                    # noqa: BLE001 - context only
         return ()
@@ -836,7 +858,9 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                                   factors_total=getattr(cell, "factors_total", 0),
                                   components=(_check_components(result, ticker)
                                               if base["kind"] == "check" else ()),
-                                  factors=_check_components(result, ticker)))
+                                  factors=_check_components(result, ticker, with_direction=True),
+                                  buy_above_value=(cell.verdict == "buy" and base["kind"] != "check"
+                                                   and (_epv_reading(result, ticker) or 0) < 0)))
         else:
             reason = cell.reason_plain or _plain_reason(cell.reason)
             shadow = None
