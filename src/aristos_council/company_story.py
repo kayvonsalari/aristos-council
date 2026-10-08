@@ -553,7 +553,7 @@ def table_rows(report) -> list[TableRow]:
     for v in report.votes:
         detail = ""
         if v.badge is not None:
-            detail = f"{v.badge.detail_line()} - {BADGE_MEANINGS[v.badge.label]}"
+            detail = f"{v.badge.detail_line()} - {v.badge.explanation()}"      # B24-E2
         rows.append(TableRow(lens=v.label, outcome=_outcome(v),
                              badge=v.badge.label if v.badge is not None else "none",
                              reason=_row_reason(v), asks=v.asks, badge_detail=detail,

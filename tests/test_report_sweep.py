@@ -201,7 +201,8 @@ def test_the_batch22_wording_rule_fires_on_each_shape_it_names():
 
 
 FOLD_B22 = "\nSHOW THE WORKINGS"
-_B22_BAD = ["Narration check: 1 statement in the council opinion was flagged.",
+_B22_BAD = ["beat its group by +2.6% a year on average - In this cohort, this lens's record does not clear the bar, and does no better than picking names at random.",
+            "Narration check: 1 statement in the council opinion was flagged.",
             "The answer\nWhat happened. 14 of 20 had usable figures for Quality.\nLens by lens\n14 of 20 had usable figures for Quality.",
             "beat its group by -1.1% a year on average",
             "The answer\nNo track record exists for this industry yet.\nWhat this cannot tell you. x. No track record exists for this industry yet.",
@@ -210,7 +211,8 @@ _B22_BAD = ["Narration check: 1 statement in the council opinion was flagged.",
             "The answer\nBYD was ranked against 19 peers, companies in its own industry (step 2 of 4 of the peer search, market index of 2026-09-25).",
             "One lens did not apply, all for one reason: no operating profit.",
             "The answer\nWhat survived. Debt and cash (latest annual accounts): it owes $600."]
-_B22_OK = ["AI text check: no issues found",
+_B22_OK = ["beat its group by +2.6% a year on average - Fell short on the winning years (only 5 of 10; the bar is 6).",
+           "AI text check: no issues found",
            "Lens by lens\n14 of 20 had usable figures for Quality; 20 of 20 for Forensic.",
            "trailed its group by 1.1% a year on average", "beat its group by +4.5% a year on average",
            "the rule allows at most 1.0x. On its measures it would rank 6th", "trailed its group by 1.1% a year on average",
