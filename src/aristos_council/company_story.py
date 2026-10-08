@@ -328,9 +328,7 @@ def _happened(report) -> str:
     ranked = [v for v in _voting(report) if v.ranked]
     if ranked:
         bits.append("Voting: " + "; ".join(f"{v.label} {v.result()}" for v in ranked) + ".")
-        note = usable_figures_note(report)
-        if note:
-            bits.append(note[:1].upper() + note[1:])
+        # B23-N5: "14 of 20 had usable figures..." is said ONCE, under the lens table (it was also here)
     else:
         bits.append("No lens voted.")
     groups = _excluded_groups(report)
@@ -368,12 +366,23 @@ def _survived(report) -> str:
             bits.append("Debt and cash do not describe a bank or insurer, so no reading is given.")
         elif dc.net_debt.available:
             yl = getattr(dc.years_to_repay, "label", "") if getattr(dc.years_to_repay, "available", False) else ""
-            extra = f", and it {yl.rstrip('.')}" if yl.startswith("would take") else ""
             rw = getattr(dc, "cash_runway", None)           # CASH-RUNWAY-1
-            if rw is not None and rw.available:
-                extra += (", and " if rw.label.startswith("at ") else "; ") + rw.label.rstrip(".")
-            bits.append(f"Debt and cash ({asof}): it {dc.net_debt.label.rstrip('.')}{extra}."
-                        + (f" {' '.join(dc.notes())}" if getattr(dc, "notes", None) and dc.notes() else ""))
+            bs = getattr(dc, "balance_sheet_short", "")
+            tail = (f" {' '.join(dc.notes())}" if getattr(dc, "notes", None) and dc.notes() else "")
+            if bs:
+                # B23-N4: each figure carries its OWN date once - the cash and debt are the latest balance
+                # sheet; the cash-flow figures (years to repay, the spending) are a fiscal year
+                text = f"Debt and cash: it {dc.net_debt.label.rstrip('.')} ({bs})"
+                if yl.startswith("would take"):
+                    text += f", and it {yl.rstrip('.')} ({asof})"
+                if rw is not None and rw.available:
+                    text += "; " + dc.runway_core().rstrip(".")
+                bits.append(text + "." + tail)
+            else:
+                extra = f", and it {yl.rstrip('.')}" if yl.startswith("would take") else ""
+                if rw is not None and rw.available:
+                    extra += (", and " if rw.label.startswith("at ") else "; ") + rw.label.rstrip(".")
+                bits.append(f"Debt and cash ({asof}): it {dc.net_debt.label.rstrip('.')}{extra}." + tail)
         else:
             bits.append(f"Debt and cash ({asof}) could not be read: {dc.net_debt.note}.")
     gr = getattr(c, "growth_record", None)

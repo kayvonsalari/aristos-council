@@ -191,6 +191,17 @@ class DebtAndCash:
     cash_runway: Reading = field(default_factory=Reading)
     # FINANCE-ARM-1: set for a company whose debt is mostly a captive finance arm's (data/finance_arms.yaml)
     finance_arm_note: str = ""
+    # B23-N4/N8: the pieces of the runway sentence and the balance-sheet date, so the story and the card
+    # can give each figure its OWN date once ("(balance sheet, Jun 2026)" vs "FY2025's spending")
+    balance_sheet_short: str = ""        # "balance sheet, Jun 2026" / "latest balance sheet"
+    runway_span: str = ""                # "about 1.8 years" / "about 5 months" / "less than a month"
+    runway_basis: str = ""               # "FY2025's spending" / "last year's spending"
+
+    def runway_core(self) -> str:
+        """The runway sentence without its trailing balance-sheet date (the story states that once)."""
+        label = self.cash_runway.label
+        suffix = f" ({self.balance_sheet_short.replace('balance sheet, ', 'balance sheet of ')})"
+        return label[:-len(suffix)] if suffix.strip() and label.endswith(suffix) else label
 
     def notes(self) -> list[str]:
         """The muted line(s) under the debt readings, said ONCE (like the growth record's notes)."""
@@ -222,26 +233,53 @@ def _balance_sheet_date(f) -> str:
         return "latest balance sheet"
 
 
-def cash_runway(f, *, debt, cash, net, fcf, currency: str) -> Reading:
-    """CASH-RUNWAY-1 (approved 2026-10-04): a fact, never a vote.
+def _balance_sheet_short(f) -> str:
+    """"balance sheet, Jun 2026" - the form the story's sentence uses."""
+    return _balance_sheet_date(f).replace("balance sheet of ", "balance sheet, ")
 
-    * free cash flow negative AND net cash positive: how long that cash lasts at last year's spending;
-    * free cash flow negative AND net debt: "no cash cushion: spending is funded by debt";
-    * free cash flow positive, missing, or the company a bank: no reading at all.
-    A missing debt or cash figure also gives no reading (null is not false: it cannot be said)."""
-    if fcf is None or fcf >= 0 or net is None or debt is None or cash is None:
+
+def _fy_label(f) -> str:
+    """"FY2025" - the fiscal year of the latest cash-flow figure, from its period end ("" when unknown)."""
+    ends = getattr(f, "aligned_period_ends", None) or {}
+    for key in ("free_cash_flow", "operating_cash_flow"):
+        dates = [d for d in (ends.get(key) or []) if d]
+        if dates:
+            return f"FY{max(dates)[:4]}"
+    return ""
+
+
+def _runway_pieces(f, years: float) -> tuple[str, str]:
+    """``(span, basis)``: "about 1.8 years" / "about 5 months" / "less than a month", and "FY2025's
+    spending" (or "last year's spending" when the fiscal year is not known)."""
+    if years >= 1:
+        span = f"about {years:.1f} years"
+    else:                      # BYD-shaped: a sum that lasts days is not "0.0 years"
+        months = years * 12
+        span = ("less than a month" if months < 1
+                else f"about {round(months)} month{'s' if round(months) != 1 else ''}")
+    fy = _fy_label(f)
+    return span, (f"{fy}'s spending" if fy else "last year's spending")
+
+
+def cash_runway(f, *, debt, cash, net, fcf, ocf, currency: str) -> Reading:
+    """CASH-RUNWAY-1 (approved 2026-10-04; narrowed by B23-N1): a fact, never a vote.
+
+    It describes a genuine cash BURN, so it needs the business itself to be losing cash:
+    * the latest fiscal year's OPERATING cash flow must be negative (BYD's negative free cash flow is
+      heavy investment on top of +CNY 59.1bn of operating cash - that is not a burn, and says nothing);
+    * then, with net cash: how long that cash lasts at that year's spending (the operating outflow plus
+      capital spending, i.e. the negative free cash flow); with net debt: "no cash cushion";
+    * positive or missing operating cash flow, a missing figure, or a bank: no reading at all."""
+    if (ocf is None or ocf >= 0 or fcf is None or fcf >= 0
+            or net is None or debt is None or cash is None):
         return Reading()
     if net > 0:
         return Reading(value=0.0, unit="years",
                        label="no cash cushion: spending is funded by debt")
     years = (-net) / (-fcf)
-    if years >= 1:
-        span = f"about {years:.1f} years"
-    else:                      # BYD: CNY 2.8bn against CNY 97.7bn a year is days, and "0.0 years" says nothing
-        months = years * 12
-        span = "less than a month" if months < 1 else f"about {round(months)} month{'s' if round(months) != 1 else ''}"
+    span, basis = _runway_pieces(f, years)
     return Reading(value=years, unit="years",
-                   label=(f"at last year's spending ({_money(-fcf, currency)}) that lasts {span} "
+                   label=(f"at {basis} ({_money(-fcf, currency)}) that lasts {span} "
                           f"({_balance_sheet_date(f)})"))
 
 
@@ -362,12 +400,22 @@ def debt_and_cash(f) -> DebtAndCash:
                         label=f"would take {years:.1f} years of free cash flow to repay "
                               f"its debt")
 
-    runway = cash_runway(f, debt=debt, cash=cash, net=net, fcf=fcf, currency=currency)
+    # the burn test reads the latest FISCAL YEAR's operating cash flow (the annual series), falling back to
+    # the scalar the provider gives when no series is on file
+    aligned_ocf = (getattr(f, "aligned_annual", None) or {}).get("operating_cash_flow") or []
+    annual_ocf = [v for v in (_num(x) for x in aligned_ocf) if v is not None]
+    burn_ocf = annual_ocf[0] if annual_ocf else _num(getattr(f, "operating_cash_flow", None))
+    runway = cash_runway(f, debt=debt, cash=cash, net=net, fcf=fcf, ocf=burn_ocf, currency=currency)
+    span = basis = ""
+    if runway.available and runway.value:
+        span, basis = _runway_pieces(f, runway.value)
     from .finance_arms import finance_arm_note
     return DebtAndCash(net_debt=net_reading, net_debt_to_ocf=ratio,
                        interest_cover=cover, years_to_repay=repay, currency=currency,
                        cash_runway=runway,
-                       finance_arm_note=finance_arm_note(getattr(f, "ticker", "")))
+                       finance_arm_note=finance_arm_note(getattr(f, "ticker", "")),
+                       balance_sheet_short=_balance_sheet_short(f), runway_span=span,
+                       runway_basis=basis)
 
 
 # --------------------------------------------------------------------------- #

@@ -34,13 +34,44 @@ def _val(reading) -> Optional[float]:
     return getattr(reading, "value", None) if reading is not None else None
 
 
+SHORT_REASON_MAX = 60
+
+
+def short_reason(text: str, fallback: str) -> str:
+    """B23-N2: a card never shows a sentence cut off in the middle. The first clause of ``text`` (up to a
+    semicolon, a bracket or a dash) when it is short and whole; otherwise ``fallback`` - a short, plain
+    reason. The full wording stays in the workings."""
+    clause = re.split(r"\s*(?:;|\(|\u2014| - )\s*", (text or "").strip(), maxsplit=1)[0].strip().rstrip(".")
+    if clause and len(clause) <= SHORT_REASON_MAX:
+        return clause[:1].lower() + clause[1:]
+    return fallback
+
+
 def _why(reading, fallback: str) -> str:
-    """A short reason for a missing reading, from the reading's own words."""
+    """A short reason for a missing reading, from the reading's own words (never cut mid-sentence)."""
     if reading is None:
         return fallback
     text = (getattr(reading, "not_meaningful", "") or getattr(reading, "failure", "")
-            or getattr(reading, "note", "") or "").strip().rstrip(".")
-    return (text[:1].lower() + text[1:]) if text else fallback
+            or getattr(reading, "note", "") or "").strip()
+    return short_reason(text, fallback)
+
+
+_NO_PROFIT_MONTHS = re.compile(r"undefined in (\d+) of (\d+) months \((\d+) with no positive operating profit")
+_USABLE_SPAN = re.compile(r"span ([\d.]+)y and the band needs ([\d.]+)y")
+
+
+def band_reason(text: str) -> str:
+    """Why the valuation band was not read, in one short whole phrase ("Not read: ...")."""
+    t = re.sub(r"^not evaluated\s*[\u2014-]\s*", "", str(text or "")).strip()
+    m = _NO_PROFIT_MONTHS.search(t)
+    if m and int(m.group(3)) * 2 >= int(m.group(2)):
+        return "Not read: no operating profit in most months"
+    m = _USABLE_SPAN.search(t)
+    if m:
+        return f"Not read: only {m.group(1)} years of usable history (needs {m.group(2)})"
+    if "usable statements" in t:
+        return "Not read: usable statements are missing"
+    return "Not read: " + short_reason(t, "not enough usable history")
 
 
 def band_word(percentile: Optional[float]) -> str:
@@ -149,8 +180,7 @@ def valuation_card(report) -> str:
     text = str(getattr(check, "valuation_band", "") or "")
     m = _MULTIPLE.match(text)
     if p is None or m is None:
-        reason = re.sub(r"^not evaluated\s*[—-]\s*", "", text).strip() or "not evaluated"
-        return ui.stat_card("Valuation vs own history", abstain=reason.split(";")[0][:90])
+        return ui.stat_card("Valuation vs own history", abstain=band_reason(text))
     return ui.stat_card("Valuation vs own history", f"{m.group(1)} {m.group(2)}",
                         [f"{ordinal(round(p))} percentile of its own 5-year range"],
                         extra_html=ui.percentile_bar(p))
@@ -204,6 +234,10 @@ def balance_sheet_card(report) -> str:
         sub = ["interest immaterial" if "immaterial" in cover.label else f"interest cover {cover.value:.1f}x"]
     else:
         sub = [f"interest cover: {_why(cover, 'not stated')}"]
+    rw = getattr(dc, "cash_runway", None)                  # B23-N8: only for a genuine cash burn (N1)
+    if rw is not None and rw.available:
+        sub.append(f"lasts {dc.runway_span} at {dc.runway_basis}" if dc.runway_span
+                   else rw.label)
     return ui.stat_card(title, big, sub)
 
 

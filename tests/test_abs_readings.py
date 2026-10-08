@@ -557,10 +557,13 @@ def test_spacing_and_capitalisation_do_not_smuggle_a_duplicate_through():
 
 # =========================================================================== #
 # CASH-RUNWAY-1 (approved 2026-10-04; Viking VKTX had negative free cash flow and net cash, no line)
+# B23-N1: only for a genuine BURN - the latest fiscal year's OPERATING cash flow must be negative
 # =========================================================================== #
 def _viking(**kw):
     base = dict(total_debt=5.0e6, total_cash=502.6e6, free_cash_flow=-278.7e6,
-                financial_currency="USD", trailing_period_end="2026-06-30")
+                operating_cash_flow=-277.0e6, financial_currency="USD", trailing_period_end="2026-06-30",
+                aligned_period_ends={"free_cash_flow": ["2025-12-31", "2024-12-31"],
+                                     "operating_cash_flow": ["2025-12-31", "2024-12-31"]})
     base.update(kw)
     return _f(**base)
 
@@ -569,27 +572,56 @@ def test_runway_negative_fcf_and_net_cash_says_how_long_the_cash_lasts():
     out = debt_and_cash(_viking())
     assert out.net_debt.label == "holds $497.6m more cash than debt"
     assert out.cash_runway.available
-    assert out.cash_runway.label == ("at last year's spending ($278.7m) that lasts about 1.8 years "
+    assert out.cash_runway.label == ("at FY2025's spending ($278.7m) that lasts about 1.8 years "
                                      "(balance sheet of Jun 2026)")
     assert out.cash_runway.value == pytest.approx(497.6 / 278.7)
     assert out.cash_runway.label in out.lines()
+    assert (out.runway_span, out.runway_basis) == ("about 1.8 years", "FY2025's spending")
+    assert out.balance_sheet_short == "balance sheet, Jun 2026"
 
 
-def test_runway_without_a_period_end_says_latest_balance_sheet():
-    out = debt_and_cash(_viking(trailing_period_end=None))
-    assert out.cash_runway.label.endswith("(latest balance sheet)")
+def test_runway_without_a_period_end_says_latest_balance_sheet_and_last_year_without_a_fiscal_year():
+    out = debt_and_cash(_viking(trailing_period_end=None, aligned_period_ends={}))
+    assert out.cash_runway.label == ("at last year's spending ($278.7m) that lasts about 1.8 years "
+                                     "(latest balance sheet)")
 
 
-def test_runway_negative_fcf_and_net_debt_says_there_is_no_cushion():
+def test_runway_negative_operating_cash_and_net_debt_says_there_is_no_cushion():
     out = debt_and_cash(_viking(total_debt=900e6, total_cash=100e6))
     assert out.cash_runway.label == "no cash cushion: spending is funded by debt"
     assert "no cash cushion: spending is funded by debt" in out.lines()
 
 
-def test_runway_positive_or_missing_fcf_gives_no_line():
-    for fcf in (278.7e6, 0.0, None):
-        out = debt_and_cash(_viking(free_cash_flow=fcf))
-        assert not out.cash_runway.available
+def test_b23_n1_a_business_that_makes_cash_but_invests_heavily_gets_no_runway_line():
+    """BYD (1211.HK): operating cash flow +CNY 59.1bn, capital spending CNY 156.8bn, free cash flow
+    -CNY 97.7bn, net cash CNY 2.8bn. It read "...lasts less than a month" - wrong, the business makes cash."""
+    byd = debt_and_cash(_viking(total_debt=1.0e9, total_cash=3.8e9, free_cash_flow=-97.7e9,
+                                operating_cash_flow=59.1e9, financial_currency="CNY",
+                                aligned_annual={"operating_cash_flow": [59.1e9, 40.0e9]}))
+    assert byd.net_debt.available and not byd.cash_runway.available
+    assert not any("lasts" in ln or "cushion" in ln for ln in byd.lines())
+    assert byd.runway_span == "" and byd.runway_basis == ""
+
+
+def test_b23_n1_positive_operating_cash_flow_means_no_line_even_with_net_debt():
+    out = debt_and_cash(_viking(total_debt=900e6, total_cash=100e6, operating_cash_flow=50e6,
+                                aligned_annual={"operating_cash_flow": [50e6]}))
+    assert not out.cash_runway.available
+
+
+def test_b23_n1_the_annual_series_wins_over_a_scalar_that_disagrees():
+    """The test reads the latest FISCAL YEAR's operating cash flow (the annual series), not a trailing scalar."""
+    out = debt_and_cash(_viking(operating_cash_flow=-5e6, aligned_annual={"operating_cash_flow": [30e6, -10e6]}))
+    assert not out.cash_runway.available
+    out = debt_and_cash(_viking(operating_cash_flow=30e6, aligned_annual={"operating_cash_flow": [-30e6, 10e6]}))
+    assert out.cash_runway.available
+
+
+def test_runway_positive_missing_or_unknown_operating_cash_flow_gives_no_line():
+    for kw in (dict(free_cash_flow=278.7e6), dict(free_cash_flow=0.0), dict(free_cash_flow=None),
+               dict(operating_cash_flow=None, aligned_annual={})):
+        out = debt_and_cash(_viking(**kw))
+        assert not out.cash_runway.available, kw
         assert not any("lasts about" in ln or "cushion" in ln for ln in out.lines())
 
 
@@ -604,32 +636,31 @@ def test_runway_a_bank_gets_no_line():
 
 
 def test_runway_reaches_the_story_the_text_page_and_the_summary_facts(tmp_path):
-    from aristos_council.abs_readings import DebtAndCash  # noqa: F401
     from aristos_council.company_check import absolute_reading_lines
+    from aristos_council.company_markdown import company_report_markdown
     from aristos_council.company_report import company_facts_pack, format_company_report
     from aristos_council.company_story import story_paragraphs
+    from aristos_council.export.report_html import company_report_html
     from tests.test_company_report import RAW, _run
     report = _run([RAW], tmp_path=tmp_path)
     report.check.debt_and_cash = debt_and_cash(_viking())
-    story = dict(story_paragraphs(report))
-    survived = story["Other facts."]
-    assert "that lasts about 1.8 years (balance sheet of Jun 2026)" in survived
+    facts = dict(story_paragraphs(report))["Other facts."]
+    # B23-N4: each figure carries its own date, once
+    assert ("Debt and cash: it holds $497.6m more cash than debt (balance sheet, Jun 2026); "
+            "at FY2025's spending ($278.7m) that lasts about 1.8 years.") in facts
+    assert "fiscal year to" not in facts.split("Growth record")[0]
     assert any("lasts about 1.8 years" in ln for ln in absolute_reading_lines(report.check))
-    assert "lasts about 1.8 years" in format_company_report(report)
-    from aristos_council.company_markdown import company_report_markdown
-    from aristos_council.export.report_html import company_report_html
-    assert "lasts about 1.8 years" in company_report_markdown(report)
-    assert "lasts about 1.8 years" in company_report_html(report)
+    for doc in (format_company_report(report), company_report_markdown(report), company_report_html(report)):
+        assert "lasts about 1.8 years" in doc
     assert any("lasts about 1.8 years" in ln
                for ln in company_facts_pack(report)["absolute_readings"]["debt_and_cash"])
 
 
 def test_runway_under_a_year_is_said_in_months_and_under_a_month_as_such():
-    """BYD (1211.HK): CNY 2.8bn net cash against CNY 97.7bn of spending printed "about 0.0 years"."""
     five_months = debt_and_cash(_viking(total_cash=5.0e6 + 116.1e6))      # net cash 116.1m / 278.7m
     assert "that lasts about 5 months (balance sheet of Jun 2026)" in five_months.cash_runway.label
     one_month = debt_and_cash(_viking(total_cash=5.0e6 + 25.0e6))         # 25m / 278.7m -> 1.08 months
     assert "that lasts about 1 month (" in one_month.cash_runway.label
-    days = debt_and_cash(_viking(total_cash=5.0e6 + 2.8e6, free_cash_flow=-97.7e9))
+    days = debt_and_cash(_viking(total_cash=5.0e6 + 2.8e6, free_cash_flow=-97.7e9, operating_cash_flow=-50e9))
     assert "that lasts less than a month (" in days.cash_runway.label
     assert "0.0 years" not in days.cash_runway.label

@@ -461,3 +461,93 @@ def test_b11_the_finance_arm_note_is_a_muted_caption_on_the_page(tmp_path):
                                                   free_cash_flow=12.5e9))
     at = _render(report)
     assert any("Includes debt of its car-loan arm" in str(c.value) for c in at.caption)
+
+
+# --------------------------------------------------------------------------- #
+# Batch 23
+# --------------------------------------------------------------------------- #
+def test_b23_n8_the_balance_sheet_card_adds_the_runway_only_for_a_genuine_burn(tmp_path):
+    from aristos_council import company_cards as cc
+    from aristos_council.abs_readings import debt_and_cash
+    from tests.test_abs_readings import _viking
+    report = _company_report(tmp_path)
+    report.check.debt_and_cash = debt_and_cash(_viking())
+    card = cc.balance_sheet_card(report)
+    assert "net cash &#36;497.6m" in card and "lasts about 1.8 years at FY2025&#x27;s spending" in card
+    assert "interest cover" in card                                    # the first line is still there
+    byd = debt_and_cash(_viking(total_debt=1.0e9, total_cash=3.8e9, free_cash_flow=-97.7e9,
+                                operating_cash_flow=59.1e9, aligned_annual={"operating_cash_flow": [59.1e9]}))
+    report.check.debt_and_cash = byd
+    assert "lasts" not in cc.balance_sheet_card(report)
+
+
+def test_b23_n2_no_card_ever_shows_text_cut_off_mid_sentence(tmp_path):
+    """VKTX's valuation card read "...(44 with no positive operating profit, the" - cut at 90 characters."""
+    import re
+
+    from aristos_council import company_cards as cc
+    from aristos_council.abs_readings import DebtAndCash, Reading
+    report = _company_report(tmp_path)
+    vktx = ("not evaluated \u2014 valuation measure undefined in 61 of 61 months (44 with no positive "
+            "operating profit, the rest lack usable statements)")
+    ford = ("not evaluated \u2014 valuation measure undefined in 38 of 61 months (21 with no positive operating "
+            "profit, the rest lack usable statements); the usable months span 1.8y and the band needs 3.0y")
+    report.check.band_percentile = None
+    report.check.valuation_band = vktx
+    assert "Not read: no operating profit in most months" in cc.valuation_card(report)
+    report.check.valuation_band = ford
+    assert "Not read: only 1.8 years of usable history (needs 3.0)" in cc.valuation_card(report)
+    report.check.valuation_band = "not evaluated \u2014 " + "something rather long and wordy " * 8
+    assert "Not read: not enough usable history" in cc.valuation_card(report)
+    # every other card: a long reason falls back to a short whole one
+    long_note = "the reported free cash flow is larger than operating cash flow, so the two disagree and neither is used"
+    report.check.debt_and_cash = DebtAndCash(net_debt=Reading(note=long_note))
+    report.check.price_and_cash = None
+    for html in (cc.balance_sheet_card(report), cc.price_card(report), cc.earnings_price_card(report),
+                 cc.valuation_card(report)):
+        for text in re.findall(r'class="ar-abstain">(.*?)</div>', html):
+            assert len(text) <= cc.SHORT_REASON_MAX + 40 and not text.endswith((",", " the", " and", " of"))
+    assert "not reported" in cc.balance_sheet_card(report)
+
+
+def _list_page(validation: bool):
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+    from tests.test_merged_multi_report import _multi
+    from tests.test_multi_strategy_run import RAW, SCREENED
+    script = ("import sys, streamlit as st\n" f"sys.path.insert(0, r'{ROOT}')\n"
+              "import app\nfrom aristos_council.ui_text import install\ninstall(st)\n"
+              "app._render_multi_strategy_result(st.session_state['res'])\n")
+    at = AppTest.from_string(script, default_timeout=120)
+    at.session_state["res"] = _multi([SCREENED, RAW])
+    if validation:
+        at.session_state["show_legacy"] = True
+    at.run()
+    assert not at.exception, at.exception
+    return "\n".join(str(getattr(e, "value", "")) for k in ("caption", "markdown", "info", "warning", "success")
+                     for e in at.get(k))
+
+
+def test_b23_n6_the_list_page_hides_the_machinery_header_unless_validation_tools_is_on():
+    off, on = _list_page(False), _list_page(True)
+    for jargon in ("Verdict: deterministic ranker", "Narrative: none", "no LLM ran", "Multi-lens re-grade"):
+        assert jargon not in off, jargon
+    assert "Verdict: deterministic ranker" in on and "no LLM ran" in on
+    assert "Shortlist" in off or "ranked by at least one" in off      # the real content is still there
+
+
+def test_b23_n7_the_list_page_downloads_are_short_and_carry_the_file_names(tmp_path):
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+    from tests.test_merged_multi_report import _multi
+    from tests.test_multi_strategy_run import RAW, SCREENED
+    script = ("import sys, streamlit as st\n" f"sys.path.insert(0, r'{ROOT}')\n"
+              "import app\nfrom aristos_council.ui_text import install\ninstall(st)\n"
+              "app._render_multi_strategy_result(st.session_state['res'])\n")
+    at = AppTest.from_string(script, default_timeout=120)
+    at.session_state["res"] = _multi([SCREENED, RAW])
+    at.run()
+    assert not at.exception, at.exception
+    buttons = at.get("download_button")
+    assert [b.proto.label for b in buttons] == ["⬇ Download Markdown", "⬇ Download HTML"]
+    assert buttons[0].proto.help.endswith(".md") and buttons[1].proto.help.endswith(".html")
