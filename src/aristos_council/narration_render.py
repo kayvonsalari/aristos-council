@@ -649,9 +649,23 @@ _R12 = re.compile(r"12[-\s]?month[^.]{0,40}?(-?\+?\d+(?:\.\d+)?)\s*%", re.I)
 _R6 = re.compile(r"6[-\s]?month[^.]{0,40}?(-?\+?\d+(?:\.\d+)?)\s*%", re.I)
 
 
+# B25-8: "sustained" needs both windows to move by more than this many percent. MSFT 2026-10-08 read "12-month
+# return 1.0%; 6-month return 42.1% ... rising over both windows - a sustained advance": a +1% year is not one.
+SUSTAINED_MOVE_PCT = 10.0
+
+
+def _window_word(x: float) -> str:
+    return "up" if x >= SUSTAINED_MOVE_PCT else "down" if x <= -SUSTAINED_MOVE_PCT else "about flat"
+
+
 def momentum_gloss(return_12m: float, return_6m: float) -> str:
-    """The plain-English clause for one 12m/6m pair. Sign-driven and total."""
-    return _MOMENTUM_GLOSS[(return_12m >= 0, return_6m >= 0)]
+    """The plain-English clause for one 12m/6m pair. A fixed phrase when BOTH windows moved by more than
+    ``SUSTAINED_MOVE_PCT`` (up or down); otherwise each window is described plainly, so a small move is never
+    called a sustained advance or fall."""
+    if abs(return_12m) >= SUSTAINED_MOVE_PCT and abs(return_6m) >= SUSTAINED_MOVE_PCT:
+        return _MOMENTUM_GLOSS[(return_12m >= 0, return_6m >= 0)]
+    w12, w6 = _window_word(return_12m), _window_word(return_6m)
+    return f"{w12} over 12 months, {w6} over the last 6 months"
 
 
 def gloss_momentum_in_text(text: str) -> str:
