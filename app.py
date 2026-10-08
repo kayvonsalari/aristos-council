@@ -4426,6 +4426,8 @@ def _render_company_report(report) -> None:
         st.caption(page.caption)
     if page.group_note:                                    # B22-B3
         st.caption(page.group_note)
+    if page.badge_note:                                    # B25-7
+        st.caption(page.badge_note)
 
     if not page.no_vote:                                   # four small cards, above the workings
         st.markdown(company_cards.stat_cards(report), unsafe_allow_html=True)

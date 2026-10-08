@@ -1394,6 +1394,8 @@ def story_text_lines(report: CompanyReport) -> list[str]:
         lines.append(page.caption)
     if page.group_note:
         lines.append(page.group_note)
+    if page.badge_note:
+        lines.append(page.badge_note)
     return lines
 
 
