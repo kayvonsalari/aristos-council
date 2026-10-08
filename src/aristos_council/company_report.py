@@ -574,8 +574,27 @@ def _annotate_specialist_repetition(rep, state) -> None:
         d.rationale = d.rationale.rstrip() + "\n\n" + "\n".join(flags)
 
 
+_COUNCIL_STEPS = ("fundamental", "technical", "sentiment", "risk")
+
+
+def council_progress_label(finished: str) -> str:
+    """B24-E6: what to tell the reader when the council node ``finished`` has just completed - the next
+    step ("Council: technical specialist 2 of 4..."). "" for a node that has no next step to announce."""
+    if finished == "gather":
+        return f"Council: {_COUNCIL_STEPS[0]} specialist 1 of {len(_COUNCIL_STEPS)}\u2026"
+    if finished in _COUNCIL_STEPS:
+        i = _COUNCIL_STEPS.index(finished)
+        if i + 1 < len(_COUNCIL_STEPS):
+            return f"Council: {_COUNCIL_STEPS[i + 1]} specialist {i + 2} of {len(_COUNCIL_STEPS)}\u2026"
+        return "Council: critic\u2026"
+    if finished == "critic":
+        return "Council: narrator writing the opinion\u2026"
+    return ""
+
+
 def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
-                        today: Optional[date] = None) -> CouncilOpinion:
+                        today: Optional[date] = None,
+                        progress: Optional[Callable[[str], None]] = None) -> CouncilOpinion:
     """COUNCIL-OPINION-1 — the ONE other model feature this module offers (with the plain-
     English summary): the existing four specialists, the critic and the narrator
     (``graph.build_council``, unchanged — no second council), run in NARRATOR MODE on this
@@ -641,12 +660,25 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
                             sentiment_error=sentiment_error, run_matrix=False,
                             news_fallback_fetchers={"eodhd_fetcher": fetch_eodhd_news,
                                                    "yfinance_fetcher": fetch_yfinance_news})
-        state = ResearchState.model_validate(app.invoke(ResearchState(
+        initial = ResearchState(
             ticker=report.ticker, strategy_id=frame.id,
             ranker_verdict=Recommendation(lead.verdict), ranker_explanation=lead.result(),
             ranker_cohort_size=lead.cohort_size,
             cross_lens_verdicts=cross_lens, agreement_row=agreement_row,
-            company_facts_block=company_facts)))
+            company_facts_block=company_facts)
+        say = progress or (lambda _m: None)
+        say("Council: gathering the evidence\u2026")
+        final = None
+        # B24-E6: stream the graph so the page can say which specialist is working; the final "values"
+        # chunk is exactly what ``invoke`` would have returned
+        for mode, chunk in app.stream(initial, stream_mode=["updates", "values"]):
+            if mode == "values":
+                final = chunk
+            else:
+                label = council_progress_label(next(iter(chunk), ""))
+                if label:
+                    say(label)
+        state = ResearchState.model_validate(final)
     except Exception as exc:                              # noqa: BLE001 - reported, never raised
         cost = _cost_meta(meter, mark)
         return CouncilOpinion(
@@ -1021,7 +1053,8 @@ def run_company_report(
     if with_council:
         say("Convening the council (narrator mode — it writes, it does not vote)…")
         report.council_opinion = run_council_opinion(report, adapter=adapter,
-                                                      runners=council_runners, today=today)
+                                                      runners=council_runners, today=today,
+                                                      progress=say)
     if with_summary:
         say("Writing the plain-English summary…")
         report.summary = write_company_summary(report, runner=reader_runner)

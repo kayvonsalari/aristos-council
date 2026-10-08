@@ -586,3 +586,12 @@ def test_b24_e9_the_marker_has_amber_css_and_reads_on_hover_or_tap():
     c = css("dark")
     assert ".ar-flag:hover .ar-flag-tip, .ar-flag:focus .ar-flag-tip { display: block; }" in c
     assert "var(--ar-hold-fg)" in c.split(".ar-flag {")[1].split("}")[0]
+
+
+def test_b24_e6_the_paid_extras_say_they_add_minutes():
+    import app
+    at = _app_test()
+    assert "Adds a few minutes to the run." in _html_blob(at)
+    assert app.OPTIONAL_EXTRAS_HEADING == "Optional extras (paid AI calls)"
+    council = next(c for c in at.checkbox if c.label == "Council opinion")
+    assert "Adds a few minutes to the run." in council.help
