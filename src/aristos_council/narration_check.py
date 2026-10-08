@@ -862,6 +862,38 @@ def _lens_core(label: str) -> str:
     return (label or "").split(" (")[0].strip()
 
 
+_FACTOR_LINE = re.compile(r"^(?P<name>[^:]+):.*?\brank\s+(?P<pos>\d+)\s+of\s+(?P<size>\d+)", re.I)
+
+
+def _factor_ranks(verdicts: list[dict] | None) -> list[tuple[str, tuple[int, int]]]:
+    """``[(factor name, (rank, of))]`` from the ranked lenses' "factors" lines (B24-E8)."""
+    out = []
+    for v in verdicts or []:
+        for line in v.get("factors") or ():
+            m = _FACTOR_LINE.match(str(line))
+            if m:
+                out.append((m.group("name").strip(), (int(m.group("pos")), int(m.group("size")))))
+    return out
+
+
+def _factor_tied(sentence: str, pair: tuple[int, int], factors: list[tuple[str, tuple[int, int]]]) -> bool:
+    """B25-2b: is this "Nth of M" the rank of a FACTOR the sentence names ("net debt ... ranked 10th of 13")?
+    A factor's own rank is not any lens's overall rank, whatever pair it happens to equal."""
+    low = sentence.lower()
+    for name, fpair in factors:
+        if fpair != pair:
+            continue
+        words = [w[:5] for w in re.findall(r"[a-z]{4,}", name.lower())]
+        if words and sum(1 for w in set(words) if w in low) >= min(2, len(set(words))):
+            return True
+    return False
+
+
+def _heading_lens(heading: str, lens_cores: dict[str, str]) -> set[str]:
+    return {label for label, core in lens_cores.items()
+            if heading and re.search(rf"\b{re.escape(core)}\b", heading, re.I)}
+
+
 def _named_lens(sentence: str, lens_labels: list[str]) -> Optional[str]:
     """The ONE lens label this sentence names, or None (zero or several — an ambiguous
     sentence is never adjudicated)."""
@@ -912,6 +944,7 @@ def check_rank_attribution(narrative: str, lens_verdicts: list[dict] | None) -> 
     flags: list[str] = []
     seen: set[str] = set()
     headings = _headings(narrative)
+    factor_pairs = _factor_ranks(lens_verdicts)
     for offset, sentence in _sentences_at(narrative):
         heading = _heading_at(headings, offset)
         for match in _WORD_RANK.finditer(sentence):
@@ -924,6 +957,8 @@ def check_rank_attribution(narrative: str, lens_verdicts: list[dict] | None) -> 
                 continue                                  # already correctly attributed
             if heading and re.search(rf"\b{core}\b", heading, re.I):
                 continue                  # E1: the section heading ("Forensic - why") names the lens
+            if _factor_tied(sentence, key, factor_pairs):
+                continue                  # B25-2b: a named factor's own rank
             claim = _claim(sentence)
             if claim in seen:
                 continue
@@ -1027,6 +1062,7 @@ def check_would_rank(narrative: str, verdicts: list[dict] | None) -> list[str]:
                   if v.get("lens") and _lens_core(str(v["lens"]))}
     real = {str(v["lens"]): (int(v["position"]), int(v["cohort_size"])) for v in (verdicts or [])
             if v.get("lens") and v.get("position") and v.get("cohort_size")}
+    factor_pairs = _factor_ranks(verdicts)
     flags: list[str] = []
     seen: set[str] = set()
     headings = _headings(narrative)
@@ -1052,6 +1088,10 @@ def check_would_rank(narrative: str, verdicts: list[dict] | None) -> list[str]:
                         continue
                     if any(real.get(other) == pair for other in named_any if other != lens):
                         continue          # E1: a lens the sentence names really holds this rank
+                    if _heading_lens(heading, lens_cores) - {lens}:
+                        continue          # B25-2b: inside another lens's "why" section
+                    if _factor_tied(parsed, pair, factor_pairs):
+                        continue          # B25-2b: a named factor's own rank, not the lens's
                     cite = m.group(0)
             if not (gives_verdict or cite):
                 continue

@@ -148,6 +148,11 @@ def narration_prose(narration) -> str:
     if narration.echoed_verdict:
         parts.append(narration.echoed_verdict.strip())
     for a in narration.lens_attribution:
+        # B25-2a: the reader sees "<Lens> - why" as a heading above this block, so the checked prose carries
+        # the SAME heading (a bold-only line the checker reads as one). Without it a sentence like "MSFT's
+        # reading placed it 2nd of 13" looked lens-less to the checker, because the heading existed only in
+        # the rendered page - the Batch 24 heading rule never saw one on live output.
+        parts.append(f"**{a.lens} \u2014 why**")
         ranks = ", ".join(f"{fr.factor} rank {fr.rank} of {fr.cohort_size}"
                           for fr in a.factor_ranks)
         lead = f"{a.lens} lens"
@@ -157,6 +162,8 @@ def narration_prose(narration) -> str:
             parts.append(f"{lead} screens passed: {', '.join(a.screens_passed)}.")
         if a.reasoning:
             parts.append(f"{lead}. {a.reasoning.strip()}")
+    if narration.lens_attribution:
+        parts.append("**Beyond the lenses**")        # B25-2a: closes the last lens section
     if narration.disagreement_note:
         parts.append(narration.disagreement_note.strip())
     # MONEY-ABBREV-1: the checker reads FULL precision. Abbreviation is a display
