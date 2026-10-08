@@ -102,6 +102,11 @@ class ValuationBand:
     years_covered: float = 0.0               # span of the computable months, in years
     window_years: int = BAND_YEARS
     note: str = ""
+    # D3 (B24): the guard that abstains on an implausible multiple says so in plain words on screen, and a
+    # multiple that is only very high - one that agrees with the vendor's own trailing P/E - is SHOWN with a
+    # plain caution instead of being withheld.
+    implausible: bool = False
+    caution: str = ""
     # Net-debt provenance for the EV route: "asof" (dated statements, per month),
     # "latest" (current scalars held constant — disclosed), "" when not applicable.
     net_debt_basis: str = ""
@@ -141,6 +146,11 @@ class ValuationBand:
         return self.percentile is not None
 
     @property
+    def reason_plain(self) -> str:
+        """The abstention reason as a reader should see it."""
+        return UNRELIABLE_EARNINGS if self.implausible else self.note
+
+    @property
     def basis_label(self) -> str:
         return _BASIS_LABEL.get(self.basis or "", "")
 
@@ -159,6 +169,8 @@ class ValuationBand:
         ``pipeline.valuation_band_table``.
         """
         if not self.available:
+            if self.implausible:
+                return f"not read: {UNRELIABLE_EARNINGS}"
             return f"not evaluated — {self.note}" if self.note else "not evaluated"
         pct = round(self.percentile)
         tail = "; net debt held at latest reported" \
@@ -174,10 +186,11 @@ class ValuationBand:
         # comparing an ADR's band to a domestic name's must be able to see that one of
         # them crossed a currency to get there.
         fx = f"; {self.fx_note}" if self.fx_note else ""
+        caution = f" — {self.caution}" if self.caution else ""
         return (f"{lead}{ordinal(pct)} percentile ({percentile_gloss(self.percentile)}) "
                 f"of its own {self.window_years}-year range "
                 f"(based on {self.months_covered} of {plural(self.months_total, 'month')}"
-                f"{gap}{tail}{fx})")
+                f"{gap}{tail}{fx}){caution}")
 
 
 # Plain-English gloss for a percentile (PRICE-2). FIXED cutoffs, documented in
@@ -222,10 +235,17 @@ MULTIPLE_MAX = 200.0
 MULTIPLE_MIN = 1.0
 
 
+UNRELIABLE_EARNINGS = "the earnings figure looks unreliable"
+# A current multiple above MULTIPLE_MAX is only a fault if nothing else backs it. The vendor's own trailing P/E
+# is a second, independent reading of the same earnings: within this share of it, the multiple is real - just
+# very high (TSLA) - and is shown with a caution; otherwise the band abstains.
+PLAUSIBLE_AGAINST_TRAILING_PE = 0.15
+
+
 def _abstain(note: str, *, covered: int = 0, total: int = 0,
-             years: float = 0.0) -> ValuationBand:
+             years: float = 0.0, implausible: bool = False) -> ValuationBand:
     return ValuationBand(note=note, months_covered=covered, months_total=total,
-                         years_covered=years)
+                         years_covered=years, implausible=implausible)
 
 
 # --------------------------------------------------------------------------- #
@@ -484,15 +504,23 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
     # MEDIAN too: a believable current multiple against an absurd own-history median gives
     # an equally absurd percentile.
     _median_now = _median(values)
+    _caution = ""
     for _label, _value in (("", current), ("own 5-year median ", _median_now)):
         if _value is None:
             continue
         if _value > MULTIPLE_MAX or _value < MULTIPLE_MIN:
+            # D3: a CURRENT multiple above the cap that agrees with the vendor's trailing P/E (within 15%)
+            # is a very high reading, not an input fault - shown, with a plain caution
+            _pe = getattr(f, "pe_ratio", None)
+            if (_label == "" and _value > MULTIPLE_MAX and isinstance(_pe, (int, float)) and _pe > 0
+                    and abs(_value - _pe) / _pe <= PLAUSIBLE_AGAINST_TRAILING_PE):
+                _caution = f"very high: {_value:.0f}\u00d7 earnings"
+                continue
             # ".2f" below 10x: "0x" would hide which end of the range it failed.
             _shown = f"{_value:.2f}" if _value < 10 else f"{_value:.0f}"
             return _abstain(
                 f"multiple implausible ({_label}{_shown}x); inputs suspect, "
-                "not stated", covered=covered, total=total, years=span)
+                "not stated", covered=covered, total=total, years=span, implausible=True)
     # PRICE-1: record (never recompute) the reversion inputs — the median of THIS series
     # and the three point-in-time quantities the CURRENT point above was built from, all
     # taken at the same month `current_day`. Pure bookkeeping: no value below feeds the
@@ -508,7 +536,7 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
         fx_pair=((fx.direct_pair if fx.source_for(current_day) != "inverted"
                   else fx.reverse_pair) if cross_currency and fx is not None else ""),
         quoted_units=(mcap_now / price_now if price_now else None),
-        percentile=_percentile(values, current), basis=basis, current=current,
+        percentile=_percentile(values, current), basis=basis, current=current, caution=_caution,
         months_covered=covered, months_total=total, years_covered=span,
         window_years=years, net_debt_basis=(net_debt_basis if basis == _EV_EBIT else ""),
         median_multiple=_median(values),

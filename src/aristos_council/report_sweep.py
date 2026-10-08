@@ -209,6 +209,8 @@ _WORDING: list[tuple[re.Pattern, str, bool]] = [
     (re.compile(r"beat its group by [+][^\n]*no better than picking names at random"), "a record that beat its group called no better than random", False),
     (re.compile(r"(?s)(falling over both windows|rising over both windows|fell early, recovering since|"
                 r"rose early, giving it back since).*"+chr(92)+"1"), "a fixed reading phrase used twice in one AI section", False),
+    (re.compile(r"inputs suspect, not stated"), "raw 'multiple implausible ... inputs suspect' wording on a reader page", False),
+    (re.compile(r"\b1 names? had no BUY[^.]*\bare not listed"), "'1 name ... are not listed here'", False),
     (re.compile(r"[Nn]arration check"), "'narration check' (a reader sees 'AI text check')", False),
     (re.compile(r"tied with 1(?![0-9])"), "'tied with 1' (say 'tied with one other')", False),
     (re.compile(r"What survived[.]"), "'What survived.' heading on a company page", True),

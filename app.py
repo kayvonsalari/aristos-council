@@ -2468,9 +2468,9 @@ def _shortlist_markdown(ag, lens_agreement_table) -> list[str]:
     if band_line:
         lines += ["", f"**{band_line}**"]
     if ag.no_buy_count:
-        plural = "s" if ag.no_buy_count != 1 else ""
-        lines += ["", f"_{ag.no_buy_count} name{plural} had no BUY from any lens, and "
-                      "are not listed here._"]
+        one = ag.no_buy_count == 1                 # the Markdown line had the grammar slip fixed elsewhere
+        lines += ["", f"_{ag.no_buy_count} name{'' if one else 's'} had no BUY from any lens, and "
+                      f"{'is' if one else 'are'} not listed here._"]
     return lines
 
 
