@@ -26,6 +26,7 @@ Nothing here reaches a model. The CLI:
     python -m aristos_council.market_index refresh [--older-than 30]
     python -m aristos_council.market_index peers TICKER
     python -m aristos_council.market_index status
+    python -m aristos_council.market_index milan          # Borsa Italiana, from Yahoo (MILAN-1)
 """
 from __future__ import annotations
 
@@ -139,6 +140,11 @@ SOURCE_EODHD = "eodhd"                    # LEGACY: fetched before the listing f
 # permanent 10-unit loop. Without the tag there is no way to tell "never asked" from
 # "asked and got nothing", and the 9,018 legacy rows would look complete.
 SOURCE_EODHD_LISTING = "eodhd+listing"
+# MILAN-1 - rows for Borsa Italiana, which EODHD does not serve on this plan (every symbol-list code 404s, and
+# /fundamentals/LDO.MI answers "Symbol not found"). They come from Yahoo's screener + quote data instead, are
+# tagged so, and are complete in the same sense as an EODHD listing row. See ``milan_index.py``.
+SOURCE_YAHOO_LISTING = "yahoo+screener"
+LISTING_SOURCES = (SOURCE_EODHD_LISTING, SOURCE_YAHOO_LISTING)
 # Provenance for the USD column, in the repo's own ``factors`` vocabulary: a converted
 # figure carries its receipt, an unconvertible one abstains rather than guessing.
 USD_COMPUTED = "computed"
@@ -256,7 +262,7 @@ class IndexRow:
         # MARKET-INDEX-3 adds the two listing fields: a row fetched before they existed
         # cannot be placed as a home listing, so it is refetched like a capless one.
         return (self.market_cap is not None
-                and self.source == SOURCE_EODHD_LISTING)
+                and self.source in LISTING_SOURCES)
 
     @property
     def unresolvable_listing(self) -> bool:
@@ -267,7 +273,7 @@ class IndexRow:
         a row that has been ASKED (it carries a name) and got nothing is left alone and
         counted as unresolved.
         """
-        return (self.source == SOURCE_EODHD_LISTING
+        return (self.source in LISTING_SOURCES
                 and not self.primary_ticker and not self.isin)
 
     @property
@@ -282,7 +288,7 @@ class IndexRow:
             gaps.add("market_cap")
         if not self.classification:
             gaps.add("classification")
-        if self.source != SOURCE_EODHD_LISTING:
+        if self.source not in LISTING_SOURCES:
             gaps.add("listing")
         return frozenset(gaps)
 
@@ -297,7 +303,7 @@ class IndexRow:
         asked, and it is the evidence the backoff below reads for rows that predate the
         attempt counter.
         """
-        return self.source == SOURCE_EODHD_LISTING and bool(self.name)
+        return self.source in LISTING_SOURCES and bool(self.name)
 
     def retry_due(self, today: Optional[date] = None, *,
                   after_attempts: int = DEFAULT_EMPTY_RETRY_AFTER,
@@ -348,7 +354,7 @@ class IndexRow:
 # owner actually holds plus the deep markets whose companies are the peers: North America,
 # the main European books, and the Asian and Latin American venues where the comparables
 # for a chip maker or a miner are listed.
-DEFAULT_EXCHANGES = ("US", "XETRA", "LSE", "PA", "AS", "MC", "MI", "SW", "ST", "CO",
+DEFAULT_EXCHANGES = ("US", "XETRA", "LSE", "PA", "AS", "MC", "SW", "ST", "CO",
                      "OL", "HE", "TO", "HK", "KO", "KQ", "AU", "TW", "SA")
 
 
@@ -3648,6 +3654,10 @@ def build_parser():
                               f"a /fundamentals call costs {CHARGE_FUNDAMENTALS})")
     p_build.set_defaults(func=_cmd_build, refresh_only=False)
 
+    p_milan = sub.add_parser("milan", help="add or refresh the Borsa Italiana rows (from Yahoo; no EODHD units)")
+    p_milan.add_argument("--limit", type=int, default=None, help="stop after N names (for a trial run)")
+    p_milan.set_defaults(func=_cmd_milan)
+
     p_refresh = sub.add_parser("refresh", help="refetch only rows older than N days")
     p_refresh.add_argument("--older-than", type=int, default=DEFAULT_MAX_AGE_DAYS)
     p_refresh.add_argument("--exchanges", default="")
@@ -3725,6 +3735,17 @@ def _cmd_build(args) -> int:
         _say(f"Log: {build_log_path(store)}")
         return 1
     return 0
+
+
+def _cmd_milan(args) -> int:
+    from .data.provider import select_market_adapter
+    from .milan_index import build_milan
+    try:
+        adapter = select_market_adapter("yfinance")
+    except Exception:
+        adapter = None
+    counts = build_milan(store=_store_for(args), usd=_UsdConverter(adapter), limit=args.limit, progress=_say)
+    return 0 if counts["listed"] else 1
 
 
 def _cmd_peers(args) -> int:
