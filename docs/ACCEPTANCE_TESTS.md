@@ -266,3 +266,11 @@ AI text check, track-record wording, data checks. No rank, vote, verdict or lens
 | **B25-T6** | (free) Run MSFT (Systems Software) and open the Growth row's track record. | It reads "No test history for this lens in this industry yet." - not "matched its group - 0 of 0 years positive - no random-pick comparison - 0 monthly test rounds". Lenses with real history read as before. |
 | **B25-T7** | (free) Run MSFT with several lenses. | Under the lens table, one muted line: "Track record is from tests on Systems Software companies; this run compared it with a wider sector group, so the badges are a weaker guide." It also appears in the Markdown, HTML and text downloads. A company compared with an ordinary same-industry peer group shows no such line. |
 | **B25-T8** | (free: python -m pytest tests/test_glossary_and_money.py -k b25_8) (paid: council opinion on MSFT) | A 12-month return of 1.0% with a 6-month return of 42.1% reads "about flat over 12 months, up over the last 6 months", never "a sustained advance". "Sustained advance" / "sustained weakness" appear only when both windows moved by 10% or more in the same direction; a rise then a fall (or the reverse) of 10% or more each still reads "rose early, giving it back since" / "fell early, recovering since". |
+
+## MILAN-1
+
+| ID | How | Expect |
+| --- | --- | --- |
+| **MILAN-T1** | (free) Analyse tab, Company Check: type LDO.MI (then UCG.MI, ISP.MI, ENI.MI). | The box recognises each ("Leonardo", "UniCredit", ...) instead of "Milan is not covered by the local index"; the check runs and the figures are in EUR. |
+| **MILAN-T2** | (free) Paste a list: LDO.MI UCG.MI ISP.MI ENI.MI RHM.DE. | "5 recognised"; a ranker-only run ranks them together; no "not covered" line. A Tokyo ticker (7203.T) still says Tokyo is not covered. |
+| **MILAN-T3** | (free) python -m aristos_council.market_index status | Borsa Italiana rows (market MI) are in the table, tagged yahoo+screener, with a EUR currency and a USD cap beside the EUR one. |

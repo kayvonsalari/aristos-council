@@ -147,7 +147,9 @@ def saved_list_label(name: str, n: int, thesis: str = "") -> str:
 # the ticker resolver
 # --------------------------------------------------------------------------- #
 # Exchanges the local index does not carry (docs/MARKET_INDEX.md: their codes 404 on this plan).
-_NOT_COVERED_SUFFIXES = {".T": "Tokyo", ".MI": "Milan"}
+# MILAN-1: Milan is no longer here - its rows come from Yahoo (milan_index.py), so a .MI ticker is looked up in
+# the index like a .PA one, and a .MI ticker the index does not hold is "not recognised", not "not covered".
+_NOT_COVERED_SUFFIXES = {".T": "Tokyo"}
 
 
 @dataclass(frozen=True)
