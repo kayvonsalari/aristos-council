@@ -263,7 +263,7 @@ def reversion_value(band: Optional[ValuationBand], fundamentals, *,
             units = band.current_shares
             if units is None or units <= 0:
                 return _abstain("shares outstanding unavailable", band, currency)
-        price = implied_equity / units
+        price = implied_equity / units * (getattr(band, "quote_unit_scale", 1.0) or 1.0)   # pence quote: pounds -> pence
 
     gap = price / last_close - 1.0
     if gap > GAP_SANITY or gap < GAP_SANITY_DOWN:

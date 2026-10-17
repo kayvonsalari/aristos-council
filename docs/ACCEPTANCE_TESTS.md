@@ -274,3 +274,11 @@ AI text check, track-record wording, data checks. No rank, vote, verdict or lens
 | **MILAN-T1** | (free) Analyse tab, Company Check: type LDO.MI (then UCG.MI, ISP.MI, ENI.MI). | The box recognises each ("Leonardo", "UniCredit", ...) instead of "Milan is not covered by the local index"; the check runs and the figures are in EUR. |
 | **MILAN-T2** | (free) Paste a list: LDO.MI UCG.MI ISP.MI ENI.MI RHM.DE. | "5 recognised"; a ranker-only run ranks them together; no "not covered" line. A Tokyo ticker (7203.T) still says Tokyo is not covered. |
 | **MILAN-T3** | (free) python -m aristos_council.market_index status | Borsa Italiana rows (market MI) are in the table, tagged yahoo+screener, with a EUR currency and a USD cap beside the EUR one. |
+
+## DEFENCE-COHORT-1
+
+| ID | How | Expect |
+| --- | --- | --- |
+| **DEF-T1** | (free) python -m aristos_council.cohorts plan --name "Industrials - Aerospace & Defense (Europe + US)" --members | 49 names before the history test, all on US, Xetra, London, Paris, Amsterdam, Milan, Oslo, Stockholm; the seven anchors (RHM.XETRA, BA.LSE, LDO.MI, HO.PA, SAAB-B.ST, LMT.US, GD.US) are in. |
+| **DEF-T2** | (free) Analyse tab, Built cohort: pick "Industrials - Aerospace & Defense (Europe + US)". | 40 names, the thesis line is in the list's description; the track-record line names the cohort and every lens shows its badge (Growth reads "No test history for this lens in this industry yet."). |
+| **DEF-T3** | (free) Tick Growth, Magic Formula RAW, Value + Momentum, Quality, Forensic and the valuation band; run. | BAE Systems shows a band percentile and a reversion price in pence (about 1,660p against a 1,860p close); Rolls-Royce says plainly why its band is not read (under three years of usable operating profit), not "GBP vs GBp - no rates". Euro, kroner, krona, dollar names show prices in their own currency. EMBJ shows its name. |

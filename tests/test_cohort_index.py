@@ -483,7 +483,11 @@ def test_the_shipped_list_loads_and_is_about_fifty_cohorts():
 
 def test_every_shipped_cohort_is_an_index_cohort_with_a_floor_between_one_and_ten_billion():
     for d in load_definitions(SHIPPED):
-        assert d.uses_index and d.all_index_exchanges and d.exchanges == ("ALL",), d.name
+        assert d.uses_index, d.name
+        if d.all_index_exchanges:
+            assert d.exchanges == ("ALL",), d.name
+        else:        # DEFENCE-COHORT-1: a regional cut names its markets and never reaches Sao Paulo
+            assert d.exchanges and "ALL" not in d.exchanges and "SA" not in d.exchange_codes, d.name
         assert 1e9 <= d.min_market_cap_usd <= 10e9, d.name
         assert d.min_market_cap_usd in {1e9, 2e9, 3e9, 5e9, 10e9}, d.name   # the stated tiers
         assert d.exclude == ("financials", "reits"), d.name

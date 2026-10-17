@@ -255,6 +255,25 @@ cohorts:
     watch: false
     anchors: []
 
+  # DEFENCE-COHORT-1 (2026-10-15): the regional cut of the cohort above - the same industry code, but ONLY European
+  # and US main listings (the index markets US, XETRA, LSE, Euronext Paris/Amsterdam, SIX, the Nordic books, Milan,
+  # Madrid, Vienna, Warsaw). The question it exists to ask: does the post-2025 defence sell-off make the European
+  # names cheap relative to their growth?
+  # n1 = 85 (Aerospace & Defense 85, Europe + US only) -> the tier rule would say $3bn; the FLOOR IS $5bn BY THE
+  # OWNER'S INSTRUCTION for this cohort (the global cohort above also uses $5bn), stated here rather than hidden.
+  # Anchors are a sanity check, never membership;
+  # the loader allows two, so two are written here and the other five the owner named (BA.L, HO.PA, SAAB-B.ST,
+  # LMT, GD) are checked against the frozen members.csv and reported, not added.
+  - name: "Industrials - Aerospace & Defense (Europe + US)"
+    industry: ["Aerospace & Defense"]
+    exchanges: [US, XETRA, LSE, EURONEXT, SIX, NORDIC, MILAN, MADRID, VIENNA, WARSAW]
+    min_market_cap_usd: 5000000000
+    min_history_years: 5
+    exclude: [financials, reits]
+    watch: false
+    anchors: [RHM.XETRA, LDO.MI]
+    thesis: "European and US defence and aerospace companies: does the post-2025 sell-off make the European names cheap relative to their growth?"
+
   # guide: electrical equipment
   # n1 = 61 (Electrical Equipment & Parts 61) -> tier $2bn
   - name: "Industrials - Electrical Equipment"

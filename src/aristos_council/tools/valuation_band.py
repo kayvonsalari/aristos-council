@@ -140,6 +140,10 @@ class ValuationBand:
     # quoted unit is an ADR that may bundle several ordinary shares, so this is NOT
     # `shares_outstanding`; dividing by it keeps the reversion price per QUOTED unit.
     quoted_units: Optional[float] = None
+    # DEFENCE-COHORT-1 - a London name is QUOTED in pence ("GBp") but its market cap and accounts are in pounds,
+    # so the band is a same-money, same-unit multiple and needs no rate; only a PRICE stated from it (the
+    # reversion value) has to be scaled to the quote's unit. 100.0 for a pence quote on pound accounts, else 1.0.
+    quote_unit_scale: float = 1.0
 
     @property
     def available(self) -> bool:
@@ -386,6 +390,11 @@ def _young_company_reason(earnings, bars, *, asof: date, years: int) -> str:
             f"the band needs {BAND_YEARS}, so it is not stated")
 
 
+# quote codes for a MINOR unit and the major unit they are a hundredth of (see also abs_readings._MINOR_UNITS)
+MINOR_UNITS = {"GBp": "GBP", "GBX": "GBP", "GBPENCE": "GBP", "GBP_PENCE": "GBP", "ZAc": "ZAR", "ZAC": "ZAR",
+               "ILA": "ILS", "ILa": "ILS"}
+
+
 def valuation_band(bars: Sequence, fundamentals, *, asof: date,
                    years: int = BAND_YEARS,
                    min_years: float = MIN_YEARS,
@@ -402,6 +411,12 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
 
     price_ccy = getattr(f, "currency", None)
     acct_ccy = getattr(f, "financial_currency", None)
+    # a pence quote on pound accounts (RR.L, BA.L: price GBp, accounts GBP) is the SAME money in another unit:
+    # no FX rate exists for "GBPGBp=X", none is needed, and the old reading abstained every London name
+    quote_unit_scale = 1.0
+    if price_ccy and acct_ccy and price_ccy != acct_ccy and MINOR_UNITS.get(price_ccy) == acct_ccy:
+        quote_unit_scale = 100.0
+        price_ccy = acct_ccy
     cross_currency = bool(price_ccy and acct_ccy and price_ccy != acct_ccy)
     if cross_currency and (fx is None or not getattr(fx, "available", False)):
         # VALBAND-2: the abstention NAMES what was missing, so "no FX" is actionable
@@ -536,6 +551,7 @@ def valuation_band(bars: Sequence, fundamentals, *, asof: date,
         fx_pair=((fx.direct_pair if fx.source_for(current_day) != "inverted"
                   else fx.reverse_pair) if cross_currency and fx is not None else ""),
         quoted_units=(mcap_now / price_now if price_now else None),
+        quote_unit_scale=quote_unit_scale,
         percentile=_percentile(values, current), basis=basis, current=current, caution=_caution,
         months_covered=covered, months_total=total, years_covered=span,
         window_years=years, net_debt_basis=(net_debt_basis if basis == _EV_EBIT else ""),

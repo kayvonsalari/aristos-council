@@ -179,6 +179,7 @@ def write_definition_snapshot(path: Path, defn: CohortDefinition, *, version: in
         "exclude": list(defn.exclude),
         "anchors": list(defn.anchors),
         "check_lens": defn.check_lens,
+        **({"thesis": defn.thesis} if defn.thesis else {}),
     }
     path.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True),
                     encoding="utf-8")
@@ -224,6 +225,7 @@ def register_universe(frozen: FrozenCohort, defn: CohortDefinition, *,
         display_name=defn.name,
         role=f"rule-built cohort, v{frozen.version}",
         description=(
+            (f"{defn.thesis} " if defn.thesis else "") +
             f"Built mechanically by COHORT-1 from "
             f"{', '.join(defn.industry_as_written or defn.industry)} on "
             f"{', '.join(defn.exchanges)}. Membership of record is "

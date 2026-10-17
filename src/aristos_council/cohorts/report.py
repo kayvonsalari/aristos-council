@@ -48,6 +48,9 @@ def render_report(*, defn: CohortDefinition, version: int, built_on: date,
     add("")
     add(f"Built {built_on.isoformat()} from the rule below. {size.sentence()}")
     add("")
+    if defn.thesis:
+        add(f"**Thesis:** {defn.thesis}")
+        add("")
 
     # -- the rule ---------------------------------------------------------- #
     add("## The rule")

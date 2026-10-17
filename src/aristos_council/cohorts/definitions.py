@@ -374,6 +374,9 @@ class CohortDefinition:
     min_history_years: float
     exclude: tuple[str, ...] = DEFAULT_EXCLUDE
     anchors: tuple[str, ...] = ()
+    # DEFENCE-COHORT-1 - an optional one-line plain-English statement of the question the cohort exists to ask.
+    # Display only (the frozen definition, the report and the registered list carry it); it never selects a name.
+    thesis: str = ""
     # What the YAML said before ``normalise_industries`` mapped GICS names across, kept so
     # the snapshot beside a frozen cohort reads the way the author wrote it.
     industry_as_written: tuple[str, ...] = ()
@@ -551,7 +554,8 @@ def definition_from_mapping(raw: dict) -> CohortDefinition:
         name=name, industry=industry, exchanges=exchanges, min_market_cap=min_cap,
         min_history_years=min_hist, exclude=exclude, anchors=anchors,
         industry_as_written=as_written, min_market_cap_usd=min_usd, watch=watch,
-        gics_subindustry=subs, check_lens=check_lens)
+        gics_subindustry=subs, check_lens=check_lens,
+        thesis=" ".join(str(raw.get("thesis") or "").split()))
 
 
 def load_definitions(path: str | Path) -> list[CohortDefinition]:
