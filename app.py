@@ -4,18 +4,14 @@ Launch:
     pip install -e ".[ui,yfinance,llm]"
     streamlit run app.py
 
-Browsing past runs needs only ".[ui]". LAUNCHING a council additionally needs
-the runtime deps (".[yfinance,llm]") and the API keys it reads from the
-environment or a local .env (ANTHROPIC_API_KEY, optionally FINNHUB_API_KEY).
+Launching a narrated run or a council opinion additionally needs the runtime deps
+(".[yfinance,llm]") and the API keys it reads from the environment or a local .env
+(ANTHROPIC_API_KEY, optionally FINNHUB_API_KEY, and for the judge panel OPENAI_API_KEY
+and GEMINI_API_KEY).
 
-Billing note: a council run bills real API credits — this app is meant to run
-on a machine that holds the runtime keys, NEVER inside the subscription-only
-Claude Code dev environment. The sidebar gates every run behind an explicit
-cost acknowledgement for exactly this reason.
-
-The council itself is imported and invoked IN-PROCESS (not shelled out), and the
-graph stays disk-free: this edge loads the prior verdict before the run and
-writes the verdict log + full run report after it, mirroring run_council.py.
+Billing note: a narrated run bills real API credits — this app is meant to run on a
+machine that holds the runtime keys, NEVER inside the subscription-only Claude Code
+dev environment. Every paid extra is a tick box, off by default, with its cost stated.
 """
 
 from __future__ import annotations
@@ -23,7 +19,6 @@ from __future__ import annotations
 from aristos_council.plurals import plural
 from aristos_council.report_language import universe_display_name
 
-import base64
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -37,8 +32,7 @@ from aristos_council import ui_style
 from aristos_council.ui_text import escape_dollars, install as install_dollar_safety, reader_text
 from pydantic import ValidationError
 
-from aristos_council.data.adapter import (
-    DataUnavailable, display_name, normalize_ticker)
+from aristos_council.data.adapter import display_name, normalize_ticker
 from aristos_council.pipeline import (
     DEFAULT_NARRATION_CAP, DEFAULT_NARRATION_LEVEL, NARRATION_LEVELS)
 from aristos_council.demo_surface import (
@@ -53,52 +47,18 @@ from aristos_council.costs import actual_vs_estimate, cost_phrase
 # READER-3: the reader may be asked twice (one retry on a failed check), so the
 # hint covers both calls. A hint that quotes only the best case is not a hint.
 READER_COST_HINT = "1-2 cents"
-from aristos_council.tracing import trace_config
-from aristos_council.persistence.reports import (
-    RunReport,
-    list_reports,
-    load_report,
-    report_from_state,
-    save_report,
-)
-from aristos_council.persistence.verdicts import (
-    append_record,
-    load_latest,
-    load_records,
-    record_from_state,
-)
-from aristos_council.presentation import (
-    SCREEN_STATUS_HEX,
-    contested_banner,
-    degraded_banner,
-    matrix_comparison_line,
-    matrix_verdict_text,
-    run_health_line,
-    screen_table_rows,
-    strip_provenance,
-)
-from aristos_council.state import Stance
 from aristos_council.strategy.applicability import (
     applicable_rank_strategies,
     cohort_asset_kind,
     cohort_scope_note,
     out_of_scope_note,
 )
-from aristos_council.strategy.loader import Strategy, load_strategy
 from aristos_council.strategy.picker import (
     choice_labels,
     default_index,
-    resolve,
     resolve_all,
     selected_labels,
     strategy_choices,
-)
-from aristos_council.strategy.overrides import applied_overrides, effective_strategy
-from aristos_council.tools.criteria.registry import REGISTRY
-from aristos_council.strategy.versioning import (
-    bump_version,
-    make_new_version,
-    save_strategy,
 )
 
 # Anchor all data dirs to the APP FILE's location (resolved to absolute at import),
@@ -109,7 +69,6 @@ STRATEGIES_DIR = ROOT / "strategies"
 # lists; unset (always, in real use) it is the repo's universes/ folder.
 import os as _os
 UNIVERSES_DIR = Path(_os.environ.get("ARISTOS_UNIVERSES_DIR") or ROOT / "universes")
-VERDICTS_DIR = ROOT / "verdicts"
 REPORTS_DIR = ROOT / "reports"
 # Auto-persisted universe-run .md/.html (UI-FIX-1) — gitignored, a disposable copy of
 # what the download buttons serve, kept apart from the committed reports/<TICKER>/ tree.
@@ -132,14 +91,6 @@ _VERDICT_DOT = {"BUY": "🟢", "HOLD": "🟡", "SELL": "🔴",
                 "INSUFFICIENT_EVIDENCE": "⚪"}  # selectbox can't take hex
 GOLD = "#52B6A4"  # the single accent
 
-# The one-line banner on every PRE-V2 surface (the single-ticker council flow and its
-# Report/History browsers). The council no longer issues the verdict — it narrates the
-# deterministic ranker — so these surfaces are kept for comparison, clearly labeled.
-_LEGACY_BANNER = (
-    "Earlier architecture: an LLM council issued the verdict. Demoted to narrator "
-    "after a controlled experiment (README: 'Why this design'). Kept for comparison "
-    "and demonstration."
-)
 
 
 def _verdict_hex(verdict: str | None) -> str:
@@ -150,41 +101,16 @@ def _verdict_hex(verdict: str | None) -> str:
 DISPLAY_TZ = ZoneInfo("Europe/Berlin")
 
 
-def _to_local(dt: datetime) -> datetime:
-    """A UTC-stored timestamp in the display timezone. Naive == UTC."""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(DISPLAY_TZ)
 
 
-def _fmt_local(dt: datetime, fmt: str = "%Y-%m-%d %H:%M") -> str:
-    """Format a timestamp in the display timezone, tagged with its tz abbrev."""
-    return _to_local(dt).strftime(f"{fmt} %Z")
 
 
-def _local_label_from_slug(stem: str) -> str:
-    """Render a report filename slug (UTC, '%Y-%m-%dT%H-%M-%SZ') in local time."""
-    try:
-        dt = datetime.strptime(stem, "%Y-%m-%dT%H-%M-%SZ").replace(
-            tzinfo=timezone.utc)
-    except ValueError:
-        return stem  # unrecognised slug — show it raw rather than hide the run
-    return _fmt_local(dt, "%Y-%m-%d %H:%M:%S")
 
 
-def _ts_header(dt: datetime) -> str:
-    """Identity-header timestamp: European dotted, local — '12.06.2026 15:42'."""
-    return _to_local(dt).strftime("%d.%m.%Y %H:%M")
 
 
-def _ts_compact(dt: datetime) -> str:
-    """Compact local timestamp for dense labels — '12.06. 15:42'."""
-    return _to_local(dt).strftime("%d.%m. %H:%M")
 
 
-def _prose(text: str, show_provenance: bool) -> str:
-    """Prose for display: raw under the provenance toggle, stripped otherwise."""
-    return text if show_provenance else strip_provenance(text)
 
 
 def _md(text: str) -> str:
@@ -193,22 +119,10 @@ def _md(text: str) -> str:
     return escape_dollars(text) if text else text
 
 
-def _render_prose(text: str, show_provenance: bool) -> str:
-    """Display-ready prose: provenance-cleaned (unless toggled) and $-escaped."""
-    return _md(_prose(text, show_provenance))
 
 
-# Stance display helpers ------------------------------------------------------ #
-_STANCE_BADGE = {
-    Stance.BULLISH: "🟢 bullish",
-    Stance.NEUTRAL: "🟡 neutral",
-    Stance.BEARISH: "🔴 bearish",
-    Stance.ABSTAIN: "⚪ abstain",
-}
 
 
-def _stance_badge(stance: Stance) -> str:
-    return _STANCE_BADGE.get(stance, str(stance))
 
 
 def _favicon() -> str:
@@ -297,25 +211,6 @@ def _inject_chrome() -> None:
     )
 
 
-def list_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, Strategy]]:
-    """Every USER-RUNNABLE SINGLE-TICKER (council) strategy as (label, path, strategy),
-    id-sorted.
-
-    Classification is by SHAPE (``aristos_council.strategy.discovery``): council
-    strategies have ``criteria:`` and are NOT referenced as a rank strategy's
-    council-lens screen. The rank strategies (Run tab) and the internal lens
-    screens are excluded here. Invalid YAMLs are skipped silently (the loader gates).
-    """
-    from aristos_council.strategy.discovery import council_strategies
-
-    out: list[tuple[str, Path, Strategy]] = []
-    for info in council_strategies(strategies_dir):
-        try:
-            s = load_strategy(info.path)
-        except Exception:
-            continue
-        out.append((f"{s.name} · {s.id}", info.path, s))
-    return out
 
 
 def list_rank_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, object]]:
@@ -334,838 +229,56 @@ def list_rank_strategy_options(strategies_dir: Path) -> list[tuple[str, Path, ob
     return out
 
 
-# --------------------------------------------------------------------------- #
-# Running the council in-process
-# --------------------------------------------------------------------------- #
-def run_council(ticker: str, strategy_path: Path,
-                overrides: dict | None = None) -> RunReport:
-    """Invoke the council for one ticker and persist both sinks at the edge.
-
-    ``overrides`` (optional) carries ephemeral per-run disposition settings —
-    ``{"partial_pass_allows_hold": bool, "is_gating": {criterion_name: bool}}`` —
-    applied IN MEMORY on top of the immutable YAML strategy for THIS run only. The
-    file is never modified; the delta vs the file is recorded on the verdict and
-    report. None/empty ⇒ a pure-defaults run (byte-identical to before).
-
-    Runtime imports (yfinance/langchain) are lazy so merely browsing past runs
-    never requires the runtime extras to be installed.
-    """
-    import os
-
-    from dotenv import load_dotenv
-
-    load_dotenv(ROOT / ".env")  # no-op if absent; never overrides real env vars
-
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set. Put it in the environment or a "
-            "local .env before running the council."
-        )
-
-    from aristos_council.agents.runners import production_runners, runner_metadata
-    from aristos_council.data.provider import select_market_adapter
-    from aristos_council.graph import build_council
-    from aristos_council.state import ResearchState
-
-    base = load_strategy(strategy_path)
-    # Apply ephemeral per-run overrides in memory; the on-disk YAML is untouched.
-    overrides = overrides or {}
-    strategy = effective_strategy(
-        base,
-        partial_pass_allows_hold=overrides.get("partial_pass_allows_hold"),
-        is_gating=overrides.get("is_gating"),
-    )
-    delta = applied_overrides(base, strategy)   # what actually differs vs the file
-
-    sentiment = None
-    sentiment_missing_key = False
-    if os.environ.get("FINNHUB_API_KEY"):
-        from aristos_council.data.finnhub_adapter import FinnhubAdapter
-        sentiment = FinnhubAdapter()
-    else:
-        sentiment_missing_key = True   # -> MISSING_KEY run issue -> degraded banner
-
-    # Provider chosen by $ARISTOS_MARKET_PROVIDER (default yfinance); adapter.name
-    # rides into provenance so the run records which provider it used.
-    adapter = select_market_adapter()
-    runners = production_runners()
-    app = build_council(adapter, strategy, runners,
-                        sentiment_adapter=sentiment,
-                        sentiment_missing_key=sentiment_missing_key)
-
-    # Prior verdict for the SAME ticker AND strategy (recommendation_flip key).
-    # load_latest skips prior OVERRIDE runs, so an experiment never becomes the
-    # baseline; and a non-empty delta suppresses this run's own flip firing.
-    prior = load_latest(ticker, VERDICTS_DIR, strategy_id=base.id)
-    initial = ResearchState(
-        ticker=ticker,
-        strategy_id=base.id,                     # always the BASE id
-        prior_recommendation=prior.verdict if prior else None,
-        applied_overrides=delta,
-    )
-
-    # Stream the graph so the UI can show per-stage progress for free: each
-    # "values" chunk is the full state after a node, which we label by what it
-    # has populated so far.
-    progress = st.progress(0.0, text="Gathering evidence…")
-    final: dict | None = None
-    STAGES = 7  # gather + 4 specialists + critic + decision (audit/veto are fast)
-    # Trace metadata so a live (optional-LangSmith) run is filterable; harmless off.
-    trace = trace_config(ticker, base.id, adapter.name, bool(delta))
-    for i, chunk in enumerate(
-            app.stream(initial, config=trace, stream_mode="values"), start=1):
-        final = chunk
-        progress.progress(min(i / STAGES, 1.0), text=_stage_label(chunk))
-    progress.progress(1.0, text="Done.")
-
-    result = ResearchState.model_validate(final)
-
-    # Friendly fail on a ticker the adapter couldn't supply (bad symbol,
-    # delisted). gather records adapter failures as failed tool calls rather
-    # than raising, so detect a failed CORE fundamentals fetch here and raise
-    # DataUnavailable — nothing meaningful was deliberated, so do NOT persist a
-    # degenerate verdict/report. The UI maps this to a friendly message.
-    fundamentals_tc = next(
-        (tc for tc in result.tool_calls if tc.tool_name == "get_fundamentals"),
-        None,
-    )
-    if fundamentals_tc is None or not fundamentals_tc.ok:
-        raise DataUnavailable(
-            fundamentals_tc.error if fundamentals_tc
-            else f"no fundamentals fetched for {ticker}"
-        )
-
-    append_record(record_from_state(result), VERDICTS_DIR)
-    report = report_from_state(result)
-    report.models = runner_metadata(runners)   # record model + temperature per tier
-    save_report(report, REPORTS_DIR)
-    return report
-
-
-def _friendly_error(exc: Exception, ticker: str) -> str | None:
-    """Map a run exception to a friendly UI message, or None to fall back to a
-    full traceback. DataUnavailable (bad/delisted ticker) is the expected,
-    user-actionable case; anything else is unexpected and shown in full."""
-    if isinstance(exc, DataUnavailable):
-        return f"No data found for {ticker} — check the symbol."
-    return None
-
-
-def _stage_label(chunk: dict) -> str:
-    """A human progress label derived from how far the state has filled in."""
-    if chunk.get("decision"):
-        return "Decision issued — auditing…"
-    if chunk.get("critic_report"):
-        return "Critic deliberating…"
-    ops = chunk.get("specialist_opinions") or []
-    if ops:
-        return f"{len(ops)} of 4 specialists reported…"
-    if chunk.get("tool_calls"):
-        return "Evidence gathered — specialists deliberating…"
-    return "Gathering evidence…"
-
-
-# --------------------------------------------------------------------------- #
-# Report rendering (shared by fresh runs and browsing past runs)
-# --------------------------------------------------------------------------- #
-def _run_label(report: RunReport) -> str:
-    """Dense one-line label for the run selector, with a verdict color dot:
-    'MO · 12.06. 15:42 · 🟡 HOLD 0.55'."""
-    d = report.decision
-    if d:
-        v = d.recommendation.value.upper()
-        verdict = f"{_VERDICT_DOT.get(v, '')} {v} {d.confidence:.2f}".strip()
-    else:
-        verdict = "—"
-    return f"{report.ticker} · {_ts_compact(report.run_at)} · {verdict}"
-
-
-def _figures_table(figures, show_provenance: bool = False) -> None:
-    """Render provenance-bound figures as a table.
-
-    Default columns are label / value / unit / source field / tool — the
-    auditable provenance a reader needs. The call_id (pure plumbing) is shown
-    only when the per-report provenance toggle is on. Mirrors run_council.py.
-    """
-    if not figures:
-        return
-    rows = []
-    for fig in figures:
-        row = {
-            "label": fig.label,
-            "value": fig.value,
-            "unit": fig.unit,
-            "field": fig.provenance.field_path,
-            "tool": fig.provenance.tool_name,
-        }
-        if show_provenance:
-            row["call_id"] = fig.provenance.call_id
-        rows.append(row)
-    st.dataframe(rows, hide_index=True, width="stretch")
-
-
-# Back-compat alias for the shared helper (kept for tests / call sites).
-_screen_table_rows = screen_table_rows
-
-
-def _render_screen_table(screen: dict | None) -> None:
-    rows = screen_table_rows(screen)
-    if not rows:
-        return
-    import pandas as pd
-
-    df = pd.DataFrame(rows)
-    styler = df.style.map(
-        lambda v: f"color: {SCREEN_STATUS_HEX.get(v, '')}; font-weight: 600",
-        subset=["Status"],
-    )
-    st.subheader("Screen results")
-    st.dataframe(styler, hide_index=True, width="stretch")
-
-
-def _render_report_header(report: RunReport, sidebar_ticker: str | None) -> None:
-    """Persistent identity header: ticker (large), company, strategy, timestamp.
-
-    Cannot scroll out of ambiguity — it sits at the top of every rendered
-    report, and ticker+timestamp are repeated as a caption above the decision.
-    """
-    name = f" — {report.company_name}" if report.company_name else ""
-    with st.container(border=True):
-        st.markdown(f"## {report.ticker}{name}")
-        st.caption(
-            f"{report.strategy_id} · {_ts_header(report.run_at)} · Europe/Berlin"
-        )
-        if sidebar_ticker and sidebar_ticker != report.ticker:
-            # Prevent wrong-company misreads when the sidebar has moved on.
-            st.caption(
-                f"⚠ Viewing **{report.ticker}** — sidebar is set to "
-                f"**{sidebar_ticker}**"
-            )
-
-
-@st.cache_data(show_spinner=False)
-def _report_pdf_bytes(report_json: str) -> bytes:
-    """Generate the export PDF, cached by report content so it's built once."""
-    from aristos_council.export.report_pdf import render_report_pdf
-    return render_report_pdf(RunReport.model_validate_json(report_json))
-
-
-def _render_pdf_button(report: RunReport, run_uid: str, key_ns: str) -> None:
-    """An 'Export PDF' download button — a purpose-built A4 council record."""
-    try:
-        pdf = _report_pdf_bytes(report.model_dump_json())
-    except Exception as exc:  # missing ui extra, etc. — degrade, don't crash
-        st.caption(f"PDF export unavailable: {exc}")
-        return
-    st.download_button(
-        "⬇ Export PDF",
-        data=pdf,
-        file_name=f"{report.ticker}_{run_uid}.pdf",
-        mime="application/pdf",
-        key=f"pdf_{key_ns}_{report.ticker}_{run_uid}",
-    )
-
-
-def _plural(kind: str, n: int) -> str:
-    if n == 1:
-        return kind
-    return kind + "es" if kind == "mismatch" else kind + "s"
-
-
-def _dq_summary(audit: dict) -> str:
-    """One-line data-quality summary from the provenance audit counts, e.g.
-    '7 provenance issues: 5 mismatches, 2 unresolvable'."""
-    n = len(audit.get("violations") or [])
-    cats = []
-    if audit.get("mismatch"):
-        cats.append(f"{audit['mismatch']} {_plural('mismatch', audit['mismatch'])}")
-    if audit.get("unresolvable"):
-        cats.append(f"{audit['unresolvable']} unresolvable")
-    base = f"{n} provenance issue{'' if n == 1 else 's'}"
-    return base + (": " + ", ".join(cats) if cats else "")
-
-
-def _violation_tool(v: str) -> str:
-    """The tool a violation cites, parsed from '... at <tool> -> <field> ...'."""
-    arrow = v.find(" → ")           # ' -> ' (unicode arrow used in the text)
-    if arrow == -1:
-        return "?"
-    before = v[:arrow]
-    at = before.rfind(" at ")
-    return before[at + 4:].strip() if at != -1 else "?"
-
-
-def _group_violations(violations: list[str]) -> list[tuple[str, list[str]]]:
-    """Group violations by (kind, cited tool) so repeats collapse, e.g.
-    '4 mismatches citing get_dividend_history'. Returns (header, items)."""
-    groups: dict[tuple[str, str], list[str]] = {}
-    order: list[tuple[str, str]] = []
-    for v in violations:
-        kind = "unresolvable path" if v.lower().startswith("unresolvable") \
-            else "mismatch"
-        key = (kind, _violation_tool(v))
-        if key not in groups:
-            groups[key] = []
-            order.append(key)
-        groups[key].append(v)
-    out = []
-    for kind, tool in order:
-        items = groups[(kind, tool)]
-        out.append((f"{len(items)} {_plural(kind, len(items))} citing {tool}",
-                    items))
-    return out
-
-
-def render_report(
-    report: RunReport, sidebar_ticker: str | None = None, key_ns: str = "report"
-) -> None:
-    """Render a full run report. The deliberation is the product: everything
-    examples/run_council.py prints to the console appears here too."""
-    # Run health FIRST: a degraded run (a fixable tool failure) gets a LOUD banner
-    # as the very first thing, above the verdict. A clean run renders no banner.
-    banner = degraded_banner(report.run_issues)
-    if banner:
-        st.error(banner)
-    st.caption(run_health_line(report))
-
-    _render_report_header(report, sidebar_ticker)
-
-    run_uid = _to_local(report.run_at).strftime("%Y%m%d%H%M%S")
-    ctrl_left, ctrl_right = st.columns([3, 1], vertical_alignment="center")
-    with ctrl_left:
-        # Per-report provenance toggle (off by default): shows call_ids in the
-        # figures tables and the RAW, unstripped prose (inline citations intact).
-        show_prov = st.toggle(
-            "Show provenance details",
-            value=False,
-            key=f"prov_{key_ns}_{report.ticker}_{run_uid}",
-            help="Reveal call_ids and inline field references for auditing.",
-        )
-    with ctrl_right:
-        _render_pdf_button(report, run_uid, key_ns)
-
-    _render_verdict_banner(report)
-
-    # Hybrid verdict: the deterministic matrix verdict next to the LLM one, with its
-    # working in an expander (the matrix's edge — a fully auditable verdict).
-    comparison = matrix_comparison_line(report)
-    if comparison:
-        st.info(f"🔢 {comparison}")
-        m = report.matrix_decision
-        if m is not None and m.contributions:
-            with st.expander("Matrix working (deterministic score breakdown)"):
-                for c in m.contributions:
-                    st.markdown(f"- `{c.points:+.1f}` — {c.detail}")
-                if not m.gated:
-                    st.markdown(f"**Total score: {m.score:+.1f}** "
-                                f"→ {matrix_verdict_text(m)}")
-
-    # Contested-verdict line: a close call (panel split / dissent) routes the user
-    # to the report and their own judgement. Clean verdicts get nothing.
-    contested_line = contested_banner(report)
-    if contested_line:
-        st.warning(f"⚖ **{contested_line}**")
-
-    # Decision-node micro-harness: if this run was measured and came back BORDERLINE,
-    # show the vote distribution under the verdict.
-    ds = report.decision_stability or {}
-    if ds.get("stability") == "BORDERLINE":
-        dist = ds.get("verdict_distribution", {})
-        dist_txt = " / ".join(f"{v.upper()} {c}"
-                              for v, c in sorted(dist.items(),
-                                                 key=lambda kv: (-kv[1], kv[0])))
-        st.warning(
-            f"⚖ **BORDERLINE — the Decision node returned {dist_txt} over "
-            f"{ds.get('n')} replays on identical evidence; treat as a lead and "
-            f"read the report.**")
-
-    # Override stamp: a run that changed a setting must not read as a default run.
-    if report.applied_overrides:
-        ovr = "; ".join(f"`{k}` = {v}"
-                        for k, v in report.applied_overrides.items())
-        st.warning(f"⚠ **Overrides this run** (not strategy defaults): {ovr}")
-
-    # Human-review flags — prominent, directly under the banner.
-    if report.veto_flags:
-        st.error(
-            "**⚠ Human review required** — "
-            f"{plural(len(report.veto_flags), 'veto trigger')} fired."
-        )
-        audit = report.provenance_audit or {}
-        for f in report.veto_flags:
-            # data_quality: a one-line summary + grouped full list in an expander,
-            # instead of dumping the raw violation text inline.
-            if f.trigger.value == "data_quality" and audit.get("violations"):
-                st.markdown(f"- **data_quality** — {_dq_summary(audit)}")
-                with st.expander("Show provenance issues"):
-                    for header, items in _group_violations(audit["violations"]):
-                        st.markdown(f"**{header}**")
-                        for it in items:
-                            st.markdown(f"- {it}")
-            else:
-                st.markdown(f"- **{f.trigger.value}** — {f.detail}")
-    else:
-        st.success("No veto triggers — auto-proceed permitted.")
-
-    # --- Screen results (deterministic table, above the rationale) ------- #
-    st.divider()
-    st.caption(f"{report.ticker} · {_ts_header(report.run_at)}")  # stay oriented
-    _render_screen_table(report.screen)
-
-    # --- Decision -------------------------------------------------------- #
-    if report.decision:
-        st.subheader("Decision rationale")
-        st.markdown(
-            _render_prose(report.decision.rationale, show_prov)
-            or "_(no rationale)_"
-        )
-        if report.decision.dissent:
-            st.markdown(
-                "**Dissent recorded:** "
-                + ", ".join(s.value for s in report.decision.dissent)
-            )
-        else:
-            st.caption("No dissent recorded.")
-
-    # --- Specialists ----------------------------------------------------- #
-    st.divider()
-    st.subheader("Specialists")
-    for op in report.specialist_opinions:
-        with st.expander(
-            f"{_stance_badge(op.stance)}  {op.specialist.value.title()} "
-            f"· confidence {op.confidence:.2f}"
-        ):
-            st.markdown(_render_prose(op.thesis, show_prov) or "_(no thesis)_")
-            _figures_table(op.figures, show_prov)
-            if op.caveats:
-                st.markdown("**Caveats**")
-                for c in op.caveats:
-                    st.markdown(f"- ⚠ {_render_prose(c, show_prov)}")
-
-    # --- Critic ---------------------------------------------------------- #
-    if report.critic_report:
-        cr = report.critic_report
-        st.divider()
-        st.subheader(
-            f"Critic — arguing against the {cr.targets_stance.value} consensus"
-        )
-        st.markdown(
-            _render_prose(cr.counter_thesis, show_prov) or "_(no counter-thesis)_"
-        )
-        _figures_table(cr.figures, show_prov)
-        if cr.challenged_figures:
-            st.markdown("**Challenged figures** (cited by the council, contested)")
-            for cf in cr.challenged_figures:
-                st.markdown(f"- {_render_prose(cf, show_prov)}")
-        if cr.weaknesses_found:
-            st.markdown("**Weaknesses found**")
-            for w in cr.weaknesses_found:
-                st.markdown(f"- {_render_prose(w, show_prov)}")
-        if cr.open_questions:
-            st.markdown(
-                "**Open questions** (for human resolution — not evidence)"
-            )
-            for q in cr.open_questions:
-                st.markdown(f"- {_render_prose(q, show_prov)}")
-
-    # --- Audit (call_ids always — that is its job) ----------------------- #
-    _render_provenance_panel(report.provenance_audit)
-
-
-def _render_verdict_banner(report: RunReport) -> None:
-    d = report.decision
-    verdict = d.recommendation.value.upper() if d else "—"
-    # The GATING metric is the deterministic evidence coverage — NOT the narrator's
-    # self-assigned confidence (which is now a non-gating prose note below).
-    cov = report.evidence_coverage
-    cov_txt = f"{cov:.2f}" if cov is not None else "—"
-    # Class lets the print stylesheet darken the verdict color for paper.
-    vclass = f"verdict-{d.recommendation.value}" if d else "verdict-none"
-    col1, col2, col3 = st.columns([2, 1, 2])
-    # Verdict is the only colored value — its semantic color, nothing else.
-    col1.markdown(
-        "<div style='font-size:0.8rem;letter-spacing:0.08em;color:#9aa0aa'>"
-        "VERDICT</div>"
-        f"<div class='{vclass}' style='font-size:2.1rem;font-weight:700;"
-        f"line-height:1.1;color:{_verdict_hex(verdict)}'>{verdict}</div>",
-        unsafe_allow_html=True,
-    )
-    col2.metric("Evidence coverage", cov_txt,
-                help="Deterministic coverage of what the run actually saw — this "
-                     "gates the low-confidence escalation, in place of the narrator's "
-                     "self-assigned number.")
-    col3.metric("Run", _fmt_local(report.run_at))
-    if d:
-        # The narrator's number, kept as an HONEST non-gating note (renamed from
-        # "confidence" — it no longer moves any mechanical outcome).
-        st.caption(f"Narrator's note on conviction: **{d.confidence:.2f}** — a prose "
-                   "signal only; it does NOT gate escalation.")
-
-
-def _render_provenance_panel(audit: dict | None) -> None:
-    if not audit:
-        return
-    st.divider()
-    st.subheader("Provenance audit")
-    cols = st.columns(6)
-    for col, key in zip(
-        cols,
-        ("figures_audited", "verified", "mismatch",
-         "unresolvable", "unverifiable", "unit_scaled"),
-    ):
-        col.metric(key.replace("_", " "), audit.get(key, 0))
-    violations = audit.get("violations") or []
-    if violations:
-        st.markdown("**Violations** (feed the DATA_QUALITY veto)")
-        for v in violations:
-            st.markdown(f"- {v}")
-    notes = audit.get("unit_scaled_notes") or []
-    if notes:
-        st.markdown("**Unit-scaled notes** (reported, not veto-firing)")
-        for n in notes:
-            st.markdown(f"- {n}")
-
-
-# --------------------------------------------------------------------------- #
-# History rendering
-# --------------------------------------------------------------------------- #
-def render_history(ticker: str) -> None:
-    records = load_records(ticker, VERDICTS_DIR)
-    if not records:
-        st.info(f"No verdict history for {ticker} yet.")
-        return
-
-    import altair as alt
-    import pandas as pd
-
-    st.subheader(f"{ticker} — verdict & confidence across runs")
-    st.caption("Timestamps shown in Europe/Berlin (stored in UTC).")
-    # Runs are sparse and irregular, so treat them as ordered discrete EVENTS
-    # (#1, #2, … with date labels), not a continuous time axis — a real time
-    # axis would render mostly empty space between clustered runs.
-    chart_df = pd.DataFrame(
-        [
-            {
-                "run_idx": i,
-                "run_label": f"#{i} · {_to_local(r.run_at).strftime('%Y-%m-%d')}",
-                "verdict": r.verdict.value.upper() if r.verdict else None,
-                "confidence": r.confidence,
-            }
-            for i, r in enumerate(records, start=1)
-        ]
-    )
-    run_order = chart_df["run_label"].tolist()  # already in chronological order
-    x = alt.X("run_label:N", sort=run_order, title="Run",
-              axis=alt.Axis(labelAngle=0))
-    tooltip = ["run_label", "verdict", "confidence"]
-    verdict_scale = alt.Scale(domain=["BUY", "HOLD", "SELL"],
-                              range=["#2E7D32", "#B8860B", "#B23B3B"])
-
-    # Verdict: a stepped categorical line with SELL/HOLD/BUY as labelled levels
-    # (BUY on top). The line is the gold accent (continuous, not semantic); the
-    # markers carry each run's semantic verdict color and carry the signal when
-    # there are only a few runs.
-    base = alt.Chart(chart_df).encode(x=x)
-    y_verdict = alt.Y("verdict:N", sort=["BUY", "HOLD", "SELL"], title="Verdict",
-                      scale=alt.Scale(domain=["BUY", "HOLD", "SELL"]))
-    verdict_panel = alt.layer(
-        base.mark_line(interpolate="step-after", color=GOLD).encode(y=y_verdict),
-        base.mark_point(filled=True, size=120, opacity=1).encode(
-            y=y_verdict,
-            color=alt.Color("verdict:N", scale=verdict_scale, legend=None),
-            tooltip=tooltip,
-        ),
-    ).properties(height=170, title="Verdict")
-
-    # Confidence: its own 0–1 axis (so verdict levels never read as a flat line
-    # pinned to the bottom of a shared scale), in the gold accent — not semantic.
-    confidence_panel = (
-        alt.Chart(chart_df)
-        .mark_line(color=GOLD, point=alt.OverlayMarkDef(size=90, color=GOLD))
-        .encode(
-            x=x,
-            y=alt.Y("confidence:Q", title="Confidence",
-                    scale=alt.Scale(domain=[0, 1])),
-            tooltip=tooltip,
-        )
-        .properties(height=170, title="Confidence")
-    )
-    chart = alt.vconcat(verdict_panel, confidence_panel).resolve_scale(
-        x="shared")
-    st.altair_chart(chart, width="stretch")
-
-    st.subheader("Runs")
-    runs_df = pd.DataFrame(
-        [
-            {
-                "run (Europe/Berlin)": _fmt_local(r.run_at, "%Y-%m-%d %H:%M:%S"),
-                "verdict": r.verdict.value if r.verdict else "—",
-                "confidence": r.confidence,
-                "strategy": r.strategy_id,
-                "vetoes": ", ".join(t.value for t in r.veto_triggers) or "—",
-            }
-            for r in records
-        ]
-    ).set_index("run (Europe/Berlin)")
-    st.dataframe(runs_df, width="stretch")
-
-    st.subheader("Specialist stance across runs")
-    st.caption(
-        "Reads down a column to spot drift — e.g. whether Technical has been "
-        "sliding toward neutral run over run."
-    )
-    stance_rows = []
-    for r in records:
-        row = {"run (Europe/Berlin)": _fmt_local(r.run_at, "%Y-%m-%d %H:%M:%S")}
-        for name, stance in r.stances.items():
-            row[name] = stance.value if hasattr(stance, "value") else stance
-        stance_rows.append(row)
-    st.dataframe(
-        pd.DataFrame(stance_rows).set_index("run (Europe/Berlin)"),
-        width="stretch",
-    )
-
-
-# --------------------------------------------------------------------------- #
-# Strategy rendering (read-only form + edit-as-new-version)
-# --------------------------------------------------------------------------- #
-# CriterionSpec carries exactly these per-criterion params; the rest a criterion
-# declares (e.g. min_revenue_cagr's `years`) are registry defaults the strategy
-# can't yet override, so they render read-only.
-_PERSISTABLE_PARAMS = {"threshold", "unverifiable_blocks"}
-
-
-def _human_number(value) -> str | None:
-    """Readable form for large thresholds (raw ints like 1e10 are unreadable).
-
-    None for values that don't need it (small decimals/integers)."""
-    n = float(value)
-    if abs(n) < 1000:
-        return None
-    commas = f"{n:,.0f}"
-    if abs(n) >= 1e9:
-        return f"{commas} (${n / 1e9:.0f}B)"
-    if abs(n) >= 1e6:
-        return f"{commas} (${n / 1e6:.0f}M)"
-    return commas
-
-
-def _param_input_kwargs(param, value) -> dict:
-    """st.number_input kwargs for a criterion ParamSpec (type/bounds/step)."""
-    kw: dict = {}
-    if param.type == "int":
-        kw["value"] = int(value)
-        if param.min is not None:
-            kw["min_value"] = int(param.min)
-        if param.max is not None:
-            kw["max_value"] = int(param.max)
-        kw["step"] = int(param.step or 1)
-    else:
-        kw["value"] = float(value)
-        if param.min is not None:
-            kw["min_value"] = float(param.min)
-        if param.max is not None:
-            kw["max_value"] = float(param.max)
-        step = float(param.step) if param.step else 0.01
-        kw["step"] = step
-        kw["format"] = "%.4f" if step < 0.01 else ("%.2f" if step < 1 else "%.0f")
-    return kw
-
-
-# Friendlier labels + help for the generic criterion renderer (display-only).
-_PARAM_LABELS = {
-    "threshold": "Threshold",
-    "years": "CAGR window (years)",
-    "unverifiable_blocks": "Unverifiable result blocks",
-}
-_PARAM_HELP = {
-    "unverifiable_blocks":
-        "Marks whether a NOT-EVAL (couldn't-be-evaluated) result for this "
-        "criterion should count as disqualifying for this strategy. Not yet "
-        "active: today every NOT-EVAL result escalates to human review "
-        "regardless of this setting — this per-criterion control is reserved "
-        "for upcoming strategy-disposition logic.",
-    "years":
-        "Look-back window for the in-house revenue CAGR (shared by the revenue "
-        "and PEG criteria). Fixed in code; not strategy-configurable yet.",
-}
-
-
-def _param_label(param) -> str:
-    return _PARAM_LABELS.get(param.name, param.name.replace("_", " ").title())
-
-
-def _render_criterion(spec, edit: bool, sid: str) -> dict:
-    """Render one criterion's params from its registry metadata.
-
-    Generic — no per-criterion branches. Numeric params share a row; the
-    bool (unverifiable-blocks) gets its OWN line so it never reads as a
-    threshold nor blurs into the strategy-level Policy checkbox (different
-    section). Locked params (not strategy-configurable, e.g. the CAGR window)
-    are still SHOWN, but disabled and tagged 🔒 so nothing verdict-affecting is
-    invisible. Returns the persistable params to save.
-    """
-    crit = REGISTRY.get(spec.name)
-    label = crit.label if crit else spec.name
-    params = crit.params if crit else ()
-    st.markdown(f"**{label}**  ·  `{spec.name}`")
-
-    current = {"threshold": spec.threshold,
-               "unverifiable_blocks": spec.unverifiable_blocks}
-    saved = {"threshold": spec.threshold,
-             "unverifiable_blocks": spec.unverifiable_blocks}
-
-    numeric = [p for p in params if p.type in ("int", "float")]
-    bools = [p for p in params if p.type == "bool"]
-
-    # strategy-scoped widget keys: two strategies can share a criterion name
-    # (both have min_market_cap), so switching must not reuse widgets.
-    for col, param in zip(st.columns(len(numeric)), numeric):
-        value = current.get(param.name, param.default)
-        persistable = param.name in _PERSISTABLE_PARAMS
-        disabled = not edit or not persistable
-        key = f"c_{sid}_{spec.name}_{param.name}"
-        lbl = _param_label(param) + ("  🔒" if not persistable else "")
-        out = col.number_input(lbl, disabled=disabled, key=key,
-                               help=_PARAM_HELP.get(param.name),
-                               **_param_input_kwargs(param, value))
-        human = _human_number(out)
-        if human:
-            col.caption(f"= {human}")
-        if not persistable:
-            col.caption("🔒 fixed — not configurable")
-        if persistable:
-            saved[param.name] = out
-
-    # The per-criterion bool on its own full-width line, clearly labelled.
-    for param in bools:
-        value = current.get(param.name, param.default)
-        persistable = param.name in _PERSISTABLE_PARAMS
-        key = f"c_{sid}_{spec.name}_{param.name}"
-        out = st.checkbox(_param_label(param), value=bool(value),
-                          disabled=not edit or not persistable, key=key,
-                          help=_PARAM_HELP.get(param.name))
-        if persistable:
-            saved[param.name] = out
-    return {"name": spec.name, **saved}
-
-
-def _run_overrides(strategy: Strategy) -> dict:
-    """Sidebar controls for EPHEMERAL per-run disposition overrides — applied to
-    THIS run only and recorded on the report, never written to the strategy file.
-
-    Returns ``{"partial_pass_allows_hold": bool, "is_gating": {name: bool}}`` with
-    the current control values; the run records only what actually differs from
-    the file (so leaving everything at its default is a no-op). Deliberately NOT
-    part of Save-new-version / _PERSISTABLE_PARAMS — this controls a run, not the
-    file."""
-    sid = strategy.id
-    with st.expander("⚙️ Run overrides — this run only", expanded=False):
-        st.caption("Applied to THIS run only and stamped on the report. The "
-                   "strategy file is never modified.")
-        if st.button("↺ Reset to strategy defaults", key=f"ovr_reset_{sid}"):
-            for k in ([f"ovr_partial_{sid}"]
-                      + [f"ovr_gate_{sid}_{c.name}" for c in strategy.criteria]):
-                st.session_state.pop(k, None)
-            st.rerun()
-        partial = st.checkbox(
-            "Partial pass allows HOLD",
-            value=strategy.policy.partial_pass_allows_hold,
-            key=f"ovr_partial_{sid}",
-            help="Soft policy hint to the Decision agent (this run only).")
-        st.caption("Gating — a confirmed fail caps the verdict at SELL:")
-        is_gating: dict[str, bool] = {}
-        for c in strategy.criteria:
-            crit = REGISTRY.get(c.name)
-            label = crit.label if crit else c.name
-            is_gating[c.name] = st.checkbox(
-                f"{label} · gating",
-                value=c.is_gating,
-                key=f"ovr_gate_{sid}_{c.name}",
-                help="Deterministic SELL ceiling on a confirmed fail (this run "
-                     "only).")
-    return {"partial_pass_allows_hold": partial, "is_gating": is_gating}
-
-
-def render_strategy_tab(selected_path: Path | None = None) -> None:
-    """Dynamic Strategy VIEWER (Sprint 4C): renders the selected strategy ENTIRELY from
-    its YAML via ``strategy.detail`` — nothing strategy-specific is hardcoded, so a new
-    strategy dropped into ``strategies/`` appears fully rendered with zero UI changes.
-    Editing is done in the repo (configs are versioned, never mutated in place)."""
-    from aristos_council.strategy.detail import (
-        PROVENANCE_NOTE, strategy_detail)
-    from aristos_council.strategy.discovery import discover_strategies
-
-    st.subheader("Strategy — config viewer")
-    st.caption("Rendered entirely from the selected strategy's YAML. Add a strategy to "
-               "`strategies/` and it appears here with no UI changes; configs are "
-               "versioned, never edited in place.")
-
-    infos = discover_strategies(STRATEGIES_DIR)
-    if not infos:
-        st.error(f"No strategies found under {STRATEGIES_DIR}")
-        return
-    labels = [f"{(i.display_name or i.name)} · {i.id} ({i.kind})" for i in infos]
-    choice = st.selectbox("Strategy config", labels, key="strat_view_select")
-    info = infos[labels.index(choice)]
-    d = strategy_detail(info.id, STRATEGIES_DIR)
-
-    # 1 — header
-    st.markdown(f"### {d.display_name}")
-    created = f" · created {d.created}" if d.created else ""
-    st.caption(f"`{d.id}` · version {d.version} · {d.kind}{created}")
-    # UNI-1 ITEM 3: the strategy↔universe pairing, rendered from YAML (present only when
-    # the strategy declares suggested_universes; absent -> the header is unchanged).
-    if d.suggested_universes:
-        st.caption(f"Suggested universes: {', '.join(d.suggested_universes)}")
-
-    # 2 — description (verbatim)
-    if d.description:
-        st.markdown(d.description)
-
-    # 3 — screen criteria (REPORT-1: the rule's human name first, its limit in plain
-    # English, and its id kept as the record key).
-    from aristos_council.company_check import _criterion_label, _criterion_threshold
-
-    st.subheader(f"Screen criteria · {d.screen_source}")
-    if d.criteria:
-        st.dataframe(
-            [{"Rule": _criterion_label(c.name),
-              "Limit": _criterion_threshold(c.name, c.threshold),
-              "Gating": "gating" if c.gating else "non-gating",
-              "Criterion id": c.name} for c in d.criteria],
-            hide_index=True, width="stretch")
-    else:
-        st.caption("No screen criteria.")
-
-    # 4 — gates (sector + rationale, market cap, payout)
-    if d.gates:
-        st.subheader("Gates")
-        for g in d.gates:
-            st.markdown(f"- **{g.name}** — {g.value}")
-            if g.rationale:
-                st.caption(f"↳ {g.rationale}")
-
-    # 5 — rank factors + verdict cut
-    if d.factors:
-        st.subheader("Rank factors + verdict cut")
-        from aristos_council.factors import FACTOR_REGISTRY
-        st.dataframe(
-            [{"Factor": (getattr(FACTOR_REGISTRY.get(f.name), "label", "") or f.name),
-              "Better when": ("higher" if f.direction == "high" else "lower"),
-              "Factor id": f.name} for f in d.factors],
-            hide_index=True, width="stretch")
-        st.caption(f"Verdict cut: {d.cut_rule}")
-
-    # 6 — policy flags (plain meanings from the shared glossary)
-    if d.policy:
-        st.subheader("Policy")
-        for p in d.policy:
-            st.markdown(f"- **{p.name}** = `{p.value}` — {p.meaning}")
-
-    # 7 — provenance footer
-    st.divider()
-    st.caption(f"Source: `{d.path}` · {PROVENANCE_NOTE}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # --------------------------------------------------------------------------- #
@@ -1354,6 +467,7 @@ class RunOptions:
     strategies: list = field(default_factory=list)
     with_summary: bool = False
     with_council: bool = False          # always False when show_council=False
+    with_judges: bool = False           # JUDGE-PANEL-1; also False when show_council=False
 
 
 # The "Plain-English summary" checkbox means two different things on the two inputs (one
@@ -1398,7 +512,7 @@ OPTIONAL_EXTRAS_TIME = "Adds a few minutes to the run."          # B24-E6: a cou
 
 
 def render_run_options(choices, *, input_kind: str, show_council: bool,
-                       show_validation: bool = False) -> RunOptions:
+                       show_validation: bool = False, show_judges: bool = False) -> RunOptions:
     """ONE options block, called once per input kind. ``input_kind`` is "list" (the Run
     tab) or "company" (Company Check) — it only qualifies widget keys (see
     ``opt_lens_checkbox_key``) and picks the right summary help text; the WIDGETS
@@ -1435,15 +549,31 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
         help=_SUMMARY_HELP[input_kind])
     store["summary"] = with_summary
     with_council = False
+    with_judges = False
     if show_council:
         _sync_from_store(f"opt_council_{input_kind}", "council", switched=switched)
         with_council = st.checkbox(
             "Council opinion", value=False, key=f"opt_council_{input_kind}",
             help=_COUNCIL_HELP)
         store["council"] = with_council
+    if show_council and show_judges:
+        # JUDGE-PANEL-1 - directly under the council tick box, off by default, with the expected
+        # number of model calls beside it. It records what independent models would say; it has no
+        # vote and changes nothing above.
+        from aristos_council.judges import render as _judge_render
+        from aristos_council.judges.config import load_config as _load_judges
+        _sync_from_store(f"opt_judges_{input_kind}", "judges", switched=switched)
+        with_judges = st.checkbox(
+            _judge_render.CHECKBOX_LABEL, value=False, key=f"opt_judges_{input_kind}",
+            help=_judge_render.HELP)
+        store["judges"] = with_judges
+        try:
+            st.caption(_judge_render.checkbox_caption(_load_judges()))
+        except Exception as exc:                        # noqa: BLE001 - a bad judges.yaml is shown, not fatal
+            st.caption(f"The judge panel is not configured: {type(exc).__name__}: {str(exc)[:120]}")
     st.session_state["_opts_last_kind"] = input_kind
     return RunOptions(strategies=strategies, with_summary=with_summary,
-                      with_council=with_council)
+                      with_council=with_council, with_judges=with_judges)
 
 
 # --------------------------------------------------------------------------- #
@@ -1459,14 +589,11 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
 # One selector now carries the decision, and the UI never shows a value it is not using.
 RUN_MODE_RANKER = "ranker_only"
 RUN_MODE_NARRATOR = "narrator"
-RUN_MODE_SECOND_OPINION = "second_opinion"
-RUN_MODES: tuple[str, ...] = (RUN_MODE_RANKER, RUN_MODE_NARRATOR,
-                              RUN_MODE_SECOND_OPINION)
+RUN_MODES: tuple[str, ...] = (RUN_MODE_RANKER, RUN_MODE_NARRATOR)
 
 RUN_MODE_LABELS = {
     RUN_MODE_RANKER: "Ranker only — deterministic, no LLM, no cost",
     RUN_MODE_NARRATOR: "Narrator — the LLM explains the ranker's verdict",
-    RUN_MODE_SECOND_OPINION: "Second opinion — experimental; null result, see README",
 }
 
 MULTI_LENS_LOCK_REASON = ("Several lenses is a deterministic comparison — it cannot "
@@ -1507,8 +634,6 @@ def run_mode_arguments(run_mode: str) -> tuple[bool, str]:
     inert value today's disabled selectbox already handed it, so the call is unchanged."""
     if run_mode == RUN_MODE_RANKER:
         return True, RUN_MODE_NARRATOR
-    if run_mode == RUN_MODE_SECOND_OPINION:
-        return False, RUN_MODE_SECOND_OPINION
     return False, RUN_MODE_NARRATOR
 
 
@@ -1522,7 +647,8 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
                      est_cost: float | None = None,
                      narrated_count: int | None = None,
                      with_reader: bool = False,
-                     with_council: bool | None = None) -> str:
+                     with_council: bool | None = None,
+                     with_judges: bool = False) -> str:
     """The button says what will happen and what it costs, on its own line:
 
         ``▶ Run 5 lenses · free``
@@ -1542,6 +668,10 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
     if with_council is not None:
         extras = [n for n, on in (("summary", with_reader), ("council opinion", with_council))
                  if on]
+        if with_judges:                       # JUDGE-PANEL-1: ~6 calls (3 judges x 2) on top
+            names = extras + ["judge panel"]
+            calls = (1 if with_reader else 0) + (6 if with_council else 0) + 6
+            return f"▶ Run company check + {' + '.join(names)} (~{calls} model calls)"
         if not extras:
             return "▶ Run company check · free"
         if extras == ["summary"]:
@@ -1575,7 +705,7 @@ def run_button_label(run_mode: str = RUN_MODE_RANKER, *, n_strategies: int,
                 if est_cost is not None else "")
         return (f"▶ {what} — free{reader_tail} · then choose whether to narrate "
                 f"up to {plural(narrated_count, 'name')}{tail}")
-    verb = "narrate" if run_mode == RUN_MODE_NARRATOR else "take a second opinion"
+    verb = "narrate"
     tail = f" · ≤ ${est_cost:.2f} total" if est_cost is not None else ""
     return f"▶ {what} — free{reader_tail} · then choose whether to {verb}{tail}"
 
@@ -1724,7 +854,7 @@ def run_problems(universe: list[str], *, n_strategies: int, deterministic: bool,
             problems.append(f"List too large ({len(universe)} > {cap}) for a narrated "
                             "run — trim it, or switch to Ranker only.")
     if not deterministic and not has_key:
-        problems.append("Narrator / second-opinion needs ANTHROPIC_API_KEY (set it "
+        problems.append("Narrator needs ANTHROPIC_API_KEY (set it "
                         "in the environment or a local .env). Use **Ranker only** to "
                         "run with no LLM and no cost.")
     return problems
@@ -3806,10 +2936,11 @@ def _render_company_run(choice: InputChoice, choices, *, show_validation: bool =
     from aristos_council.company_report import run_company_report
 
     run_options = render_run_options(choices, input_kind="company", show_council=True,
-                                     show_validation=show_validation)
+                                     show_validation=show_validation, show_judges=True)
     strategies = run_options.strategies
     with_summary = run_options.with_summary
     with_council = run_options.with_council
+    with_judges = run_options.with_judges
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     if (with_summary or with_council) and not has_key:
@@ -3822,7 +2953,8 @@ def _render_company_run(choice: InputChoice, choices, *, show_validation: bool =
         st.info("Pick at least one strategy.")
     run = st.button(_md(run_button_label(n_strategies=len(strategies),
                                          with_reader=with_summary,
-                                         with_council=with_council)),
+                                         with_council=with_council,
+                                         with_judges=with_judges)),
                     type="primary", disabled=not choice.ticker or not strategies,
                     key="cc_run")
     if run:
@@ -3833,6 +2965,7 @@ def _render_company_run(choice: InputChoice, choices, *, show_validation: bool =
                 choice.ticker, [s_.id for s_ in strategies], adapter=_company_check_adapter(),
                 strategies_dir=STRATEGIES_DIR, universes_dir=UNIVERSES_DIR,
                 runs_dir=ROOT / "runs", with_summary=with_summary, with_council=with_council,
+                with_judges=with_judges,
                 include_small=choice.include_small,
                 progress=lambda msg: status.update(label=msg))
         except Exception as exc:
@@ -3865,7 +2998,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
     """The list-input half of the Analyse tab — unchanged pipeline calls and result
     renderers; what changed: options come from the shared block (commit 1); "Council
     opinion" ticked/unticked now drives Narrator/Ranker-only by default, with the old
-    3-way Run-mode radio (Second opinion) restored only behind the validation toggle —
+    Run-mode radio (ranker only / narrator) restored only behind the validation toggle —
     never both controls at once; the spend threshold and size-floor override moved into
     an "Advanced (list only)" expander."""
     import os
@@ -3881,8 +3014,8 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
     derived_from = choice.derived_from
 
     # TAB-MERGE-1 commit 3: "Council opinion" ticked = Narrator, unticked = Ranker only.
-    # "Second opinion" is KEPT, visible only behind the validation toggle — as the OLD
-    # 3-way radio, restored in place of the checkbox so the two controls never both show.
+    # Behind the validation toggle the OLD radio (ranker only / narrator) stands in place of the
+    # checkbox, so the two controls never both show.
     show_run_mode_radio = show_validation
     options = render_run_options(choices, input_kind="list",
                                  show_council=not show_run_mode_radio,
@@ -3918,10 +3051,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
             "Run mode", RUN_MODES,
             format_func=lambda m: RUN_MODE_LABELS[m], key="uni_run_mode",
             help="Ranker only: the deterministic ranking, free. "
-                 "Narrator: the LLM explains the ranker's verdict. "
-                 "Second opinion: an independent comparison verdict — a "
-                 "pre-registered experiment that returned a null result; kept "
-                 "behind this option.")
+                 "Narrator: the LLM explains the ranker's verdict.")
         st.session_state["uni_run_mode_choice"] = run_mode
     else:
         run_mode = RUN_MODE_NARRATOR if options.with_council else RUN_MODE_RANKER
@@ -4460,6 +3590,9 @@ def _render_company_report(report) -> None:
         else:
             st.info(op.note)
 
+    if getattr(report, "judge_panel", None) is not None:      # only when it was ticked
+        _render_judge_panel(report.judge_panel)
+
     with st.expander(SECTION_WORKINGS):
         st.subheader("Valuation band")
         st.caption("This company against its own history; a mark, never a veto.")
@@ -4519,6 +3652,33 @@ def _render_company_report(report) -> None:
         if report.saved_to:
             tail += f"; saved under `{report.saved_to}`"
         st.caption(tail)
+
+
+def _render_judge_panel(panel) -> None:
+    """JUDGE-PANEL-1 - one row per judge, the split, and whether the panel agrees with the verdict of
+    record. No average, no combined verdict. Built from ``judges.render`` so the page and every
+    download say the same thing."""
+    import pandas as pd
+
+    from aristos_council.judges import render as jr
+
+    st.subheader(jr.SECTION_TITLE)
+    st.caption(jr.CAPTION)
+    if not panel.available:
+        st.info(f"Not run: {panel.note}")
+        return
+    st.dataframe(pd.DataFrame(jr.rows(panel), columns=list(jr.COLUMNS)),
+                 hide_index=True, width="stretch")
+    for line in jr.summary_lines(panel):
+        st.markdown(line)
+    paragraph, note = jr.reading_text(panel)
+    if paragraph:
+        st.markdown(paragraph)
+        st.caption(jr.READING_CAPTION)
+    elif note:
+        st.caption(note)
+    if panel.log_error:
+        st.warning(f"The panel's answers could not be written to the log: {panel.log_error}")
 
 
 HOW_GRADED_TOPIC = "How lenses are graded"
@@ -4618,16 +3778,6 @@ def main() -> None:
     except Exception:               # noqa: BLE001 - a missing image must never stop the app
         pass
 
-    # Legacy surfaces are HIDDEN BY DEFAULT (product decision): the app opens as
-    # v2-only. Read the toggle's persisted value FIRST so the pre-v2 flow renders only
-    # when enabled; the toggle itself sits small at the BOTTOM of the sidebar.
-    show_legacy = st.session_state.get("show_legacy", False)
-
-    ticker = "JNJ"
-    selected_path: Path | None = None
-    run_overrides: dict = {}
-    run_clicked = False
-
     with st.sidebar:
         # ASSET-MODE-1 — the one control that decides what every picker offers. In the
         # SIDEBAR, not in a tab, because it governs the Run tab, Company Check and every
@@ -4645,41 +3795,6 @@ def main() -> None:
                  key="asset_mode")
         st.divider()
 
-        if show_legacy:
-            # --- LEGACY single-ticker council flow (pre-v2) ---
-            st.header("Run a council · Legacy")
-            st.caption(_LEGACY_BANNER)
-            # normalize_ticker also strips a stray trailing dot ("000660.KS." -> the
-            # SK Hynix retrieval bug); upper-cases and trims like the old inline call.
-            ticker = normalize_ticker(st.text_input("Ticker", value="JNJ"))
-
-            options = list_strategy_options(STRATEGIES_DIR)
-            if options:
-                labels = [label for label, _, _ in options]
-                choice = st.selectbox("Strategy", labels)
-                by_label = {label: (p, s) for label, p, s in options}
-                selected_path, selected_strategy = by_label[choice]
-                run_overrides = _run_overrides(selected_strategy)
-            else:  # no loadable strategy files — show the absolute path searched
-                st.error(f"No strategies found under {STRATEGIES_DIR}")
-
-            st.divider()
-            # Cost gate. Cleared BEFORE the widget renders, so it starts unchecked
-            # each session AND re-arms after every run — each API run requires a
-            # fresh acknowledgement, never a leftover tick.
-            if st.session_state.pop("_clear_cost_ack", False):
-                st.session_state["cost_ack"] = False
-            ack = st.checkbox(
-                "I understand an API run costs real credits.", key="cost_ack")
-            run_clicked = st.button(
-                "▶ Run council",
-                type="primary",
-                disabled=not (ack and ticker and selected_path is not None),
-            )
-            if not ack:
-                st.caption("Acknowledge the cost to enable the Run button.")
-            st.divider()
-
         # DISPLAY (UI-POLISH-1): the two view switches. The validation toggle stays in BOTH states so it is
         # always the way back. No `value=`: the default is off, and tests/session can set a key without a
         # default-conflict warning. Both are session-only.
@@ -4692,129 +3807,16 @@ def main() -> None:
             "Show validation tools", key="show_legacy",
             help="Reveal the validation assets - the known-trap bench universe and the "
                  "Classic Value baseline strategy (for side-by-side comparison) - plus "
-                 "the legacy single-ticker council, its Report/History, and the "
-                 "council-strategy editor, and the run's working details (file paths, timings). "
+                 "the run's working details (file paths, timings). "
                  "Off by default - the app opens on the live scoreboard strategies and "
                  "universes only.")
 
-    if show_legacy and run_clicked and selected_path is not None:
-        try:
-            with st.spinner(f"Running the council on {ticker}…"):
-                report = run_council(ticker, selected_path, run_overrides)
-        except Exception as exc:  # surface, don't crash the page
-            friendly = _friendly_error(exc, ticker)
-            if friendly:
-                st.error(friendly)
-            else:
-                st.exception(exc)  # unexpected — show the full traceback
-        else:
-            st.session_state["run_complete_msg"] = (
-                f"Run complete — verdict and full report saved for {ticker}."
-            )
-            # Focus the browser on the just-completed run, re-arm the cost gate,
-            # and re-render. The run becomes the selected report — not a second
-            # copy pinned above the browser.
-            st.session_state["_focus_ticker"] = ticker
-            st.session_state["_clear_cost_ack"] = True
-            st.rerun()
-
-    pending = st.session_state.pop("run_complete_msg", None)
-    if pending:
-        st.success(pending)
-
-    if not show_legacy:
-        # v2-ONLY landing: Analyse + Scoreboard (first-class, not legacy). Validation
-        # assets hidden (show_validation=False). TAB-MERGE-1 commit 3: Company Check and
-        # the old Run tab are now ONE tab, "Analyse" — picking Company or Cohort / list is
-        # an explicit switch inside it, not a choice of tab.
-        tab_analyse, tab_scoreboard = st.tabs(["Analyse", "Scoreboard"])
-        with tab_analyse:
-            render_run_tab(show_validation=False)
-        with tab_scoreboard:
-            render_scoreboard_tab()
-        return
-
-    # Legacy ON: Analyse FIRST (Streamlit default-selects it), Scoreboard next
-    # (first-class), then the pre-v2 council browsers (Legacy), the YAML editor last. The
-    # toggle is ON here, so validation assets are revealed (incl. the "Second opinion"
-    # run mode, TAB-MERGE-1 commit 3).
-    tab_analyse, tab_scoreboard, tab_report, tab_history, tab_strategy = \
-        st.tabs(["Analyse", "Scoreboard", "Report · Legacy",
-                 "History · Legacy", "Strategy · Legacy"])
-
+    show_validation = bool(st.session_state.get("show_legacy", False))
+    tab_analyse, tab_scoreboard = st.tabs(["Analyse", "Scoreboard"])
     with tab_analyse:
-        render_run_tab(show_validation=True)
-
+        render_run_tab(show_validation=show_validation)
     with tab_scoreboard:
         render_scoreboard_tab()
-
-    with tab_report:
-        st.info(f"**Legacy.** {_LEGACY_BANNER}")
-        _report_tab(ticker)
-
-    with tab_history:
-        st.info(f"**Legacy.** {_LEGACY_BANNER}")
-        render_history(ticker)
-
-    with tab_strategy:
-        render_strategy_tab()
-
-
-def _available_tickers(reports_dir: Path) -> list[str]:
-    """Tickers actually on record under reports/ (dirs holding ≥1 report), sorted.
-
-    This is the browser's scope — independent of the sidebar text field, so every
-    ticker with saved runs is reachable without editing the sidebar."""
-    if not reports_dir.exists():
-        return []
-    return sorted(
-        d.name for d in reports_dir.iterdir()
-        if d.is_dir() and any(d.glob("*.json"))
-    )
-
-
-def _report_tab(ticker: str) -> None:
-    """One report view. The past-run browser is scoped by its OWN ticker
-    selector (built from reports/ on disk), defaulting to the sidebar ticker but
-    navigable independently. A report is never rendered twice on the page."""
-    tickers = _available_tickers(REPORTS_DIR)
-    if not tickers:
-        st.info("No saved reports yet. Run a council from the sidebar.")
-        return
-
-    # Empty scope: the sidebar ticker has nothing on record — say what does.
-    if ticker not in tickers:
-        st.caption(
-            f"No reports for **{ticker}** yet. On record: {', '.join(tickers)}."
-        )
-
-    # Focus the just-completed run's ticker after a run; otherwise default to the
-    # sidebar ticker. The choice then persists independently of the sidebar.
-    focus = st.session_state.pop("_focus_ticker", None)
-    if focus in tickers:
-        st.session_state["browse_ticker"] = focus
-    if st.session_state.get("browse_ticker") not in tickers:
-        st.session_state["browse_ticker"] = (
-            ticker if ticker in tickers else tickers[0]
-        )
-    sel = st.selectbox(
-        f"Runs for · {plural(len(tickers), 'ticker')} on record",
-        tickers, key="browse_ticker",
-    )
-
-    reports = [load_report(p) for p in reversed(list_reports(sel, REPORTS_DIR))]
-    if not reports:  # defensive — selector only lists tickers that have reports
-        st.info(f"No reports for {sel}. On record: {', '.join(tickers)}.")
-        return
-    # Rich, verdict-bearing labels; select by index so shared labels can't collide.
-    pick = st.selectbox(
-        "Run", range(len(reports)),
-        format_func=lambda i: _run_label(reports[i]),
-        key=f"run_pick_{sel}",
-    )
-    chosen = reports[pick]
-    st.caption(f"▶ Currently viewing: **{_run_label(chosen)}**")
-    render_report(chosen, sidebar_ticker=ticker, key_ns="browse")
 
 
 if __name__ == "__main__":

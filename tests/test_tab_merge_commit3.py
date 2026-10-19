@@ -172,8 +172,9 @@ def test_no_cc_or_uni_leftover_keys_for_the_shared_options():
         assert not any(k.startswith("cc_lens_") or k.startswith("uni_lens_") for k in keys)
         assert "cc_summary" not in keys and "uni_reader" not in keys
         assert "cc_council" not in keys
+        # JUDGE-PANEL-1: "opt_judges_" is the one new family, the judge-panel tick box (company only)
         assert all(not k.startswith("opt_") or k.startswith(("opt_lens_", "opt_summary_",
-                                                              "opt_council_"))
+                                                              "opt_council_", "opt_judges_"))
                   for k in keys)
 
 

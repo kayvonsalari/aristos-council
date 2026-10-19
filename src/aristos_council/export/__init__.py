@@ -1,1 +1,1 @@
-"""Deliverable artifact export (PDF). See report_pdf."""
+"""Deliverable artifact export (HTML). See report_html."""

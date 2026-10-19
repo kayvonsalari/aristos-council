@@ -361,6 +361,7 @@ class CompanyReport:
     no_vote_reason: str = ""                          # why there is no vote, when there is none
     summary: object = None                            # a reader.ReaderResult, only when asked for
     council_opinion: Optional[CouncilOpinion] = None  # COUNCIL-OPINION-1, only when asked for
+    judge_panel: object = None                        # JUDGE-PANEL-1 (judges.panel.PanelResult), only when asked for
     universe: list = field(default_factory=list)      # the tickers every lens ranked, company first
     lens_ranks: dict = field(default_factory=dict)    # strategy id -> the run's ranks, for the record
     run_at: str = ""
@@ -747,6 +748,37 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
                           seconds=round(time.perf_counter() - started, 1))
 
 
+def run_judge_panel(report: CompanyReport, *, adapter=None, caller=None, reader=None, config=None,
+                    log_dir=None, strategies_dir=None, environ=None):
+    """JUDGE-PANEL-1 - the blind judge panel for this company, logged. Never raises, and never
+    touches ``report.agreement`` or any vote: the panel records, it does not judge. Fundamentals
+    (the annual series and the dividend record the page itself does not hold) come from the same
+    day-cached adapter the report already used; if they cannot be read the pack simply omits them."""
+    from .judges.log import write_log
+    from .judges.panel import run_panel
+
+    fundamentals = None
+    if adapter is not None:
+        try:
+            fundamentals = adapter.get_fundamentals(report.ticker)
+        except Exception:                                    # noqa: BLE001 - the pack goes without
+            fundamentals = None
+    result = run_panel(report, fundamentals=fundamentals, config=config, caller=caller,
+                       reader=reader, strategies_dir=strategies_dir, environ=environ)
+    try:
+        folder = write_log(result, log_dir)
+        result.log_dir = str(folder) if folder is not None else ""
+    except Exception as exc:                                 # noqa: BLE001 - the panel is still shown
+        result.log_error = f"{type(exc).__name__}: {str(exc)[:200]}"
+    return result
+
+
+def judge_panel_record(panel) -> dict:
+    """The panel as saved with the run: everything the page showed, so a reload needs no call."""
+    import dataclasses
+    return dataclasses.asdict(panel)
+
+
 def peers_for_ranking(group) -> tuple[list[str], list[str]]:
     """``(yahoo tickers, skipped)`` for a peer group: what the ranker resolves, in the group's own
     (ticker) order. A peer with no Yahoo symbol is named, never dropped silently."""
@@ -956,6 +988,8 @@ def run_company_report(
     runs_dir=None, today: Optional[date] = None,
     with_summary: bool = False, reader_runner=None, with_council: bool = False,
     council_runners=None, store=None, save: bool = True,
+    with_judges: bool = False, judge_caller=None, judge_reader=None, judge_config=None,
+    judges_dir=None, judge_environ=None,
     progress: Optional[Callable[[str], None]] = None,
     include_small: bool = False, news_fetcher=None,
 ) -> CompanyReport:
@@ -1115,6 +1149,12 @@ def run_company_report(
         report.council_opinion = run_council_opinion(report, adapter=adapter,
                                                       runners=council_runners, today=today,
                                                       progress=say)
+    if with_judges:
+        say("Asking the blind judge panel (it records, it does not vote)…")
+        report.judge_panel = run_judge_panel(report, adapter=adapter, caller=judge_caller,
+                                             reader=judge_reader, config=judge_config,
+                                             log_dir=judges_dir, strategies_dir=strategies_dir,
+                                             environ=judge_environ)
     if with_summary:
         say("Writing the plain-English summary…")
         report.summary = write_company_summary(report, runner=reader_runner)
@@ -1188,6 +1228,10 @@ def report_record(report: CompanyReport) -> dict:
         # when False/empty/None, so a reader can tell "definitely not a small-company
         # run" (v2, value False) from "don't know, this predates the field" (v1, key
         # absent) — never conflate the two.
+        # JUDGE-PANEL-1 - present only when the panel was ticked, so a record without it is
+        # byte-identical to what it was before the panel existed.
+        **({"judge_panel": judge_panel_record(report.judge_panel)}
+           if report.judge_panel is not None else {}),
         "outside_tested_range": report.outside_tested_range,
         "smallcap_cohort": report.smallcap_cohort,
         "smallcap_floor_usd": report.smallcap_floor_usd,
@@ -1469,6 +1513,10 @@ def format_company_report(report: CompanyReport) -> str:
     if report.council_opinion is not None:
         lines += ["COUNCIL OPINION (narration only - never a vote; the agreement above is "
                   "the verdict of record)", *council_opinion_lines(report), ""]
+    if report.judge_panel is not None:
+        from .judges import render as _judge_render
+        lines += [f"{_judge_render.SECTION_TITLE.upper()} (blind, no vote - the agreement above is "
+                  "the verdict of record)", *_judge_render.text_lines(report.judge_panel), ""]
     lines += workings_text_lines(report)
     tail = f"Ran in {report.seconds:.1f}s"
     if report.cache.get("hits") is not None:
@@ -1593,6 +1641,10 @@ def main(argv=None) -> int:
     parser.add_argument("--council", action="store_true",
                         help="tick the council opinion (COUNCIL-OPINION-1) — narrator mode, "
                              "about six model calls; needs ANTHROPIC_API_KEY; never votes")
+    parser.add_argument("--judges", action="store_true",
+                        help="tick the blind judge panel (JUDGE-PANEL-1) - one judge per model family "
+                             "(data/judges.yaml), asked twice; about 6 model calls; a judge with no "
+                             "key is skipped; records, never votes; logs under data/local/judges/")
     parser.add_argument("--no-save", action="store_true", help="do not write the run under runs/")
     parser.add_argument("--include-small", action="store_true",
                         help="SMALLCAP-VIEW-1: for a company under the $5bn lens gate, rank it "
@@ -1608,7 +1660,8 @@ def main(argv=None) -> int:
         pass
     report = run_company_report(
         args.ticker, args.lenses or list(DEFAULT_LENSES),
-        with_summary=args.summary, with_council=args.council, save=not args.no_save,
+        with_summary=args.summary, with_council=args.council, with_judges=args.judges,
+        save=not args.no_save,
         include_small=args.include_small,
         progress=lambda m: print(m, flush=True) if os.environ.get("ARISTOS_VERBOSE") else None)
     print(format_company_report(report))

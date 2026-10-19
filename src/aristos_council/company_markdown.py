@@ -87,6 +87,9 @@ def company_report_markdown(report) -> str:
             from .ai_text_check import count, top_line
             out += [f"*{top_line(count(op.narrative or ''))}*", ""]
         out += [(op.narrative or "(no narrative produced)") if op.available else op.note, ""]
+    if report.judge_panel is not None:
+        from .judges.render import markdown_lines as _judge_markdown
+        out += _judge_markdown(report.judge_panel)
 
     out += [f"## {SECTION_WORKINGS}", "", "### Valuation band", "",
             "*This company against its own history; a mark, never a veto.*", "", c.valuation_band, ""]
