@@ -81,17 +81,31 @@ stands, because the panel measures how stable each model is as it ships.
 | stable | both calls gave the same verdict (ABSTAIN counts as a verdict) | the verdict, once |
 | unstable | both calls were valid and **differed** | "unstable: BUY / HOLD" — both kept |
 | incomplete | one call valid, the other not | the valid verdict, flagged; not stable |
-| invalid output | malformed twice | "invalid output" |
-| error | the call could not be made | "error: …" |
+| error | the call could not be made, or the reply was malformed twice | a short label, below |
 | not run | the key is missing | "not run — no key" |
 
 Only a **stable** judge is compared with the record. An ABSTAIN takes no side.
 
+**Error labels.** A failed judge shows ONE short label in the Verdict column and nothing else (no
+reason, no confidence): `error: no credits` (an `insufficient_quota` reply, or a 429 whose body talks
+about credits, quota or billing), `error: model not available` (HTTP 404), `error: timeout`,
+`error: invalid output` (malformed twice), and `error: <HTTP status>` for anything else (a plain
+429 or a 503 reads `error: 429` / `error: 503`). The provider's full raw error body is written to
+`judge_log.csv` (`error_detail`) and **never** appears in the page or in any download.
+
+**The split counts judges, not calls.** Each judge contributes exactly once - its stable verdict, or
+"unstable", "incomplete", "error" or "not run" - so one judge's two calls are never "HOLD 2":
+"1 HOLD, 2 error" is one judge that answered and two that did not.
+
 **Agreement with the verdict of record.** The record's single verdict is the verdict held by a strict
 majority of the lenses that voted (the same >50% rule as the MAJORITY_OVERRIDE veto); no strict
 majority is *MIXED*. The panel *agrees* if every stable BUY/HOLD/SELL judge matches it, *disagrees* if
-none does, and is *mixed* otherwise (or when the record itself is split). *No stable judge* when none
-gave a BUY/HOLD/SELL.
+none does, and is *mixed* otherwise (or when the record itself is split).
+
+**Two judges, or no reading.** The agreement line is written only when **at least two judges** gave
+a stable verdict (an abstention is an answer). With fewer, the page says "No panel reading: fewer
+than two judges answered." - one judge is not a panel - and the narrator is not called. If two or
+more judges answered but all abstained, the line says there is nothing to compare.
 
 ## Setting it up
 
@@ -99,6 +113,14 @@ gave a BUY/HOLD/SELL.
   mid-tier model per family. The OpenAI and Gemini names are the most likely to need updating as
   providers retire models; a name the provider no longer serves shows as that judge's *error*, not a
   crash.
+- **Gemini.** The Google judge is `gemini-3.8-flash` (the mid-tier model, not Pro). It is called
+  through the `generateContent` REST endpoint, which the Gemini 3 family accepts; only
+  `temperature` is left at the provider default, and `frequency_penalty`, `presence_penalty` and
+  `candidate_count` are never sent (Gemini 3 rejects them). `gemini-2.5-flash` returned HTTP 404 "no
+  longer available to new users" on 2026-10-19. Google recommends its Interactions API for new work
+  (`google-genai`: `client.interactions.create`, `interaction.output_text`); the panel does not use
+  it because the REST path answers on the same model and adds no dependency. If `generateContent`
+  is ever retired for the family, the swap is one function in `judges/clients.py`.
 - **Keys** are read from the environment or the local `.env`, like the Anthropic and EODHD keys:
   `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`. A missing key marks that judge *not run —
   no key* and the panel runs with the rest. Keys travel only in a request header and are scrubbed
@@ -116,15 +138,19 @@ belongs in the repo.
 
 - `judge_log.csv` — one row per judge **per call**: `run_date, ticker, judge_family, model_name,
   call_number, verdict, confidence, stable, reason, would_change_my_mind, verdict_of_record,
-  lens_split, pack_hash, call_status`. `verdict_of_record` and `lens_split` are the lenses' state *at
+  lens_split, pack_hash, call_status, error_detail`. `verdict_of_record` and `lens_split` are the lenses' state *at
   that moment*. A judge with no key leaves one `call_number 0 / NOT_RUN` row, so its absence is in
-  the data. `call_status` (`ok | invalid | error | not_run`) is the one column beyond the agreed
-  list; it keeps a malformed call distinguishable from a verdict.
+  the data. `call_status` (`ok | invalid | error | not_run`) keeps a malformed call distinguishable
+  from a verdict, and `error_detail` holds the raw provider error body (empty for a good call); both
+  are beyond the originally agreed columns.
 - `judge_summary.csv` — one row per company run: the record and its split, each family's stable
   verdict and confidence (`claude_verdict`, `openai_verdict`, `gemini_verdict` …, or `UNSTABLE:BUY/HOLD`,
-  `NOT_RUN`, `INVALID`, `ERROR`), the panel's split and its agreement.
+  `NOT_RUN`, `INVALID`, `ERROR`), the panel's split and its agreement (`no_panel_reading` when fewer
+  than two judges answered), and `judges_answered` - the number of judges with a stable verdict.
 
-The headers are fixed. A file whose columns differ from what the code writes is **refused**, not
+The headers are fixed. A file carrying the **previous** header (before `error_detail` and
+`judges_answered` existed) is upgraded in place - the new columns are appended, empty for old rows,
+nothing reordered or lost. Any other file whose columns differ from what the code writes is **refused**, not
 migrated, so a changed column order can never shift a year of data under the wrong titles.
 
 ## How to read it

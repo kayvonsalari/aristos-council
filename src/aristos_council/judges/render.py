@@ -49,8 +49,6 @@ def rows(result: PanelResult) -> list[dict]:
             row.update({"Confidence": " / ".join(c.confidence for c in ok),
                         "Reason": " | ".join(f"{c.verdict}: {c.reason}" for c in ok),
                         "Would change its mind if": " | ".join(f"{c.verdict}: {c.would_change_my_mind}" for c in ok)})
-        elif j.status != NOT_RUN and j.note:
-            row["Reason"] = j.note
         out.append(row)
     return out
 

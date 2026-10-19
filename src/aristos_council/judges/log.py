@@ -16,22 +16,29 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from .panel import (ERROR, INCOMPLETE, INVALID, NOT_RUN, STABLE, UNSTABLE, PanelResult)
+from .panel import (ERROR, INCOMPLETE, INVALID, NOT_RUN, STABLE, UNSTABLE, PanelResult,
+                    judges_answered)
 
 _ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DIR = _ROOT / "data" / "local" / "judges"
 LOG_NAME = "judge_log.csv"
 SUMMARY_NAME = "judge_summary.csv"
 
-LOG_COLUMNS = ("run_date", "ticker", "judge_family", "model_name", "call_number", "verdict",
-               "confidence", "stable", "reason", "would_change_my_mind", "verdict_of_record",
-               "lens_split", "pack_hash", "call_status")
+_LOG_V1 = ("run_date", "ticker", "judge_family", "model_name", "call_number", "verdict",
+           "confidence", "stable", "reason", "would_change_my_mind", "verdict_of_record",
+           "lens_split", "pack_hash", "call_status")
+LOG_COLUMNS = _LOG_V1 + ("error_detail",)
 
 FAMILY_COLUMNS = (("anthropic", "claude"), ("openai", "openai"), ("google", "gemini"))
-SUMMARY_COLUMNS = (("run_date", "ticker", "pack_hash", "verdict_of_record", "lens_split",
-                    "record_headline")
-                   + tuple(c for _, name in FAMILY_COLUMNS for c in (f"{name}_verdict", f"{name}_confidence"))
-                   + ("panel_split", "panel_agreement"))
+_SUMMARY_V1 = (("run_date", "ticker", "pack_hash", "verdict_of_record", "lens_split",
+                "record_headline")
+               + tuple(c for _, name in FAMILY_COLUMNS for c in (f"{name}_verdict", f"{name}_confidence"))
+               + ("panel_split", "panel_agreement"))
+SUMMARY_COLUMNS = _SUMMARY_V1 + ("judges_answered",)
+# Earlier headers of the same files. A file carrying one of THESE is upgraded in place (the new
+# columns are appended, empty for old rows - nothing is reordered or lost); any other header is
+# still refused.
+_PREVIOUS = {LOG_NAME: (_LOG_V1,), SUMMARY_NAME: (_SUMMARY_V1,)}
 
 
 class LogHeaderMismatch(RuntimeError):
@@ -42,12 +49,29 @@ def judges_dir(path=None) -> Path:
     return Path(path or os.environ.get("ARISTOS_JUDGES_DIR") or DEFAULT_DIR)
 
 
+def _upgrade(path: Path, columns: tuple) -> None:
+    """Rewrite a file that carries an earlier known header with the current one, padding old rows."""
+    with path.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.reader(f))
+    width = len(columns)
+    body = [r + [""] * (width - len(r)) for r in rows[1:]]
+    tmp = path.with_suffix(".csv.tmp")
+    with tmp.open("w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(columns)
+        w.writerows(body)
+    tmp.replace(path)
+
+
 def _append(path: Path, columns: tuple, rows: list) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fresh = not path.exists() or path.stat().st_size == 0
     if not fresh:
         with path.open(encoding="utf-8", newline="") as f:
             header = next(csv.reader(f), [])
+        if tuple(header) in _PREVIOUS.get(path.name, ()):
+            _upgrade(path, columns)
+            header = list(columns)
         if tuple(header) != columns:
             raise LogHeaderMismatch(f"{path.name} has columns {header}, this code writes {list(columns)}; "
                                     "move the old file aside rather than mixing the two")
@@ -71,12 +95,13 @@ def log_rows(result: PanelResult) -> list[list]:
     for j in result.judges:
         stable = "yes" if j.status == STABLE else "no"
         if not j.calls:
-            rows.append([*common, j.family, j.model, 0, "NOT_RUN", "", stable, j.note, "", *tail, NOT_RUN])
+            rows.append([*common, j.family, j.model, 0, "NOT_RUN", "", stable, j.note, "", *tail, NOT_RUN, ""])
             continue
         for c in j.calls:
             verdict = c.verdict if c.status == "ok" else {"invalid": "INVALID", "error": "ERROR"}.get(c.status, "")
             rows.append([*common, j.family, j.model, c.call_no, verdict, c.confidence, stable,
-                         _cell(c.reason or c.error), _cell(c.would_change_my_mind), *tail, c.status])
+                         _cell(c.reason or c.error), _cell(c.would_change_my_mind), *tail, c.status,
+                         _cell(c.error_detail)])
     return rows
 
 
@@ -100,7 +125,7 @@ def summary_row(result: PanelResult) -> list:
            result.record.split, _cell(result.record.headline)]
     for family, _ in FAMILY_COLUMNS:
         row.extend(family_cell(by_family.get(family)))
-    row += [result.split_line, result.agreement]
+    row += [result.split_line, result.agreement, judges_answered(result.judges)]
     return row
 
 
