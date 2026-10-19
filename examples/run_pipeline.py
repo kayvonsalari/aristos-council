@@ -3,7 +3,7 @@ shortlist with the LLM council.
 
 STAGE 1 ranks the universe (free, deterministic) — the ranker verdict is the
 verdict-of-record. STAGE 2 runs the LLM council ONLY on the shortlist (default: the
-BUY quintile) as a NARRATOR (or an independent second opinion behind the flag). The
+BUY quintile) as a NARRATOR. The
 council bills API credits; the estimate is printed and requires --yes above the cap.
 
 This script is a THIN WRAPPER: all orchestration lives in
@@ -69,7 +69,7 @@ def main() -> None:
                         "council_screen_strategy (same philosophy)")
     p.add_argument("--council-runs-on", choices=["buy_quintile", "top_k", "all"],
                    default=None)
-    p.add_argument("--council-mode", choices=["second_opinion", "narrator"],
+    p.add_argument("--council-mode", choices=["narrator"],
                    default=None)
     p.add_argument("--narrate", choices=["buys_only", "all"], default="buys_only",
                    help="which ranked names to narrate: buys_only (default, cheapest) "

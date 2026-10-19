@@ -82,7 +82,7 @@ def install(st) -> None:
 # --------------------------------------------------------------------------- #
 # A strategy id ("magic_formula_momentum_v1") and an ad-hoc list fingerprint ("adhoc:2523dc81")
 # are stable KEYS: the exports and run records keep them, because a verdict must stay traceable.
-# On screen a reader gets the plain name; the validation toggle ("Show validation & legacy
+# On screen a reader gets the plain name; the validation toggle ("Show validation
 # tools") brings the keys back. Pure string work so it is unit-tested rather than eyeballed.
 _ID_IN_BRACKETS = re.compile(r"\s*\(\s*[a-z][a-z0-9]*(?:_[a-z0-9]+)*_v\d+\s*\)")
 _ID_IN_BACKTICKS = re.compile(r"\s*`[a-z][a-z0-9]*(?:_[a-z0-9]+)*_v\d+`")

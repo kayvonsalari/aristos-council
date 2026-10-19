@@ -12,7 +12,7 @@ Pure functions (no Streamlit), so the labelling is unit-tested directly.
 from __future__ import annotations
 
 # A universe is BACKSTAGE (hidden from the default demo surface, revealed by the "Show
-# validation & legacy tools" toggle) when its ``role:`` marks it NEVER-GRADED — the
+# validation tools" toggle) when its ``role:`` marks it NEVER-GRADED — the
 # observation/watch universes (energy_watch, the portfolio_watch pattern) and the
 # known-trap control benches (defensive_16). FRONT-STAGE are the graded scoreboard
 # universes and the exploratory lens cohorts (financials_16) — the ones you actually run

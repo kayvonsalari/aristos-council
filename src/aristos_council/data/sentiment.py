@@ -88,8 +88,8 @@ def skipped_non_us(tickers) -> list[str]:
 def build_sentiment_adapter(*, provider: str = "finnhub"):
     """``(adapter, missing_key, error)`` — the sentiment provider, or an honest absence.
 
-    Extracted from ``examples/run_council.py``, which was the ONLY place that ever built
-    one. ``run_rank_pipeline`` accepts a ``sentiment_adapter`` and threads it all the way
+    Extracted from the removed single-ticker council script, which was the ONLY place that
+    ever built one. ``run_rank_pipeline`` accepts a ``sentiment_adapter`` and threads it all the way
     to the agents, but no caller ever constructed one — so on every universe run the
     Sentiment specialist abstained no matter what the key said, and the abstention blamed
     a missing key that was present. Both entry points now call this, so a future entry

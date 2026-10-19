@@ -288,3 +288,16 @@ AI text check, track-record wording, data checks. No rank, vote, verdict or lens
 | ID | How | Expect |
 | --- | --- | --- |
 | **BTR-T1** | (free) python -m aristos_council.cohorts status ; then copy `backtests/` to a temp folder, add a `<slug>/<lens>.csv` for every voting lens under the slug of a cohort listed (the defence cohort `industrials_aerospace_defense_europe_us` if it is not yet backtested; any newly built cohort otherwise) and run python -m aristos_council.cohorts status --backtests <temp folder>. | The first run lists the cohort as "no track record yet for ..." with its missing lens names. In the temp copy that cohort's line is gone. Nothing in `backtests/` itself changed, no network was used. |
+
+## SNAPSHOT-2 (quarterly forward freeze)
+
+Command line, not Council Station. None of these calls a model.
+
+| ID | How | Expect |
+| --- | --- | --- |
+| **SNAP2-T1** | (free, a few minutes) python -m aristos_council.forward_snapshot take | Progress per watched cohort, then "wrote snapshots/forward_<today>.csv - N rows, 13 cohorts x 8 lenses (...), M names". Open the CSV: one row per cohort, lens and name; an excluded name has an empty verdict and its reason; a London name's price_usd is its pound price (not pence) times GBPUSD; a name the provider has no currency for has an empty price_usd and says why in the reason column. |
+| **SNAP2-T2** | (free) Run the same command again the same day. | "REFUSED: ... already exists - a snapshot is never overwritten", exit code 1, no network use, the file is unchanged. |
+| **SNAP2-T3** | (free) python -m aristos_council.forward_snapshot check | A line per snapshot: "forward_<date>.csv: N days old - not graded until it is 365 (<date + 365>)". No table, no error. |
+| **SNAP2-T4** | (free) python -m aristos_council.forward_snapshot check --min-age-days 0 | A line "REHEARSAL - this snapshot is N days old ... Nothing below is a result", then the table prints end to end (BUY / HOLD / SELL / all mean USD return per cohort and lens, the count of cells where BUY beat both, names left out and why, agreement vs return per cohort). Returns are within a few percent of zero because the freeze is days old. |
+| **SNAP2-T5** | (free) git status, then git check-ignore -v snapshots/forward_<date>.csv. After that, ONLY in a private repo or a scratch clone: python -m aristos_council.forward_snapshot take --commit (on a new date), then git show --stat HEAD. | The CSV is not listed by git status and check-ignore names the .gitignore rule - the file names the watched cohorts and the repo is public. With --commit: one commit, message "forward snapshot <date>", touching only that CSV; any other modified or staged file is not in it. |
+| **SNAP2-T6** | (free) Look in the CSV for the 13 watched cohorts: python -c "import csv,sys; print(len({r['cohort'] for r in csv.DictReader(open(sys.argv[1], encoding='utf-8'))}))" snapshots/forward_<date>.csv | 13. The old July file snapshots/verdict_consensus.csv is untouched and is not read by either command. |

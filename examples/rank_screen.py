@@ -4,8 +4,8 @@ For each ticker: fetch market data (the SAME adapter the council uses, respectin
 ARISTOS_MARKET_PROVIDER), run the deterministic screen, and compute the SCREEN-ONLY
 matrix score (the real matrix weights, with specialist stances excluded). Sorts the
 pool by score descending so the top N are the picks — SECONDS per name instead of
-MINUTES. Then run the FULL council (run_council.py) only on the chosen finalists for
-the narrative report and the small specialist-stance adjustment.
+MINUTES. Then run the rank pipeline (examples/run_pipeline.py) on the chosen finalists for
+the narrative report.
 
 Usage:
     python examples/rank_screen.py META MSFT GOOGL ADBE --strategy growth_v1
@@ -28,7 +28,19 @@ from aristos_council.data.provider import select_market_adapter
 from aristos_council.ranking import rank_ticker, split_and_sort
 from aristos_council.strategy.loader import load_strategy
 
-from run_council import resolve_strategy_path  # type: ignore
+STRATEGIES_DIR = Path(__file__).resolve().parent.parent / "strategies"
+DEFAULT_STRATEGY_ID = "dividend_aristocrats_v1"
+
+
+def resolve_strategy_path(arg: str | None, strategies_dir: Path = STRATEGIES_DIR) -> Path:
+    """A strategy argument -> YAML path: empty = the default, ``*.yaml`` as given, else an id
+    resolved as ``strategies/<id>.yaml``. Existence is left to ``load_strategy``."""
+    if not arg:
+        return strategies_dir / f"{DEFAULT_STRATEGY_ID}.yaml"
+    p = Path(arg)
+    if p.suffix.lower() in (".yaml", ".yml"):
+        return p
+    return strategies_dir / f"{arg}.yaml"
 
 
 def _read_tickers(args) -> list[str]:

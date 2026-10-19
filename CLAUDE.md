@@ -4,9 +4,9 @@ Equity research where **the math judges and the LLM writes** (v2). A determinist
 multi-factor rank-sum, hard gates — issues the BUY/HOLD/SELL verdict of record for a universe of
 tickers under a versioned YAML strategy ("lens"); LLM specialists (Fundamental, Technical, Sentiment,
 Risk) and an adversarial Critic then NARRATE that verdict and never change it; a veto layer escalates
-contested runs to a human. The original v1 council (LLM Decision agent issues the verdict) is kept
-behind `council_mode: second_opinion` and `examples/run_council.py`: a pre-registered experiment
-showed it flipped on identical inputs, which is why it was demoted. LangGraph orchestration,
+contested runs to a human. The original v1 council (LLM Decision agent issues the verdict) was demoted after a
+pre-registered experiment showed it flipped on identical inputs; `docs/JUDGE_PANEL.md` is the forward test
+of whether LLM judgement adds anything. LangGraph orchestration,
 Anthropic models, pydantic state. Three parts live in this repo: **Council Station** (the ranker +
 narrator + Streamlit UI), the **market index and cohorts** (a local table of listed companies, peer
 groups and rule-defined cohorts), and **Gap Ledger** (a separate pre-market experiment).
@@ -137,16 +137,13 @@ Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.
   of `report.md`/`plan`, and excluded companies listed under it with their reason. See
   `docs/COHORTS.md` and `docs/MARKET_INDEX.md`.
 - `examples/` — CLIs: `run_pipeline.py` is the v2 universe CLI, a THIN wrapper over
-  `run_rank_pipeline` (`--ranker-only` for a free, no-LLM deterministic ranking); `run_council.py` is
-  the single-ticker v1 council demo (run in Colab, not here; bills API credits);
-  `company_check.py`, `rank_factors.py`, `rank_screen.py`, `backtest.py`, `snapshot_consensus.py` /
+  `run_rank_pipeline` (`--ranker-only` for a free, no-LLM deterministic ranking); `company_check.py`, `rank_factors.py`, `rank_screen.py`, `backtest.py`, `snapshot_consensus.py` /
   `score_snapshot.py` (the scoreboard), the ETF and Piotroski probes, and `grade_holdings.py` (grades a
   private CSV outside the repo — never commit its input or output). `scripts/` holds the weekly scout
   job (`scout_verdicts.py`, `publish_verdicts.py`, `sweep_staging.py`) and ETF static-row generation.
 - `app.py` — Council Station, the local Streamlit UI (`streamlit run app.py`).
-  Tabs: **Run** (the ONE run flow over the v2 rank pipeline — see below), Company Check,
-  Scoreboard, then the legacy single-ticker Report / History / Strategy behind the
-  "Show validation & legacy tools" toggle. Loads `.env` at app start so keys reach the
+  Tabs: **Analyse** (the ONE run flow over the v2 rank pipeline — see below) and Scoreboard;
+  the "Show validation tools" toggle reveals validation assets. Loads `.env` at app start so keys reach the
   process.
 - `src/aristos_council/gap_ledger/` + `gap_ledger_app.py` — **Gap Ledger (GAP-LEDGER-1), a
   SEPARATE TOOL that happens to live here.** A pre-market news-movers screener: a daily
@@ -236,10 +233,9 @@ Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.
      fake, or mark the test `@pytest.mark.real_adapter` if it is genuinely about
      the provider. The suite reads no `.env` and no API keys. Full rule and the
      reasoning: `docs/TESTING.md`.
-7. Published strategy files are IMMUTABLE. Editing a strategy in the UI writes
-   a new `<id>_v<n+1>.yaml` and refuses to overwrite — recorded verdicts and
-   run reports reference their `strategy_id` and must stay reproducible
-   (strategy/versioning.py).
+7. Published strategy files are IMMUTABLE. A changed strategy is a new
+   `<id>_v<n+1>.yaml`, never an overwrite — recorded verdicts and
+   run reports reference their `strategy_id` and must stay reproducible.
    - One deliberate exemption: the Sprint 4A registry migration rewrote
      `dividend_aristocrats_v1.yaml` in place (same `strategy_id`, screen output
      byte-identical — proven by the equivalence test; see the 4A.2 commit).
@@ -332,10 +328,8 @@ and parameterize them. There is NO dividend-specific logic in the runner.
 
 Each criterion also **self-describes**: a human `label` and a `params` spec (per
 parameter: name, type float/int/bool, bounds, step, default; policy flags are
-bool). The Council Station **Strategy tab reads this metadata** (Sprint 4C) and
-renders the right widget per parameter — number field per threshold (declared
-bounds/step), checkbox per bool flag — so dividend and growth show different
-fields with NO strategy-specific UI code. Params a strategy can't yet set
+bool). The metadata (bounds/step/default, bool policy flags) is
+what a UI renders from, so dividend and growth need NO strategy-specific UI code. Params a strategy can't yet set
 (min_revenue_cagr's `years`) render read-only.
 
 **Strategy-scoped evidence (Sprint 4D)**: agents are handed a strategy-scoped
@@ -400,26 +394,15 @@ section and the code win (e.g. the decision core is now the v2 rank engine, not 
 
 ## Current state (2026-06-12, end of Sprint 3)
 
-Sprint 3 shipped Council Station — a local Streamlit UI (`app.py`) over the
-council — plus the full run-report sink and strategy versioning it stands on
-(126 tests green):
+Sprint 3 shipped the run-report sink behind Council Station (a local Streamlit UI, `app.py`):
 
 - `reports/<TICKER>/<run_at>.json` (persistence/reports.py) — one immutable
   file per run holding the ENTIRE deliberation (every specialist
   thesis/figures/caveats, the critic counter-case, the decision rationale, the
   FULL provenance audit including violation prose). The fat counterpart to the
-  thin verdict log: it exists so the UI can re-render any past run without
-  re-spending API credits. Same IO-at-the-edge pattern — run_council writes it
-  after invoke; the graph stays disk-free.
-- `app.py` (run `streamlit run app.py`) — sidebar (ticker, strategy dropdown,
-  cost-gated Run); Report view (verdict banner, human-review flags,
-  per-specialist expanders, critic + provenance panels, browsable past runs);
-  History view (verdict/confidence chart + stance-per-specialist across runs
-  off verdicts/<TICKER>.json); Strategy tab (read-only form + edit-as-new-
-  version). Runs the council in-process; never launch it from here.
-- strategy/versioning.py — make_new_version (bumps id+version, validates edits
-  up front) + save_strategy (refuses to overwrite; published files immutable,
-  rule 7).
+  thin verdict log: IO at the edge, the graph stays disk-free. The single-ticker
+  council that wrote it has been removed; `docs/JUDGE_PANEL.md` is the forward
+  test of LLM judgement.
 
 ### Sprint 2 (prior)
 
@@ -428,9 +411,9 @@ prompt hard rules.
 
 - `verdicts/<TICKER>.json` — append-only history (persistence/verdicts.py):
   run_at, strategy_id, verdict, confidence, per-specialist stances, veto
-  triggers fired, provenance audit counts. IO is at the edge: run_council
-  loads the latest prior record into prior_recommendation (so the existing
-  recommendation_flip veto can finally fire) and appends after the run; the
+  triggers fired, provenance audit counts. IO is at the edge: the
+  latest prior record feeds prior_recommendation (so the existing
+  recommendation_flip veto can fire) and the run appends to it; the
   graph stays disk-free.
 - Fifth veto MAJORITY_OVERRIDE (agents/veto.py): fires when the Decision
   verdict contradicts a STRICT (>50%) stance-majority of non-abstaining
@@ -477,32 +460,13 @@ growth runs (live on NVDA/ASML). The screen shows a neutral `run_screen` label
 to agents (stored tool_name unchanged), and `get_fundamentals` is rendered
 scoped to the active strategy's criteria + a fixed core, so growth runs no
 longer see dividend fields. Display-only; ledger/audit untouched. Prompts not
-modified. `examples/run_council.py` also gained a strategy argument (id or YAML
-path) so growth_v1 can be run from the CLI. 223 tests green.
+modified. 223 tests green.
 
 ## Sprint 4C (shipped 2026-06-14)
 
-Lit up growth in Council Station. The sidebar dropdown lists ALL live strategies
-(dividend_aristocrats_v1 + growth_v1; the "coming soon" placeholder is gone) and
-drives both the Run button and the Strategy tab. The Strategy tab renders
-generically from the criterion registry (label + ParamSpec per criterion) — no
-strategy-specific UI — so switching the dropdown re-renders the right fields, and
-big-number thresholds get a readable caption. `examples/run_council.py` also
-takes a strategy arg (Sprint 4B follow-on). 228 tests green.
-
-**Strategy tab cleanup (visual/structural only, no verdict-logic change):** the
-tab shows ONE strategy at a time (the sidebar selection) under a prominent
-`📋 Viewing: <name> (<id>)` header, split into three boxed sections —
-**Criteria** (generic, editable thresholds), **Policy** (the lone
-`partial_pass_allows_hold` checkbox, lifted into its own card so it isn't
-confused with the per-criterion `unverifiable_blocks` boxes — its behavior is
-unchanged: still only a Decision-agent prompt hint, `nodes.py`), and
-**Veto gate** (min_confidence). Locked params (not strategy-configurable) are
-SHOWN but disabled + tagged 🔒, so no verdict-affecting input is invisible.
-The in-house revenue-CAGR window (`_REVENUE_CAGR_YEARS`, read by BOTH
-`_min_revenue_cagr` and `_max_peg_ratio` — one source of truth, can never
-diverge) is surfaced ONCE, read-only, under `min_revenue_cagr`; PEG reuses the
-same window, so it is NOT a PEG parameter and is not shown redundantly there.
+Lit up growth in Council Station: the strategy dropdown lists ALL live strategies
+and a criterion registry (label + ParamSpec per criterion) lets a UI render the right
+fields with no strategy-specific code. 228 tests green.
 
 ## Sprint 4E (shipped 2026-06-14)
 
@@ -515,7 +479,7 @@ dividend run is unchanged. Fixed the live MSFT dividend-citation violations.
 ## Universe Run tab (shipped 2026-07-04)
 
 Council Station catches up with the v2 pipeline. Before this, `app.py` could only
-drive `run_council(ticker, strategy)` — the pre-v2 single-ticker path — so the rank
+drive the pre-v2 single-ticker path — so the rank
 strategies (`conservative_plus_v1` / `magic_formula_v1` /
 `magic_formula_momentum_v1`) existed only in `examples/run_pipeline.py` and were
 unreachable from the UI. This adds ONE tab that renders what the pipeline already

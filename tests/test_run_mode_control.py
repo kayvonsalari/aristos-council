@@ -62,8 +62,6 @@ def test_each_mode_maps_onto_the_existing_pipeline_arguments():
     """UI layer only — the pipeline's signature and behaviour are untouched."""
     assert app.run_mode_arguments(app.RUN_MODE_RANKER) == (True, "narrator")
     assert app.run_mode_arguments(app.RUN_MODE_NARRATOR) == (False, "narrator")
-    assert app.run_mode_arguments(app.RUN_MODE_SECOND_OPINION) == \
-        (False, "second_opinion")
     # ranker-only passes the SAME inert council_mode the old disabled selectbox handed
     # the pipeline, so that call is byte-unchanged.
     assert app.run_mode_arguments(app.RUN_MODE_RANKER)[1] == "narrator"
@@ -72,7 +70,6 @@ def test_each_mode_maps_onto_the_existing_pipeline_arguments():
 def test_only_the_narrating_modes_spend():
     assert app.run_mode_narrates(app.RUN_MODE_RANKER) is False
     assert app.run_mode_narrates(app.RUN_MODE_NARRATOR) is True
-    assert app.run_mode_narrates(app.RUN_MODE_SECOND_OPINION) is True
 
 
 def test_the_button_says_what_will_happen_and_what_it_costs():
@@ -87,9 +84,6 @@ def test_the_button_says_what_will_happen_and_what_it_costs():
     # free, and the upper bound reads as the conditional it is.
     assert app.run_button_label(app.RUN_MODE_NARRATOR, n_strategies=1, est_cost=0.42) == \
         "▶ Run — free · then choose whether to narrate · ≤ $0.42 total"
-    assert app.run_button_label(app.RUN_MODE_SECOND_OPINION, n_strategies=1,
-                                est_cost=1.2) == \
-        "▶ Run — free · then choose whether to take a second opinion · ≤ $1.20 total"
     # no estimate available (empty/oversized list) -> the claim is omitted, not invented
     assert app.run_button_label(app.RUN_MODE_NARRATOR, n_strategies=1) == \
         "▶ Run — free · then choose whether to narrate"
@@ -224,7 +218,7 @@ def test_no_disabled_control_in_the_run_flow_displays_a_value_it_is_not_using():
             assert widget.value == effective
         else:
             # no OTHER disabled control in the flow carries a run-mode value at all
-            assert str(widget.value) not in ("narrator", "second_opinion"), widget.label
+            assert str(widget.value) != "narrator", widget.label
 
 
 def test_narration_coverage_is_hidden_not_greyed_when_nothing_narrates():
@@ -315,16 +309,16 @@ def test_deselecting_the_extra_lens_restores_the_mode_rather_than_stranding_the_
     at = _run_tab()
     raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
 
-    _run_mode_widget(at).set_value(app.RUN_MODE_SECOND_OPINION).run()
-    assert _run_mode_widget(at).value == app.RUN_MODE_SECOND_OPINION
+    _run_mode_widget(at).set_value(app.RUN_MODE_RANKER).run()
+    assert _run_mode_widget(at).value == app.RUN_MODE_RANKER
 
-    # NARR-UNION-1: a second lens no longer OVERRIDES the choice, so second-opinion
+    # NARR-UNION-1: a second lens no longer OVERRIDES the choice, so the choice
     # simply stands — and still stands when the lens is unticked.
     _lens_checkbox(at, raw).set_value(True).run()
-    assert _run_mode_widget(at).value == app.RUN_MODE_SECOND_OPINION
+    assert _run_mode_widget(at).value == app.RUN_MODE_RANKER
 
     _lens_checkbox(at, raw).set_value(False).run()
-    assert _run_mode_widget(at).value == app.RUN_MODE_SECOND_OPINION
+    assert _run_mode_widget(at).value == app.RUN_MODE_RANKER
 
 
 # --------------------------------------------------------------------------- #

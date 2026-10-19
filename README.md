@@ -57,7 +57,8 @@ What costs money, and what does not:
 - **Free and deterministic:** the ranker, the screen, a company check, `--ranker-only`, every
   multi-lens run, the market index queries (`status`, `peers`), `cohorts plan`, the whole test suite.
 - **Bills LLM credits (`ANTHROPIC_API_KEY`):** narrating a run (one model call per explained name), the
-  optional plain-English summary (about a cent), the single-ticker council (`examples/run_council.py`).
+  optional plain-English summary (about a cent), the council opinion, and the blind judge panel (about six
+  calls across three model families).
   Never set this key in a development shell — the Analyse tab shows a cost estimate before it spends.
 - **Bills data credits (`EODHD_API_KEY`):** `market_index build` / `refresh` (a `/fundamentals` call costs
   10 units of a daily allowance), Gap Ledger's news call, and the EODHD-backed data providers.
@@ -80,6 +81,7 @@ What costs money, and what does not:
 | [docs/GAP_LEDGER.md](docs/GAP_LEDGER.md) | The pre-market experiment: pipeline, schedule, freeze, verdict criteria |
 | [docs/TESTING.md](docs/TESTING.md) | How the suite is isolated from the network and from real providers |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Open defects and data gaps a tester may meet, with the current workaround |
+| [docs/JUDGE_PANEL.md](docs/JUDGE_PANEL.md) | The blind judge panel on the company page: what it records, why it has no vote, the blind-pack and stability rules, the logs, and the 12-month review plan (JUDGE-PANEL-1) |
 | [docs/DESIGN_company_story.md](docs/DESIGN_company_story.md) | The single-company page: the two-line answer, the code-written story, one lens table, the workings folded (COMPANY-STORY-1) |
 | [CLAUDE.md](CLAUDE.md) | The contributor's working agreement: architecture in reading order, hard rules, sprint history |
 | `docs/diagnosis_*.md` | Two dated post-mortems of specific data defects (kept as case studies) |
@@ -403,9 +405,8 @@ analyse them."* — so the exclusion is a next step rather than a dead end.
    carry provenance to the exact tool call that produced it; a post-run audit re-resolves
    every citation and flags mismatches. The narrator is barred from reinterpreting
    accounting and from asserting forward deterioration as fact — anything beyond the
-   evidence is phrased as an open question. (An optional `second_opinion` mode lets the
-   council issue its own verdict for comparison; it exists behind a flag as the
-   experimental instrument that produced the demotion evidence.)
+   evidence is phrased as an open question. (The earlier design, in which the council issued
+   the verdict itself, was removed from the app; see *Why this design*.)
 5. **The human holds the veto.** Contested runs — low confidence, material data-quality
    gaps, verdict flips, gate overrides — are escalated for review. The system's job is to
    surface candidates and show its work, not to replace judgment.
@@ -423,6 +424,24 @@ analyse them."* — so the exclusion is a next step rather than a dead end.
 3. **Honesty over coverage.** Missing data abstains rather than guesses; abstention never
    excludes; a name without data gets no verdict at all. INSUFFICIENT_EVIDENCE is a
    first-class outcome.
+4. **The earlier council was removed from the app, and the experiment that demoted it is the
+   reason.** In the first design an LLM council issued the verdict. Run on identical inputs it
+   flipped. Moved to a second-opinion role and tested in a pre-registered controlled experiment
+   across three strategies, it disagreed with 100% of the verdicts; and when its best objection
+   (momentum) was handled deterministically, it began objecting to momentum itself. Its valid
+   insights were hardened into rules (the momentum objections became a momentum factor; its one
+   legitimate catch became the screen-as-prefilter), the council was demoted to narrator, and the
+   single-ticker council mode, its tabs and its entry points have since been removed from the app
+   and the command line. The experiment is described here and in
+   [How a verdict is reached](docs/COUNCIL_EXPLAINER.md); the mode is not offered to run.
+5. **Model judgement is tested forward, blind, and without a vote.** Whether a language model
+   adds anything to the lenses is a question the controlled experiment could not close, so the
+   company page can ask a *judge panel* (one model each from Anthropic, OpenAI and Google). Each
+   judge sees only the company's raw facts - no lens, rank, badge or verdict - is asked twice, and
+   may abstain. Every answer is logged beside the verdict of record at that moment, so in twelve
+   months the answers can be scored against what happened. The panel never votes and changes no
+   verdict, rank or badge: it is the forward test, not a new decision-maker. See
+   [docs/JUDGE_PANEL.md](docs/JUDGE_PANEL.md).
 
 ## Company Report (the Analyse tab's Company mode)
 
@@ -599,7 +618,7 @@ prospective scoreboard until deliberately frozen"*). **Every ETF lens and every 
 is exploration today**; the three cohorts marked *observation only* exist to watch how a
 euro-investable lens behaves, not to produce a verdict of record. (A separate, role-derived
 rule decides *visibility* rather than grading: a universe whose `role:` says **never graded** —
-the watch sets and known-trap control benches — sits behind the "Show validation & legacy
+the watch sets and known-trap control benches — sits behind the "Show validation
 tools" toggle. The ETF universes are front-stage.)
 
 ## Architecture
@@ -640,8 +659,7 @@ tools" toggle. The ETF universes are front-stage.)
   run. List mode: edit the ticker list, run (one strategy narrates; several grade the same
   list under several lenses and report one combined grid, deterministically and for free).
   Company mode: the company's own peer group, each ticked lens's vote the verdict of
-  record. Plus the Scoreboard and strategy editing (edit-as-new-version; published files
-  are never mutated).
+  record. Plus the Scoreboard. Published strategy files are never mutated; a change is a new version.
 - **Market index and cohorts:** `market_index.py` (a local parquet table of ~25,000 listed companies;
   `clean_pool` gives one row per company; `peers()` is the peer ladder) and `cohorts/` (57 cohort
   rules → frozen, versioned member lists with quality checks and correction flags). Deterministic,
@@ -667,7 +685,7 @@ aristos-council/
 │   ├── scoreboard.py             # prospective scoreboard: freeze verdicts, grade on forward returns
 │   ├── tools/                    # ALL arithmetic lives here (screening, technical, valuation band, fx …)
 │   │   └── criteria/registry.py  # named, pure screen criteria that strategies select by name
-│   ├── strategy/                 # loaders, picker, discovery, applicability, versioning, overrides
+│   ├── strategy/                 # loaders, picker, discovery, applicability, overrides
 │   │  ── the narrator and the council (LLM, behind a Runner seam) ─────────────────────
 │   ├── graph.py                  # LangGraph: gather → specialists → critic → decision → audit → veto
 │   ├── agents/                   # nodes, prompts, runners, schemas, veto (7 triggers), disposition (gate cap)
@@ -690,7 +708,7 @@ aristos-council/
 │                                 #   size_corrections.yaml, etf_static.csv;  local/ (gitignored): market index, cohorts, gap ledger
 ├── market_index.yaml             # which exchange codes the index fetches, and why some are absent
 ├── docs/                         # the documents listed above
-├── examples/                     # CLIs: run_pipeline, run_council, company_check, rank_*, backtest, scoreboard tools
+├── examples/                     # CLIs: run_pipeline, company_check, rank_*, backtest, scoreboard tools
 ├── scripts/                      # weekly scout job, ETF static-row generator, diagnostics
 ├── snapshots/                    # prospective-scoreboard freezes (verdict_consensus.csv)
 ├── verdicts/  reports/           # committed run data: append-only verdict history; full per-run reports
@@ -731,7 +749,7 @@ Set **`FINNHUB_NON_US=1`** in the environment (or your local `.env`) to turn the
 
 **Phase 4 — audit, persistence & Council Station (complete):** a deep post-run **provenance audit** that resolves every cited figure's `field_path` against the tool-call ledger and feeds the data-quality veto; an append-only **verdict history** (`verdicts/`) powering the recommendation-flip and majority-override vetoes; full per-run **reports** (`reports/`); **strategy versioning** (edit-as-new-version, never mutating a published file); and **Council Station** — a local Streamlit UI to run the council, read the full deliberation, browse past runs across tickers, chart verdict/confidence history, and edit strategies. See `CLAUDE.md` for the sprint log.
 
-**Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator` by default; `second_opinion` survives behind the flag). Ten lenses are now visible — seven over stocks (defensive income, cyclical income, value+momentum (the flagship), growth at a reasonable price, a no-screen Greenblatt baseline, a financials P/B+ROE lens, and a forensic check lens) and three over ETFs (dividend, growth, index tracker — see [ETF lenses](#etf-lenses)) — each running the same rank-sum engine with **no tuned weights**, an optional absolute-floor **screen-as-prefilter** (one definition per strategy), a confirmed-only **asset-kind** gate walling the classes apart, and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
+**Phase 5 — v2 rank-based decision core (current):** the verdict moved from the LLM Decision agent to a **deterministic rank engine** (`rank_engine.py` + `factors.py`) after a pre-registered controlled experiment showed the LLM council's verdicts flipped on identical inputs and its second opinion disagreed with 100% of picks. The council now **narrates** the deterministic verdict (`council_mode: narrator`); the second-opinion mode it was tested in has been removed from the app and the command line. Ten lenses are now visible — seven over stocks (defensive income, cyclical income, value+momentum (the flagship), growth at a reasonable price, a no-screen Greenblatt baseline, a financials P/B+ROE lens, and a forensic check lens) and three over ETFs (dividend, growth, index tracker — see [ETF lenses](#etf-lenses)) — each running the same rank-sum engine with **no tuned weights**, an optional absolute-floor **screen-as-prefilter** (one definition per strategy), a confirmed-only **asset-kind** gate walling the classes apart, and an **UNRATEABLE** guard so delisted names get no verdict. Full formulas in [The Calculations](docs/CALCULATIONS.md).
 
 **Phase 6 — Prospective evaluation (running).** Verdicts and street consensus are frozen in quarterly snapshots (first freeze: 2026-07-05, growth_40; defensive follows the FCF payout fix) and scored on 6- and 12-month forward total returns. The pre-committed test is bucket ordering — BUY > HOLD > SELL, and street most-loved > least-loved — against the equal-weight universe. Standing caveat: single snapshots are anecdotes; the evidence is the ordering across repeated freezes. Next scoring: January 2027. Methodology: **[The Scoreboard](docs/SCOREBOARD.md)**.
 
@@ -888,7 +906,8 @@ From the command line:
 ```bash
 python examples/run_pipeline.py KO PEP PG --rank-strategy magic_formula_raw_v1 --ranker-only   # free, no LLM
 python examples/company_check.py KO --strategy magic_formula_momentum_v1                        # one name, no verdict
-python examples/run_council.py JNJ                                                              # v1 council; bills credits
+python -m aristos_council.company_report KO --judges                                           # + blind judge panel; bills credits
+python -m aristos_council.judges report                                                        # the panel's log, per ticker
 ```
 
 The market index, cohorts and Gap Ledger commands are in their own sections above; Gap Ledger's

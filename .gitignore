@@ -63,3 +63,8 @@ data/local/gap_ledger/
 # files per trading day, and the kill-switch STOP file. Machine-written, local, never
 # personal (ticker picks and prices only, same convention as Gap Ledger's own record).
 data/local/paper_trade/
+
+# SNAPSHOT-2: the forward freeze names the watched cohorts and every company in them. Which cohorts are
+# watched is personal (same reason as data/local/cohorts/watch.yaml), and this repo is public.
+# `forward_snapshot take --commit` force-adds one on purpose, for a private repo.
+snapshots/forward_*.csv

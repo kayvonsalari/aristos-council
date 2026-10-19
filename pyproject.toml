@@ -49,10 +49,6 @@ ui = [
     # IANA tz database for zoneinfo — Windows has no system tz source, and the
     # UI converts UTC timestamps to Europe/Berlin for display.
     "tzdata",
-    # "Export PDF" — purpose-built A4 council record via HTML-to-PDF (pure
-    # Python, installs cleanly on Windows) + markdown -> HTML for agent prose.
-    "xhtml2pdf>=0.2.16",
-    "markdown>=3.4",
 ]
 # GAP-IBKR-1 — Interactive Brokers, the only source of real PRE-MARKET VOLUME available
 # here (yfinance publishes none). Optional because it is Gap Ledger's alone: no Aristos lens

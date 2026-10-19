@@ -58,7 +58,10 @@ three strategies — and when its best objection (momentum) was handled determin
 it began objecting to momentum itself. Its valid insights were hardened into rules: the
 momentum objections became a momentum factor; its one legitimate catch (a name ranking
 well while failing the strategy's own quality floor) became the screen-as-prefilter. The
-`second_opinion` mode remains behind a flag as the experimental instrument; the verdict
+engine still contains the `second_opinion` mode, but only for its own tests: it has no UI and
+is not meant to be run (the history is in the README's *Why this design* section, and the
+forward test of whether model judgement adds anything is the blind judge panel,
+`docs/JUDGE_PANEL.md`). The verdict
 header states the division of labor plainly: *Verdict: deterministic ranker. Narrative:
 LLM (non-judging).*
 
@@ -126,21 +129,9 @@ The strategy notes above flag exactly where these gaps affect results today.
 
 ### What you can change in the app
 
-Council Station exposes two ways to change how a run behaves, and the difference matters:
-
-- **Run overrides — this run only** (sidebar). Ephemeral toggles applied to a single run; the
-strategy file is never touched, the change is stamped "overrides this run" on the report, and the run
-is excluded from flip-comparison baselines. Two controls: whether a partial screen pass can still be
-a HOLD (the partial-pass policy), and whether the deterministic gate is on or off for a given
-criterion (per criterion) — the experiment knob.
-- **Edit as a new version** (Strategy tab). A deliberate, persisted change that creates a *new*
-strategy version rather than mutating a published one: the partial-pass policy and the human-veto
-confidence floor, saved under a new version id.
-
-In short: a run override is "try a setting for this run, nothing saved"; editing as a new version is
-"change the strategy going forward." Threshold values themselves are changed through the new-version
-flow, not as casual per-run sidebar sliders — only the gate toggles and the partial-pass policy are
-per-run.
+The app does not edit strategies and has no per-run override controls. A published strategy
+file is never mutated: a changed strategy is a new versioned YAML file, so every recorded verdict
+stays reproducible against the file it was produced with.
 
 ---
 

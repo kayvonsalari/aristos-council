@@ -261,7 +261,7 @@ def _current_test(request):
 
     The marker does NOT skip on its own. A ``real_adapter`` test that needs an optional
     dependency declares it the way the rest of the repo does — ``pytest.importorskip``
-    (49 uses for streamlit, 2 for yfinance, one each for pandas/markdown/xhtml2pdf) — so
+    (counts in docs/TESTING.md) — so
     that a provider test needing no yfinance (EODHD, or the unknown-name ValueError)
     still RUNS on a box without it instead of being skipped for nothing.
     """
