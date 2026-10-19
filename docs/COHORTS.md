@@ -323,6 +323,15 @@ list and named in its description rather than written as a symbol that would com
 UNRATEABLE. The universe id carries the same version number as the frozen directory, so a
 list in the sidebar and a cut on disk can never disagree about which one it is.
 
+## Definition of done for a new cohort
+
+1. Rule added to `data/cohort_definitions.yaml`; `plan` reviewed.
+2. Built and frozen (`build`), `check` clean, corrections flagged.
+3. Documented here (and the cohort count in README updated if it changed).
+4. Colab backtest run on the frozen `members.csv` under every voting lens, and the CSVs committed
+   to `backtests/` (in this PR or a follow-up named in its description). Rebuilding the cohort
+   later means re-running it. `python -m aristos_council.cohorts status` must no longer list it.
+
 ## What is committed
 
 `data/cohort_definitions.yaml` (the 57 rules), the correction files it relies on

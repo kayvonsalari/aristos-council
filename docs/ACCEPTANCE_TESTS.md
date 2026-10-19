@@ -283,6 +283,12 @@ AI text check, track-record wording, data checks. No rank, vote, verdict or lens
 | **DEF-T2** | (free) Analyse tab, Built cohort: pick "Industrials - Aerospace & Defense (Europe + US)". | 40 names, the thesis line is in the list's description; the track-record line names the cohort and every lens shows its badge (Growth reads "No test history for this lens in this industry yet."). |
 | **DEF-T3** | (free) Tick Growth, Magic Formula RAW, Value + Momentum, Quality, Forensic and the valuation band; run. | BAE Systems shows a band percentile and a reversion price in pence (about 1,660p against a 1,860p close); Rolls-Royce says plainly why its band is not read (under three years of usable operating profit), not "GBP vs GBp - no rates". Euro, kroner, krona, dollar names show prices in their own currency. EMBJ shows its name. |
 
+## BACKTEST-RULE-1
+
+| ID | How | Expect |
+| --- | --- | --- |
+| **BTR-T1** | (free) python -m aristos_council.cohorts status ; then copy `backtests/` to a temp folder, add a `<slug>/<lens>.csv` for every voting lens under the slug of a cohort listed (the defence cohort `industrials_aerospace_defense_europe_us` if it is not yet backtested; any newly built cohort otherwise) and run python -m aristos_council.cohorts status --backtests <temp folder>. | The first run lists the cohort as "no track record yet for ..." with its missing lens names. In the temp copy that cohort's line is gone. Nothing in `backtests/` itself changed, no network was used. |
+
 ## SNAPSHOT-2 (quarterly forward freeze)
 
 Command line, not Council Station. None of these calls a model.

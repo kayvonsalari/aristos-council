@@ -1,4 +1,4 @@
-"""COHORT-1 CLI — ``python -m aristos_council.cohorts <build|check|diff|plan>``.
+"""COHORT-1 CLI — ``python -m aristos_council.cohorts <build|check|diff|plan|status>``.
 
 The brief writes this as ``python -m aristos.cohorts``; this repo's package is
 ``aristos_council`` and there is no ``aristos``, so the command is spelled to match the
@@ -127,6 +127,16 @@ def cmd_plan(args) -> int:
     return 0
 
 
+def cmd_status(args) -> int:
+    """Frozen cohorts with no backtest rows for one or more voting lenses. Read-only, no network."""
+    from .track_record import backtested_lenses, format_missing, missing_track_records
+    rows = (missing_track_records(args.root, args.backtests) if args.backtests
+            else missing_track_records(args.root))
+    _say(format_missing(rows, backtested_lenses(args.backtests) if args.backtests
+                        else backtested_lenses()))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m aristos_council.cohorts",
@@ -180,6 +190,12 @@ def build_parser() -> argparse.ArgumentParser:
                         help="list every member (with its correction symbols and the legend), not "
                              "just the five largest")
     p_plan.set_defaults(func=cmd_plan)
+
+    p_status = sub.add_parser(
+        "status", help="frozen cohorts with no backtest track record yet. Read-only, no network")
+    p_status.add_argument("--backtests", default=None,
+                          help="backtests directory (default: the repo's backtests/)")
+    p_status.set_defaults(func=cmd_status)
     return parser
 
 
