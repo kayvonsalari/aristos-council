@@ -851,6 +851,11 @@ failure — while a ratio that *can* be computed and falls short still drops the
 stated on every surface: the report, the CSV, the Todoist task and the viewer. Full detail, the
 schedule, the thresholds and the verdict criteria: **[docs/GAP_LEDGER.md](docs/GAP_LEDGER.md)**.
 
+## House rules
+
+A new cohort or lens is not done until its backtest CSVs are committed to `backtests/`. See
+[docs/BACKTEST.md](docs/BACKTEST.md) "When to re-run the backtest".
+
 ## A note on honesty
 
 The measured limitations of the deterministic core — GAAP payout noise, knife-edge absolute floors, small-universe quintile artifacts, the trailing-data blind spot, and the EBIT/market-cap proxy — are documented, not hidden. See **[The Calculations §6 — Known limitations](docs/CALCULATIONS.md#6-known-limitations-measured-not-hypothetical)**.
