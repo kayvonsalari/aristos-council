@@ -3,7 +3,7 @@ shortlist with the LLM council.
 
 STAGE 1 ranks the universe (free, deterministic) — the ranker verdict is the
 verdict-of-record. STAGE 2 runs the LLM council ONLY on the shortlist (default: the
-BUY quintile) as a NARRATOR (or an independent second opinion behind the flag). The
+BUY quintile) as a NARRATOR. The
 council bills API credits; the estimate is printed and requires --yes above the cap.
 
 This script is a THIN WRAPPER: all orchestration lives in

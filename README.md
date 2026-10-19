@@ -618,7 +618,7 @@ prospective scoreboard until deliberately frozen"*). **Every ETF lens and every 
 is exploration today**; the three cohorts marked *observation only* exist to watch how a
 euro-investable lens behaves, not to produce a verdict of record. (A separate, role-derived
 rule decides *visibility* rather than grading: a universe whose `role:` says **never graded** —
-the watch sets and known-trap control benches — sits behind the "Show validation & legacy
+the watch sets and known-trap control benches — sits behind the "Show validation
 tools" toggle. The ETF universes are front-stage.)
 
 ## Architecture
@@ -659,8 +659,7 @@ tools" toggle. The ETF universes are front-stage.)
   run. List mode: edit the ticker list, run (one strategy narrates; several grade the same
   list under several lenses and report one combined grid, deterministically and for free).
   Company mode: the company's own peer group, each ticked lens's vote the verdict of
-  record. Plus the Scoreboard and strategy editing (edit-as-new-version; published files
-  are never mutated).
+  record. Plus the Scoreboard. Published strategy files are never mutated; a change is a new version.
 - **Market index and cohorts:** `market_index.py` (a local parquet table of ~25,000 listed companies;
   `clean_pool` gives one row per company; `peers()` is the peer ladder) and `cohorts/` (57 cohort
   rules → frozen, versioned member lists with quality checks and correction flags). Deterministic,
