@@ -612,6 +612,30 @@ volume over the following days — a real move, left alone. EODHD's own `/eod` e
 current plan, so this check relies on yfinance's series and action history alone; a warning that has
 not yet been run down by hand should be treated as unverified, not as an error.
 
+## When to re-run the backtest (BACKTEST-RULE-1)
+
+A track-record badge exists only for a cohort and lens that have a row in the committed
+`backtests/` CSVs. Anything without a row reads "untested here". So the backtest is part of
+shipping a cohort or a lens, not an optional extra:
+
+1. **Once a year**, refresh every cohort and every lens (see "Refreshing the results").
+2. **Every new cohort.** Freeze `members.csv` first, then run the Colab backtest for that cohort
+   under every voting lens. If the cohort's members change after the backtest (a `--rebuild`),
+   re-run it: otherwise the badge describes a different group than the one on screen.
+3. **Every new voting lens.** Run it across every cohort that already has CSVs in `backtests/`
+   (the same set as the existing files; 14 today, and `SUMMARY.csv` lists them).
+4. **Commit the CSVs** into `backtests/`, either in the cohort/lens PR itself or in a follow-up PR
+   that the first PR's description names. Until they are committed the cohort or lens is not done.
+5. **Check lenses are not backtested.** Forensic and the valuation band mark a company, they do not
+   vote, so they have no CSVs and get no badge. Nobody should go looking for missing rows for them.
+
+To see what is still owed: `python -m aristos_council.cohorts status` lists every frozen cohort
+that lacks backtest rows for one or more voting lenses ("no track record yet"). It is read-only and
+uses no network. The voting lenses it checks are the ones the committed CSVs already cover, so a
+brand-new lens is only caught once it has rows somewhere: follow item 3 for it by hand. Most of
+the 57 built cohorts are not backtested on purpose and will be listed; the ones that matter are
+those you are about to ship or watch.
+
 ## What it costs to run
 
 Every company's accounts are one EODHD `/fundamentals` request (10 API units), fetched once and kept
