@@ -224,13 +224,29 @@ def test_take_runs_every_voting_lens_ranker_only_and_writes_one_row_per_name_and
     assert next(r for r in rows if r["ticker"] == "AAA")["price_usd"] == "10"
 
 
-def test_take_commits_only_the_snapshot_file_with_a_dated_message(tmp_path, fake_agreement):
+def test_take_commits_only_the_snapshot_file_with_a_dated_message_when_asked(tmp_path, fake_agreement):
     res, _, git = _take(tmp_path, commit=True)
     assert res.committed
-    assert git[0] == ("add", "--", str(res.path))
+    assert git[0] == ("add", "-f", "--", str(res.path))          # -f: the snapshot CSVs are git-ignored
     assert git[1] == ("commit", "-m", "forward snapshot 2026-10-18", "--", str(res.path))
-    _, _, none = _take(tmp_path / "x", commit=False)
-    assert none == []
+    _, _, none = _take(tmp_path / "x")
+    assert none == []                                            # the default writes and commits nothing
+
+
+def test_the_cli_does_not_commit_unless_told_to():
+    import inspect
+    src = inspect.getsource(fs.main)
+    assert "commit=args.commit" in src and "--no-commit" not in src
+
+
+def test_the_snapshot_csvs_are_git_ignored_because_they_name_the_watched_cohorts():
+    ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "snapshots/forward_*.csv" in ignore.splitlines()
+    if (ROOT / ".git").exists():
+        hit = subprocess.run(["git", "check-ignore", "-q", "snapshots/forward_2026-10-18.csv"], cwd=ROOT)
+        assert hit.returncode == 0
+        old = subprocess.run(["git", "check-ignore", "-q", "snapshots/verdict_consensus.csv"], cwd=ROOT)
+        assert old.returncode == 1                               # the July file stays tracked
 
 
 def test_a_fetch_error_stops_the_freeze_unless_allowed(tmp_path, fake_agreement):
@@ -343,6 +359,16 @@ def test_check_says_when_a_snapshot_is_too_young_and_when_it_is_due(tmp_path):
     assert "Snapshot 2025-10-01 checked on 2026-10-18" in text
     assert fs.check_snapshots(tmp_path / "empty", today=TODAY, adapter=ad, say=said.append) == 0
     assert "No forward snapshots" in said[-1]
+
+
+def test_a_check_run_on_a_young_snapshot_says_it_is_a_rehearsal(tmp_path):
+    fs.write_snapshot([dict(_row("C", "l", "B1", "BUY"), date="2026-10-01")], tmp_path, date(2026, 10, 1))
+    said: list[str] = []
+    fs.check_snapshots(tmp_path, today=date(2026, 10, 18), adapter=FakeAdapter(), min_age_days=0, say=said.append)
+    assert any(line.startswith("REHEARSAL - this snapshot is 17 days old") for line in said)
+    said.clear()
+    fs.check_snapshots(tmp_path, today=date(2027, 10, 2), adapter=FakeAdapter(), say=said.append)
+    assert not any("REHEARSAL" in line for line in said)                  # a real, due check is not one
 
 
 def test_the_report_gives_the_count_of_cells_not_a_single_winner():

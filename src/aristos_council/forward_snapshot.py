@@ -3,7 +3,7 @@
 This replaces the July ``examples/snapshot_consensus.py`` (its universes and lenses are gone; it is
 not run or revived). One command freezes, one command grades:
 
-    python -m aristos_council.forward_snapshot take    # freeze today's verdicts, commit the CSV
+    python -m aristos_council.forward_snapshot take    # freeze today's verdicts into a local CSV
     python -m aristos_council.forward_snapshot check   # grade every snapshot older than 12 months
 
 NO MODEL IS CALLED, by either command. ``take`` runs ``run_multi_strategy_pipeline`` with
@@ -27,6 +27,12 @@ its CURRENT frozen version, graded under EVERY voting lens: the visible rank str
 * ``price_usd`` is the last close in the listing currency, converted at the FX rate of the same day.
   A minor-unit quote (pence, South African cents, ILA) is first scaled to its major unit. A price that
   cannot be converted is EMPTY with the reason in ``reason`` - never a guess.
+
+LOCAL BY DEFAULT. The CSV names the watched cohorts and every company in them, and which cohorts are
+watched is personal (CLAUDE.md; the same reason ``watch.yaml`` is git-ignored), so ``snapshots/forward_*.csv``
+is git-ignored and ``take`` only WRITES it. ``take --commit`` stages it with ``git add -f`` and commits just
+that file with a dated message - for the day the repo is private; it is not the default. Because the file is
+untracked it has no history and no backup: copy it somewhere private after each freeze.
 
 A snapshot file is IMMUTABLE: ``take`` refuses to overwrite one. If any name hit a transient fetch
 failure it refuses to write at all (a freeze with holes in it would be graded as if complete) unless
@@ -327,10 +333,10 @@ def take_snapshot(*, today: Optional[date] = None, adapter=None, out_dir: Path |
 
 
 def commit_snapshot(path: Path, snap_date: date, *, git=None) -> None:
-    """``git add`` + ``git commit`` of THIS file only, with a dated message. Anything else staged or
-    modified in the tree is left alone."""
+    """``git add -f`` + ``git commit`` of THIS file only, with a dated message (-f because the snapshot
+    CSVs are git-ignored). Anything else staged or modified in the tree is left alone."""
     git = git or (lambda *a: subprocess.run(["git", *a], cwd=ROOT, check=True))
-    git("add", "--", str(path))
+    git("add", "-f", "--", str(path))
     git("commit", "-m", f"forward snapshot {snap_date.isoformat()}", "--", str(path))
 
 
@@ -553,6 +559,9 @@ def check_snapshots(directory: Path | str = SNAPSHOT_DIR, *, today: Optional[dat
         rows = read_snapshot(p)
         cells, left_out = grade_snapshot(rows, d, adapter, today)
         say("")
+        if (today - d).days < MIN_AGE_DAYS:
+            say(f"REHEARSAL - this snapshot is {(today - d).days} days old, under the {MIN_AGE_DAYS} the check "
+                f"requires. Nothing below is a result; it only shows the plumbing runs.")
         say(format_check(d, today, cells, left_out, agreement_table(rows, d, adapter, today)))
     return len(due)
 
@@ -584,9 +593,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="python -m aristos_council.forward_snapshot",
                                 description="SNAPSHOT-2: quarterly forward freeze of watched-cohort verdicts.")
     sub = p.add_subparsers(dest="cmd", required=True)
-    t = sub.add_parser("take", help="freeze today's verdicts into snapshots/forward_<date>.csv and commit it")
+    t = sub.add_parser("take", help="freeze today's verdicts into snapshots/forward_<date>.csv (local, git-ignored)")
     t.add_argument("--out", default=str(SNAPSHOT_DIR))
-    t.add_argument("--no-commit", action="store_true", help="write the CSV but do not git commit it")
+    t.add_argument("--commit", action="store_true",
+                   help="also git add -f + commit that one file with a dated message (the CSV names the "
+                        "watched cohorts - only do this in a private repo)")
     t.add_argument("--allow-fetch-errors", action="store_true")
     c = sub.add_parser("check", help="grade every snapshot older than 12 months against today's prices")
     c.add_argument("--dir", default=str(SNAPSHOT_DIR))
@@ -597,9 +608,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     try:
         if args.cmd == "take":
             r = take_snapshot(out_dir=args.out, allow_fetch_errors=args.allow_fetch_errors,
-                              commit=not args.no_commit, freeze_dir=ROOT / "runs", progress=_say)
+                              commit=args.commit, freeze_dir=ROOT / "runs", progress=_say)
             _say(f"wrote {r.path} - {r.rows} rows, {r.cohorts} cohorts x {len(r.lenses)} lenses "
-                 f"({', '.join(r.lenses)}), {r.names} names" + (", committed" if r.committed else ", NOT committed"))
+                 f"({', '.join(r.lenses)}), {r.names} names" + (", committed" if r.committed else ", local only (git-ignored, not committed)"))
             if r.no_price:
                 _say(f"{len(r.no_price)} name(s) have no USD price (reason in the reason column): "
                      + ", ".join(r.no_price))
