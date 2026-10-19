@@ -1296,6 +1296,16 @@ changes. A published file is never edited in place: change it by saving a new ve
 (`edit-as-new-version`), so every recorded verdict stays reproducible against the exact
 file it ran under.
 
+### 8.1 Definition of done for a new lens
+
+1. Strategy YAML added (new id or version; published files are never edited), `kind: selector` for a
+   voting lens or `kind: check` for a mark that does not vote.
+2. Factors, thresholds and rationale documented in this file.
+3. Tests, and a live run seen on a real cohort.
+4. A voting lens: Colab backtest across every cohort already in `backtests/`, CSVs committed (in this
+   PR or a follow-up named in its description). A check lens is not backtested and gets no badge.
+   See docs/BACKTEST.md "When to re-run the backtest".
+
 ## 9. Scope: where the metrics apply
 
 The factors and screens are honest on operating businesses and disclose their limits
