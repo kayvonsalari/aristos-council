@@ -1,6 +1,6 @@
 """Market-data provider selection — one chokepoint for the composition root.
 
-app.py and run_council.py both build the council; this is the single place that
+app.py builds the council; this is the single place that
 turns the ``ARISTOS_MARKET_PROVIDER`` env var (or an explicit name) into a
 concrete ``MarketDataAdapter``. Default is yfinance, so nothing changes unless a
 run explicitly switches. EODHD's key requirement is enforced inside the adapter

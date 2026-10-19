@@ -1,0 +1,34 @@
+# JUDGE-PANEL-1 - which models sit on the blind judge panel.
+#
+# One judge per model FAMILY, no personas. The panel records what independent models would have
+# said about a company, blind, so that in twelve months we can judge whether LLM judgement adds
+# anything to the lenses. It has no vote and never changes a verdict (docs/JUDGE_PANEL.md).
+#
+# Model names live HERE so they can change without a code change. Defaults are the mid-tier model
+# of each family, not the most expensive. A name the provider no longer serves shows up on the
+# page as that judge's error, never as a crash - edit the line and run again.
+#
+#   family    anthropic | openai | google   (selects the API the judge is called through)
+#   label     what the page calls the judge
+#   model     the provider's model id
+#   key_env   the environment variable holding the key. Keys are read from the environment or the
+#             local .env, exactly like ANTHROPIC_API_KEY and EODHD_API_KEY, and are never printed
+#             or logged. A judge whose key is missing is shown as "not run - no key".
+#
+# calls_per_judge: every judge is asked the SAME question this many times; if the answers differ
+# the judge is "unstable" and both are kept. 2 is the design; do not lower it to save money.
+version: 1
+calls_per_judge: 2
+judges:
+  - family: anthropic
+    label: Claude
+    model: claude-sonnet-5-5
+    key_env: ANTHROPIC_API_KEY
+  - family: openai
+    label: OpenAI
+    model: gpt-5-mini
+    key_env: OPENAI_API_KEY
+  - family: google
+    label: Gemini
+    model: gemini-2.5-flash
+    key_env: GEMINI_API_KEY

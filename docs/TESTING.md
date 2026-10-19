@@ -34,14 +34,16 @@ so a typo (`real_adaptor`) is an error rather than a silent no-op — a silent n
 means the test reaches the network after all.
 
 The marker does **not** skip on its own. A test that needs an optional dependency declares
-it the way the rest of the repo does, with `pytest.importorskip` (49 uses for `streamlit`,
-2 for `yfinance`, one each for `pandas`, `markdown`, `xhtml2pdf`). That is deliberate:
+it the way the rest of the repo does, with `pytest.importorskip` (105 uses at the time of writing: 88 for `streamlit`,
+8 for `pandas`, 4 for `pyarrow`, 2 each for `yfinance` and `ib_async`, 1 for `dotenv`; count them with
+`grep -rho 'importorskip(' tests | wc -l`). That is deliberate:
 `test_provider_selection_eodhd` builds an EODHD adapter and
 `test_provider_selection_unknown_raises` builds nothing at all, so neither should be
 skipped on a box without yfinance just because it shares a marker with two that do.
 
-Five tests carry the marker today — the provider-selection cases in
-`tests/test_eodhd_adapter.py` and `tests/test_hybrid_adapter.py`. Constructing an adapter
+60 tests carry the marker today (`pytest -m real_adapter --collect-only`): the provider-selection
+cases in `tests/test_eodhd_adapter.py` and `tests/test_hybrid_adapter.py`, one in
+`tests/test_test_isolation.py`, and the whole-file marks on the IBKR Gap Ledger and paper-trade adapter tests. Constructing an adapter
 opens no connection; they are caught because the guard guards construction, which is the
 only place it can catch the tests that should not be constructing.
 
@@ -78,10 +80,10 @@ suppresses the summary line. **Run the full suite before every commit, including
 commits** (CLAUDE.md rule 6; imports break through refactors and this repo has the scar).
 
 The guard is also why the suite got faster: 106s before it, 57s after. Half the wall clock
-was a live Finnhub client nobody had asked for. (Historical figures: the suite then had a few hundred tests. As of 2026-09-26 it has
-3,625 passing and 1 skipped and takes about six minutes on a laptop; the one skip is a test
-guarded by `pytest.importorskip` for an optional dependency that is not installed locally; a clean
-checkout without the `ibkr` extra skips `test_gap_ledger_ibkr.py` the same way, and CI installs it.)
+was a live Finnhub client nobody had asked for. (Historical figures: the suite then had a few hundred tests. As of 2026-10-19 it collects 4,893 tests: 4,888 pass and 5 are skipped, in about four to
+six minutes on a laptop. The skips are tests guarded by `pytest.importorskip` for an optional
+dependency that is not installed locally; a clean checkout without the `ibkr` extra skips
+`test_gap_ledger_ibkr.py` the same way, and CI installs it.)
 
 One more rule learned in September 2026: **a test must not read the developer's own `data/local/`.**
 A guard that looked for frozen cohorts there passed on every clean checkout and went red on the one

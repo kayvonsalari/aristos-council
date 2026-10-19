@@ -1,6 +1,6 @@
 """Shared presentation helpers — PURE (no Streamlit, no PDF deps).
 
-Both Council Station (screen) and the PDF exporter must clean prose and shape the
+Both Council Station (screen) and the HTML exporter must clean prose and shape the
 screen-results table identically, so that logic lives here. Display-only: none
 of this is ever applied to stored data (reports keep call_ids for auditability).
 """
