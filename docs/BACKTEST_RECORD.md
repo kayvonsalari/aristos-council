@@ -52,6 +52,14 @@ up across industries: "Quality passed the test in Mining" is a statement the rec
 - **Batch 27B** (Growth v3 definition; an as-of filing-date mode so accounts are dated by the date
   they were actually filed, not an assumed lag). Neither changes a committed verdict until a
   re-run is committed with its compare output (`scripts/backtest_compare.py`, `docs/BACKTEST.md`).
+- **Roadmap (evidence that would strengthen or overturn these results):**
+  - Delisted US companies: EODHD publishes a list of them, but fundamentals only go back to 2018, so any
+    reconstruction of the survivors-only gap is partial.
+  - Drop the top 2 and top 3 picks each round, not only the best one, against random baskets treated the
+    same way.
+  - A portfolio-level return series (one compounded line per lens), alongside the per-round excess.
+  - A longer window where the data allows it.
+  - A full re-run dated by filing date (27B) with its compare output committed beside the CSVs.
 - **Proposals, not yet made:** Earnings Power Value as a reading beside the valuation band rather than
   a vote; a wider pool or looser rule for Growth, with its own backtest and the basket size shown; and
   results read per industry only.
