@@ -406,11 +406,12 @@ def test_every_judge_gets_the_identical_prompt_and_pack(report):
     assert "equity analyst" in seen[0][0] and "ABSTAIN" in seen[0][0]
 
 
-def test_the_panel_is_not_run_when_no_lens_gave_a_verdict_of_record(report):
+def test_the_panel_still_runs_when_no_lens_gave_a_verdict_of_record(report):
+    # JUDGE-PANEL-3: the "Not run: no lens gave a verdict of record" rule is gone for the panel
     report.agreement = None
-    caller = _scripted({"anthropic": [_reply()]})
+    caller = _scripted({"anthropic": [_reply()], "openai": [_reply()], "google": [_reply()]})
     result = _run_panel(report, caller)
-    assert not result.available and "verdict of record" in result.note and caller.calls == []
+    assert result.available and len(caller.calls) == 6 and result.record.verdict == ""
 
 
 def test_a_crash_inside_the_panel_is_reported_not_raised(report):

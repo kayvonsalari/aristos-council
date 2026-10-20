@@ -37,6 +37,8 @@ DISAGREES = "disagrees"
 MIXED = "mixed"
 NO_STABLE = "no_stable_judge"
 NO_READING = "no_panel_reading"
+NO_RECORD = "no_record"          # no lens voted: the panel is shown, there is nothing to compare with
+NO_VOTE_TEXT = "no lens vote"    # what the verdict-of-record column of the logs reads then
 MIN_JUDGES_ANSWERED = 2          # a panel is only read when at least this many judges were stable
 
 NO_KEY_TEXT = "not run — no key"
@@ -115,6 +117,11 @@ class RecordSnapshot:
     split: str = ""                  # "BUY 2 / HOLD 1 / SELL 0"
     headline: str = ""               # the agreement table's own sentence
     n_voted: int = 0
+
+    @property
+    def cell(self) -> str:
+        """What the logs' verdict-of-record column holds: the verdict, or "no lens vote"."""
+        return self.verdict or NO_VOTE_TEXT
 
 
 @dataclass
@@ -209,6 +216,8 @@ def panel_agreement(judges, record: RecordSnapshot) -> str:
     sides = stable_verdicts(judges)
     if not sides:
         return NO_STABLE
+    if record.verdict not in ("BUY", "HOLD", "SELL", "MIXED"):
+        return NO_RECORD
     if record.verdict in ("BUY", "HOLD", "SELL"):
         same = sum(1 for v in sides if v == record.verdict)
         if same == len(sides):
@@ -237,6 +246,8 @@ def agreement_line(status: str, record: RecordSnapshot) -> str:
         return f"The panel disagrees with {rec}."
     if status == MIXED:
         return f"The panel is mixed against {rec}."
+    if status == NO_RECORD:
+        return "There is no verdict of record to compare with: no lens voted."
     if status == NO_READING:
         return "No panel reading: fewer than two judges answered."
     return "The judges that answered all abstained, so there is nothing to compare with the verdict of record."
@@ -251,17 +262,23 @@ def needs_reading(status: str) -> bool:
 # running the judges
 # --------------------------------------------------------------------------- #
 def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> JudgeCall:
-    """One call, retried ONCE if the reply is malformed. A failed network call is an error, not
-    something a retry of the same words fixes, so it is not retried."""
+    """One call, retried ONCE if the reply is malformed and ONCE if it times out (a second
+    timeout is "error: timeout", the raw detail kept). Any other failed network call is an error,
+    not something a retry of the same words fixes, so it is not retried."""
     from .clients import CallError, error_label
 
-    call = JudgeCall(call_no=call_no)
+    call = JudgeCall(call_no=call_no, attempts=0)
     why = ""
-    for attempt in (1, 2):
-        call.attempts = attempt
+    malformed = False                 # a bad reply has been seen: the next ask carries the retry note
+    timed_out = False                 # a timeout has been seen: one more try, then "error: timeout"
+    while True:
+        call.attempts += 1
         try:
-            text = caller(spec, system, user if attempt == 1 else user + RETRY_NOTE + f" The problem was: {why}.")
+            text = caller(spec, system, user + RETRY_NOTE + f" The problem was: {why}." if malformed else user)
         except CallError as exc:
+            if (exc.timeout or error_label(exc) == "timeout") and not timed_out:
+                timed_out = True
+                continue
             call.status, call.error, call.error_detail = "error", error_label(exc), str(exc)
             return call
         except Exception as exc:                            # noqa: BLE001 - one judge must not stop the panel
@@ -276,6 +293,9 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> 
             call.unexplained = answer.unexplained
             call.own_knowledge_claims = answer.own_knowledge_claims
             return call
+        if malformed:
+            break
+        malformed = True
     call.status, call.error, call.error_detail = "invalid", "invalid output", why
     return call
 
@@ -350,12 +370,10 @@ def run_panel(report, *, fundamentals=None, config: Optional[PanelConfig] = None
         if getattr(report, "unrateable", False):
             result.note = f"no data for this company ({report.check.data_integrity.note})"
             return result
+        # JUDGE-PANEL-3: the panel runs whether or not a lens voted (loss-makers and turnarounds
+        # are exactly where a second reading is wanted). With no vote the record is empty, the
+        # logs say "no lens vote", and there is nothing for the panel to agree or disagree with.
         record = record_snapshot(report.agreement)
-        if not record.verdict:
-            # the same rule as the council opinion: with no lens verdict there is nothing to
-            # compare with, so no judge is asked - and the page says so rather than going quiet
-            result.note = "no lens gave a verdict of record for this company"
-            return result
         result.record = record
         config = config or load_config()
         pack = build_blind_pack(report, fundamentals, statements, news, strategies_dir=strategies_dir)

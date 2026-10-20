@@ -93,7 +93,7 @@ def log_rows(result: PanelResult) -> list[list]:
     in the data and not just missing from it)."""
     rows: list[list] = []
     common = (result.run_at, result.ticker)
-    tail = (result.record.verdict, result.record.split, result.pack_hash)
+    tail = (result.record.cell, result.record.split, result.pack_hash)
     for j in result.judges:
         stable = "yes" if j.status == STABLE else "no"
         if not j.calls:
@@ -124,7 +124,7 @@ def family_cell(j) -> tuple[str, str]:
 
 def summary_row(result: PanelResult) -> list:
     by_family = {j.family: j for j in result.judges}
-    row = [result.run_at, result.ticker, result.pack_hash, result.record.verdict,
+    row = [result.run_at, result.ticker, result.pack_hash, result.record.cell,
            result.record.split, _cell(result.record.headline)]
     for family, _ in FAMILY_COLUMNS:
         row.extend(family_cell(by_family.get(family)))
@@ -135,7 +135,7 @@ def summary_row(result: PanelResult) -> list:
 
 def write_log(result: PanelResult, directory=None) -> Optional[Path]:
     """Append this run to both files and return the directory written to. Nothing is written for a
-    panel that asked no one (no verdict of record, or no judge had a key): an all-"not run" row is
+    panel that asked no one (no judge had a key): an all-"not run" row is
     not data about the judges."""
     if not result.available or not any(j.calls for j in result.judges):
         return None

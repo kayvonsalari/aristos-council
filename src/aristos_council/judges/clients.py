@@ -17,9 +17,8 @@ import urllib.error
 import urllib.request
 from typing import Callable, Optional
 
-from .config import JudgeSpec
+from .config import DEFAULT_TIMEOUT_SECONDS, JudgeSpec
 
-TIMEOUT_SECONDS = 240
 MAX_ANSWER_TOKENS = 1500
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
@@ -62,7 +61,7 @@ def _scrub(text: str, key: str) -> str:
     return text.replace(key, "[key]") if key else text
 
 
-def post_json(url: str, headers: dict, body: dict, *, timeout: int = TIMEOUT_SECONDS) -> dict:
+def post_json(url: str, headers: dict, body: dict, *, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> dict:
     """POST ``body`` as JSON and return the decoded JSON reply. Raises ``CallError``."""
     data = json.dumps(body).encode("utf-8")
     request = urllib.request.Request(url, data=data, method="POST",
@@ -85,7 +84,7 @@ def _anthropic(spec: JudgeSpec, system: str, user: str, *, post=post_json) -> st
     reply = post(ANTHROPIC_URL,
                  {"x-api-key": spec.key(), "anthropic-version": "2023-06-01"},
                  {"model": spec.model, "max_tokens": MAX_ANSWER_TOKENS, "system": system,
-                  "messages": [{"role": "user", "content": user}]})
+                  "messages": [{"role": "user", "content": user}]}, timeout=spec.timeout_seconds)
     parts = [b.get("text", "") for b in (reply.get("content") or []) if b.get("type") == "text"]
     return "".join(parts)
 
@@ -95,16 +94,19 @@ def _openai(spec: JudgeSpec, system: str, user: str, *, post=post_json) -> str:
                  {"model": spec.model,
                   "messages": [{"role": "system", "content": system},
                                {"role": "user", "content": user}],
-                  "response_format": {"type": "json_object"}})
+                  "response_format": {"type": "json_object"}}, timeout=spec.timeout_seconds)
     choices = reply.get("choices") or []
     return str(((choices[0] if choices else {}).get("message") or {}).get("content") or "")
 
 
 def _gemini(spec: JudgeSpec, system: str, user: str, *, post=post_json) -> str:
+    generation = {"responseMimeType": "application/json"}
+    if spec.thinking_level:             # a verdict and a few sentences does not need deep reasoning
+        generation["thinkingConfig"] = {"thinkingLevel": spec.thinking_level}
     reply = post(GEMINI_URL.format(model=spec.model), {"x-goog-api-key": spec.key()},
                  {"systemInstruction": {"parts": [{"text": system}]},
                   "contents": [{"role": "user", "parts": [{"text": user}]}],
-                  "generationConfig": {"responseMimeType": "application/json"}})
+                  "generationConfig": generation}, timeout=spec.timeout_seconds)
     candidates = reply.get("candidates") or []
     parts = ((candidates[0] if candidates else {}).get("content") or {}).get("parts") or []
     return "".join(p.get("text", "") for p in parts)

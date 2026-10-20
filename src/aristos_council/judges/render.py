@@ -119,8 +119,13 @@ def summary_lines(result: PanelResult) -> list[str]:
     from .panel import AGREES, DISAGREES, MIXED, NO_READING, NO_STABLE
 
     rec = result.record
-    head = f"Verdict of record {rec.verdict} (lens votes: {_lens_votes(rec)})."
     panel = f"Panel: {result.split_line}"
+    if not rec.verdict:                    # no lens voted: there is nothing to agree or disagree with
+        line = f"Verdict of record: none (no lens voted). {panel}."
+        if result.agreement == NO_READING:
+            line += " No panel reading: fewer than two judges answered."
+        return [line]
+    head = f"Verdict of record {rec.verdict} (lens votes: {_lens_votes(rec)})."
     tail = {AGREES: "agrees", DISAGREES: "disagrees", MIXED: "mixed against the record"}.get(result.agreement)
     if tail:
         return [f"{head} {panel} — {tail}."]
