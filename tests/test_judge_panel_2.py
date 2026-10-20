@@ -38,9 +38,10 @@ def test_an_error_row_shows_a_short_label_in_the_verdict_column_and_nothing_else
     assert j.status == panel.ERROR and j.verdict_text() == "error: no credits"
     res = panel.PanelResult(ticker="CO", available=True, record=_record("BUY"), judges=[j],
                             agreement=panel.NO_READING)
-    row = render.rows(res)[0]
-    assert row["Verdict"] == "error: no credits"
-    assert row["Confidence"] == row["Reason"] == row["Would change its mind if"] == ""
+    row = render.cards(res)[0]
+    assert row["verdict"] == "error: no credits"
+    assert not any(row[k] for k in ("confidence", "driving_fact", "reasoning", "key_risk",
+                                    "unexplained", "would_change_my_mind"))
     shown = "\n".join(render.text_lines(res) + render.markdown_lines(res))
     assert "raw body" not in shown and "secret" not in shown
     bad = panel.settle(_config().judges[1], [panel.JudgeCall(1, "invalid", error="invalid output")] * 2)
@@ -54,7 +55,7 @@ def test_the_raw_error_body_goes_to_the_log_in_error_detail(tmp_path, report):
     result = _run_panel(report, caller)
     folder = jlog.write_log(result, tmp_path / "judges")
     rows = _rows(folder / jlog.LOG_NAME)
-    assert jlog.LOG_COLUMNS[-1] == "error_detail"
+    assert "error_detail" in jlog.LOG_COLUMNS
     bad = [r for r in rows if r["judge_family"] == "openai"]
     assert len(bad) == 2 and all("insufficient_quota" in r["error_detail"] for r in bad)
     assert all(r["verdict"] == "ERROR" for r in bad)
@@ -96,9 +97,8 @@ def test_one_error_one_unstable_one_stable_gives_no_panel_reading_and_no_narrato
     assert result.agreement == panel.NO_READING and asked == [] and result.reading is None
     assert result.split_line == "1 HOLD, 1 unstable, 1 error"
     assert "No panel reading: fewer than two judges answered." in "\n".join(render.text_lines(result))
-    row = jlog.summary_row(result)
-    assert row[-1] == 1 and row[-2] == panel.NO_READING                       # judges_answered, agreement
-    assert jlog.SUMMARY_COLUMNS[-1] == "judges_answered"
+    row = dict(zip(jlog.SUMMARY_COLUMNS, jlog.summary_row(result)))
+    assert row["judges_answered"] == 1 and row["panel_agreement"] == panel.NO_READING
 
 
 def test_two_stable_judges_are_a_panel_even_when_the_third_failed(report):

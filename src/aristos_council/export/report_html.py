@@ -1575,6 +1575,9 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
 
     parts.append(_story_html(report))
 
+    if report.judge_panel is not None:
+        parts.append(_judge_panel_html(report.judge_panel))
+
     if report.council_opinion is not None:
         parts.append('<section class="section"><h2>Council opinion</h2>'
                      '<p class="note">Narration only — never a vote; the agreement above is '
@@ -1587,9 +1590,6 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
                      else f'<p class="note">{_esc(op.note)}</p>')
         parts.append("</section>")
 
-    if report.judge_panel is not None:
-        parts.append(_judge_panel_html(report.judge_panel))
-
     parts.append(_workings_html(report))
     tail = f"Ran in {report.seconds:.1f}s"
     if report.cache.get("hits") is not None:
@@ -1601,27 +1601,11 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
 
 
 def _judge_panel_html(panel) -> str:
-    """JUDGE-PANEL-1 - the blind judge panel section, from the SAME rows the page and the other
+    """JUDGE-PANEL-1/3 - the blind judge panel section, from the SAME cards the page and the other
     exports use (``judges.render``)."""
     from ..judges import render as jr
 
-    out = [f'<section class="section"><h2>{_esc(jr.SECTION_TITLE)}</h2>',
-           f'<p class="note">{_esc(jr.CAPTION)}</p>']
-    if not panel.available:
-        out.append(f'<p class="note">Not run: {_esc(panel.note)}</p></section>')
-        return "".join(out)
-    head = "".join(f"<th>{_esc(c)}</th>" for c in jr.COLUMNS)
-    body = "".join("<tr>" + "".join(f"<td>{_esc(r[c])}</td>" for c in jr.COLUMNS) + "</tr>"
-                   for r in jr.rows(panel))
-    out.append(f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>")
-    out += [f"<p>{_esc(line)}</p>" for line in jr.summary_lines(panel)]
-    paragraph, note = jr.reading_text(panel)
-    if paragraph:
-        out.append(f"<p>{_esc(paragraph)}</p><p class=\"note\">{_esc(jr.READING_CAPTION)}</p>")
-    elif note:
-        out.append(f'<p class="note">{_esc(note)}</p>')
-    out.append("</section>")
-    return "".join(out)
+    return jr.html_section(panel, esc=_esc)
 
 
 def _story_html(report) -> str:

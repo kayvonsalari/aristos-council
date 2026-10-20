@@ -59,8 +59,22 @@ def main(argv=None) -> int:
     rep.add_argument("--dir", default=None, help="the folder holding judge_summary.csv "
                                                  "(default data/local/judges)")
     rep.add_argument("--ticker", default=None, help="only this ticker")
+    sc = sub.add_parser("score", help="score every logged verdict (each judge's and the lenses' record) "
+                                      "against its cohort over 3, 6 and 12 months; writes score.csv. "
+                                      "Read-only analysis: it changes nothing on the page")
+    sc.add_argument("--dir", default=None)
+    sc.add_argument("--today", default=None, help="score as of this date (YYYY-MM-DD); default today")
     args = parser.parse_args(argv)
     force_utf8_stdout()
     if args.command == "report":
         print(format_report(read_summary(args.dir), ticker=args.ticker))
+    if args.command == "score":
+        from datetime import date
+
+        from .score import run_score
+        today = date.fromisoformat(args.today) if args.today else None
+        _scored, text, path = run_score(args.dir, today=today)
+        print(text)
+        if path:
+            print(f"\nWritten to {path}")
     return 0

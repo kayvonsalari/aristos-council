@@ -8,8 +8,8 @@ from typing import Optional
 
 _ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = _ROOT / "data" / "judges.yaml"
-PROMPT_PATH = Path(__file__).resolve().parent / "judge_prompt_v1.md"
-PROMPT_VERSION = "judge_prompt_v1"
+PROMPT_PATH = Path(__file__).resolve().parent / "judge_prompt_v2.md"
+PROMPT_VERSION = "judge_prompt_v2"
 
 FAMILIES = ("anthropic", "openai", "google")
 DEFAULT_CALLS_PER_JUDGE = 2

@@ -80,7 +80,7 @@ suppresses the summary line. **Run the full suite before every commit, including
 commits** (CLAUDE.md rule 6; imports break through refactors and this repo has the scar).
 
 The guard is also why the suite got faster: 106s before it, 57s after. Half the wall clock
-was a live Finnhub client nobody had asked for. (Historical figures: the suite then had a few hundred tests. As of 2026-10-20 it collects 4,931 tests: 4,926 pass and 5 are skipped, in about four to
+was a live Finnhub client nobody had asked for. (Historical figures: the suite then had a few hundred tests. As of 2026-10-20 it collects 4,980 tests: 4,975 pass and 5 are skipped, in about four to
 six minutes on a laptop. The skips are tests guarded by `pytest.importorskip` for an optional
 dependency that is not installed locally; a clean checkout without the `ibkr` extra skips
 `test_gap_ledger_ibkr.py` the same way, and CI installs it.)

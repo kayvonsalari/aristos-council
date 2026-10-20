@@ -19,7 +19,7 @@ from typing import Callable, Optional
 
 from .config import JudgeSpec
 
-TIMEOUT_SECONDS = 120
+TIMEOUT_SECONDS = 240
 MAX_ANSWER_TOKENS = 1500
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"

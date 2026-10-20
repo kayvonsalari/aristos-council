@@ -41,7 +41,8 @@ MIN_JUDGES_ANSWERED = 2          # a panel is only read when at least this many 
 
 NO_KEY_TEXT = "not run — no key"
 RETRY_NOTE = ("\n\nYour previous reply was not a valid answer. Reply again with ONLY the single JSON "
-              "object described above, with exactly its four keys and no other text.")
+              "object described above, with exactly its seven keys, no other text, and every claim "
+              "in driving_fact and reasoning ending with [pack] or [own knowledge].")
 
 
 # --------------------------------------------------------------------------- #
@@ -53,8 +54,12 @@ class JudgeCall:
     status: str = "ok"                # ok | invalid | error
     verdict: str = ""
     confidence: str = ""
-    reason: str = ""
+    reason: str = ""                  # the judge's reasoning, claims labelled [pack] / [own knowledge]
+    driving_fact: str = ""
+    key_risk: str = ""
+    unexplained: str = ""
     would_change_my_mind: str = ""
+    own_knowledge_claims: int = 0
     attempts: int = 1
     error: str = ""                   # short label for a failed call ("no credits", "404"...)
     error_detail: str = ""            # the RAW error body: logged, never shown
@@ -137,6 +142,7 @@ class PanelResult:
     seconds: float = 0.0
     log_dir: str = ""            # where the rows were appended ("" when nothing was written)
     log_error: str = ""          # why they were not, when writing failed
+    peers: list = field(default_factory=list)   # the lens universe minus the company (the scorer's cohort)
 
     @property
     def split_line(self) -> str:
@@ -254,7 +260,7 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> 
     for attempt in (1, 2):
         call.attempts = attempt
         try:
-            text = caller(spec, system, user if attempt == 1 else user + RETRY_NOTE)
+            text = caller(spec, system, user if attempt == 1 else user + RETRY_NOTE + f" The problem was: {why}.")
         except CallError as exc:
             call.status, call.error, call.error_detail = "error", error_label(exc), str(exc)
             return call
@@ -265,7 +271,10 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> 
         if answer is not None:
             call.status = "ok"
             call.verdict, call.confidence = answer.verdict, answer.confidence
-            call.reason, call.would_change_my_mind = answer.reason, answer.would_change_my_mind
+            call.reason, call.would_change_my_mind = answer.reasoning, answer.would_change_my_mind
+            call.driving_fact, call.key_risk = answer.driving_fact, answer.key_risk
+            call.unexplained = answer.unexplained
+            call.own_knowledge_claims = answer.own_knowledge_claims
             return call
     call.status, call.error, call.error_detail = "invalid", "invalid output", why
     return call
@@ -324,7 +333,8 @@ def calls_made(judges) -> int:
 
 def run_panel(report, *, fundamentals=None, config: Optional[PanelConfig] = None,
               caller: Optional[Callable] = None, environ=None, reader=None,
-              strategies_dir=None, now: Optional[datetime] = None) -> PanelResult:
+              strategies_dir=None, now: Optional[datetime] = None,
+              statements=None, news=None) -> PanelResult:
     """The whole panel for one ``CompanyReport``. Never raises.
 
     ``reader`` (optional) is a callable ``(result, report, pack) -> PanelReading`` standing in for
@@ -348,7 +358,10 @@ def run_panel(report, *, fundamentals=None, config: Optional[PanelConfig] = None
             return result
         result.record = record
         config = config or load_config()
-        pack = build_blind_pack(report, fundamentals, strategies_dir=strategies_dir)
+        pack = build_blind_pack(report, fundamentals, statements, news, strategies_dir=strategies_dir)
+        # the tickers the lenses ranked this company against: the benchmark the scorer will use
+        result.peers = [t for t in (getattr(report, "universe", None) or [])
+                        if str(t).upper() != str(report.ticker).upper()]
         result.pack_hash, result.pack_version = pack.pack_hash, pack.version
         if caller is None:
             from .clients import http_caller as caller

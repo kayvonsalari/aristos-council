@@ -27,18 +27,20 @@ SUMMARY_NAME = "judge_summary.csv"
 _LOG_V1 = ("run_date", "ticker", "judge_family", "model_name", "call_number", "verdict",
            "confidence", "stable", "reason", "would_change_my_mind", "verdict_of_record",
            "lens_split", "pack_hash", "call_status")
-LOG_COLUMNS = _LOG_V1 + ("error_detail",)
+_LOG_V2 = _LOG_V1 + ("error_detail",)
+LOG_COLUMNS = _LOG_V2 + ("driving_fact", "key_risk", "unexplained", "own_knowledge_claims")
 
 FAMILY_COLUMNS = (("anthropic", "claude"), ("openai", "openai"), ("google", "gemini"))
 _SUMMARY_V1 = (("run_date", "ticker", "pack_hash", "verdict_of_record", "lens_split",
                 "record_headline")
                + tuple(c for _, name in FAMILY_COLUMNS for c in (f"{name}_verdict", f"{name}_confidence"))
                + ("panel_split", "panel_agreement"))
-SUMMARY_COLUMNS = _SUMMARY_V1 + ("judges_answered",)
+_SUMMARY_V2 = _SUMMARY_V1 + ("judges_answered",)
+SUMMARY_COLUMNS = _SUMMARY_V2 + ("peers",)
 # Earlier headers of the same files. A file carrying one of THESE is upgraded in place (the new
 # columns are appended, empty for old rows - nothing is reordered or lost); any other header is
 # still refused.
-_PREVIOUS = {LOG_NAME: (_LOG_V1,), SUMMARY_NAME: (_SUMMARY_V1,)}
+_PREVIOUS = {LOG_NAME: (_LOG_V1, _LOG_V2), SUMMARY_NAME: (_SUMMARY_V1, _SUMMARY_V2)}
 
 
 class LogHeaderMismatch(RuntimeError):
@@ -95,13 +97,14 @@ def log_rows(result: PanelResult) -> list[list]:
     for j in result.judges:
         stable = "yes" if j.status == STABLE else "no"
         if not j.calls:
-            rows.append([*common, j.family, j.model, 0, "NOT_RUN", "", stable, j.note, "", *tail, NOT_RUN, ""])
+            rows.append([*common, j.family, j.model, 0, "NOT_RUN", "", stable, j.note, "", *tail, NOT_RUN, "", "", "", "", 0])
             continue
         for c in j.calls:
             verdict = c.verdict if c.status == "ok" else {"invalid": "INVALID", "error": "ERROR"}.get(c.status, "")
             rows.append([*common, j.family, j.model, c.call_no, verdict, c.confidence, stable,
                          _cell(c.reason or c.error), _cell(c.would_change_my_mind), *tail, c.status,
-                         _cell(c.error_detail)])
+                         _cell(c.error_detail), _cell(c.driving_fact), _cell(c.key_risk),
+                         _cell(c.unexplained), c.own_knowledge_claims])
     return rows
 
 
@@ -125,7 +128,8 @@ def summary_row(result: PanelResult) -> list:
            result.record.split, _cell(result.record.headline)]
     for family, _ in FAMILY_COLUMNS:
         row.extend(family_cell(by_family.get(family)))
-    row += [result.split_line, result.agreement, judges_answered(result.judges)]
+    row += [result.split_line, result.agreement, judges_answered(result.judges),
+            ";".join(result.peers)]
     return row
 
 

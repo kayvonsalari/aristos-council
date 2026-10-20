@@ -3559,6 +3559,10 @@ def _render_company_report(report) -> None:
     if page.badge_note:                                    # B25-7
         st.caption(page.badge_note)
 
+    # JUDGE-PANEL-3: directly under the lens table, above the cards, the council opinion and the workings
+    if getattr(report, "judge_panel", None) is not None:      # only when it was ticked
+        _render_judge_panel(report.judge_panel)
+
     if not page.no_vote:                                   # four small cards, above the workings
         st.markdown(company_cards.stat_cards(report), unsafe_allow_html=True)
 
@@ -3589,9 +3593,6 @@ def _render_company_report(report) -> None:
                         unsafe_allow_html=True)
         else:
             st.info(op.note)
-
-    if getattr(report, "judge_panel", None) is not None:      # only when it was ticked
-        _render_judge_panel(report.judge_panel)
 
     with st.expander(SECTION_WORKINGS):
         st.subheader("Valuation band")
@@ -3655,11 +3656,11 @@ def _render_company_report(report) -> None:
 
 
 def _render_judge_panel(panel) -> None:
-    """JUDGE-PANEL-1 - one row per judge, the split, and whether the panel agrees with the verdict of
-    record. No average, no combined verdict. Built from ``judges.render`` so the page and every
-    download say the same thing."""
-    import pandas as pd
-
+    """JUDGE-PANEL-1/3 - one card per judge (verdict, confidence, the fact that drove it, the
+    reasoning folded under "Why", key risk, what it could not account for, what would change its
+    mind), then ONE line: the verdict of record with the lenses' votes, the panel's split and
+    whether it agrees. No average, no combined verdict. Own-knowledge passages are italic with a
+    small tag. Built from ``judges.render`` so the page and every download say the same thing."""
     from aristos_council.judges import render as jr
 
     st.subheader(jr.SECTION_TITLE)
@@ -3667,8 +3668,18 @@ def _render_judge_panel(panel) -> None:
     if not panel.available:
         st.info(f"Not run: {panel.note}")
         return
-    st.dataframe(pd.DataFrame(jr.rows(panel), columns=list(jr.COLUMNS)),
-                 hide_index=True, width="stretch")
+    for card in jr.cards(panel):
+        with st.container(border=True):
+            conf = f" · confidence {card['confidence']}" if card["confidence"] else ""
+            st.markdown(f"**{card['judge']}** — **{card['verdict']}**{conf}")
+            if card["driving_fact"]:
+                st.markdown(f"*The fact that drove it:* {jr.mark_markdown(card['driving_fact'])}")
+            if card["reasoning"]:
+                with st.expander("Why"):
+                    st.markdown(jr.mark_markdown(card["reasoning"]))
+            for key, caption in jr.FIELDS[2:]:
+                if card[key]:
+                    st.markdown(f"*{caption}:* {jr.mark_markdown(card[key])}")
     for line in jr.summary_lines(panel):
         st.markdown(line)
     paragraph, note = jr.reading_text(panel)
@@ -3677,6 +3688,7 @@ def _render_judge_panel(panel) -> None:
         st.caption(jr.READING_CAPTION)
     elif note:
         st.caption(note)
+    st.caption(jr.OWN_TAG_NOTE)
     if panel.log_error:
         st.warning(f"The panel's answers could not be written to the log: {panel.log_error}")
 
