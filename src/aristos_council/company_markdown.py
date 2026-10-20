@@ -79,6 +79,10 @@ def company_report_markdown(report) -> str:
     if page.badge_note:
         out += [f"*{page.badge_note}*", ""]
 
+    if report.judge_panel is not None:
+        from .judges.render import markdown_lines as _judge_markdown
+        out += _judge_markdown(report.judge_panel)
+
     if report.council_opinion is not None:
         op = report.council_opinion
         out += [f"## {'Council opinion'}", "",
@@ -87,10 +91,6 @@ def company_report_markdown(report) -> str:
             from .ai_text_check import count, top_line
             out += [f"*{top_line(count(op.narrative or ''))}*", ""]
         out += [(op.narrative or "(no narrative produced)") if op.available else op.note, ""]
-    if report.judge_panel is not None:
-        from .judges.render import markdown_lines as _judge_markdown
-        out += _judge_markdown(report.judge_panel)
-
     out += [f"## {SECTION_WORKINGS}", "", "### Valuation band", "",
             "*This company against its own history; a mark, never a veto.*", "", c.valuation_band, ""]
     out += ["### Price and cash", "", *_bullets(price_and_cash_lines(c)), ""]

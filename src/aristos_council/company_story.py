@@ -436,6 +436,11 @@ def _doubt(report) -> str:
     p = getattr(report.check, "band_percentile", None)
     if p is None and str(getattr(report.check, "valuation_band", "")).startswith("not evaluated"):
         bits.append("Its valuation band abstained.")
+    # JUDGE-PANEL-3: only when the panel ran - what the judges could not account for in the facts
+    from .judges.render import unexplained_line
+    judged = unexplained_line(getattr(report, "judge_panel", None))
+    if judged:
+        bits.append(judged)
     return " ".join(bits) if bits else "Nothing in this run calls for extra doubt beyond the sentence below."
 
 

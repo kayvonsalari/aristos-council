@@ -749,8 +749,9 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
 
 
 def run_judge_panel(report: CompanyReport, *, adapter=None, caller=None, reader=None, config=None,
-                    log_dir=None, strategies_dir=None, environ=None):
-    """JUDGE-PANEL-1 - the blind judge panel for this company, logged. Never raises, and never
+                    log_dir=None, strategies_dir=None, environ=None, statements_fetcher=None,
+                    news_fetcher=None):
+    """JUDGE-PANEL-1/3 - the blind judge panel for this company, logged. Never raises, and never
     touches ``report.agreement`` or any vote: the panel records, it does not judge. Fundamentals
     (the annual series and the dividend record the page itself does not hold) come from the same
     day-cached adapter the report already used; if they cannot be read the pack simply omits them."""
@@ -763,8 +764,28 @@ def run_judge_panel(report: CompanyReport, *, adapter=None, caller=None, reader=
             fundamentals = adapter.get_fundamentals(report.ticker)
         except Exception:                                    # noqa: BLE001 - the pack goes without
             fundamentals = None
+    # JUDGE-PANEL-3: the full annual statements and every recent headline. A live run (no injected
+    # caller) fetches them; an injected caller means a test, which injects its own fetchers or goes
+    # without - nothing in the suite may reach a provider.
+    if caller is None:
+        from .judges import evidence
+        statements_fetcher = statements_fetcher or (lambda t: evidence.fetch_statements(t))
+        news_fetcher = news_fetcher or (lambda t: evidence.fetch_news(t))
+    statements = news = None
+    for name, fetcher in (("statements", statements_fetcher), ("news", news_fetcher)):
+        if fetcher is None:
+            continue
+        try:
+            data, _why = fetcher(report.ticker)
+        except Exception:                                    # noqa: BLE001 - the pack goes without
+            data = None
+        if name == "statements":
+            statements = data
+        else:
+            news = data
     result = run_panel(report, fundamentals=fundamentals, config=config, caller=caller,
-                       reader=reader, strategies_dir=strategies_dir, environ=environ)
+                       reader=reader, strategies_dir=strategies_dir, environ=environ,
+                       statements=statements, news=news)
     try:
         folder = write_log(result, log_dir)
         result.log_dir = str(folder) if folder is not None else ""
@@ -989,7 +1010,7 @@ def run_company_report(
     with_summary: bool = False, reader_runner=None, with_council: bool = False,
     council_runners=None, store=None, save: bool = True,
     with_judges: bool = False, judge_caller=None, judge_reader=None, judge_config=None,
-    judges_dir=None, judge_environ=None,
+    judges_dir=None, judge_environ=None, judge_statements=None, judge_news=None,
     progress: Optional[Callable[[str], None]] = None,
     include_small: bool = False, news_fetcher=None,
 ) -> CompanyReport:
@@ -1154,7 +1175,9 @@ def run_company_report(
         report.judge_panel = run_judge_panel(report, adapter=adapter, caller=judge_caller,
                                              reader=judge_reader, config=judge_config,
                                              log_dir=judges_dir, strategies_dir=strategies_dir,
-                                             environ=judge_environ)
+                                             environ=judge_environ,
+                                             statements_fetcher=judge_statements,
+                                             news_fetcher=judge_news)
     if with_summary:
         say("Writing the plain-English summary…")
         report.summary = write_company_summary(report, runner=reader_runner)
@@ -1510,13 +1533,13 @@ def format_company_report(report: CompanyReport) -> str:
 
     lines += story_text_lines(report)
     lines.append("")
-    if report.council_opinion is not None:
-        lines += ["COUNCIL OPINION (narration only - never a vote; the agreement above is "
-                  "the verdict of record)", *council_opinion_lines(report), ""]
     if report.judge_panel is not None:
         from .judges import render as _judge_render
         lines += [f"{_judge_render.SECTION_TITLE.upper()} (blind, no vote - the agreement above is "
                   "the verdict of record)", *_judge_render.text_lines(report.judge_panel), ""]
+    if report.council_opinion is not None:
+        lines += ["COUNCIL OPINION (narration only - never a vote; the agreement above is "
+                  "the verdict of record)", *council_opinion_lines(report), ""]
     lines += workings_text_lines(report)
     tail = f"Ran in {report.seconds:.1f}s"
     if report.cache.get("hits") is not None:

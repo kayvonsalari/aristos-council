@@ -68,8 +68,9 @@ def _material(result, report) -> str:
             c = j.first_ok
             said = "ABSTAINED" if j.verdict == "ABSTAIN" else j.verdict
             lines.append(f"- {j.label} ({j.model}): {said}; "
-                         f"confidence {c.confidence}; reason: {c.reason}; would change its mind if: "
-                         f"{c.would_change_my_mind}")
+                         f"confidence {c.confidence}; the fact that drove it: {c.driving_fact}; "
+                         f"reasoning: {c.reason}; could not account for: {c.unexplained}; "
+                         f"would change its mind if: {c.would_change_my_mind}")
         elif j.status == UNSTABLE:
             lines.append(f"- {j.label}: unstable (its two answers were " + " and ".join(j.verdicts) + ")")
         else:

@@ -81,7 +81,7 @@ What costs money, and what does not:
 | [docs/GAP_LEDGER.md](docs/GAP_LEDGER.md) | The pre-market experiment: pipeline, schedule, freeze, verdict criteria |
 | [docs/TESTING.md](docs/TESTING.md) | How the suite is isolated from the network and from real providers |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Open defects and data gaps a tester may meet, with the current workaround |
-| [docs/JUDGE_PANEL.md](docs/JUDGE_PANEL.md) | The blind judge panel on the company page: what it records, why it has no vote, the blind-pack and stability rules, the logs, and the 12-month review plan (JUDGE-PANEL-1) |
+| [docs/JUDGE_PANEL.md](docs/JUDGE_PANEL.md) | The judge panel on the company page: the full-evidence pack (statements, news, readings, no lens opinions), labelled own knowledge, why it has no vote, the stability rule, the logs, `judges score`, and the bar (12 months, 30 names) before any judge earns a vote |
 | [docs/DESIGN_company_story.md](docs/DESIGN_company_story.md) | The single-company page: the two-line answer, the code-written story, one lens table, the workings folded (COMPANY-STORY-1) |
 | [CLAUDE.md](CLAUDE.md) | The contributor's working agreement: architecture in reading order, hard rules, sprint history |
 | `docs/diagnosis_*.md` | Two dated post-mortems of specific data defects (kept as case studies) |
@@ -437,9 +437,10 @@ analyse them."* — so the exclusion is a next step rather than a dead end.
 5. **Model judgement is tested forward, blind, and without a vote.** Whether a language model
    adds anything to the lenses is a question the controlled experiment could not close, so the
    company page can ask a *judge panel* (one model each from Anthropic, OpenAI and Google). Each
-   judge sees only the company's raw facts - no lens, rank, badge or verdict - is asked twice, and
-   may abstain. Every answer is logged beside the verdict of record at that moment, so in twelve
-   months the answers can be scored against what happened. The panel never votes and changes no
+   judge sees the company's full facts (statements, readings, news) but no lens, rank, badge or
+   verdict, may add what it knows if it labels it, is asked twice, and may abstain. Every answer is
+   logged beside the verdict of record at that moment, and `judges score` marks each against the
+   company's cohort at 3, 6 and 12 months. The panel never votes and changes no
    verdict, rank or badge: it is the forward test, not a new decision-maker. See
    [docs/JUDGE_PANEL.md](docs/JUDGE_PANEL.md).
 
@@ -908,6 +909,7 @@ python examples/run_pipeline.py KO PEP PG --rank-strategy magic_formula_raw_v1 -
 python examples/company_check.py KO --strategy magic_formula_momentum_v1                        # one name, no verdict
 python -m aristos_council.company_report KO --judges                                           # + blind judge panel; bills credits
 python -m aristos_council.judges report                                                        # the panel's log, per ticker
+python -m aristos_council.judges score                                                         # score the log (3/6/12 months vs cohort)
 ```
 
 The market index, cohorts and Gap Ledger commands are in their own sections above; Gap Ledger's

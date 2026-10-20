@@ -1,22 +1,36 @@
-"""JUDGE-PANEL-1 - the panel as rows and lines, ONE source for the page, the text, the Markdown and
-the HTML so the four cannot drift (the same rule the company page's story follows)."""
+"""JUDGE-PANEL-1/3 - the panel as cards and lines, ONE source for the page, the text, the Markdown and
+the HTML so the four cannot drift (the same rule the company page's story follows).
+
+A judge's reasoning carries a source tag on every claim, ``[pack]`` or ``[own knowledge]``. Where
+the format allows, the own-knowledge claims are visibly marked (italic plus a small tag) so a
+reader sees at a glance what came from outside the evidence.
+"""
 from __future__ import annotations
 
-from .panel import (INCOMPLETE, NOT_RUN, STABLE, UNSTABLE, PanelResult, needs_reading)
+import html as _html
+
+from . import answer as _answer
+from .panel import (INCOMPLETE, STABLE, UNSTABLE, PanelResult, needs_reading)
 
 SECTION_TITLE = "Judge panel"
 CHECKBOX_LABEL = "Judge panel (blind, no vote)"
-CAPTION = ("Independent models were each shown only this company's raw facts - no lens, rank, "
-           "badge or verdict - and asked twice. They have no vote and change nothing above: the "
-           "lenses stay the verdict of record. This is a record kept to see, in a year, whether "
-           "model judgement adds anything.")
-COLUMNS = ("Judge", "Verdict", "Confidence", "Reason", "Would change its mind if")
+CAPTION = ("Independent models were each shown this company's facts - the full statements, the "
+           "readings, the news - but no lens, rank, badge or verdict, and asked twice. They have no "
+           "vote and change nothing above: the lenses stay the verdict of record. This is a record "
+           "kept to see, in a year, whether model judgement adds anything.")
 READING_CAPTION = "A reading of the difference, not a recommendation."
+OWN_TAG_NOTE = "Passages marked “own knowledge” come from the model, not from the facts it was given."
 
-HELP = ("Three independent models (Claude, OpenAI, Gemini), each shown ONLY this company's raw facts "
-        "- no lens, rank, badge or verdict - and asked the same question twice. They never vote and "
-        "change nothing above; every answer is logged so that in a year we can see whether model "
-        "judgement adds anything. A judge with no key is skipped. Off unless you tick it.")
+HELP = ("Three independent models (Claude, OpenAI, Gemini), each shown this company's facts - the "
+        "full statements, the readings, the news - but NO lens, rank, badge or verdict, and asked "
+        "the same question twice. They may use what they know about the company, and must label it. "
+        "They never vote and change nothing above; every answer is logged so that in a year we can "
+        "see whether model judgement adds anything. A judge with no key is skipped. Off unless you "
+        "tick it.")
+
+# the labelled fields a card shows, in order, with their captions
+FIELDS = (("driving_fact", "The fact that drove it"), ("reasoning", "Why"), ("key_risk", "Key risk"),
+          ("unexplained", "Could not account for"), ("would_change_my_mind", "Would change its mind if"))
 
 
 def checkbox_caption(config, environ=None) -> str:
@@ -31,31 +45,90 @@ def checkbox_caption(config, environ=None) -> str:
             f"x {config.calls_per_judge}, plus one short paragraph if the panel differs){tail}.")
 
 
-def _per_call(j, attr: str) -> str:
-    return " / ".join(getattr(c, attr) for c in j.calls if c.status == "ok" and getattr(c, attr))
+# --------------------------------------------------------------------------- #
+# marking the source of a claim
+# --------------------------------------------------------------------------- #
+def mark_markdown(text: str) -> str:
+    """Own-knowledge claims in italics followed by a small tag; pack claims as written, tag dropped."""
+    out = []
+    for claim, source in _answer.segments(text):
+        if source == "own knowledge":
+            out.append(f"*{claim}* `own knowledge`")
+        else:
+            out.append(claim)
+    return " ".join(out) if out else text
 
 
-def rows(result: PanelResult) -> list[dict]:
+def mark_html(text: str) -> str:
+    out = []
+    for claim, source in _answer.segments(text):
+        if source == "own knowledge":
+            out.append(f'<em>{_html.escape(claim)}</em> <span class="tag own-knowledge">own knowledge</span>')
+        else:
+            out.append(_html.escape(claim))
+    return " ".join(out) if out else _html.escape(text)
+
+
+def mark_text(text: str) -> str:
+    """Plain text keeps the tags as written - they are the marking."""
+    return text
+
+
+# --------------------------------------------------------------------------- #
+# cards
+# --------------------------------------------------------------------------- #
+def cards(result: PanelResult) -> list[dict]:
+    """One dict per judge: the head line fields, then each labelled field (empty for a judge that
+    gave no answer - an error shows its short label and NOTHING else)."""
     out = []
     for j in result.judges:
-        row = {"Judge": f"{j.label} ({j.model})", "Verdict": j.verdict_text(),
-               "Confidence": "", "Reason": "", "Would change its mind if": ""}
-        if j.status == STABLE:
-            c = j.first_ok
-            row.update({"Confidence": c.confidence, "Reason": c.reason,
-                        "Would change its mind if": c.would_change_my_mind})
-        elif j.status in (UNSTABLE, INCOMPLETE):
-            ok = [c for c in j.calls if c.status == "ok"]
-            row.update({"Confidence": " / ".join(c.confidence for c in ok),
-                        "Reason": " | ".join(f"{c.verdict}: {c.reason}" for c in ok),
-                        "Would change its mind if": " | ".join(f"{c.verdict}: {c.would_change_my_mind}" for c in ok)})
-        out.append(row)
+        card = {"judge": f"{j.label} ({j.model})", "verdict": j.verdict_text(), "confidence": "",
+                "status": j.status, "own_knowledge": 0,
+                **{key: "" for key, _ in FIELDS}}
+        ok = [c for c in j.calls if c.status == "ok"]
+        if j.status == STABLE and ok:
+            c = ok[0]
+            card.update(confidence=c.confidence, driving_fact=c.driving_fact, reasoning=c.reason,
+                        key_risk=c.key_risk, unexplained=c.unexplained,
+                        would_change_my_mind=c.would_change_my_mind)
+        elif j.status in (UNSTABLE, INCOMPLETE) and ok:
+            def both(attr):
+                return " | ".join(f"{c.verdict}: {getattr(c, attr)}" for c in ok)
+            card.update(confidence=" / ".join(c.confidence for c in ok), driving_fact=both("driving_fact"),
+                        reasoning=both("reason"), key_risk=both("key_risk"),
+                        unexplained=both("unexplained"), would_change_my_mind=both("would_change_my_mind"))
+        card["own_knowledge"] = sum(c.own_knowledge_claims for c in ok)
+        out.append(card)
     return out
 
 
+def _lens_votes(record) -> str:
+    """The lenses' votes as '0 BUY, 2 HOLD, 0 SELL' - never judge counts."""
+    return ", ".join(f"{n} {w}" for w, n in _split_pairs(record.split))
+
+
+def _split_pairs(split: str):
+    parts = [p.split() for p in (split or "").split(" / ")]
+    return [(p[0], p[1]) for p in parts if len(p) == 2]
+
+
 def summary_lines(result: PanelResult) -> list[str]:
-    """The split line and the agreement line - two lines, no more."""
-    return [f"Split: {result.split_line}.", result.agreement_line]
+    """ONE line: the verdict of record with the lenses' votes in the bracket, then the panel's split
+    (judges, not calls) and whether it agrees. e.g. "Verdict of record HOLD (lens votes: 0 BUY,
+    2 HOLD, 0 SELL). Panel: 3 HOLD — agrees." """
+    from .panel import AGREES, DISAGREES, MIXED, NO_READING, NO_STABLE
+
+    rec = result.record
+    head = f"Verdict of record {rec.verdict} (lens votes: {_lens_votes(rec)})."
+    panel = f"Panel: {result.split_line}"
+    tail = {AGREES: "agrees", DISAGREES: "disagrees", MIXED: "mixed against the record"}.get(result.agreement)
+    if tail:
+        return [f"{head} {panel} — {tail}."]
+    if result.agreement == NO_READING:
+        return [f"{head} {panel}. No panel reading: fewer than two judges answered."]
+    if result.agreement == NO_STABLE:
+        return [f"{head} {panel}. The judges that answered all abstained, so there is nothing to compare."]
+    return [f"{head} {panel}."]
 
 
 def reading_text(result: PanelResult) -> tuple[str, str]:
@@ -66,24 +139,44 @@ def reading_text(result: PanelResult) -> tuple[str, str]:
     return rd.paragraph, ("" if rd.paragraph or not needs_reading(result.agreement) else rd.note)
 
 
+def unexplained_line(result) -> str:
+    """"The judge panel could not account for: ..." for the story's "What to doubt" paragraph, or ""
+    when the panel did not run or nobody had anything unexplained. One line; each judge once."""
+    if result is None or not getattr(result, "available", False):
+        return ""
+    items = []
+    for j in result.judges:
+        c = j.first_ok if j.status == STABLE else None
+        text = (c.unexplained if c else "").strip().rstrip(".")
+        if text and text.lower() not in ("nothing", "none", "nothing."):
+            items.append(f"{j.label}: {_answer._normalise_tags(text)}")
+    if not items:
+        return ""
+    return "The judge panel could not account for: " + "; ".join(items) + "."
+
+
+def _head(card) -> str:
+    conf = f" (confidence {card['confidence']})" if card["confidence"] else ""
+    return f"{card['judge']}: {card['verdict']}{conf}"
+
+
 def text_lines(result: PanelResult) -> list[str]:
-    """Plain-text block for the .txt download (after the council opinion)."""
+    """Plain-text block for the .txt download."""
     if not result.available:
         return [f"  Not run: {result.note}"]
     out = []
-    for r in rows(result):
-        out.append(f"  {r['Judge']}: {r['Verdict']}"
-                   + (f" (confidence {r['Confidence']})" if r["Confidence"] else ""))
-        if r["Reason"]:
-            out.append(f"      reason: {r['Reason']}")
-        if r["Would change its mind if"]:
-            out.append(f"      would change its mind if: {r['Would change its mind if']}")
+    for card in cards(result):
+        out.append("  " + _head(card))
+        for key, caption in FIELDS:
+            if card[key]:
+                out.append(f"      {caption.lower()}: {mark_text(card[key])}")
     out += ["  " + ln for ln in summary_lines(result)]
     paragraph, note = reading_text(result)
     if paragraph:
         out += ["", "  " + paragraph, f"  ({READING_CAPTION})"]
     elif note:
         out += ["", "  " + note]
+    out += ["", f"  ({OWN_TAG_NOTE})"]
     return out
 
 
@@ -91,14 +184,39 @@ def markdown_lines(result: PanelResult) -> list[str]:
     out = [f"## {SECTION_TITLE}", "", f"_{CAPTION}_", ""]
     if not result.available:
         return out + [f"Not run: {result.note}", ""]
-    out.append("| " + " | ".join(COLUMNS) + " |")
-    out.append("|" + "|".join("---" for _ in COLUMNS) + "|")
-    for r in rows(result):
-        out.append("| " + " | ".join(str(r[c]).replace("|", "/").replace("\n", " ") for c in COLUMNS) + " |")
-    out += ["", *summary_lines(result), ""]
+    for card in cards(result):
+        out += [f"**{_head(card)}**", ""]
+        for key, caption in FIELDS:
+            if card[key]:
+                out.append(f"- *{caption}:* {mark_markdown(card[key])}")
+        out.append("")
+    out += [*summary_lines(result), ""]
     paragraph, note = reading_text(result)
     if paragraph:
         out += [paragraph, "", f"_{READING_CAPTION}_", ""]
     elif note:
         out += [f"_{note}_", ""]
+    out += [f"_{OWN_TAG_NOTE}_", ""]
     return out
+
+
+def html_section(result: PanelResult, esc=_html.escape) -> str:
+    """The section for the HTML download."""
+    out = [f'<section class="section"><h2>{esc(SECTION_TITLE)}</h2>', f'<p class="note">{esc(CAPTION)}</p>']
+    if not result.available:
+        return "".join(out) + f'<p class="note">Not run: {esc(result.note)}</p></section>'
+    for card in cards(result):
+        out.append(f'<div class="judge"><p><strong>{esc(_head(card))}</strong></p>')
+        items = "".join(f"<li><em>{esc(caption)}:</em> {mark_html(card[key])}</li>"
+                        for key, caption in FIELDS if card[key])
+        if items:
+            out.append(f"<ul>{items}</ul>")
+        out.append("</div>")
+    out += [f"<p>{esc(line)}</p>" for line in summary_lines(result)]
+    paragraph, note = reading_text(result)
+    if paragraph:
+        out.append(f'<p>{esc(paragraph)}</p><p class="note">{esc(READING_CAPTION)}</p>')
+    elif note:
+        out.append(f'<p class="note">{esc(note)}</p>')
+    out.append(f'<p class="note">{esc(OWN_TAG_NOTE)}</p></section>')
+    return "".join(out)

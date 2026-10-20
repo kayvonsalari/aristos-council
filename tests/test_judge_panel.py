@@ -35,9 +35,11 @@ pytestmark = pytest.mark.min_group(3)
 KEYS = {"ANTHROPIC_API_KEY": "k-a", "OPENAI_API_KEY": "k-o", "GEMINI_API_KEY": "k-g"}
 
 
-def _reply(verdict="BUY", confidence="medium", reason="Cash flow covers its debt twice over.",
-           change="A cut to the dividend."):
-    return json.dumps({"verdict": verdict, "confidence": confidence, "reason": reason,
+def _reply(verdict="BUY", confidence="medium", reason="Cash flow covers its debt twice over [pack].",
+           change="A cut to the dividend.", fact="Free cash flow was $5.3bn in FY2025 [pack].",
+           risk="A one-off tax bill could recur.", unexplained="nothing"):
+    return json.dumps({"verdict": verdict, "confidence": confidence, "driving_fact": fact,
+                       "reasoning": reason, "key_risk": risk, "unexplained": unexplained,
                        "would_change_my_mind": change})
 
 
@@ -100,8 +102,7 @@ def _dated_fundamentals():
 def test_the_pack_still_carries_the_facts_the_judges_need(report):
     text = build_blind_pack(report, _dated_fundamentals(), strategies_dir=STRAT_DIR).text()
     assert "Company Co" in text or "CO Corp" in text            # identity
-    assert "Companies of similar kind and size (names only)" in text
-    assert "P00 Corp" in text                                   # peers by NAME
+    assert "P00 Corp - market cap" in text and "Semiconductors" in text   # peers: name, cap, sub-industry
     assert "owes" in text                                       # debt and cash
     assert "Revenue (oldest first, each figure labelled with its year): FY2023 $800 · FY2024 $850 · FY2025 $900" in text
     assert "Dividend yield: 3.10%" in text and "a floor" in text    # the streak is stated as a floor
@@ -479,7 +480,7 @@ def _rows(path):
 
 
 def test_the_log_has_one_row_per_judge_per_call_with_the_agreed_columns(tmp_path, report):
-    caller = _scripted({"anthropic": [_reply("BUY", reason="Debt is covered, twice.")],
+    caller = _scripted({"anthropic": [_reply("BUY", reason="Debt is covered, twice [pack].")],
                         "openai": [_reply("BUY"), _reply("HOLD")], "google": [_reply("ABSTAIN")]})
     result = _run_panel(report, caller)
     folder = jlog.write_log(result, tmp_path / "judges")
@@ -495,7 +496,7 @@ def test_the_log_has_one_row_per_judge_per_call_with_the_agreed_columns(tmp_path
     assert by[("google", "2")]["verdict"] == "ABSTAIN"
     assert {r["ticker"] for r in rows} == {"CO"} and {r["pack_hash"] for r in rows} == {result.pack_hash}
     assert {r["verdict_of_record"] for r in rows} == {result.record.verdict}
-    assert by[("anthropic", "1")]["reason"] == "Debt is covered, twice."
+    assert by[("anthropic", "1")]["reason"] == "Debt is covered, twice [pack]."
     assert by[("anthropic", "1")]["lens_split"] == result.record.split
 
 
@@ -662,6 +663,6 @@ def test_an_unstable_judge_shows_both_verdicts_and_a_missing_key_says_so():
     j1 = panel.JudgeResult("anthropic", "Claude", "m", status=panel.UNSTABLE, calls=ok)
     j2 = panel.JudgeResult("openai", "OpenAI", "m", status=panel.NOT_RUN, note="no key")
     res = panel.PanelResult(ticker="CO", available=True, record=_record("BUY"), judges=[j1, j2])
-    rows = {r["Judge"].split(" ")[0]: r for r in render.rows(res)}
-    assert rows["Claude"]["Verdict"] == "unstable: BUY / HOLD" and "BUY: r1" in rows["Claude"]["Reason"]
-    assert rows["OpenAI"]["Verdict"] == "not run — no key"
+    rows = {r["judge"].split(" ")[0]: r for r in render.cards(res)}
+    assert rows["Claude"]["verdict"] == "unstable: BUY / HOLD" and "BUY: r1" in rows["Claude"]["reasoning"]
+    assert rows["OpenAI"]["verdict"] == "not run — no key"

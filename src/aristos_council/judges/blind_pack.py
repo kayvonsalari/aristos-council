@@ -43,6 +43,9 @@ BADGE_WORDS = ("proven", "promising", "no edge", "untested", "worked against you
 GENERIC_LENS_NAMES = ("Growth", "Financials", "Forensic")
 
 _IDENTITY_SECTIONS = ("Company", "Peers")
+NEWS_SECTION = "Recent news (third-party headlines and openings)"
+STATEMENT_TITLES = {"income": "Income statement", "balance": "Balance sheet",
+                    "cashflow": "Cash flow statement"}
 
 
 class BlindPackError(ValueError):
@@ -78,10 +81,12 @@ def _lens_names(strategies_dir: Optional[Path] = None) -> tuple[tuple[str, ...],
 
 
 def find_leaks(text: str, *, strategies_dir: Optional[Path] = None,
-               check_generic_names: bool = True) -> list[str]:
-    """Every forbidden word or lens name still in ``text`` (empty = blind)."""
+               check_generic_names: bool = True, check_words: bool = True) -> list[str]:
+    """Every forbidden word or lens name still in ``text`` (empty = blind). ``check_words=False``
+    is for third-party text (news): a headline may say "buy zone", and that is the world talking,
+    not Aristos - but it may still never carry one of OUR lens names."""
     leaks: list[str] = []
-    for word in VERDICT_TOKENS + BADGE_WORDS:
+    for word in (VERDICT_TOKENS + BADGE_WORDS) if check_words else ():
         if re.search(rf"(?<![A-Za-z]){re.escape(word)}(?![A-Za-z])", text, re.I):
             leaks.append(word)
     distinctive, generic = _lens_names(strategies_dir)
@@ -169,15 +174,22 @@ def _identity(report) -> list[str]:
 
 
 def _peers(report, limit: int = 40) -> list[str]:
+    """Peer NAMES with market cap and sub-industry - never a rank."""
+    from ..tools.price_context import format_money
+
     group = getattr(report.check, "peer_group", None)
     if group is None or not getattr(group, "available", False):
         return []
-    names = []
+    out = []
     for m in list(group.members)[:limit]:
         name = _clean(getattr(m, "name", "") or getattr(m, "yahoo_ticker", "") or getattr(m, "ticker", ""))
-        if name:
-            names.append(name)
-    return [f"Companies of similar kind and size (names only): {'; '.join(names)}"] if names else []
+        if not name:
+            continue
+        cap = getattr(m, "market_cap_usd", None)
+        sub = _clean(getattr(m, "gics_subindustry", "") or getattr(m, "industry", ""))
+        bits = [f"market cap {format_money(cap, 'USD', abbreviate=True)}" if cap else "", sub]
+        out.append(name + (" - " + "; ".join(b for b in bits if b) if any(bits) else ""))
+    return out
 
 
 def _price(report) -> list[str]:
@@ -288,21 +300,81 @@ def _dividends(fundamentals) -> list[str]:
     return out
 
 
-def build_blind_pack(report, fundamentals=None, *, strategies_dir: Optional[Path] = None) -> BlindPack:
+_COUNT_WORDS = ("shares", "share issued", "number")
+_SMALL_WORDS = ("eps", "rate", "per share")
+
+
+def _fmt_statement_value(line: str, v, ccy) -> str:
+    """A statement cell: a share COUNT is abbreviated with no currency, a per-share figure or a rate
+    keeps its decimals, and any other line is money in the statements' currency."""
+    from ..tools.price_context import format_money
+
+    low = line.lower()
+    if any(w in low for w in _COUNT_WORDS):
+        for cut, suffix in ((1e12, "tn"), (1e9, "bn"), (1e6, "m")):
+            if abs(v) >= cut:
+                return f"{v / cut:,.2f}{suffix}"
+        return f"{v:,.0f}"
+    if any(w in low for w in _SMALL_WORDS) and abs(v) < 1000:
+        return f"{v:,.2f}"
+    return format_money(v, ccy, abbreviate=True)
+
+
+def _statement(statements, key: str, ccy) -> list[str]:
+    """One statement, every line item the provider gives, oldest period first."""
+    block = (statements or {}).get(key) or {}
+    periods, rows = block.get("periods") or [], block.get("rows") or {}
+    if not rows:
+        return []
+    head = "fiscal years ending " + ", ".join(periods) + " (oldest first" + (f"; {ccy}" if ccy else "") + ")"
+    out = [head]
+    for line, vals in rows.items():
+        cells = [(_fmt_statement_value(line, v, ccy) if v is not None else "n/a") for v in vals]
+        out.append(f"{line}: " + " | ".join(cells))
+    return out
+
+
+def _news(news, report) -> list[str]:
+    """Every recent headline: date, source, title and - when the provider gave one - the opening of
+    the article. Falls back to the page's own (fewer, snippet-less) headlines."""
+    items = list(news or [])
+    if not items:
+        pac = getattr(report.check, "price_and_cash", None)
+        for it in getattr(pac, "news", ()) or ():
+            items.append({"date": it.published.isoformat(), "title": it.headline,
+                          "source": getattr(it, "source", ""), "snippet": ""})
+    out = []
+    for it in items:
+        line = f"{it['date']} [{it.get('source') or 'news'}] {_clean(it['title'])}"
+        if it.get("snippet"):
+            line += f" - {_clean(it['snippet'])}"
+        out.append(line)
+    return out
+
+
+def build_blind_pack(report, fundamentals=None, statements=None, news=None, *,
+                     strategies_dir: Optional[Path] = None) -> BlindPack:
     """The pack for ONE company report. ``fundamentals`` (optional) adds the annual series and
     the dividend record the report itself does not hold; without it those sections are absent
-    and the pack says nothing about them."""
+    and the pack says nothing about them. ``statements`` (``evidence.fetch_statements``) adds the full
+    annual statements and ``news`` (``evidence.fetch_news``) every recent headline with its opening."""
+    ccy = (getattr(fundamentals, "financial_currency", None) or getattr(fundamentals, "currency", None)
+           or None) if fundamentals is not None else None
     raw = [
         ("Company", _identity(report)),
         ("Peers", _peers(report)),
         ("Price and trading", _price(report)),
         ("Financial series", _series(fundamentals)),
+        ("Income statement", _statement(statements, "income", ccy)),
+        ("Balance sheet", _statement(statements, "balance", ccy)),
+        ("Cash flow statement", _statement(statements, "cashflow", ccy)),
         ("Valuation against its own history", _valuation(report)),
         ("What analysts say", _analysts(report)),
         ("Debt and cash", _debt_cash(report)),
         ("Record of expansion", _growth(report)),
         ("Accounting-quality readings (raw values)", _forensic_raw(report)),
         ("Dividend record", _dividends(fundamentals)),
+        (NEWS_SECTION, _news(news, report)),
     ]
     pack = BlindPack()
     for title, lines in raw:
@@ -310,8 +382,10 @@ def build_blind_pack(report, fundamentals=None, *, strategies_dir: Optional[Path
         for line in lines:
             if not line:
                 continue
+            third_party = title == NEWS_SECTION
             leaks = find_leaks(line, strategies_dir=strategies_dir,
-                               check_generic_names=title not in _IDENTITY_SECTIONS)
+                               check_generic_names=title not in _IDENTITY_SECTIONS and not third_party,
+                               check_words=not third_party)
             if leaks:
                 pack.dropped.append((title, line, leaks))
                 continue

@@ -2,8 +2,10 @@
 
 A blind, multi-model panel on the company page. Tick **Judge panel (blind, no vote)**, directly under
 *Council opinion*, and three independent models — one from each of Anthropic, OpenAI and Google —
-are each shown only the company's raw facts and asked what they would say. Their answers are shown
-on the page and written to a log. Nothing else happens.
+are each shown the company's facts (the full statements, the readings, the news — everything the page
+has except Aristos' own opinions) and asked what they would say. Their answers are shown on the page,
+directly under the lens table, and written to a log. `python -m aristos_council.judges score` later
+scores that log against what happened. Nothing else happens.
 
 ## What it is for
 
@@ -29,47 +31,72 @@ record is the product. The page section is a convenience for reading it.
 
 ## The blind pack
 
-Every judge receives the **same** facts pack, built from the readings the company page already
-prints, and nothing else. Before anything is sent, the pack is scanned and any line that still
-carries a forbidden word is **dropped and recorded**, not sent.
+Every judge receives the **same** facts pack. It holds **all the facts the page has** — not a trimmed
+selection — and none of Aristos' own opinions. Before anything is sent, the pack is scanned and any
+line that still carries a forbidden word is **dropped and recorded**, not sent.
 
 | Kept | Stripped |
 |---|---|
 | Identity: name, ticker, exchange, country, sector, industry, market capitalisation | Every lens verdict, rank and badge; "proven" / "no edge" labels |
-| Peer **names** only (no peer ranks) | The agreement count, shortlist status, any lens name |
-| Price and trading readings, the annual financial series (oldest first, each figure with its year and currency) | The council opinion and the narrator's text |
-| The valuation band as a plain number against the company's own five-year history | "priced high" / "dearest" wording (a verdict) |
-| Analyst counts (worded "strongest positive … strongest negative", not buy/hold/sell), price target, forecasts | Recent news headlines (they carry broker language) |
-| Debt and cash, growth record, cash runway | |
-| Forensic raw readings: accrual ratio, Altman Z, F-Score as numbers | The clean / doubted label and the readings' ranks |
-| Dividend record (the streak is stated as a floor) | |
+| **Full financial statements**: income statement, balance sheet and cash flow statement, **every line the data provider gives** (four fiscal years from yfinance in practice), oldest first — including the cash flow lines that explain a swing (taxes paid, change in tax payable, business purchases and sales, other investing items) | The agreement count, shortlist status, any lens name |
+| All price and trading readings; the valuation band as numbers against the company's own five-year history | The council opinion and the narrator's text |
+| Debt and cash, growth record, cash runway | "priced high" / "dearest" wording (a verdict) |
+| Dividend record (yield, payout, years raised — stated as a floor) | The words BUY / HOLD / SELL / clean / doubted **from Aristos** |
+| Analyst counts (worded "strongest positive … strongest negative"), price target, forecasts | |
+| Forensic raw readings: accrual ratio, Altman Z, F-Score as numbers | The clean / doubted label and every reading's rank |
+| **All recent news** the provider returns for 30 days (up to 60 items), each with date, source, headline and — when EODHD gives it — the opening of the article | |
+| Peers: name, market cap and sub-industry — **no ranks** | |
+
+**Why the statements.** In the first live panel (2026-10-19) a company's free cash flow halved in
+FY2024 because of a one-off tax deposit of roughly $6bn. Nothing in the old, trimmed pack showed it,
+so no judge could reason about it. The cash flow lines (and the news) are where such a cause is
+visible.
+
+**Headlines are facts, not opinions.** A headline may say "buy zone" — that is the world talking, not
+a lens — so the news section is exempt from the BUY/HOLD/SELL and badge-word scan. It is *not* exempt
+from the lens-name scan: a headline that names one of our lenses is dropped. Everything else in the
+pack is scanned for all of it.
 
 The lens names are read off `strategies/*.yaml`, so a lens added tomorrow is covered the day it is
-added. `tests/test_judge_panel.py` asserts the pack carries no lens name, no BUY/HOLD/SELL token and
-no badge word.
+added. `tests/test_judge_panel*.py` assert the pack carries no lens name, no BUY/HOLD/SELL/clean/
+doubted token and no badge word outside the news.
 
-**A limit worth stating plainly.** *Blind* means blind to the lenses' opinion. It does not mean the
-model knows nothing: a model that recognises "The Coca-Cola Company" brings what it learned in
-training, and the prompt cannot take that away. "No internet, no other data" is an instruction, not
-a guarantee. The pack carries the company's name because the spec keeps identity; if the 12-month
-review suggests recognition is doing the work, an anonymised variant is the next experiment.
+The statements are fetched live and day-cached under `data/local/judges/cache/`; the news is one
+EODHD request. If either cannot be fetched the pack simply omits it.
 
-## The prompt
+**What "blind" means — and does not.** Blind means blind to the lenses' opinion. A model that
+recognises "The Coca-Cola Company" brings what it learned in training. Since JUDGE-PANEL-3 that is no
+longer something to suppress: the judge **may** use it, but must label it (below), so a reader can see
+which claims came from outside the evidence.
+
+## The prompt and the own-knowledge rule
 
 One prompt, identical for all judges, stored next to the code
-(`src/aristos_council/judges/judge_prompt_v1.md`). It asks for strict JSON:
+(`src/aristos_council/judges/judge_prompt_v2.md`). The judge **may** use what it knows about the
+company and its industry beyond the pack, but **every claim must end with its source**: `[pack]` (it
+rests on a figure or headline in the pack) or `[own knowledge]` (it rests on what the model knew from
+outside). The reply is strict JSON with seven keys:
 
 ```json
 {"verdict": "BUY|HOLD|SELL|ABSTAIN", "confidence": "low|medium|high",
- "reason": "<one sentence>", "would_change_my_mind": "<one sentence, a specific observable fact>"}
+ "driving_fact": "<the ONE fact that drove the verdict most, with its tag>",
+ "reasoning": "<up to 150 words; every sentence ends with [pack] or [own knowledge]>",
+ "key_risk": "<one sentence>",
+ "unexplained": "<the most important thing in the pack it could not account for, or nothing>",
+ "would_change_my_mind": "<one sentence, a specific observable fact>"}
 ```
 
-**ABSTAIN is explicitly allowed and expected** when the pack is thin or the business is of a kind
-the numbers cannot describe. The reply is validated strictly (exactly those four keys, the allowed
-words, non-empty sentences; a single code fence is tolerated, prose around the object is not). A
-malformed reply is retried once, then recorded as **invalid output** for that call. A failed call
+**ABSTAIN is explicitly allowed and expected** when the judge cannot reach a view.
+
+**Validation is strict.** Exactly those keys; the allowed words; non-empty sentences; `reasoning` at
+most 150 words and `driving_fact` at most 60; **an unlabelled claim is a format error**: every claim in
+`driving_fact` and `reasoning` must end with a valid tag, nothing may follow the last tag, no label may
+stand alone, one tag may not cover two sentences, and no other bracket label is accepted. A single
+code fence is tolerated, prose around the object is not. A malformed reply is retried **once** (the
+retry names the problem), then recorded as **error: invalid output** for that call. A failed call
 (network, HTTP status) is an **error** and is not retried. The prompt version and the pack's hash are
-logged, so every row says exactly what was asked and on which facts.
+logged. In practice some judges slip on the labelling — Claude lands an unlabelled closing sentence in
+roughly a third of calls — which shows up honestly as *incomplete* rather than being forgiven.
 
 ## The stability rule
 
@@ -81,7 +108,7 @@ stands, because the panel measures how stable each model is as it ships.
 | stable | both calls gave the same verdict (ABSTAIN counts as a verdict) | the verdict, once |
 | unstable | both calls were valid and **differed** | "unstable: BUY / HOLD" — both kept |
 | incomplete | one call valid, the other not | the valid verdict, flagged; not stable |
-| error | the call could not be made, or the reply was malformed twice | a short label, below |
+| error | the call could not be made, or the reply was malformed twice (unlabelled claims included) | a short label, below |
 | not run | the key is missing | "not run — no key" |
 
 Only a **stable** judge is compared with the record. An ABSTAIN takes no side.
@@ -106,6 +133,23 @@ none does, and is *mixed* otherwise (or when the record itself is split).
 a stable verdict (an abstention is an answer). With fewer, the page says "No panel reading: fewer
 than two judges answered." - one judge is not a panel - and the narrator is not called. If two or
 more judges answered but all abstained, the line says there is nothing to compare.
+
+## What the page shows
+
+The section sits **directly under the lens table**, above the cards, the council opinion and the
+workings, with the same no-vote caption. One card per judge: the verdict and confidence, **the fact
+that drove it**, the reasoning folded under **Why**, the key risk, what it **could not account for**,
+and what would change its mind. **`[own knowledge]` passages are italic with a small tag**, so a
+reader sees at a glance what came from outside the evidence (the text download keeps the bracketed
+tags). An error card shows only its short label.
+
+Then ONE line: `Verdict of record HOLD (lens votes: 0 BUY, 2 HOLD, 0 SELL). Panel: 3 HOLD — agrees.`
+The bracket is the **lenses'** votes, never judge counts. When the panel disagrees with (or is mixed
+against) the record the narrator's reading of at most 80 words follows, as before.
+
+When the panel ran, the story's **What to doubt** paragraph gains one sentence — "The judge panel could
+not account for: Claude: …; OpenAI: …" — built from each stable judge's `unexplained` line (a judge that
+wrote *nothing* adds nothing). Nothing is added when the panel did not run.
 
 ## Setting it up
 
@@ -138,18 +182,20 @@ belongs in the repo.
 
 - `judge_log.csv` — one row per judge **per call**: `run_date, ticker, judge_family, model_name,
   call_number, verdict, confidence, stable, reason, would_change_my_mind, verdict_of_record,
-  lens_split, pack_hash, call_status, error_detail`. `verdict_of_record` and `lens_split` are the lenses' state *at
-  that moment*. A judge with no key leaves one `call_number 0 / NOT_RUN` row, so its absence is in
+  lens_split, pack_hash, call_status, error_detail, driving_fact, key_risk, unexplained,
+  own_knowledge_claims`. `reason` holds the labelled reasoning; `own_knowledge_claims` counts the
+  `[own knowledge]` tags. `verdict_of_record` and `lens_split` are the lenses' state *at that moment*. A judge with no key leaves one `call_number 0 / NOT_RUN` row, so its absence is in
   the data. `call_status` (`ok | invalid | error | not_run`) keeps a malformed call distinguishable
   from a verdict, and `error_detail` holds the raw provider error body (empty for a good call); both
   are beyond the originally agreed columns.
 - `judge_summary.csv` — one row per company run: the record and its split, each family's stable
   verdict and confidence (`claude_verdict`, `openai_verdict`, `gemini_verdict` …, or `UNSTABLE:BUY/HOLD`,
   `NOT_RUN`, `INVALID`, `ERROR`), the panel's split and its agreement (`no_panel_reading` when fewer
-  than two judges answered), and `judges_answered` - the number of judges with a stable verdict.
+  than two judges answered), `judges_answered` - the number of judges with a stable verdict - and
+  `peers`, the tickers the lenses ranked the company against (the scorer's cohort).
 
-The headers are fixed. A file carrying the **previous** header (before `error_detail` and
-`judges_answered` existed) is upgraded in place - the new columns are appended, empty for old rows,
+The headers are fixed. A file carrying an **earlier** header (before `error_detail`, `judges_answered`,
+the new answer fields or `peers` existed) is upgraded in place - the new columns are appended, empty for old rows,
 nothing reordered or lost. Any other file whose columns differ from what the code writes is **refused**, not
 migrated, so a changed column order can never shift a year of data under the wrong titles.
 
@@ -177,6 +223,35 @@ When due, the paragraph comes from the narrator's own model tier. It is withheld
 recommendation or says which side is right, combines the judges into a new verdict, or asserts a
 BUY/HOLD/SELL word that neither the record nor a judge gave. One corrective retry, as the
 plain-English summary has.
+
+## Scoring
+
+```
+python -m aristos_council.judges score [--dir data/local/judges] [--today YYYY-MM-DD]
+```
+
+For every row of `judge_summary.csv` it fetches each name's price on the judgement date and today
+(through the app's day-cached adapter), computes the return since, and the return of the company's
+**cohort** — the `peers` the lenses ranked it against, **equal-weighted, over the same dates** — as the
+benchmark (fewer than three peers with prices means *no data*, never a guess). It scores each judge's
+verdict and the lenses' verdict of record **by one rule**:
+
+- **BUY** is right if the name beat its cohort by **more than 2 percentage points** over the window.
+- **SELL** is right if it trailed by more than 2.
+- **HOLD** is right if it finished within **±2**.
+- **ABSTAIN is never scored** — nor is an unstable, errored or missing judge, nor a MIXED record.
+
+Windows are **3, 6 and 12 months** from the judgement date; a window that has not ended is **too
+early**. The command writes `data/local/judges/score.csv` (one row per run × subject × window, with the
+returns and the excess in points) and prints a plain-English summary: per subject (the lenses, then each
+family) and window, rows scored, right, wrong, too early; the list of **disagreements** — every case a
+judge differed from the record — with who was right at the longest scored window; and each family's
+progress toward the bar below.
+
+**Scoring influences nothing.** Nothing on the page, no verdict, rank, badge or agreement reads it (a
+test asserts the page and the panel modules do not import it). **No judge earns a vote until it has
+12-month results across at least 30 names.** Until then the panel records and nothing else; the
+command prints each family's count ("0 of 30 names with a 12-month result").
 
 ## Hand-off to SNAPSHOT-2
 
