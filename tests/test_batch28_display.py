@@ -61,3 +61,20 @@ def test_an_operating_loss_reads_as_interest_not_covered_never_a_negative_multip
     assert out.interest_cover.label == "operating loss: interest not covered by operating profit"
     assert out.interest_cover.value == -6.9                       # the value is kept; only the words change
     assert "times" not in out.interest_cover.label and "-6.9" not in out.interest_cover.label
+
+
+# --------------------------------------------------------------------------- #
+# B10 NAME-TRIM-2
+# --------------------------------------------------------------------------- #
+def test_short_names_never_keep_a_dangling_article():
+    from types import SimpleNamespace
+    from aristos_council.company_story import short_name
+    for legal, want in (("The Coca-Cola Company", "Coca-Cola"),
+                        ("The Procter & Gamble Company", "Procter & Gamble"),
+                        ("The Home Depot, Inc.", "Home Depot"),
+                        ("The Magnum Ice Cream Company N.V.", "Magnum Ice Cream"),
+                        ("Theravance Biopharma, Inc.", "Theravance Biopharma"),     # "The" inside a word stays
+                        ("JPMorgan Chase & Co.", "JPMorgan Chase")):
+        report = SimpleNamespace(ticker="ZZZZ", check=SimpleNamespace(company_name=legal))
+        got = short_name(report)
+        assert got == want or (legal.startswith("JPM") and got.startswith("JPMorgan")), (legal, got)

@@ -105,6 +105,10 @@ def short_name(report) -> str:
                 text = text[: -len(tail)].strip()
                 changed = True
     text = text.rstrip(" &").strip()
+    # NAME-TRIM-2: once "Company" is trimmed, "The Coca-Cola" is left with a dangling article; the name
+    # people use has none ("Coca-Cola", "Procter & Gamble", "Home Depot").
+    if text[:4].lower() == "the " and len(text) > 4:
+        text = text[4:].strip()
     return text or report.ticker
 
 
