@@ -84,6 +84,14 @@ class RankStrategy(BaseModel):
     # (legacy/superseded configs). Still fully loadable via the loader/CLI — hidden means
     # not listed, not removed. Default "" == visible. Presentation only.
     ui: str = ""
+    # STATUS (27B-1): "under_test" marks a lens whose definition is frozen but whose backtest has not
+    # been committed, so it carries no track record yet (``track_record`` reads "under test here").
+    # Empty (every published lens) changes nothing.
+    status: str = ""
+    # BUY-CAP (27B-1): {factor: "top_half" | "top_third"} - a name the cut would BUY is capped at HOLD
+    # when its rank on that factor is outside that share of the ranked set. Empty -> no cap, and the
+    # engine's output is byte-identical to before the field existed.
+    buy_requires: dict[str, str] = Field(default_factory=dict)
     created: str = ""           # optional 'YYYY-MM-DD' provenance date (display-only)
     description: str = ""
     rationale: str = ""
@@ -201,6 +209,13 @@ class RankStrategy(BaseModel):
             raise ValueError(f"thesis entries must be in {sorted(_THESES)}, got {bad!r}")
         return v
 
+    @field_validator("status")
+    @classmethod
+    def _status_valid(cls, v):
+        if v not in ("", "under_test"):
+            raise ValueError(f"status must be empty or 'under_test', got {v!r}")
+        return v
+
     @field_validator("cut")
     @classmethod
     def _cut_valid(cls, v):
@@ -220,6 +235,13 @@ class RankStrategy(BaseModel):
         unknown = [f.name for f in self.factors if f.name not in FACTOR_REGISTRY]
         if unknown:
             raise ValueError("unknown factors: " + ", ".join(unknown))
+        from ..rank_engine import BUY_REQUIRES_SHARES
+        names = {f.name for f in self.factors}
+        for factor, rule in self.buy_requires.items():
+            if factor not in names:
+                raise ValueError(f"buy_requires names {factor!r}, which is not one of the strategy's factors")
+            if rule not in BUY_REQUIRES_SHARES:
+                raise ValueError(f"buy_requires rule must be one of {sorted(BUY_REQUIRES_SHARES)}, got {rule!r}")
         return self
 
 

@@ -1,0 +1,46 @@
+# Growth screen v3 — the council LENS for growth_garp_v3 (GROWTH-V3-DEF, 2026-10-20).
+# =====================================================================================
+# ABSOLUTE FLOORS ONLY. v2 asked three things at once: grow at 10%+, earn 12%+ on capital, and
+# pass a PEG of 2.0. The backtest could not judge it in 12 of 14 industry groups because that
+# stack leaves fewer than three names to buy (docs/BACKTEST_RECORD.md). v3 keeps the three floors
+# that say WHAT KIND of company is in scope and moves the ranking question to the rank strategy:
+#
+#   - min_market_cap 5e9      worth at least $5bn (unchanged scope)
+#   - min_revenue_cagr 0.0    growing at all (3y in-house CAGR)
+#   - min_roic 0.0            profitable on its capital. No "positive operating income" criterion
+#                             exists in the registry, and the profit guard
+#                             (requires_operating_profit) is a rank-strategy flag, not a screen
+#                             rule, so the existing through-cycle ROIC criterion at a zero floor
+#                             is used: it fails a company whose operating profit after tax is
+#                             negative over the window, and abstains (null != false) on a gap.
+#   - NO PEG criterion        price enters through the earnings_yield FACTOR instead, ranked, not
+#                             gated (PEG has a known extreme-CAGR distortion).
+#
+# Frozen by docs/DESIGN_growth_v3.md. Published files are immutable (rule 7): a change is v4.
+id: growth_screen_v3
+name: Growth screen
+version: 3
+
+description: >-
+  Profitable, growing companies worth at least $5bn: three absolute floors and nothing relative.
+  The scope definition for the Growth v3 rank candidate; the relative judgement (growing faster
+  than most of the industry) lives in that strategy's BUY cap.
+
+criteria:
+  - name: min_revenue_cagr          # growing at all (in-house 3y CAGR)
+    threshold: 0.0
+  - name: min_roic                  # profitable on its capital (through-cycle ROIC at a zero floor)
+    threshold: 0.0
+  - name: min_market_cap            # 5B USD; mid/large-cap scope
+    threshold: 5000000000
+
+policy:
+  partial_pass_allows_hold: true
+
+veto:
+  min_confidence: 0.6
+
+rationale: >-
+  Scope, not selection: a business that is growing and earns something on its capital is in the
+  room; the ranking decides who is best in it. Keeping the floors absolute leaves enough names in
+  each industry group to be ranked and judged at all.

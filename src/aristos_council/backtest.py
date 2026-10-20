@@ -1672,6 +1672,7 @@ LABEL_BAR = "passed the bar here, luck not ruled out"
 LABEL_BEHIND = "behind random picks here"
 LABEL_NO_EDGE = "no edge shown here"
 LABEL_UNTESTED = "untested here"
+LABEL_UNDER_TEST = "under test here"      # a lens whose definition is frozen but not yet backtested (27B-1)
 
 # The ONE old -> new mapping. Saved reports, snapshots and fixtures written before BADGE-WORDS-2 carry
 # the old words; every reader goes through ``canonical_label`` (``Badge`` does it on construction).
@@ -1708,12 +1709,14 @@ BADGE_MEANINGS = {
                     f"years), and it was not clearly behind random picking either."),
     LABEL_UNTESTED: ("There is not enough measured history for this cohort and this lens to say "
                      "anything either way."),
+    LABEL_UNDER_TEST: ("This lens's definition is frozen but its backtest has not been committed yet, "
+                       "so it has no track record and borrows none from an earlier version."),
 }
 BADGE_LABELS = tuple(BADGE_MEANINGS)  # display order
 # the short form used in the "Track record: 2 passed the test, ..." count line
 _BADGE_SHORT = {LABEL_PASSED: "passed the test", LABEL_BAR: "passed the bar, luck not ruled out",
                 LABEL_BEHIND: "behind random picks", LABEL_NO_EDGE: "no edge shown",
-                LABEL_UNTESTED: "untested"}
+                LABEL_UNTESTED: "untested", LABEL_UNDER_TEST: "under test"}
 
 
 NO_TEST_HISTORY = "No test history for this lens in this industry yet."
@@ -1913,12 +1916,33 @@ def has_track_record(cohort_slug: str, *, root=None) -> bool:
     return any(slug == cohort_slug for slug, _lens in _load_backtests(root))
 
 
+_STATUS_CACHE: dict = {}
+
+
+def _lens_status(lens_id: str) -> str:
+    """The ``status:`` of the committed strategy file ``strategies/<lens_id>.yaml`` ("" when it has
+    none, or no such file - a test's invented lens id included)."""
+    if lens_id not in _STATUS_CACHE:
+        status = ""
+        path = _BACKTESTS_ROOT.parent / "strategies" / f"{lens_id}.yaml"
+        try:
+            import yaml
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.is_file() else None
+            status = str((data or {}).get("status") or "") if isinstance(data, dict) else ""
+        except Exception:                                   # noqa: BLE001 - no status, not a crash
+            status = ""
+        _STATUS_CACHE[lens_id] = status
+    return _STATUS_CACHE[lens_id]
+
+
 def track_record(cohort_slug: str, lens_id: str, *, root=None) -> Badge:
     """The plain-English track-record badge for one (cohort, lens) pair (BACKTEST-2). Reads the
     committed CSVs under ``backtests/`` (cached after the first call); never gates — this is
     display only and is never fed back into a vote, rank or verdict.
 
     Checked in this order:
+      - the lens's strategy file says ``status: under_test`` -> "under test here" (27B-1: no badge
+        is ever borrowed from an earlier version)
       - no committed result for this cohort+lens at all, or its own ``verdict()`` is
         "insufficient" (too little measured history to trust ANY number below) -> "untested here"
       - ``verdict()`` == "proven" -> "passed the test here"
@@ -1928,6 +1952,10 @@ def track_record(cohort_slug: str, lens_id: str, *, root=None) -> Badge:
         10) — regardless of the bar -> "behind random picks here"
       - everything else that was actually tested -> "no edge shown here"
     """
+    if _lens_status(lens_id) == "under_test":          # 27B-1: no badge transfer from an older version
+        return Badge(label=LABEL_UNDER_TEST, verdict=None, mean_excess=None, luck_pct=None,
+                     years_positive=None, years_measured=None, rounds_held=None,
+                     note="under test: the committed backtest for this version does not exist yet")
     cache = _load_backtests(root)
     result = cache.get((cohort_slug, lens_id))
     if result is None:

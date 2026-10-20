@@ -127,6 +127,7 @@ class LensVote:
     factors_total: int = 0
     # TIE-CHECK-1 - the number of OTHER companies sharing this one's combined rank-sum (0 = not tied)
     tied_with: int = 0
+    cap_reason: str = ""        # BUY-CAP (27B-1): why a would-be BUY reads HOLD
 
     @property
     def votes(self) -> bool:
@@ -907,6 +908,7 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                                   position=cell.position, cohort_size=cell.cohort_size,
                                   factor_note=cell.factor_note,
                                   tied_with=getattr(cell, "tied_with", 0),
+                                  cap_reason=getattr(cell, "cap_reason", ""),
                                   factors_measured=getattr(cell, "factors_measured", 0),
                                   factors_total=getattr(cell, "factors_total", 0),
                                   components=(_check_components(result, ticker)

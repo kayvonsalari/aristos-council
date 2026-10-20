@@ -47,7 +47,7 @@ def test_lens_screens_are_derived_and_hidden():
     # cyclical_income_screen_v1 as cyclical_income_v1's). The set is DERIVED, so a new
     # lens arriving here is the derivation working, not a list needing maintenance.
     assert lens == {"conservative_screen_v1", "magic_value_screen_v1",
-                    "growth_screen_v1", "growth_screen_v2",
+                    "growth_screen_v1", "growth_screen_v2", "growth_screen_v3",
                     "cyclical_income_screen_v1"}
 
 
