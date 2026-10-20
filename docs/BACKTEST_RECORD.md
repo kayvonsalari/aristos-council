@@ -34,6 +34,10 @@ up across industries: "Quality passed the test in Mining" is a statement the rec
 
 - **Restated accounts.** The statements are what the data vendor carries today (restated), dated by
   fiscal-period end plus a 90-day lag. A reader on the day saw the original figures, which may differ.
+- **Real filing dates exist mostly for US companies.** EODHD carries true filing dates mainly for US
+  companies; for many non-US companies its "filing date" is just the fiscal period end, so a filing-date
+  re-run falls back to the 90-day lag for them (the CSV header counts how often). The timing rule can be
+  tightened for US names; it cannot yet be for the rest.
 - **Survivors only, direction unknown.** The groups are today's companies; names that were delisted,
   merged or dropped out are absent, and the benchmark shares that gap. This flatters a lens, but the
   size of the effect on any one result is not known.
