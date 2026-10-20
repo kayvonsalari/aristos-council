@@ -135,3 +135,4 @@ def test_the_pack_labels_specials_apart_and_names_no_cut(report):
     assert not any("Most recent year" in ln for ln in lines)
     special = next(ln for ln in lines if "Supplemental or special" in ln)
     assert "2023 +0.65" in special and "2024 +0.18" in special and "inferred" in special
+

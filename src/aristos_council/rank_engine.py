@@ -223,6 +223,15 @@ def too_few_to_rank_text(cohort_size: int) -> str:
     return f"too few to rank ({cohort_size} {company})"
 
 
+PASSED_TOO_FEW = "passed, too few to rank"
+
+
+def too_few_header_note(passed: int) -> str:
+    """"(3 passed, under 5, no ranks)" - TOO-FEW-DISPLAY-1: the column header / reason that says WHY a
+    lens column holds no ranks: it kept `passed` names and a rank needs MIN_RANKABLE_COHORT."""
+    return f"({passed} passed, under {MIN_RANKABLE_COHORT}, no ranks)"
+
+
 def passed_too_few_text(kept: int) -> str:
     """"2 passed its rules, too few to rank" - the ONE wording for a lens that kept fewer than
     MIN_RANKABLE_COHORT names (NO-RANK-NO-VOTE-1 / VM-COUNT-WORDING-1). Such a lens casts no vote

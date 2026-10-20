@@ -44,8 +44,9 @@ DOES_NOT_APPLY = "does not apply"
 # PEERS-RANK-RULE (19A): the under-3 rule the lens pages already follow. A rank among fewer than
 # three names is not a ranking, so the column says so in every cell; a column nobody was ranked in
 # (every name excluded or unrateable) is dropped rather than printed empty.
-from .rank_engine import MIN_RANKABLE_COHORT as MIN_RANKED     # B25-1: under 5 names a column reads "too few to rank"
-TOO_FEW_TO_RANK = "too few to rank"
+from .rank_engine import MIN_RANKABLE_COHORT as MIN_RANKED     # B25-1: under 5 names a lens holds no ranks
+from .rank_engine import PASSED_TOO_FEW, too_few_header_note
+TOO_FEW_TO_RANK = PASSED_TOO_FEW            # TOO-FEW-DISPLAY-1: a name that PASSED the rules but cannot be ranked
 ONE_SYSTEM_MARK = "†"
 ONE_SYSTEM_NOTE = f"{ONE_SYSTEM_MARK} counted as a peer on one industry classification only"
 
@@ -182,8 +183,11 @@ def rank_columns(report) -> list[RankColumn]:
             # (JPM's Forensic: sector excluded) - so no column, for a voting lens and a check alike
             continue
         if voter and len(ranked) < MIN_RANKED:
-            values = {key: TOO_FEW_TO_RANK for key in values}
-            header = f"{vote.label} rank"
+            # TOO-FEW-DISPLAY-1: only the names that PASSED the lens's rules read "passed, too few to
+            # rank"; the ones its rules excluded keep "does not apply" (and no data / fetch failed stay).
+            values = {key: (TOO_FEW_TO_RANK if key in {str(e["ticker"]).upper() for e in ranked} else word)
+                      for key, word in values.items()}
+            header = f"{vote.label} rank {too_few_header_note(len(ranked))}"
         else:
             header = (f"{vote.label} rank (of {len(ranked)})" if voter
                       else f"{vote.label} mark (check - does not vote)")

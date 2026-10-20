@@ -514,7 +514,8 @@ def _outcome(v) -> str:
     if v.status == "excluded":
         return "does not apply"
     if v.status == "too_few":
-        return "too few to rank"
+        from .rank_engine import PASSED_TOO_FEW
+        return PASSED_TOO_FEW                       # TOO-FEW-DISPLAY-1: it passed; there are too few to rank
     if v.status == "unrateable":
         return "no data"
     if v.status == "fetch_error":
@@ -536,6 +537,9 @@ def _row_reason(v) -> str:
         if w is not None and w.available:
             text += f" (would rank {ordinal(w.position)} of {w.cohort_size}; not a vote)"
         return text
+    if v.status == "too_few":
+        from .rank_engine import too_few_header_note
+        return too_few_header_note(v.cohort_size).strip("()")
     return _plain_reason(v.result())
 
 
