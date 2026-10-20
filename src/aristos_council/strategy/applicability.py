@@ -25,7 +25,7 @@ asset-kind gate itself: ``etf`` / ``equity`` / ``None``, where ``None`` is
 NOT-EVALUATED — never a silent exclusion.
 
 Hidden (``ui: hidden``) strategies are NOT this module's business: the caller filters those
-with ``demo_surface.is_hidden_strategy`` (the validation toggle) BEFORE asking what applies,
+with ``demo_surface.is_hidden_strategy`` BEFORE asking what applies,
 so a superseded config stays hidden here too.
 """
 

@@ -46,7 +46,7 @@ def _visible_lenses():
             loaded.append(load_rank_strategy(info.path))
         except Exception:                                   # noqa: BLE001 - as the app does
             continue
-    return [c.strategy for c in strategy_choices(loaded, show_validation=False)]
+    return [c.strategy for c in strategy_choices(loaded)]
 
 
 def _lens_name(strategy) -> str:

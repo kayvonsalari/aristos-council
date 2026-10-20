@@ -85,7 +85,7 @@ Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.
   CLI show the SAME thing.
 - `src/aristos_council/strategy/picker.py` — THE strategy picker (FUND-UI-2). One
   implementation for every surface that offers strategies: `strategy_choices` filters by
-  visibility (`ui: hidden` unless the validation toggle is on) and orders flagship-first,
+  visibility (`ui: hidden` is never offered) and orders flagship-first,
   `choice_labels`/`resolve`/`resolve_all` move between labels and strategies, `default_index`
   pre-selects the flagship. Two surfaces had grown their own copies (the run tab's and Company
   Check's), so STRAT-PICKER-1's fix landed on one and missed the other — and both carried the
@@ -143,7 +143,7 @@ Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.
   job (`scout_verdicts.py`, `publish_verdicts.py`, `sweep_staging.py`) and ETF static-row generation.
 - `app.py` — Council Station, the local Streamlit UI (`streamlit run app.py`).
   Tabs: **Analyse** (the ONE run flow over the v2 rank pipeline — see below) and Scoreboard;
-  the "Show validation tools" toggle reveals validation assets. Loads `.env` at app start so keys reach the
+  the sidebar has one view switch, "Show lens descriptions" (the "Show validation tools" toggle was removed, VALIDATION-TOOLS-REMOVE-1). Loads `.env` at app start so keys reach the
   process.
 - `src/aristos_council/gap_ledger/` + `gap_ledger_app.py` — **Gap Ledger (GAP-LEDGER-1), a
   SEPARATE TOOL that happens to live here.** A pre-market news-movers screener: a daily

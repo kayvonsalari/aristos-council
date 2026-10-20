@@ -145,11 +145,11 @@ def _lens_captions(at):
     return [str(c.value).replace("\$", "$") for c in at.caption]      # undo the $-escape
 
 
-def test_the_display_heading_holds_both_toggles_and_the_old_name_is_gone():
+def test_the_display_heading_holds_the_lens_description_toggle_and_no_validation_toggle():
     at = _app_test()
     labels = [t.label for t in at.toggle]
-    assert "Show lens descriptions" in labels and "Show validation tools" in labels
-    assert "Show validation & legacy tools" not in labels
+    assert labels == ["Show lens descriptions"]
+    assert "Show validation tools" not in labels and "Show validation & legacy tools" not in labels
     assert any("**Display**" in str(m.value) for m in at.sidebar.markdown)
     assert _toggle(at, "Show lens descriptions").value is False       # off by default
 
@@ -213,7 +213,7 @@ def _company_report(tmp_path, lenses=None):
     return _run(lenses or [RAW, SCREENED], tmp_path=tmp_path)
 
 
-def _render(report, *, validation: bool = False):
+def _render(report):
     pytest.importorskip("streamlit")
     from streamlit.testing.v1 import AppTest
     script = (
@@ -225,8 +225,6 @@ def _render(report, *, validation: bool = False):
         "app._render_company_report(st.session_state['rep'])\n")
     at = AppTest.from_string(script, default_timeout=120)
     at.session_state["rep"] = report
-    if validation:
-        at.session_state["show_legacy"] = True
     at.run()
     assert not at.exception, at.exception
     return at
@@ -298,13 +296,11 @@ def test_band_wording_follows_the_percentile():
     assert band_word(50) == "Mid-range vs its own 5 years" and band_word(None) == "Valuation band not read"
 
 
-def test_workshop_details_are_hidden_unless_validation_tools_is_on(tmp_path):
+def test_workshop_details_are_never_on_screen(tmp_path):
     report = _company_report(tmp_path)
     report.saved_to = str(tmp_path / "runs" / "x")
     off = "\n".join(str(c.value) for c in _render(report).caption)
     assert "Ran in" not in off and "day-cache" not in off and "saved under" not in off
-    on = "\n".join(str(c.value) for c in _render(report, validation=True).caption)
-    assert "Ran in" in on and "saved under" in on
 
 
 def test_how_lenses_are_graded_lives_inside_sources_and_downloads_stay(tmp_path):
@@ -514,7 +510,7 @@ def test_b23_n2_no_card_ever_shows_text_cut_off_mid_sentence(tmp_path):
     assert "not reported" in cc.balance_sheet_card(report)
 
 
-def _list_page(validation: bool):
+def _list_page():
     pytest.importorskip("streamlit")
     from streamlit.testing.v1 import AppTest
     from tests.test_merged_multi_report import _multi
@@ -524,19 +520,16 @@ def _list_page(validation: bool):
               "app._render_multi_strategy_result(st.session_state['res'])\n")
     at = AppTest.from_string(script, default_timeout=120)
     at.session_state["res"] = _multi([SCREENED, RAW])
-    if validation:
-        at.session_state["show_legacy"] = True
     at.run()
     assert not at.exception, at.exception
     return "\n".join(str(getattr(e, "value", "")) for k in ("caption", "markdown", "info", "warning", "success")
                      for e in at.get(k))
 
 
-def test_b23_n6_the_list_page_hides_the_machinery_header_unless_validation_tools_is_on():
-    off, on = _list_page(False), _list_page(True)
+def test_b23_n6_the_list_page_never_shows_the_machinery_header():
+    off = _list_page()
     for jargon in ("Verdict: deterministic ranker", "Narrative: none", "no LLM ran", "Multi-lens re-grade"):
         assert jargon not in off, jargon
-    assert "Verdict: deterministic ranker" in on and "no LLM ran" in on
     assert "Shortlist" in off or "ranked by at least one" in off      # the real content is still there
 
 

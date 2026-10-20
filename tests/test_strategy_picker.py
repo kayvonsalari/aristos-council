@@ -41,12 +41,9 @@ def _live(sid: str):
 # --------------------------------------------------------------------------- #
 # Visibility — the ONLY filter (a ticker list never makes a strategy unofferable)
 # --------------------------------------------------------------------------- #
-def test_hidden_strategies_are_offered_only_under_the_validation_toggle():
+def test_hidden_strategies_are_never_offered():
     strategies = [FakeStrategy("live_v1", "Live"), FakeStrategy("old_v1", "Old", ui="hidden")]
-    off = [c.id for c in strategy_choices(strategies, show_validation=False)]
-    on = [c.id for c in strategy_choices(strategies, show_validation=True)]
-    assert off == ["live_v1"]
-    assert set(on) == {"live_v1", "old_v1"}
+    assert [c.id for c in strategy_choices(strategies)] == ["live_v1"]
 
 
 def test_every_visible_strategy_is_offered_regardless_of_the_ticker_list():
@@ -62,7 +59,7 @@ def test_every_visible_strategy_is_offered_regardless_of_the_ticker_list():
 def test_colliding_display_names_are_disambiguated_by_id():
     a = FakeStrategy("growth_garp_v1", "Growth at a Reasonable Price (GARP)")
     b = FakeStrategy("growth_garp_v2", "Growth at a Reasonable Price (GARP)")
-    choices = strategy_choices([a, b], show_validation=True)
+    choices = strategy_choices([a, b])
     labels = choice_labels(choices)
     assert len(set(labels)) == 2
     assert all("growth_garp_v" in lbl for lbl in labels)
@@ -164,10 +161,10 @@ def test_default_index_prefers_the_flagship_and_never_goes_out_of_range():
 # --------------------------------------------------------------------------- #
 # Over the LIVE strategies dir — the picker both surfaces actually get
 # --------------------------------------------------------------------------- #
-def test_live_rank_strategies_produce_unique_labels_under_the_validation_toggle():
+def test_live_rank_strategies_produce_unique_labels():
     from aristos_council.strategy.discovery import rank_strategies
 
     live = [_live(info.id) for info in rank_strategies(STRAT_DIR)]
-    labels = choice_labels(strategy_choices(live, show_validation=True))
+    labels = choice_labels(strategy_choices(live))
     assert len(labels) == len(set(labels))          # incl. the GARP v1/v2 collision
-    assert len(labels) == len(live)
+    assert len(labels) == len([s for s in live if getattr(s, "ui", "") != "hidden"])
