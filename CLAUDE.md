@@ -401,8 +401,7 @@ Sprint 3 shipped the run-report sink behind Council Station (a local Streamlit U
   thesis/figures/caveats, the critic counter-case, the decision rationale, the
   FULL provenance audit including violation prose). The fat counterpart to the
   thin verdict log: IO at the edge, the graph stays disk-free. The single-ticker
-  council that wrote it has been removed; `docs/JUDGE_PANEL.md` is the forward
-  test of LLM judgement.
+  council that wrote it has been removed.
 
 ### Sprint 2 (prior)
 
