@@ -32,7 +32,7 @@ BADGES_RE = re.compile(r"(<!-- GEN:BADGES -->).*?(<!-- /GEN:BADGES -->)", re.S)
 # badge label -> the CSS class the page styles it with
 _BADGE_CLASS = {"passed the test here": "b-proven", "passed the bar here, luck not ruled out": "b-luck",
                 "no edge shown here": "b-notproven", "behind random picks here": "b-against",
-                "untested here": "b-insufficient"}
+                "untested here": "b-insufficient", "under test here": "b-insufficient"}
 
 
 def _visible_lenses():

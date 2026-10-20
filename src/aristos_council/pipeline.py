@@ -393,7 +393,8 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
              for fac in rank_strategy.factors]
     ranked = rank_universe(rows, specs, cut=rank_strategy.cut, k=rank_strategy.k,
                            percentile=rank_strategy.percentile,
-                           missing=rank_strategy.missing)
+                           missing=rank_strategy.missing,
+                           buy_requires=getattr(rank_strategy, "buy_requires", None) or None)
     # Attach the per-factor SOURCE tags recorded at compute time (ITEM 1) — the report's
     # factor-integrity block reads these to disclose EV vs proxy vs abstained per name.
     for r in ranked:
@@ -2483,6 +2484,9 @@ class MultiStrategyCell:
     # TIE-CHECK-1 - how many OTHER ranked names share this one's combined rank-sum (so its position).
     # Display only: the sort, the cut and the verdicts do not read it.
     tied_with: int = 0
+    # BUY-CAP (27B-1): why a would-be BUY reads HOLD ("ranked 2nd, but growing slower than the
+    # industry median, so HOLD"); "" for every other cell.
+    cap_reason: str = ""
 
     @property
     def factor_note(self) -> str:
@@ -2504,8 +2508,9 @@ class MultiStrategyCell:
             from .rank_engine import small_group_text
             small = "" if self.is_check or not small_group_text(self.cohort_size) \
                 else f" · {small_group_text(self.cohort_size)}"          # B25-1
+            cap = f" · {self.cap_reason}" if self.cap_reason else ""      # BUY-CAP (27B-1)
             return (f"{pos} · {verdict_word(self.verdict, check=self.is_check)}"
-                    f"{small}{self.factor_note}")
+                    f"{cap}{small}{self.factor_note}")
         if self.status == _EXCLUDED:
             return f"excluded — {self.reason_plain or self.reason}"
         if self.status == _UNRATEABLE:
@@ -2611,7 +2616,7 @@ def combine_rank_results(results: dict[str, RankPipelineResult],
                 strategy_id=sid, status=_RANKED, position=pos, cohort_size=cohort_m,
                 tied_with=(sum(1 for o in res.ranked if not o.excluded and o is not r
                                and o.combined_rank == r.combined_rank) if _tied else 0),
-                verdict=r.verdict, score=r.combined_rank,
+                verdict=r.verdict, score=r.combined_rank, cap_reason=r.cap_reason,
                 is_check=_is_check_result(res),
                 # FACTOR-MARK-1/3: measured = the lens's factors this name actually had a
                 # value for. An imputed factor is not a measurement of the name. Counted

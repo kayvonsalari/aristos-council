@@ -1,0 +1,68 @@
+# Growth — rank strategy v3 (GROWTH-V3-DEF, 2026-10-20). UNDER TEST, HIDDEN.
+# ==========================================================================
+# Same four factors as v2 (revenue growth, ROIC, earnings yield, 12-month momentum), a looser SCREEN
+# (growth_screen_v3: absolute floors only, no PEG) so that more than a handful of names survive to be
+# ranked, and ONE relative gate expressed as a BUY cap: a name the quintile cut would BUY is held at
+# HOLD when its revenue-growth rank is in the bottom half of the ranked set. Why, the frozen rule and
+# the promotion test: docs/DESIGN_growth_v3.md. Nothing in v2 changed (rule 7).
+id: growth_garp_v3
+name: Growth at a Reasonable Price
+display_name: Growth
+version: 3
+status: under_test           # no badge until its backtest is committed ("under test here")
+ui: hidden                   # not offered in the picker until the promotion rule in the design note is met
+
+asks: >-
+  Growing faster than most of its industry at a fair price: a BUY needs sales growth above the
+  industry median; names are then ranked on sales growth, return on capital, price and trend, among
+  profitable, growing companies worth at least $5bn.
+
+kind: selector
+thesis:
+  - growth
+created: "2026-10-20"
+
+description: >-
+  Growth v3: rank profitable, growing companies worth at least $5bn on revenue growth, capital
+  efficiency (ROIC), valuation (earnings yield) and 12-month momentum; a BUY additionally requires
+  revenue growth in the top half of the ranked set (buy_requires), otherwise the name is HOLD with the
+  reason shown.
+
+suggested_universes:
+  - growth_40_v1
+
+asset_kinds:
+  - equity
+asset_kind_rationale: >-
+  Revenue CAGR, ROIC and EBIT/EV describe an operating company, not a fund; an ETF
+  scored on look-through vendor fundamentals is quiet garbage, so it is gated out.
+exclude_sectors:
+  - Financial Services
+  - Financials
+sector_exclusion_rationale: >-
+  Revenue growth and return on capital do not measure a bank or an insurer: deposits, loans and
+  premiums are the business.
+
+factors:
+  - name: revenue_growth     # growth   - in-house 3y revenue CAGR
+  - name: roic               # quality  - through-cycle return on invested capital
+  - name: earnings_yield     # value    - EBIT/EV (reasonable price)
+  - name: momentum_12m       # trend    - equal rank weight, same combine
+
+cut: quintile                # top 20% BUY, middle 60% HOLD, bottom 20% SELL
+missing: worst
+min_market_cap: 5.0e9
+
+# The one relative gate: a BUY needs revenue growth in the top half of the ranked set.
+buy_requires:
+  revenue_growth: top_half
+
+council_screen_strategy: growth_screen_v3
+prefilter_screen: true
+
+rationale: >-
+  Great businesses compound revenue at high incremental returns on capital. v2 asked for that with
+  three absolute thresholds and a price test, which left too few names to judge. v3 keeps the scope
+  broad (profitable, growing, $5bn+), ranks on the same four factors, and puts the growth demand where
+  it belongs: a relative one. "Growing faster than most of its industry" is a statement about the
+  group, so it is a cap on the BUY, not an absolute rate.

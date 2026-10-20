@@ -182,6 +182,20 @@ def _dated_series(yearly: object, key: str) -> tuple[list[float], list[str]]:
     return values, dates
 
 
+def _filing_dates(yearly: object, key: str) -> list[str]:
+    """The ``filing_date`` of every cell ``_dated_series`` keeps, index-parallel to its dates ("" when
+    the entry carries none or a placeholder). Same walk, same cells, so the two can never misalign."""
+    if not isinstance(yearly, dict):
+        return []
+    out: list[str] = []
+    for period in sorted(yearly.keys(), reverse=True):
+        row = yearly.get(period) or {}
+        v = _coerce_float(row.get(key)) if isinstance(row, dict) else None
+        if v is not None:
+            out.append((_clean_str(row.get("filing_date")) or "")[:10] if isinstance(row, dict) else "")
+    return out
+
+
 # (Fundamentals field, statement, EODHD key) for every positional annual list a lens can read. The
 # first six are mapped by ``fundamentals_from_payload`` always; the rest only with ``with_periods``.
 _PERIOD_LISTS = (
@@ -288,10 +302,11 @@ def fundamentals_from_payload(ticker: str, data: dict, *, with_periods: bool = F
     periods: dict = {}
     if with_periods:
         statements = {"income": income_yearly, "balance": balance_yearly, "cashflow": cashflow_yearly}
-        lists, dates = {}, {}
+        lists, dates, filed = {}, {}, {}
         for field_name, statement, key in _PERIOD_LISTS:
             lists[field_name], dates[field_name] = _dated_series(statements[statement], key)
-        periods = {**lists, "period_ends": dates,
+            filed[field_name] = _filing_dates(statements[statement], key)
+        periods = {**lists, "period_ends": dates, "filing_dates": filed,
                    "period_scalars": _period_scalars(income_yearly, balance_yearly, cashflow_yearly)}
 
     base = Fundamentals(

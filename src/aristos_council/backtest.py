@@ -281,6 +281,9 @@ CALIBRATION_WARNING_FACTOR = 2.0   # a tail over ~2x its expected share triggers
 
 AS_OF_RULE = ("each round ranks on accounts whose fiscal period ended on or before the round date "
               "minus the filing lag, and on closes up to the round date; nothing later is read")
+AS_OF_RULE_FILING = ("each round ranks on accounts whose filing date is on or before the round date (a "
+                     "period with no usable filing date falls back to its fiscal-period end plus the "
+                     "filing lag, and is counted), and on closes up to the round date; nothing later is read")
 BENCHMARK_RULE = "equal-weight return of every ranked member of the cohort over the same window"
 COST_RULE = "cost_bps deducted once per round trip from the BUY basket; the benchmark pays none"
 RETURN_RULE = ("closes on or before the round date and the exit date; adjusted close, so "
@@ -416,6 +419,14 @@ class BacktestResult:
     # actually measured; an older (1C) file with no such line is "independent" on read (see
     # from_csv), never silently reinterpreted as the new default.
     random_mode: str = RANDOM_MODE_DEFAULT
+    # ASOF-FILING-1 - how accounts were dated: "lag" (fiscal-period end + lag_days, the default and the
+    # only mode before this field) or "filing" (the EODHD filing date; a missing one falls back to the
+    # lag and is counted). ``filing_decisions`` is how many (name, fiscal period) visibility decisions
+    # were made across all rounds and ``filing_date_fallbacks`` how many of them rested on the lag
+    # fallback. Both counts are 0 in lag mode, where no filing date is consulted.
+    as_of_mode: str = "lag"
+    filing_decisions: int = 0
+    filing_date_fallbacks: int = 0
 
     @property
     def cohort_slug(self) -> str:
@@ -729,7 +740,8 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                       max_luck: float = MAX_LUCK,
                       random_mode: str = RANDOM_MODE_DEFAULT,
                       min_cap_usd: Optional[float] = None,
-                      min_adv_usd: float = MIN_ADV_USD_DEFAULT) -> BacktestResult:
+                      min_adv_usd: float = MIN_ADV_USD_DEFAULT,
+                      as_of_mode: str = "lag") -> BacktestResult:
     """Backtest one lens on one cohort. The first eight parameters are the contract; the rest of the
     keywords only say WHERE things live (a cohort directory, an explicit member list and its market
     caps for a machine with no built cohorts, a strategies directory) and change no rule.
@@ -793,7 +805,9 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
     source."""
     if random_mode not in RANDOM_MODES:
         raise ValueError(f"random_mode must be one of {RANDOM_MODES}, got {random_mode!r}")
-    from .data.asof_adapter import AsOfAdapter
+    from .data.asof_adapter import AS_OF_MODES, AsOfAdapter
+    if as_of_mode not in AS_OF_MODES:
+        raise ValueError(f"as_of_mode must be one of {AS_OF_MODES}, got {as_of_mode!r}")
     from .data.backtest_feed import MemoAdapter, lookback_start
     from .pipeline import run_rank_pipeline
 
@@ -847,6 +861,7 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
                             min_cap_usd=min_cap_usd,
                             min_adv_usd=float(min_adv_usd) if liquidity_guard_on else None)
     if not dates:
+        result.as_of_mode = as_of_mode
         result.caveats = _caveats(result, 0)
         result.caveats.append(f"the window {start} to {end} is shorter than one {hold_months}-month "
                               f"hold, so no round could be measured")
@@ -910,11 +925,13 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
     dropbest_cols: list = []                                # each shape (random_baskets,)
     previous_buys: Optional[set] = None                     # for n_new - tracked EVERY round
     turnover_baskets: Optional[_TurnoverBaskets] = None      # built lazily, on first use
+    asofs: list = []                                       # one AsOfAdapter per round (ASOF-FILING-1 counts)
     for i, d in enumerate(dates, 1):
         exit_date = add_months(d, hold_months)
         eligible, n_illiquid = eligible_at(d)
         total_illiquid += n_illiquid
-        asof = AsOfAdapter(memo, d, lag_days)
+        asof = AsOfAdapter(memo, d, lag_days, as_of_mode)
+        asofs.append(asof)
         # SIZE-FLOOR-2 item 2d — a data-coverage fact about ELIGIBLE NAMES this round, not
         # about any one lens: non-empty period_ends means AsOfAdapter served real dated
         # accounts, not its identity-only abstain shell (_abstain, asof_adapter.py). Cheap —
@@ -1044,6 +1061,9 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
     if random_baskets > 0 and pos_excess_cols:
         _apply_luck_stats(result, pos_dates=pos_dates, pos_excess_cols=pos_excess_cols,
                           dropbest_dates=dropbest_dates, dropbest_cols=dropbest_cols)
+    result.as_of_mode = as_of_mode
+    result.filing_decisions = sum(a.filing_decisions for a in asofs)
+    result.filing_date_fallbacks = sum(a.filing_date_fallbacks for a in asofs)
     result.caveats = _caveats(result, unpriced, undersized_rounds)
     return result
 
@@ -1187,9 +1207,12 @@ def _drop_best_excess(held: list, n_buys: int, bench_ret: float, cost: float) ->
 
 
 def _caveats(result: BacktestResult, unpriced: int, undersized_rounds: int = 0) -> list:
+    dated_by = (f"fiscal-period end plus a {result.lag_days}-day filing lag" if result.as_of_mode != "filing"
+                else f"their filing date (fiscal-period end plus a {result.lag_days}-day lag where "
+                     f"EODHD gives none)")
     out = [
         "RESTATED ACCOUNTS: statements are the ones EODHD carries today (restated), dated by "
-        f"fiscal-period end plus a {result.lag_days}-day filing lag; a reader on the day saw the "
+        f"{dated_by}; a reader on the day saw the "
         "original figures, so a lens may look better here than it would have then.",
         "SURVIVORSHIP: a company delisted, merged, or acquired out of today's frozen cohort"
         + (f" (v{result.cohort_version})" if result.cohort_version else "")
@@ -1254,6 +1277,21 @@ def csv_path(result: BacktestResult, out) -> Path:
     return out if out.suffix == ".csv" else out / result.cohort_slug / f"{result.lens_id}.csv"
 
 
+def _fallback_text(result: BacktestResult) -> str:
+    """"412 of 5230 fiscal periods (7.9%)" in filing mode, "n/a - lag mode" otherwise."""
+    if result.as_of_mode != "filing":
+        return "n/a - lag mode"
+    share = (result.filing_date_fallbacks / result.filing_decisions) if result.filing_decisions else 0.0
+    return (f"{result.filing_date_fallbacks} of {result.filing_decisions} fiscal periods ({share:.1%}) "
+            f"had no usable filing date and fell back to period end + lag")
+
+
+def _parse_fallbacks(text: str) -> tuple:
+    import re
+    m = re.match(r"\s*(\d+) of (\d+) fiscal periods", text or "")
+    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+
+
 def to_csv(result: BacktestResult, path) -> Path:
     """One row per round under a ``# key: value`` header block (as-of rule, lag, costs, benchmark,
     caveats, verdict, the lenses' git commit). Deterministic: no timestamps, sorted rows, exact
@@ -1267,7 +1305,10 @@ def to_csv(result: BacktestResult, path) -> Path:
         ("lens_commit", result.lens_commit), ("start", result.start), ("end", result.end),
         ("hold_months", result.hold_months), ("step_months", result.step_months),
         ("cost_bps", repr(float(result.cost_bps))), ("lag_days", result.lag_days),
-        ("as_of_rule", AS_OF_RULE), ("benchmark", BENCHMARK_RULE), ("costs", COST_RULE),
+        ("as_of_rule", AS_OF_RULE_FILING if result.as_of_mode == "filing" else AS_OF_RULE),
+        ("as_of_mode", result.as_of_mode),
+        ("filing_date_fallbacks", _fallback_text(result)),
+        ("benchmark", BENCHMARK_RULE), ("costs", COST_RULE),
         ("returns", RETURN_RULE),
         ("as_of_size_floor", (f"{result.size_floor:,.0f} USD, estimated from today's cap and price "
                               f"ratio ({result.size_floor_note})") if result.size_floor is not None
@@ -1396,7 +1437,10 @@ def from_csv(path) -> BacktestResult:
         seed_rule=(meta.get("seed_rule", "") if random_baskets_n else ""),
         max_luck=float(meta["max_luck"]) if meta.get("max_luck") else MAX_LUCK,
         luck_pct_mean=_meta_num("luck_pct_mean"), luck_pct_pass=_meta_num("luck_pct_pass"),
-        drop_best_vs_random=_meta_num("drop_best_vs_random"))
+        drop_best_vs_random=_meta_num("drop_best_vs_random"),
+        as_of_mode=("filing" if meta.get("as_of_mode") == "filing" else "lag"),
+        filing_decisions=_parse_fallbacks(meta.get("filing_date_fallbacks", ""))[1],
+        filing_date_fallbacks=_parse_fallbacks(meta.get("filing_date_fallbacks", ""))[0])
 
 
 def _pct(x: Optional[float], signed: bool = True) -> str:
@@ -1672,6 +1716,7 @@ LABEL_BAR = "passed the bar here, luck not ruled out"
 LABEL_BEHIND = "behind random picks here"
 LABEL_NO_EDGE = "no edge shown here"
 LABEL_UNTESTED = "untested here"
+LABEL_UNDER_TEST = "under test here"      # a lens whose definition is frozen but not yet backtested (27B-1)
 
 # The ONE old -> new mapping. Saved reports, snapshots and fixtures written before BADGE-WORDS-2 carry
 # the old words; every reader goes through ``canonical_label`` (``Badge`` does it on construction).
@@ -1708,12 +1753,14 @@ BADGE_MEANINGS = {
                     f"years), and it was not clearly behind random picking either."),
     LABEL_UNTESTED: ("There is not enough measured history for this cohort and this lens to say "
                      "anything either way."),
+    LABEL_UNDER_TEST: ("This lens's definition is frozen but its backtest has not been committed yet, "
+                       "so it has no track record and borrows none from an earlier version."),
 }
 BADGE_LABELS = tuple(BADGE_MEANINGS)  # display order
 # the short form used in the "Track record: 2 passed the test, ..." count line
 _BADGE_SHORT = {LABEL_PASSED: "passed the test", LABEL_BAR: "passed the bar, luck not ruled out",
                 LABEL_BEHIND: "behind random picks", LABEL_NO_EDGE: "no edge shown",
-                LABEL_UNTESTED: "untested"}
+                LABEL_UNTESTED: "untested", LABEL_UNDER_TEST: "under test"}
 
 
 NO_TEST_HISTORY = "No test history for this lens in this industry yet."
@@ -1913,12 +1960,33 @@ def has_track_record(cohort_slug: str, *, root=None) -> bool:
     return any(slug == cohort_slug for slug, _lens in _load_backtests(root))
 
 
+_STATUS_CACHE: dict = {}
+
+
+def _lens_status(lens_id: str) -> str:
+    """The ``status:`` of the committed strategy file ``strategies/<lens_id>.yaml`` ("" when it has
+    none, or no such file - a test's invented lens id included)."""
+    if lens_id not in _STATUS_CACHE:
+        status = ""
+        path = _BACKTESTS_ROOT.parent / "strategies" / f"{lens_id}.yaml"
+        try:
+            import yaml
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.is_file() else None
+            status = str((data or {}).get("status") or "") if isinstance(data, dict) else ""
+        except Exception:                                   # noqa: BLE001 - no status, not a crash
+            status = ""
+        _STATUS_CACHE[lens_id] = status
+    return _STATUS_CACHE[lens_id]
+
+
 def track_record(cohort_slug: str, lens_id: str, *, root=None) -> Badge:
     """The plain-English track-record badge for one (cohort, lens) pair (BACKTEST-2). Reads the
     committed CSVs under ``backtests/`` (cached after the first call); never gates — this is
     display only and is never fed back into a vote, rank or verdict.
 
     Checked in this order:
+      - the lens's strategy file says ``status: under_test`` -> "under test here" (27B-1: no badge
+        is ever borrowed from an earlier version)
       - no committed result for this cohort+lens at all, or its own ``verdict()`` is
         "insufficient" (too little measured history to trust ANY number below) -> "untested here"
       - ``verdict()`` == "proven" -> "passed the test here"
@@ -1928,6 +1996,10 @@ def track_record(cohort_slug: str, lens_id: str, *, root=None) -> Badge:
         10) — regardless of the bar -> "behind random picks here"
       - everything else that was actually tested -> "no edge shown here"
     """
+    if _lens_status(lens_id) == "under_test":          # 27B-1: no badge transfer from an older version
+        return Badge(label=LABEL_UNDER_TEST, verdict=None, mean_excess=None, luck_pct=None,
+                     years_positive=None, years_measured=None, rounds_held=None,
+                     note="under test: the committed backtest for this version does not exist yet")
     cache = _load_backtests(root)
     result = cache.get((cohort_slug, lens_id))
     if result is None:
@@ -2042,6 +2114,10 @@ def _build_parser():
                           f"{RANDOM_BASKETS_DEFAULT}; 0 opts out) - BACKTEST-1C")
     run.add_argument("--max-luck", type=float, default=MAX_LUCK,
                      help=f"\"proven\" needs luck_pct_mean <= this (default {MAX_LUCK:g})")
+    run.add_argument("--as-of-mode", choices=("lag", "filing"), default="lag",
+                     help="how accounts are dated: \"lag\" (fiscal-period end + --lag-days, default) or "
+                          "\"filing\" (EODHD filing date; a missing one falls back to the lag, counted) "
+                          "- ASOF-FILING-1. Write a filing-mode run to its own --out folder")
     run.add_argument("--random-mode", choices=RANDOM_MODES, default=RANDOM_MODE_DEFAULT,
                      help=f"\"turnover\" (default) matches the lens's own turnover; "
                           f"\"independent\" is the 1C behaviour, kept for comparison")
@@ -2090,7 +2166,8 @@ def main(argv=None) -> int:
         args.cohort, args.lens, start=start, end=end, hold_months=args.hold, step_months=args.step,
         cost_bps=args.cost_bps, lag_days=args.lag_days, cohorts_root=args.cohorts_root,
         random_baskets=args.random_baskets, max_luck=args.max_luck,
-        random_mode=args.random_mode, progress=lambda msg: print(msg, flush=True))
+        random_mode=args.random_mode, as_of_mode=args.as_of_mode,
+        progress=lambda msg: print(msg, flush=True))
     path = to_csv(result, args.out)
     print(f"wrote {path}")
     print(summary_line(result))

@@ -526,6 +526,8 @@ def _outcome(v) -> str:
 
 def _row_reason(v) -> str:
     if v.status == "ranked":
+        if getattr(v, "cap_reason", ""):
+            return v.cap_reason
         note = v.factor_note.strip(" ·")
         return note or ("marks only, never votes" if not v.votes else "ranked among its peers")
     if v.status == "excluded":

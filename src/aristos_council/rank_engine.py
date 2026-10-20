@@ -80,6 +80,10 @@ class RankedTicker:
     # True when another ranked name shares this combined rank.
     cohort_position: Optional[int] = None
     cohort_tied: bool = False
+    # BUY-CAP (27B-1): set only when a ``buy_requires`` gate capped a would-be BUY to HOLD. The
+    # reason is shown wherever the verdict is (page, tables, exports); empty on every other name,
+    # so a strategy without ``buy_requires`` is byte-identical to before.
+    cap_reason: str = ""
     # --- DISPLAY-ONLY CONTEXT (VALBAND-1 / PRICE-1 / PRICE-2) ------------------------ #
     # The three objects below are attached by the rank stage after ranking (like
     # factor_sources) and are the ONE source every surface formats from — PRICE-2 renders
@@ -255,11 +259,36 @@ def _verdict_for_position(i: int, n: int, cut: str, k: int, percentile: float) -
     return "hold"
 
 
+# BUY-CAP (27B-1) - a RELATIVE gate on a BUY: "buy_requires: {revenue_growth: top_half}" means a name
+# whose rank on THAT factor falls outside the top half (or third) of the ranked set is capped at HOLD,
+# never BUY. A cap, not a screen: it never excludes, never makes a SELL, and acts only on names the
+# cut would have bought. Each entry is the share of the ranked set that may buy.
+BUY_REQUIRES_SHARES = {"top_half": 2.0, "top_third": 3.0}      # divisor: n / d names qualify
+_BUY_CAP_PHRASE = {"revenue_growth": "growing slower than the industry median"}
+
+
+def _passes_buy_requirement(rank: float, n: int, rule: str) -> bool:
+    """1 = best, ties averaged. The median name is NOT in the bottom half, so it passes:
+    top_half keeps ranks <= (n + 1) / 2, top_third ranks <= (n + 2) / 3."""
+    d = BUY_REQUIRES_SHARES[rule]
+    return rank <= (n + (d - 1.0)) / d
+
+
+def _cap_reason(factor: str, rule: str, position: int) -> str:
+    from .tools.valuation_band import ordinal as _ordinal
+    phrase = _BUY_CAP_PHRASE.get(factor) if rule == "top_half" else None
+    if phrase is None:
+        label = factor_column_label(factor).lower()
+        phrase = (f"{label} below the industry median" if rule == "top_half"
+                  else f"{label} outside the industry's top third")
+    return f"ranked {_ordinal(position)}, but {phrase}, so HOLD"
+
+
 def rank_universe(
     rows: list[tuple[str, dict[str, Optional[float]]]],
     factors: list[FactorSpec], *,
     cut: str = "quintile", k: int = 6, percentile: float = 0.2,
-    missing: str = "worst",
+    missing: str = "worst", buy_requires: Optional[dict] = None,
 ) -> list[RankedTicker]:
     """Rank a universe and assign verdicts. ``rows`` is (ticker, {factor: value}).
 
@@ -337,6 +366,16 @@ def rank_universe(
         r.verdict = _verdict_for_position(at, n, cut, k, percentile)
         r.rank_position = i + 1          # record position (no effect on the sort/cut)
     assign_cohort_positions(ranked)      # display-only #N of M (RANK-DISPLAY-1)
+    if buy_requires:
+        for r in ranked:
+            if r.verdict != "buy":
+                continue
+            for factor, rule in buy_requires.items():
+                rank = r.factor_ranks.get(factor)
+                if rank is not None and not _passes_buy_requirement(rank, n, rule):
+                    r.verdict = "hold"
+                    r.cap_reason = _cap_reason(factor, rule, r.cohort_position or r.rank_position)
+                    break
     return ranked + excluded
 
 
@@ -579,7 +618,8 @@ def ranked_table_rows(ranked: list["RankedTicker"],
         row = {"Position (score)": format_position_cell(
                    pos, m, tied, r.combined_rank, len(r.factor_ranks)),
                "Name": label,
-               "Verdict": format_verdict_cell(r.verdict, tie_notes.get(r.ticker, ""))}
+               "Verdict": format_verdict_cell(
+                   r.verdict, " ".join(x for x in (tie_notes.get(r.ticker, ""), r.cap_reason) if x))}
         for f in factor_names:
             if f in r.factor_ranks:
                 row[columns[f]] = format_factor_cell(
