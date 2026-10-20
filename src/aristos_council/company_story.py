@@ -418,10 +418,11 @@ def _doubt(report) -> str:
     for v in _checks(report):
         if ag is not None and ag.checks.get(v.label) == "doubted":
             bits.append(f"{v.label} doubts the quality of the accounts.")
+    from .backtest import LABEL_PASSED
     weak = [v for v in _voting(report) if v.ranked and v.badge is not None
-            and v.badge.label != "proven here"]
+            and v.badge.label != LABEL_PASSED]
     if weak:
-        bits.append("No badge says proven for " + _join(
+        bits.append("No badge shows a passed test for " + _join(
             [f"{v.label} ({v.badge.label})" for v in weak]) + ".")
     group = report.peer_group
     if group is not None and getattr(group, "members", None):
@@ -557,13 +558,14 @@ def _full_reason(v) -> str:
 
 
 def table_rows(report) -> list[TableRow]:
-    from .backtest import BADGE_MEANINGS
+    from .backtest import evidence_summary
 
+    chance = evidence_summary().sentence()          # CHANCE-LINE-1: the same line under every badge
     rows = []
     for v in report.votes:
         detail = ""
         if v.badge is not None:
-            detail = f"{v.badge.detail_line()} - {v.badge.explanation()}"      # B24-E2
+            detail = f"{v.badge.detail_line()} - {v.badge.explanation()} {chance}"      # B24-E2
         rows.append(TableRow(lens=v.label, outcome=_outcome(v),
                              badge=v.badge.label if v.badge is not None else "none",
                              reason=_row_reason(v), asks=v.asks, badge_detail=detail,
