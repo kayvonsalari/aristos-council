@@ -80,7 +80,8 @@ def test_it_never_carries_a_buy_hold_or_sell_and_never_a_badge(tmp_path):
     screened = by_id[SCREENED]
     assert screened.verdict == "" and screened.badge is None
     assert not VERDICT_WORDS.search(screened.would_rank.text)
-    assert {f.name for f in fields(WouldRank)} == {"available", "position", "cohort_size", "reason"}
+    # WOULD-RANK-GROUP-1 added lens_ranked (a count of names the lens ranked: no verdict, no badge)
+    assert {f.name for f in fields(WouldRank)} == {"available", "position", "cohort_size", "reason", "lens_ranked"}
     # the track-record step only ever decorates a vote that ranked
     assert all(v.badge is None for v in report.votes if not v.ranked)
 
