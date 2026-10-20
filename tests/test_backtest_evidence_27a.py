@@ -175,3 +175,52 @@ def test_overlap_counts_two_bar_passers_with_the_same_picks_as_one(tmp_path):
     xz = pairs[("x_v1", "z_v1")]
     assert xz.mean_jaccard == 0.0 and not xz.counts_as_one and "count as one" not in xz.sentence()
 
+
+# --------------------------------------------------------------------------- #
+# 27A-2 / 27A-5 / 27A-6 - the generated record and the compare tool
+# --------------------------------------------------------------------------- #
+def _scripts():
+    import sys
+    root = str(Path(__file__).resolve().parents[1])
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from scripts import backtest_badge_matrix, backtest_compare
+    return backtest_badge_matrix, backtest_compare
+
+
+def test_the_committed_record_equals_what_the_generator_writes():
+    """The record's numbers are never typed: regenerating from SUMMARY.csv changes nothing."""
+    m, _ = _scripts()
+    record = Path(__file__).resolve().parents[1] / "docs" / "BACKTEST_RECORD.md"
+    summary = Path(__file__).resolve().parents[1] / "backtests" / "SUMMARY.csv"
+    rows = m.read_summary(summary)
+    text = record.read_text(encoding="utf-8")
+    assert m.fill_record(text, m.record_blocks(rows, summary.parent)) == text
+
+
+def test_the_record_opens_with_the_three_sections_and_keeps_the_per_industry_read():
+    text = (Path(__file__).resolve().parents[1] / "docs" / "BACKTEST_RECORD.md").read_text(encoding="utf-8")
+    heads = [l for l in text.splitlines() if l.startswith("## ")]
+    assert heads[:3] == ["## What Aristos can show today", "## What remains uncertain",
+                         "## What is being done"]
+    assert "## Read per industry" in heads
+
+
+def test_compare_reports_changes_and_counts(tmp_path):
+    _, c = _scripts()
+    before, after = tmp_path / "before", tmp_path / "after"
+    _write(before, "a_v1", PASS, luck=0.01)
+    _write(before, "b_v1", PASS, luck=0.01)
+    _write(after, "a_v1", PASS, luck=0.01)                         # unchanged
+    _write(after, "b_v1", FAIL, luck=0.5)                          # moved
+    _write(after, "c_v1", FAIL, luck=0.5)                          # new
+    out = c.compare(c.read_side(before), c.read_side(after))
+    assert "**3 pairs.** Verdict changed: 1. Label changed: 1." in out
+    assert "Only in after: 1. Only in before: 0." in out
+
+
+def test_compare_main_against_itself_changes_nothing():
+    _, c = _scripts()
+    side = c.read_side(Path(__file__).resolve().parents[1] / "backtests")
+    out = c.compare(side, side)
+    assert "**98 pairs.** Verdict changed: 0. Label changed: 0." in out

@@ -24,12 +24,15 @@ from __future__ import annotations
 import argparse
 import csv
 import glob
+import re
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SUMMARY = ROOT / "backtests" / "SUMMARY.csv"
 DEFAULT_RUN_MD = ROOT / "backtests" / "RUN.md"
+DEFAULT_RECORD = ROOT / "docs" / "BACKTEST_RECORD.md"
+STRATEGIES_DIR = ROOT / "strategies"
 
 VERDICT_LETTER = {"proven": "P", "not beyond luck": "L", "not proven": "N", "insufficient": "U"}
 LETTER_MEANING = ("P = proven, L = not beyond luck, N = not proven, U = insufficient "
@@ -146,6 +149,146 @@ def write_run_md(path: Path, *, n_rows: int, today: date) -> None:
         encoding="utf-8")
 
 
+# --------------------------------------------------------------------------- #
+# docs/BACKTEST_RECORD.md - every number in the record is GENERATED between <!-- GEN:x --> markers
+# --------------------------------------------------------------------------- #
+VERDICT_WORDS = {"proven": "passed the test", "not beyond luck": "passed the bar, luck not ruled out",
+                 "not proven": "did not clear the bar", "insufficient": "untested"}
+_GEN = re.compile(r"(<!-- GEN:(\w+) -->)(.*?)(<!-- /GEN:\2 -->)", re.S)
+
+
+def lens_names() -> dict:
+    """{lens id: display name}, read from the strategy files - never typed here."""
+    import yaml
+    out = {}
+    for path in STRATEGIES_DIR.glob("*.yaml"):
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:                                   # noqa: BLE001 - a bad file is just unnamed
+            continue
+        if isinstance(data, dict) and data.get("display_name"):
+            out[path.stem] = str(data["display_name"])
+    return out
+
+
+def _short(cohort: str) -> str:
+    _, sep, tail = cohort.partition(" - ")
+    return tail if sep else cohort
+
+
+def _f(x):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def _signed(x: float) -> str:
+    return f"{x:+.1f}"
+
+
+def counts_block(rows: list[dict]) -> str:
+    n = {v: sum(1 for r in rows if r["verdict"] == v) for v in VERDICT_WORDS}
+    lenses = {r["lens"] for r in rows}
+    cohorts = {r["cohort"] for r in rows}
+    return (f"{len(lenses)} lenses were tested in {len(cohorts)} industry groups, {len(rows)} pairs in "
+            f"all. {n['proven']} passed the test, {n['not beyond luck']} passed the bar but luck is not "
+            f"ruled out, {n['not proven']} did not clear the bar, and {n['insufficient']} could not be "
+            f"judged.")
+
+
+def lens_table_block(rows: list[dict]) -> str:
+    names = lens_names()
+    lenses = sorted({r["lens"] for r in rows}, key=lambda l: names.get(l, l))
+    out = ["| Lens | Passed the test | Passed the bar, luck not ruled out | Did not clear the bar | "
+           "Untested | Average excess, %/yr (judged pairs) | Where it passed the test |",
+           "| --- | --- | --- | --- | --- | --- | --- |"]
+    for lens in lenses:
+        mine = [r for r in rows if r["lens"] == lens]
+        c = {v: sum(1 for r in mine if r["verdict"] == v) for v in VERDICT_WORDS}
+        judged = [_f(r["mean excess / yr"]) for r in mine if r["verdict"] != "insufficient"]
+        judged = [x for x in judged if x is not None]
+        avg = _signed(sum(judged) / len(judged)) + (f" ({len(judged)} groups)" if len(judged) < 14 else "") \
+            if judged else "n/a"
+        passed = ", ".join(f"{_short(r['cohort'])} {_signed(_f(r['mean excess / yr']))}"
+                           for r in mine if r["verdict"] == "proven") or "none"
+        out.append(f"| {names.get(lens, lens)} | {c['proven']} | {c['not beyond luck']} | "
+                   f"{c['not proven']} | {c['insufficient']} | {avg} | {passed} |")
+    return "\n".join(out)
+
+
+def industry_block(rows: list[dict]) -> str:
+    """Per cohort: each pair that cleared the bar, with its drop-best comparison (the exclusion
+    method is stated once, in docs/BACKTEST.md); cohorts with nothing to show are listed last."""
+    names = lens_names()
+    out, quiet = [], []
+    for cohort in sorted({r["cohort"] for r in rows}):
+        mine = [r for r in rows if r["cohort"] == cohort]
+        cleared = [r for r in mine if r["verdict"] in ("proven", "not beyond luck")]
+        if not cleared:
+            untested = sum(1 for r in mine if r["verdict"] == "insufficient")
+            quiet.append(f"{_short(cohort)} ({untested} of {len(mine)} untested)")
+            continue
+        parts = []
+        for r in cleared:
+            d, vs = _f(r["mean excess / yr, drop best"]), _f(r["drop-best vs random"])
+            tail = ""
+            if d is not None and vs is not None:
+                tail = f"; without its best pick each year {_signed(d)}, {_signed(vs)} against random baskets"
+            tag = "passed the test" if r["verdict"] == "proven" else "luck not ruled out"
+            parts.append(f"{names.get(r['lens'], r['lens'])} {_signed(_f(r['mean excess / yr']))} "
+                         f"({tag}{tail})")
+        out.append(f"- **{_short(cohort)}**: " + "; ".join(parts) + ".")
+    out.append("")
+    out.append("No lens cleared the bar in: " + "; ".join(quiet) + ".")
+    return "\n".join(out)
+
+
+def evidence_block(backtests_dir) -> str:
+    from aristos_council.backtest import evidence_summary
+    ev = evidence_summary(backtests_dir)
+    return f"{ev.sentence()}\n\n{ev.calibration_line()}"
+
+
+def overlap_block(backtests_dir) -> str:
+    """CONC-READ-1: pairs that cleared the bar together in a cohort, and whether they are one result."""
+    from aristos_council.backtest import overlap_report
+    names = lens_names()
+    pairs = overlap_report(backtests_dir)
+    if not pairs:
+        return "No two lenses cleared the bar together in the same industry group."
+    out = []
+    for ov in sorted(pairs, key=lambda o: -o.mean_jaccard):
+        a, b = names.get(ov.lens_a, ov.lens_a), names.get(ov.lens_b, ov.lens_b)
+        line = (f"- {_short(ov.cohort)}: {a} and {b} - mean overlap {ov.mean_jaccard:.0%}, identical "
+                f"baskets in {ov.identical_rounds} of {ov.shared_rounds} months")
+        if ov.counts_as_one:
+            line += (f". These two results share {ov.mean_jaccard:.0%} of their picks and count as one "
+                     f"result, not two.")
+        out.append(line)
+    return "\n".join(out)
+
+
+def record_blocks(rows: list[dict], backtests_dir) -> dict:
+    return {"EVIDENCE": evidence_block(backtests_dir), "COUNTS": counts_block(rows),
+            "LENSTABLE": lens_table_block(rows), "INDUSTRY": industry_block(rows),
+            "OVERLAP": overlap_block(backtests_dir)}
+
+
+def fill_record(text: str, blocks: dict) -> str:
+    """Replace the body of every ``<!-- GEN:x -->`` block; a block with no generator is an error."""
+    def one(m):
+        if m.group(2) not in blocks:
+            raise KeyError(f"no generator for GEN:{m.group(2)}")
+        return f"{m.group(1)}\n{blocks[m.group(2)]}\n{m.group(4)}"
+    return _GEN.sub(one, text)
+
+
+def update_record(path: Path, rows: list[dict], backtests_dir) -> None:
+    path.write_text(fill_record(path.read_text(encoding="utf-8"), record_blocks(rows, backtests_dir)),
+                    encoding="utf-8")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--summary", default=str(DEFAULT_SUMMARY),
@@ -155,6 +298,9 @@ def main(argv=None) -> int:
     parser.add_argument("--no-rebuild", action="store_true",
                         help="read SUMMARY.csv as it is instead of rebuilding it from the per-lens CSVs")
     parser.add_argument("--no-run-md", action="store_true", help="print the matrix only")
+    parser.add_argument("--record", default=str(DEFAULT_RECORD),
+                        help=f"docs/BACKTEST_RECORD.md whose GEN blocks are rewritten (default {DEFAULT_RECORD})")
+    parser.add_argument("--no-record", action="store_true", help="leave the record document alone")
     args = parser.parse_args(argv)
 
     if not args.no_rebuild:
@@ -167,6 +313,9 @@ def main(argv=None) -> int:
         write_run_md(Path(args.run_md), n_rows=len(rows),
                     today=datetime.now(timezone.utc).date())
         print(f"\nWrote {args.run_md}")
+    if not args.no_record and Path(args.record).exists():
+        update_record(Path(args.record), rows, Path(args.summary).parent)
+        print(f"Wrote the generated blocks of {args.record}")
     return 0
 
 

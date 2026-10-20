@@ -1,81 +1,127 @@
 # Aristos lens track record: what the backtest says
 
-As of 2026-10-05. Figures from `backtests/SUMMARY.csv` (committed 2026-09-30); method in `docs/BACKTEST.md`. These figures are scheduled for a full re-run (see Caveats).
+Figures come from `backtests/SUMMARY.csv` and the per-pair CSVs beside it. Every number below sits
+inside a generated block (`<!-- GEN:… -->`), rewritten by `python -m scripts.backtest_badge_matrix`
+and never typed by hand; method in `docs/BACKTEST.md`. These results are exploratory, not proof of a
+repeatable edge.
 
-## What was tested and how to read a verdict
+<!-- GEN:EVIDENCE -->
+Across all tested industries, 12 of 68 cleared the bar (about 11 would by chance) and 5 also passed the luck test (about 3 to 4 would by chance; the luck test itself still runs somewhat hot, so treat these as approximate). These results are exploratory, not proof of a repeatable edge.
 
-We asked a simple question of each lens: if you had followed its BUY picks every month from October 2016 to September 2025, would you have done better than just owning the whole industry group? We ran this in 13 industry groups (we call them cohorts). Each month the lens picks, we hold the picks for 12 months, and we charge 0.5% in trading costs. The lens only sees company accounts 90 days after they were published, and only companies that were big enough at the time count, so there is no peeking at the future.
+Luck-test calibration: 5 pairs in the 0-5% tail and 9 in the 95-100% tail, about 3.4 expected in each; either tail is over twice its expectation, so the luck test is approximate.
+<!-- /GEN:EVIDENCE -->
 
-Two tests decide the verdict. The bar: beat the industry group by at least 2% a year in at least 6 of the 10 years. The luck test: we also build 500 baskets of randomly chosen companies, same size, same turnover. The luck figure is the share of those random baskets that did at least as well as the lens. Lower is better; 25% or less means the lens is doing something random picking cannot.
+## What Aristos can show today
 
-- **proven**: passed the bar and the luck test
-- **not beyond luck**: passed the bar, but a quarter or more of the random baskets did just as well
-- **not proven**: did not pass the bar
-- **insufficient**: the lens found fewer than three companies to buy in most months, so there is too little to judge
+- Each lens was run backwards over ten years in 14 industry groups: follow its BUY picks every month,
+  hold 12 months, charge trading costs, see only accounts 90 days after they were published, and only
+  companies of the size they were at the time. The question asked of each pair is whether it beat the
+  group average by at least 2 points a year in at least 6 of 10 years, and whether fewer than 1 in 20
+  random pickers of the same basket size and turnover did as well.
+- The badge on a lens in the app states that one result for that industry group, in plain words, and
+  never removes a vote.
 
-In the app, each lens shows its verdict for that industry group as a badge next to its vote. The badge never removes a vote. It tells the reader how much weight the vote deserves.
+<!-- GEN:COUNTS -->
+7 lenses were tested in 14 industry groups, 98 pairs in all. 5 passed the test, 7 passed the bar but luck is not ruled out, 56 did not clear the bar, and 30 could not be judged.
+<!-- /GEN:COUNTS -->
 
-## Results by lens, 14 cohorts
+The industry matters more than the lens: the pairs that clear the bar cluster in a few industries,
+and the table under "Read per industry" shows which. Read results one industry at a time, never added
+up across industries: "Quality passed the test in Mining" is a statement the record supports;
+"Quality works" is not.
 
-We tested 7 lenses in 14 industry groups, 98 pairs in all. 5 pairs are proven, 7 passed the bar but not the luck test, 56 did not pass the bar, and 30 could not be judged. "Avg excess" is the average amount by which the lens beat (or trailed) its industry group, per year, across the groups where it could be measured.
+## What remains uncertain
 
-| Lens | What it asks | Proven | Not beyond luck | Not proven | Insufficient | Avg excess %/yr | Where it is proven |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Magic Formula RAW | cheap and good | 2 | 2 | 9 | 1 | +1.2 | Mining +16.0, Grid & Electrical +6.3 |
-| Quality | strong, durable business | 1 | 1 | 11 | 1 | +1.7 | Mining +15.9 |
-| Growth | growing fast at a fair price | 1 | 0 | 1 | 12 | +7.1 (7 cohorts only) | Interactive Media +8.7 |
-| Value + Momentum | RAW with a 12% capital-return floor | 1 | 0 | 10 | 3 | -0.6 | Media & Entertainment +9.3 (73 of 108 months) |
-| Earnings Power Value | cheap for the profit it already makes | 0 | 2 | 11 | 1 | -1.4 | none |
-| Cyclical Income | income that survives the cycle | 0 | 2 | 9 | 3 | -5.2 | none |
-| Defensive Income | steady income, trend intact | 0 | 0 | 5 | 9 | -3.1 | none |
+- **Restated accounts.** The statements are what the data vendor carries today (restated), dated by
+  fiscal-period end plus a 90-day lag. A reader on the day saw the original figures, which may differ.
+- **Survivors only, direction unknown.** The groups are today's companies; names that were delisted,
+  merged or dropped out are absent, and the benchmark shares that gap. This flatters a lens, but the
+  size of the effect on any one result is not known.
+- **One decade cannot detect a 2 to 3 point edge.** With ten yearly observations and baskets of three
+  to nine names, an edge of that size is within what chance produces; the pass bar is exactly that
+  small.
+- **The luck test runs hot.** Its extreme bins hold more pairs than a fair test would put there (see
+  the calibration line above), so the luck figures are approximate.
+- **Concentration.** A pair that clears the bar usually depends on its single best pick each round;
+  the per-industry list below shows each pair without it, against random baskets without theirs. Where
+  two lenses cleared the bar on nearly the same picks they are one result, not two (list below).
+- **One cycle.** Nothing here says how a lens behaves in a different market.
 
-The industry matters more than the lens. Mining is where stock picking works at all: RAW, Quality and EPV all beat the group by more than 10% a year there (EPV only had picks in 62 of the 108 months). In Semiconductors, Software, Hardware and Pharma no lens shows an edge, and in most of those groups random picking did better more than half the time.
+## What is being done
 
-## What the numbers mean
+- **Batch 27B** (Growth v3 definition; an as-of filing-date mode so accounts are dated by the date
+  they were actually filed, not an assumed lag). Neither changes a committed verdict until a
+  re-run is committed with its compare output (`scripts/backtest_compare.py`, `docs/BACKTEST.md`).
+- **Proposals, not yet made:** Earnings Power Value as a reading beside the valuation band rather than
+  a vote; a wider pool or looser rule for Growth, with its own backtest and the basket size shown; and
+  results read per industry only.
+- **The forward test, a separate frozen process.** From this quarter the live verdicts of the watched
+  cohorts are frozen every three months (`docs/SCOREBOARD.md`), and the 12-month judge record
+  (`docs/JUDGE_PANEL.md`) is kept apart from the backtest. Neither is edited after the fact, so from
+  2027 there is evidence nobody can accuse of hindsight.
 
-The honest reading: the lenses sort companies sensibly, but they rarely beat the industry average by enough to convince a sceptic. Five proven pairs out of 98 is what you would expect if the edge is real but small and only shows up in a few industries. It is not a system that works everywhere.
+## Results by lens
 
-One more check makes this sharper. If we take away each lens's single best pick in each industry, almost every positive result turns negative. Quality in Mining goes from +15.9% to -5.4% a year. In other words, the lenses earn their returns from one or two big winners per group, not from steadily ranking good companies above bad ones. That is why the badge so often says "promising" rather than "proven".
+<!-- GEN:LENSTABLE -->
+| Lens | Passed the test | Passed the bar, luck not ruled out | Did not clear the bar | Untested | Average excess, %/yr (judged pairs) | Where it passed the test |
+| --- | --- | --- | --- | --- | --- | --- |
+| Cyclical Income | 0 | 2 | 9 | 3 | -3.1 (11 groups) | none |
+| Defensive Income | 0 | 0 | 5 | 9 | -4.1 (5 groups) | none |
+| Earnings Power Value | 0 | 2 | 11 | 1 | -2.1 (13 groups) | none |
+| Growth | 1 | 0 | 1 | 12 | -3.0 (2 groups) | Interactive Media & Gaming +8.7 |
+| Magic Formula RAW | 2 | 2 | 9 | 1 | +0.6 (13 groups) | Grid & Electrical Machinery +6.3, Diversified Mining +16.0 |
+| Quality | 1 | 1 | 11 | 1 | +0.8 (13 groups) | Diversified Mining +15.9 |
+| Value + Momentum | 1 | 0 | 10 | 3 | -1.2 (11 groups) | Media & Entertainment +9.3 |
+<!-- /GEN:LENSTABLE -->
 
-Growth is a special case. It could not be judged in 12 of the 14 groups, because among companies worth $5bn or more its rules rarely leave three names to buy. In the one group where it ran properly (Interactive Media) it gave the best result in the whole test. The lens may be fine and the pool of companies too narrow for it.
+"Average excess" is the average, over the groups where the lens could be judged, of the amount by
+which it beat (or trailed) its industry group per year. A lens that is untested in most groups has
+an average over a few groups only; the count is shown.
 
-Earnings Power Value behaves like a way of describing a price, not a way of picking stocks. It is proven nowhere, loses to its industry group on average, and in six groups more than 80% of random baskets beat it.
+## Read per industry
 
-## Read per industry: what the 14-cohort table shows
+Pairs that cleared the bar, each with the same pair without its best pick each year (the exclusion
+method is stated once, in `docs/BACKTEST.md`) and the gap to random baskets treated the same way.
+A positive gap means the lens leans on its best pick less than random picking does.
 
-Of 98 cohort/lens pairs, 5 are proven, 7 passed the bar but not beyond luck, 56 show no edge and 30 are untestable.
+<!-- GEN:INDUSTRY -->
+- **Interactive Media & Gaming**: Cyclical Income +2.1 (luck not ruled out; without its best pick each year -9.0, +3.9 against random baskets); Earnings Power Value +3.0 (luck not ruled out; without its best pick each year -6.9, +4.2 against random baskets); Growth +8.7 (passed the test; without its best pick each year -24.0, -15.2 against random baskets); Magic Formula RAW +2.4 (luck not ruled out; without its best pick each year -8.3, +3.0 against random baskets).
+- **Media & Entertainment**: Value + Momentum +9.3 (passed the test; without its best pick each year -9.2, +4.5 against random baskets).
+- **Auto Manufacturers**: Magic Formula RAW +6.2 (luck not ruled out; without its best pick each year -14.1, +3.3 against random baskets); Quality +8.5 (luck not ruled out; without its best pick each year -13.2, +3.0 against random baskets).
+- **Grid & Electrical Machinery**: Earnings Power Value +5.6 (luck not ruled out; without its best pick each year -10.2, +9.1 against random baskets); Magic Formula RAW +6.3 (passed the test; without its best pick each year -16.0, +2.5 against random baskets).
+- **Diversified Mining**: Magic Formula RAW +16.0 (passed the test; without its best pick each year -5.1, +11.7 against random baskets); Quality +15.9 (passed the test; without its best pick each year -5.4, +11.2 against random baskets).
+- **Semiconductors**: Cyclical Income +4.7 (luck not ruled out; without its best pick each year -16.0, +0.8 against random baskets).
 
-Proven results sit in capital-heavy, cyclical industries: Diversified Mining (Magic Formula RAW +16.0% a year over the cohort average, Quality +15.9%) and Grid & Electrical Machinery (Magic Formula RAW +6.3%). In software, semiconductors, hardware and large pharma, Magic Formula RAW and EPV are both negative. The lenses work where today's accounts describe the business, not where the market prices the future.
+No lens cleared the bar in: Large Pharma (2 of 7 untested); Medical Devices & Instruments (1 of 7 untested); Aerospace & Defense (Europe + US) (2 of 7 untested); Airlines & Airports (2 of 7 untested); Hardware (2 of 7 untested); IT Services (1 of 7 untested); Semiconductor Equipment (7 of 7 untested); Systems Software (1 of 7 untested).
+<!-- /GEN:INDUSTRY -->
 
-Every proven result collapses without the single best pick per round (drop-best between -5 and -24), so none stands as a strategy alone.
+### Do two passes share the same picks?
 
-Growth is untestable in 12 of 14 cohorts because its screen keeps too few names; its one proven result (Interactive Media & Gaming, +8.7%) rests on a thin sample.
+For every pair of lenses that both cleared the bar in the same group: how much their baskets
+overlapped, month by month.
 
-The Aerospace & Defence cohort shows no edge under any lens (Magic Formula + Momentum -9.8%, Magic Formula RAW -6.1%). Semiconductor Equipment is untestable under all seven lenses.
+<!-- GEN:OVERLAP -->
+- Diversified Mining: Magic Formula RAW and Quality - mean overlap 98%, identical baskets in 59 of 62 months. These two results share 98% of their picks and count as one result, not two.
+- Interactive Media & Gaming: Earnings Power Value and Magic Formula RAW - mean overlap 56%, identical baskets in 7 of 107 months
+- Auto Manufacturers: Magic Formula RAW and Quality - mean overlap 50%, identical baskets in 7 of 108 months
+- Interactive Media & Gaming: Cyclical Income and Magic Formula RAW - mean overlap 32%, identical baskets in 0 of 108 months
+- Interactive Media & Gaming: Growth and Magic Formula RAW - mean overlap 31%, identical baskets in 0 of 103 months
+- Grid & Electrical Machinery: Earnings Power Value and Magic Formula RAW - mean overlap 30%, identical baskets in 1 of 104 months
+- Interactive Media & Gaming: Earnings Power Value and Growth - mean overlap 27%, identical baskets in 0 of 102 months
+- Interactive Media & Gaming: Cyclical Income and Earnings Power Value - mean overlap 25%, identical baskets in 0 of 107 months
+- Interactive Media & Gaming: Cyclical Income and Growth - mean overlap 15%, identical baskets in 0 of 103 months
+<!-- /GEN:OVERLAP -->
 
-This supports the three proposals below: EPV as a reading, not a vote; a wider Growth pool; results read per industry only. Badges remain informational and never gate a vote (ruling of 2026-09-30).
+Badges remain informational and never gate a vote (ruling of 2026-09-30).
 
 ## Caveats a reviewer should know
 
-- One cycle only. Nine years, 2016 to 2025, is one kind of market. Nothing here says how a lens behaves in the next one.
-- A hindsight problem was found and fixed. The first run built each industry group from today's company sizes, so it included small companies that later grew 10 to 55 times. Groups are now built from company sizes as they were each month. Companies that have since been delisted are still under-counted, because the data vendor drops them.
-- Small groups. Several groups had only 10 to 20 companies in 2016, so a BUY basket is 2 to 4 names. One winner can carry the whole result; see the "best pick" check above.
-- The numbers are being re-run. Two recent code changes (how missing accounts are treated, and a rule that a company must have an operating profit) can move rankings. All 98 pairs will be re-run before any badge is shown to outside testers. We do not expect the picture to change.
-- Companies under $5bn were not tested. The app will analyse them on request against companies of similar size, clearly labelled as untested, with no badge.
-- No live record yet. Everything here looks backwards. From this quarter we freeze the live verdicts every three months, so that from 2027 there is evidence nobody can accuse of hindsight.
+- Companies under $5bn were not tested; the app analyses them on request against companies of similar
+  size, labelled as untested, with no badge.
+- Small groups: several groups had only 10 to 20 companies early in the window, so a BUY basket is
+  three to four names and one winner can carry the whole result.
+- A lens counts a month as a held position from three BUY names; the app gives a verdict from five
+  ranked names. The two differ on purpose (`docs/BACKTEST.md`).
 
-## Proposed changes and questions for the reviewer
-
-Three changes follow from the results. None has been made yet.
-
-1. Earnings Power Value stops voting. It becomes a reading shown next to the valuation band ("the market is paying X times what this business would be worth if it never grew"), which is what it is good at. As a vote it added noise in every group.
-2. Growth gets a bigger pool or a looser rule. If a lens cannot be judged in 12 of 14 groups, it is almost never allowed to speak. Either the $5bn size floor is lowered for Growth only, with its own backtest, or the minimum of three BUYs becomes two, with the basket size shown.
-3. Results are read one industry at a time, never added up across industries. The app's badges already do this. The documentation should say plainly: "Quality is proven" is false; "Quality is proven in Mining" is true.
-
-Questions for the reviewer:
-
-- Is the pass bar (2% a year, 6 of 10 years, luck 25% or less) the right one, or would you set it differently?
-- Is a 12-month holding period a fair test for the income lenses, which are meant for longer holds?
-- Does the "best pick" check change how you would present these results to someone who is not a specialist?
-
-Sources: `backtests/SUMMARY.csv`, one CSV per industry and lens under `backtests/`, method in `docs/BACKTEST.md`.
+Sources: `backtests/SUMMARY.csv`, one CSV per industry and lens under `backtests/`, method in
+`docs/BACKTEST.md`.
