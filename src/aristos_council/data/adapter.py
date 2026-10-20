@@ -361,6 +361,12 @@ class Fundamentals:
     # them today), and nothing that ranks a name reads them - a normal run is byte-identical.
     period_ends: dict[str, list[str]] = field(default_factory=dict)
     period_scalars: dict[str, dict[str, float | None]] = field(default_factory=dict)
+    # ASOF-FILING-1: the FILING date (ISO) of each value in ``period_ends``, index-PARALLEL to those
+    # lists ("" where the provider gave none). Only the EODHD mapper with ``with_periods=True`` fills
+    # it (its Financials entries carry ``filing_date``); yfinance leaves it empty, so every period
+    # of a yfinance-only name falls back to period end + lag in an as-of read. Nothing that ranks a
+    # name reads it; only ``AsOfAdapter`` in "filing" mode does.
+    filing_dates: dict[str, list[str]] = field(default_factory=dict)
     # Where the figures stand in time, in words a report can print: an as-of read says
     # "as-of 2019-06-28, lag 90 days, restated accounts". None for an ordinary current read.
     provenance: str | None = None

@@ -617,6 +617,31 @@ included, are byte-identical to the previous refresh. `backtests/SUMMARY.csv`, t
 per-cohort-lens CSVs, `backtests/RUN.md` and the 13×5 matrix above are all current as of
 this refresh.
 
+## Information timing versus restated values (ASOF-FILING-1)
+
+The first honesty limit below bundles two different problems, and only one of them can be fixed on this
+data.
+
+- **Information timing (fixed by filing dates where EODHD has them).** The default as-of rule
+  (`--as-of-mode lag`) shows a fiscal period once its end is `lag_days` (90) behind the round date,
+  which is a guess at when the accounts were filed. In `--as-of-mode filing`, a period is visible when
+  its **filing date** (EODHD's `filing_date` on each Financials entry, carried as
+  `Fundamentals.filing_dates`, parallel to `period_ends`) is on or before the round date: a company
+  that filed in 40 days is seen sooner, a late filer later. A period with no usable filing date (absent,
+  `NA`, or dated before its own period end) falls back to period end + lag and is **counted**; the CSV
+  header carries `as_of_mode` and `filing_date_fallbacks` ("412 of 5230 fiscal periods (7.9%) had no
+  usable filing date and fell back to period end + lag"), so a filing-mode run says how much of it still
+  rests on the lag. yfinance carries no filing dates, so a yfinance-only name is all fallback.
+- **Restated values (not fixable on this data; direction unknown).** Whatever the timing rule, the
+  figures are the ones EODHD carries today: restated, corrected, re-classified. A reader on the day saw
+  the original numbers. Filing dates change WHEN a period becomes visible, never WHAT it says, and we
+  cannot tell whether restatement flatters or hurts any one lens.
+
+**The default stays `lag`** until a full re-run in filing mode, with its compare output
+(`scripts/backtest_compare.py`) committed beside the CSVs, shows what the change does to the record.
+A filing-mode run goes in its own folder (`--out backtests_experiments/<name>/`), never over
+`backtests/`. The Colab notebook's cell 5 carries the same switch as `AS_OF_MODE`.
+
 ## The two honesty limits
 
 These are stamped into every result and every CSV. Both **flatter** the lens, and neither can be
