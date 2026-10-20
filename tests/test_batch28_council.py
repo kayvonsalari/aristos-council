@@ -56,3 +56,60 @@ def test_the_echoes_buy_warning_disappears_once_the_heading_states_the_record():
     n.echoed_verdict = ag.headline
     codes = [i.code for i in validate_narration(n, ranker_verdict="hold", verdict_of_record=ag.headline)]
     assert "verdict_mismatch" not in codes and "headline_does_not_restate_verdict_of_record" not in codes
+
+
+# --------------------------------------------------------------------------- #
+# C13 TEXTCHECK-TABLEFACT-1
+# --------------------------------------------------------------------------- #
+FUND = ("Quality ranks Ford 4th of 14 on the table. The average analyst target of $94.74 is only 1% "
+        "above the $93.90 price today. Free cash flow was mixed.")
+RISK = ("The average analyst target of $94.74 is only 1% above the $93.90 price today, which leaves "
+        "little room. Quality ranks Ford 4th of 14 on the table.")
+
+
+def test_restating_the_same_table_facts_in_two_specialists_is_never_flagged():
+    from aristos_council.narration_check import check_printed_repetition
+    assert check_printed_repetition({"fundamental": FUND, "risk": RISK},
+                                    lens_labels=["Quality", "Magic Formula RAW"]) == []
+
+
+def test_real_convergent_phrasing_is_flagged_on_the_printed_sentence_and_can_be_marked():
+    from aristos_council import ai_text_check as atc
+    from aristos_council.narration_check import check_printed_repetition
+    f = "Margins are being squeezed by tariffs and warranty costs across every segment. Debt is steady."
+    r = "Honestly, margins are being squeezed by tariffs and warranty costs across every segment! Cash is fine."
+    flags = check_printed_repetition({"fundamental": f, "risk": r})
+    assert len(flags) == 2 and all("near-verbatim in 2 specialists' views (fundamental, risk)" in x for x in flags)
+    # each stamp quotes a sentence that occurs in the PRINTED text, so the inline marker can find it
+    prose = f"{f}\n\n{r}"
+    for stamp in flags:
+        assert atc.claim_of(stamp) in prose
+    marked, swaps, unplaced = atc.mark_sentences(prose, flags)
+    assert unplaced == [] and len(swaps) == 4
+    assert atc.plain_reason(flags[0]) == "Two specialists used the same words"
+
+
+def test_a_shared_run_that_contains_a_figure_or_a_lens_name_is_not_a_run():
+    from aristos_council.narration_check import check_printed_repetition
+    a = "Free cash flow fell to 5.3 billion dollars last year."
+    b = "Free cash flow fell to 5.3 billion dollars last year."
+    assert check_printed_repetition({"fundamental": a, "risk": b}) == []        # the figure splits it into two short runs
+    c = "Quality ranks Ford high, Quality ranks Ford high, Quality ranks Ford high."
+    assert check_printed_repetition({"fundamental": c, "risk": c}, lens_labels=["Quality"]) == []   # lens name masked
+
+
+def test_the_council_annotates_from_the_printed_views_not_the_raw_theses():
+    from types import SimpleNamespace
+    from aristos_council.company_report import _annotate_specialist_repetition
+    from aristos_council.agents.schemas import Narration, SpecialistView
+    n = Narration(specialist_views=[
+        SpecialistView(specialist="fundamental", stance="neutral", confidence=0.5,
+                       reasoning="Margins are being squeezed by tariffs and warranty costs across every segment."),
+        SpecialistView(specialist="risk", stance="bearish", confidence=0.5,
+                       reasoning="Margins are being squeezed by tariffs and warranty costs across every segment.")])
+    decision = SimpleNamespace(rationale="Prose.", narration=n.model_dump())
+    rep = SimpleNamespace(decision=decision)
+    state = SimpleNamespace(specialist_opinions=[])          # the raw theses are not consulted when a narration exists
+    _annotate_specialist_repetition(rep, state, ["Quality"])
+    assert decision.rationale.count("[⚠ AI text check:") == 1                      # one sentence, quoted once
+    assert '"Margins are being squeezed by tariffs and warranty costs across every segment."' in decision.rationale

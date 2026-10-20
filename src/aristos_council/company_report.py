@@ -603,21 +603,30 @@ def _council_company_facts(report: CompanyReport) -> dict:
     return facts
 
 
-def _annotate_specialist_repetition(rep, state) -> None:
-    """COUNCIL-FIX-1(e) (Batch 15) — appends the fact-checker's convergent-phrasing
-    annotations in place, the same treatment every other narration check gets. Reads the
-    RAW specialist theses off ``state`` (before ``report_from_state`` loses them); an
-    abstained specialist (no real thesis) is excluded, so its short "no data" line can
-    never trigger a false match against another specialist's actual analysis."""
-    from .narration_check import check_specialist_repetition
+def _annotate_specialist_repetition(rep, state, lens_labels=()) -> None:
+    """COUNCIL-FIX-1(e) (Batch 15) / TEXTCHECK-TABLEFACT-1 (Batch 28) - appends the fact-checker's
+    convergent-phrasing annotations in place, the same treatment every other narration check gets.
+
+    When the decision carries a structured narration the check reads the specialist views AS PRINTED (the
+    narrator's own), ignores any run that contains a table fact (a lens, verdict, rank or figure the table
+    shows) and quotes each flagged sentence as printed. Only a decision with no narration falls back to
+    the raw theses on ``state`` (an abstained specialist, with no real thesis, is excluded either way)."""
+    from .narration_check import check_printed_repetition, check_specialist_repetition
+    from .narration_render import as_narration
     from .state import Stance
 
     d = getattr(rep, "decision", None)
     if d is None or not getattr(d, "rationale", ""):
         return
-    theses = {op.specialist.value: op.thesis for op in (state.specialist_opinions or [])
-             if op.stance != Stance.ABSTAIN and (op.thesis or "").strip()}
-    flags = check_specialist_repetition(theses)
+    narration = as_narration(getattr(d, "narration", None))
+    if narration is not None and getattr(narration, "specialist_views", None):
+        printed = {v.specialist: (v.reasoning or "") for v in narration.specialist_views
+                   if getattr(v, "assessed", True) and (v.reasoning or "").strip()}
+        flags = check_printed_repetition(printed, lens_labels=lens_labels)
+    else:
+        theses = {op.specialist.value: op.thesis for op in (state.specialist_opinions or [])
+                  if op.stance != Stance.ABSTAIN and (op.thesis or "").strip()}
+        flags = check_specialist_repetition(theses)
     if flags:
         d.rationale = d.rationale.rstrip() + "\n\n" + "\n".join(flags)
 
@@ -741,7 +750,7 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
     # COUNCIL-FIX-1(e) (Batch 15) — specialists write independently, so an identical
     # 6+-word run in two theses is convergent canned phrasing, not analysis. Annotated on
     # the DECISION's own rationale, the same place every other narration check lands.
-    _annotate_specialist_repetition(rep, state)
+    _annotate_specialist_repetition(rep, state, [v.label for v in report.votes])
     outcome = CouncilOutcome(
         ticker=report.ticker, ranker_verdict=lead.verdict, council_verdict=None,
         agreement=None, dissent_notes=rep.dissent_notes, report=rep,

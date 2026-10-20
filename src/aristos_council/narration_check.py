@@ -1280,3 +1280,76 @@ def check_specialist_repetition(theses: dict) -> list[str]:
             f'specialists\' theses ({", ".join(holders)}) — convergent phrasing on the '
             f'same figures, not independent domain analysis]')
     return flags
+
+
+# --------------------------------------------------------------------------- #
+# TEXTCHECK-TABLEFACT-1 (Batch 28) - the repetition check, on what the reader SEES
+# --------------------------------------------------------------------------- #
+# Two faults in the first version above, both found on the Ford council opinion:
+#  (a) Kayvon's ruling of 2026-10-05: restating the same TABLE fact (a lens, its verdict, its rank, a figure
+#      such as the price target) in two specialists is never a fault - the table is the shared source. The
+#      first version flagged any 6-word run, so two specialists both writing "the average analyst target of
+#      $94.74 is only 1% above the price" were flagged for quoting the same figure.
+#  (b) It ran on the specialists' RAW theses, which are never printed (the page prints the narrator's own
+#      specialist views), lower-cased and without punctuation. So the flags said "marked below" while nothing
+#      was marked inline, and a quoted phrase did not occur in the text on the page.
+# ``check_printed_repetition`` fixes both: it reads the PRINTED views, masks every table fact so no run can
+# contain one, and quotes the actual printed sentence of each specialist, so the marker lands on it.
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_VERDICT_WORDS_SET = frozenset(("buy", "hold", "sell"))
+
+
+def _mask_table_facts(words: list[str], label_runs: list[list[str]], tag: str) -> list[str]:
+    """``words`` with every table fact replaced by a token unique to its position, so it can never equal
+    anything in another text: any word with a digit (a figure, a rank), a verdict word, a lens name."""
+    out = list(words)
+    for run in label_runs:
+        n = len(run)
+        for i in range(len(out) - n + 1):
+            if out[i:i + n] == run:
+                for k in range(i, i + n):
+                    out[k] = f"\x00{tag}{k}"
+    for i, w in enumerate(out):
+        if not w.startswith("\x00") and (any(c.isdigit() for c in w) or w in _VERDICT_WORDS_SET):
+            out[i] = f"\x00{tag}{i}"
+    return out
+
+
+def check_printed_repetition(printed: dict, *, lens_labels=()) -> list[str]:
+    """``printed``: ``{specialist: the text the page prints for that specialist}``. One stamp per
+    specialist sentence that shares a run of at least ``_REPEAT_WORDS`` words with another specialist's
+    printed text, the run containing NO table fact (see above). Each stamp quotes the specialist's actual
+    printed sentence, so the inline marker can find it. Never rewrites."""
+    names = [n for n, t in (printed or {}).items() if (t or "").strip()]
+    labels = [_words(label) for label in lens_labels if label]
+    labels = [r for r in labels if r]
+    masked = {n: _mask_table_facts(_words(printed[n]), labels, n[:3]) for n in names}
+    groups: dict[str, list[str]] = {}
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            run = _longest_common_run(masked[a], masked[b])
+            if len(run) < _REPEAT_WORDS:
+                continue
+            holders = groups.setdefault(" ".join(run), [])
+            for who in (a, b):
+                if who not in holders:
+                    holders.append(who)
+    flags: list[str] = []
+    seen: set[str] = set()
+    for phrase, holders in groups.items():
+        run = phrase.split()
+        for who in holders:
+            for sentence in _SENTENCE_SPLIT.split(printed[who].strip()):
+                sentence = " ".join(sentence.split())
+                if not sentence or sentence in seen:
+                    continue
+                sw = _words(sentence)
+                if any(sw[i:i + len(run)] == run for i in range(len(sw) - len(run) + 1)):
+                    seen.add(sentence)
+                    flags.append(
+                        f'[\u26a0 AI text check: "{sentence}" appears near-verbatim in {len(holders)} '
+                        f"specialists' views ({', '.join(holders)}) \u2014 convergent phrasing on the "
+                        f"same figures, not independent domain analysis]")
+                    break
+    return flags
+
