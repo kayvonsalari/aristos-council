@@ -441,6 +441,7 @@ class RunOptions:
     with_summary: bool = False
     with_council: bool = False          # always False when show_council=False
     with_judges: bool = False           # JUDGE-PANEL-1; also False when show_council=False
+    load_errors: tuple = ()             # LENS-DROPOUT-1: a lens that cannot load / resolve BLOCKS the run
 
 
 # The "Plain-English summary" checkbox means two different things on the two inputs (one
@@ -501,6 +502,13 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
     switched = st.session_state.get("_opts_last_kind") != input_kind
     st.markdown("**Lenses**")
     st.caption(equal_vote_caption(choices))
+    # LENS-DROPOUT-1: a strategy file that will not load used to vanish from this grid with no word
+    # (and Streamlit dropped its tick). It is named here, with the loader's reason, and blocks the run.
+    from aristos_council.strategy.discovery import load_failures
+    load_errors = [f"The lens {f.strategy_id} ({f.path.name}) cannot be loaded and is not offered: "
+                   f"{f.reason}. Runs are blocked until it is fixed." for f in load_failures(STRATEGIES_DIR)]
+    for message in load_errors:
+        st.error(message)
     _preselect_default_lens(choices, seeded_key=f"opt_lenses_seeded_{asset}", key_for=key_for)
     for c in choices:
         _sync_from_store(key_for(c.id), shared_lens_store_key(asset, c.id), switched=switched)
@@ -508,7 +516,12 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
     store = st.session_state.setdefault(_SHARED_OPTS, {})
     for c in choices:
         store[shared_lens_store_key(asset, c.id)] = bool(st.session_state.get(key_for(c.id)))
-    strategies = resolve_all(choices, selected_labels(extras=extras))
+    ticked_labels = selected_labels(extras=extras)
+    strategies = resolve_all(choices, ticked_labels)
+    if len(strategies) != len(set(ticked_labels)):
+        load_errors.append("A ticked lens did not resolve to a strategy; the run is blocked rather "
+                           "than run without it.")
+        st.error(load_errors[-1])
     # B22-U3: the two paid AI extras are not lenses - their own small heading sets them apart from the grid
     st.markdown(f'<div class="ar-sub" style="margin-top:14px">{OPTIONAL_EXTRAS_HEADING}<br>'
                 f"{OPTIONAL_EXTRAS_TIME}</div>", unsafe_allow_html=True)
@@ -542,7 +555,8 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
             st.caption(f"The judge panel is not configured: {type(exc).__name__}: {str(exc)[:120]}")
     st.session_state["_opts_last_kind"] = input_kind
     return RunOptions(strategies=strategies, with_summary=with_summary,
-                      with_council=with_council, with_judges=with_judges)
+                      with_council=with_council, with_judges=with_judges,
+                      load_errors=tuple(load_errors))
 
 
 # --------------------------------------------------------------------------- #
@@ -2866,7 +2880,8 @@ def _render_company_run(choice: InputChoice, choices) -> None:
                                          with_reader=with_summary,
                                          with_council=with_council,
                                          with_judges=with_judges)),
-                    type="primary", disabled=not choice.ticker or not strategies,
+                    type="primary",
+                    disabled=not choice.ticker or not strategies or bool(run_options.load_errors),
                     key="cc_run")
     if run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
@@ -3023,6 +3038,7 @@ def _render_list_run(choice: InputChoice, choices) -> None:
     deterministic = ranker_only
     problems = run_problems(universe, n_strategies=len(strategies),
                             deterministic=deterministic, has_key=has_key)
+    problems += list(options.load_errors)
 
     est = None
     narrated_count = None

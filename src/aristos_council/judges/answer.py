@@ -53,15 +53,27 @@ class Answer:
     @property
     def own_knowledge_claims(self) -> int:
         """How many claims the judge marked as coming from outside the pack."""
-        return sum(len(_TAG.findall(t)) - len(re.findall(r"\[pack\]", t, re.I))
-                   for t in (self.driving_fact, self.reasoning))
+        return count_claims(self.driving_fact, self.reasoning)[1]
+
+
+_CONDITION = re.compile(r"(change|changes|changing|revise|revisit|reverse).{0,20}(my|the|this).{0,12}"
+                        r"(mind|view|verdict|call|rating)", re.I)
+
+
+def is_condition(claim: str) -> bool:
+    """A sentence that only says what would change the judge's mind (CONDITION-NOT-CLAIM-1): a
+    condition, not a factual claim, so it is never counted as pack or own knowledge."""
+    return bool(_CONDITION.search(claim or ""))
 
 
 def count_claims(*texts: str) -> tuple:
-    """``(pack, own knowledge)`` claim counts over the labelled texts (OWN-KNOWLEDGE-COUNT-1)."""
+    """``(pack, own knowledge)`` claim counts over the labelled texts (OWN-KNOWLEDGE-COUNT-1).
+    A sentence stating only what would change the judge's mind is not a claim and is not counted."""
     pack = own = 0
     for t in texts:
         for _claim_text, source in segments(t):
+            if is_condition(_claim_text):
+                continue
             if source == "pack":
                 pack += 1
             elif source == "own knowledge":
@@ -142,6 +154,8 @@ def parse_answer(raw: str) -> tuple[Optional[Answer], str]:
         if len(value) > (MAX_REASONING_CHARS if key == "reasoning" else MAX_SENTENCE_CHARS):
             return None, f"{key} is too long"
         values[key] = _normalise_tags(re.sub(r"\s+", " ", value).strip())
+        if key in FREE:                  # CONDITION-NOT-CLAIM-1: free fields are not claims; a stray tag goes
+            values[key] = strip_tags(values[key])
     for key, cap in (("reasoning", MAX_REASONING_WORDS), ("driving_fact", MAX_FACT_WORDS)):
         if _words(values[key]) > cap:
             return None, f"{key} is longer than {cap} words"
