@@ -94,6 +94,25 @@ def discover_strategies(strategies_dir: str | Path) -> list[StrategyInfo]:
     return out
 
 
+def describe_load_error(exc: BaseException) -> str:
+    """"ValidationError: factors: Value error, unknown factors: not_a_factor" - the loader's own reason.
+    A pydantic ValidationError's first line is only "1 validation error for RankStrategy", which names no
+    cause, so its field errors are spelt out (up to three); anything else gives its first line."""
+    errors = getattr(exc, "errors", None)
+    if callable(errors):
+        try:
+            parts = []
+            for e in list(errors())[:3]:
+                where = ".".join(str(x) for x in e.get("loc", ())) or "(file)"
+                parts.append(f"{where}: {e.get('msg', '')}")
+            if parts:
+                return f"{type(exc).__name__}: " + "; ".join(parts)[:300]
+        except Exception:                                         # noqa: BLE001 - fall back to the text
+            pass
+    first = (str(exc).strip().splitlines() or [""])[0][:200]
+    return f"{type(exc).__name__}: {first}"
+
+
 @dataclass(frozen=True)
 class LoadFailure:
     path: Path
@@ -112,19 +131,26 @@ def load_failures(strategies_dir: str | Path) -> list[LoadFailure]:
         try:
             raw = yaml.safe_load(p.read_text(encoding="utf-8"))
         except Exception as exc:                                  # noqa: BLE001 - reported
-            out.append(LoadFailure(p, p.stem, f"{type(exc).__name__}: {str(exc).splitlines()[0][:200]}"))
+            out.append(LoadFailure(p, p.stem, describe_load_error(exc)))
             continue
-        if not isinstance(raw, dict) or raw.get("ui") == "hidden":
+        if not isinstance(raw, dict):
+            # a file in strategies/ that parses to a scalar, a list or nothing is a damaged strategy,
+            # not "something else": it would otherwise vanish from the picker without a word
+            out.append(LoadFailure(p, p.stem, f"the file is not a strategy mapping (it parsed to "
+                                              f"{type(raw).__name__})"))
+            continue
+        if raw.get("ui") == "hidden":
             continue
         loader = (load_rank_strategy if "factors" in raw
                   else load_strategy if "criteria" in raw else None)
         if loader is None:
+            out.append(LoadFailure(p, str(raw.get("id") or p.stem),
+                                   "it has neither a factors: nor a criteria: section (a misspelt key?)"))
             continue
         try:
             loader(p)
         except Exception as exc:                                  # noqa: BLE001 - reported
-            first = (str(exc).strip().splitlines() or [""])[0][:200]
-            out.append(LoadFailure(p, str(raw.get("id") or p.stem), f"{type(exc).__name__}: {first}"))
+            out.append(LoadFailure(p, str(raw.get("id") or p.stem), describe_load_error(exc)))
     return out
 
 

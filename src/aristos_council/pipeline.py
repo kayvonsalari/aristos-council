@@ -2755,27 +2755,35 @@ def run_multi_strategy_pipeline(
         if progress is not None:
             progress(f"Grading with {_lens_display_name(sid, strategies_dir)} "
                      f"({i} of {len(ids)})…")
-        res = run_rank_pipeline(
-            list(universe) if universe else None, sid, universe_id=universe_id,
-            universes_dir=universes_dir, strategies_dir=strategies_dir,
-            ranker_only=True, adapter=adapter, today=today, use_cache=use_cache,
-            freeze_dir=freeze_dir,
-            # VALBAND-1 / BAND-2: the band is per-NAME, not per-strategy — so it is computed
-            # for EVERY lens, not just the first. Computing it once looked equivalent, but a
-            # lens only attaches a band to the names IT ranked, so the first lens's ranked
-            # set silently decided who got a band at all: ordering Defensive Income first on
-            # the 121-name USD cohort (its 10-year dividend-streak rule ranked 2 names) left
-            # the band section with 2 rows; Magic Formula RAW first produced 81. Which lens
-            # happened to run first must not decide that. The per-day cache means the later
-            # lenses re-read the SAME 5-year fetch rather than issuing a second network call
-            # (see test_band_computed_for_every_lens_costs_one_fetch).
-            with_valuation_band=with_valuation_band,
-            # FLOOR-1: the floor is a COHORT statement, not a lens one — "grade mid-caps
-            # this run" is a claim about who is in the room, so it applies to every lens
-            # alike. Each lens still diffs it against its OWN file value, so a lens whose
-            # file already carries the override's number records no override.
-            min_market_cap_override=min_market_cap_override,
-            derived_from=derived_from, with_shadow=with_shadow)
+        try:
+            res = run_rank_pipeline(
+                list(universe) if universe else None, sid, universe_id=universe_id,
+                universes_dir=universes_dir, strategies_dir=strategies_dir,
+                ranker_only=True, adapter=adapter, today=today, use_cache=use_cache,
+                freeze_dir=freeze_dir,
+                # VALBAND-1 / BAND-2: the band is per-NAME, not per-strategy — so it is computed
+                # for EVERY lens, not just the first. Computing it once looked equivalent, but a
+                # lens only attaches a band to the names IT ranked, so the first lens's ranked
+                # set silently decided who got a band at all: ordering Defensive Income first on
+                # the 121-name USD cohort (its 10-year dividend-streak rule ranked 2 names) left
+                # the band section with 2 rows; Magic Formula RAW first produced 81. Which lens
+                # happened to run first must not decide that. The per-day cache means the later
+                # lenses re-read the SAME 5-year fetch rather than issuing a second network call
+                # (see test_band_computed_for_every_lens_costs_one_fetch).
+                with_valuation_band=with_valuation_band,
+                # FLOOR-1: the floor is a COHORT statement, not a lens one — "grade mid-caps
+                # this run" is a claim about who is in the room, so it applies to every lens
+                # alike. Each lens still diffs it against its OWN file value, so a lens whose
+                # file already carries the override's number records no override.
+                min_market_cap_override=min_market_cap_override,
+                derived_from=derived_from, with_shadow=with_shadow)
+        except Exception as exc:                          # noqa: BLE001 - re-raised, naming the lens
+            # LENS-DROPOUT-1: a ticked lens that cannot load or run stops the run, and the error says
+            # WHICH lens and why - never a bare parser/validation message that names no lens.
+            from .strategy.discovery import describe_load_error
+            from .strategy.picker import LensDropped
+            raise LensDropped(f"The lens {sid} was ticked but could not run, so the run is stopped "
+                              f"rather than reported without it: {describe_load_error(exc)}") from exc
         results[sid] = res
         names[sid] = res.meta.get("rank_strategy_name", "") or sid
 
