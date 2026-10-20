@@ -129,6 +129,10 @@ majority of the lenses that voted (the same >50% rule as the MAJORITY_OVERRIDE v
 majority is *MIXED*. The panel *agrees* if every stable BUY/HOLD/SELL judge matches it, *disagrees* if
 none does, and is *mixed* otherwise (or when the record itself is split).
 
+**No lens vote.** When no lens voted there is no verdict of record, so the line reads "Verdict of
+record: none (no lens voted). Panel: <split>." (with "No panel reading: fewer than two judges
+answered." added when fewer than two answered) and the narrator is not called.
+
 **Two judges, or no reading.** The agreement line is written only when **at least two judges** gave
 a stable verdict (an abstention is an answer). With fewer, the page says "No panel reading: fewer
 than two judges answered." - one judge is not a panel - and the narrator is not called. If two or
@@ -172,8 +176,21 @@ wrote *nothing* adds nothing). Nothing is added when the panel did not run.
 - **Cost.** About six calls per company (3 judges × 2), shown next to the tick box (it counts only
   judges that have a key), plus one short paragraph when the panel differs. Off by default.
 - **From the command line:** `python -m aristos_council.company_report KO --judges`.
-- **No lens verdict, no panel.** With no lens verdict of record no judge is asked and nothing is
-  logged; the page says so in one line rather than going quiet.
+- **The panel runs with no lens vote.** Tick the box and the judges are asked whether or not any
+  lens voted - loss-makers and turnarounds, where every lens abstains, are where a second reading is
+  most wanted. (The *council opinion* keeps its own silence rule; this applies to the panel only.)
+  With no vote the verdict-of-record column of `judge_log.csv` and `judge_summary.csv` reads
+  **`no lens vote`**, the agreement line reads `Verdict of record: none (no lens voted). Panel: 1 HOLD,
+  2 SELL.`, there is nothing to agree or disagree with so **no narrator paragraph is called**, and
+  `judges score` scores the judges against the cohort return as usual and leaves the lens comparison
+  empty for that row. A company with no data at all (unrateable) still asks no one.
+- **Timeouts and Gemini's thinking level are settings.** `timeout_seconds` in `data/judges.yaml`
+  (90 for every judge; an entry may carry its own) is the client timeout of one call. A call that
+  times out is tried **once more**; a second timeout is recorded as `error: timeout` and the raw
+  detail stays in `error_detail`. For the Google judge `thinking_level: low` is sent as
+  `generationConfig.thinkingConfig.thinkingLevel` - a verdict and a few sentences does not need deep
+  reasoning, and the long thinking was what made the larger pack time out. A timeout retry counts as
+  a model call in the call tally.
 
 ## Where the logs are
 
