@@ -49,3 +49,15 @@ def test_ford_free_cash_flow_reads_in_one_scale_on_the_page_and_in_the_pack():
                      period_ends={"free_cash_flow_annual": ["2025-12-31", "2024-12-31", "2023-12-31", "2022-12-31"]})
     line = next(ln for ln in _series(f) if ln.startswith("Free cash flow"))
     assert "FY2022 -$0.01bn" in line and "m " not in line.split("year): ")[1] + " "
+
+
+# --------------------------------------------------------------------------- #
+# B9 NEG-COVERAGE-1
+# --------------------------------------------------------------------------- #
+def test_an_operating_loss_reads_as_interest_not_covered_never_a_negative_multiple():
+    from tests.test_abs_readings import _f
+    from aristos_council.abs_readings import debt_and_cash
+    out = debt_and_cash(_f(operating_income=-6.9e9, aligned={"interest_expense": [1.0e9]}))
+    assert out.interest_cover.label == "operating loss: interest not covered by operating profit"
+    assert out.interest_cover.value == -6.9                       # the value is kept; only the words change
+    assert "times" not in out.interest_cover.label and "-6.9" not in out.interest_cover.label
