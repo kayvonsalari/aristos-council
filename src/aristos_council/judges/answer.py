@@ -56,8 +56,8 @@ class Answer:
         return count_claims(self.driving_fact, self.reasoning)[1]
 
 
-_CONDITION = re.compile(r"(change|changes|changing|revise|revisit|reverse).{0,20}(my|the|this).{0,12}"
-                        r"(mind|view|verdict|call|rating)", re.I)
+_CONDITION = re.compile(r"\b(change|changes|changing|revise|revisit|reverse)\b.{0,20}\b(my|the|this)\b.{0,12}"
+                        r"\b(mind|view|verdict|call|rating)\b", re.I)
 
 
 def is_condition(claim: str) -> bool:
