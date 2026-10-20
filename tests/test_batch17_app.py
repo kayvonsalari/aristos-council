@@ -112,12 +112,6 @@ def test_the_list_result_shows_no_ids_and_no_lens_jargon_block_for_readers(monke
     assert f"({RAW})" not in shown and f"`{RAW}`" not in shown
     # the id / role / long-description caption block under the lens grid is a validation view
     assert not any(str(c.value).startswith(f"`{RAW}`") for c in at.caption)
-    # ...and it comes back behind the toggle
-    at.toggle(key="show_legacy").set_value(True).run()
-    assert not at.exception, at.exception
-    with_toggle = " ".join(str(getattr(e, "value", "")) for group in (at.markdown, at.caption)
-                           for e in group)
-    assert RAW in with_toggle
 
 
 def test_editing_the_list_after_a_run_labels_the_old_results(monkeypatch):

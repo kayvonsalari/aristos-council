@@ -16,7 +16,7 @@ here with the strategy's id, so a label always names exactly one strategy.
 
 What this module deliberately does NOT do is filter by "relevance": every strategy the
 caller hands it is offered for any ticker list (FUND-UI-2 — one picker, all compatible
-strategies). Visibility (``ui: hidden``, revealed by the validation toggle) is the only
+strategies). Visibility (``ui: hidden``) is the only
 filter, and that is a property of the CONFIG, not of the list being graded.
 """
 
@@ -51,15 +51,13 @@ class StrategyChoice:
         return getattr(self.strategy, "id", "")
 
 
-def strategy_choices(strategies: Iterable,
-                     *, show_validation: bool = False) -> list[StrategyChoice]:
+def strategy_choices(strategies: Iterable) -> list[StrategyChoice]:
     """Every strategy a picker should offer, ordered, with unambiguous labels.
 
-    ``show_validation`` is the app's validation/legacy toggle: OFF hides the ``ui:
-    hidden`` configs (superseded/baseline), ON reveals them. Nothing else is ever
-    filtered out — a ticker list does not make a strategy unofferable.
+    The ``ui: hidden`` configs (superseded/baseline) are never offered. Nothing else is
+    ever filtered out — a ticker list does not make a strategy unofferable.
     """
-    visible = [s for s in strategies if show_validation or not is_hidden_strategy(s)]
+    visible = [s for s in strategies if not is_hidden_strategy(s)]
     ordered = sorted(visible, key=_order_key)
     return [StrategyChoice(label=label, strategy=s)
             for s, label in zip(ordered, _unique_labels(ordered))]

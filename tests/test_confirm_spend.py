@@ -235,10 +235,6 @@ def _ss(at, key, default=None):
 def _run_tab(timeout: int = 120):
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=timeout)
-    # TAB-MERGE-1 commit 3: the "Run mode" radio (Second opinion included) now lives
-    # behind the validation toggle; the default surface shows a "Council opinion"
-    # checkbox instead. This module drives the radio directly, so it needs the toggle on.
-    at.session_state["show_legacy"] = True
     at = at.run()
     assert not at.exception, at.exception
     # TAB-MERGE-1 part 2 commit 1: the Analyse tab now opens in COMPANY mode by default
@@ -258,8 +254,27 @@ def _pick_cohort(at):
     return at
 
 
+class _Mode:
+    """The run mode in force. It is derived from the "Council opinion" tick box (the 3-way "Run
+    mode" radio went with the validation toggle): ticked = narrator, unticked = ranker only."""
+
+    def __init__(self, at):
+        self._at = at
+        self._box = next(c for c in at.checkbox if str(c.label) == "Council opinion"
+                         and str(getattr(c, "key", "") or "").endswith("_list"))
+
+    @property
+    def value(self):
+        import app
+        return app.RUN_MODE_NARRATOR if self._box.value else app.RUN_MODE_RANKER
+
+    def set_value(self, mode):
+        import app
+        self._box.set_value(mode == app.RUN_MODE_NARRATOR)
+        return self._at
+
 def _mode(at):
-    return next(r for r in at.radio if str(r.label) == "Run mode")
+    return _Mode(at)
 
 
 def test_ranker_only_mode_never_shows_the_confirmation_step():

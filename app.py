@@ -320,15 +320,10 @@ def saved_list_labels(saved) -> list[str]:
     return [b if times[b] == 1 else f"{b} ({u.id})" for u, b in zip(saved, base)]
 
 
-def _ids_visible() -> bool:
-    """JARGON-UI-1: strategy ids and list fingerprints show on screen only behind the validation
-    toggle ("Show validation tools"); the exports and run records always keep them."""
-    return bool(st.session_state.get("show_legacy"))
-
-
 def _plain(text):
-    """``text`` for a reader: no strategy ids, no ``adhoc:...`` fingerprints (see ``ui_text``)."""
-    return reader_text(text, show_ids=_ids_visible())
+    """``text`` for a reader: no strategy ids, no ``adhoc:...`` fingerprints (see ``ui_text``);
+    the exports and run records always keep them."""
+    return reader_text(text)
 
 
 # --------------------------------------------------------------------------- #
@@ -433,32 +428,10 @@ def render_lens_checkboxes(choices, key_for) -> list[tuple[str, bool]]:
     return extras
 
 
-def lens_selection_captions(strategies) -> None:
-    """TAB-MERGE-1 commit 1 — the id + role + "asks" caption loop under the TICKED
-    lenses (CAPTION-1), unified from the two copies that existed today: the Run tab's own
-    (id, role, asks-for-every-lens, single-lens description) and Company Check's own
-    (id, role ONLY — no asks repeat, no single-lens description). Unified on the FULLER
-    version: it is a strict ADDITION for Company Check (the "asks" text was already
-    visible once per lens under its checkbox via CAPTION-2 inside
-    ``render_lens_checkboxes`` — this is the SAME text, repeated under the ticked-lens
-    caption exactly as the Run tab already did), never a removal for either caller."""
-    for s in strategies:
-        bits = f"`{s.id}`"                               # the stable record key
-        if strategy_role(s):
-            bits += f" · {strategy_role(s)}"
-        st.caption(bits)
-        _asks = (getattr(s, "asks", "") or "").strip()
-        if _asks:
-            st.caption(_asks)
-    if len(strategies) == 1 and getattr(strategies[0], "description", ""):
-        st.caption(strategies[0].description.strip())
-
-
 # --------------------------------------------------------------------------- #
 # TAB-MERGE-1 commit 1 — the ONE options block both input kinds call: lenses (+
 # captions), the plain-English summary checkbox, and the council-opinion checkbox
-# (company input always; list input too, per commit 3, unless the validation toggle
-# restores the old 3-way run-mode radio instead). The list side's OWN narration-level /
+# (company input and list input alike). The list side's OWN narration-level /
 # cap / skip-doubted / spend-threshold / size-floor controls are UNCHANGED and stay in
 # render_run_tab's list branch — they are not part of this shared block.
 # --------------------------------------------------------------------------- #
@@ -512,7 +485,7 @@ OPTIONAL_EXTRAS_TIME = "Adds a few minutes to the run."          # B24-E6: a cou
 
 
 def render_run_options(choices, *, input_kind: str, show_council: bool,
-                       show_validation: bool = False, show_judges: bool = False) -> RunOptions:
+                       show_judges: bool = False) -> RunOptions:
     """ONE options block, called once per input kind. ``input_kind`` is "list" (the Run
     tab) or "company" (Company Check) — it only qualifies widget keys (see
     ``opt_lens_checkbox_key``) and picks the right summary help text; the WIDGETS
@@ -536,10 +509,6 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
     for c in choices:
         store[shared_lens_store_key(asset, c.id)] = bool(st.session_state.get(key_for(c.id)))
     strategies = resolve_all(choices, selected_labels(extras=extras))
-    # JARGON-UI-1: the id / role / long-description block under the lens grid is a validation
-    # view; a reader already has each lens's question under its own tick box.
-    if show_validation:
-        lens_selection_captions(strategies)
     # B22-U3: the two paid AI extras are not lenses - their own small heading sets them apart from the grid
     st.markdown(f'<div class="ar-sub" style="margin-top:14px">{OPTIONAL_EXTRAS_HEADING}<br>'
                 f"{OPTIONAL_EXTRAS_TIME}</div>", unsafe_allow_html=True)
@@ -589,26 +558,8 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
 # One selector now carries the decision, and the UI never shows a value it is not using.
 RUN_MODE_RANKER = "ranker_only"
 RUN_MODE_NARRATOR = "narrator"
-RUN_MODES: tuple[str, ...] = (RUN_MODE_RANKER, RUN_MODE_NARRATOR)
-
-RUN_MODE_LABELS = {
-    RUN_MODE_RANKER: "Ranker only — deterministic, no LLM, no cost",
-    RUN_MODE_NARRATOR: "Narrator — the LLM explains the ranker's verdict",
-}
-
 MULTI_LENS_LOCK_REASON = ("Several lenses is a deterministic comparison — it cannot "
                           "narrate.")
-
-
-def effective_run_mode(selected: str, *, n_strategies: int) -> str:
-    """The run mode ACTUALLY in force.
-
-    NARR-UNION-1 relaxed the earlier multi-lens LOCK to a DEFAULT: a multi-lens run can
-    now narrate, because "what does a cross-lens narration even say?" has an answer — one
-    section per NAME over the union of every lens's BUYs, attributing each lens and
-    adjudicating none. Ranker-only remains the default there (it is free), but it is the
-    user's to change, so nothing is forced and nothing is displayed that is not in force."""
-    return selected if selected in RUN_MODES else RUN_MODE_NARRATOR
 
 
 def run_mode_locked(n_strategies: int) -> bool:
@@ -616,12 +567,6 @@ def run_mode_locked(n_strategies: int) -> bool:
     any more — kept as the ONE place that answers the question, so a future lock has a
     home and the invariant test has something to read."""
     return False
-
-
-def default_run_mode(n_strategies: int) -> str:
-    """The mode a run STARTS on: ranker-only for several lenses (a cross-lens comparison
-    is usually wanted for free), narrator for one."""
-    return RUN_MODE_RANKER if n_strategies > 1 else RUN_MODE_NARRATOR
 
 
 def run_mode_arguments(run_mode: str) -> tuple[bool, str]:
@@ -1177,17 +1122,6 @@ def _persist_universe_run(result, run_start: datetime,
     html_bytes = universe_report_html(result, run_start=run_start).encode("utf-8")
     return save_universe_run(md_bytes, html_bytes, md_name=md_name, html_name=html_name,
                              out_dir=UNIVERSE_RUNS_DIR)
-
-
-def _shown_path(path) -> str:
-    """A written file's path for display: relative to the repo when it lives there, the
-    full path otherwise. ``Path.relative_to`` RAISES on a path outside the root, which
-    turned a successful save into a crashed render the moment the sink was pointed
-    anywhere else."""
-    try:
-        return str(Path(path).relative_to(ROOT))
-    except ValueError:
-        return str(path)
 
 
 def _supersede(run_start, new_paths) -> None:
@@ -2070,29 +2004,20 @@ def _render_multi_strategy_result(multi_result) -> None:
     m = multi_result.meta
     ids = multi_result.strategy_ids
 
-    persisted = st.session_state.get("uni_multi_persisted")
-    if persisted and _ids_visible():             # UI-POLISH-1: file paths are a workshop detail
-        md_path, html_path = persisted
-        st.success(f"💾 Saved this run to: `{_shown_path(md_path)}` and "
-                   f"`{_shown_path(html_path)}` — ONE merged report covering all "
-                   f"{plural(len(ids), 'lens', 'lenses')}.")
-
     from aristos_council.pipeline import (
         RULES_SECTION_TITLE, VERDICT_TABLE_NOTE, VERDICT_TABLE_TITLE, verdict_table_note,
-        multi_header_line, multi_strategy_grid_rows, multi_summary_line, rules_applied,
+        multi_strategy_grid_rows, multi_summary_line, rules_applied,
     )
     from aristos_council.report_language import label_with_id
 
     # JARGON-UI-1: on screen a reader gets "Value + Momentum" and "your list"; the ids and the
-    # ad-hoc fingerprint stay in the exports (and come back with the validation toggle).
+    # ad-hoc fingerprint stay in the exports.
     cohort = _plain(label_with_id(m.get("universe_name", ""), m.get("universe_id") or "adhoc"))
     lens_labels = {sid: _plain(label_with_id(multi_result.strategy_names.get(sid) or sid, sid))
                    for sid in ids}
     st.markdown(f"#### {cohort} — {plural(len(ids), 'lens', 'lenses')} × {plural(m.get('universe_size', 0), 'name')}")
     st.caption("Lenses: " + "; ".join(lens_labels.values()))
     st.markdown(f"### {_plain(multi_summary_line(multi_result))}")
-    if _ids_visible():            # B23-N6: "Verdict: deterministic ranker..." is a validation view
-        st.caption(_plain(multi_header_line(multi_result)))
 
     # SHORTLIST-1/2 — the answer, on screen, ahead of the evidence for it. Both reports
     # have carried this section since SHORTLIST-1; the Run tab carried only the summary
@@ -2100,7 +2025,7 @@ def _render_multi_strategy_result(multi_result) -> None:
     # seeing WHICH — and, after SHORTLIST-2, without seeing the price warning on one.
     _render_shortlist(getattr(multi_result, "lens_agreement", None))
     # BACKTEST-2 — this universe's own track record per lens, when its name matches one of the
-    # 13 backtested cohorts; nothing shown otherwise. Display only — the shortlist above is
+    # 14 backtested cohorts; nothing shown otherwise. Display only — the shortlist above is
     # unaffected.
     for line in _run_track_record_lines(m, lens_labels):
         st.caption(line)
@@ -2235,12 +2160,6 @@ def _render_universe_result(result) -> None:
 
     # UI-FIX-1: where this run landed on disk, prominent — the first thing a user sees
     # so a completed (possibly paid) run is never mistaken for session-only output.
-    persisted = st.session_state.get("uni_persisted_paths")
-    if persisted and _ids_visible():             # UI-POLISH-1: file paths are a workshop detail
-        md_path, html_path = persisted
-        st.success(f"💾 Saved to: `{_shown_path(md_path)}` and "
-                  f"`{_shown_path(html_path)}`")
-
     from aristos_council.pipeline import (
         PROVENANCE_SECTION_NOTE, PROVENANCE_SECTION_TITLE, RULES_SECTION_TITLE,
         header_lines, provenance_sentences, rules_applied, summary_line,
@@ -2249,13 +2168,10 @@ def _render_universe_result(result) -> None:
     from aristos_council.rank_engine import factor_column_label
     from aristos_council.report_language import label_with_id, score_gloss_with_note
 
-    # ITEM 6: the confirmation line first — a wrong dropdown is visible immediately.
-    if _ids_visible():
-        st.caption(_confirmation_line(m))
-    else:      # JARGON-UI-1: the lens's name and the list's name, not their record keys
-        _list = m.get("universe_name") or m.get("universe_id") or ""
-        st.caption(f"Running {m.get('rank_strategy_name') or m['rank_strategy_id']} on "
-                   f"{_plain(_list) if _list else 'your list'} in {m['council_mode']}.")
+    # JARGON-UI-1: the lens's name and the list's name, not their record keys
+    _list = m.get("universe_name") or m.get("universe_id") or ""
+    st.caption(f"Running {m.get('rank_strategy_name') or m['rank_strategy_id']} on "
+               f"{_plain(_list) if _list else 'your list'} in {m['council_mode']}.")
     # 1 — REPORT-1: the human names lead; every id stays beside them as the record key.
     head = header_lines(result)
     st.markdown(f"#### {_plain(head[0])}")
@@ -2266,19 +2182,15 @@ def _render_universe_result(result) -> None:
     for line in head[1:]:
         (st.warning if line == _stale else st.caption)(_plain(line))
     st.markdown(f"### {_plain(summary_line(result))}")
-    if _ids_visible():                       # UI-POLISH-1: the machinery line is a validation view
-        st.caption(result.header)
     meta_bits = (f"Screen: {_plain(label_with_id(m.get('screen_strategy_name', ''), m['screen_strategy_id']))} · "
                  f"ranked {m['ranked_count']} of {plural(m['universe_size'], 'name')}")
     if not m["ranker_only"]:
         meta_bits += (f" · shortlist {len(m['shortlist'])} · "
                       f"estimated cost ${m['est_cost']:.2f} · "
                       f"narrating {m.get('narrate_coverage', 'buys_only')}")
-    if m.get("run_id") and _ids_visible():
-        meta_bits += f" · run id `{m['run_id']}`"
     st.caption(meta_bits)
     # BACKTEST-2 — this lens's track record in this cohort, when the universe matches one of the
-    # 13 backtested cohorts; nothing shown otherwise. Display only.
+    # 14 backtested cohorts; nothing shown otherwise. Display only.
     _lens_label = m.get("rank_strategy_name") or m["rank_strategy_id"]
     for line in _run_track_record_lines(m, {m["rank_strategy_id"]: _lens_label}):
         st.caption(line)
@@ -2569,7 +2481,7 @@ def small_company_notice(cap_usd: Optional[float], *, live_fetched: bool) -> str
            f"range.{tail}")
 
 
-def render_input(*, show_validation: bool) -> InputChoice:
+def render_input() -> InputChoice:
     """ONE switch — "Company" or "Cohort / list" — never inferred from the ticker box's
     contents. Hidden (not greyed) in ETF mode: the market index covers listed common
     stocks only, so there is no company search and no company peer group for a fund."""
@@ -2738,7 +2650,7 @@ def render_input(*, show_validation: bool) -> InputChoice:
                 st.caption(f"{plural(_unbuilt, 'more cohort')} defined but not built yet.")
     else:
         if source == li.SOURCE_SAVED:
-            saved = visible_universes(list_universes(UNIVERSES_DIR), show_validation=show_validation)
+            saved = visible_universes(list_universes(UNIVERSES_DIR))
             saved = [u for u in saved if _mode_filters()[1](u)]
             list_labels = saved_list_labels(saved)
             if not saved:
@@ -2863,7 +2775,7 @@ def render_input(*, show_validation: bool) -> InputChoice:
 TOP_LINE = "Check one company against its rivals, or rank a list. Every lens is one equal vote."
 
 
-def render_run_tab(show_validation: bool = False) -> None:
+def render_run_tab() -> None:
     """TAB-MERGE-1 commit 3 — ONE tab, "Analyse": Company or Cohort / list, picked by an
     explicit switch (``render_input``). Options (lenses, summary, council) are shown
     once (commit 1). The two run ENGINES (``run_company_report`` for a company,
@@ -2873,12 +2785,11 @@ def render_run_tab(show_validation: bool = False) -> None:
     st.subheader("Analyse — one company, or a cohort")
     st.caption(TOP_LINE)
 
-    choice = render_input(show_validation=show_validation)
+    choice = render_input()
 
     # STRATEGIES. ONE picker (FUND-UI-2, strategy/picker.py), shared by both input kinds
     # exactly as it was shared by the two separate tabs before this merge.
-    choices = strategy_choices([o[2] for o in list_rank_strategy_options(STRATEGIES_DIR)],
-                               show_validation=show_validation)
+    choices = strategy_choices([o[2] for o in list_rank_strategy_options(STRATEGIES_DIR)])
     choices = [c for c in choices if _mode_filters()[0](c.strategy)]
     if not choices:
         st.error(f"No {plural(asset_mode(), 'strategy', 'strategies')} found under {STRATEGIES_DIR}")
@@ -2886,9 +2797,9 @@ def render_run_tab(show_validation: bool = False) -> None:
     labels = choice_labels(choices)          # kept, as before (unused; see the Part 2 cleanup)
 
     if choice.kind == INPUT_COMPANY:
-        _render_company_run(choice, choices, show_validation=show_validation)
+        _render_company_run(choice, choices)
     else:
-        _render_list_run(choice, choices, show_validation=show_validation)
+        _render_list_run(choice, choices)
 
 
 def stale_results_note(produced_for, current, *, what: str, now: str) -> str:
@@ -2926,7 +2837,7 @@ START_PANEL = (
 )
 
 
-def _render_company_run(choice: InputChoice, choices, *, show_validation: bool = False) -> None:
+def _render_company_run(choice: InputChoice, choices) -> None:
     """The company-input half of the Analyse tab — unchanged from the pre-merge Company
     Check tab, except: options come from the shared block (commit 1), and
     ``include_small``/the adapter come from ``render_input``'s own auto-detection
@@ -2936,7 +2847,7 @@ def _render_company_run(choice: InputChoice, choices, *, show_validation: bool =
     from aristos_council.company_report import run_company_report
 
     run_options = render_run_options(choices, input_kind="company", show_council=True,
-                                     show_validation=show_validation, show_judges=True)
+                                     show_judges=True)
     strategies = run_options.strategies
     with_summary = run_options.with_summary
     with_council = run_options.with_council
@@ -2994,12 +2905,10 @@ def _render_company_run(choice: InputChoice, choices, *, show_validation: bool =
         _render_company_report(report)
 
 
-def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> None:
+def _render_list_run(choice: InputChoice, choices) -> None:
     """The list-input half of the Analyse tab — unchanged pipeline calls and result
     renderers; what changed: options come from the shared block (commit 1); "Council
-    opinion" ticked/unticked now drives Narrator/Ranker-only by default, with the old
-    Run-mode radio (ranker only / narrator) restored only behind the validation toggle —
-    never both controls at once; the spend threshold and size-floor override moved into
+    opinion" ticked/unticked drives Narrator/Ranker-only; the spend threshold and size-floor override moved into
     an "Advanced (list only)" expander."""
     import os
 
@@ -3014,12 +2923,7 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
     derived_from = choice.derived_from
 
     # TAB-MERGE-1 commit 3: "Council opinion" ticked = Narrator, unticked = Ranker only.
-    # Behind the validation toggle the OLD radio (ranker only / narrator) stands in place of the
-    # checkbox, so the two controls never both show.
-    show_run_mode_radio = show_validation
-    options = render_run_options(choices, input_kind="list",
-                                 show_council=not show_run_mode_radio,
-                                 show_validation=show_validation)
+    options = render_run_options(choices, input_kind="list", show_council=True)
     strategies = options.strategies
     with_reader = options.with_summary
     multi = len(strategies) > 1
@@ -3038,23 +2942,9 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
 
     strategy_ids = [s.id for s in strategies]
 
-    # RUNMODE-1 — the mode in force. Behind the validation toggle, the ORIGINAL 3-way
-    # radio (unchanged mechanism: it follows the lens count until touched, then obeys the
-    # user). Otherwise it is DERIVED from the one "Council opinion" checkbox above.
+    # RUNMODE-1 — the mode in force is DERIVED from the one "Council opinion" checkbox above.
     n_strategies = len(strategies)
-    if show_run_mode_radio:
-        st.session_state.setdefault("uni_run_mode_choice", default_run_mode(n_strategies))
-        st.session_state.setdefault(
-            "uni_run_mode", effective_run_mode(st.session_state["uni_run_mode_choice"],
-                                               n_strategies=n_strategies))
-        run_mode = st.radio(
-            "Run mode", RUN_MODES,
-            format_func=lambda m: RUN_MODE_LABELS[m], key="uni_run_mode",
-            help="Ranker only: the deterministic ranking, free. "
-                 "Narrator: the LLM explains the ranker's verdict.")
-        st.session_state["uni_run_mode_choice"] = run_mode
-    else:
-        run_mode = RUN_MODE_NARRATOR if options.with_council else RUN_MODE_RANKER
+    run_mode = RUN_MODE_NARRATOR if options.with_council else RUN_MODE_RANKER
     if n_strategies > 1 and run_mode_narrates(run_mode):
         st.caption(MULTI_LENS_NARRATION_NOTE)
 
@@ -3146,10 +3036,6 @@ def _render_list_run(choice: InputChoice, choices, *, show_validation: bool) -> 
             est = estimate_cost(narrated_count)
         else:
             est = estimate_cost(per_lens)
-    if multi and not run_mode_narrates(run_mode) and _ids_visible():    # UI-POLISH-1: workshop detail
-        st.caption(f"Multi-lens re-grade: **{len(strategies)}** strategies × "
-                   f"**{plural(len(universe), 'name')}** — deterministic ranker only "
-                   f"(no narration, no cost), reported as ONE combined grid.")
 
     for msg in problems:
         st.info(msg)
@@ -3646,13 +3532,6 @@ def _render_company_report(report) -> None:
         st.download_button("⬇ Download Markdown", help=md_name,
                            data=company_report_markdown(report), file_name=md_name,
                            mime="text/markdown", key="cc_report_download_md")
-    if _ids_visible():                       # UI-POLISH-1: timings, cache counts and paths are workshop details
-        tail = f"Ran in {report.seconds:.1f}s"
-        if report.cache.get("hits") is not None:
-            tail += f"; day-cache {report.cache['hits']} hits, {report.cache['misses']} fetched"
-        if report.saved_to:
-            tail += f"; saved under `{report.saved_to}`"
-        st.caption(tail)
 
 
 def _render_judge_panel(panel) -> None:
@@ -3807,26 +3686,17 @@ def main() -> None:
                  key="asset_mode")
         st.divider()
 
-        # DISPLAY (UI-POLISH-1): the two view switches. The validation toggle stays in BOTH states so it is
-        # always the way back. No `value=`: the default is off, and tests/session can set a key without a
-        # default-conflict warning. Both are session-only.
+        # DISPLAY (UI-POLISH-1): the view switch. No `value=`: the default is off, and tests/session can
+        # set a key without a default-conflict warning. Session-only.
         st.markdown("**Display**")
         st.toggle(
             "Show lens descriptions", key=SHOW_LENS_DESC_KEY,
             help="Show each lens's full description under its tick box. Off: names and tick boxes "
                  "only, with the one-line summary on the small ? beside each lens.")
-        st.toggle(
-            "Show validation tools", key="show_legacy",
-            help="Reveal the validation assets - the known-trap bench universe and the "
-                 "Classic Value baseline strategy (for side-by-side comparison) - plus "
-                 "the run's working details (file paths, timings). "
-                 "Off by default - the app opens on the live scoreboard strategies and "
-                 "universes only.")
 
-    show_validation = bool(st.session_state.get("show_legacy", False))
     tab_analyse, tab_scoreboard = st.tabs(["Analyse", "Scoreboard"])
     with tab_analyse:
-        render_run_tab(show_validation=show_validation)
+        render_run_tab()
     with tab_scoreboard:
         render_scoreboard_tab()
 

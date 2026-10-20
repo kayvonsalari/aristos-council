@@ -227,7 +227,7 @@ class RankStrategy(BaseModel):
 # growth_garp_v2 shipped without a financial-sector gate, so the gate is applied here, at the one
 # place a rank strategy is loaded, and every consumer (the rank stage, Company Check's gate rows,
 # the rules table, the lens caption) sees it without a per-site change. It cannot alter any
-# backtest: the 13 backtested cohorts already exclude financials. A new lens file declares
+# backtest: the backtested cohorts already exclude financials. A new lens file declares
 # ``exclude_sectors`` itself and needs no entry here.
 _FINANCIAL_SECTORS = ["Financial Services", "Financials"]
 _SCOPE_AFTER_PUBLICATION = {

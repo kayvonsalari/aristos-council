@@ -123,17 +123,6 @@ def _markdown_blob(at) -> str:
     return "\n".join(m.value for m in at.markdown if isinstance(m.value, str))
 
 
-def _legacy_app(timeout: int = 60):
-    """Run the app with the 'Show legacy tools' toggle ON — legacy surfaces (the
-    single-ticker council, Report/History, Strategy editor) are hidden by DEFAULT, so
-    any test that exercises them must opt in. Session state persists across at.run()."""
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file(str(_APP), default_timeout=timeout)
-    at.session_state["show_legacy"] = True
-    return at.run()
-
-
 # --------------------------------------------------------------------------- #
 # Run tab — schema-split pickers + pure render helpers (Sprint)
 # --------------------------------------------------------------------------- #
@@ -468,7 +457,7 @@ def test_run_tab_renders_with_the_one_flow():
 
 
 # --------------------------------------------------------------------------- #
-# Legacy surfaces hidden by default behind the "Show legacy tools" toggle
+# Legacy surfaces are never rendered (the validation toggle that revealed them is gone)
 # --------------------------------------------------------------------------- #
 def _info_blob(at) -> str:
     return " ".join(str(getattr(e, "value", "")) for e in getattr(at, "info", []))
@@ -478,15 +467,13 @@ def _header_blob(at) -> str:
     return " ".join(str(getattr(e, "value", "")) for e in getattr(at, "header", []))
 
 
-def test_legacy_hidden_by_default_and_toggle_defaults_off():
+def test_legacy_surfaces_are_not_rendered_and_the_validation_toggle_is_gone():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    # the toggle exists and defaults OFF
-    legacy_toggle = next(t for t in at.toggle
-                         if t.label == "Show validation tools")
-    assert legacy_toggle.value is False
-    assert at.session_state["show_legacy"] is False
+    # VALIDATION-TOOLS-REMOVE-1: the toggle is gone; "Show lens descriptions" stays
+    assert [t.label for t in at.toggle] == ["Show lens descriptions"]
+    assert "show_legacy" not in at.session_state
     # NO legacy surface rendered: no council-run button, no legacy sidebar header, no
     # Strategy-editor scope banner, no legacy tabs — the legacy render paths never ran.
     assert not any("Run council" in b.label for b in at.button)
@@ -496,17 +483,6 @@ def test_legacy_hidden_by_default_and_toggle_defaults_off():
     # the v2 product IS the landing (the Analyse tab's lens grid renders, in either
     # input mode — this test is about legacy visibility, not about which mode)
     assert _LensGrid(at, "opt_lens_company_").options
-
-
-def test_validation_toggle_does_not_bring_back_the_removed_council():
-    # JUDGE-PANEL-1: the old single-ticker council (Run council, Report/History/Strategy
-    # tabs) was removed from the app; the validation toggle reveals validation assets only.
-    at = _legacy_app(60)
-    assert not at.exception
-    assert not any("Run council" in b.label for b in at.button)
-    assert "Run a council" not in _header_blob(at)
-    assert not any("Legacy" in str(t.label) for t in at.tabs)
-    assert [str(t.label) for t in at.tabs][:2] == ["Analyse", "Scoreboard"]
 
 
 def _dropdown(at, label):
@@ -795,17 +771,11 @@ def test_the_run_tab_list_selector_offers_no_suggestion_ordering():
     assert not any(str(o).startswith("⭐") for o in uni)
 
 
-def test_validation_assets_revealed_when_toggle_on():
-    # The universe half of this is gone with the demo cohorts (the trap bench is a fixture
-    # now, not a shipped list); the STRATEGY half is what the toggle still reveals.
+def test_the_hidden_baseline_strategy_is_never_offered():
     from streamlit.testing.v1 import AppTest
-    default = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
-    assert not default.exception
-    at = _list_mode(_legacy_app(60))
+    at = _list_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
     assert not at.exception
-    rank = _strategy_picker(at).options
-    assert any("Classic Value" in o for o in rank)                  # baseline revealed
-    assert len(rank) > len(_strategy_picker(default).options)       # strictly more offered
+    assert not any("Classic Value" in o for o in _strategy_picker(at).options)
 
 
 _MSFT_PRE_4E = _REPORTS / "MSFT" / "2026-06-14T13-29-49Z.json"
@@ -1096,7 +1066,7 @@ def test_persist_universe_run_ad_hoc_run_persists_too(monkeypatch, tmp_path):
     assert html_path.name == "universe_magic_formula_v1_narrator_2026-08-05_1200.html"
 
 
-def test_saved_to_banner_shows_the_persisted_paths():
+def test_saved_to_banner_is_not_shown_on_screen():
     # UI-FIX-1: the paths are printed prominently in the result header, before the rest
     # of the run renders — the first thing a user sees is where the run landed on disk.
     from datetime import datetime, timezone
@@ -1115,15 +1085,8 @@ def test_saved_to_banner_shows_the_persisted_paths():
     at.session_state["uni_universe_display_name"] = "Growth 40"
     at = at.run()
     assert not at.exception
-    # UI-POLISH-1: the path banner is a workshop detail - hidden unless "Show validation tools" is on
+    # UI-POLISH-1: the path banner is a workshop detail - never on screen (the exports keep it)
     assert not any("Saved to:" in str(getattr(s, "value", "")) for s in at.success)
-    at.session_state["show_legacy"] = True
-    at = at.run()
-    assert not at.exception
-    blob = " ".join(str(getattr(s, "value", "")) for s in at.success)
-    assert "Saved to:" in blob
-    assert "reports" in blob and "universe_runs" in blob and "x.md" in blob
-    assert "x.html" in blob
 
 
 def test_scoreboard_is_its_own_top_level_tab():
@@ -1247,18 +1210,11 @@ def test_ticking_a_second_lens_makes_the_run_deterministic():
     _lens_checkbox(at, raw).set_value(True).run()
     assert not at.exception
     # TAB-MERGE-1 commit 3: "Council opinion" is unticked by default, which IS ranker
-    # only now (the old 3-way radio, and the lens-count seeding this comment used to
-    # describe, only exist behind the validation toggle). Nothing to select — the
+    # only now (the old 3-way radio and its lens-count seeding are gone). Nothing to select — the
     # deterministic run this test is about is already what's in force.
     assert not any(str(c.label) == "Council opinion" and c.value for c in at.checkbox)
-    # UI-POLISH-1: the re-grade explainer is a workshop detail - hidden by default, shown behind
-    # "Show validation tools" (same sentence as before).
+    # UI-POLISH-1: the re-grade explainer is a workshop detail - not on screen
     assert "Multi-lens re-grade" not in _caption_blob(at)
-    next(t for t in at.toggle if t.label == "Show validation tools").set_value(True).run()
-    assert not at.exception
-    blob = _caption_blob(at)
-    assert "Multi-lens re-grade" in blob and "no narration, no cost" in blob
-    assert "ONE combined grid" in blob
     # the run button says how many lenses will run and what it costs, and is not gated
     # on an API key (RUNMODE-1 moved the estimate onto the button's own line).
     assert any("Run 2 lenses · free" in b.label for b in at.button)

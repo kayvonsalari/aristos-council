@@ -99,24 +99,22 @@ def test_label_falls_back_to_name_then_id():
 
 
 # --------------------------------------------------------------------------- #
-# Visibility — validation assets hidden by default, revealed by the toggle (ITEM 2)
+# Visibility — validation assets hidden (ITEM 2)
 # --------------------------------------------------------------------------- #
 _RANKS = ("magic_formula_momentum_v1", "conservative_plus_v1", "magic_formula_v1")
 
 
-def test_visible_universes_hides_the_bench_by_default():
+def test_visible_universes_hides_the_bench():
     manifests = list_universes(UNIV_DIR)
-    off = {u.id for u in visible_universes(manifests, show_validation=False)}
+    off = {u.id for u in visible_universes(manifests)}
     # UNI-1: front-stage is ROLE-DERIVED — graded/exploratory cohorts are offered, the
     # never-graded observation and control assets stay back. (The set is the FIXTURE dir's
     # now: FUND-UI-2 removed these from the product surface, so what is pinned here is the
     # classification, not a shipping list.)
     assert off == {"growth_40_v1", "defensive_income_16_v1", "financials_16_v1"}
-    on = {u.id for u in visible_universes(manifests, show_validation=True)}
-    assert "defensive_16_v1" in on                                      # bench revealed
     # the never-graded observation/control assets stay backstage (role-derived, UNI-1):
     # the energy-watch OBSERVATION universe and the known-trap validation bench.
-    assert "energy_watch_v1" not in off and "energy_watch_v1" in on
+    assert "energy_watch_v1" not in off
     assert "defensive_16_v1" not in off                                 # trap bench stays back
     # UNI-1: the exploratory financials cohort (role: not 'never graded') is FRONT-stage now
     assert "financials_16_v1" in off
@@ -137,16 +135,14 @@ def test_a_fresh_universe_is_discovered_front_stage_with_zero_code_change(tmp_pa
     # gave strategies. No hardcoded id list to edit.
     _write_universe(tmp_path, "synthetic_probe_v1", "exploratory probe — a fresh cohort")
     manifests = list_universes(tmp_path)
-    off = {u.id for u in visible_universes(manifests, show_validation=False)}
+    off = {u.id for u in visible_universes(manifests)}
     assert "synthetic_probe_v1" in off
 
 
 def test_role_marked_observational_universe_stays_backstage(tmp_path):
     _write_universe(tmp_path, "watch_probe_v1", "cyclical watch — observation only, never graded")
     manifests = list_universes(tmp_path)
-    off = {u.id for u in visible_universes(manifests, show_validation=False)}
-    on = {u.id for u in visible_universes(manifests, show_validation=True)}
-    assert "watch_probe_v1" not in off and "watch_probe_v1" in on
+    assert "watch_probe_v1" not in {u.id for u in visible_universes(manifests)}
 
 
 # --------------------------------------------------------------------------- #
@@ -182,12 +178,10 @@ def test_suggested_first_absent_field_is_byte_unchanged():
     assert [u.id for u in others] == [u.id for u in manifests]     # order unchanged
 
 
-def test_visible_rank_strategies_hides_the_baseline_by_default():
+def test_visible_rank_strategies_hides_the_baseline():
     strategies = [_strategy(s) for s in _RANKS]
-    off = {s.id for s in visible_rank_strategies(strategies, show_validation=False)}
+    off = {s.id for s in visible_rank_strategies(strategies)}
     assert off == {"magic_formula_momentum_v1", "conservative_plus_v1"}  # live only
-    on = {s.id for s in visible_rank_strategies(strategies, show_validation=True)}
-    assert "magic_formula_v1" in on                                     # baseline revealed
 
 
 def test_hidden_assets_remain_fully_functional_ids_intact():

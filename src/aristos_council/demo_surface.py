@@ -11,8 +11,7 @@ Pure functions (no Streamlit), so the labelling is unit-tested directly.
 
 from __future__ import annotations
 
-# A universe is BACKSTAGE (hidden from the default demo surface, revealed by the "Show
-# validation tools" toggle) when its ``role:`` marks it NEVER-GRADED — the
+# A universe is BACKSTAGE (hidden from the demo surface) when its ``role:`` marks it NEVER-GRADED — the
 # observation/watch universes (energy_watch, the portfolio_watch pattern) and the
 # known-trap control benches (defensive_16). FRONT-STAGE are the graded scoreboard
 # universes and the exploratory lens cohorts (financials_16) — the ones you actually run
@@ -23,7 +22,7 @@ _OBSERVATIONAL_ROLE_MARKER = "never graded"
 
 
 def is_validation_universe(universe) -> bool:
-    """True for a universe shown only behind the validation toggle. Role-derived: a role
+    """True for a backstage universe (never offered). Role-derived: a role
     marked 'never graded' (an observation/watch universe or a known-trap control bench)
     is backstage; a missing/blank role, a graded scoreboard universe, or an exploratory
     lens cohort is front-stage. Accepts a manifest (reads ``.role``) or a bare role
@@ -34,7 +33,7 @@ def is_validation_universe(universe) -> bool:
 
 def is_hidden_strategy(strategy) -> bool:
     """True for a ``ui: hidden`` strategy (Sprint 4C — legacy/superseded configs). Hidden
-    from the dropdown by default; revealed under the validation/legacy toggle. Accepts a
+    from the dropdown. Accepts a
     loaded strategy OR a discovery ``StrategyInfo`` (a ``.hidden`` bool wins if present,
     else the ``.ui`` field)."""
     if hasattr(strategy, "ui"):                 # a loaded strategy carries the raw field
@@ -42,18 +41,16 @@ def is_hidden_strategy(strategy) -> bool:
     return bool(getattr(strategy, "hidden", False))    # a discovery StrategyInfo
 
 
-def visible_universes(manifests, *, show_validation: bool):
-    """The universe manifests a dropdown should offer: all of them when the validation
-    toggle is ON, else only the non-validation (scoreboard) universes."""
-    return [u for u in manifests
-            if show_validation or not is_validation_universe(u)]
+def visible_universes(manifests):
+    """The universe manifests a dropdown should offer: only the non-validation
+    (scoreboard) universes."""
+    return [u for u in manifests if not is_validation_universe(u)]
 
 
-def visible_rank_strategies(strategies, *, show_validation: bool):
-    """The rank strategies a dropdown should offer: all when the toggle is ON, else only
-    the non-hidden (live) strategies. Accepts loaded strategies or StrategyInfos."""
-    return [s for s in strategies
-            if show_validation or not is_hidden_strategy(s)]
+def visible_rank_strategies(strategies):
+    """The rank strategies a dropdown should offer: only the non-hidden (live) strategies.
+    Accepts loaded strategies or StrategyInfos."""
+    return [s for s in strategies if not is_hidden_strategy(s)]
 
 
 def suggested_first(manifests, suggested_ids):

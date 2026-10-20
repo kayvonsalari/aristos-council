@@ -258,10 +258,10 @@ The rule, precisely (`track_record()` in `backtest.py`):
 
 ### Where the cohort comes from
 
-- **The Analyse tab's list side.** The universe being run either IS one of the 13 backtested
+- **The Analyse tab's list side.** The universe being run either IS one of the 14 backtested
   cohorts or it is not — its display name is slugified the same way a cohort's name is
   (`cohort_slug()`) and matched directly against `backtests/<slug>/`. Most lists (an ad-hoc
-  paste, a saved list of a different shape) match none of the 13, and show no track-record
+  paste, a saved list of a different shape) match none of the 14, and show no track-record
   section at all; that is the ordinary case, not an error.
 - **Company mode.** A company's own industry label (EODHD, or the GICS sub-industry a cohort is
   narrowed to) is matched against `data/cohort_definitions.yaml` by `cohort_for_industry()` — the
@@ -286,7 +286,7 @@ The rule, precisely (`track_record()` in `backtest.py`):
   it will do next. The optional plain-English summary is held to the same rule: it may repeat a
   badge's label, but must never turn it into a claim that a lens predicts anything.
 
-### The 13×7 results matrix
+### The 14×7 results matrix
 
 Generated from `backtests/SUMMARY.csv` by `scripts/backtest_badge_matrix.py` — re-run it after
 every refresh (below) and paste its output back in here; never hand-edited, so this table can
@@ -306,6 +306,7 @@ little measured history), each cell's mean annual excess in parentheses:
 | Consumer - Auto Manufacturers | U (-6.7%) | N (2.5%) | N (-1.1%) | N (-14.6%) | N (-3.4%) | L (6.2%) | L (8.5%) |
 | Health - Large Pharma | U (6.9%) | N (-5.3%) | N (-5.6%) | U | N (-2.8%) | N (-1.1%) | N (0.4%) |
 | Health - Medical Devices & Instruments | N (0.9%) | N (-1.5%) | N (-3.2%) | U | N (-2.2%) | N (2.6%) | N (3.5%) |
+| Industrials - Aerospace & Defense (Europe + US) | U (1.8%) | N (-0.5%) | N (-4.2%) | U | N (-9.8%) | N (-6.1%) | N (-4.1%) |
 | Industrials - Airlines & Airports | U | N (-9.6%) | N (1.5%) | U | N (-1.3%) | N (-0.2%) | N (-1.1%) |
 | Industrials - Grid & Electrical Machinery | U | U (-33.6%) | L (5.6%) | U | U | P (6.3%) | N (-7.8%) |
 | Materials - Diversified Mining | U (-6.0%) | U (-8.5%) | N (12.3%) | U (2.5%) | U (8.2%) | P (16.0%) | P (15.9%) |
@@ -315,8 +316,8 @@ little measured history), each cell's mean annual excess in parentheses:
 | Tech - Semiconductors | U (9.0%) | L (4.7%) | N (-9.2%) | U (5.7%) | N (-6.8%) | N (-7.9%) | N (-2.6%) |
 | Tech - Systems Software | N (-6.7%) | N (-2.2%) | N (-6.6%) | U | N (-0.2%) | N (-6.8%) | N (0.7%) |
 
-As of this run: 5 proven, 7 not beyond luck, 51 not proven, 28 insufficient across all 91 cells — consistent with "about 2 proven expected by chance" being a floor, not a ceiling, and with most cells reading "not proven" or "insufficient" rather than either extreme. The two newest columns, quality_v1 and epv_v1 (LENS-EXPAND-1a), were run on the same window, method and bar as the five before them; see "The Quality and Earnings Power Value backtests" below. (Refreshed 2026-10-04 —
-BASELINE-CHECK-1 below is why some numbers moved from the previous refresh.)
+As of this run: 5 proven, 7 not beyond luck, 56 not proven, 30 insufficient across all 98 cells — consistent with "about 2 proven expected by chance" being a floor, not a ceiling, and with most cells reading "not proven" or "insufficient" rather than either extreme. The two newest columns, quality_v1 and epv_v1 (LENS-EXPAND-1a), were run on the same window, method and bar as the five before them; see "The Quality and Earnings Power Value backtests" below. (Summary rows for the defence cohort added 2026-10-20 from its committed per-lens CSVs; the other 13 cohorts' rows are unchanged from the 2026-10-04 refresh —
+BASELINE-CHECK-1 below is why some numbers moved from the one before.)
 
 ## The Quality and Earnings Power Value backtests (LENS-EXPAND-1a)
 
@@ -332,7 +333,7 @@ records the commit of its own lens file.
 | `quality_v1` | 1 (Materials - Diversified Mining) | 1 (Consumer - Auto Manufacturers) | 10 | 1 (Tech - Semiconductor Equipment) |
 | `epv_v1` | 0 | 2 (Comms - Interactive Media & Gaming, Industrials - Grid & Electrical Machinery) | 10 | 1 (Tech - Semiconductor Equipment) |
 
-Read these the way every other column is read: with 91 tests, a handful of "proven" cells is what
+Read these the way every other column is read: with 98 tests, a handful of "proven" cells is what
 chance alone would give, and the one proven Quality cell (Mining, only 62 of 108 rounds held a position
 and 6 measured years) is evidence, not proof. Two things specific to these lenses: yfinance serves about
 four annual statements, so Quality's "worst of the last 5 years" is usually the worst of four on a live
@@ -681,13 +682,13 @@ to_csv(result, "backtests/")
 
 ## Refreshing the results
 
-The 13-cohort × 7-lens run behind the matrix above (and every badge in the app) is only as fresh
+The 14-cohort × 7-lens run behind the matrix above (and every badge in the app) is only as fresh
 as its last refresh — `backtests/RUN.md` states the date (the matrix was last refreshed
 2026-10-04; each refresh moves the window's end date forward with it, so this page deliberately
 does not repeat a date that would go stale). To refresh it:
 
 1. In Colab, re-run `notebooks/aristos_backtest.ipynb` end to end.
-2. Run cell 8, which zips the 13 cohort folders plus `SUMMARY.csv` into `backtests_export.zip`
+2. Run cell 8, which zips the 14 cohort folders plus `SUMMARY.csv` into `backtests_export.zip`
    and offers it for download.
 3. Unzip it locally, over `backtests/` (`backtests/<cohort_slug>/<lens_id>.csv` and
    `backtests/SUMMARY.csv` — the same layout already committed).

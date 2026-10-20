@@ -1,23 +1,11 @@
-"""RUNMODE-1 — the run controls must never display a value they are not using.
-
-THE BUG: with two or more lenses ticked, the code forced ``ranker_only = True``
-internally while the "Ranker only — no LLM, no cost" checkbox rendered DISABLED AND
-UNCHECKED and "Council mode" still displayed "narrator". The screen said narration would
-run; the run was deterministic. The VALUES were right — nothing narrated and nothing was
-charged — but a disabled widget showing a value other than the one in force is worse than
-no widget, because a reader has no way to know which half is lying.
-
-"Ranker only" and "Council mode" were two controls for ONE decision. They are now one
-selector, and the invariant these tests pin is blunt: **displayed == effective**, for
-every control, in every state.
-"""
+"""RUNMODE-1 — the pure run-mode mapping and the guarantee that a ranker-only multi-lens run
+never reaches the LLM. (The 3-way "Run mode" radio and the AppTest checks that drove it went with
+the "Show validation tools" toggle, VALIDATION-TOOLS-REMOVE-1; the run mode is now derived from
+the "Council opinion" tick box.)"""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
-from tests._env import needs_local_saved_list
 
 # CI installs test deps only — no streamlit, no network providers. ``app`` imports
 # streamlit at module scope, so importing it unguarded turns a skip into a COLLECTION
@@ -27,35 +15,15 @@ pytest.importorskip("streamlit")
 
 import app  # noqa: E402
 
-_APP = Path(__file__).resolve().parents[1] / "app.py"
-
 
 # --------------------------------------------------------------------------- #
 # 1. The pure mapping — unit-tested rather than eyeballed in a browser
 #    (the discipline `run_problems` already established).
 # --------------------------------------------------------------------------- #
-def test_several_lenses_DEFAULT_to_ranker_only_but_are_no_longer_forced():
-    """NARR-UNION-1 relaxed the multi-lens LOCK to a DEFAULT: a cross-lens narration now
-    has a defined meaning (one section per NAME over the union of every lens's BUYs), so
-    the mode became the user's to choose. Ranker-only stays the default because it is
-    free — but choosing Narrator is honoured, not silently overridden."""
-    for n in (2, 3, 5):
-        assert app.default_run_mode(n) == app.RUN_MODE_RANKER
+def test_a_run_mode_is_never_locked():
+    """NARR-UNION-1 relaxed the multi-lens LOCK: nothing forces the mode."""
+    for n in (1, 2, 3, 5):
         assert app.run_mode_locked(n) is False
-        for mode in app.RUN_MODES:                    # whatever is chosen is what runs
-            assert app.effective_run_mode(mode, n_strategies=n) == mode
-
-
-def test_one_lens_keeps_whatever_the_user_chose():
-    for mode in app.RUN_MODES:
-        assert app.effective_run_mode(mode, n_strategies=1) == mode
-    assert app.run_mode_locked(1) is False
-    assert app.default_run_mode(1) == app.RUN_MODE_NARRATOR
-
-
-def test_an_unknown_mode_falls_back_to_the_default_rather_than_crashing():
-    assert app.effective_run_mode("", n_strategies=1) == app.RUN_MODE_NARRATOR
-    assert app.effective_run_mode("nonsense", n_strategies=1) == app.RUN_MODE_NARRATOR
 
 
 def test_each_mode_maps_onto_the_existing_pipeline_arguments():
@@ -101,228 +69,8 @@ def test_the_button_says_what_will_happen_and_what_it_costs():
         assert "total" in label
 
 
-def test_every_mode_has_a_label_and_they_are_distinct():
-    assert set(app.RUN_MODE_LABELS) == set(app.RUN_MODES)
-    assert len(set(app.RUN_MODE_LABELS.values())) == len(app.RUN_MODES)
-    assert all(label.strip() for label in app.RUN_MODE_LABELS.values())
-
-
 # --------------------------------------------------------------------------- #
-# 2. THE INVARIANT, in the rendered app: displayed == effective.
-#    This is the test that fails on the old two-control flow.
-# --------------------------------------------------------------------------- #
-def _run_tab(*, extra_lens: str | None = None, timeout: int = 90):
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file(str(_APP), default_timeout=timeout)
-    # TAB-MERGE-1 commit 3: the "Run mode" radio (Second opinion included) now lives
-    # behind the validation toggle — the default surface shows a plain "Council opinion"
-    # checkbox instead. This module is specifically ABOUT the 3-way control, so it needs
-    # the toggle on to see it at all; the control itself, its keys and its behaviour are
-    # otherwise unchanged.
-    at.session_state["show_legacy"] = True
-    at = at.run()
-    assert not at.exception
-    # The merged tab defaults its Company/Cohort switch to "Cohort / list" — select it
-    # explicitly so this module (never about the switch) does not depend on that default.
-    kind = next((r for r in at.radio if str(r.label) == "Input"), None)
-    if kind is not None and kind.value != "Cohort / list":
-        kind.set_value("Cohort / list").run()
-        assert not at.exception
-    if extra_lens is not None:
-        _lens_checkbox(at, extra_lens).set_value(True).run()
-        assert not at.exception
-    return at
-
-
-class _Offered:
-    """The lenses the Run tab offers, as its tick boxes. (This helper used to read them off Company
-    Check's Strategy dropdown, which the Company Report replaced with the same tick boxes.)"""
-
-    def __init__(self, at):
-        self.options = [str(c.label) for c in at.checkbox
-                        if str(getattr(c, "key", "") or "").startswith("opt_lens_list_")]
-
-
-def _strategy_picker(at):
-    return _Offered(at)
-
-
-def _lens_checkbox(at, label: str):
-    # the RUN tab's box: Company Check offers the same lenses under its own keys
-    # (``opt_lens_company_``, TAB-MERGE-1 commit 1)
-    return next(c for c in at.checkbox if str(c.label) == label
-                and str(getattr(c, "key", "") or "").startswith("opt_lens_list_"))
-
-
-def _run_mode_widget(at):
-    return next(r for r in at.radio if str(r.label) == "Run mode")
-
-
-def _run_button(at):
-    return next(b for b in at.button if b.label.startswith("▶ Run"))
-
-
-def test_the_lens_count_SEEDS_the_mode_but_never_re_defaults_it():
-    """The regression this control exists for. On the old flow the effective value was
-    ranker-only while the control displayed an UNCHECKED "Ranker only" box and a
-    "narrator" mode — displayed != effective, in both controls at once. The invariant is
-    unchanged: what is shown is what runs.
-
-    UPDATED (CONFIRM-SPEND-1, 2026-08-25). Ranker-only is still what several lenses START
-    on — ``default_run_mode`` is untouched and still says so — but it is now applied ONCE,
-    as a seed, and never re-applied when the lens count changes. Re-defaulting on every
-    change could not tell "the user picked the mode already showing" from "the user has
-    not picked", because Streamlit fires on_change only on an actual CHANGE; it therefore
-    silently overrode an explicit Narrator selection the moment a second lens was ticked,
-    and shipped a ranker-only report for a narrated run. The cost guard that re-default
-    provided is now structural (a free ranking, then a confirmation carrying the exact
-    figure), so the override is gone and the seed remains."""
-    pytest.importorskip("streamlit")
-    # the seed itself — several lenses still START free
-    assert app.default_run_mode(2) == app.RUN_MODE_RANKER
-    assert app.default_run_mode(1) == app.RUN_MODE_NARRATOR
-
-    at = _run_tab()
-    raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
-    at = _run_tab(extra_lens=raw)
-
-    widget = _run_mode_widget(at)
-    displayed = widget.value
-    # THE invariant, whatever the mode is: what is shown is the value in force.
-    assert displayed == app.effective_run_mode(displayed, n_strategies=2)
-    assert widget.disabled is False                  # ...and the user may change it
-
-    # ...and ticking a lens did not move it behind the user's back
-    _run_mode_widget(at).set_value(app.RUN_MODE_NARRATOR).run()
-    _lens_checkbox(at, raw).set_value(False).run()
-    assert _run_mode_widget(at).value == app.RUN_MODE_NARRATOR
-
-
-def test_no_disabled_control_in_the_run_flow_displays_a_value_it_is_not_using():
-    """The general form of the bug: a greyed widget is still read. If it is disabled, the
-    value it shows must be the value in force."""
-    pytest.importorskip("streamlit")
-    at = _run_tab()
-    raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
-    at = _run_tab(extra_lens=raw)
-
-    effective = app.RUN_MODE_RANKER
-    ranker_only, council_mode = app.run_mode_arguments(effective)
-    assert ranker_only is True
-
-    for widget in list(at.radio) + list(at.selectbox) + list(at.checkbox):
-        if not getattr(widget, "disabled", False):
-            continue
-        if str(widget.label) == "Run mode":
-            assert widget.value == effective
-        else:
-            # no OTHER disabled control in the flow carries a run-mode value at all
-            assert str(widget.value) != "narrator", widget.label
-
-
-def test_narration_coverage_is_hidden_not_greyed_when_nothing_narrates():
-    """A greyed control still invites a reading it cannot support."""
-    pytest.importorskip("streamlit")
-    at = _run_tab()
-    raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
-    at = _run_tab(extra_lens=raw)
-    # the mode is no longer re-defaulted by the lens count, so SELECT the one under test
-    _run_mode_widget(at).set_value(app.RUN_MODE_RANKER).run()
-    assert _run_mode_widget(at).value == app.RUN_MODE_RANKER      # nothing narrates
-    assert not any(str(s.label) == "Narration coverage" for s in at.selectbox)
-
-
-def test_choosing_narrator_on_a_multi_lens_run_brings_coverage_back():
-    """NARR-UNION-1: several lenses CAN narrate now, so the coverage control returns the
-    moment the mode does."""
-    pytest.importorskip("streamlit")
-    at = _run_tab()
-    raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
-    at = _run_tab(extra_lens=raw)
-    _run_mode_widget(at).set_value(app.RUN_MODE_NARRATOR).run()
-    assert _run_mode_widget(at).value == app.RUN_MODE_NARRATOR     # honoured, not forced
-    # NARR-2 replaced the single "Narration coverage" dropdown with three levers: the
-    # level of agreement, a cap, and whether to skip the marked names. What this test
-    # guards is unchanged — the controls come back the moment the mode does.
-    assert any(str(s.label) == "Narrate" for s in at.selectbox)
-    assert any(str(n.label) == "Up to" for n in at.number_input)
-    assert any("Skip names doubted" in str(c.label) for c in at.checkbox)
-    captions = " ".join(str(getattr(c, "value", "")) for c in at.caption)
-    assert "ONE section per NAME" in captions or "narrated once" in captions
-
-
-def test_the_button_states_the_deterministic_free_run_in_ranker_only_mode():
-    pytest.importorskip("streamlit")
-    at = _run_tab()
-    raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
-    at = _run_tab(extra_lens=raw)
-    _run_mode_widget(at).set_value(app.RUN_MODE_RANKER).run()
-    assert _run_button(at).label == "▶ Run 2 lenses · free"
-
-
-@needs_local_saved_list
-def test_the_button_states_the_NAME_COUNT_and_cost_before_a_narrated_multi_lens_run():
-    """NARR-UNION-1's cost guard, at the point of decision: the bill is proportional to
-    the number of NAMES narrated, so that is what the button says — BEFORE the click."""
-    pytest.importorskip("streamlit")
-    at = _run_tab()
-    raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
-    at = _run_tab(extra_lens=raw)
-    # a cohort is needed for an estimate to exist at all (an empty list omits it rather
-    # than inventing one) — pick the first saved list.
-    next(r for r in at.radio if str(r.label) == "List source").set_value("Saved list").run()
-    lists = next(s for s in at.selectbox if str(s.label) == "My lists")
-    lists.set_value(next(o for o in lists.options if "name" in o)).run()
-    _run_mode_widget(at).set_value(app.RUN_MODE_NARRATOR).run()
-    label = _run_button(at).label
-    assert label.startswith("▶ Run 2 lenses — ")
-    # stated as the CEILING it is: the true union is only knowable after the free
-    # ranking pass, and there is no non-invented way to predict how far the lenses overlap.
-    assert "up to" in label and "names" in label
-    assert "free" in label and "then choose whether to narrate" in label
-    # LIVE 2026-08-26: the RENDERED label read "… ≤ [code]3.04 total (one charge,
-    # about[/code] 0.19 a name)" — Streamlit took the PAIR of "$" as LaTeX math
-    # delimiters and ate both. Labels bound for a markdown-rendering widget are escaped
-    # (`_md`), so the widget's label carries "\$" and BOTH costs survive on screen.
-    assert "≤ \$" in label
-    assert label.count("\$") == 2, label       # both costs kept their dollar sign
-    assert "$" not in label.replace("\$", "")   # ...and none was left unescaped
-
-
-def test_a_single_lens_narrated_run_is_unchanged():
-    pytest.importorskip("streamlit")
-    at = _run_tab()
-    widget = _run_mode_widget(at)
-    assert widget.value == app.RUN_MODE_NARRATOR         # the default, as before
-    assert widget.disabled is False
-    assert any(str(s.label) == "Narrate" for s in at.selectbox)   # NARR-2's level lever
-    assert _run_button(at).label.startswith(
-        "▶ Run — free · then choose whether to narrate")
-    assert app.run_mode_arguments(widget.value) == (False, "narrator")
-
-
-def test_deselecting_the_extra_lens_restores_the_mode_rather_than_stranding_the_user():
-    """The forced multi-lens control renders under its OWN key, so it never clobbers the
-    single-lens choice — untick the lens and the mode you picked comes back."""
-    pytest.importorskip("streamlit")
-    at = _run_tab()
-    raw = next(o for o in _strategy_picker(at).options if "RAW" in o)
-
-    _run_mode_widget(at).set_value(app.RUN_MODE_RANKER).run()
-    assert _run_mode_widget(at).value == app.RUN_MODE_RANKER
-
-    # NARR-UNION-1: a second lens no longer OVERRIDES the choice, so the choice
-    # simply stands — and still stands when the lens is unticked.
-    _lens_checkbox(at, raw).set_value(True).run()
-    assert _run_mode_widget(at).value == app.RUN_MODE_RANKER
-
-    _lens_checkbox(at, raw).set_value(False).run()
-    assert _run_mode_widget(at).value == app.RUN_MODE_RANKER
-
-
-# --------------------------------------------------------------------------- #
-# 3. NO LLM MAY EVER BE INVOKED BY A MULTI-LENS RUN
+# NO LLM MAY EVER BE INVOKED BY A MULTI-LENS RUN
 # --------------------------------------------------------------------------- #
 def test_a_multi_lens_RANKER_ONLY_run_never_reaches_the_narration_entry_point(monkeypatch):
     """The guardrail that survives NARR-UNION-1: a multi-lens run may narrate now, but a
