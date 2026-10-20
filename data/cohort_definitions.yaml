@@ -244,16 +244,10 @@ cohorts:
     watch: false
     anchors: []
 
-  # guide: aerospace and defence
-  # n1 = 104 (Aerospace & Defense 104) -> tier $5bn
-  - name: "Industrials - Aerospace & Defense"
-    industry: ["Aerospace & Defense"]
-    exchanges: [ALL]
-    min_market_cap_usd: 5000000000
-    min_history_years: 5
-    exclude: [financials, reits]
-    watch: false
-    anchors: []
+  # OLD-DEFENCE-RETIRE-1 (2026-10-20, Batch 28): the all-markets "Industrials - Aerospace & Defense" cohort
+  # (COHORT-1, 48 names) is retired in favour of the regional one below. It matched the same industry code
+  # FIRST, so every defence company was pointed at a cohort with no backtest while the Europe + US one had
+  # all seven. No backtest CSV was ever committed for it; see backtests_experiments/retired/.
 
   # DEFENCE-COHORT-1 (2026-10-15): the regional cut of the cohort above - the same industry code, but ONLY European
   # and US main listings (the index markets US, XETRA, LSE, Euronext Paris/Amsterdam, SIX, the Nordic books, Milan,

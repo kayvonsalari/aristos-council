@@ -74,6 +74,23 @@ table, the markdown download, and Company mode:
 
 This is **presentation only** — no verdict, rank, or gate reads any of it.
 
+### 1.2 The BUY cap — `buy_requires` (GROWTH-V3-DEF, Batch 27B)
+
+A rank strategy may carry one RELATIVE gate on its BUY, written `buy_requires: {<factor>: top_half}`
+(or `top_third`). The cut runs first, exactly as above; then each name it would BUY is checked
+against its **rank on that factor** among the ranked names:
+
+- `top_half` keeps a BUY when the factor rank is at most `(n + 1) / 2` — the median name is **not**
+  in the bottom half, so it keeps its BUY. `top_third` keeps ranks at most `(n + 2) / 3`.
+- A name that fails is **HOLD, never BUY**, and the reason is shown wherever the verdict is: the
+  ranked table's Verdict cell, the grid cell, the lens row on a company page and the exports —
+  e.g. `ranked 1st, but growing slower than the industry median, so HOLD`.
+- It is a **cap, not a screen**: it never excludes a name, never creates a SELL, never promotes, and
+  never touches a name the cut did not buy. A strategy without `buy_requires` produces byte-identical
+  output to before the field existed (pinned by a test over every published strategy).
+- The only strategy that uses it today is `growth_garp_v3` (hidden, `status: under_test`; see
+  `docs/DESIGN_growth_v3.md`). Its badge reads `under test here` until a backtest is committed.
+
 ## 2. The factors (`factors.py`)
 
 All factors are pure functions of adapter data; each returns a float or `None`

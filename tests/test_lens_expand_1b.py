@@ -39,7 +39,8 @@ def test_an_entry_rule_exclusion_carries_where_it_would_have_ranked(tmp_path):
     assert w is not None and w.available
     assert 1 <= w.position <= w.cohort_size and w.cohort_size == N_PEERS + 1   # the whole peer group
     assert w.text == (f"on its measures it would rank {_ord(w.position)} of the {w.cohort_size} "
-                      f"names with usable figures, had the lens's rules not excluded it. "
+                      f"names with usable figures (the lens itself ranked {w.lens_ranked}{', too few to give anyone a rank' if w.lens_ranked < 5 else ''}), "
+                      f"had the lens's rules not excluded it. "
                       f"{NOT_A_VOTE}")
     assert screened.result_shown() == f"{screened.result()} - {w.text}"
     assert screened.result_shown().startswith("does not apply - ")
@@ -79,7 +80,8 @@ def test_it_never_carries_a_buy_hold_or_sell_and_never_a_badge(tmp_path):
     screened = by_id[SCREENED]
     assert screened.verdict == "" and screened.badge is None
     assert not VERDICT_WORDS.search(screened.would_rank.text)
-    assert {f.name for f in fields(WouldRank)} == {"available", "position", "cohort_size", "reason"}
+    # WOULD-RANK-GROUP-1 added lens_ranked (a count of names the lens ranked: no verdict, no badge)
+    assert {f.name for f in fields(WouldRank)} == {"available", "position", "cohort_size", "reason", "lens_ranked"}
     # the track-record step only ever decorates a vote that ranked
     assert all(v.badge is None for v in report.votes if not v.ranked)
 

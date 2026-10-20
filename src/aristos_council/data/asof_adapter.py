@@ -316,7 +316,8 @@ class AsOfAdapter(MarketDataAdapter):
         for e in events:
             annual[e.ex_date.year] = annual.get(e.ex_date.year, 0.0) + float(e.amount)
             per_year.setdefault(e.ex_date.year, []).append(float(e.amount))
-        streak, last_cut = dividend_streak(annual, self.as_of.year)
+        stats = {y: (sum(a), statistics.median(a), len(a)) for y, a in per_year.items() if a}
+        streak, last_cut = dividend_streak(annual, self.as_of.year, year_stats=stats)
         trailing = sum(e.amount for e in events if e.ex_date > self.as_of - timedelta(days=365))
         return dict(
             dividend_per_share=float(trailing),

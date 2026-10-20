@@ -304,7 +304,7 @@ def test_the_story_lists_what_the_judges_could_not_account_for_only_when_the_pan
     report.judge_panel = res
     after = doubt(report)
     assert after.endswith("The judge panel could not account for: Claude: Why free cash flow halved in "
-                          "FY2024 [pack].")
+                          "FY2024.")                                     # STORY-TAG-LEAK-1: no [pack] in prose
     assert after.startswith(before) or before in after
     report.judge_panel = panel.PanelResult(available=False, note="n")
     assert doubt(report) == before                                       # a panel that did not run adds nothing
@@ -336,7 +336,7 @@ def test_lens_output_stays_identical_with_the_full_evidence_panel_on_or_off(tmp_
     for r in (on, off):
         r.seconds, r.cache, r.saved_to = 0.0, {}, ""
     t_on = re.sub(r"JUDGE PANEL.*?(?=\nSHOW THE WORKINGS)", "", format_company_report(on), flags=re.S)
-    t_on = re.sub(r" The judge panel could not account for: [^\n]*?\[pack\]\.", "", t_on).replace("\n\n\n", "\n\n")
+    t_on = re.sub(r" The judge panel could not account for: [^\n]*", "", t_on).replace("\n\n\n", "\n\n")
     assert t_on == format_company_report(off)
 
 

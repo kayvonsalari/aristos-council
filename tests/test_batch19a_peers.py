@@ -247,10 +247,13 @@ def _report(lens_sizes):
 def test_peers_rank_columns_under_three_names_read_too_few_to_rank():
     columns = rank_columns(_report({"Value + Momentum": 2, "Quality": 5}))
     by_label = {c.header: c for c in columns}
-    assert "Value + Momentum rank" in by_label                      # no "(of 2)"
+    # TOO-FEW-DISPLAY-1: no "(of 2)"; the header says why there are no ranks
+    assert "Value + Momentum rank (2 passed, under 5, no ranks)" in by_label
     assert "Quality rank (of 5)" in by_label
-    few = by_label["Value + Momentum rank"]
-    assert set(few.values.values()) == {TOO_FEW_TO_RANK}            # every cell, excluded included
+    few = by_label["Value + Momentum rank (2 passed, under 5, no ranks)"]
+    # the names that PASSED read "passed, too few to rank"; the one the rules excluded still "does not apply"
+    assert {few.values["T0"], few.values["T1"]} == {TOO_FEW_TO_RANK} == {"passed, too few to rank"}
+    assert few.values["OUT"] == "does not apply"
     assert by_label["Quality rank (of 5)"].values["T0"] == 1
 
 
@@ -263,7 +266,7 @@ def test_peers_rank_exactly_five_is_a_ranking_and_four_is_not():
     """B25-1 (MIN-GROUP-5): the line moved from three to five names."""
     columns = rank_columns(_report({"Quality": 5}))
     assert columns[0].header == "Quality rank (of 5)"
-    assert rank_columns(_report({"Quality": 4}))[0].header == "Quality rank"          # too few to rank
+    assert rank_columns(_report({"Quality": 4}))[0].header == "Quality rank (4 passed, under 5, no ranks)"
 
 
 def test_peers_too_few_to_rank_displays_as_words_and_sorts_after_real_ranks():

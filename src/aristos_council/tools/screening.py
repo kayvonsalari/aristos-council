@@ -900,8 +900,48 @@ _STREAK_SHAPE = {
 }
 
 
+def regular_dividend_cut_years(stats: dict, *, tolerance: float = 0.10) -> list:
+    """Years whose REGULAR dividend was cut (DIV-CUT-SPECIAL-1): the year's total AND its typical
+    payment both fell by more than ``tolerance`` against the prior year - the same rule
+    ``_cuts_from_year_stats`` applies for Cyclical Income, so the two cannot disagree. ``stats`` is
+    ``{year: (total, median payment, payment count)}``. A special dividend moves the total and not the
+    typical payment, so it is never read as a cut (Ford: a supplemental in Feb 2024 then a smaller one in
+    Feb 2025 made the 2025 total fall 4% while the regular $0.15 a quarter never moved)."""
+    years = sorted(stats)
+    out = []
+    for prev, year in zip(years, years[1:]):
+        (t_prev, m_prev, n_prev), (t_now, m_now, n_now) = stats[prev], stats[year]
+        if t_prev <= 0:
+            continue
+        total_fall = (t_prev - t_now) / t_prev
+        if total_fall <= tolerance:
+            continue
+        if n_now == 1 and n_prev > 1:
+            median_fall = total_fall
+        elif m_prev <= 0:
+            continue
+        else:
+            median_fall = (m_prev - m_now) / m_prev
+        if median_fall > tolerance:
+            out.append(year)
+    return out
+
+
+def inferred_special_dividends(stats: dict, *, tolerance: float = 0.25) -> dict:
+    """``{year: amount}`` of dividend money paid ABOVE the regular run, inferred because the free data
+    does not label specials: the year's total minus (typical payment x payment count), kept when it is
+    more than ``tolerance`` of that regular run. An inference, always labelled as one where shown."""
+    out = {}
+    for year, (total, median, n) in sorted(stats.items()):
+        regular = median * n
+        if n > 1 and regular > 0 and total - regular > tolerance * regular:
+            out[year] = total - regular
+    return out
+
+
 def dividend_streak(
     annual_by_year: dict[int, float], as_of_year: int, *, flat_tol: float = 0.005,
+    year_stats: dict | None = None,
 ) -> tuple[int | None, int | None]:
     """Consecutive years of dividend INCREASES ending at the latest COMPLETE year, and
     the most recent CUT year — from per-CALENDAR-YEAR dividend totals.
@@ -916,16 +956,26 @@ def dividend_streak(
       below the prior (an actual cut), scanning ALL history — independent of where the
       growth streak broke.
     None (both) on fewer than 3 complete years of history (honest abstain). The series
-    is used as given (yfinance dividends are already split-adjusted)."""
+    is used as given (yfinance dividends are already split-adjusted).
+
+    ``year_stats`` (``{year: (total, median payment, count)}``, optional): when given, the CUT year
+    is the last year whose REGULAR dividend was cut (``regular_dividend_cut_years``), not merely the
+    last year whose total fell - a special dividend no longer reads as a cut (DIV-CUT-SPECIAL-1). The
+    growth streak is unchanged."""
     years = sorted(y for y in annual_by_year if y < as_of_year)
     if len(years) < 3:
         return None, None
 
     last_cut: int | None = None
-    for i in range(1, len(years)):
-        prev, cur = annual_by_year[years[i - 1]], annual_by_year[years[i]]
-        if prev > 0 and (cur - prev) / prev < -flat_tol:
-            last_cut = years[i]                       # keep -> ends at the most recent
+    if year_stats:
+        cuts = [y for y in regular_dividend_cut_years(
+            {y: v for y, v in year_stats.items() if y < as_of_year}) if y in annual_by_year]
+        last_cut = cuts[-1] if cuts else None
+    else:
+        for i in range(1, len(years)):
+            prev, cur = annual_by_year[years[i - 1]], annual_by_year[years[i]]
+            if prev > 0 and (cur - prev) / prev < -flat_tol:
+                last_cut = years[i]                   # keep -> ends at the most recent
 
     streak = 0
     for i in range(len(years) - 1, 0, -1):

@@ -13,8 +13,9 @@ Three kinds live under ``strategies/``:
 
 The lens set is DERIVED (the union of rank strategies' ``council_screen_strategy``),
 never hardcoded — add a rank strategy that points at a new screen and that screen is
-classified as a lens automatically. Invalid YAMLs are skipped silently (the loaders
-are the gatekeepers), exactly as the UI did before.
+classified as a lens automatically. An invalid YAML is left out of ``discover_strategies``
+(the loaders are the gatekeepers) - but never SILENTLY: ``load_failures`` names each one and its
+reason, and the Analyse tab shows them and blocks the run (LENS-DROPOUT-1).
 """
 
 from __future__ import annotations
@@ -90,6 +91,40 @@ def discover_strategies(strategies_dir: str | Path) -> list[StrategyInfo]:
                                 "lens" if sid in lens_ids else "council",
                                 display_name=display, hidden=hidden))
     out.sort(key=lambda si: si.id)
+    return out
+
+
+@dataclass(frozen=True)
+class LoadFailure:
+    path: Path
+    strategy_id: str      # the file's own ``id:`` when readable, else its stem
+    reason: str           # "ValidationError: ..." - the loader's own message, first line
+
+
+def load_failures(strategies_dir: str | Path) -> list[LoadFailure]:
+    """Every strategy YAML that ``discover_strategies`` left out because it would not load.
+
+    LENS-DROPOUT-1: a lens that cannot load used to vanish from the picker with no word, and
+    Streamlit then dropped its tick. A ``ui: hidden`` file is not offered, so its failure is not
+    reported here; a file with neither ``factors:`` nor ``criteria:`` is not a strategy."""
+    out: list[LoadFailure] = []
+    for p in sorted(Path(strategies_dir).glob("*.yaml")):
+        try:
+            raw = yaml.safe_load(p.read_text(encoding="utf-8"))
+        except Exception as exc:                                  # noqa: BLE001 - reported
+            out.append(LoadFailure(p, p.stem, f"{type(exc).__name__}: {str(exc).splitlines()[0][:200]}"))
+            continue
+        if not isinstance(raw, dict) or raw.get("ui") == "hidden":
+            continue
+        loader = (load_rank_strategy if "factors" in raw
+                  else load_strategy if "criteria" in raw else None)
+        if loader is None:
+            continue
+        try:
+            loader(p)
+        except Exception as exc:                                  # noqa: BLE001 - reported
+            first = (str(exc).strip().splitlines() or [""])[0][:200]
+            out.append(LoadFailure(p, str(raw.get("id") or p.stem), f"{type(exc).__name__}: {first}"))
     return out
 
 

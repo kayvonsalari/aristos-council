@@ -105,6 +105,10 @@ def short_name(report) -> str:
                 text = text[: -len(tail)].strip()
                 changed = True
     text = text.rstrip(" &").strip()
+    # NAME-TRIM-2: once "Company" is trimmed, "The Coca-Cola" is left with a dangling article; the name
+    # people use has none ("Coca-Cola", "Procter & Gamble", "Home Depot").
+    if text[:4].lower() == "the " and len(text) > 4:
+        text = text[4:].strip()
     return text or report.ticker
 
 
@@ -514,7 +518,8 @@ def _outcome(v) -> str:
     if v.status == "excluded":
         return "does not apply"
     if v.status == "too_few":
-        return "too few to rank"
+        from .rank_engine import PASSED_TOO_FEW
+        return PASSED_TOO_FEW                       # TOO-FEW-DISPLAY-1: it passed; there are too few to rank
     if v.status == "unrateable":
         return "no data"
     if v.status == "fetch_error":
@@ -536,6 +541,9 @@ def _row_reason(v) -> str:
         if w is not None and w.available:
             text += f" (would rank {ordinal(w.position)} of {w.cohort_size}; not a vote)"
         return text
+    if v.status == "too_few":
+        from .rank_engine import too_few_header_note
+        return too_few_header_note(v.cohort_size).strip("()")
     return _plain_reason(v.result())
 
 

@@ -2781,6 +2781,10 @@ def run_multi_strategy_pipeline(
 
     rows = combine_rank_results(results, ids)
     first = results[ids[0]]
+    # LENS-DROPOUT-1 - the ONE place lenses are assembled for a run (list and company runs both
+    # come through here): every lens asked for has a result, or the run stops.
+    from .strategy.picker import require_all_lenses
+    require_all_lenses(ids, results, where="Multi-lens run")
 
     # NARR-UNION-1 — ONE narration pass over the UNION of every lens's BUYs. Ranker-only
     # (the default) does not build a council, does not construct runners and makes ZERO

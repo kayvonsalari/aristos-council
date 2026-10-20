@@ -7,7 +7,11 @@ reader sees at a glance what came from outside the evidence.
 """
 from __future__ import annotations
 
+import re
+
 import html as _html
+
+from aristos_council.plurals import plural
 
 from . import answer as _answer
 from .panel import (INCOMPLETE, STABLE, UNSTABLE, PanelResult, needs_reading)
@@ -20,6 +24,25 @@ CAPTION = ("Independent models were each shown this company's facts - the full s
            "kept to see, in a year, whether model judgement adds anything.")
 READING_CAPTION = "A reading of the difference, not a recommendation."
 OWN_TAG_NOTE = "Passages marked “own knowledge” come from the model, not from the facts it was given."
+NO_OWN_TAG_NOTE = "No passage was marked own knowledge in this run."
+
+
+def own_tag_note(result) -> str:
+    """The footer: the standing note, or - when no judge marked a single passage as own knowledge -
+    the plain statement that none was (OWN-KNOWLEDGE-COUNT-1)."""
+    cs = cards(result)
+    answered = [c for c in cs if c["claims_pack"] or c["claims_own"]]
+    if answered and not any(c["claims_own"] for c in cs):
+        return NO_OWN_TAG_NOTE
+    return OWN_TAG_NOTE
+
+
+def claims_line(card) -> str:
+    """"5 claims from the pack, 1 from own knowledge", or "" for a judge that gave no answer."""
+    if not (card["claims_pack"] or card["claims_own"]):
+        return ""
+    return (f"{plural(card['claims_pack'], 'claim')} from the pack, "
+            f"{card['claims_own']} from own knowledge")
 
 HELP = ("Three independent models (Claude, OpenAI, Gemini), each shown this company's facts - the "
         "full statements, the readings, the news - but NO lens, rank, badge or verdict, and asked "
@@ -83,7 +106,7 @@ def cards(result: PanelResult) -> list[dict]:
     out = []
     for j in result.judges:
         card = {"judge": f"{j.label} ({j.model})", "verdict": j.verdict_text(), "confidence": "",
-                "status": j.status, "own_knowledge": 0,
+                "status": j.status, "own_knowledge": 0, "claims_pack": 0, "claims_own": 0,
                 **{key: "" for key, _ in FIELDS}}
         ok = [c for c in j.calls if c.status == "ok"]
         if j.status == STABLE and ok:
@@ -98,6 +121,8 @@ def cards(result: PanelResult) -> list[dict]:
                         reasoning=both("reason"), key_risk=both("key_risk"),
                         unexplained=both("unexplained"), would_change_my_mind=both("would_change_my_mind"))
         card["own_knowledge"] = sum(c.own_knowledge_claims for c in ok)
+        if ok:                                         # the claims on the card as displayed (the first answer)
+            card["claims_pack"], card["claims_own"] = _answer.count_claims(ok[0].driving_fact, ok[0].reason)
         out.append(card)
     return out
 
@@ -152,12 +177,17 @@ def unexplained_line(result) -> str:
     items = []
     for j in result.judges:
         c = j.first_ok if j.status == STABLE else None
-        text = (c.unexplained if c else "").strip().rstrip(".")
-        if text and text.lower() not in ("nothing", "none", "nothing."):
-            items.append(f"{j.label}: {_answer._normalise_tags(text)}")
+        text = _answer.strip_tags((c.unexplained if c else "").strip()).strip()
+        if text and text.lower().rstrip(".") not in ("nothing", "none"):
+            items.append(f"{j.label}: {text}")
     if not items:
         return ""
-    return "The judge panel could not account for: " + "; ".join(items) + "."
+    # DOUBLE-STOP-1: a gap sentence may already end with its own stop (or "?", or a stop inside a closing
+    # quote). Between items the stop is dropped for the "; "; at the end the line takes ONE stop unless
+    # the last sentence already has one.
+    items = [re.sub(r"\.+$", "", t) for t in items[:-1]] + [re.sub(r"\.{2,}$", ".", items[-1])]
+    line = "The judge panel could not account for: " + "; ".join(items)
+    return line if re.search(r"[.!?][\"”’)\]]*$", line) else line + "."
 
 
 def _head(card) -> str:
@@ -172,6 +202,8 @@ def text_lines(result: PanelResult) -> list[str]:
     out = []
     for card in cards(result):
         out.append("  " + _head(card))
+        if claims_line(card):
+            out.append(f"      {claims_line(card)}")
         for key, caption in FIELDS:
             if card[key]:
                 out.append(f"      {caption.lower()}: {mark_text(card[key])}")
@@ -181,7 +213,7 @@ def text_lines(result: PanelResult) -> list[str]:
         out += ["", "  " + paragraph, f"  ({READING_CAPTION})"]
     elif note:
         out += ["", "  " + note]
-    out += ["", f"  ({OWN_TAG_NOTE})"]
+    out += ["", f"  ({own_tag_note(result)})"]
     return out
 
 
@@ -191,6 +223,8 @@ def markdown_lines(result: PanelResult) -> list[str]:
         return out + [f"Not run: {result.note}", ""]
     for card in cards(result):
         out += [f"**{_head(card)}**", ""]
+        if claims_line(card):
+            out.append(f"- *{claims_line(card)}*")
         for key, caption in FIELDS:
             if card[key]:
                 out.append(f"- *{caption}:* {mark_markdown(card[key])}")
@@ -201,7 +235,7 @@ def markdown_lines(result: PanelResult) -> list[str]:
         out += [paragraph, "", f"_{READING_CAPTION}_", ""]
     elif note:
         out += [f"_{note}_", ""]
-    out += [f"_{OWN_TAG_NOTE}_", ""]
+    out += [f"_{own_tag_note(result)}_", ""]
     return out
 
 
@@ -212,7 +246,8 @@ def html_section(result: PanelResult, esc=_html.escape) -> str:
         return "".join(out) + f'<p class="note">Not run: {esc(result.note)}</p></section>'
     for card in cards(result):
         out.append(f'<div class="judge"><p><strong>{esc(_head(card))}</strong></p>')
-        items = "".join(f"<li><em>{esc(caption)}:</em> {mark_html(card[key])}</li>"
+        extra = f"<li><em>{esc(claims_line(card))}</em></li>" if claims_line(card) else ""
+        items = extra + "".join(f"<li><em>{esc(caption)}:</em> {mark_html(card[key])}</li>"
                         for key, caption in FIELDS if card[key])
         if items:
             out.append(f"<ul>{items}</ul>")
@@ -223,5 +258,5 @@ def html_section(result: PanelResult, esc=_html.escape) -> str:
         out.append(f'<p>{esc(paragraph)}</p><p class="note">{esc(READING_CAPTION)}</p>')
     elif note:
         out.append(f'<p class="note">{esc(note)}</p>')
-    out.append(f'<p class="note">{esc(OWN_TAG_NOTE)}</p></section>')
+    out.append(f'<p class="note">{esc(own_tag_note(result))}</p></section>')
     return "".join(out)

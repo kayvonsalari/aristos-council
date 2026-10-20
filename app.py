@@ -3551,6 +3551,8 @@ def _render_judge_panel(panel) -> None:
         with st.container(border=True):
             conf = f" · confidence {card['confidence']}" if card["confidence"] else ""
             st.markdown(f"**{card['judge']}** — **{card['verdict']}**{conf}")
+            if jr.claims_line(card):
+                st.caption(jr.claims_line(card))
             if card["driving_fact"]:
                 st.markdown(f"*The fact that drove it:* {jr.mark_markdown(card['driving_fact'])}")
             if card["reasoning"]:
@@ -3567,7 +3569,7 @@ def _render_judge_panel(panel) -> None:
         st.caption(jr.READING_CAPTION)
     elif note:
         st.caption(note)
-    st.caption(jr.OWN_TAG_NOTE)
+    st.caption(jr.own_tag_note(panel))
     if panel.log_error:
         st.warning(f"The panel's answers could not be written to the log: {panel.log_error}")
 

@@ -57,6 +57,25 @@ class Answer:
                    for t in (self.driving_fact, self.reasoning))
 
 
+def count_claims(*texts: str) -> tuple:
+    """``(pack, own knowledge)`` claim counts over the labelled texts (OWN-KNOWLEDGE-COUNT-1)."""
+    pack = own = 0
+    for t in texts:
+        for _claim_text, source in segments(t):
+            if source == "pack":
+                pack += 1
+            elif source == "own knowledge":
+                own += 1
+    return pack, own
+
+
+def strip_tags(text: str) -> str:
+    """The text without its [pack] / [own knowledge] tags, spacing and the closing full stop tidied
+    (STORY-TAG-LEAK-1: a tag is bookkeeping for the judge card, never prose for the story)."""
+    out = _TAG.sub("", text or "")
+    return re.sub(r"\s+([.,;])", r"\1", re.sub(r"\s{2,}", " ", out)).strip()
+
+
 def _object_text(raw: str) -> str:
     """The JSON object text: the reply itself, or the reply inside ONE code fence. Prose around it
     is not tolerated."""

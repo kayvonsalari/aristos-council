@@ -54,7 +54,9 @@ _VERDICTS = ("buy", "hold", "sell")
 # Numeric shapes a narration is allowed to state. A token that LOOKS like one of these
 # but will not parse is the failure this catches — "12.3.4%", "1/", "$1,2,3".
 _PERCENT = re.compile(r"(?<![\w.])(-?\d[\d,]*(?:\.\d+)?)\s*%")
-_RANK = re.compile(r"(?<![\w/])(\d+)\s*/\s*(\d+)(?![\w/])")
+# RANK-CHECK-FALSEPOS-1: a rank is two WHOLE numbers. "93.90 / 3.30" (a price over a forward EPS) was read
+# as the rank "90 / 3" and flagged twice; a number glued to a decimal point is not part of a rank.
+_RANK = re.compile(r"(?<![\w/.])(\d+)\s*/\s*(\d+)(?![\w/]|\.\d)")
 _MONEY = re.compile(r"(?:[$€£¥]|\b(?:USD|EUR|GBP|JPY|CHF|KRW|SEK|DKK|NOK|CAD|AUD|HKD|TWD)\s?)"
                     r"(-?[\d][\d,]*(?:\.\d+)?)\s*(tn|bn|m)?", re.I)
 # A malformed numeric token: more than one decimal point, or a stray thousands group.
@@ -268,7 +270,13 @@ def validate_narration(narration, *, ranker_verdict: Optional[str] = None,
                             f"it a verdict word "
                             f"({'/'.join(sorted(said)).upper()}): "
                             f"\"{sentence.strip()}\"."))
-    return issues
+    # each distinct finding is listed ONCE (the same sentence can sit in two text fields)
+    unique, seen_issues = [], set()
+    for issue in issues:
+        if (issue.code, issue.detail) not in seen_issues:
+            seen_issues.add((issue.code, issue.detail))
+            unique.append(issue)
+    return unique
 
 
 def _check_lens_core(label: str) -> str:

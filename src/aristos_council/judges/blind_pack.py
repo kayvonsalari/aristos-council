@@ -209,7 +209,7 @@ def _series(fundamentals) -> list[str]:
     if fundamentals is None:
         return []
     from ..series_pack import ORDER_OLDEST_FIRST, pack_series, packed_ok
-    from ..tools.price_context import format_money
+    from ..tools.price_context import format_money, format_money_series
 
     ccy = getattr(fundamentals, "financial_currency", None) or getattr(fundamentals, "currency", None) or None
     out: list[str] = []
@@ -220,8 +220,11 @@ def _series(fundamentals) -> list[str]:
         packed = pack_series(fundamentals, fld, label=label, order=ORDER_OLDEST_FIRST)
         if not packed_ok(packed):
             continue
-        cells = [f"{y} " + (format_money(v, ccy, decimals=2) if per_share else format_money(v, ccy, abbreviate=True))
-                 for y, v in zip(packed["years"], packed["values"])]
+        if per_share:
+            shown = [format_money(v, ccy, decimals=2) for v in packed["values"]]
+        else:
+            shown = format_money_series(packed["values"], ccy)             # FCF-UNITS-1: one unit scale
+        cells = [f"{y} {m}" for y, m in zip(packed["years"], shown)]
         out.append(f"{label} (oldest first, each figure labelled with its year): " + " · ".join(cells))
     return out
 
@@ -254,9 +257,24 @@ def _analysts(report) -> list[str]:
     return out
 
 
-def _debt_cash(report) -> list[str]:
+def _debt_cash(report, fundamentals=None) -> list[str]:
+    """The page's debt-and-cash readings. PACK-NETDEBT-1: the page's net-debt figure is the LATEST
+    balance sheet, while the balance-sheet statement carries a year-end "Net Debt" line for each fiscal
+    year; with both in one pack they read as two unlabelled disagreeing figures ($140.0bn and $141.2bn
+    on Ford). The reading therefore carries its balance-sheet date, and a note says the statement's
+    line is the year-end one."""
     debt = getattr(report.check, "debt_and_cash", None)
-    return [_clean(x) for x in (list(debt.lines()) + list(debt.notes()))] if debt is not None else []
+    if debt is None:
+        return []
+    lines = [_clean(x) for x in list(debt.lines())]
+    if lines and getattr(debt.net_debt, "available", False) and "balance sheet" not in lines[0]:
+        from ..abs_readings import _balance_sheet_date
+        lines[0] = f"{lines[0]} ({_balance_sheet_date(fundamentals)})"
+    notes = [_clean(x) for x in list(debt.notes())]
+    if lines:
+        notes.append("The 'Net Debt' line in the balance sheet above is each fiscal year's year-end "
+                     "figure; the net-debt reading here is the latest balance sheet.")
+    return lines + notes
 
 
 def _growth(report) -> list[str]:
@@ -296,7 +314,17 @@ def _dividends(fundamentals) -> list[str]:
                    f"history on file is limited, so the true run may be longer)")
     cut = getattr(fundamentals, "last_dividend_reduction_year", None)
     if cut:
-        out.append(f"Most recent year the dividend was cut: {cut}")
+        out.append(f"Most recent year the regular dividend was cut: {cut}")
+    # DIV-CUT-SPECIAL-1: supplemental / special payments, labelled apart from the regular dividend.
+    from ..tools.screening import inferred_special_dividends
+    stats = {int(y): (t, m, int(n)) for y, t, m, n in
+             (getattr(fundamentals, "dividend_year_stats", None) or [])}
+    specials = inferred_special_dividends(stats)
+    if specials:
+        shown = ", ".join(f"{y} +{amt:.2f}" for y, amt in specials.items())
+        out.append(f"Supplemental or special payments above the regular dividend (inferred from the "
+                   f"payment record, which does not label them; per share): {shown}. They are left out of "
+                   f"the cut test for the regular dividend.")
     return out
 
 
@@ -370,7 +398,7 @@ def build_blind_pack(report, fundamentals=None, statements=None, news=None, *,
         ("Cash flow statement", _statement(statements, "cashflow", ccy)),
         ("Valuation against its own history", _valuation(report)),
         ("What analysts say", _analysts(report)),
-        ("Debt and cash", _debt_cash(report)),
+        ("Debt and cash", _debt_cash(report, fundamentals)),
         ("Record of expansion", _growth(report)),
         ("Accounting-quality readings (raw values)", _forensic_raw(report)),
         ("Dividend record", _dividends(fundamentals)),
