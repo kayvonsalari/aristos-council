@@ -209,7 +209,7 @@ def _series(fundamentals) -> list[str]:
     if fundamentals is None:
         return []
     from ..series_pack import ORDER_OLDEST_FIRST, pack_series, packed_ok
-    from ..tools.price_context import format_money
+    from ..tools.price_context import format_money, format_money_series
 
     ccy = getattr(fundamentals, "financial_currency", None) or getattr(fundamentals, "currency", None) or None
     out: list[str] = []
@@ -220,8 +220,11 @@ def _series(fundamentals) -> list[str]:
         packed = pack_series(fundamentals, fld, label=label, order=ORDER_OLDEST_FIRST)
         if not packed_ok(packed):
             continue
-        cells = [f"{y} " + (format_money(v, ccy, decimals=2) if per_share else format_money(v, ccy, abbreviate=True))
-                 for y, v in zip(packed["years"], packed["values"])]
+        if per_share:
+            shown = [format_money(v, ccy, decimals=2) for v in packed["values"]]
+        else:
+            shown = format_money_series(packed["values"], ccy)             # FCF-UNITS-1: one unit scale
+        cells = [f"{y} {m}" for y, m in zip(packed["years"], shown)]
         out.append(f"{label} (oldest first, each figure labelled with its year): " + " · ".join(cells))
     return out
 

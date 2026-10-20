@@ -152,6 +152,29 @@ def format_money(value: Optional[float], currency: Optional[str], *,
     return _prefixed(currency, f"{value:,.{decimals}f}")
 
 
+def format_money_series(values, currency: Optional[str]) -> list:
+    """A SERIES of amounts in ONE unit scale (FCF-UNITS-1). Ford's free cash flow read ``FY2022 -$13.0m
+    FY2023 $6.7bn``: the figures were right (operating cash flow less capital spending was -$13m that
+    year) but two scales in one line read as a slip. The scale is the one the LARGEST magnitude needs and
+    every value wears it, with extra decimals when a small value would otherwise round to a bare 0.0 (so
+    the -$13m year reads ``-$0.013bn``). A missing value reads ``not available``."""
+    nums = [v for v in values if _is_number(v)]
+    if not nums:
+        return [NOT_AVAILABLE for _ in values]
+    biggest = max(abs(v) for v in nums)
+    for cut, suffix in _MAGNITUDES:
+        if biggest >= cut:
+            break
+    else:
+        return [format_money(v, currency, abbreviate=True) for v in values]
+    base = 2 if suffix == "tn" else 1
+    places = base
+    while places < 4 and any(v != 0 and round(abs(v) / cut, places) == 0 for v in nums):
+        places += 1
+    return [NOT_AVAILABLE if not _is_number(v) else _prefixed(currency, f"{v / cut:,.{places}f}{suffix}")
+            for v in values]
+
+
 def format_money_full(value: Optional[float], currency: Optional[str]) -> str:
     """The UNABBREVIATED amount — what a hover title carries beside an abbreviated one,
     and what the fact-checker resolves an abbreviated figure back to."""

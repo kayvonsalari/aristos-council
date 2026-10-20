@@ -1238,8 +1238,9 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
         packed = pack_series(f, "free_cash_flow_annual", label="Free cash flow",
                              order=ORDER_OLDEST_FIRST)
         if packed_ok(packed):
-            pairs = " ".join(f"{y} {acct_money(v)}"
-                             for y, v in zip(packed["years"], packed["values"]))
+            from .tools.price_context import format_money_series          # FCF-UNITS-1: one unit scale
+            shown = format_money_series(packed["values"], acct_label)
+            pairs = " ".join(f"{y} {m}" for y, m in zip(packed["years"], shown))
             fcf_series = Reading(value=packed["values"][-1], unit=acct_label,
                                  label=f"free cash flow, oldest first: {pairs}")
         else:
