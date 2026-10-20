@@ -89,6 +89,15 @@ _SECTION_TITLES = {
 # The spec is explicit: layout markup arriving from the narrator is a PROMPT failure, so
 # it must be visible rather than quietly cleaned up at render time. These detectors give
 # the tests something exact to assert and give a live run something to surface.
+def _verdict_cell(verdict: str) -> str:
+    """The lens table's Verdict cell. A verdict word is set in capitals (BUY / HOLD / SELL); a lens that
+    did not vote says so in ordinary case - "Does not apply", not "DOES NOT APPLY" (COUNCIL-CAPS-1)."""
+    raw = (verdict or "").strip()
+    if "not apply" in raw.lower():
+        return raw[:1].upper() + raw[1:].lower()
+    return raw.upper()
+
+
 _RULE = re.compile(r"^\s*(-{3,}|\*{3,}|_{3,})\s*$", re.M)
 _MD_HEADING = re.compile(r"^\s*#{1,6}\s+\S", re.M)
 _ALLCAPS = re.compile(r"^\s*[A-Z][A-Z0-9 ,.'/&()\-‐-―:]{7,}\s*$", re.M)
@@ -428,7 +437,7 @@ def narration_markdown(narration, *, level: int = 4,
                 "| Lens | Verdict | Position | Note |", "| --- | --- | --- | --- |"]
         for v in narration.lens_verdicts:
             note = (v.excluded_reason or "").strip() or "—"
-            out.append(f"| {v.lens} | {scrub_check_cell(v.verdict.upper())} | "
+            out.append(f"| {v.lens} | {scrub_check_cell(_verdict_cell(v.verdict))} | "
                        f"{_position(v) or '—'} | {note} |")
         out.append("")
 
@@ -546,7 +555,7 @@ def narration_html(narration, *, anchor_prefix: str = "",
                    "</section>")
 
     if narration.lens_verdicts:
-        rows = [[v.lens, scrub_check_cell(v.verdict.upper()), _position(v) or "—",
+        rows = [[v.lens, scrub_check_cell(_verdict_cell(v.verdict)), _position(v) or "—",
                  (v.excluded_reason or "").strip() or "—"]
                 for v in narration.lens_verdicts]
         out.append(f'<section class="narr-block"{_id("lens_verdicts")}>'

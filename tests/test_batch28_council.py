@@ -113,3 +113,19 @@ def test_the_council_annotates_from_the_printed_views_not_the_raw_theses():
     _annotate_specialist_repetition(rep, state, ["Quality"])
     assert decision.rationale.count("[⚠ AI text check:") == 1                      # one sentence, quoted once
     assert '"Margins are being squeezed by tariffs and warranty costs across every segment."' in decision.rationale
+
+
+# --------------------------------------------------------------------------- #
+# C14 COUNCIL-CAPS-1
+# --------------------------------------------------------------------------- #
+def test_a_lens_that_does_not_apply_is_not_shouted_in_the_council_lens_table():
+    from aristos_council.agents.schemas import LensVerdictItem
+    from aristos_council.narration_render import narration_html, narration_markdown
+    n = _well_formed()
+    n.lens_verdicts = [LensVerdictItem(lens="Growth", verdict="does not apply", excluded_reason="growth 5% < 10%"),
+                       LensVerdictItem(lens="Quality", verdict="hold")]
+    md = narration_markdown(n)
+    assert "| Growth | Does not apply |" in md and "DOES NOT APPLY" not in md
+    assert "| Quality | HOLD |" in md                                        # a verdict word keeps capitals
+    html = narration_html(n)
+    assert "Does not apply" in html and "DOES NOT APPLY" not in html and ">HOLD<" in html.replace(" ", "")
