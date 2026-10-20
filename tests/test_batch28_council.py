@@ -149,3 +149,33 @@ def test_the_record_states_that_real_filing_dates_are_mostly_us():
     from pathlib import Path
     text = (Path(__file__).resolve().parents[1] / "docs" / "BACKTEST_RECORD.md").read_text(encoding="utf-8")
     assert "Real filing dates exist mostly for US companies" in text and "90-day lag" in text
+
+
+# --------------------------------------------------------------------------- #
+# D18 OLD-DEFENCE-RETIRE-1
+# --------------------------------------------------------------------------- #
+def test_the_old_all_markets_defence_cohort_is_retired_and_defence_resolves_to_the_europe_us_one():
+    from pathlib import Path
+    import yaml
+    from aristos_council.backtest import cohort_for_industry
+    root = Path(__file__).resolve().parents[1]
+    names = [d["name"] for d in yaml.safe_load((root / "data" / "cohort_definitions.yaml")
+                                               .read_text(encoding="utf-8"))["cohorts"]]
+    assert "Industrials - Aerospace & Defense" not in names
+    assert "Industrials - Aerospace & Defense (Europe + US)" in names
+    assert cohort_for_industry("Aerospace & Defense") == "industrials_aerospace_defense_europe_us"
+    note = (root / "backtests_experiments" / "retired" / "README.md").read_text(encoding="utf-8")
+    assert "industrials_aerospace_defense" in note and "none exist" in note
+
+
+def test_cohorts_status_no_longer_lists_the_retired_cohort(tmp_path):
+    from aristos_council.cohorts.track_record import missing_track_records
+    for slug in ("industrials_aerospace_defense_europe_us", "chemicals"):
+        d = tmp_path / slug / "v1"
+        d.mkdir(parents=True)
+        (d / "members.csv").write_text("ticker\nA\n", encoding="utf-8")
+    bt = tmp_path / "bt" / "industrials_aerospace_defense_europe_us"
+    bt.mkdir(parents=True)
+    (bt / "quality_v1.csv").write_text("x", encoding="utf-8")
+    slugs = [s for s, _ in missing_track_records(tmp_path, tmp_path / "bt")]
+    assert "industrials_aerospace_defense" not in slugs and slugs == ["chemicals"]
