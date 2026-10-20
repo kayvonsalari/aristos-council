@@ -67,3 +67,21 @@ def test_the_story_sentence_carries_no_source_tags(report):
     assert "[pack]" not in line and "[own knowledge]" not in line
     assert line.endswith("$21.3bn swing in other investing.") or "swing in other investing." in line
     assert answer.strip_tags("It was $21.3bn. [own knowledge]") == "It was $21.3bn."
+
+
+# --------------------------------------------------------------------------- #
+# A3 PACK-NETDEBT-1
+# --------------------------------------------------------------------------- #
+def test_the_pack_dates_the_net_debt_reading_and_explains_the_statement_line(report):
+    from aristos_council.data.adapter import Fundamentals
+    from aristos_council.abs_readings import debt_and_cash
+    from aristos_council.judges.blind_pack import build_blind_pack
+    f = Fundamentals(ticker="CO", name="Co", financial_currency="USD", total_debt=200e9, total_cash=58.8e9,
+                     operating_cash_flow=20e9, trailing_period_end="2026-06-30")
+    report.check.debt_and_cash = debt_and_cash(f)
+    pack = build_blind_pack(report, f)
+    section = dict(pack.sections)["Debt and cash"]
+    assert section[0].startswith("owes $141.2bn net of cash") and "balance sheet of Jun 2026" in section[0]
+    assert any("year-end" in ln and "Net Debt" in ln for ln in section)
+    # the net-debt figure appears once in the readings, with its date
+    assert sum("net of cash" in ln for ln in section) == 1
