@@ -7,6 +7,8 @@ reader sees at a glance what came from outside the evidence.
 """
 from __future__ import annotations
 
+import re
+
 import html as _html
 
 from aristos_council.plurals import plural
@@ -175,12 +177,17 @@ def unexplained_line(result) -> str:
     items = []
     for j in result.judges:
         c = j.first_ok if j.status == STABLE else None
-        text = (c.unexplained if c else "").strip().rstrip(".")
-        if text and text.lower() not in ("nothing", "none", "nothing."):
-            items.append(f"{j.label}: {_answer.strip_tags(text)}")
+        text = _answer.strip_tags((c.unexplained if c else "").strip()).strip()
+        if text and text.lower().rstrip(".") not in ("nothing", "none"):
+            items.append(f"{j.label}: {text}")
     if not items:
         return ""
-    return "The judge panel could not account for: " + "; ".join(items) + "."
+    # DOUBLE-STOP-1: a gap sentence may already end with its own stop (or "?", or a stop inside a closing
+    # quote). Between items the stop is dropped for the "; "; at the end the line takes ONE stop unless
+    # the last sentence already has one.
+    items = [re.sub(r"\.+$", "", t) for t in items[:-1]] + [re.sub(r"\.{2,}$", ".", items[-1])]
+    line = "The judge panel could not account for: " + "; ".join(items)
+    return line if re.search(r"[.!?][\"”’)\]]*$", line) else line + "."
 
 
 def _head(card) -> str:

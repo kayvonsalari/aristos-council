@@ -86,6 +86,27 @@ def resolve_all(choices: Sequence[StrategyChoice], labels: Iterable[str]) -> lis
     return [c.strategy for c in choices if c.label in chosen]
 
 
+class LensDropped(RuntimeError):
+    """A lens the run was asked for is not in what the run produced (LENS-DROPOUT-1)."""
+
+
+def missing_lenses(requested: Iterable[str], produced: Iterable[str]) -> list[str]:
+    """The requested lens ids that are absent from ``produced``, in request order."""
+    have = set(produced)
+    return [sid for sid in dict.fromkeys(requested) if sid not in have]
+
+
+def require_all_lenses(requested: Iterable[str], produced: Iterable[str], *, where: str) -> None:
+    """THE guard (list runs and company runs alike): a ticked lens is either in the result or the
+    run stops with an error that names it. Never neither."""
+    gone = missing_lenses(requested, produced)
+    if gone:
+        raise LensDropped(f"{where}: the lens{'es' if len(gone) != 1 else ''} "
+                          f"{', '.join(gone)} {'were' if len(gone) != 1 else 'was'} ticked but "
+                          "is missing from the result. The run is stopped rather than reported "
+                          "without it.")
+
+
 def selected_labels(primary=None, extras=()) -> list[str]:
     """The labels a run grades: every TICKED lens, in offer order.
 

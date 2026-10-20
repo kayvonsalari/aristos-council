@@ -1168,6 +1168,8 @@ def run_company_report(
     if not report.votes and ids:
         report.votes = [LensVote(strategy_id=sid, label=sid, status="no_group",
                                  reason=report.no_vote_reason) for sid in ids]
+    from .strategy.picker import require_all_lenses
+    require_all_lenses(ids, [v.strategy_id for v in report.votes], where=f"Company run for {ticker}")
     # No agreement when no lens ran (no peer group, no data): "no vote, and here is why" is the
     # honest statement, not "none of the lenses applies".
     if report.votes and any(v.status != "no_group" for v in report.votes):
