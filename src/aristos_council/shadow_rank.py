@@ -42,6 +42,10 @@ class WouldRank:
     position: Optional[int] = None
     cohort_size: int = 0
     reason: str = ""                  # why it is not available (plain words); "" when available
+    # WOULD-RANK-GROUP-1: how many names the lens ITSELF ranked, so the sentence agrees with the peers
+    # table beside it (the table's column counts those, the "of N" here counts the wider group of names
+    # whose figures could all be computed). None for a WouldRank built without it.
+    lens_ranked: Optional[int] = None
 
     @property
     def text(self) -> str:
@@ -51,8 +55,12 @@ class WouldRank:
             # peer group, while the peers table showed "rank (of 1)": the 13 are the names whose
             # figures could all be computed, with this company slotted in as if its rules had
             # not excluded it.
+            own = ""
+            if self.lens_ranked is not None:
+                tail = (", too few to give anyone a rank" if self.lens_ranked < MIN_RANKABLE_COHORT else "")
+                own = f" (the lens itself ranked {self.lens_ranked}{tail})"
             return (f"on its measures it would rank {ordinal(self.position)} of the "
-                    f"{self.cohort_size} names with usable figures, had the lens's rules not "
+                    f"{self.cohort_size} names with usable figures{own}, had the lens's rules not "
                     f"excluded it. {NOT_A_VOTE}")
         return f"{UNAVAILABLE_PREFIX}: {self.reason}"
 
@@ -126,4 +134,5 @@ def would_rank(strategy, ranked, pool: dict, ticker: str) -> Optional[WouldRank]
         return WouldRank(False, cohort_size=len(live),
                          reason=f"only {plural(len(live), 'company', 'companies')} could be compared "
                                 f"(needs {MIN_RANKABLE_COHORT})")
-    return WouldRank(True, position=positions[ticker][0], cohort_size=len(live))
+    return WouldRank(True, position=positions[ticker][0], cohort_size=len(live),
+                     lens_ranked=sum(1 for r in ranked if not r.excluded))
