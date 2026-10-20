@@ -129,3 +129,23 @@ def test_a_lens_that_does_not_apply_is_not_shouted_in_the_council_lens_table():
     assert "| Quality | HOLD |" in md                                        # a verdict word keeps capitals
     html = narration_html(n)
     assert "Does not apply" in html and "DOES NOT APPLY" not in html and ">HOLD<" in html.replace(" ", "")
+
+
+# --------------------------------------------------------------------------- #
+# D15 notebook cell 6 / D17 record
+# --------------------------------------------------------------------------- #
+def test_notebook_cell_6_builds_its_table_with_the_scripts_function_not_a_copy():
+    import json
+    from pathlib import Path
+    nb = json.loads((Path(__file__).resolve().parents[1] / "notebooks" / "aristos_backtest.ipynb")
+                    .read_text(encoding="utf-8"))
+    cell = next("".join(c["source"]) if isinstance(c["source"], list) else c["source"]
+                for c in nb["cells"]
+                if ("".join(c["source"]) if isinstance(c["source"], list) else c["source"]).startswith("#@title 6."))
+    assert "build_summary_table(OUT)" in cell and "rows.append" not in cell
+
+
+def test_the_record_states_that_real_filing_dates_are_mostly_us():
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / "docs" / "BACKTEST_RECORD.md").read_text(encoding="utf-8")
+    assert "Real filing dates exist mostly for US companies" in text and "90-day lag" in text
