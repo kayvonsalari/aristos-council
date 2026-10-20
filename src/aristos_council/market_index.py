@@ -2100,6 +2100,10 @@ _LSE_FOREIGN_CODE = re.compile(r"^0[A-Z0-9]{3}$")
 # apart in the index, and the ticker tiebreak ('8' < '9') seated Alibaba on its RMB counter 89988.
 _HK_RMB_CODE = re.compile(r"^8\d{4}$")
 _GDR_NAME = re.compile(r"\bGDR\b|global depositary", re.IGNORECASE)
+# PEER-GDR-1 - a London depositary receipt whose NAME is the company's own ("Mahindra & Mahindra
+# Limited", MHID.LSE) carries the Reg S marker in its ISIN instead: "USY..." / "USX..." is the issuer code
+# of a non-US issuer's Reg S / 144A security, which no UK listing of an ordinary share has.
+_REG_S_ISIN = re.compile(r"^US[XY]", re.IGNORECASE)
 
 
 def receipt_kind(row: "IndexRow") -> str:
@@ -2125,7 +2129,7 @@ def receipt_kind(row: "IndexRow") -> str:
     elif market == "LSE":
         if _LSE_FOREIGN_CODE.match(code):
             return RECEIPT_LSE_LINE
-        if _GDR_NAME.search(name):
+        if _GDR_NAME.search(name) or _REG_S_ISIN.match(row.isin or ""):
             return RECEIPT_LSE_GDR
     elif market == "SW":
         primary = normalise_symbol(row.primary_ticker)

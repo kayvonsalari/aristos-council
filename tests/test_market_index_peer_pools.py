@@ -188,6 +188,21 @@ def test_a_london_gdr_is_a_receipt():
     assert receipt_kind(gdr) == RECEIPT_LSE_GDR
 
 
+def test_a_london_depositary_receipt_under_the_companys_own_name_is_found_by_its_reg_s_isin():
+    """PEER-GDR-1 (Batch 28): MHID.LSE is "Mahindra & Mahindra Limited" - no GDR in the name - but its ISIN
+    USY541641194 is a Reg S issuer code, and it sat in the auto cohort as a company. Same shape: L&T
+    (LTOD.LSE, USY5217N1183) and China Steel (CNSD.LSE, USY150411251)."""
+    for ticker, name, isin in (("MHID.LSE", "Mahindra & Mahindra Limited", "USY541641194"),
+                               ("LTOD.LSE", "Larsen & Toubro Limited", "USY5217N1183"),
+                               ("CNSD.LSE", "China Steel Corporation", "USY150411251")):
+        assert receipt_kind(_row(ticker, name, primary="M&M.NSE", isin=isin, market="LSE")
+                            ) == RECEIPT_LSE_GDR, ticker
+    # an ordinary London listing, including a US-incorporated one, is not touched
+    assert receipt_kind(_row("SOM.LSE", "Somero Enterprise Inc", primary="SOM.LSE", isin="USU834501038",
+                             market="LSE")) == ""
+    assert receipt_kind(_row("BP.LSE", "BP p.l.c.", primary="BP.LSE", isin="GB0007980591", market="LSE")) == ""
+
+
 def test_a_swiss_line_that_names_a_foreign_home_is_secondary():
     assert receipt_kind(_row("LLY.SW", "Eli Lilly and Company", primary="LLY.US",
                              market="SW")) == RECEIPT_SWISS_LINE
