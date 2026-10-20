@@ -413,7 +413,8 @@ def _dividend_streak_from_ticker(tk) -> tuple:
                 pass
     except Exception:
         return None, None, None, None, None
-    streak, last_cut = dividend_streak(annual, date.today().year)
+    year_stats = {y: (sum(a), statistics.median(a), len(a)) for y, a in per_year.items() if a}
+    streak, last_cut = dividend_streak(annual, date.today().year, year_stats=year_stats)
     totals = [[float(y), float(annual[y])] for y in sorted(annual)]
     # CRIT-NOCUT-2: the per-year payments reduced to (total, median, count). Computed here
     # because this is where the individual payments already are; deriving them again

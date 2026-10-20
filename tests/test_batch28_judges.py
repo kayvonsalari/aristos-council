@@ -85,3 +85,53 @@ def test_the_pack_dates_the_net_debt_reading_and_explains_the_statement_line(rep
     assert any("year-end" in ln and "Net Debt" in ln for ln in section)
     # the net-debt figure appears once in the readings, with its date
     assert sum("net of cash" in ln for ln in section) == 1
+
+
+# --------------------------------------------------------------------------- #
+# A4 DIV-CUT-SPECIAL-1
+# --------------------------------------------------------------------------- #
+def _ford_years():
+    import statistics
+    per = {2021: [.15] * 4, 2022: [.15] * 4, 2023: [.8, .15, .15, .15], 2024: [.33, .15, .15, .15],
+           2025: [.3, .15, .15, .15], 2026: [.15] * 3}
+    stats = {y: (sum(a), statistics.median(a), len(a)) for y, a in per.items()}
+    return per, stats, {y: sum(a) for y, a in per.items()}
+
+
+def test_a_shrinking_special_is_not_a_cut_of_the_regular_dividend():
+    from aristos_council.tools.screening import dividend_streak
+    _per, stats, annual = _ford_years()
+    assert dividend_streak(annual, 2026)[1] == 2025                       # totals alone: the old false flag
+    assert dividend_streak(annual, 2026, year_stats=stats) == (0, None)   # regular $0.60 never moved
+
+
+def test_a_real_cut_still_reads_as_a_cut_with_the_regular_dividend_rule():
+    import statistics
+    from aristos_council.tools.screening import dividend_streak
+    per = {2018: [.5] * 4, 2019: [.5] * 4, 2020: [.5, .5, .1, .1], 2021: [.1] * 4, 2022: [.1] * 4, 2023: [.1] * 2}
+    stats = {y: (sum(a), statistics.median(a), len(a)) for y, a in per.items()}
+    annual = {y: sum(a) for y, a in per.items()}
+    assert dividend_streak(annual, 2023, year_stats=stats)[1] == 2021
+
+
+def test_cyclical_income_already_reads_the_regular_dividend_so_it_passes_the_ford_shape():
+    from aristos_council.data.adapter import DividendEvent
+    from aristos_council.tools.screening import max_dividend_cuts_criterion
+    from datetime import date
+    per, _stats, _annual = _ford_years()
+    events = [DividendEvent(ex_date=date(y, 1 + 3 * i % 12, 10), amount=a)
+              for y, amounts in per.items() for i, a in enumerate(amounts)]
+    res = max_dividend_cuts_criterion(events, years=4)
+    assert res.passed is True and res.observed == 0.0
+
+
+def test_the_pack_labels_specials_apart_and_names_no_cut(report):
+    from aristos_council.data.adapter import Fundamentals
+    from aristos_council.judges.blind_pack import _dividends
+    _per, stats, _annual = _ford_years()
+    f = Fundamentals(ticker="F", name="Ford", dividend_per_share=0.6, last_dividend_reduction_year=None,
+                     dividend_year_stats=[[float(y), t, m, float(n)] for y, (t, m, n) in stats.items()])
+    lines = _dividends(f)
+    assert not any("Most recent year" in ln for ln in lines)
+    special = next(ln for ln in lines if "Supplemental or special" in ln)
+    assert "2023 +0.65" in special and "2024 +0.18" in special and "inferred" in special

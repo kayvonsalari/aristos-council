@@ -311,7 +311,17 @@ def _dividends(fundamentals) -> list[str]:
                    f"history on file is limited, so the true run may be longer)")
     cut = getattr(fundamentals, "last_dividend_reduction_year", None)
     if cut:
-        out.append(f"Most recent year the dividend was cut: {cut}")
+        out.append(f"Most recent year the regular dividend was cut: {cut}")
+    # DIV-CUT-SPECIAL-1: supplemental / special payments, labelled apart from the regular dividend.
+    from ..tools.screening import inferred_special_dividends
+    stats = {int(y): (t, m, int(n)) for y, t, m, n in
+             (getattr(fundamentals, "dividend_year_stats", None) or [])}
+    specials = inferred_special_dividends(stats)
+    if specials:
+        shown = ", ".join(f"{y} +{amt:.2f}" for y, amt in specials.items())
+        out.append(f"Supplemental or special payments above the regular dividend (inferred from the "
+                   f"payment record, which does not label them; per share): {shown}. They are left out of "
+                   f"the cut test for the regular dividend.")
     return out
 
 
