@@ -34,7 +34,7 @@ def test_mixed_votes_state_both():
 
 def test_buys_only_and_holds_only_read_as_before():
     assert build_agreement([_v("A", "buy"), _v("B", "hold")]).headline == "BUY on 1 of 2 votes"
-    assert build_agreement([_v("A", "hold")]).headline == "BUY on 0 of 1 vote"
+    assert build_agreement([_v("A", "hold")]).headline == "HOLD, 1 of 1 vote"      # COUNCIL-RECORD-HEADING-1
 
 
 def test_the_company_table_row_carries_the_sell_votes():

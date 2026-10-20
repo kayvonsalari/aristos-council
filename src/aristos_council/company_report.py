@@ -266,7 +266,7 @@ class CompanyAgreement:
 
     @property
     def headline(self) -> str:
-        """"BUY on 0 of 1 vote; 2 lenses did not apply to this company", "SELL on 3 of 3 votes; no BUY"
+        """"HOLD, 1 of 1 vote; 2 lenses did not apply to this company", "SELL on 3 of 3 votes; no BUY"
         (AGREEMENT-SELL-1: SELL votes are always stated), or - when nothing voted -
         "No lens voted: every ticked lens's rules exclude this company". Never "0 of 0"."""
         if not self.n_ticked:
@@ -280,6 +280,10 @@ class CompanyAgreement:
             head = f"SELL on {self.sell_votes} of {votes}; no BUY"
         elif self.sell_votes:
             head = f"BUY on {self.buy_votes} of {votes}; SELL on {self.sell_votes}"
+        elif not self.buy_votes:
+            # COUNCIL-RECORD-HEADING-1: every vote was HOLD. "BUY on 0 of 2 votes" stated the record
+            # as a count of the verdict nobody gave, and the council narrator echoed the word BUY.
+            head = f"HOLD, {self.n_voted} of {votes}"
         else:
             head = f"BUY on {self.buy_votes} of {votes}"
         return f"{head}; {self._did_not_apply()}" if self.n_not_applying else head

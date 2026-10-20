@@ -28,3 +28,31 @@ def test_a_genuine_rank_with_a_trailing_full_stop_still_parses():
     n = _well_formed()
     n.neutral_context = ["It ranks 3/6."]
     assert all(i.code != "impossible_rank" for i in validate_narration(n, ranker_verdict="buy"))
+
+
+# --------------------------------------------------------------------------- #
+# C12 COUNCIL-RECORD-HEADING-1
+# --------------------------------------------------------------------------- #
+def _vote(label, verdict):
+    from aristos_council.company_report import LensVote
+    return LensVote(strategy_id=f"{label}_v1", label=label, kind="selector", asks="", status="ranked",
+                    verdict=verdict, position=3, cohort_size=10)
+
+
+def test_an_all_hold_record_is_stated_as_hold_not_as_zero_buys():
+    from aristos_council.company_report import LensVote, build_agreement
+    votes = [_vote("A", "hold"), _vote("B", "hold"),
+             LensVote(strategy_id="c_v1", label="C", kind="selector", asks="", status="excluded", reason="x")]
+    ag = build_agreement(votes)
+    assert ag.headline == "HOLD, 2 of 2 votes; 1 lens did not apply to this company"
+    assert "BUY" not in ag.headline
+
+
+def test_the_echoes_buy_warning_disappears_once_the_heading_states_the_record():
+    from aristos_council.company_report import build_agreement
+    from aristos_council.narration_schema import validate_narration
+    ag = build_agreement([_vote("A", "hold"), _vote("B", "hold")])
+    n = _well_formed()
+    n.echoed_verdict = ag.headline
+    codes = [i.code for i in validate_narration(n, ranker_verdict="hold", verdict_of_record=ag.headline)]
+    assert "verdict_mismatch" not in codes and "headline_does_not_restate_verdict_of_record" not in codes
