@@ -15,10 +15,16 @@
 #             local .env, exactly like ANTHROPIC_API_KEY and EODHD_API_KEY, and are never printed
 #             or logged. A judge whose key is missing is shown as "not run - no key".
 #
+# timeout_seconds: the client timeout of ONE model call, for every judge (a judge entry may carry its
+# own). A call that times out is tried once more; a second timeout shows as "error: timeout".
+# thinking_level: Gemini only - how much reasoning the model spends before answering. A verdict and
+# a few sentences does not need deep reasoning, so "low". Leave it out to take the provider default.
+#
 # calls_per_judge: every judge is asked the SAME question this many times; if the answers differ
 # the judge is "unstable" and both are kept. 2 is the design; do not lower it to save money.
 version: 1
 calls_per_judge: 2
+timeout_seconds: 90
 judges:
   - family: anthropic
     label: Claude
@@ -32,3 +38,4 @@ judges:
     label: Gemini
     model: gemini-3.8-flash
     key_env: GEMINI_API_KEY
+    thinking_level: low

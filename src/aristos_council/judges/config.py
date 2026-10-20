@@ -13,6 +13,7 @@ PROMPT_VERSION = "judge_prompt_v2"
 
 FAMILIES = ("anthropic", "openai", "google")
 DEFAULT_CALLS_PER_JUDGE = 2
+DEFAULT_TIMEOUT_SECONDS = 90      # only when data/judges.yaml omits it; the setting lives in the yaml
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,8 @@ class JudgeSpec:
     label: str           # what the page calls it
     model: str
     key_env: str
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS   # per-call client timeout (data/judges.yaml)
+    thinking_level: str = ""     # Gemini only: "low" etc.; "" leaves the provider default
 
     def has_key(self, environ=None) -> bool:
         env = os.environ if environ is None else environ
@@ -35,6 +38,7 @@ class JudgeSpec:
 class PanelConfig:
     judges: tuple
     calls_per_judge: int = DEFAULT_CALLS_PER_JUDGE
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
 
     def runnable(self, environ=None) -> tuple:
         return tuple(j for j in self.judges if j.has_key(environ))
@@ -49,6 +53,7 @@ def load_config(path: Optional[Path] = None) -> PanelConfig:
     import yaml
 
     doc = yaml.safe_load(Path(path or CONFIG_PATH).read_text(encoding="utf-8")) or {}
+    timeout = max(1, int(doc.get("timeout_seconds") or DEFAULT_TIMEOUT_SECONDS))
     judges = []
     for entry in doc.get("judges") or []:
         family = str(entry.get("family") or "").strip().lower()
@@ -58,11 +63,13 @@ def load_config(path: Optional[Path] = None) -> PanelConfig:
         if not model:
             raise ValueError(f"judges.yaml: the {family} judge has no model")
         judges.append(JudgeSpec(family=family, label=str(entry.get("label") or family).strip(),
-                                model=model, key_env=str(entry.get("key_env") or "").strip()))
+                                model=model, key_env=str(entry.get("key_env") or "").strip(),
+                                timeout_seconds=max(1, int(entry.get("timeout_seconds") or timeout)),
+                                thinking_level=str(entry.get("thinking_level") or "").strip().lower()))
     if len({j.family for j in judges}) != len(judges):
         raise ValueError("judges.yaml: one judge per model family")
     calls = int(doc.get("calls_per_judge") or DEFAULT_CALLS_PER_JUDGE)
-    return PanelConfig(judges=tuple(judges), calls_per_judge=max(1, calls))
+    return PanelConfig(judges=tuple(judges), calls_per_judge=max(1, calls), timeout_seconds=timeout)
 
 
 def prompt_text() -> str:
