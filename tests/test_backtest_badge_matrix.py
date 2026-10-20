@@ -60,8 +60,33 @@ def test_write_run_md_states_the_date_and_the_row_count(tmp_path):
     assert "python -m scripts.backtest_badge_matrix" in text
 
 
-def test_the_real_committed_summary_csv_has_91_rows_and_every_verdict_is_known():
+def test_the_real_committed_summary_csv_has_98_rows_and_every_verdict_is_known():
     from scripts.backtest_badge_matrix import DEFAULT_SUMMARY, VERDICT_LETTER
     rows = read_summary(DEFAULT_SUMMARY)
-    assert len(rows) == 91                     # 13 cohorts x 7 lenses (LENS-EXPAND-1a added two)
+    assert len(rows) == 98                     # 14 cohorts x 7 lenses (BACKTEST-DOCS-14-1: + defence)
+    assert len({r["cohort"] for r in rows}) == 14
     assert all(r["verdict"] in VERDICT_LETTER for r in rows)
+
+
+def test_every_cohort_folder_with_per_lens_csvs_has_summary_rows():
+    """BACKTEST-DOCS-14-1: the defence cohort (PR #174) had its 7 per-lens CSVs committed but no
+    SUMMARY.csv rows, so the matrix, the badges' source table and the docs silently said 13 cohorts."""
+    from scripts.backtest_badge_matrix import DEFAULT_SUMMARY, cohort_folders_without_summary_rows
+    rows = read_summary(DEFAULT_SUMMARY)
+    assert cohort_folders_without_summary_rows(DEFAULT_SUMMARY.parent, rows) == []
+
+
+def test_the_check_names_a_cohort_folder_whose_summary_rows_are_missing():
+    from scripts.backtest_badge_matrix import DEFAULT_SUMMARY, cohort_folders_without_summary_rows
+    rows = [r for r in read_summary(DEFAULT_SUMMARY) if "Aerospace" not in r["cohort"]]
+    assert cohort_folders_without_summary_rows(DEFAULT_SUMMARY.parent, rows) == [
+        "industrials_aerospace_defense_europe_us"]
+
+
+def test_the_committed_summary_csv_is_what_the_per_lens_csvs_rebuild_to(tmp_path):
+    """The rebuild is the notebook's cell 6 row construction; if the committed file ever drifts from
+    the CSVs beside it (or the rebuild from the notebook), this names it."""
+    from scripts.backtest_badge_matrix import DEFAULT_SUMMARY, build_summary_table
+    out = tmp_path / "SUMMARY.csv"
+    build_summary_table(DEFAULT_SUMMARY.parent).to_csv(out, index=False)
+    assert out.read_bytes().splitlines() == DEFAULT_SUMMARY.read_bytes().splitlines()
