@@ -51,7 +51,7 @@ TEN_YEARS_ALL_NEGATIVE = {y: -0.01 for y in range(2016, 2026)}    # bar comforta
 def test_proven_needs_the_bar_and_luck_5_pct_or_under(tmp_path):
     _write(tmp_path, excess_by_year=TEN_YEARS_ALL_POSITIVE, luck_pct_mean=0.03)
     b = track_record(SLUG, LENS, root=tmp_path)
-    assert b.label == "proven here" and b.verdict == "proven"
+    assert b.label == "passed the test here" and b.verdict == "proven"
     assert b.mean_excess == pytest.approx(0.03) and b.years_positive == 10
     assert b.years_measured == 10 and b.rounds_held == 120
     assert b.luck_pct == pytest.approx(0.03)
@@ -60,7 +60,7 @@ def test_proven_needs_the_bar_and_luck_5_pct_or_under(tmp_path):
 def test_promising_needs_the_bar_and_luck_between_5_and_25_pct(tmp_path):
     _write(tmp_path, excess_by_year=TEN_YEARS_ALL_POSITIVE, luck_pct_mean=0.15)
     b = track_record(SLUG, LENS, root=tmp_path)
-    assert b.label == "promising here" and b.verdict == "not beyond luck"
+    assert b.label == "passed the bar here, luck not ruled out" and b.verdict == "not beyond luck"
 
 
 def test_worked_against_you_fires_on_luck_alone_bar_or_no_bar(tmp_path):
@@ -69,11 +69,11 @@ def test_worked_against_you_fires_on_luck_alone_bar_or_no_bar(tmp_path):
     _write(tmp_path, excess_by_year=TEN_YEARS_ALL_NEGATIVE, luck_pct_mean=0.95)
     _write(tmp_path, excess_by_year=TEN_YEARS_ALL_POSITIVE, luck_pct_mean=0.95, lens="bar_met_v1")
     b = track_record(SLUG, LENS, root=tmp_path)
-    assert b.label == "worked against you here"
+    assert b.label == "behind random picks here"
     # BACKTEST-2: "regardless of the bar" - a lens that ALSO clears the bar still reads this way
     # once 9-in-10 random pickers matched or beat it.
     b2 = track_record(SLUG, "bar_met_v1", root=tmp_path)
-    assert b2.label == "worked against you here"
+    assert b2.label == "behind random picks here"
 
 
 def test_no_edge_shown_is_the_catch_all_for_everything_else_tested(tmp_path):
@@ -87,7 +87,7 @@ def test_untested_fires_on_a_genuinely_insufficient_result(tmp_path):
     _write(tmp_path, excess_by_year={2024: 0.05, 2025: 0.05, 2026: 0.05}, luck_pct_mean=0.01)
     b = track_record(SLUG, LENS, root=tmp_path)
     assert b.label == "untested here" and b.verdict == "insufficient"
-    assert "not enough history" in b.note
+    assert "too little history" in b.note
 
 
 def test_untested_fires_on_no_committed_result_at_all(tmp_path):
@@ -97,11 +97,13 @@ def test_untested_fires_on_no_committed_result_at_all(tmp_path):
     assert b.mean_excess is None and b.note == "no backtest result for this cohort and lens"
 
 
-def test_every_label_has_exactly_one_sentence_and_matches_the_badge_scale():
+def test_every_label_has_one_meaning_and_matches_the_badge_scale():
     assert set(BADGE_MEANINGS) == set(BADGE_LABELS)
     for label in BADGE_LABELS:
         sentence = BADGE_MEANINGS[label]
-        assert sentence.endswith(".") and sentence.count(".") == 1     # exactly one sentence
+        # BADGE-WORDS-2: the passing labels close with "One test, one decade; not proof..." so a
+        # meaning is one statement plus at most that one caveat sentence, never a paragraph.
+        assert sentence.endswith(".") and sentence.count(". ") <= 1
 
 
 # =========================================================================== #
@@ -131,13 +133,13 @@ def test_a_two_part_cohort_name_shows_only_the_part_after_the_dash(tmp_path):
 
 
 def test_format_track_record_summary_counts_in_badge_scale_order(tmp_path):
-    badges = [Badge("proven here", "proven", 0.03, 0.02, 8, 10, 100, ""),
-             Badge("proven here", "proven", 0.04, 0.01, 9, 10, 100, ""),
-             Badge("promising here", "not beyond luck", 0.03, 0.15, 7, 10, 100, ""),
+    badges = [Badge("passed the test here", "proven", 0.03, 0.02, 8, 10, 100, ""),
+             Badge("passed the test here", "proven", 0.04, 0.01, 9, 10, 100, ""),
+             Badge("passed the bar here, luck not ruled out", "not beyond luck", 0.03, 0.15, 7, 10, 100, ""),
              Badge("no edge shown here", "not proven", -0.01, 0.5, 3, 10, 100, ""),
              Badge("no edge shown here", "not proven", -0.02, 0.6, 2, 10, 100, "")]
     assert (format_track_record_summary(badges)
-           == "Track record: 2 proven, 1 promising, 2 no edge shown")
+           == "Track record: 2 passed the test, 1 passed the bar, luck not ruled out, 2 no edge shown")
     assert format_track_record_summary([]) == ""
 
 
@@ -248,10 +250,10 @@ def test_b24_e2_a_missing_luck_figure_is_said_not_hidden():
 
 def test_b24_e2_other_labels_keep_their_own_meaning_and_nothing_failed_gives_no_line():
     from aristos_council.backtest import BADGE_MEANINGS
-    assert _badge(0.03, 0.01, 7, label="proven here").explanation() == BADGE_MEANINGS["proven here"]
+    assert _badge(0.03, 0.01, 7, label="passed the test here").explanation() == BADGE_MEANINGS["passed the test here"]
     assert _badge(0.03, 0.01, 7).why_line() == ""
-    assert _badge(0.05, 0.95, 4, label="worked against you here").explanation() == BADGE_MEANINGS[
-        "worked against you here"]
+    assert _badge(0.05, 0.95, 4, label="behind random picks here").explanation() == BADGE_MEANINGS[
+        "behind random picks here"]
 
 
 def test_b24_e2_the_lens_note_uses_the_generated_sentence(tmp_path):

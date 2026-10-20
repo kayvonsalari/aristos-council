@@ -119,6 +119,8 @@ tech_semiconductor_equipment x magic_formula_momentum_v1: insufficient - mean an
   end of each hold, over non-overlapping chains of holds (worst chain, no-position months as cash),
   so it understates a dip *inside* a hold.
 
+**The exclusion method, stated once.** Every "drop best" figure in this project — the CSV column, the summary, the badge hover sentence ("without its best pick each year…") and `docs/BACKTEST_RECORD.md` — means this: in each round, remove the single best-returning BUY name and recompute the excess; only rounds with at least 4 BUY names are included (below that, removing one name leaves a basket too small to read). Other documents refer here rather than restate it.
+
 **Reading `excess_drop_best` (BACKTEST-1B).** Each round with 4 or more BUY names also carries
 `excess_drop_best` — the excess recomputed with the single best-returning BUY name removed (`None`
 below 4 names, or when the round held no position). `verdict()` never reads this column; it is for
@@ -234,27 +236,60 @@ weight because of its badge is a separate, still-unbuilt step (see "What it will
 
 ### The badge scale
 
-One of five labels, checked in this order, each with the ONE sentence that explains it — written
-here once and reused verbatim by the app's hover/expander, so the two can never drift
-(`BADGE_MEANINGS` in `backtest.py`):
+One of five labels, checked in this order, each with the sentence that says what the historical
+test establishes (BADGE-WORDS-2: nothing more) — written here once and reused verbatim by the app's
+hover/expander (`BADGE_MEANINGS` in `backtest.py`):
 
 | Badge | Meaning |
 |---|---|
-| **proven here** | Beat its benchmark in this cohort by enough, often enough, for long enough, that fewer than 1 in 20 random stock-pickers matched it. |
-| **promising here** | Beat its benchmark in this cohort by a real margin most years, and did better than most random stock-pickers - not yet enough history or separation from luck to call it proven. |
-| **worked against you here** | In this cohort, picking names at random would have matched or beaten this lens at least 9 times in 10. |
-| **no edge shown here** | In this cohort, this lens's record does not clear the bar, and does no better than picking names at random. |
-| **untested here** | There is not yet enough measured history for this cohort and this lens to say anything. |
+| **passed the test here** | In this cohort this lens beat the group average by at least 2 points a year in at least 6 of 10 years, and fewer than 1 in 20 random pickers of the same basket size matched it. One test, one decade; not proof of a repeatable edge. |
+| **passed the bar here, luck not ruled out** | In this cohort this lens beat the group average by at least 2 points a year in at least 6 of 10 years, but more than 1 in 20 random pickers of the same basket size matched it, so luck is not ruled out. One test, one decade; not proof of a repeatable edge. |
+| **behind random picks here** | In this cohort at least 9 in 10 random pickers of the same basket size did as well or better than this lens. That describes this one historical test, not what comes next. |
+| **no edge shown here** | In this cohort this lens did not clear the bar (beating the group average by 2 points a year in 6 of 10 years), and it was not clearly behind random picking either. |
+| **untested here** | There is not enough measured history for this cohort and this lens to say anything either way. |
+
+The labels were renamed on 2026-10-20 (BADGE-WORDS-2); the rule, thresholds and ordering did not
+change, and a pinned test holds every committed (cohort, lens) verdict and badge assignment
+identical. Saved reports and snapshots that carry the old words (`proven here`, `promising here`,
+`worked against you here`) are mapped to the new ones on read, through the single
+`LEGACY_LABELS` dict in `backtest.py`.
 
 The rule, precisely (`track_record()` in `backtest.py`):
 
 1. no committed result for this cohort + lens at all, or its own `verdict()` reads
    "insufficient" (too little measured history to trust anything below) → **untested here**
-2. `verdict()` == "proven" → **proven here**
+2. `verdict()` == "proven" → **passed the test here**
 3. the plain excess/years bar is met (mean excess ≥ +2%/yr, positive in ≥ 6 of 10 years) AND
-   `luck_pct_mean` ≤ 25% → **promising here**
-4. `luck_pct_mean` ≥ 90% — regardless of whether the bar was met — → **worked against you here**
+   `luck_pct_mean` ≤ 25% → **passed the bar here, luck not ruled out**
+4. `luck_pct_mean` ≥ 90% — regardless of whether the bar was met — → **behind random picks here**
 5. everything else that was actually tested → **no edge shown here**
+
+**Why an "untested here" is untested (UNTESTED-WHY-1).** The badge's note names the cause, computed
+from the per-round CSV: *its picks were too few to count (1 or 2 names a month; the test needs 3)*
+when the lens ranked at least 5 names in the median round but held under 3 BUY names in most
+rounds; *rarely applies in this industry* when it ranked under 5 names in the median round while at
+least 10 were eligible; *too little history* otherwise.
+
+**Three BUY names here, five ranked names in the app.** The backtest counts a month as a held
+position from 3 BUY names (`MIN_BUYS`), because below that the "basket" is a one- or two-stock bet
+and its excess return says nothing about the lens. The app gives a company a verdict from 5 ranked
+names (`MIN_RANKABLE_COHORT`), because a quintile cut over fewer than 5 companies puts one name in
+every bucket and means nothing. The two numbers measure different things — the width of the ranked
+pool versus the size of the BUY basket — so a lens can rank 8 names (a verdict in the app) yet buy
+only 2 a month (no position in the backtest, hence "untested here").
+
+**One sentence about chance, under every badge (CHANCE-LINE-1).** `evidence_summary()` reads the
+committed CSVs and returns how many pairs were measured, how many cleared the bar and passed the
+luck test, how many of each chance alone would produce (the sum of each test's own
+`luck_pct_pass`; measured × 5%), and the calibration tails (pairs in the ≤5% and ≥95% luck bins,
+about 5% of measured expected in each; flagged approximate when either is over twice that). It is
+shown in the badge hover, at the top of `docs/BACKTEST_RECORD.md` (generated by
+`scripts/backtest_badge_matrix.py`, never typed) and by `python -m aristos_council.backtest summary`.
+
+**Do two passes share the same picks? (CONC-READ-1).** `backtest summary` also prints, for every
+pair of lenses that both cleared the bar in the same cohort, the mean per-round basket overlap
+(Jaccard over the rounds where both held a position) and "identical baskets in k of n rounds"; at
+80% overlap or more it says the two results share that share of their picks and count as one.
 
 ### Where the cohort comes from
 
@@ -703,6 +738,16 @@ backtests/`, then `python -m aristos_council.backtest summary backtests/` to rea
 matrix above and `backtests/RUN.md` should still be regenerated afterward so they describe
 exactly what is committed. A cohort that has been re-built (`v2`) is a different cohort: its file
 records the version, and a rebuilt cohort should be re-run rather than compared with the old file.
+
+**The refresh protocol (BASELINE-1).** The state before 27A is the annotated tag
+`backtests-baseline-2026-10-20`. `python -m scripts.backtest_compare <ref-or-dir> <ref-or-dir>`
+prints, per cohort × lens, the verdict, the badge label, the mean annual excess and the luck figure
+before and after, plus the count of label changes (a ref is a git ref whose `backtests/` is
+compared; a directory is read as it is). Every future re-run therefore commits its compare output
+(`backtests/COMPARE_<date>.md`) beside the CSVs it describes, so a reader can see exactly what a
+refresh moved. An experiment run (a different floor, a new lens version, a changed gate) never
+overwrites `backtests/`: it writes to its own folder, `backtests_experiments/<name>/`, and is
+compared against the committed baseline the same way.
 
 `backtests/RUN.md` (written by the script above) states the date `backtests/` was last refreshed,
 so a reader of the committed results — or of a badge in the app — can tell at a glance how stale

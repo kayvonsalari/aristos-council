@@ -57,6 +57,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
+from .backtest import canonical_label
+
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT_DIR = ROOT / "snapshots"
 FILE_PREFIX = "forward_"
@@ -458,7 +460,7 @@ def grade_snapshot(rows: list[dict], snap_date: date, adapter, today: date) -> t
         if r["verdict"] not in ("BUY", "HOLD", "SELL"):
             continue
         key = (r["cohort"], r["lens"])
-        cell = cells.setdefault(key, CellResult(r["cohort"], r["lens"], r["badge"], Group(), Group(),
+        cell = cells.setdefault(key, CellResult(r["cohort"], r["lens"], canonical_label(r["badge"]), Group(), Group(),
                                                 Group(), Group(), 0))
         nr = returns.get(r["ticker"])
         if nr is None or nr.usd_return is None:

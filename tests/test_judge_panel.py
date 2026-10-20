@@ -84,7 +84,7 @@ def test_the_pack_has_no_lens_name_no_verdict_word_and_no_badge_word(report):
         assert v.strategy_id not in text and v.label not in text
     assert find_leaks(text, strategies_dir=STRAT_DIR, check_generic_names=False) == []
     assert not re.search(r"\b(?:buy|hold|sell)\b", text, re.I)
-    for word in ("proven", "no edge", "untested", "worked against you", "doubted", "track record",
+    for word in ("proven", "no edge", "untested", "worked against you", "passed the test", "behind random", "doubted", "track record",
                  "shortlist", "agreement", "council", "verdict", "lens", "rank"):
         assert not re.search(rf"(?<![A-Za-z]){word}", text, re.I), word
 

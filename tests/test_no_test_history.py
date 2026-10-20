@@ -30,4 +30,5 @@ def test_a_badge_with_rounds_reads_as_before():
 
 def test_the_real_msft_case_growth_in_systems_software_has_no_history():
     b = track_record("tech_systems_software", "growth_garp_v2")
-    assert b.years_measured == 0 and b.detail_line() == NO_TEST_HISTORY and b.note == NO_TEST_HISTORY
+    assert b.years_measured == 0 and b.detail_line().startswith(NO_TEST_HISTORY)   # UNTESTED-WHY-1 adds the cause
+    assert b.note in ("rarely applies in this industry", "too little history") or "too few to count" in b.note

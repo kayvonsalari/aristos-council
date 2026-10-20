@@ -1527,6 +1527,131 @@ def calibration_report_for_directory(root) -> CalibrationReport:
 
 
 # --------------------------------------------------------------------------- #
+# CHANCE-LINE-1 — the one sentence that puts every badge in the context of all the tests run
+# --------------------------------------------------------------------------- #
+def _about(x: float) -> str:
+    """"about 11" for a large expected count; "3 to 4" for a small fractional one (rounding 3.4 to
+    "3" or 3.6 to "4" would claim a precision the calculation does not have)."""
+    import math
+    if x >= 10 or abs(x - round(x)) < 0.25:
+        return str(int(round(x)))
+    return f"{math.floor(x)} to {math.ceil(x)}"
+
+
+@dataclass(frozen=True)
+class EvidenceSummary:
+    """Across every measured cohort x lens pair: how many cleared the bar and passed the luck test,
+    how many chance alone would produce, and whether the luck test itself runs hot."""
+    measured: int                      # pairs with enough history to be judged
+    bar_passed: int                    # cleared the excess/years bar (luck passed or not)
+    bar_expected: float                # sum of each test's own luck_pct_pass
+    luck_passed: int                   # also passed the luck test ("proven")
+    luck_expected: float               # measured x MAX_LUCK
+    low_tail: int                      # luck_pct_mean in the 0-5% tail
+    high_tail: int                     # luck_pct_mean in the 95-100% tail
+    tail_expected: float               # 5% of the luck-measured pairs, per tail
+    approximate: bool                  # either tail holds more than twice its expectation
+
+    def sentence(self) -> str:
+        if self.measured == 0:
+            return "No cohort x lens pair has enough measured history yet."
+        hot = ("; the luck test itself still runs somewhat hot, so treat these as approximate"
+               if self.approximate else "")
+        return (f"Across all tested industries, {self.bar_passed} of {self.measured} cleared the bar "
+                f"(about {_about(self.bar_expected)} would by chance) and {self.luck_passed} also passed "
+                f"the luck test (about {_about(self.luck_expected)} would by chance{hot}). These results "
+                f"are exploratory, not proof of a repeatable edge.")
+
+    def calibration_line(self) -> str:
+        return (f"Luck-test calibration: {self.low_tail} pairs in the 0-5% tail and {self.high_tail} in "
+                f"the 95-100% tail, about {self.tail_expected:.1f} expected in each"
+                + ("; either tail is over twice its expectation, so the luck test is approximate."
+                   if self.approximate else "."))
+
+
+def evidence_summary(root=None) -> EvidenceSummary:
+    """CHANCE-LINE-1: every figure read from the committed per-pair CSVs under ``root`` (default
+    ``backtests/``), never typed. "Measured" is the non-"insufficient" pairs, the same population
+    ``multiple_testing`` and ``calibration_report`` use."""
+    results = list(_load_backtests(root).values())
+    tested = [r for r in results if verdict(r, max_luck=r.max_luck) != "insufficient"]
+    n = len(tested)
+    bar_passed = sum(1 for r in tested if verdict(r, max_luck=r.max_luck) in ("proven", "not beyond luck"))
+    luck_passed = sum(1 for r in tested if verdict(r, max_luck=r.max_luck) == "proven")
+    cal = calibration_report(tested)
+    tail_expected = cal.expected[0]
+    low, high = cal.counts[0], cal.counts[-1]
+    approximate = tail_expected > 0 and (low > CALIBRATION_WARNING_FACTOR * tail_expected
+                                         or high > CALIBRATION_WARNING_FACTOR * cal.expected[-1])
+    return EvidenceSummary(
+        measured=n, bar_passed=bar_passed, bar_expected=sum((r.luck_pct_pass or 0.0) for r in tested),
+        luck_passed=luck_passed, luck_expected=n * MAX_LUCK, low_tail=low, high_tail=high,
+        tail_expected=tail_expected, approximate=approximate)
+
+
+# --------------------------------------------------------------------------- #
+# CONC-READ-1 — do two "passes" in one cohort rest on the same picks?
+# --------------------------------------------------------------------------- #
+OVERLAP_COUNTS_AS_ONE = 0.80
+
+
+@dataclass(frozen=True)
+class BasketOverlap:
+    cohort: str
+    lens_a: str
+    lens_b: str
+    mean_jaccard: float
+    identical_rounds: int
+    shared_rounds: int
+
+    @property
+    def counts_as_one(self) -> bool:
+        return self.mean_jaccard >= OVERLAP_COUNTS_AS_ONE
+
+    def sentence(self) -> str:
+        line = (f"{self.cohort}: {self.lens_a} and {self.lens_b} - mean basket overlap "
+                f"{self.mean_jaccard:.0%}, identical baskets in {self.identical_rounds} of "
+                f"{self.shared_rounds} rounds")
+        if self.counts_as_one:
+            line += (f"; these two results share {self.mean_jaccard:.0%} of their picks and count "
+                     f"as one")
+        return line
+
+
+def basket_overlap(a: "BacktestResult", b: "BacktestResult") -> Optional[BasketOverlap]:
+    """Mean Jaccard overlap of the two lenses' BUY baskets over the rounds BOTH held a position in
+    (``None`` when they never shared one)."""
+    by_date = {r.date: set(r.tickers) for r in b.rounds if r.has_position and r.tickers}
+    scores, identical = [], 0
+    for r in a.rounds:
+        other = by_date.get(r.date)
+        if not (r.has_position and r.tickers and other):
+            continue
+        mine = set(r.tickers)
+        scores.append(len(mine & other) / len(mine | other))
+        identical += mine == other
+    if not scores:
+        return None
+    return BasketOverlap(a.cohort, a.lens_id, b.lens_id, sum(scores) / len(scores), identical, len(scores))
+
+
+def overlap_report(root=None) -> list:
+    """A ``BasketOverlap`` for every pair of lenses that BOTH cleared the bar in the same cohort."""
+    from itertools import combinations
+    by_cohort: dict = {}
+    for (slug, _lens), r in sorted(_load_backtests(root).items()):
+        if verdict(r, max_luck=r.max_luck) in ("proven", "not beyond luck"):
+            by_cohort.setdefault(slug, []).append(r)
+    out = []
+    for slug, rs in by_cohort.items():
+        for a, b in combinations(rs, 2):
+            ov = basket_overlap(a, b)
+            if ov is not None:
+                out.append(ov)
+    return out
+
+
+# --------------------------------------------------------------------------- #
 # BACKTEST-2 — plain-English track-record badges
 #
 # Display only: a badge NEVER changes a vote, a rank or a verdict, and every lens keeps its vote
@@ -1540,23 +1665,55 @@ _TRACK_RECORD_CACHE: dict = {}
 
 NO_BACKTESTS_NOTICE = "no backtest results found"
 
+# BADGE-WORDS-2: the labels say what the historical test ESTABLISHED, nothing more. The verdict logic
+# behind them (``track_record``) is unchanged; only the words are.
+LABEL_PASSED = "passed the test here"
+LABEL_BAR = "passed the bar here, luck not ruled out"
+LABEL_BEHIND = "behind random picks here"
+LABEL_NO_EDGE = "no edge shown here"
+LABEL_UNTESTED = "untested here"
+
+# The ONE old -> new mapping. Saved reports, snapshots and fixtures written before BADGE-WORDS-2 carry
+# the old words; every reader goes through ``canonical_label`` (``Badge`` does it on construction).
+LEGACY_LABELS = {
+    "proven here": LABEL_PASSED,
+    "promising here": LABEL_BAR,
+    "worked against you here": LABEL_BEHIND,
+}
+
+
+def canonical_label(label):
+    """A pre-BADGE-WORDS-2 label mapped to its current wording; anything else returned unchanged."""
+    return LEGACY_LABELS.get(label, label)
+
+
+_TEST_BAR_WORDS = (f"beat the group average by at least {PROOF_MIN_EXCESS * 100:g} points a year in at "
+                   f"least {PROOF_MIN_YEARS} of {PROOF_OF_YEARS} years")
+
 # The five labels, in the order the badge rule checks them (see ``track_record``), each with the
-# ONE sentence that explains what it means — written once, reused by the UI (the hover/expander)
-# and by docs/BACKTEST.md's badge-scale table (BACKTEST-2 item 4a), so the two can never drift.
+# ONE sentence that explains what it means - written once, reused by the UI (the hover/expander)
+# and by docs/BACKTEST.md's badge-scale table, so the two can never drift.
 BADGE_MEANINGS = {
-    "proven here": ("Beat its benchmark in this cohort by enough, often enough, for long enough, "
-                    "that fewer than 1 in 20 random stock-pickers matched it."),
-    "promising here": ("Beat its benchmark in this cohort by a real margin most years, and did "
-                       "better than most random stock-pickers - not yet enough history or "
-                       "separation from luck to call it proven."),
-    "worked against you here": ("In this cohort, picking names at random would have matched or "
-                                "beaten this lens at least 9 times in 10."),
-    "no edge shown here": ("In this cohort, this lens's record does not clear the bar, and does "
-                           "no better than picking names at random."),
-    "untested here": ("There is not yet enough measured history for this cohort and this lens to "
-                      "say anything."),
+    LABEL_PASSED: (f"In this cohort this lens {_TEST_BAR_WORDS}, and fewer than 1 in 20 random pickers "
+                   f"of the same basket size matched it. One test, one decade; not proof of a "
+                   f"repeatable edge."),
+    LABEL_BAR: (f"In this cohort this lens {_TEST_BAR_WORDS}, but more than 1 in 20 random pickers of "
+                f"the same basket size matched it, so luck is not ruled out. One test, one decade; "
+                f"not proof of a repeatable edge."),
+    LABEL_BEHIND: ("In this cohort at least 9 in 10 random pickers of the same basket size did as well "
+                   "or better than this lens. That describes this one historical test, not what comes "
+                   "next."),
+    LABEL_NO_EDGE: ("In this cohort this lens did not clear the bar (beating the group average by "
+                    f"{PROOF_MIN_EXCESS * 100:g} points a year in {PROOF_MIN_YEARS} of {PROOF_OF_YEARS} "
+                    f"years), and it was not clearly behind random picking either."),
+    LABEL_UNTESTED: ("There is not enough measured history for this cohort and this lens to say "
+                     "anything either way."),
 }
 BADGE_LABELS = tuple(BADGE_MEANINGS)  # display order
+# the short form used in the "Track record: 2 passed the test, ..." count line
+_BADGE_SHORT = {LABEL_PASSED: "passed the test", LABEL_BAR: "passed the bar, luck not ruled out",
+                LABEL_BEHIND: "behind random picks", LABEL_NO_EDGE: "no edge shown",
+                LABEL_UNTESTED: "untested"}
 
 
 NO_TEST_HISTORY = "No test history for this lens in this industry yet."
@@ -1576,6 +1733,13 @@ class Badge:
     years_measured: Optional[int]
     rounds_held: Optional[int]          # Summary.n_positions
     note: str = ""                      # why "untested here", when it needs saying; else ""
+    # BACKTEST-1B/CONC-READ-1: this lens's mean annual excess with each round's best BUY name removed,
+    # and that figure minus the random baskets' own. None when no round ever had 4+ BUY names.
+    drop_best_excess: Optional[float] = None
+    drop_best_vs_random: Optional[float] = None
+
+    def __post_init__(self):
+        object.__setattr__(self, "label", canonical_label(self.label))
 
     @property
     def no_history(self) -> bool:
@@ -1653,27 +1817,71 @@ class Badge:
     def explanation(self) -> str:
         """The sentence under the numbers in the lens notes: the generated reason for a label that is
         about a record that FELL SHORT ("no edge shown here"), the label's own meaning otherwise."""
-        if self.label == "no edge shown here":
+        if self.label == LABEL_NO_EDGE:
             return self.why_line() or BADGE_MEANINGS[self.label]
         return BADGE_MEANINGS[self.label]
+
+    def drop_best_words(self) -> str:
+        """CONC-READ-1: "without its best pick each year it trailed the group by 5.1 points; random
+        baskets without theirs trailed by 16.8, so it holds up by 11.7". "" when there is no drop-best
+        figure to compare."""
+        if self.drop_best_excess is None or self.drop_best_vs_random is None:
+            return ""
+        x = self.drop_best_excess
+        random_x = x - self.drop_best_vs_random
+        lens_move = (f"trailed the group by {abs(x) * 100:.1f}" if x < 0
+                     else f"beat the group by {x * 100:.1f}")
+        rand_move = (f"trailed by {abs(random_x) * 100:.1f}" if random_x < 0
+                     else f"beat it by {random_x * 100:.1f}")
+        tail = (f"so it holds up by {self.drop_best_vs_random * 100:.1f}" if self.drop_best_vs_random >= 0
+                else "so it does not hold up")
+        return (f"without its best pick each year it {lens_move} points; random baskets without "
+                f"theirs {rand_move}, {tail}")
 
     def detail_line(self) -> str:
         """"beat its group by +4.5% a year on average · 7 of 10 years positive · a random pick did as
         well 4% of the time · 108 monthly test rounds" - the numbers behind the badge, for a
-        hover/expander, in plain words (B22-B7b); "no numbers measured" when there is nothing to show."""
+        hover/expander, in plain words (B22-B7b); "no numbers measured" when there is nothing to show.
+        An untested badge also names its cause (UNTESTED-WHY-1)."""
         if self.years_measured is None:
             return self.note or "no numbers measured"
         if self.no_history:                                       # B25-6: no "0 of 0 years positive"
-            return NO_TEST_HISTORY
+            return NO_TEST_HISTORY + (f" {self.note[0].upper()}{self.note[1:]}."
+                                      if self.note and self.note != NO_TEST_HISTORY else "")
         luck = (f"a random pick did as well {self.luck_pct:.0%} of the time"
                 if self.luck_pct is not None else "no random-pick comparison")
-        return (f"{self._excess_words()} · {self.years_positive} of "
-                f"{plural(self.years_measured, 'year')} positive · {luck} · "
-                f"{plural(self.rounds_held, 'monthly test round')}")
+        parts = [self._excess_words(),
+                 f"{self.years_positive} of {plural(self.years_measured, 'year')} positive",
+                 luck, plural(self.rounds_held, 'monthly test round')]
+        drop = self.drop_best_words()
+        if drop:
+            parts.append(drop)
+        if self.label == LABEL_UNTESTED and self.note:
+            parts.append(self.note)
+        return " · ".join(parts)
+
+
+def untested_cause(result: "BacktestResult") -> str:
+    """UNTESTED-WHY-1: the cause of an "untested here", computed from the per-round CSV. The test
+    counts a position from MIN_BUYS BUY names, so a lens that ranks plenty of names but only ever
+    buys one or two reads differently from a lens that rarely applies in the industry at all."""
+    import statistics
+    rounds = result.rounds
+    if rounds:
+        med_ranked = statistics.median(r.n_ranked for r in rounds)
+        med_eligible = statistics.median(r.n_eligible for r in rounds)
+        small = [r.n_buys for r in rounds if r.n_buys < MIN_BUYS]
+        if med_ranked >= 5 and len(small) * 2 > len(rounds):
+            counts = sorted({n for n in small if n > 0})
+            names = (" or ".join(str(n) for n in counts) + " names a month") if counts else "no names"
+            return f"its picks were too few to count ({names}; the test needs {MIN_BUYS})"
+        if med_ranked < 5 and med_eligible >= 10:
+            return "rarely applies in this industry"
+    return "too little history"
 
 
 def _untested_badge(note: str) -> Badge:
-    return Badge(label="untested here", verdict=None, mean_excess=None, luck_pct=None,
+    return Badge(label=LABEL_UNTESTED, verdict=None, mean_excess=None, luck_pct=None,
                 years_positive=None, years_measured=None, rounds_held=None, note=note)
 
 
@@ -1713,11 +1921,11 @@ def track_record(cohort_slug: str, lens_id: str, *, root=None) -> Badge:
     Checked in this order:
       - no committed result for this cohort+lens at all, or its own ``verdict()`` is
         "insufficient" (too little measured history to trust ANY number below) -> "untested here"
-      - ``verdict()`` == "proven" -> "proven here"
+      - ``verdict()`` == "proven" -> "passed the test here"
       - the plain excess/years bar met (mean excess >= 2%/yr, years positive >= 6 of 10) AND
-        ``luck_pct_mean`` <= 25% -> "promising here"
+        ``luck_pct_mean`` <= 25% -> "passed the bar here, luck not ruled out"
       - ``luck_pct_mean`` >= 90% (a random stock-picker matched or beat it at least 9 times in
-        10) — regardless of the bar -> "worked against you here"
+        10) — regardless of the bar -> "behind random picks here"
       - everything else that was actually tested -> "no edge shown here"
     """
     cache = _load_backtests(root)
@@ -1732,21 +1940,22 @@ def track_record(cohort_slug: str, lens_id: str, *, root=None) -> Badge:
     v = verdict(result, max_luck=result.max_luck)
     common = dict(verdict=v, mean_excess=s.mean_annual_excess, luck_pct=s.luck_pct_mean,
                  years_positive=s.years_positive, years_measured=s.years_measured,
-                 rounds_held=s.n_positions)
+                 rounds_held=s.n_positions, drop_best_excess=s.mean_annual_excess_drop_best,
+                 drop_best_vs_random=s.drop_best_vs_random)
     if v == "insufficient" and (s.years_measured == 0 or s.n_positions == 0):
-        return Badge(label="untested here", note=NO_TEST_HISTORY, **common)         # B25-6
+        return Badge(label=LABEL_UNTESTED, note=untested_cause(result), **common)   # B25-6
     if v == "insufficient":
-        return Badge(label="untested here", note=(
-            f"only {plural(s.years_measured, 'year')} measured, {plural(s.n_positions, 'round')} held - not "
-            f"enough history yet"), **common)
+        return Badge(label=LABEL_UNTESTED, note=(
+            f"only {plural(s.years_measured, 'year')} measured, {plural(s.n_positions, 'round')} held; "
+            f"{untested_cause(result)}"), **common)
     if v == "proven":
-        return Badge(label="proven here", **common)
+        return Badge(label=LABEL_PASSED, **common)
     if (_passes_bar(s, PROOF_MIN_EXCESS, PROOF_MIN_YEARS, PROOF_OF_YEARS)
             and s.luck_pct_mean is not None and s.luck_pct_mean <= 0.25):
-        return Badge(label="promising here", **common)
+        return Badge(label=LABEL_BAR, **common)
     if s.luck_pct_mean is not None and s.luck_pct_mean >= 0.90:
-        return Badge(label="worked against you here", **common)
-    return Badge(label="no edge shown here", **common)
+        return Badge(label=LABEL_BEHIND, **common)
+    return Badge(label=LABEL_NO_EDGE, **common)
 
 
 def track_record_caption(cohort_slug: str, *, root=None) -> Optional[str]:
@@ -1764,12 +1973,12 @@ def track_record_caption(cohort_slug: str, *, root=None) -> Optional[str]:
 
 
 def format_track_record_summary(badges) -> str:
-    """"Track record: 2 proven, 1 promising, 2 no edge shown" - counts, over ``badges`` (an
+    """"Track record: 2 passed the test, 1 passed the bar, luck not ruled out, 2 no edge shown" - counts, over ``badges`` (an
     iterable of ``Badge``), of each label actually present, in the fixed badge-scale order, each
     label's trailing " here" dropped for a shorter line. "" when ``badges`` is empty."""
     from collections import Counter
     counts = Counter(b.label for b in badges)
-    parts = [f"{counts[label]} {label[:-len(' here')]}" for label in BADGE_LABELS if counts[label]]
+    parts = [f"{counts[label]} {_BADGE_SHORT[label]}" for label in BADGE_LABELS if counts[label]]
     return "Track record: " + ", ".join(parts) if parts else ""
 
 
@@ -1863,6 +2072,16 @@ def main(argv=None) -> int:
             print(multiple_testing_for_directory(args.root).sentence())
             for line in calibration_report_for_directory(args.root).lines():
                 print(line)
+            ev = evidence_summary(args.root)
+            print()
+            print(ev.sentence())
+            print(ev.calibration_line())
+            overlaps = overlap_report(args.root)
+            if overlaps:
+                print()
+                print("Basket overlap between lenses that both cleared the bar in the same cohort:")
+                for ov in overlaps:
+                    print("  " + ov.sentence())
         return 0
     _load_env()
     end = args.end or month_end(date.today().replace(day=1) - timedelta(days=1))
