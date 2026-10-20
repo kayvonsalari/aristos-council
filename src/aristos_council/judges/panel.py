@@ -36,6 +36,8 @@ AGREES = "agrees"
 DISAGREES = "disagrees"
 MIXED = "mixed"
 NO_STABLE = "no_stable_judge"
+NO_READING = "no_panel_reading"
+MIN_JUDGES_ANSWERED = 2          # a panel is only read when at least this many judges were stable
 
 NO_KEY_TEXT = "not run — no key"
 RETRY_NOTE = ("\n\nYour previous reply was not a valid answer. Reply again with ONLY the single JSON "
@@ -54,7 +56,8 @@ class JudgeCall:
     reason: str = ""
     would_change_my_mind: str = ""
     attempts: int = 1
-    error: str = ""
+    error: str = ""                   # short label for a failed call ("no credits", "404"...)
+    error_detail: str = ""            # the RAW error body: logged, never shown
 
 
 @dataclass
@@ -92,9 +95,9 @@ class JudgeResult:
         if self.status == UNSTABLE:
             return "unstable: " + " / ".join(self.verdicts)
         if self.status == INVALID:
-            return "invalid output"
+            return "error: invalid output"
         if self.status == ERROR:
-            return "error: " + (self.note or "the call failed")
+            return "error: " + (self.note or "failed")
         if self.status == INCOMPLETE:
             return f"incomplete: {self.verdicts[0]} on one call only"
         return self.status
@@ -185,9 +188,18 @@ def stable_verdicts(judges) -> list[str]:
     return [j.verdict for j in judges if j.status == STABLE and j.verdict in ("BUY", "HOLD", "SELL")]
 
 
+def judges_answered(judges) -> int:
+    """How many JUDGES (not calls) gave a stable verdict, an abstention included: a judge that
+    errored, was unstable, was incomplete or had no key did not answer."""
+    return sum(1 for j in judges if j.status == STABLE)
+
+
 def panel_agreement(judges, record: RecordSnapshot) -> str:
-    """agrees | disagrees | mixed | no_stable_judge. No averaging: each stable judge is compared
-    with the record on its own."""
+    """agrees | disagrees | mixed | no_stable_judge | no_panel_reading. No averaging: each stable
+    judge is compared with the record on its own, and only when at least two judges answered -
+    one judge's answer is not a panel."""
+    if judges_answered(judges) < MIN_JUDGES_ANSWERED:
+        return NO_READING
     sides = stable_verdicts(judges)
     if not sides:
         return NO_STABLE
@@ -219,7 +231,9 @@ def agreement_line(status: str, record: RecordSnapshot) -> str:
         return f"The panel disagrees with {rec}."
     if status == MIXED:
         return f"The panel is mixed against {rec}."
-    return "No judge gave a stable verdict, so there is nothing to compare with the verdict of record."
+    if status == NO_READING:
+        return "No panel reading: fewer than two judges answered."
+    return "The judges that answered all abstained, so there is nothing to compare with the verdict of record."
 
 
 def needs_reading(status: str) -> bool:
@@ -233,7 +247,7 @@ def needs_reading(status: str) -> bool:
 def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> JudgeCall:
     """One call, retried ONCE if the reply is malformed. A failed network call is an error, not
     something a retry of the same words fixes, so it is not retried."""
-    from .clients import CallError
+    from .clients import CallError, error_label
 
     call = JudgeCall(call_no=call_no)
     why = ""
@@ -242,10 +256,10 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> 
         try:
             text = caller(spec, system, user if attempt == 1 else user + RETRY_NOTE)
         except CallError as exc:
-            call.status, call.error = "error", str(exc)[:300]
+            call.status, call.error, call.error_detail = "error", error_label(exc), str(exc)
             return call
         except Exception as exc:                            # noqa: BLE001 - one judge must not stop the panel
-            call.status, call.error = "error", f"{type(exc).__name__}: {str(exc)[:200]}"
+            call.status, call.error, call.error_detail = "error", "failed", f"{type(exc).__name__}: {exc}"
             return call
         answer, why = parse_answer(text)
         if answer is not None:
@@ -253,7 +267,7 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> 
             call.verdict, call.confidence = answer.verdict, answer.confidence
             call.reason, call.would_change_my_mind = answer.reason, answer.would_change_my_mind
             return call
-    call.status, call.error = "invalid", why
+    call.status, call.error, call.error_detail = "invalid", "invalid output", why
     return call
 
 

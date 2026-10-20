@@ -209,9 +209,10 @@ def test_malformed_output_is_retried_once_then_recorded_as_invalid():
 
 def test_a_failed_call_is_an_error_and_is_not_retried():
     spec = _config().judges[0]
-    caller = _scripted({"anthropic": [CallError("HTTP 500: down")]})
+    caller = _scripted({"anthropic": [CallError("HTTP 500: down", status=500)]})
     call = panel._ask_once(spec, "sys", "user", caller, 1)
-    assert call.status == "error" and "500" in call.error and len(caller.calls) == 1
+    assert call.status == "error" and call.error == "500" and "down" in call.error_detail
+    assert len(caller.calls) == 1
 
 
 # =========================================================================== #
@@ -286,7 +287,7 @@ def test_the_panel_agrees_disagrees_or_is_mixed_against_the_record_without_avera
     assert panel.panel_agreement(_stable("HOLD", "SELL"), rec) == panel.DISAGREES
     assert panel.panel_agreement(_stable("BUY", "HOLD"), rec) == panel.MIXED
     assert panel.panel_agreement(_stable("ABSTAIN", "ABSTAIN"), rec) == panel.NO_STABLE
-    assert panel.panel_agreement([], rec) == panel.NO_STABLE
+    assert panel.panel_agreement([], rec) == panel.NO_READING
     # a record that is itself split cannot be "agreed with"
     assert panel.panel_agreement(_stable("BUY", "BUY"), _record("MIXED")) == panel.MIXED
 
