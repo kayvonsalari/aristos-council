@@ -628,7 +628,8 @@ data.
   its **filing date** (EODHD's `filing_date` on each Financials entry, carried as
   `Fundamentals.filing_dates`, parallel to `period_ends`) is on or before the round date: a company
   that filed in 40 days is seen sooner, a late filer later. A period with no usable filing date (absent,
-  `NA`, or dated before its own period end) falls back to period end + lag and is **counted**; the CSV
+  `NA`, or dated on or before its own period end: EODHD fills `filing_date` with the period-end date for many
+  non-US companies, e.g. 1211.HK and RIO.AU on 2026-10-20, and trusting that would show a year the day it closed) falls back to period end + lag and is **counted**; the CSV
   header carries `as_of_mode` and `filing_date_fallbacks` ("412 of 5230 fiscal periods (7.9%) had no
   usable filing date and fell back to period end + lag"), so a filing-mode run says how much of it still
   rests on the lag. yfinance carries no filing dates, so a yfinance-only name is all fallback.

@@ -97,6 +97,15 @@ def test_an_impossible_filing_date_before_the_period_end_is_a_fallback_not_trust
     assert ad.filing_date_fallbacks == 1
 
 
+def test_a_filing_date_equal_to_the_period_end_is_eodhds_placeholder_and_falls_back():
+    """Live 2026-10-20: 1211.HK and RIO.AU carry filing_date == period end for most years. Trusting it
+    would show a year the day it closed, months before it was public."""
+    f = _f({"2021-12-31": "2021-12-31", "2020-12-31": "2020-12-31"})
+    ad = AsOfAdapter(_Inner(f), date(2022, 3, 15), 90, "filing")
+    assert ad.get_fundamentals("X").period_ends["ebit"] == ["2020-12-31"]    # same as lag 90, not 2021
+    assert ad.filing_date_fallbacks == ad.filing_decisions == 2
+
+
 def test_a_yfinance_style_name_with_no_filing_dates_is_all_fallback_and_equals_lag_mode():
     f = _f({"2020-05-31": "", "2019-12-31": "", "2018-12-31": ""}, with_filing=False)
     ad = _adapt(f)

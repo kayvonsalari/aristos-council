@@ -12,7 +12,7 @@ Wraps any adapter. Everything it returns is cut to ``as_of``:
 * **Information timing (ASOF-FILING-1).** The default mode ``"lag"`` is the rule above. Mode
   ``"filing"`` makes a period visible when its FILING date (``Fundamentals.filing_dates``, from EODHD's
   ``filing_date``) is on or before ``as_of``; a period with no usable filing date (missing, or dated
-  before its own period end) falls back to period end + ``lag_days`` and is COUNTED
+  on or before its own period end) falls back to period end + ``lag_days`` and is COUNTED
   (``filing_date_fallbacks`` / ``filing_decisions``), so a run says how much of it rests on the fallback.
   A yfinance-only name has no filing dates, so every period of it falls back.
 * **Scalars that describe "now"** - eps, free cash flow, debt, cash, dividends paid, operating cash
@@ -114,10 +114,10 @@ class AsOfAdapter(MarketDataAdapter):
     def _visible(self, ticker: str, period: str, filing: str) -> bool:
         """Is the fiscal period ending ``period`` (ISO) visible at ``as_of``? Lag mode: its end is on or
         before ``cutoff`` (unchanged). Filing mode: its filing date is on or before ``as_of``; a missing
-        or impossible (before the period's own end) filing date falls back to the lag rule, counted."""
+        or impossible (on or before the period's own end) filing date falls back to the lag rule, counted."""
         if self.mode != "filing":
             return period <= self.cutoff.isoformat()
-        usable = bool(filing) and filing >= period
+        usable = bool(filing) and filing > period      # == period end is EODHD's placeholder, not a filing
         self._decisions[(ticker, period)] = not usable or self._decisions.get((ticker, period), False)
         if usable:
             return filing <= self.as_of.isoformat()
@@ -133,7 +133,7 @@ class AsOfAdapter(MarketDataAdapter):
             if len(filed) != len(dates):
                 continue
             for d, fd in zip(dates, filed):
-                if fd and fd >= d:
+                if fd and fd > d:
                     out[d] = max(out.get(d, ""), fd)
         return out
 
