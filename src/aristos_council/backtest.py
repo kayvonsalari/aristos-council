@@ -734,7 +734,7 @@ def code_commit() -> str:
         run = lambda *a: subprocess.run(["git", *a], cwd=here, capture_output=True, text=True,
                                         timeout=30, check=True).stdout.strip()
         head = run("rev-parse", "--short", "HEAD")
-        return head + ("+uncommitted" if run("status", "--porcelain", "--", "src", "strategies") else "")
+        return head + ("+uncommitted" if run("status", "--porcelain", "--", ":/src", ":/strategies") else "")
     except Exception:
         return "unknown"
 
@@ -1190,6 +1190,12 @@ def _series_rest_mean_dropping_best(pairs: list) -> float:
     """``pairs`` is ``[(ticker, return), ...]``, length >= 2, from a SORTED iteration (so a tied
     return breaks the same way every run). The mean return with the single best-returning ticker
     dropped — the same construction ``_drop_best_excess`` uses, per random series."""
+    if len(pairs) < 2:
+        # FIX-DIVZERO-1 (2026-10-21): a persistent random series can be SHORT of ``k`` when the pool is
+        # small (a name swapped out this round may not be drawn straight back, and nothing else is
+        # left). One name has no "rest" once the best is dropped; it keeps its own return rather than
+        # dividing by zero (Grid & Electrical Machinery and IT Services x Defensive Income crashed).
+        return pairs[0][1]
     best_ticker = max(pairs, key=lambda tv: tv[1])[0]
     rest = [v for t, v in pairs if t != best_ticker]
     return sum(rest) / len(rest)
@@ -1656,7 +1662,7 @@ def evidence_summary(root=None) -> EvidenceSummary:
     """CHANCE-LINE-1: every figure read from the committed per-pair CSVs under ``root`` (default
     ``backtests/``), never typed. "Measured" is the non-"insufficient" pairs, the same population
     ``multiple_testing`` and ``calibration_report`` use."""
-    results = list(_load_backtests(root).values())
+    results = list(_pooled_backtests(root).values())
     tested = [r for r in results if verdict(r, max_luck=r.max_luck) != "insufficient"]
     n = len(tested)
     bar_passed = sum(1 for r in tested if verdict(r, max_luck=r.max_luck) in ("proven", "not beyond luck"))
@@ -1722,7 +1728,7 @@ def overlap_report(root=None) -> list:
     """A ``BasketOverlap`` for every pair of lenses that BOTH cleared the bar in the same cohort."""
     from itertools import combinations
     by_cohort: dict = {}
-    for (slug, _lens), r in sorted(_load_backtests(root).items()):
+    for (slug, _lens), r in sorted(_pooled_backtests(root).items()):
         if verdict(r, max_luck=r.max_luck) in ("proven", "not beyond luck"):
             by_cohort.setdefault(slug, []).append(r)
     out = []
@@ -1991,6 +1997,13 @@ def _load_backtests(root=None) -> dict:
                     continue
         _TRACK_RECORD_CACHE[key] = found
     return _TRACK_RECORD_CACHE[key]
+
+
+def _pooled_backtests(root=None) -> dict:
+    """``_load_backtests`` without the lenses still ``status: under_test`` (GROWTH-V3-RESULTS-1): a lens
+    that has no badge must not move the pooled figures (how many cleared the bar against chance, the
+    calibration tails, the overlap check) that the badges' own evidence line states."""
+    return {k: r for k, r in _load_backtests(root).items() if _lens_status(k[1]) != "under_test"}
 
 
 def has_track_record(cohort_slug: str, *, root=None) -> bool:

@@ -336,23 +336,24 @@ little measured history), each cell's mean annual excess in parentheses:
 
 | Cohort | conservative_plus_v1 | cyclical_income_v1 | epv_v1 | growth_garp_v2 | magic_formula_momentum_v1 | magic_formula_raw_v1 | quality_v1 |
 |---|---|---|---|---|---|---|---|
-| Comms - Interactive Media & Gaming | N (0.4%) | L (2.1%) | L (3.0%) | P (8.7%) | N (3.1%) | L (2.4%) | N (0.4%) |
-| Comms - Media & Entertainment | N (-10.2%) | N (-4.4%) | N (-8.9%) | U | P (9.3%) | N (-1.0%) | N (3.2%) |
-| Consumer - Auto Manufacturers | U (-6.7%) | N (2.5%) | N (-1.1%) | N (-14.6%) | N (-3.4%) | L (6.2%) | L (8.5%) |
-| Health - Large Pharma | U (6.9%) | N (-5.3%) | N (-5.6%) | U | N (-2.8%) | N (-1.1%) | N (0.4%) |
-| Health - Medical Devices & Instruments | N (0.9%) | N (-1.5%) | N (-3.2%) | U | N (-2.2%) | N (2.6%) | N (3.5%) |
-| Industrials - Aerospace & Defense (Europe + US) | U (1.8%) | N (-0.5%) | N (-4.2%) | U | N (-9.8%) | N (-6.1%) | N (-4.1%) |
-| Industrials - Airlines & Airports | U | N (-9.6%) | N (1.5%) | U | N (-1.3%) | N (-0.2%) | N (-1.1%) |
-| Industrials - Grid & Electrical Machinery | U | U (-33.6%) | L (5.6%) | U | U | P (6.3%) | N (-7.8%) |
-| Materials - Diversified Mining | U (-6.0%) | U (-8.5%) | N (12.3%) | U (2.5%) | U (8.2%) | P (16.0%) | P (15.9%) |
-| Tech - Hardware | U (-19.2%) | N (-12.4%) | N (-12.0%) | U (37.7%) | N (2.4%) | N (-1.0%) | N (-3.6%) |
-| Tech - IT Services | N (-4.7%) | N (-7.3%) | N (1.7%) | U (2.0%) | N (-1.8%) | N (-1.4%) | N (-2.6%) |
-| Tech - Semiconductor Equipment | U | U (3.7%) | U (7.7%) | U (7.5%) | U (-2.5%) | U (9.0%) | U (13.3%) |
-| Tech - Semiconductors | U (9.0%) | L (4.7%) | N (-9.2%) | U (5.7%) | N (-6.8%) | N (-7.9%) | N (-2.6%) |
-| Tech - Systems Software | N (-6.7%) | N (-2.2%) | N (-6.6%) | U | N (-0.2%) | N (-6.8%) | N (0.7%) |
+| Comms - Interactive Media & Gaming | N (1.6%) | N (-0.5%) | L (3.9%) | N (6.6%) | N (0.1%) | L (3.0%) | L (5.3%) |
+| Comms - Media & Entertainment | U (-2.0%) | N (-0.5%) | N (-5.9%) | U | U (12.2%) | N (1.5%) | N (2.4%) |
+| Consumer - Auto Manufacturers | U (-3.9%) | N (-0.5%) | N (-0.6%) | U | U (-33.8%) | L (6.3%) | N (5.3%) |
+| Health - Large Pharma | U (-0.5%) | N (-0.5%) | N (-5.5%) | U (6.6%) | N (-3.5%) | N (-1.4%) | N (1.0%) |
+| Health - Medical Devices & Instruments | U (2.6%) | N (-0.5%) | N (-3.0%) | U | N (-2.7%) | N (2.6%) | N (5.0%) |
+| Industrials - Aerospace & Defense (Europe + US) | U (1.8%) | N (-0.5%) | N (-4.1%) | U | N (-9.9%) | N (-6.1%) | N (-4.0%) |
+| Industrials - Airlines & Airports | U (1.6%) | N (-0.5%) | N (2.1%) | U | U (-4.1%) | N (-0.1%) | N (-1.5%) |
+| Industrials - Grid & Electrical Machinery | U (11.4%) | U (-0.5%) | L (4.8%) | U | U (3.7%) | L (4.7%) | N (-8.9%) |
+| Materials - Diversified Mining | N (-3.9%) | N (-0.5%) | N (0.3%) | N (0.4%) | P (13.9%) | P (11.9%) | N (9.0%) |
+| Tech - Hardware | U (4.2%) | N (-0.5%) | N (-11.1%) | U (17.9%) | U (3.9%) | N (1.0%) | N (-2.7%) |
+| Tech - IT Services | U (-1.1%) | N (-0.5%) | N (0.7%) | U (-11.4%) | N (-3.3%) | N (-1.5%) | N (-3.0%) |
+| Tech - Semiconductor Equipment | U | U | U (7.3%) | U (1.7%) | U (4.0%) | P (8.4%) | P (11.0%) |
+| Tech - Semiconductors | U | U | N (-8.5%) | U (14.5%) | N (-6.4%) | N (-7.6%) | N (-1.1%) |
+| Tech - Systems Software | U | U | N (-0.9%) | U (-0.5%) | U (4.5%) | N (-1.8%) | N (2.4%) |
 
-As of this run: 5 proven, 7 not beyond luck, 56 not proven, 30 insufficient across all 98 cells — consistent with "about 2 proven expected by chance" being a floor, not a ceiling, and with most cells reading "not proven" or "insufficient" rather than either extreme. The two newest columns, quality_v1 and epv_v1 (LENS-EXPAND-1a), were run on the same window, method and bar as the five before them; see "The Quality and Earnings Power Value backtests" below. (Summary rows for the defence cohort added 2026-10-20 from its committed per-lens CSVs; the other 13 cohorts' rows are unchanged from the 2026-10-04 refresh —
-BASELINE-CHECK-1 below is why some numbers moved from the one before.)
+As of the 2026-10-21 refresh: 4 proven, 6 not beyond luck, 52 not proven, 36 insufficient across the 98 cells of the seven voting lenses (62 measured; the pooled chance line is in `docs/BACKTEST_RECORD.md`). `growth_garp_v3` is run in the same grid but is `under_test`, has no badge and is left out of this matrix and of every pooled figure; its coverage and results are reported separately (GROWTH-V3-RESULTS-1 in `docs/BACKTEST_RECORD.md`).
+
+**Committed results are valid only for the code that produced them.** Every CSV header carries `code_commit` (the repo HEAD the run executed) and `data_feed` (feed, provider variable, key, cache), added by DATA-DRIFT-1; `lens_commit` dates only the lens file. The set refreshed on 2026-10-04 (code `2fdd337`) predated two deliberate rule changes merged on 2026-10-05 — the operating-profit guard (`f706ba6`, SMALLCAP-BAND-GAP-1) and NULL-EXCLUDES-2 (`eb43dc2`) — so every badge described rules the app no longer ran. The 2026-10-21 refresh (`code_commit` 6dbce3e; two pairs re-run after FIX-DIVZERO-1 carry 9944056) replaced it. The old set is kept as the annotated tag `backtests-baseline-2026-10-20`, and `backtests/COMPARE_2026-10-21.md` shows what moved. A change to the shared ranking path is a reason to re-run, not only a change to a lens file.
 
 ## The Quality and Earnings Power Value backtests (LENS-EXPAND-1a)
 
@@ -745,7 +746,7 @@ to_csv(result, "backtests/")
 
 The 14-cohort × 7-lens run behind the matrix above (and every badge in the app) is only as fresh
 as its last refresh — `backtests/RUN.md` states the date (the matrix was last refreshed
-2026-10-04; each refresh moves the window's end date forward with it, so this page deliberately
+2026-10-21; each refresh moves the window's end date forward with it, so this page deliberately
 does not repeat a date that would go stale). To refresh it:
 
 1. In Colab, re-run `notebooks/aristos_backtest.ipynb` end to end.

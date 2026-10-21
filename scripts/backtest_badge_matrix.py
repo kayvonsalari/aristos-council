@@ -157,6 +157,13 @@ VERDICT_WORDS = {"proven": "passed the test", "not beyond luck": "passed the bar
 _GEN = re.compile(r"(<!-- GEN:(\w+) -->)(.*?)(<!-- /GEN:\2 -->)", re.S)
 
 
+def voting_rows(rows: list[dict]) -> list[dict]:
+    """The summary rows of lenses that carry a badge: ``status: under_test`` lenses (GROWTH-V3-RESULTS-1)
+    have none, so the matrix and every pooled figure leave them out."""
+    from aristos_council.backtest import _lens_status
+    return [r for r in rows if _lens_status(r["lens"]) != "under_test"]
+
+
 def lens_names() -> dict:
     """{lens id: display name}, read from the strategy files - never typed here."""
     import yaml
@@ -269,8 +276,73 @@ def overlap_block(backtests_dir) -> str:
     return "\n".join(out)
 
 
+# GROWTH-V3-RESULTS-1 - the promotion rule of docs/DESIGN_growth_v3.md: at least 10 names ranked and a
+# position held in at least half the rounds, in at least 10 of the 14 cohorts.
+PROMOTE_MIN_RANKED = 10
+PROMOTE_MIN_HELD = 0.5
+PROMOTE_MIN_COHORTS = 10
+
+
+def under_test_stats(backtests_dir) -> list[dict]:
+    """One row per (cohort, under-test lens) read from the committed CSVs: coverage figures first
+    (ranked median / last round / share of rounds ranking >= 10, rounds held) and performance second."""
+    import statistics
+
+    from aristos_council.backtest import _lens_status, _load_backtests, verdict
+    out = []
+    for (slug, lens), r in sorted(_load_backtests(backtests_dir).items()):
+        if _lens_status(lens) != "under_test" or not r.rounds:
+            continue
+        rs = sorted(r.rounds, key=lambda x: x.date)
+        ranked = [x.n_ranked for x in rs]
+        held = sum(1 for x in rs if x.buy_return is not None)
+        s = r.summary
+        out.append({"lens": lens, "cohort": r.cohort, "median": statistics.median(ranked),
+                    "last": ranked[-1], "share10": sum(1 for n in ranked if n >= PROMOTE_MIN_RANKED) / len(ranked),
+                    "held": held, "rounds": len(rs), "verdict": verdict(r, max_luck=r.max_luck),
+                    "excess": s.mean_annual_excess, "years": f"{s.years_positive} of {s.years_measured}",
+                    "luck": s.luck_pct_mean})
+    return out
+
+
+def under_test_block(backtests_dir) -> str:
+    names = lens_names()
+    stats = under_test_stats(backtests_dir)
+    if not stats:
+        return "No lens is under test."
+    out = []
+    for lens in sorted({s["lens"] for s in stats}):
+        mine = [s for s in stats if s["lens"] == lens]
+        out += [f"**{names.get(lens, lens)} (`{lens}`, under test, no badge) - coverage.** Names ranked per round "
+                f"and rounds with a position held (3 or more BUY names).", "",
+                "| Industry group | Ranked, median round | Ranked, last round | Rounds ranking 10+ | Rounds held |",
+                "| --- | --- | --- | --- | --- |"]
+        for s in mine:
+            out.append(f"| {_short(s['cohort'])} | {s['median']:.0f} | {s['last']} | {s['share10']:.0%} | "
+                       f"{s['held']} of {s['rounds']} ({s['held'] / s['rounds']:.0%}) |")
+        held_ok = [s for s in mine if s["held"] / s["rounds"] >= PROMOTE_MIN_HELD]
+        readings = [("median round", lambda s: s["median"] >= PROMOTE_MIN_RANKED),
+                    ("last round", lambda s: s["last"] >= PROMOTE_MIN_RANKED),
+                    ("half the rounds or more", lambda s: s["share10"] >= 0.5)]
+        out += ["", f"Promotion rule (10+ names ranked and a position held in at least half the rounds, in at "
+                    f"least {PROMOTE_MIN_COHORTS} of {len(mine)} groups); {len(held_ok)} groups hold a position "
+                    f"in half the rounds or more. Groups meeting both, by what \"ranked 10+\" is read to mean:"]
+        for label, ok in readings:
+            out.append(f"- {label}: {sum(1 for s in held_ok if ok(s))} of {len(mine)}")
+        out += ["", f"**{names.get(lens, lens)} - performance (reported apart from coverage; no badge, nothing "
+                    f"carried over from an earlier version).**", "",
+                "| Industry group | Verdict | Mean excess, %/yr | Years positive | Chance a random picker did as well |",
+                "| --- | --- | --- | --- | --- |"]
+        for s in mine:
+            ex = "n/a" if s["excess"] is None else _signed(100 * s["excess"])
+            lk = "n/a" if s["luck"] is None else f"{s['luck']:.0%}"
+            out.append(f"| {_short(s['cohort'])} | {s['verdict']} | {ex} | {s['years']} | {lk} |")
+        out.append("")
+    return "\n".join(out).rstrip()
+
+
 def record_blocks(rows: list[dict], backtests_dir) -> dict:
-    return {"EVIDENCE": evidence_block(backtests_dir), "COUNTS": counts_block(rows),
+    return {"UNDERTEST": under_test_block(backtests_dir), "EVIDENCE": evidence_block(backtests_dir), "COUNTS": counts_block(rows),
             "LENSTABLE": lens_table_block(rows), "INDUSTRY": industry_block(rows),
             "OVERLAP": overlap_block(backtests_dir)}
 
@@ -306,15 +378,19 @@ def main(argv=None) -> int:
     if not args.no_rebuild:
         build_summary_table(Path(args.summary).parent).to_csv(args.summary, index=False)
     rows = read_summary(args.summary)
+    # GROWTH-V3-RESULTS-1: a lens still ``status: under_test`` has no badge, so it stays out of the
+    # matrix and every pooled figure; SUMMARY.csv keeps its rows, and its coverage and results are
+    # reported in their own tables.
+    voting = voting_rows(rows)
     print(LETTER_MEANING)
     print()
-    print(matrix_table(rows))
+    print(matrix_table(voting))
     if not args.no_run_md:
         write_run_md(Path(args.run_md), n_rows=len(rows),
                     today=datetime.now(timezone.utc).date())
         print(f"\nWrote {args.run_md}")
     if not args.no_record and Path(args.record).exists():
-        update_record(Path(args.record), rows, Path(args.summary).parent)
+        update_record(Path(args.record), voting, Path(args.summary).parent)
         print(f"Wrote the generated blocks of {args.record}")
     return 0
 

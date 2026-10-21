@@ -1,0 +1,450 @@
+{
+ "comms_interactive_media_gaming/conservative_plus_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "comms_interactive_media_gaming/cyclical_income_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "comms_interactive_media_gaming/epv_v1": {
+  "label": "passed the bar here, luck not ruled out",
+  "verdict": "not beyond luck"
+ },
+ "comms_interactive_media_gaming/growth_garp_v2": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "comms_interactive_media_gaming/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "not beyond luck"
+ },
+ "comms_interactive_media_gaming/magic_formula_momentum_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "comms_interactive_media_gaming/magic_formula_raw_v1": {
+  "label": "passed the bar here, luck not ruled out",
+  "verdict": "not beyond luck"
+ },
+ "comms_interactive_media_gaming/quality_v1": {
+  "label": "passed the bar here, luck not ruled out",
+  "verdict": "not beyond luck"
+ },
+ "comms_media_entertainment/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "comms_media_entertainment/cyclical_income_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "comms_media_entertainment/epv_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "comms_media_entertainment/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "comms_media_entertainment/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "proven"
+ },
+ "comms_media_entertainment/magic_formula_momentum_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "comms_media_entertainment/magic_formula_raw_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "comms_media_entertainment/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "consumer_auto_manufacturers/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "consumer_auto_manufacturers/cyclical_income_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "consumer_auto_manufacturers/epv_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "consumer_auto_manufacturers/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "consumer_auto_manufacturers/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "not proven"
+ },
+ "consumer_auto_manufacturers/magic_formula_momentum_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "consumer_auto_manufacturers/magic_formula_raw_v1": {
+  "label": "passed the bar here, luck not ruled out",
+  "verdict": "not beyond luck"
+ },
+ "consumer_auto_manufacturers/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "health_large_pharma/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "health_large_pharma/cyclical_income_v1": {
+  "label": "behind random picks here",
+  "verdict": "not proven"
+ },
+ "health_large_pharma/epv_v1": {
+  "label": "behind random picks here",
+  "verdict": "not proven"
+ },
+ "health_large_pharma/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "health_large_pharma/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "not proven"
+ },
+ "health_large_pharma/magic_formula_momentum_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "health_large_pharma/magic_formula_raw_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "health_large_pharma/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "health_medical_devices_instruments/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "health_medical_devices_instruments/cyclical_income_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "health_medical_devices_instruments/epv_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "health_medical_devices_instruments/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "health_medical_devices_instruments/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "not proven"
+ },
+ "health_medical_devices_instruments/magic_formula_momentum_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "health_medical_devices_instruments/magic_formula_raw_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "health_medical_devices_instruments/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "industrials_aerospace_defense_europe_us/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "industrials_aerospace_defense_europe_us/cyclical_income_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "industrials_aerospace_defense_europe_us/epv_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "industrials_aerospace_defense_europe_us/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "industrials_aerospace_defense_europe_us/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "proven"
+ },
+ "industrials_aerospace_defense_europe_us/magic_formula_momentum_v1": {
+  "label": "behind random picks here",
+  "verdict": "not proven"
+ },
+ "industrials_aerospace_defense_europe_us/magic_formula_raw_v1": {
+  "label": "behind random picks here",
+  "verdict": "not proven"
+ },
+ "industrials_aerospace_defense_europe_us/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "industrials_airlines_airports/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "industrials_airlines_airports/cyclical_income_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "industrials_airlines_airports/epv_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "industrials_airlines_airports/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "industrials_airlines_airports/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "insufficient"
+ },
+ "industrials_airlines_airports/magic_formula_momentum_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "industrials_airlines_airports/magic_formula_raw_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "industrials_airlines_airports/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "industrials_grid_electrical_machinery/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "industrials_grid_electrical_machinery/cyclical_income_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "industrials_grid_electrical_machinery/epv_v1": {
+  "label": "passed the bar here, luck not ruled out",
+  "verdict": "not beyond luck"
+ },
+ "industrials_grid_electrical_machinery/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "industrials_grid_electrical_machinery/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "not beyond luck"
+ },
+ "industrials_grid_electrical_machinery/magic_formula_momentum_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "industrials_grid_electrical_machinery/magic_formula_raw_v1": {
+  "label": "passed the bar here, luck not ruled out",
+  "verdict": "not beyond luck"
+ },
+ "industrials_grid_electrical_machinery/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "materials_diversified_mining/conservative_plus_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "materials_diversified_mining/cyclical_income_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "materials_diversified_mining/epv_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "materials_diversified_mining/growth_garp_v2": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "materials_diversified_mining/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "insufficient"
+ },
+ "materials_diversified_mining/magic_formula_momentum_v1": {
+  "label": "passed the test here",
+  "verdict": "proven"
+ },
+ "materials_diversified_mining/magic_formula_raw_v1": {
+  "label": "passed the test here",
+  "verdict": "proven"
+ },
+ "materials_diversified_mining/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_hardware/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_hardware/cyclical_income_v1": {
+  "label": "behind random picks here",
+  "verdict": "not proven"
+ },
+ "tech_hardware/epv_v1": {
+  "label": "behind random picks here",
+  "verdict": "not proven"
+ },
+ "tech_hardware/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_hardware/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "not proven"
+ },
+ "tech_hardware/magic_formula_momentum_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_hardware/magic_formula_raw_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_hardware/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_it_services/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_it_services/cyclical_income_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_it_services/epv_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_it_services/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_it_services/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "not proven"
+ },
+ "tech_it_services/magic_formula_momentum_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_it_services/magic_formula_raw_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_it_services/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_semiconductor_equipment/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_semiconductor_equipment/cyclical_income_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_semiconductor_equipment/epv_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_semiconductor_equipment/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_semiconductor_equipment/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "insufficient"
+ },
+ "tech_semiconductor_equipment/magic_formula_momentum_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_semiconductor_equipment/magic_formula_raw_v1": {
+  "label": "passed the test here",
+  "verdict": "proven"
+ },
+ "tech_semiconductor_equipment/quality_v1": {
+  "label": "passed the test here",
+  "verdict": "proven"
+ },
+ "tech_semiconductors/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_semiconductors/cyclical_income_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_semiconductors/epv_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_semiconductors/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_semiconductors/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "not beyond luck"
+ },
+ "tech_semiconductors/magic_formula_momentum_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_semiconductors/magic_formula_raw_v1": {
+  "label": "behind random picks here",
+  "verdict": "not proven"
+ },
+ "tech_semiconductors/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_systems_software/conservative_plus_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_systems_software/cyclical_income_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_systems_software/epv_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_systems_software/growth_garp_v2": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_systems_software/growth_garp_v3": {
+  "label": "under test here",
+  "verdict": "insufficient"
+ },
+ "tech_systems_software/magic_formula_momentum_v1": {
+  "label": "untested here",
+  "verdict": "insufficient"
+ },
+ "tech_systems_software/magic_formula_raw_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ },
+ "tech_systems_software/quality_v1": {
+  "label": "no edge shown here",
+  "verdict": "not proven"
+ }
+}

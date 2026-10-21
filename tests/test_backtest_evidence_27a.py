@@ -17,7 +17,7 @@ from aristos_council import backtest as bt
 from aristos_council.backtest import (BacktestResult, Badge, Round, add_months, evidence_summary,
                                       overlap_report, to_csv, track_record)
 
-BASELINE = Path(__file__).parent / "fixtures" / "backtest_badges_baseline_2026-10-20.json"
+BASELINE = Path(__file__).parent / "fixtures" / "backtest_badges_baseline_2026-10-21.json"
 COHORT = "Test Cohort"
 SLUG = "test_cohort"
 
@@ -26,10 +26,10 @@ SLUG = "test_cohort"
 # 27A-1 - the rename changes words only
 # --------------------------------------------------------------------------- #
 def test_every_committed_pair_keeps_its_verdict_and_badge_assignment():
-    """98 (cohort, lens) pairs, snapshotted from main BEFORE the rename (old labels). After mapping
-    the old words through the one dict, verdict and assignment are identical."""
+    """112 (cohort, lens) pairs, re-pinned at the 2026-10-21 refresh (the 2026-10-20 snapshot described
+    results the refresh replaced, DATA-DRIFT-1). Each pair keeps its verdict and badge label."""
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
-    assert len(baseline) == 98
+    assert len(baseline) == 112
     cache = bt._load_backtests()
     assert {f"{c}/{l}" for c, l in cache} == set(baseline)
     for (cohort, lens), result in cache.items():
@@ -109,10 +109,11 @@ def test_the_tails_flag_the_luck_test_as_approximate_only_past_twice_expectation
     assert not ev2.approximate and "approximate" not in ev2.sentence()
 
 
-def test_the_committed_record_reads_12_of_68(tmp_path):
+def test_the_committed_record_reads_10_of_62(tmp_path):
+    """Re-pinned at the 2026-10-21 refresh (was 12 of 68); the under-test v3 lens is not pooled."""
     ev = evidence_summary()
-    assert (ev.measured, ev.bar_passed, ev.luck_passed) == (68, 12, 5)
-    assert "(about 11 would by chance)" in ev.sentence() and "(about 3 to 4 would by chance" in ev.sentence()
+    assert (ev.measured, ev.bar_passed, ev.luck_passed) == (62, 10, 4)
+    assert "(about 8 would by chance)" in ev.sentence() and "(about 3 would by chance" in ev.sentence()
 
 
 def test_an_empty_directory_says_so(tmp_path):
@@ -193,7 +194,7 @@ def test_the_committed_record_equals_what_the_generator_writes():
     m, _ = _scripts()
     record = Path(__file__).resolve().parents[1] / "docs" / "BACKTEST_RECORD.md"
     summary = Path(__file__).resolve().parents[1] / "backtests" / "SUMMARY.csv"
-    rows = m.read_summary(summary)
+    rows = m.voting_rows(m.read_summary(summary))
     text = record.read_text(encoding="utf-8")
     assert m.fill_record(text, m.record_blocks(rows, summary.parent)) == text
 
@@ -223,4 +224,13 @@ def test_compare_main_against_itself_changes_nothing():
     _, c = _scripts()
     side = c.read_side(Path(__file__).resolve().parents[1] / "backtests")
     out = c.compare(side, side)
-    assert "**98 pairs.** Verdict changed: 0. Label changed: 0." in out
+    assert "**112 pairs.** Verdict changed: 0. Label changed: 0." in out
+
+
+def test_an_under_test_lens_is_not_pooled_into_the_chance_line_or_the_overlap_check():
+    """GROWTH-V3-RESULTS-1: growth_garp_v3 (status: under_test) has no badge, so its 14 results must
+    not move the pooled figures the badges' evidence line states."""
+    from aristos_council.backtest import _load_backtests, _pooled_backtests
+    everything, pooled = _load_backtests(), _pooled_backtests()
+    assert {l for _, l in everything} - {l for _, l in pooled} == {"growth_garp_v3"}
+    assert len(everything) - len(pooled) == 14
