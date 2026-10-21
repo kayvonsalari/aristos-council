@@ -427,6 +427,13 @@ class BacktestResult:
     as_of_mode: str = "lag"
     filing_decisions: int = 0
     filing_date_fallbacks: int = 0
+    # DATA-DRIFT-1 - which CODE and which DATA produced the file. ``lens_commit`` only dates the lens
+    # YAML; a rule change in the shared pipeline (the profit guard, NULL-EXCLUDES-2) moved committed
+    # results without touching any lens file, and nothing in the header said so. ``code_commit`` is the
+    # repo HEAD the run executed (with "+uncommitted" when the tree differs); ``data_feed`` names the
+    # feed, the provider env var (which the backtest does NOT read) and the cache.
+    code_commit: str = ""
+    data_feed: str = ""
 
     @property
     def cohort_slug(self) -> str:
@@ -717,6 +724,34 @@ def lens_commit(lens_id: str, strategies_dir=None) -> str:
         return head + ("+uncommitted" if run("status", "--porcelain") else "")
     except Exception:
         return "unknown"
+
+
+def code_commit() -> str:
+    """HEAD of the checkout this process runs from, for the CSV header ("<hash>+uncommitted" when the
+    tree differs, "unknown" outside a checkout)."""
+    try:
+        here = Path(__file__).resolve().parent
+        run = lambda *a: subprocess.run(["git", *a], cwd=here, capture_output=True, text=True,
+                                        timeout=30, check=True).stdout.strip()
+        head = run("rev-parse", "--short", "HEAD")
+        return head + ("+uncommitted" if run("status", "--porcelain", "--", "src", "strategies") else "")
+    except Exception:
+        return "unknown"
+
+
+def data_feed_state(cache_dir: str = ".aristos_cache") -> str:
+    """One line naming the data this run read: the feed, the provider env var (ignored by the
+    backtest, shown so nobody assumes it matters), whether an EODHD key was present, and the cache."""
+    import os
+    try:
+        files = len(list(Path(cache_dir).glob("*.json")))
+        cache = f"{cache_dir} ({files} files, day-keyed {date.today().isoformat()})"
+    except OSError:
+        cache = f"{cache_dir} (unreadable)"
+    return ("BacktestFeed = EODHD accounts + yfinance prices and dividends; "
+            f"ARISTOS_MARKET_PROVIDER={os.environ.get('ARISTOS_MARKET_PROVIDER') or 'unset'} "
+            "(not read by the backtest); "
+            f"EODHD key {'present' if os.environ.get('EODHD_API_KEY') else 'ABSENT'}; cache {cache}")
 
 
 def _default_feed():
@@ -1062,6 +1097,8 @@ def run_lens_backtest(cohort: str, lens_id: str, *, start: date, end: date, hold
         _apply_luck_stats(result, pos_dates=pos_dates, pos_excess_cols=pos_excess_cols,
                           dropbest_dates=dropbest_dates, dropbest_cols=dropbest_cols)
     result.as_of_mode = as_of_mode
+    result.code_commit = code_commit()
+    result.data_feed = data_feed_state() if adapter is None else "injected adapter"
     result.filing_decisions = sum(a.filing_decisions for a in asofs)
     result.filing_date_fallbacks = sum(a.filing_date_fallbacks for a in asofs)
     result.caveats = _caveats(result, unpriced, undersized_rounds)
@@ -1302,7 +1339,8 @@ def to_csv(result: BacktestResult, path) -> Path:
         ("cohort", result.cohort), ("cohort_slug", result.cohort_slug),
         ("cohort_version", "" if result.cohort_version is None else result.cohort_version),
         ("cohort_members", result.n_members), ("lens", result.lens_id),
-        ("lens_commit", result.lens_commit), ("start", result.start), ("end", result.end),
+        ("lens_commit", result.lens_commit), ("code_commit", result.code_commit),
+        ("data_feed", result.data_feed), ("start", result.start), ("end", result.end),
         ("hold_months", result.hold_months), ("step_months", result.step_months),
         ("cost_bps", repr(float(result.cost_bps))), ("lag_days", result.lag_days),
         ("as_of_rule", AS_OF_RULE_FILING if result.as_of_mode == "filing" else AS_OF_RULE),
@@ -1439,6 +1477,7 @@ def from_csv(path) -> BacktestResult:
         luck_pct_mean=_meta_num("luck_pct_mean"), luck_pct_pass=_meta_num("luck_pct_pass"),
         drop_best_vs_random=_meta_num("drop_best_vs_random"),
         as_of_mode=("filing" if meta.get("as_of_mode") == "filing" else "lag"),
+        code_commit=meta.get("code_commit", ""), data_feed=meta.get("data_feed", ""),
         filing_decisions=_parse_fallbacks(meta.get("filing_date_fallbacks", ""))[1],
         filing_date_fallbacks=_parse_fallbacks(meta.get("filing_date_fallbacks", ""))[0])
 
