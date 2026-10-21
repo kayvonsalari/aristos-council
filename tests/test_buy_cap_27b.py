@@ -135,7 +135,7 @@ def test_growth_v3_is_the_v2_factors_with_one_cap_and_is_now_promoted():
     assert v3.buy_requires == {"revenue_growth": "top_half"}
     assert v3.ui != "hidden" and not v3.status           # promoted 2026-10-21 (GROWTH-V3-PROMOTION-1)
     assert v3.asks.startswith(
-        "Growing faster than most of its industry at a fair price: a BUY needs sales growth")
+        "Growing faster than most of its industry at a fair price: companies worth at least $5bn")
     assert [c.id for c in strategy_choices([v3])] == ["growth_garp_v3"]   # offered now
 
 

@@ -1,9 +1,10 @@
 """GROWTH-V3-PROMOTION-1 (2026-10-21): v3 replaces v2 in the picker by FLAG-ONLY edits.
 
-CLAUDE.md rule 7: display and status flags (``ui``, ``status``) are not part of a strategy's immutable
-definition; changing them is allowed when a test pins every verdict-affecting field unchanged. This is
-that test: the fixture is both strategy files and the two screen lenses they reference, captured from
-main before the promotion, minus ``ui`` and ``status`` - everything else must be identical.
+CLAUDE.md rule 7: display and status fields (``ui``, ``status``, ``asks``, ``display_name``,
+``description``) are not part of a strategy's immutable definition; changing them is allowed when a test
+pins every verdict-affecting field unchanged. This is that test: the fixture is both strategy files and the
+two screen lenses they reference, captured from main before the promotion; everything except those fields
+must be identical. v3's caption was then corrected by an owner-approved text edit (GROWTH-V3-CAPTION-1).
 """
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-FLAGS = {"ui", "status"}
+FLAGS = {"ui", "status", "asks", "display_name", "description"}
 PINNED = json.loads((ROOT / "tests" / "fixtures" / "growth_v2_v3_definitions_pre_promotion.json")
                     .read_text(encoding="utf-8"))
 
@@ -27,10 +28,10 @@ def _without_flags(doc: dict) -> dict:
                                  sort_keys=True))
 
 
-def test_every_field_but_the_two_flags_is_identical_to_main_before_the_promotion():
+def test_every_field_but_the_display_and_status_fields_is_identical_to_main_before_the_promotion():
     assert set(PINNED) == {"growth_garp_v2", "growth_screen_v2", "growth_garp_v3", "growth_screen_v3"}
     for name, before in PINNED.items():
-        assert _without_flags(_load(name)) == before, name
+        assert _without_flags(_load(name)) == _without_flags(before), name
 
 
 def test_the_verdict_affecting_fields_are_named_and_unchanged():
@@ -65,3 +66,19 @@ def test_v3_badges_now_come_from_its_committed_csvs():
     assert badges["industrials_aerospace_defense_europe_us"].label == "passed the test here"
     assert badges["tech_it_services"].label != "under test here"
     assert all(b.label != "under test here" for b in badges.values())
+
+
+V3_CAPTION = (
+    "Growing faster than most of its industry at a fair price: companies worth at least $5bn whose sales are "
+    "still growing (above 0% a year) and that earn a positive return on capital, not banks or insurers; "
+    "ranked on sales growth, return on capital, price and trend; a BUY needs sales growth above the "
+    "industry median.")
+
+
+def test_v3_caption_is_the_approved_text_and_v2_display_text_is_untouched():
+    """GROWTH-V3-CAPTION-1 (2026-10-21): only v3's ``asks`` changed (owner-approved); every verdict-affecting
+    field is pinned above, and v2's display text is byte-for-byte what it was."""
+    assert " ".join(_load("growth_garp_v3")["asks"].split()) == V3_CAPTION
+    v2 = _load("growth_garp_v2")
+    for key in ("asks", "display_name", "description"):
+        assert json.loads(json.dumps(v2.get(key), default=str)) == PINNED["growth_garp_v2"].get(key), key

@@ -101,19 +101,7 @@ def missing_gates(caption: str, lens: dict) -> list[str]:
     return missing
 
 
-# GROWTH-V3-PROMOTION-1 (2026-10-21): promoting v3 made it a visible lens, and its frozen caption does not
-# name the 0% growth and 0% return-on-capital floors or the exclusion of banks and insurers. Fixing it
-# means editing `asks` in a published file, which the flag-only promotion did not do; strict xfail so
-# the test fails loudly the day the caption is corrected (a v4, or an owner-approved text edit).
-_CAPTION_GAP = {"growth_garp_v3": "caption omits min_revenue_cagr (0%), min_roic (0%), exclude_sectors"}
-
-
-def _lens_param(lens):
-    marks = [pytest.mark.xfail(strict=True, reason=_CAPTION_GAP[lens["id"]])] if lens["id"] in _CAPTION_GAP else []
-    return pytest.param(lens, id=lens["id"], marks=marks)
-
-
-@pytest.mark.parametrize("lens", [_lens_param(l) for l in _rank_lenses()])
+@pytest.mark.parametrize("lens", _rank_lenses(), ids=lambda d: d["id"])
 def test_every_lens_caption_names_every_gate_that_can_exclude_a_company(lens):
     caption = (lens.get("asks") or "").strip()
     assert caption, f"{lens['id']} has no caption"
