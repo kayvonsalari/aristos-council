@@ -6,9 +6,9 @@ and never typed by hand; method in `docs/BACKTEST.md`. These results are explora
 repeatable edge.
 
 <!-- GEN:EVIDENCE -->
-Across all tested industries, 10 of 62 cleared the bar (about 8 would by chance) and 4 also passed the luck test (about 3 would by chance; the luck test itself still runs somewhat hot, so treat these as approximate). These results are exploratory, not proof of a repeatable edge.
+Across all tested industries, 15 of 72 cleared the bar (about 9 to 10 would by chance) and 6 also passed the luck test (about 3 to 4 would by chance; the luck test itself still runs somewhat hot, so treat these as approximate). These results are exploratory, not proof of a repeatable edge.
 
-Luck-test calibration: 8 pairs in the 0-5% tail and 6 in the 95-100% tail, about 3.1 expected in each; either tail is over twice its expectation, so the luck test is approximate.
+Luck-test calibration: 10 pairs in the 0-5% tail and 6 in the 95-100% tail, about 3.6 expected in each; either tail is over twice its expectation, so the luck test is approximate.
 <!-- /GEN:EVIDENCE -->
 
 ## What Aristos can show today
@@ -22,7 +22,7 @@ Luck-test calibration: 8 pairs in the 0-5% tail and 6 in the 95-100% tail, about
   never removes a vote.
 
 <!-- GEN:COUNTS -->
-7 lenses were tested in 14 industry groups, 98 pairs in all. 4 passed the test, 6 passed the bar but luck is not ruled out, 52 did not clear the bar, and 36 could not be judged.
+8 lenses were tested in 14 industry groups, 112 pairs in all. 6 passed the test, 9 passed the bar but luck is not ruled out, 57 did not clear the bar, and 40 could not be judged.
 <!-- /GEN:COUNTS -->
 
 The industry matters more than the lens: the pairs that clear the bar cluster in a few industries,
@@ -80,7 +80,8 @@ up across industries: "Quality passed the test in Mining" is a statement the rec
 | Cyclical Income | 0 | 0 | 10 | 4 | -0.5 (10 groups) | none |
 | Defensive Income | 0 | 0 | 2 | 12 | -1.1 (2 groups) | none |
 | Earnings Power Value | 0 | 2 | 11 | 1 | -2.1 (13 groups) | none |
-| Growth | 0 | 0 | 2 | 12 | +3.5 (2 groups) | none |
+| Growth (v2) | 0 | 0 | 2 | 12 | +3.5 (2 groups) | none |
+| Growth (v3) | 2 | 3 | 5 | 4 | +2.3 (10 groups) | Media & Entertainment +6.7, Aerospace & Defense (Europe + US) +5.7 |
 | Magic Formula RAW | 2 | 3 | 9 | 0 | +1.5 | Diversified Mining +11.9, Semiconductor Equipment +8.4 |
 | Quality | 1 | 1 | 12 | 0 | +1.4 | Semiconductor Equipment +11.0 |
 | Value + Momentum | 1 | 0 | 6 | 7 | -1.7 (7 groups) | Diversified Mining +13.9 |
@@ -97,28 +98,30 @@ method is stated once, in `docs/BACKTEST.md`) and the gap to random baskets trea
 A positive gap means the lens leans on its best pick less than random picking does.
 
 <!-- GEN:INDUSTRY -->
-- **Interactive Media & Gaming**: Earnings Power Value +3.9 (luck not ruled out; without its best pick each year -7.1, +3.4 against random baskets); Magic Formula RAW +3.0 (luck not ruled out; without its best pick each year -7.9, +2.7 against random baskets); Quality +5.3 (luck not ruled out; without its best pick each year -5.0, +5.0 against random baskets).
+- **Interactive Media & Gaming**: Earnings Power Value +3.9 (luck not ruled out; without its best pick each year -7.1, +3.4 against random baskets); Growth (v3) +5.1 (luck not ruled out; without its best pick each year -5.9, +6.2 against random baskets); Magic Formula RAW +3.0 (luck not ruled out; without its best pick each year -7.9, +2.7 against random baskets); Quality +5.3 (luck not ruled out; without its best pick each year -5.0, +5.0 against random baskets).
+- **Media & Entertainment**: Growth (v3) +6.7 (passed the test; without its best pick each year -12.8, +1.0 against random baskets).
 - **Auto Manufacturers**: Magic Formula RAW +6.3 (luck not ruled out; without its best pick each year -14.7, +0.3 against random baskets).
-- **Grid & Electrical Machinery**: Earnings Power Value +4.8 (luck not ruled out; without its best pick each year -10.4, +9.1 against random baskets); Magic Formula RAW +4.7 (luck not ruled out; without its best pick each year -7.5, +7.8 against random baskets).
+- **Aerospace & Defense (Europe + US)**: Growth (v3) +5.7 (passed the test; without its best pick each year -4.1, +8.0 against random baskets).
+- **Grid & Electrical Machinery**: Earnings Power Value +4.8 (luck not ruled out; without its best pick each year -10.4, +9.1 against random baskets); Growth (v3) +7.6 (luck not ruled out; without its best pick each year -15.9, +2.5 against random baskets); Magic Formula RAW +4.7 (luck not ruled out; without its best pick each year -7.5, +7.8 against random baskets).
 - **Diversified Mining**: Value + Momentum +13.9 (passed the test); Magic Formula RAW +11.9 (passed the test; without its best pick each year -3.9, +12.8 against random baskets).
 - **Semiconductor Equipment**: Magic Formula RAW +8.4 (passed the test; without its best pick each year -4.6, +8.4 against random baskets); Quality +11.0 (passed the test; without its best pick each year -0.1, +13.7 against random baskets).
+- **Semiconductors**: Growth (v3) +4.9 (luck not ruled out; without its best pick each year -12.5, +7.3 against random baskets).
 
-No lens cleared the bar in: Media & Entertainment (3 of 7 untested); Large Pharma (2 of 7 untested); Medical Devices & Instruments (2 of 7 untested); Aerospace & Defense (Europe + US) (2 of 7 untested); Airlines & Airports (3 of 7 untested); Hardware (3 of 7 untested); IT Services (2 of 7 untested); Semiconductors (3 of 7 untested); Systems Software (4 of 7 untested).
+No lens cleared the bar in: Large Pharma (2 of 8 untested); Medical Devices & Instruments (2 of 8 untested); Airlines & Airports (4 of 8 untested); Hardware (3 of 8 untested); IT Services (2 of 8 untested); Systems Software (5 of 8 untested).
 <!-- /GEN:INDUSTRY -->
 
 **What the 2026-10-21 passes have in common (read from the table above, no earlier text carried over).**
-The four passes of the test sit in two groups: Diversified Mining (Value + Momentum +13.9, Magic Formula
-RAW +11.9) and Semiconductor Equipment (Magic Formula RAW +8.4, Quality +11.0). Six more cleared the bar
-with luck not ruled out, in Interactive Media & Gaming (three), Auto Manufacturers (one) and Grid &
-Electrical Machinery (two). The tidy story "capital-heavy industries" does not survive this table: Airlines
-& Airports and Auto Manufacturers are as capital-heavy as Mining and have no pass of the test, and
-Interactive Media & Gaming, which is not capital-heavy, has three bar-clearing pairs. What can be said is
-narrower: the passes are in cyclical groups, they held a position in 60 to 80 of 108 months (Mining Value
-+ Momentum 60, RAW 80; Semiconductor Equipment RAW 68, Quality 77), and in each group the two passing
-lenses overlap by only 40% (Mining) and 47% (Semiconductor Equipment), under the 80% line at which two
-results count as one. Without its best pick each year Mining RAW is at -3.9, Semiconductor Equipment RAW at
--4.6 and Quality at -0.1 (Mining Value + Momentum buys too few names for that check), so the passes lean on
-a few winners. One more window of data in a group would change this; read each group alone.
+Six pairs passed the test, in four groups: Diversified Mining (Value + Momentum +13.9, Magic Formula RAW
++11.9), Semiconductor Equipment (Magic Formula RAW +8.4, Quality +11.0), Media & Entertainment (Growth v3
++6.7) and Aerospace & Defense (Growth v3 +5.7). Nine more cleared the bar with luck not ruled out. The tidy
+story "capital-heavy industries" does not survive this table: Airlines & Airports and Auto Manufacturers
+are as capital-heavy as Mining and have no pass of the test, and Media & Entertainment and Interactive
+Media & Gaming are not capital-heavy. What can be said is narrower: the passes held a position in 60 to 84
+of 108 months, and where two lenses passed in one group they overlap by 40% (Mining) and 47%
+(Semiconductor Equipment), under the 80% line at which two results count as one. Without its best pick
+each year Mining RAW is at -3.9, Semiconductor Equipment RAW at -4.6 and Quality at -0.1, and both Growth
+v3 passes are at -4.1 to -12.8, so the passes lean on a few winners (Mining Value + Momentum buys too few
+names for that check). One more window of data in a group would change this; read each group alone.
 
 ## Lenses under test (GROWTH-V3-RESULTS-1)
 
@@ -129,48 +132,7 @@ earlier version carries over. Whether it is offered in the picker is decided by 
 `docs/DESIGN_growth_v3.md`, not by this table.
 
 <!-- GEN:UNDERTEST -->
-**Growth (`growth_garp_v3`, under test, no badge) - coverage.** Names ranked per round and rounds with a position held (3 or more BUY names).
-
-| Industry group | Ranked, median round | Ranked, last round | Rounds ranking 10+ | Rounds held |
-| --- | --- | --- | --- | --- |
-| Interactive Media & Gaming | 19 | 19 | 100% | 91 of 108 (84%) |
-| Media & Entertainment | 16 | 20 | 84% | 84 of 108 (78%) |
-| Auto Manufacturers | 15 | 18 | 84% | 91 of 108 (84%) |
-| Large Pharma | 15 | 14 | 84% | 76 of 108 (70%) |
-| Medical Devices & Instruments | 28 | 31 | 84% | 91 of 108 (84%) |
-| Aerospace & Defense (Europe + US) | 18 | 28 | 84% | 82 of 108 (76%) |
-| Airlines & Airports | 13 | 22 | 62% | 50 of 108 (46%) |
-| Grid & Electrical Machinery | 13 | 15 | 67% | 67 of 108 (62%) |
-| Diversified Mining | 14 | 15 | 82% | 23 of 108 (21%) |
-| Hardware | 18 | 21 | 84% | 86 of 108 (80%) |
-| IT Services | 22 | 26 | 84% | 92 of 108 (85%) |
-| Semiconductor Equipment | 9 | 11 | 35% | 24 of 108 (22%) |
-| Semiconductors | 21 | 18 | 84% | 77 of 108 (71%) |
-| Systems Software | 12 | 13 | 80% | 24 of 108 (22%) |
-
-Promotion rule (10+ names ranked and a position held in at least half the rounds, in at least 10 of 14 groups); 10 groups hold a position in half the rounds or more. Groups meeting both, by what "ranked 10+" is read to mean:
-- median round: 10 of 14
-- last round: 10 of 14
-- half the rounds or more: 10 of 14
-
-**Growth - performance (reported apart from coverage; no badge, nothing carried over from an earlier version).**
-
-| Industry group | Verdict | Mean excess, %/yr | Years positive | Chance a random picker did as well |
-| --- | --- | --- | --- | --- |
-| Interactive Media & Gaming | not beyond luck | +5.1 | 5 of 8 | 10% |
-| Media & Entertainment | proven | +6.7 | 5 of 8 | 4% |
-| Auto Manufacturers | not proven | -1.7 | 4 of 8 | 59% |
-| Large Pharma | not proven | -0.2 | 5 of 8 | 48% |
-| Medical Devices & Instruments | not proven | -0.3 | 3 of 8 | 44% |
-| Aerospace & Defense (Europe + US) | proven | +5.7 | 6 of 8 | 4% |
-| Airlines & Airports | insufficient | +0.7 | 4 of 6 | 29% |
-| Grid & Electrical Machinery | not beyond luck | +7.6 | 6 of 8 | 15% |
-| Diversified Mining | insufficient | +13.8 | 2 of 3 | 7% |
-| Hardware | not proven | -1.8 | 5 of 8 | 59% |
-| IT Services | not proven | -2.9 | 3 of 9 | 81% |
-| Semiconductor Equipment | insufficient | +6.7 | 3 of 6 | 15% |
-| Semiconductors | not beyond luck | +4.9 | 5 of 8 | 25% |
-| Systems Software | insufficient | +0.7 | 3 of 6 | 41% |
+No lens is under test.
 <!-- /GEN:UNDERTEST -->
 
 ### Do two passes share the same picks?
@@ -179,12 +141,17 @@ For every pair of lenses that both cleared the bar in the same group: how much t
 overlapped, month by month.
 
 <!-- GEN:OVERLAP -->
+- Interactive Media & Gaming: Growth (v3) and Magic Formula RAW - mean overlap 72%, identical baskets in 2 of 91 months
+- Grid & Electrical Machinery: Growth (v3) and Magic Formula RAW - mean overlap 55%, identical baskets in 3 of 67 months
 - Semiconductor Equipment: Magic Formula RAW and Quality - mean overlap 47%, identical baskets in 3 of 60 months
 - Interactive Media & Gaming: Earnings Power Value and Magic Formula RAW - mean overlap 46%, identical baskets in 2 of 108 months
 - Interactive Media & Gaming: Magic Formula RAW and Quality - mean overlap 42%, identical baskets in 0 of 108 months
+- Interactive Media & Gaming: Growth (v3) and Quality - mean overlap 41%, identical baskets in 0 of 91 months
 - Diversified Mining: Value + Momentum and Magic Formula RAW - mean overlap 40%, identical baskets in 0 of 60 months
+- Interactive Media & Gaming: Earnings Power Value and Growth (v3) - mean overlap 37%, identical baskets in 0 of 91 months
 - Interactive Media & Gaming: Earnings Power Value and Quality - mean overlap 35%, identical baskets in 0 of 108 months
 - Grid & Electrical Machinery: Earnings Power Value and Magic Formula RAW - mean overlap 30%, identical baskets in 0 of 100 months
+- Grid & Electrical Machinery: Earnings Power Value and Growth (v3) - mean overlap 30%, identical baskets in 0 of 67 months
 <!-- /GEN:OVERLAP -->
 
 Badges remain informational and never gate a vote (ruling of 2026-09-30).

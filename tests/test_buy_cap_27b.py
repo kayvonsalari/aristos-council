@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from aristos_council import backtest as bt
 from aristos_council.backtest import track_record
 from aristos_council.rank_engine import FactorSpec, rank_universe, ranked_table_rows
 from aristos_council.strategy.discovery import lens_strategy_ids
@@ -124,7 +125,7 @@ def test_the_ranked_table_shows_the_reason_beside_the_verdict():
 # --------------------------------------------------------------------------- #
 # the v3 files
 # --------------------------------------------------------------------------- #
-def test_growth_v3_is_the_v2_factors_with_one_cap_hidden_and_under_test():
+def test_growth_v3_is_the_v2_factors_with_one_cap_and_is_now_promoted():
     v2, v3 = (load_rank_strategy(STRATEGIES / f"growth_garp_v{n}.yaml") for n in (2, 3))
     assert [f.name for f in v3.factors] == [f.name for f in v2.factors] == [
         "revenue_growth", "roic", "earnings_yield", "momentum_12m"]
@@ -132,10 +133,10 @@ def test_growth_v3_is_the_v2_factors_with_one_cap_hidden_and_under_test():
         3, "Growth", "quintile", 5.0e9, True)
     assert v3.council_screen_strategy == "growth_screen_v3"
     assert v3.buy_requires == {"revenue_growth": "top_half"}
-    assert v3.ui == "hidden" and v3.status == "under_test"
+    assert v3.ui != "hidden" and not v3.status           # promoted 2026-10-21 (GROWTH-V3-PROMOTION-1)
     assert v3.asks.startswith(
         "Growing faster than most of its industry at a fair price: a BUY needs sales growth")
-    assert strategy_choices([v3]) == []                        # never offered while hidden
+    assert [c.id for c in strategy_choices([v3])] == ["growth_garp_v3"]   # offered now
 
 
 def test_growth_screen_v3_is_absolute_floors_only_and_has_no_peg():
@@ -148,10 +149,15 @@ def test_growth_screen_v3_is_absolute_floors_only_and_has_no_peg():
     assert "growth_screen_v3" in lens_strategy_ids(STRATEGIES)
 
 
-def test_an_under_test_lens_has_no_badge_and_borrows_none_from_v2():
+def test_a_promoted_lens_reads_its_own_badge_and_borrows_none_from_v2(monkeypatch):
+    """v3 (promoted 2026-10-21) has its own committed result; v2's is a different lens's and does not
+    carry over. While a lens is still status: under_test it has no badge at all."""
     b = track_record("tech_semiconductors", "growth_garp_v3")
-    assert b.label == "under test here" and b.verdict is None
-    assert track_record("tech_semiconductors", "growth_garp_v2").label != "under test here"
+    assert b.label == "passed the bar here, luck not ruled out"
+    assert track_record("tech_semiconductors", "growth_garp_v2").label == "untested here"
+    monkeypatch.setattr(bt, "_lens_status", lambda lens: "under_test" if lens == "growth_garp_v3" else "")
+    held = track_record("tech_semiconductors", "growth_garp_v3")
+    assert held.label == "under test here" and held.verdict is None
 
 
 def test_the_grid_cell_carries_the_cap_reason_and_is_unchanged_without_one():

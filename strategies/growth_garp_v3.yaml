@@ -9,8 +9,6 @@ id: growth_garp_v3
 name: Growth at a Reasonable Price
 display_name: Growth
 version: 3
-status: under_test           # no badge until its backtest is committed ("under test here")
-ui: hidden                   # not offered in the picker until the promotion rule in the design note is met
 
 asks: >-
   Growing faster than most of its industry at a fair price: a BUY needs sales growth above the

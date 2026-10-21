@@ -42,11 +42,13 @@ def test_growth_screen_v2_is_v1_minus_the_momentum_gate():
 # ITEM 2 — growth_garp_v2 supersedes v1; v1 hidden; v2 visible + rendered.
 # --------------------------------------------------------------------------- #
 def test_v2_is_visible_v1_hidden_and_lens_points_to_v2():
+    # GROWTH-V3-PROMOTION-1 (2026-10-21): v2 is now hidden too and v3 is the visible Growth; the
+    # v2 / v1 definitions below are unchanged.
     visible = {s.id for s in visible_rank_strategies(STRAT_DIR)}
     # ETF-1 ITEM 3 added the two visible ETF lenses to the set; ETFCORE-1 ITEM 1 the
     # core; FORENSIC-1 the forensic stock lens; CYCLICAL-INCOME-1 the cyclical-income one.
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
-                       "growth_garp_v2", "magic_formula_raw_v1", "financials_v1",
+                       "growth_garp_v3", "magic_formula_raw_v1", "financials_v1",
                        "forensic_v1", "cyclical_income_v1",
                        "quality_v1", "epv_v1",
                        "etf_dividend_v1", "etf_growth_v1", "etf_core_v1"}

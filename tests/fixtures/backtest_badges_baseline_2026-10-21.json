@@ -16,7 +16,7 @@
   "verdict": "not proven"
  },
  "comms_interactive_media_gaming/growth_garp_v3": {
-  "label": "under test here",
+  "label": "passed the bar here, luck not ruled out",
   "verdict": "not beyond luck"
  },
  "comms_interactive_media_gaming/magic_formula_momentum_v1": {
@@ -48,7 +48,7 @@
   "verdict": "insufficient"
  },
  "comms_media_entertainment/growth_garp_v3": {
-  "label": "under test here",
+  "label": "passed the test here",
   "verdict": "proven"
  },
  "comms_media_entertainment/magic_formula_momentum_v1": {
@@ -80,7 +80,7 @@
   "verdict": "insufficient"
  },
  "consumer_auto_manufacturers/growth_garp_v3": {
-  "label": "under test here",
+  "label": "no edge shown here",
   "verdict": "not proven"
  },
  "consumer_auto_manufacturers/magic_formula_momentum_v1": {
@@ -112,7 +112,7 @@
   "verdict": "insufficient"
  },
  "health_large_pharma/growth_garp_v3": {
-  "label": "under test here",
+  "label": "no edge shown here",
   "verdict": "not proven"
  },
  "health_large_pharma/magic_formula_momentum_v1": {
@@ -144,7 +144,7 @@
   "verdict": "insufficient"
  },
  "health_medical_devices_instruments/growth_garp_v3": {
-  "label": "under test here",
+  "label": "no edge shown here",
   "verdict": "not proven"
  },
  "health_medical_devices_instruments/magic_formula_momentum_v1": {
@@ -176,7 +176,7 @@
   "verdict": "insufficient"
  },
  "industrials_aerospace_defense_europe_us/growth_garp_v3": {
-  "label": "under test here",
+  "label": "passed the test here",
   "verdict": "proven"
  },
  "industrials_aerospace_defense_europe_us/magic_formula_momentum_v1": {
@@ -208,7 +208,7 @@
   "verdict": "insufficient"
  },
  "industrials_airlines_airports/growth_garp_v3": {
-  "label": "under test here",
+  "label": "untested here",
   "verdict": "insufficient"
  },
  "industrials_airlines_airports/magic_formula_momentum_v1": {
@@ -240,7 +240,7 @@
   "verdict": "insufficient"
  },
  "industrials_grid_electrical_machinery/growth_garp_v3": {
-  "label": "under test here",
+  "label": "passed the bar here, luck not ruled out",
   "verdict": "not beyond luck"
  },
  "industrials_grid_electrical_machinery/magic_formula_momentum_v1": {
@@ -272,7 +272,7 @@
   "verdict": "not proven"
  },
  "materials_diversified_mining/growth_garp_v3": {
-  "label": "under test here",
+  "label": "untested here",
   "verdict": "insufficient"
  },
  "materials_diversified_mining/magic_formula_momentum_v1": {
@@ -304,7 +304,7 @@
   "verdict": "insufficient"
  },
  "tech_hardware/growth_garp_v3": {
-  "label": "under test here",
+  "label": "no edge shown here",
   "verdict": "not proven"
  },
  "tech_hardware/magic_formula_momentum_v1": {
@@ -336,7 +336,7 @@
   "verdict": "insufficient"
  },
  "tech_it_services/growth_garp_v3": {
-  "label": "under test here",
+  "label": "no edge shown here",
   "verdict": "not proven"
  },
  "tech_it_services/magic_formula_momentum_v1": {
@@ -368,7 +368,7 @@
   "verdict": "insufficient"
  },
  "tech_semiconductor_equipment/growth_garp_v3": {
-  "label": "under test here",
+  "label": "untested here",
   "verdict": "insufficient"
  },
  "tech_semiconductor_equipment/magic_formula_momentum_v1": {
@@ -400,7 +400,7 @@
   "verdict": "insufficient"
  },
  "tech_semiconductors/growth_garp_v3": {
-  "label": "under test here",
+  "label": "passed the bar here, luck not ruled out",
   "verdict": "not beyond luck"
  },
  "tech_semiconductors/magic_formula_momentum_v1": {
@@ -432,7 +432,7 @@
   "verdict": "insufficient"
  },
  "tech_systems_software/growth_garp_v3": {
-  "label": "under test here",
+  "label": "untested here",
   "verdict": "insufficient"
  },
  "tech_systems_software/magic_formula_momentum_v1": {
