@@ -11,9 +11,10 @@ display_name: Growth
 version: 3
 
 asks: >-
-  Growing faster than most of its industry at a fair price: a BUY needs sales growth above the
-  industry median; names are then ranked on sales growth, return on capital, price and trend, among
-  profitable, growing companies worth at least $5bn.
+  Growing faster than most of its industry at a fair price: companies worth at least $5bn whose sales
+  are still growing (above 0% a year) and that earn a positive return on capital, not banks or
+  insurers; ranked on sales growth, return on capital, price and trend; a BUY needs sales growth
+  above the industry median.
 
 kind: selector
 thesis:
