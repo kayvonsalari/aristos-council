@@ -734,7 +734,7 @@ def code_commit() -> str:
         run = lambda *a: subprocess.run(["git", *a], cwd=here, capture_output=True, text=True,
                                         timeout=30, check=True).stdout.strip()
         head = run("rev-parse", "--short", "HEAD")
-        return head + ("+uncommitted" if run("status", "--porcelain", "--", "src", "strategies") else "")
+        return head + ("+uncommitted" if run("status", "--porcelain", "--", ":/src", ":/strategies") else "")
     except Exception:
         return "unknown"
 
@@ -1190,6 +1190,12 @@ def _series_rest_mean_dropping_best(pairs: list) -> float:
     """``pairs`` is ``[(ticker, return), ...]``, length >= 2, from a SORTED iteration (so a tied
     return breaks the same way every run). The mean return with the single best-returning ticker
     dropped — the same construction ``_drop_best_excess`` uses, per random series."""
+    if len(pairs) < 2:
+        # FIX-DIVZERO-1 (2026-10-21): a persistent random series can be SHORT of ``k`` when the pool is
+        # small (a name swapped out this round may not be drawn straight back, and nothing else is
+        # left). One name has no "rest" once the best is dropped; it keeps its own return rather than
+        # dividing by zero (Grid & Electrical Machinery and IT Services x Defensive Income crashed).
+        return pairs[0][1]
     best_ticker = max(pairs, key=lambda tv: tv[1])[0]
     rest = [v for t, v in pairs if t != best_ticker]
     return sum(rest) / len(rest)

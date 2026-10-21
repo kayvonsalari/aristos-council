@@ -1896,3 +1896,20 @@ def test_data_feed_state_names_provider_key_and_cache(monkeypatch, tmp_path):
     assert "EODHD key present" in line and "(1 files" in line
     monkeypatch.delenv("EODHD_API_KEY")
     assert "EODHD key ABSENT" in bt.data_feed_state(str(tmp_path))
+
+
+def test_a_one_name_random_series_does_not_divide_by_zero():
+    """FIX-DIVZERO-1 (2026-10-21): conservative_plus_v1 x "Tech - IT Services" and x "Industrials -
+    Grid & Electrical Machinery" raised ZeroDivisionError in the Colab refresh. A persistent random
+    series came up one name short of the basket size in a thin pool, and dropping its best name left
+    nothing to average."""
+    assert bt._series_rest_mean_dropping_best([("A", 0.12)]) == 0.12
+    assert bt._series_rest_mean_dropping_best([("A", 0.1), ("B", 0.3)]) == 0.1       # unchanged path
+    assert bt._series_rest_mean_dropping_best([("A", 0.1), ("B", 0.3), ("C", 0.2)]) == pytest.approx(0.15)
+
+
+def test_code_commit_flags_an_uncommitted_change_under_src():
+    """The DATA-DRIFT-1 header helper used a pathspec relative to the package directory, so an edited
+    src/ file never read as +uncommitted. Pin the pathspec to the repo root."""
+    import inspect
+    assert '":/src"' in inspect.getsource(bt.code_commit)
