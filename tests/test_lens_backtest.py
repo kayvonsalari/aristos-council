@@ -1870,3 +1870,29 @@ def test_notebook_cell_10_prints_a_plain_message_on_an_empty_frame_instead_of_cr
     out = capsys.readouterr().out
     assert "no results found" in out
     assert not (size_floor_out / "SIZE_FLOOR_SUMMARY.csv").exists()
+
+
+def test_csv_header_records_the_code_and_the_data_feed(monkeypatch, tmp_path):
+    """DATA-DRIFT-1 (2026-10-21): committed Systems Software results could not be reproduced and the
+    header could not say why - two rule changes in the shared pipeline (the profit guard, then
+    NULL-EXCLUDES-2) landed after the refresh and ``lens_commit`` only dates the lens YAML. The header
+    now names the code HEAD and the feed (provider env var, key, cache), and both survive a round trip."""
+    result = _run(monkeypatch)
+    result.code_commit, result.data_feed = "abc1234", "BacktestFeed = test; cache .aristos_cache"
+    path = bt.to_csv(result, tmp_path)
+    text = path.read_text(encoding="utf-8")
+    assert "# code_commit: abc1234" in text
+    assert "# data_feed: BacktestFeed = test; cache .aristos_cache" in text
+    back = bt.from_csv(path)
+    assert (back.code_commit, back.data_feed) == ("abc1234", "BacktestFeed = test; cache .aristos_cache")
+
+
+def test_data_feed_state_names_provider_key_and_cache(monkeypatch, tmp_path):
+    (tmp_path / "x.json").write_text("{}")
+    monkeypatch.delenv("ARISTOS_MARKET_PROVIDER", raising=False)
+    monkeypatch.setenv("EODHD_API_KEY", "k")
+    line = bt.data_feed_state(str(tmp_path))
+    assert "ARISTOS_MARKET_PROVIDER=unset (not read by the backtest)" in line
+    assert "EODHD key present" in line and "(1 files" in line
+    monkeypatch.delenv("EODHD_API_KEY")
+    assert "EODHD key ABSENT" in bt.data_feed_state(str(tmp_path))
