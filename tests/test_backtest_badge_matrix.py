@@ -90,3 +90,16 @@ def test_the_committed_summary_csv_is_what_the_per_lens_csvs_rebuild_to(tmp_path
     out = tmp_path / "SUMMARY.csv"
     build_summary_table(DEFAULT_SUMMARY.parent).to_csv(out, index=False)
     assert out.read_bytes().splitlines() == DEFAULT_SUMMARY.read_bytes().splitlines()
+
+
+def test_under_test_block_reports_coverage_and_performance_apart_and_without_a_badge():
+    """GROWTH-V3-RESULTS-1: growth_garp_v3 (status: under_test) gets two separate tables - coverage first,
+    performance second - one row per industry group, and the promotion-rule counts under each reading of
+    "ranked 10+" (the design note does not say which round)."""
+    from scripts.backtest_badge_matrix import DEFAULT_SUMMARY, under_test_block
+    text = under_test_block(DEFAULT_SUMMARY.parent)
+    assert text.index("coverage") < text.index("performance")
+    assert text.count("\n| ") >= 2 * 14 + 4                      # 14 rows in each of the two tables + headers
+    assert "no badge" in text and "nothing carried over from an earlier version" in text
+    for reading in ("median round", "last round", "half the rounds or more"):
+        assert f"- {reading}: " in text

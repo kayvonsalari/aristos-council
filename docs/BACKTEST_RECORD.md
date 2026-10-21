@@ -120,6 +120,59 @@ results count as one. Without its best pick each year Mining RAW is at -3.9, Sem
 -4.6 and Quality at -0.1 (Mining Value + Momentum buys too few names for that check), so the passes lean on
 a few winners. One more window of data in a group would change this; read each group alone.
 
+## Lenses under test (GROWTH-V3-RESULTS-1)
+
+A lens whose definition is frozen but whose result has not earned a badge (`status: under_test`) is run in
+the same grid and reported here, in two separate tables: coverage first, then performance. It is left out
+of the matrix, the pooled chance line and the overlap check above, and nothing earned or failed by an
+earlier version carries over. Whether it is offered in the picker is decided by the promotion rule in
+`docs/DESIGN_growth_v3.md`, not by this table.
+
+<!-- GEN:UNDERTEST -->
+**Growth (`growth_garp_v3`, under test, no badge) - coverage.** Names ranked per round and rounds with a position held (3 or more BUY names).
+
+| Industry group | Ranked, median round | Ranked, last round | Rounds ranking 10+ | Rounds held |
+| --- | --- | --- | --- | --- |
+| Interactive Media & Gaming | 19 | 19 | 100% | 91 of 108 (84%) |
+| Media & Entertainment | 16 | 20 | 84% | 84 of 108 (78%) |
+| Auto Manufacturers | 15 | 18 | 84% | 91 of 108 (84%) |
+| Large Pharma | 15 | 14 | 84% | 76 of 108 (70%) |
+| Medical Devices & Instruments | 28 | 31 | 84% | 91 of 108 (84%) |
+| Aerospace & Defense (Europe + US) | 18 | 28 | 84% | 82 of 108 (76%) |
+| Airlines & Airports | 13 | 22 | 62% | 50 of 108 (46%) |
+| Grid & Electrical Machinery | 13 | 15 | 67% | 67 of 108 (62%) |
+| Diversified Mining | 14 | 15 | 82% | 23 of 108 (21%) |
+| Hardware | 18 | 21 | 84% | 86 of 108 (80%) |
+| IT Services | 22 | 26 | 84% | 92 of 108 (85%) |
+| Semiconductor Equipment | 9 | 11 | 35% | 24 of 108 (22%) |
+| Semiconductors | 21 | 18 | 84% | 77 of 108 (71%) |
+| Systems Software | 12 | 13 | 80% | 24 of 108 (22%) |
+
+Promotion rule (10+ names ranked and a position held in at least half the rounds, in at least 10 of 14 groups); 10 groups hold a position in half the rounds or more. Groups meeting both, by what "ranked 10+" is read to mean:
+- median round: 10 of 14
+- last round: 10 of 14
+- half the rounds or more: 10 of 14
+
+**Growth - performance (reported apart from coverage; no badge, nothing carried over from an earlier version).**
+
+| Industry group | Verdict | Mean excess, %/yr | Years positive | Chance a random picker did as well |
+| --- | --- | --- | --- | --- |
+| Interactive Media & Gaming | not beyond luck | +5.1 | 5 of 8 | 10% |
+| Media & Entertainment | proven | +6.7 | 5 of 8 | 4% |
+| Auto Manufacturers | not proven | -1.7 | 4 of 8 | 59% |
+| Large Pharma | not proven | -0.2 | 5 of 8 | 48% |
+| Medical Devices & Instruments | not proven | -0.3 | 3 of 8 | 44% |
+| Aerospace & Defense (Europe + US) | proven | +5.7 | 6 of 8 | 4% |
+| Airlines & Airports | insufficient | +0.7 | 4 of 6 | 29% |
+| Grid & Electrical Machinery | not beyond luck | +7.6 | 6 of 8 | 15% |
+| Diversified Mining | insufficient | +13.8 | 2 of 3 | 7% |
+| Hardware | not proven | -1.8 | 5 of 8 | 59% |
+| IT Services | not proven | -2.9 | 3 of 9 | 81% |
+| Semiconductor Equipment | insufficient | +6.7 | 3 of 6 | 15% |
+| Semiconductors | not beyond luck | +4.9 | 5 of 8 | 25% |
+| Systems Software | insufficient | +0.7 | 3 of 6 | 41% |
+<!-- /GEN:UNDERTEST -->
+
 ### Do two passes share the same picks?
 
 For every pair of lenses that both cleared the bar in the same group: how much their baskets
