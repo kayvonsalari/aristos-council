@@ -334,24 +334,24 @@ python -m scripts.backtest_badge_matrix
 **P** = proven, **L** = not beyond luck, **N** = not proven, **U** = insufficient (untested — too
 little measured history), each cell's mean annual excess in parentheses:
 
-| Cohort | conservative_plus_v1 | cyclical_income_v1 | epv_v1 | growth_garp_v2 | magic_formula_momentum_v1 | magic_formula_raw_v1 | quality_v1 |
-|---|---|---|---|---|---|---|---|
-| Comms - Interactive Media & Gaming | N (1.6%) | N (-0.5%) | L (3.9%) | N (6.6%) | N (0.1%) | L (3.0%) | L (5.3%) |
-| Comms - Media & Entertainment | U (-2.0%) | N (-0.5%) | N (-5.9%) | U | U (12.2%) | N (1.5%) | N (2.4%) |
-| Consumer - Auto Manufacturers | U (-3.9%) | N (-0.5%) | N (-0.6%) | U | U (-33.8%) | L (6.3%) | N (5.3%) |
-| Health - Large Pharma | U (-0.5%) | N (-0.5%) | N (-5.5%) | U (6.6%) | N (-3.5%) | N (-1.4%) | N (1.0%) |
-| Health - Medical Devices & Instruments | U (2.6%) | N (-0.5%) | N (-3.0%) | U | N (-2.7%) | N (2.6%) | N (5.0%) |
-| Industrials - Aerospace & Defense (Europe + US) | U (1.8%) | N (-0.5%) | N (-4.1%) | U | N (-9.9%) | N (-6.1%) | N (-4.0%) |
-| Industrials - Airlines & Airports | U (1.6%) | N (-0.5%) | N (2.1%) | U | U (-4.1%) | N (-0.1%) | N (-1.5%) |
-| Industrials - Grid & Electrical Machinery | U (11.4%) | U (-0.5%) | L (4.8%) | U | U (3.7%) | L (4.7%) | N (-8.9%) |
-| Materials - Diversified Mining | N (-3.9%) | N (-0.5%) | N (0.3%) | N (0.4%) | P (13.9%) | P (11.9%) | N (9.0%) |
-| Tech - Hardware | U (4.2%) | N (-0.5%) | N (-11.1%) | U (17.9%) | U (3.9%) | N (1.0%) | N (-2.7%) |
-| Tech - IT Services | U (-1.1%) | N (-0.5%) | N (0.7%) | U (-11.4%) | N (-3.3%) | N (-1.5%) | N (-3.0%) |
-| Tech - Semiconductor Equipment | U | U | U (7.3%) | U (1.7%) | U (4.0%) | P (8.4%) | P (11.0%) |
-| Tech - Semiconductors | U | U | N (-8.5%) | U (14.5%) | N (-6.4%) | N (-7.6%) | N (-1.1%) |
-| Tech - Systems Software | U | U | N (-0.9%) | U (-0.5%) | U (4.5%) | N (-1.8%) | N (2.4%) |
+| Cohort | conservative_plus_v1 | cyclical_income_v1 | epv_v1 | growth_garp_v2 | growth_garp_v3 | magic_formula_momentum_v1 | magic_formula_raw_v1 | quality_v1 |
+|---|---|---|---|---|---|---|---|---|
+| Comms - Interactive Media & Gaming | N (1.6%) | N (-0.5%) | L (3.9%) | N (6.6%) | L (5.1%) | N (0.1%) | L (3.0%) | L (5.3%) |
+| Comms - Media & Entertainment | U (-2.0%) | N (-0.5%) | N (-5.9%) | U | P (6.7%) | U (12.2%) | N (1.5%) | N (2.4%) |
+| Consumer - Auto Manufacturers | U (-3.9%) | N (-0.5%) | N (-0.6%) | U | N (-1.7%) | U (-33.8%) | L (6.3%) | N (5.3%) |
+| Health - Large Pharma | U (-0.5%) | N (-0.5%) | N (-5.5%) | U (6.6%) | N (-0.2%) | N (-3.5%) | N (-1.4%) | N (1.0%) |
+| Health - Medical Devices & Instruments | U (2.6%) | N (-0.5%) | N (-3.0%) | U | N (-0.3%) | N (-2.7%) | N (2.6%) | N (5.0%) |
+| Industrials - Aerospace & Defense (Europe + US) | U (1.8%) | N (-0.5%) | N (-4.1%) | U | P (5.7%) | N (-9.9%) | N (-6.1%) | N (-4.0%) |
+| Industrials - Airlines & Airports | U (1.6%) | N (-0.5%) | N (2.1%) | U | U (0.7%) | U (-4.1%) | N (-0.1%) | N (-1.5%) |
+| Industrials - Grid & Electrical Machinery | U (11.4%) | U (-0.5%) | L (4.8%) | U | L (7.6%) | U (3.7%) | L (4.7%) | N (-8.9%) |
+| Materials - Diversified Mining | N (-3.9%) | N (-0.5%) | N (0.3%) | N (0.4%) | U (13.8%) | P (13.9%) | P (11.9%) | N (9.0%) |
+| Tech - Hardware | U (4.2%) | N (-0.5%) | N (-11.1%) | U (17.9%) | N (-1.8%) | U (3.9%) | N (1.0%) | N (-2.7%) |
+| Tech - IT Services | U (-1.1%) | N (-0.5%) | N (0.7%) | U (-11.4%) | N (-2.9%) | N (-3.3%) | N (-1.5%) | N (-3.0%) |
+| Tech - Semiconductor Equipment | U | U | U (7.3%) | U (1.7%) | U (6.7%) | U (4.0%) | P (8.4%) | P (11.0%) |
+| Tech - Semiconductors | U | U | N (-8.5%) | U (14.5%) | L (4.9%) | N (-6.4%) | N (-7.6%) | N (-1.1%) |
+| Tech - Systems Software | U | U | N (-0.9%) | U (-0.5%) | U (0.7%) | U (4.5%) | N (-1.8%) | N (2.4%) |
 
-As of the 2026-10-21 refresh: 4 proven, 6 not beyond luck, 52 not proven, 36 insufficient across the 98 cells of the seven voting lenses (62 measured; the pooled chance line is in `docs/BACKTEST_RECORD.md`). `growth_garp_v3` is run in the same grid but is `under_test`, has no badge and is left out of this matrix and of every pooled figure; its coverage and results are reported separately (GROWTH-V3-RESULTS-1 in `docs/BACKTEST_RECORD.md`).
+As of the 2026-10-21 refresh, with Growth v3 promoted: 6 proven, 9 not beyond luck, 57 not proven, 40 insufficient across 112 cells (72 measured; the pooled chance line is in `docs/BACKTEST_RECORD.md`). The matrix carries a `growth_garp_v3` column (v3 was `under_test`, and left out of it, until the promotion); its coverage and the promotion rule's outcome are in `docs/DESIGN_growth_v3.md`. Growth v2 and v3 are different lenses: nothing v2 earned or failed carries to v3.
 
 **Committed results are valid only for the code that produced them.** Every CSV header carries `code_commit` (the repo HEAD the run executed) and `data_feed` (feed, provider variable, key, cache), added by DATA-DRIFT-1; `lens_commit` dates only the lens file. The set refreshed on 2026-10-04 (code `2fdd337`) predated two deliberate rule changes merged on 2026-10-05 — the operating-profit guard (`f706ba6`, SMALLCAP-BAND-GAP-1) and NULL-EXCLUDES-2 (`eb43dc2`) — so every badge described rules the app no longer ran. The 2026-10-21 refresh (`code_commit` 6dbce3e; two pairs re-run after FIX-DIVZERO-1 carry 9944056) replaced it. The old set is kept as the annotated tag `backtests-baseline-2026-10-20`, and `backtests/COMPARE_2026-10-21.md` shows what moved. A change to the shared ranking path is a reason to re-run, not only a change to a lens file.
 

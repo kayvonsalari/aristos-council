@@ -96,8 +96,9 @@ def test_visible_rank_set_is_the_live_strategies():
     # ETFCORE-1 ITEM 1: the core-market ETF lens joins them.
     # CYCLICAL-INCOME-1 adds the cyclical-income stock lens -> seven stock lenses;
     # LENS-EXPAND-1a adds quality_v1 and epv_v1 -> nine.
+    # GROWTH-V3-PROMOTION-1 (2026-10-21): growth_garp_v3 replaces growth_garp_v2 (now ui: hidden).
     assert visible == {"conservative_plus_v1", "magic_formula_momentum_v1",
-                       "growth_garp_v2", "magic_formula_raw_v1", "financials_v1",
+                       "growth_garp_v3", "magic_formula_raw_v1", "financials_v1",
                        "forensic_v1", "cyclical_income_v1",
                        "quality_v1", "epv_v1",
                        "etf_dividend_v1", "etf_growth_v1", "etf_core_v1"}

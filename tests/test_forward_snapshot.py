@@ -51,7 +51,7 @@ class FakeAdapter:
 # --------------------------------------------------------------------------- lenses and cohorts
 def test_voting_lenses_are_the_visible_equity_selectors_and_nothing_else():
     ids = fs.voting_lens_ids(ROOT / "strategies")
-    assert {"magic_formula_momentum_v1", "conservative_plus_v1", "growth_garp_v2", "quality_v1",
+    assert {"magic_formula_momentum_v1", "conservative_plus_v1", "growth_garp_v3", "quality_v1",
             "epv_v1", "magic_formula_raw_v1", "cyclical_income_v1"} <= set(ids)
     assert "forensic_v1" not in ids                                  # a check marks, it does not vote
     assert not [i for i in ids if i.startswith("etf_")]              # fund lenses admit no equity

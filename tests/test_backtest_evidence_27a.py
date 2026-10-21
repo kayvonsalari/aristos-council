@@ -109,11 +109,12 @@ def test_the_tails_flag_the_luck_test_as_approximate_only_past_twice_expectation
     assert not ev2.approximate and "approximate" not in ev2.sentence()
 
 
-def test_the_committed_record_reads_10_of_62(tmp_path):
-    """Re-pinned at the 2026-10-21 refresh (was 12 of 68); the under-test v3 lens is not pooled."""
+def test_the_committed_record_reads_15_of_72(tmp_path):
+    """Re-pinned at the 2026-10-21 refresh (was 12 of 68) and again when v3 was promoted (was 10 of 62:
+    while a lens is status: under_test it is not pooled)."""
     ev = evidence_summary()
-    assert (ev.measured, ev.bar_passed, ev.luck_passed) == (62, 10, 4)
-    assert "(about 8 would by chance)" in ev.sentence() and "(about 3 would by chance" in ev.sentence()
+    assert (ev.measured, ev.bar_passed, ev.luck_passed) == (72, 15, 6)
+    assert "(about 9 to 10 would by chance)" in ev.sentence() and "(about 3 to 4 would by chance" in ev.sentence()
 
 
 def test_an_empty_directory_says_so(tmp_path):
@@ -227,10 +228,12 @@ def test_compare_main_against_itself_changes_nothing():
     assert "**112 pairs.** Verdict changed: 0. Label changed: 0." in out
 
 
-def test_an_under_test_lens_is_not_pooled_into_the_chance_line_or_the_overlap_check():
+def test_an_under_test_lens_is_not_pooled_into_the_chance_line_or_the_overlap_check(monkeypatch):
     """GROWTH-V3-RESULTS-1: growth_garp_v3 (status: under_test) has no badge, so its 14 results must
     not move the pooled figures the badges' evidence line states."""
     from aristos_council.backtest import _load_backtests, _pooled_backtests
+    assert _pooled_backtests() == _load_backtests()            # promoted 2026-10-21: nothing is under test
+    monkeypatch.setattr(bt, "_lens_status", lambda lens: "under_test" if lens == "growth_garp_v3" else "")
     everything, pooled = _load_backtests(), _pooled_backtests()
     assert {l for _, l in everything} - {l for _, l in pooled} == {"growth_garp_v3"}
     assert len(everything) - len(pooled) == 14

@@ -80,7 +80,7 @@ suppresses the summary line. **Run the full suite before every commit, including
 commits** (CLAUDE.md rule 6; imports break through refactors and this repo has the scar).
 
 The guard is also why the suite got faster: 106s before it, 57s after. Half the wall clock
-was a live Finnhub client nobody had asked for. (Historical figures: the suite then had a few hundred tests. As of 2026-10-20 (Batch 28) it collects 5,074 tests (5,042 after Batch 27B, 4,991 before Batch 27); the only failure seen is `test_analyst_trend`'s caller scan, which also fails on an unmodified main whenever stale `.claude/worktrees/agent-*` checkouts sit in the tree. Earlier count: 4,986 passed and 5 skipped, in about four to
+was a live Finnhub client nobody had asked for. (Historical figures: the suite then had a few hundred tests. As of 2026-10-21 (GROWTH-V3-PROMOTION-1) it collects 5,082 tests (5,074 at Batch 28, 5,042 after Batch 27B, 4,991 before Batch 27); the only failure seen is `test_analyst_trend`'s caller scan, which also fails on an unmodified main whenever stale `.claude/worktrees/agent-*` checkouts sit in the tree. Earlier count: 4,986 passed and 5 skipped, in about four to
 six minutes on a laptop. The skips are tests guarded by `pytest.importorskip` for an optional
 dependency that is not installed locally; a clean checkout without the `ibkr` extra skips
 `test_gap_ledger_ibkr.py` the same way, and CI installs it.)

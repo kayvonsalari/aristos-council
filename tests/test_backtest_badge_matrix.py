@@ -92,11 +92,14 @@ def test_the_committed_summary_csv_is_what_the_per_lens_csvs_rebuild_to(tmp_path
     assert out.read_bytes().splitlines() == DEFAULT_SUMMARY.read_bytes().splitlines()
 
 
-def test_under_test_block_reports_coverage_and_performance_apart_and_without_a_badge():
+def test_under_test_block_reports_coverage_and_performance_apart_and_without_a_badge(monkeypatch):
     """GROWTH-V3-RESULTS-1: growth_garp_v3 (status: under_test) gets two separate tables - coverage first,
     performance second - one row per industry group, and the promotion-rule counts under each reading of
     "ranked 10+" (the design note does not say which round)."""
+    from aristos_council import backtest as bt
     from scripts.backtest_badge_matrix import DEFAULT_SUMMARY, under_test_block
+    assert under_test_block(DEFAULT_SUMMARY.parent) == "No lens is under test."     # v3 promoted 2026-10-21
+    monkeypatch.setattr(bt, "_lens_status", lambda lens: "under_test" if lens == "growth_garp_v3" else "")
     text = under_test_block(DEFAULT_SUMMARY.parent)
     assert text.index("coverage") < text.index("performance")
     assert text.count("\n| ") >= 2 * 14 + 4                      # 14 rows in each of the two tables + headers

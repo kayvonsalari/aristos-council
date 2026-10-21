@@ -1,0 +1,148 @@
+{
+ "growth_garp_v2": {
+  "asks": "Growing fast at a fair price: sales up at least 10% a year, earning at least 12% on its capital, and not overpaying for that growth (its price no more than twice its growth rate), for companies worth at least $5bn.",
+  "asset_kind_rationale": "Revenue CAGR, ROIC and EBIT/EV describe an operating company, not a fund; an ETF scored on look-through vendor fundamentals is quiet garbage, so it is gated out.",
+  "asset_kinds": [
+   "equity"
+  ],
+  "council_screen_strategy": "growth_screen_v2",
+  "created": "2026-07-09",
+  "cut": "quintile",
+  "description": "Growth at a Reasonable Price: rank durable compounders on revenue growth, capital efficiency (ROIC), valuation (earnings yield) and 12-month momentum, over names that pass the growth screen (revenue CAGR, ROIC, PEG, mid/large cap). Momentum is a rank factor, not a screen gate (v2): dip names rank low, they are not vetoed.",
+  "display_name": "Growth",
+  "factors": [
+   {
+    "name": "revenue_growth"
+   },
+   {
+    "name": "roic"
+   },
+   {
+    "name": "earnings_yield"
+   },
+   {
+    "name": "momentum_12m"
+   }
+  ],
+  "id": "growth_garp_v2",
+  "kind": "selector",
+  "min_market_cap": "5.0e9",
+  "missing": "worst",
+  "name": "Growth at a Reasonable Price",
+  "prefilter_screen": true,
+  "rationale": "Great businesses compound revenue at high incremental returns on capital; the discipline is refusing to overpay for that growth. Ranking survivors of the growth screen on growth + quality + valuation + trend orders them without tuned weights, the same rank-sum mechanic the value strategies use. Momentum drags dip names down the order; it does not gate them out.",
+  "suggested_universes": [
+   "growth_40_v1"
+  ],
+  "thesis": [
+   "growth"
+  ],
+  "version": 2
+ },
+ "growth_garp_v3": {
+  "asks": "Growing faster than most of its industry at a fair price: a BUY needs sales growth above the industry median; names are then ranked on sales growth, return on capital, price and trend, among profitable, growing companies worth at least $5bn.",
+  "asset_kind_rationale": "Revenue CAGR, ROIC and EBIT/EV describe an operating company, not a fund; an ETF scored on look-through vendor fundamentals is quiet garbage, so it is gated out.",
+  "asset_kinds": [
+   "equity"
+  ],
+  "buy_requires": {
+   "revenue_growth": "top_half"
+  },
+  "council_screen_strategy": "growth_screen_v3",
+  "created": "2026-10-20",
+  "cut": "quintile",
+  "description": "Growth v3: rank profitable, growing companies worth at least $5bn on revenue growth, capital efficiency (ROIC), valuation (earnings yield) and 12-month momentum; a BUY additionally requires revenue growth in the top half of the ranked set (buy_requires), otherwise the name is HOLD with the reason shown.",
+  "display_name": "Growth",
+  "exclude_sectors": [
+   "Financial Services",
+   "Financials"
+  ],
+  "factors": [
+   {
+    "name": "revenue_growth"
+   },
+   {
+    "name": "roic"
+   },
+   {
+    "name": "earnings_yield"
+   },
+   {
+    "name": "momentum_12m"
+   }
+  ],
+  "id": "growth_garp_v3",
+  "kind": "selector",
+  "min_market_cap": "5.0e9",
+  "missing": "worst",
+  "name": "Growth at a Reasonable Price",
+  "prefilter_screen": true,
+  "rationale": "Great businesses compound revenue at high incremental returns on capital. v2 asked for that with three absolute thresholds and a price test, which left too few names to judge. v3 keeps the scope broad (profitable, growing, $5bn+), ranks on the same four factors, and puts the growth demand where it belongs: a relative one. \"Growing faster than most of its industry\" is a statement about the group, so it is a cap on the BUY, not an absolute rate.",
+  "sector_exclusion_rationale": "Revenue growth and return on capital do not measure a bank or an insurer: deposits, loans and premiums are the business.",
+  "suggested_universes": [
+   "growth_40_v1"
+  ],
+  "thesis": [
+   "growth"
+  ],
+  "version": 3
+ },
+ "growth_screen_v2": {
+  "criteria": [
+   {
+    "name": "min_revenue_cagr",
+    "threshold": 0.1
+   },
+   {
+    "name": "min_roic",
+    "threshold": 0.12
+   },
+   {
+    "name": "max_peg_ratio",
+    "threshold": 2.0
+   },
+   {
+    "name": "min_market_cap",
+    "threshold": 5000000000
+   }
+  ],
+  "description": "Capital-efficient growth (revenue CAGR + ROIC) bought at a reasonable price (PEG), scoped to mid/large caps \u2014 the screen lens for a Growth-at-a-Reasonable-Price rank candidate. Momentum is NOT a gate here (v2): dip names are dragged down by the momentum_12m rank factor, not vetoed by the screen.",
+  "id": "growth_screen_v2",
+  "name": "Growth screen",
+  "policy": {
+   "partial_pass_allows_hold": true
+  },
+  "rationale": "Great businesses compound revenue at high incremental returns on capital; the discipline is refusing to overpay for it. Revenue CAGR evidences the compounding, ROIC that the growth creates value, and PEG keeps valuation honest. Momentum is expressed as a rank factor in the strategy, not a screen gate \u2014 a dip name ranks low, it is not screened out.",
+  "version": 2,
+  "veto": {
+   "min_confidence": 0.6
+  }
+ },
+ "growth_screen_v3": {
+  "criteria": [
+   {
+    "name": "min_revenue_cagr",
+    "threshold": 0.0
+   },
+   {
+    "name": "min_roic",
+    "threshold": 0.0
+   },
+   {
+    "name": "min_market_cap",
+    "threshold": 5000000000
+   }
+  ],
+  "description": "Profitable, growing companies worth at least $5bn: three absolute floors and nothing relative. The scope definition for the Growth v3 rank candidate; the relative judgement (growing faster than most of the industry) lives in that strategy's BUY cap.",
+  "id": "growth_screen_v3",
+  "name": "Growth screen",
+  "policy": {
+   "partial_pass_allows_hold": true
+  },
+  "rationale": "Scope, not selection: a business that is growing and earns something on its capital is in the room; the ranking decides who is best in it. Keeping the floors absolute leaves enough names in each industry group to be ranked and judged at all.",
+  "version": 3,
+  "veto": {
+   "min_confidence": 0.6
+  }
+ }
+}

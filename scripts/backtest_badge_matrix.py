@@ -167,7 +167,7 @@ def voting_rows(rows: list[dict]) -> list[dict]:
 def lens_names() -> dict:
     """{lens id: display name}, read from the strategy files - never typed here."""
     import yaml
-    out = {}
+    out, versions = {}, {}
     for path in STRATEGIES_DIR.glob("*.yaml"):
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -175,7 +175,13 @@ def lens_names() -> dict:
             continue
         if isinstance(data, dict) and data.get("display_name"):
             out[path.stem] = str(data["display_name"])
-    return out
+            versions[path.stem] = data.get("version")
+    # Two versions of one lens share a display name ("Growth"); the record names the version so a result
+    # of one is never read as the other's (no badge transfer, GROWTH-V3-RESULTS-1).
+    counts: dict = {}
+    for name in out.values():
+        counts[name] = counts.get(name, 0) + 1
+    return {k: (f"{v} (v{versions[k]})" if counts[v] > 1 and versions.get(k) else v) for k, v in out.items()}
 
 
 def _short(cohort: str) -> str:

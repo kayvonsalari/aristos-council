@@ -63,3 +63,23 @@ does not say it passed the test.
 v3 is `ui: hidden` and `status: under_test`: no picker offers it, no badge exists for it and no
 verdict of record depends on it. What activates it is the Colab backtest run over the 14 cohorts, then
 GROWTH-V3-RESULTS-1 (committing the CSVs with their compare output and applying the promotion rule).
+
+## Promotion (2026-10-21)
+
+**Status: promoted.** The committed backtest (`backtests/<group>/growth_garp_v3.csv`, 14 groups, code
+`6dbce3e`) was read against the rule above. "Ranked at least 10 names" is not defined by the rule, so it was
+counted three ways, each with "held a position in at least half the rounds": the median round, the last
+round, and at least half the rounds ranking 10 or more. All three give **10 of 14 groups**, exactly the
+threshold. Ten groups held a position in at least half the rounds; four did not (Airlines & Airports 46%,
+Diversified Mining 21%, Semiconductor Equipment 22%, Systems Software 22%). Only the reading "every single
+round" fails (1 of 14), because every group is thin in its first rounds.
+
+Promotion was done by **flag-only edits** (the owner approved option (a)): `ui: hidden` and
+`status: under_test` removed from `growth_garp_v3.yaml`, and `ui: hidden` added to `growth_garp_v2.yaml`.
+Nothing else in either file changed, and `tests/test_growth_v3_promotion.py` pins every other field of both
+files and of their screen lenses against their pre-promotion content (CLAUDE.md rule 7, display and status
+flags). v3's badges now come from its own CSVs; nothing v2 earned or failed carries over. Passing the
+promotion rule says the lens can be judged, not that it passed: v3 passed the test in Media & Entertainment
+and Aerospace & Defense, cleared the bar with luck not ruled out in three more, and did not clear it in the
+rest (`docs/BACKTEST_RECORD.md`).
+

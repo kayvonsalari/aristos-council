@@ -222,7 +222,7 @@ Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.
    genuine cutters still break (T 2022 cut, INTC suspension -> streak 0). The
    remaining undercount is DATA DEPTH only (the parked EODHD adapter), not the
    method.
-6. Tests run with `python -m pytest` (pythonpath=src configured). 5,074 tests
+6. Tests run with `python -m pytest` (pythonpath=src configured). 5,082 tests
    collected as of 2026-10-20, all green except `test_analyst_trend`'s caller scan when stale `.claude/worktrees` checkouts sit in the tree (about six minutes; 2 skipped; the report sweep, `tests/test_report_sweep.py`, runs
    inside it and CI installs the `ui` extra so its Markdown half runs there too). New behavior ships with regression tests, ideally
    anchored to documented live-run incidents.
@@ -239,6 +239,9 @@ Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.
    - One deliberate exemption: the Sprint 4A registry migration rewrote
      `dividend_aristocrats_v1.yaml` in place (same `strategy_id`, screen output
      byte-identical — proven by the equivalence test; see the 4A.2 commit).
+   - Display and status flags (`ui`, `status`) are not part of a strategy's immutable definition;
+     changing them is allowed when a test pins every verdict-affecting field unchanged
+     (GROWTH-V3-PROMOTION-1: `tests/test_growth_v3_promotion.py`).
 8. Foreign-listing currency safety: criteria that compare an ABSOLUTE money
    amount against a USD-denominated threshold (today only `min_market_cap`)
    must NOT-EVAL with a note when `Fundamentals.currency` is a known non-USD
