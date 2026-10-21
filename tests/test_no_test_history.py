@@ -28,7 +28,9 @@ def test_a_badge_with_rounds_reads_as_before():
     assert "108 monthly test rounds" in b.detail_line()
 
 
-def test_the_real_msft_case_growth_in_systems_software_has_no_history():
-    b = track_record("tech_systems_software", "growth_garp_v2")
+def test_the_real_case_growth_in_aerospace_defence_has_no_history():
+    # Was Growth in Systems Software (the MSFT case); the 2026-10-21 refresh gave that pair one measured
+    # year, so the same assertions now pin a pair that still has none.
+    b = track_record("industrials_aerospace_defense_europe_us", "growth_garp_v2")
     assert b.years_measured == 0 and b.detail_line().startswith(NO_TEST_HISTORY)   # UNTESTED-WHY-1 adds the cause
     assert b.note in ("rarely applies in this industry", "too little history") or "too few to count" in b.note

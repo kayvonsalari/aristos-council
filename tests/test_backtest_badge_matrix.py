@@ -60,10 +60,10 @@ def test_write_run_md_states_the_date_and_the_row_count(tmp_path):
     assert "python -m scripts.backtest_badge_matrix" in text
 
 
-def test_the_real_committed_summary_csv_has_98_rows_and_every_verdict_is_known():
+def test_the_real_committed_summary_csv_has_112_rows_and_every_verdict_is_known():
     from scripts.backtest_badge_matrix import DEFAULT_SUMMARY, VERDICT_LETTER
     rows = read_summary(DEFAULT_SUMMARY)
-    assert len(rows) == 98                     # 14 cohorts x 7 lenses (BACKTEST-DOCS-14-1: + defence)
+    assert len(rows) == 112                    # 14 cohorts x 8 lenses: the 7 voting lenses + growth_garp_v3 (under test)
     assert len({r["cohort"] for r in rows}) == 14
     assert all(r["verdict"] in VERDICT_LETTER for r in rows)
 

@@ -157,6 +157,13 @@ VERDICT_WORDS = {"proven": "passed the test", "not beyond luck": "passed the bar
 _GEN = re.compile(r"(<!-- GEN:(\w+) -->)(.*?)(<!-- /GEN:\2 -->)", re.S)
 
 
+def voting_rows(rows: list[dict]) -> list[dict]:
+    """The summary rows of lenses that carry a badge: ``status: under_test`` lenses (GROWTH-V3-RESULTS-1)
+    have none, so the matrix and every pooled figure leave them out."""
+    from aristos_council.backtest import _lens_status
+    return [r for r in rows if _lens_status(r["lens"]) != "under_test"]
+
+
 def lens_names() -> dict:
     """{lens id: display name}, read from the strategy files - never typed here."""
     import yaml
@@ -306,15 +313,19 @@ def main(argv=None) -> int:
     if not args.no_rebuild:
         build_summary_table(Path(args.summary).parent).to_csv(args.summary, index=False)
     rows = read_summary(args.summary)
+    # GROWTH-V3-RESULTS-1: a lens still ``status: under_test`` has no badge, so it stays out of the
+    # matrix and every pooled figure; SUMMARY.csv keeps its rows, and its coverage and results are
+    # reported in their own tables.
+    voting = voting_rows(rows)
     print(LETTER_MEANING)
     print()
-    print(matrix_table(rows))
+    print(matrix_table(voting))
     if not args.no_run_md:
         write_run_md(Path(args.run_md), n_rows=len(rows),
                     today=datetime.now(timezone.utc).date())
         print(f"\nWrote {args.run_md}")
     if not args.no_record and Path(args.record).exists():
-        update_record(Path(args.record), rows, Path(args.summary).parent)
+        update_record(Path(args.record), voting, Path(args.summary).parent)
         print(f"Wrote the generated blocks of {args.record}")
     return 0
 

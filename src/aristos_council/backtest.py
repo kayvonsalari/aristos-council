@@ -1662,7 +1662,7 @@ def evidence_summary(root=None) -> EvidenceSummary:
     """CHANCE-LINE-1: every figure read from the committed per-pair CSVs under ``root`` (default
     ``backtests/``), never typed. "Measured" is the non-"insufficient" pairs, the same population
     ``multiple_testing`` and ``calibration_report`` use."""
-    results = list(_load_backtests(root).values())
+    results = list(_pooled_backtests(root).values())
     tested = [r for r in results if verdict(r, max_luck=r.max_luck) != "insufficient"]
     n = len(tested)
     bar_passed = sum(1 for r in tested if verdict(r, max_luck=r.max_luck) in ("proven", "not beyond luck"))
@@ -1728,7 +1728,7 @@ def overlap_report(root=None) -> list:
     """A ``BasketOverlap`` for every pair of lenses that BOTH cleared the bar in the same cohort."""
     from itertools import combinations
     by_cohort: dict = {}
-    for (slug, _lens), r in sorted(_load_backtests(root).items()):
+    for (slug, _lens), r in sorted(_pooled_backtests(root).items()):
         if verdict(r, max_luck=r.max_luck) in ("proven", "not beyond luck"):
             by_cohort.setdefault(slug, []).append(r)
     out = []
@@ -1997,6 +1997,13 @@ def _load_backtests(root=None) -> dict:
                     continue
         _TRACK_RECORD_CACHE[key] = found
     return _TRACK_RECORD_CACHE[key]
+
+
+def _pooled_backtests(root=None) -> dict:
+    """``_load_backtests`` without the lenses still ``status: under_test`` (GROWTH-V3-RESULTS-1): a lens
+    that has no badge must not move the pooled figures (how many cleared the bar against chance, the
+    calibration tails, the overlap check) that the badges' own evidence line states."""
+    return {k: r for k, r in _load_backtests(root).items() if _lens_status(k[1]) != "under_test"}
 
 
 def has_track_record(cohort_slug: str, *, root=None) -> bool:
