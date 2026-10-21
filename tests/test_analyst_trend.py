@@ -444,6 +444,6 @@ def test_the_tab_and_the_cli_are_the_only_callers_that_ask_for_the_mark():
     root = Path(__file__).resolve().parents[1]
     asking = [p.relative_to(root).as_posix() for p in root.rglob("*.py")
               if "with_analyst_trend=" in p.read_text(encoding="utf-8", errors="ignore")
-              and not p.relative_to(root).as_posix().startswith(("tests/", "docs/"))]
+              and not p.relative_to(root).as_posix().startswith(("tests/", "docs/", ".claude/"))]
     assert sorted(asking) == ["examples/company_check.py",
                               "src/aristos_council/company_report.py"]
