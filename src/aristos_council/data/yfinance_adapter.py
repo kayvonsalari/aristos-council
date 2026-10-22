@@ -33,6 +33,8 @@ from .adapter import (
     PriceBar,
     PriceHistory,
     StreetConsensus,
+    listing_unit_dividend,
+    minor_unit_scale,
     sane_dividend_yield,
 )
 
@@ -133,6 +135,20 @@ class YFinanceAdapter(MarketDataAdapter):
         # Recovered DPS, reused for the payout derivation below (same source the
         # screen sees), so dividend yield AND payout survive the summaryDetail gap.
         dps = _dividend_per_share(info)
+        # GBX-YIELD-1: on a pence-quoted line (London "GBp") the price is in pence while
+        # the vendor's dividend rate is in pounds, so dividend / price read 100x too low
+        # (SHEL.L 0.03%, GLEN.L 0.02%). Put the dividend in the price's unit; the payout
+        # ratio below keeps the vendor's own unit, because EPS is in that unit too.
+        dps_listing, yield_listing = dps, _dividend_yield(info)
+        scale = minor_unit_scale(info.get("currency"))
+        if scale != 1.0:
+            dps_listing = listing_unit_dividend(dps, _trailing_year_dividends(tk), scale)
+            if not _looks_like_fund(info):
+                price = (_as_float(info.get("currentPrice"))
+                         or _as_float(info.get("regularMarketPrice"))
+                         or _as_float(info.get("previousClose")))
+                yield_listing = (sane_dividend_yield(dps_listing / price)
+                                 if dps_listing is not None and price else None)
         # Dividend-growth streak + last cut, DERIVED from the payment history (a
         # yield-trap separator that's free but yfinance never surfaces as a scalar).
         (streak_years, last_cut, year_totals, year_stats,
@@ -206,8 +222,8 @@ class YFinanceAdapter(MarketDataAdapter):
             # floats; normalize empty/missing to None.
             currency=(info.get("currency") or None),
             financial_currency=(info.get("financialCurrency") or None),
-            dividend_yield=_dividend_yield(info),   # normalised to DECIMAL
-            dividend_per_share=dps,
+            dividend_yield=yield_listing,   # normalised to DECIMAL
+            dividend_per_share=dps_listing,   # in the price's unit (GBX-YIELD-1)
             payout_ratio=_payout_ratio(info, dps),
             eps=_as_float(info.get("trailingEps")),
             pe_ratio=_as_float(info.get("trailingPE")),
@@ -380,6 +396,27 @@ def _dividend_per_share(info: dict) -> float | None:
     if forward is not None:
         return forward
     return _as_float(info.get("trailingAnnualDividendRate"))
+
+
+def _trailing_year_dividends(tk, today: date | None = None) -> float | None:
+    """The sum of the payments in the last 365 days, from the payment history (GBX-YIELD-1).
+
+    Yahoo's history for a London line is in the line's own unit (HSBA.L's 2025 payments sum to
+    49.55, pence, for HSBC's $0.66), so this needs no currency guess. None when the history
+    cannot be read or is empty; 0.0 when nothing was paid in the window."""
+    try:
+        divs = tk.dividends
+        if divs is None or len(divs) == 0:
+            return None
+        end = today or date.today()
+        start = date.fromordinal(end.toordinal() - 365)
+        total = 0.0
+        for ts, amt in divs.items():
+            if start < ts.date() <= end:
+                total += float(amt)
+        return total
+    except Exception:
+        return None
 
 
 def _dividend_streak_from_ticker(tk) -> tuple:

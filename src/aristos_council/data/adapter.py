@@ -40,6 +40,37 @@ def sane_dividend_yield(v: float | None) -> float | None:
     return v
 
 
+# GBX-YIELD-1 - quote codes for a MINOR unit (pence, South African cents, agorot): the price is a
+# hundredth of the major unit the vendor's per-share fundamentals are given in.
+MINOR_UNIT_QUOTES = frozenset({"GBp", "GBX", "GBPENCE", "GBP_PENCE", "ZAc", "ZAC", "ILA"})
+
+
+def minor_unit_scale(currency: str | None) -> float:
+    """100.0 when ``currency`` is a minor-unit quote code (London "GBp"), else 1.0."""
+    return 100.0 if (currency or "").strip() in MINOR_UNIT_QUOTES else 1.0
+
+
+def listing_unit_dividend(vendor_major: float | None, history_year: float | None,
+                          scale: float) -> float | None:
+    """GBX-YIELD-1 - the annual dividend per share in the PRICE's unit (pence on a London line).
+
+    ``vendor_major`` is the vendor's dividend rate, in the major unit (pounds); ``history_year`` is
+    the last 365 days of payments from the payment history, which the vendor gives in the line's
+    own unit. The history is preferred: it is in the price's unit by construction, while the
+    vendor rate of a company that declares in dollars may be in dollars. If the history reads
+    about a hundredth of the vendor rate it is itself in the major unit, and is scaled. With no
+    usable history the vendor rate is scaled. A zero stays a zero (a genuine non-payer); None
+    stays None (no figure, never a phantom zero - house rule 3)."""
+    vendor = vendor_major * scale if vendor_major is not None else None
+    if history_year is not None and history_year > 0:
+        if vendor is not None and vendor > 0:
+            ratio = history_year / vendor
+            if 0.25 / scale <= ratio <= 4.0 / scale:
+                return history_year * scale
+        return history_year
+    return vendor
+
+
 def _fval(f, name):
     """Read a field from a Fundamentals object OR a plain dict."""
     return f.get(name) if isinstance(f, dict) else getattr(f, name, None)
