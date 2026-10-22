@@ -334,6 +334,8 @@ def net_debt_to_operating_income(f: Fundamentals, *, window: int = _OI_WINDOW):
     if f.total_debt is None or f.total_cash is None:
         missing = "total debt" if f.total_debt is None else "cash"
         return None, f"{missing} unavailable"
+    if getattr(f, "statements_currency_note", ""):
+        return None, f.statements_currency_note
     series = (f.operating_income or [])[:window]
     if not series:
         return None, "no operating-income history"

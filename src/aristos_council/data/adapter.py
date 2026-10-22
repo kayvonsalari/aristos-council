@@ -218,6 +218,12 @@ class Fundamentals:
     # records predating this field are unaffected.
     currency: str | None = None
     financial_currency: str | None = None
+    # STATEMENTS-CCY-1: non-empty when the provider's headline money figures (``total_debt``,
+    # ``total_cash`` ... in ``financial_currency``) and its dated annual statements are visibly NOT in
+    # the same currency (Vale, 2026-10-22: headline revenue BRL 218bn, annual statement 38bn - the
+    # statements are in USD, labelled BRL). The text says what was compared. Anything that would
+    # divide one by the other, or convert both with one rate, abstains on it (house rule 8, rule 3).
+    statements_currency_note: str = ""
     dividend_yield: float | None = None          # decimal, e.g. 0.038 = 3.8%
     dividend_per_share: float | None = None
     payout_ratio: float | None = None            # decimal

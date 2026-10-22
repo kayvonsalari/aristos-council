@@ -212,6 +212,8 @@ class YFinanceAdapter(MarketDataAdapter):
                         "Cash Cash Equivalents And Short Term Investments")
 
         return Fundamentals(
+            statements_currency_note=_statements_currency_note(
+                _as_float(info.get("totalRevenue")), _annual_series(income, "Total Revenue")),
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
             company_name=(info.get("longName") or None),   # display label (None-guarded)
@@ -459,6 +461,24 @@ def _dividend_streak_from_ticker(tk) -> tuple:
     stats = [[float(y), float(sum(per_year[y])), float(statistics.median(per_year[y])),
               float(len(per_year[y]))] for y in sorted(per_year)]
     return streak, last_cut, totals, stats, sorted(pay_dates)
+
+
+# STATEMENTS-CCY-1. The headline "trailing revenue" and the latest annual statement revenue are the SAME
+# business a few months apart, so they sit within a factor of two or so of each other. A factor of three or
+# more means the two are not in one currency (Vale: 218bn vs 38.4bn = 5.7x, the BRL/USD rate - the statements
+# are USD, yfinance labels them BRL). The figure is a test, never a conversion: nothing is rescaled.
+STATEMENTS_CCY_RATIO = 3.0
+
+
+def _statements_currency_note(headline_revenue, statement_revenue) -> str:
+    latest = next((v for v in (statement_revenue or []) if v), None)
+    if not headline_revenue or not latest or headline_revenue <= 0 or latest <= 0:
+        return ""
+    ratio = max(headline_revenue / latest, latest / headline_revenue)
+    if ratio < STATEMENTS_CCY_RATIO:
+        return ""
+    return (f"the provider's headline revenue ({headline_revenue:,.0f}) and its latest annual statement "
+            f"({latest:,.0f}) differ {ratio:.1f}x, so they are not in one currency")
 
 
 def _market_cap(info: dict) -> float | None:

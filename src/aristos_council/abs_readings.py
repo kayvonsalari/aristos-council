@@ -437,6 +437,9 @@ def debt_and_cash(f) -> DebtAndCash:
     if runway.available and runway.value:
         span, basis = _runway_pieces(f, runway.value)
     from .finance_arms import finance_arm_note
+    mixed = str(getattr(f, "statements_currency_note", "") or "")
+    if mixed:                    # STATEMENTS-CCY-1: the balance-sheet scalars and the statements differ in money
+        ratio = cover = repay = _abstain(f"not worked out - {mixed}")
     return DebtAndCash(net_debt=net_reading, total_debt=debt_reading, cash=cash_reading,
                        net_debt_to_ocf=ratio,
                        interest_cover=cover, years_to_repay=repay, currency=currency,

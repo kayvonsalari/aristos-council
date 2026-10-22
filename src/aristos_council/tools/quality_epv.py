@@ -96,6 +96,8 @@ def net_debt_to_ebit(f) -> tuple[Optional[float], str]:
         return None, "no fundamentals"
     if f.total_debt is None or f.total_cash is None:
         return None, f"{'total debt' if f.total_debt is None else 'cash'} unavailable"
+    if getattr(f, "statements_currency_note", ""):
+        return None, f.statements_currency_note
     ebit = _clean(f.ebit)[:1] or _clean(f.operating_income)[:1]
     if not ebit:
         return None, "no operating-profit (EBIT) history"

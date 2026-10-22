@@ -1141,6 +1141,8 @@ def _gather_valuation_band(adapter, ticker: str, fundamentals, *, today: date
     ``with_valuation_band=False`` and leaves the band ``None`` (no section), unchanged."""
     if fundamentals is None:
         return ValuationBand(note="fundamentals unavailable for this name")
+    if getattr(fundamentals, "statements_currency_note", ""):
+        return ValuationBand(note=f"not evaluated - {fundamentals.statements_currency_note}")
     try:
         prices = adapter.get_price_history(
             ticker, start=today - timedelta(days=round(365.25 * BAND_YEARS) + 10),
@@ -1279,7 +1281,9 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
     # unchanged.
     fx = None
     fx_failed = False
-    if fundamentals is not None:
+    if fundamentals is not None and getattr(fundamentals, "statements_currency_note", ""):
+        fx_failed = True      # STATEMENTS-CCY-1: the accounts are not in one currency - no EV, no EPV
+    elif fundamentals is not None:
         price_ccy = fundamentals.currency
         acct_ccy = fundamentals.financial_currency
         if price_ccy and acct_ccy and price_ccy != acct_ccy:
