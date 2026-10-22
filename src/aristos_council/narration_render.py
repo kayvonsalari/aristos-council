@@ -381,6 +381,29 @@ def _specialist_cells(view) -> tuple[str, str, str]:
     return stance, conf, money_text((view.reasoning or "").strip())
 
 
+@_glossed_once
+def printed_specialist_views(narration) -> dict[str, str]:
+    """``{specialist: the text the page prints for it}`` for every assessed specialist with a view
+    (TEXTCHECK-TABLEFACT-2). The prose fields are passed through ``money_text`` in the order the markdown
+    and HTML print them, inside one gloss scope, so a once-per-section gloss lands exactly where it does on
+    the page and a quoted sentence matches the printed one."""
+    if narration.echoed_verdict:
+        money_text(narration.echoed_verdict.strip())
+    for a in narration.lens_attribution or []:
+        if a.reasoning:
+            money_text(a.reasoning.strip())
+    if narration.disagreement_note:
+        money_text(narration.disagreement_note.strip())
+    for c in narration.neutral_context or []:
+        money_text(c.strip())
+    out: dict[str, str] = {}
+    for view in narration.specialist_views or []:
+        why = _specialist_cells(view)[2]
+        if view.assessed and (view.reasoning or "").strip() and why.strip():
+            out[view.specialist] = why
+    return out
+
+
 def narration_sections(narration) -> list[tuple[str, str]]:
     """``(anchor-slug, title)`` for the sections this narration will actually render —
     so a contents list can be built without rendering the document twice."""

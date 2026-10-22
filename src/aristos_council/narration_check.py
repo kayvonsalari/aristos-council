@@ -1315,41 +1315,78 @@ def _mask_table_facts(words: list[str], label_runs: list[list[str]], tag: str) -
     return out
 
 
+# TEXTCHECK-TABLEFACT-2 - two gaps left by the first fix, both live on KO.US 2026-10-22:
+#  (a) masking stopped a run from CONTAINING a table fact, but not from sitting right next to one. The
+#      fundamental and risk views both wrote "The Earnings Power Value lens's -67.0% reading is cited as
+#      confirmation that ...", and the 7 words after the masked figure were flagged. That is restating a
+#      table fact, which the 2026-10-05 ruling says is never flagged. Now the comparison is sentence by
+#      sentence, and two sentences that state the same table fact (the same figure or the same lens) are
+#      never flagged against each other.
+#  (b) each stamp quoted one specialist's sentence while saying "appears in 2 specialists' views", so the
+#      quote was found in only one of the two. A stamp now also quotes the other specialists' sentences as
+#      printed.
+_FIGURE = re.compile(r"\d[\d,]*(?:\.\d+)?%?")
+
+
+def _table_facts(sentence: str, label_runs: list[list[str]]) -> set[str]:
+    """The table facts a sentence states: every READING figure (whole, so "-67.0%" is "67.0%", not "67" and
+    "0") and every lens name. A reading carries a decimal point or a percent sign; a bare whole number (a
+    year, "5 lenses") is not a table fact, so two sentences sharing only "2025" can still be flagged."""
+    facts = {m for m in _FIGURE.findall(sentence) if "." in m or m.endswith("%")}
+    words = _words(sentence)
+    for run in label_runs:
+        n = len(run)
+        if any(words[i:i + n] == run for i in range(len(words) - n + 1)):
+            facts.add(" ".join(run))
+    return facts
+
+
+def _printed_sentences(text: str) -> list[str]:
+    out = []
+    for sentence in _SENTENCE_SPLIT.split((text or "").strip()):
+        sentence = " ".join(sentence.split())
+        if sentence:
+            out.append(sentence)
+    return out
+
+
 def check_printed_repetition(printed: dict, *, lens_labels=()) -> list[str]:
-    """``printed``: ``{specialist: the text the page prints for that specialist}``. One stamp per
-    specialist sentence that shares a run of at least ``_REPEAT_WORDS`` words with another specialist's
-    printed text, the run containing NO table fact (see above). Each stamp quotes the specialist's actual
-    printed sentence, so the inline marker can find it. Never rewrites."""
+    """``printed``: ``{specialist: the text the page prints for that specialist}``. One stamp per printed
+    sentence that shares a run of at least ``_REPEAT_WORDS`` words with a sentence of another specialist,
+    the run containing NO table fact and the two sentences not stating the same table fact (see above).
+    Each stamp quotes the specialist's own printed sentence, so the inline marker can find it, and the
+    other specialists' printed sentences. Never rewrites."""
     names = [n for n, t in (printed or {}).items() if (t or "").strip()]
     labels = [_words(label) for label in lens_labels if label]
     labels = [r for r in labels if r]
-    masked = {n: _mask_table_facts(_words(printed[n]), labels, n[:3]) for n in names}
-    groups: dict[str, list[str]] = {}
+    sentences = {n: [(s, _words(s)) for s in _printed_sentences(printed[n])] for n in names}
+    # (specialist, sentence) -> [(other specialist, other sentence)] it repeats
+    matches: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for i, a in enumerate(names):
         for b in names[i + 1:]:
-            run = _longest_common_run(masked[a], masked[b])
-            if len(run) < _REPEAT_WORDS:
-                continue
-            holders = groups.setdefault(" ".join(run), [])
-            for who in (a, b):
-                if who not in holders:
-                    holders.append(who)
+            for sa, wa in sentences[a]:
+                for sb, wb in sentences[b]:
+                    if _table_facts(sa, labels) & _table_facts(sb, labels):
+                        continue                       # both restate the same table fact
+                    run = _longest_common_run(_mask_table_facts(wa, labels, a[:3]),
+                                              _mask_table_facts(wb, labels, b[:3]))
+                    if len(run) < _REPEAT_WORDS:
+                        continue
+                    matches.setdefault((a, sa), []).append((b, sb))
+                    matches.setdefault((b, sb), []).append((a, sa))
     flags: list[str] = []
     seen: set[str] = set()
-    for phrase, holders in groups.items():
-        run = phrase.split()
-        for who in holders:
-            for sentence in _SENTENCE_SPLIT.split(printed[who].strip()):
-                sentence = " ".join(sentence.split())
-                if not sentence or sentence in seen:
-                    continue
-                sw = _words(sentence)
-                if any(sw[i:i + len(run)] == run for i in range(len(sw) - len(run) + 1)):
-                    seen.add(sentence)
-                    flags.append(
-                        f'[\u26a0 AI text check: "{sentence}" appears near-verbatim in {len(holders)} '
-                        f"specialists' views ({', '.join(holders)}) \u2014 convergent phrasing on the "
-                        f"same figures, not independent domain analysis]")
-                    break
+    for (who, sentence), others in matches.items():
+        if sentence in seen:
+            continue
+        seen.add(sentence)
+        holders = [who] + [o for o, _ in others if o != who]
+        holders = [n for n in names if n in holders]
+        printed_too = [f'{o} prints "{s}"' for o, s in others if s != sentence]
+        also = f" — {'; '.join(printed_too)}" if printed_too else ""
+        flags.append(
+            f'[⚠ AI text check: "{sentence}" appears near-verbatim in {len(holders)} '
+            f"specialists' views ({', '.join(holders)}){also} — convergent phrasing on the "
+            f"same figures, not independent domain analysis]")
     return flags
 

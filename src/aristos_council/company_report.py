@@ -612,7 +612,7 @@ def _annotate_specialist_repetition(rep, state, lens_labels=()) -> None:
     shows) and quotes each flagged sentence as printed. Only a decision with no narration falls back to
     the raw theses on ``state`` (an abstained specialist, with no real thesis, is excluded either way)."""
     from .narration_check import check_printed_repetition, check_specialist_repetition
-    from .narration_render import as_narration
+    from .narration_render import as_narration, printed_specialist_views
     from .state import Stance
 
     d = getattr(rep, "decision", None)
@@ -620,8 +620,7 @@ def _annotate_specialist_repetition(rep, state, lens_labels=()) -> None:
         return
     narration = as_narration(getattr(d, "narration", None))
     if narration is not None and getattr(narration, "specialist_views", None):
-        printed = {v.specialist: (v.reasoning or "") for v in narration.specialist_views
-                   if getattr(v, "assessed", True) and (v.reasoning or "").strip()}
+        printed = printed_specialist_views(narration)      # TEXTCHECK-TABLEFACT-2: the rendered text
         flags = check_printed_repetition(printed, lens_labels=lens_labels)
     else:
         theses = {op.specialist.value: op.thesis for op in (state.specialist_opinions or [])
