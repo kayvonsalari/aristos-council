@@ -1160,11 +1160,19 @@ def through_cycle_roic(
     # prior year — that MUST keep computing). Abstain ONLY on a degenerate rate
     # (tax_mean/pretax_mean ∉ [0, 0.6]) or a non-positive pretax sum.
     # Abstain fixture: ENR.DE.  Must-compute fixture: 000660.KS.
+    #
+    # EQUINOR-CHECK-1: a HIGH rate on a window with NO loss year is a real tax rate, not a degenerate one.
+    # Equinor pays Norway's petroleum tax (about 78%), so its through-cycle rate sat above 0.6 on five
+    # profitable years; Value + Momentum then said "return on invested capital not available" and Magic
+    # Formula RAW ranked it worst, while Quality's per-year ROIC computed the same years fine. With every
+    # pretax point positive, a rate up to 1.0 is used as it is; a loss-mixed window keeps the [0, 0.6] band.
     if pretax_points:
         degenerate = pretax_mean is not None and pretax_mean <= 0
         if not degenerate and pretax_mean and pretax_mean > 0 and tax_mean is not None:
             raw_rate = tax_mean / pretax_mean
-            degenerate = not (0.0 <= raw_rate <= 0.6)
+            all_profitable = all(p > 0 for p in pretax_points)
+            ceiling = 1.0 if all_profitable else 0.6
+            degenerate = not (0.0 <= raw_rate <= ceiling)
         if degenerate:
             return None, ("loss-mixed history — effective tax rate not computable "
                           "(degenerate through-cycle tax rate ∉[0,0.6] or non-positive "
