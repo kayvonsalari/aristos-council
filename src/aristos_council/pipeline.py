@@ -3877,14 +3877,23 @@ class LensAgreement:
         count of nothing is noise, and the section itself states an empty result."""
         if not self.available or not (self.rows or self.sell_no_buy_count):
             return ""
+        # REPEATS-NAMES-1: the same denominator as the table's "BUY votes" cell - the lenses that
+        # VOTED on the name, with the ones that did not apply said apart (AGREEMENT-COUNT-1). Live
+        # (list_oil_6): the header read "1 on 3 of 8" over a table reading "3 of 3 (5 did not
+        # apply)". Names are counted together only when both numbers match.
+        groups: dict = {}
+        for row in sorted(self.rows, key=lambda r: (-r.buy_votes, r.voted)):
+            key = (row.buy_votes, row.voted, len(row.not_ranked))
+            groups[key] = groups.get(key, 0) + 1
         parts = []
-        for votes, count in self.buckets().items():
+        for (votes, voted, absent), count in groups.items():
             word = "name" if count == 1 else "names"
             if votes == self.n_voting:
                 parts.append(f"{count} {word} BUY on all {votes} voting "
                              f"{'lenses' if votes != 1 else 'lens'}")
             else:
-                parts.append(f"{count} on {votes} of {self.n_voting}")
+                parts.append(f"{count} on {votes} of {voted}"
+                             + (f" ({absent} did not apply)" if absent > 0 else ""))
         if self.sell_no_buy_count:
             # AGREEMENT-SELL-1: names no lens bought but at least one SELLs are stated too, so a
             # list of all-SELL names does not read as an empty shortlist.

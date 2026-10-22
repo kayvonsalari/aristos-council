@@ -1507,7 +1507,7 @@ def story_text_lines(report: CompanyReport) -> list[str]:
 def workings_text_lines(report: CompanyReport) -> list[str]:
     """Section 4 - everything that supports the answer, in the design's order. The text download
     keeps every section; the fold is a display choice of the other renderers."""
-    from .company_story import narration_check_line, table_rows
+    from .company_story import lens_notes_chance, narration_check_line, table_rows
 
     c = report.check
     lines = ["SHOW THE WORKINGS", ""]
@@ -1545,6 +1545,9 @@ def workings_text_lines(report: CompanyReport) -> list[str]:
     notes = [r for r in table_rows(report) if r.asks or r.badge_detail or r.full_reason]
     if notes:
         lines.append("LENS NOTES (what each lens asks, its full reason, its track record)")
+        chance = lens_notes_chance(notes)
+        if chance:
+            lines.append(f"  {chance}")
         for r in notes:
             if r.asks:
                 lines.append(f"  {r.lens}: {r.asks}")
