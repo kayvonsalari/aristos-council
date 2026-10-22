@@ -37,7 +37,7 @@ PRICE AND CASH (no comparison group; they do not vote)
 ABSOLUTE READINGS (no comparison group; they do not vote)
   Debt and cash
     - owes $600 net of cash
-    - total debt $1,000, including leases
+    - total debt $1,000
     - cash and short-term investments $400
     - would take 2.4 years of operating cash flow to repay its debt
     - not stated — interest expense is not reported

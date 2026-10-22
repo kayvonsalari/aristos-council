@@ -185,8 +185,14 @@ def _series(f, name: str) -> list[Optional[float]]:
 # both from the latest balance sheet the provider gives (its most recent quarter). The provider's own
 # statement line "Net Debt" leaves out leases and short-term investments, so it is a different number
 # (MSFT, Jun 2026: $52.0bn here, $19.4bn there) and is never shown beside this one.
-NET_DEBT_DEFINITION = ("total debt including lease liabilities, minus cash, cash equivalents and "
-                       "short-term investments, from the latest balance sheet")
+#
+# NET-DEBT-2 narrowed the debt side to the balance sheet's own "Total Debt" row (borrowings and finance
+# leases); the provider's headline also carried operating-lease liabilities (MSFT, Jun 2026: $128.8bn
+# against a $56.8bn row). Those are stated on their own line, "leases add ...", never counted as debt.
+NET_DEBT_DEFINITION = ("total debt as the balance sheet's own Total Debt row (borrowings and finance "
+                       "leases, with operating-lease liabilities shown separately and not counted), "
+                       "minus cash, cash equivalents and short-term investments, from the latest "
+                       "balance sheet")
 
 
 @dataclass(frozen=True)
@@ -195,6 +201,8 @@ class DebtAndCash:
     # NET-DEBT-1: the two figures the net debt is made of, so a reader (or a judge) can do the subtraction
     total_debt: Reading = field(default_factory=Reading)
     cash: Reading = field(default_factory=Reading)
+    # NET-DEBT-2: operating-lease liabilities the headline carried beyond the debt row - said, not counted
+    leases: Reading = field(default_factory=Reading)
     net_debt_to_ocf: Reading = field(default_factory=Reading)
     interest_cover: Reading = field(default_factory=Reading)
     years_to_repay: Reading = field(default_factory=Reading)
@@ -223,7 +231,7 @@ class DebtAndCash:
     def lines(self) -> list[str]:
         # ABS-READINGS-3 - NVIDIA printed "has no net debt to repay" twice, once for the
         # operating-cash-flow reading and once for the free-cash-flow one.
-        parts = [r for r in (self.total_debt, self.cash) if r.available]
+        parts = [r for r in (self.total_debt, self.cash, self.leases) if r.available]
         readings = [self.net_debt, *parts, self.net_debt_to_ocf, self.interest_cover,
                     self.years_to_repay]
         if self.cash_runway.available:
@@ -339,11 +347,16 @@ def debt_and_cash(f) -> DebtAndCash:
 
     # NET-DEBT-1: the components, stated as figures of their own
     debt_reading = (Reading(value=debt, unit=currency,
-                            label=f"total debt {_money(debt, currency)}, including leases")
+                            label=f"total debt {_money(debt, currency)}")
                     if debt is not None else Reading())
     cash_reading = (Reading(value=cash, unit=currency,
                             label=f"cash and short-term investments {_money(cash, currency)}")
                     if cash is not None and debt is not None else Reading())
+
+    leases = _num(getattr(f, "lease_liabilities", None))
+    lease_reading = (Reading(value=leases, unit=currency,
+                             label=f"leases add {_money(leases, currency)} (not counted as debt above)")
+                     if leases and leases > 0 and debt is not None else Reading())
 
     # -- net debt to operating cash flow ------------------------------------ #
     ocf = _num(getattr(f, "operating_cash_flow", None))
@@ -441,7 +454,7 @@ def debt_and_cash(f) -> DebtAndCash:
     if mixed:                    # STATEMENTS-CCY-1: the balance-sheet scalars and the statements differ in money
         ratio = cover = repay = _abstain(f"not worked out - {mixed}")
     return DebtAndCash(net_debt=net_reading, total_debt=debt_reading, cash=cash_reading,
-                       net_debt_to_ocf=ratio,
+                       leases=lease_reading, net_debt_to_ocf=ratio,
                        interest_cover=cover, years_to_repay=repay, currency=currency,
                        cash_runway=runway,
                        finance_arm_note=finance_arm_note(getattr(f, "ticker", "")),

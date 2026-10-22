@@ -125,6 +125,10 @@ class YFinanceAdapter(MarketDataAdapter):
             balance = tk.balance_sheet
         except Exception:
             balance = None
+        try:
+            quarterly_balance = tk.quarterly_balance_sheet
+        except Exception:
+            quarterly_balance = None
         # Cash-flow statement for the FCF-basis payout criterion (best-effort, like the
         # others): absence -> None fields -> the criterion falls back to the EPS basis.
         try:
@@ -261,7 +265,8 @@ class YFinanceAdapter(MarketDataAdapter):
             dividend_year_totals=year_totals,
             dividend_year_stats=year_stats,
             dividend_payment_dates=pay_dates,
-            total_debt=_as_float(info.get("totalDebt")),
+            total_debt=_statement_total_debt(quarterly_balance, _as_float(info.get("totalDebt")))[0],
+            lease_liabilities=_statement_total_debt(quarterly_balance, _as_float(info.get("totalDebt")))[1],
             debt_to_equity=_as_float(info.get("debtToEquity")),
             total_cash=_as_float(info.get("totalCash")),   # EV = mcap + debt − cash
             # Financials-lens vendor scalars (FIN-1): the measures banks are priced by.
@@ -461,6 +466,27 @@ def _dividend_streak_from_ticker(tk) -> tuple:
     stats = [[float(y), float(sum(per_year[y])), float(statistics.median(per_year[y])),
               float(len(per_year[y]))] for y in sorted(per_year)]
     return streak, last_cut, totals, stats, sorted(pay_dates)
+
+
+def _statement_total_debt(quarterly_balance, info_total_debt):
+    """``(total_debt, lease_liabilities)`` - NET-DEBT-2. Debt is the balance sheet's OWN "Total Debt" row
+    for the latest quarter (borrowings plus finance leases, the same row the statement prints); the
+    provider's headline ``totalDebt`` also carries operating-lease liabilities (MSFT, Jun 2026: $128.8bn
+    headline against a $56.8bn row), so the excess is returned separately as ``lease_liabilities`` and is
+    never counted as debt. With no statement row the headline is used and no lease figure is claimed."""
+    row = None
+    try:
+        if quarterly_balance is not None and "Total Debt" in quarterly_balance.index:
+            col = quarterly_balance.columns[0]
+            row = _as_float(quarterly_balance.loc["Total Debt", col])
+    except Exception:                                   # noqa: BLE001 - a statement gap is not a crash
+        row = None
+    if row is None or row < 0:
+        return info_total_debt, None
+    excess = (info_total_debt - row) if info_total_debt is not None else None
+    # a rounding-size gap (Ford: 163.296bn against 163.296bn) is no lease figure
+    leases = excess if excess is not None and excess > max(1e6, 0.001 * row) else None
+    return row, leases
 
 
 # STATEMENTS-CCY-1. The headline "trailing revenue" and the latest annual statement revenue are the SAME

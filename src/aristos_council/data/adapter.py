@@ -224,6 +224,9 @@ class Fundamentals:
     # statements are in USD, labelled BRL). The text says what was compared. Anything that would
     # divide one by the other, or convert both with one rate, abstains on it (house rule 8, rule 3).
     statements_currency_note: str = ""
+    # NET-DEBT-2: operating-lease liabilities the provider's headline debt carried beyond the statement's
+    # own "Total Debt" row (``total_debt`` is that row). None when none, or when the row was unavailable.
+    lease_liabilities: float | None = None
     dividend_yield: float | None = None          # decimal, e.g. 0.038 = 3.8%
     dividend_per_share: float | None = None
     payout_ratio: float | None = None            # decimal

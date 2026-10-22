@@ -49,7 +49,7 @@ def test_nvcr_the_page_gives_debt_cash_and_net_cash_that_add_up():
     f = _frozen("NVCR")                       # recorded 2026-10-05: debt $233.4m, cash $440.6m
     dc = debt_and_cash(f)
     lines = dc.lines()
-    assert lines[:3] == ["holds $207.1m more cash than debt", "total debt $233.4m, including leases",
+    assert lines[:3] == ["holds $207.1m more cash than debt", "total debt $233.4m",
                          "cash and short-term investments $440.6m"]
     assert dc.cash.value - dc.total_debt.value == pytest.approx(-dc.net_debt.value)
 
@@ -79,7 +79,7 @@ def test_a_missing_cash_figure_still_shows_no_cash_line_and_says_gross_debt():
     dc = debt_and_cash(Fundamentals(ticker="X", financial_currency="USD", total_debt=5e9))
     lines = dc.lines()
     assert lines[0] == "owes $5.0bn net of cash (cash not reported, so this is gross debt)"
-    assert "total debt $5.0bn, including leases" in lines
+    assert "total debt $5.0bn" in lines
     assert not any(ln.startswith("cash and short-term") for ln in lines)
     assert not any("not stated —" in ln and ln.endswith("— ") for ln in lines)
 
@@ -96,10 +96,33 @@ def test_the_judge_pack_gives_three_dated_lines_and_drops_the_provider_net_debt(
     pack = build_blind_pack(report, f, statements)
     section = dict(pack.sections)["Debt and cash"]
     assert section[:3] == ["owes $52.0bn net of cash (balance sheet of Jun 2026)",
-                           "total debt $154.0bn, including leases (balance sheet of Jun 2026)",
+                           "total debt $154.0bn (balance sheet of Jun 2026)",
                            "cash and short-term investments $102.0bn (balance sheet of Jun 2026)"]
     assert any(NET_DEBT_DEFINITION in ln for ln in section)
     balance = dict(pack.sections)["Balance sheet"]
     assert not any(ln.startswith("Net Debt:") for ln in balance)
     assert any(ln.startswith("Total Debt:") for ln in balance)
     assert "19.4" not in "\n".join(line for _, lines in pack.sections for line in lines)
+
+
+# NET-DEBT-2 -----------------------------------------------------------------
+def test_total_debt_is_the_statement_row_and_the_excess_is_a_separate_lease_figure():
+    import pandas as pd
+    from aristos_council.data.yfinance_adapter import _statement_total_debt
+    q = pd.DataFrame({pd.Timestamp("2026-06-30"): [56.826e9]}, index=["Total Debt"])
+    assert _statement_total_debt(q, 128.813e9) == (56.826e9, pytest.approx(71.987e9))          # MSFT
+    assert _statement_total_debt(q, 56.826e9)[1] is None                                        # no excess
+    assert _statement_total_debt(q, 56.9e9)[1] is not None
+    assert _statement_total_debt(None, 128.8e9) == (128.8e9, None)                              # no row: headline
+    assert _statement_total_debt(pd.DataFrame(), None) == (None, None)
+
+
+def test_the_page_says_leases_add_and_does_not_count_them():
+    f = Fundamentals(ticker="MSFT", financial_currency="USD", total_debt=56.8e9, total_cash=76.8e9,
+                     lease_liabilities=72.0e9, operating_cash_flow=180e9, trailing_period_end="2026-06-30")
+    dc = debt_and_cash(f)
+    lines = dc.lines()
+    assert lines[:4] == ["holds $20.0bn more cash than debt", "total debt $56.8bn",
+                         "cash and short-term investments $76.8bn", "leases add $72.0bn (not counted as debt above)"]
+    none = debt_and_cash(Fundamentals(ticker="F", financial_currency="USD", total_debt=163.3e9, total_cash=22.1e9))
+    assert not any("leases add" in ln for ln in none.lines())

@@ -297,15 +297,15 @@ def _debt_cash(report, fundamentals=None) -> list[str]:
         return []
     from ..abs_readings import NET_DEBT_DEFINITION, _balance_sheet_date
     when = _balance_sheet_date(fundamentals)
-    dated = {r.text() for r in (debt.net_debt, debt.total_debt, debt.cash)
+    dated = {r.text() for r in (debt.net_debt, debt.total_debt, debt.cash, debt.leases)
              if getattr(r, "available", False)}
     lines = [(f"{_clean(x)} ({when})" if x in dated and "balance sheet" not in x else _clean(x))
              for x in list(debt.lines())]
     notes = [_clean(x) for x in list(debt.notes())]
     if dated:
         notes.append(f"Net debt here is {NET_DEBT_DEFINITION}. The balance sheet above is at each "
-                     f"fiscal year-end; the provider's own 'Net Debt' line, which leaves out leases and "
-                     f"short-term investments, is not shown.")
+                     f"fiscal year-end; the provider's own 'Net Debt' line, which leaves out short-term "
+                     f"investments, is not shown.")
     return lines + notes
 
 
