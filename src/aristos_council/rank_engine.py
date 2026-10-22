@@ -199,16 +199,13 @@ def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
 MIN_RANKABLE_COHORT = 5
 
 # B25-3 / TIES-SELL-1 - THE one setting for a tie that straddles a verdict cut, the SAME rule at both ends:
-# "extreme": a tie that includes FIRST place is BUY, a tie that includes LAST place is SELL, and any other
-# tie that straddles a cut is HOLD (a tie including both, e.g. every name tied, is HOLD). A tie wholly inside
-# one verdict keeps it. Both live rulings hold: MSFT 2026-10-08 Value + Momentum (AAPL 1, TSMC 1,
-# MSFT/ASML/CSCO tied 3rd of 6, NVDA 6th) - the tie does not include last place, so HOLD, not SELL; and the
-# 2026-10-22 sweep, where the old "best_position" rule gave a straddling tie the BEST position's verdict at
-# both ends - generous at the top (BUY), lenient at the bottom (HOLD) - so ties emptied the SELL slot while
-# BUYs were still given (KO Defensive Income: MDLZ/CL/ADM tied 3rd of 5 -> 1 BUY 0 SELL; MSFT Value +
-# Momentum 4 of 6 tied 3rd -> 2 BUY 0 SELL). "best_position" and "alphabetical" (ticker order breaks the
-# tie) remain for reproducing old runs.
-TIE_VERDICT_RULE = "extreme"
+# "straddle_hold": a tie group that straddles a cut line (BUY or SELL) is HOLD; only a tie group lying wholly
+# inside the top band is BUY and only one wholly inside the bottom band is SELL. Owner ruling 2026-10-22: the
+# old "best_position" rule gave a straddling tie its BEST position's verdict - BUY at the top, HOLD at the
+# bottom - so ties could hand out BUYs while emptying the SELL slot. "best_position" and "alphabetical" (ticker
+# order splits the tie) remain selectable for reproducing old runs; the goldens written under the
+# alphabetical tie-break pin it with the ``tie_rule`` test marker.
+TIE_VERDICT_RULE = "straddle_hold"
 SMALL_GROUP_MIN = 5          # the warning band is 5..9 whatever the voting line is
 SMALL_GROUP_MAX = 9
 _ARITHMETIC_CUT_BELOW = 3
@@ -283,14 +280,8 @@ def _tie_group_verdict(q: int, start: int, end: int, n: int, cut: str, k: int,
     if TIE_VERDICT_RULE == "best_position":
         return _verdict_for_position(start, n, cut, k, percentile)
     verdicts = {_verdict_for_position(p, n, cut, k, percentile) for p in range(start, end + 1)}
-    if len(verdicts) == 1:
-        return verdicts.pop()                         # wholly inside one verdict: unchanged
-    has_first, has_last = start == 0, end == n - 1
-    if has_first and not has_last and "buy" in verdicts:
-        return "buy"                                  # tied for first place
-    if has_last and not has_first and "sell" in verdicts:
-        return "sell"                                 # tied for last place
-    return "hold"
+    # wholly inside one band keeps that band's verdict; straddling a cut line is HOLD
+    return verdicts.pop() if len(verdicts) == 1 else "hold"
 
 
 # BUY-CAP (27B-1) - a RELATIVE gate on a BUY: "buy_requires: {revenue_growth: top_half}" means a name
