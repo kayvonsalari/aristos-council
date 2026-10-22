@@ -1,0 +1,29 @@
+# SWEEP-1 - the named sets of runs `python -m aristos_council.sweep run --set <name>` executes.
+#
+# An entry is ONE thing the Analyse tab can run. Company entries run first (concurrently, up to
+# --workers); list entries run after them, one at a time. The order below is the order they are
+# reported in.
+#
+#   id        folder name under the output directory (letters, digits, dot, dash, underscore)
+#   kind      company | list
+#   ticker    company: the ticker as it would be typed in the box
+#   cohort    list: the slug of a BUILT cohort (data/cohort_definitions.yaml); it must be built
+#   tickers   list: a pasted list, resolved against the local market index like the Paste box
+#   lenses    "all_stock" (the default: every visible stock lens, voting AND check - so Forensic
+#             is ticked too) or an explicit list of strategy ids
+#   council   true: run the council opinion for this entry whatever --council says
+#   judges    true/false: override --judges for this entry
+version: 1
+sets:
+  awkward:
+    - {id: KO.US,    kind: company, ticker: KO.US, council: true}
+    - {id: F.US,     kind: company, ticker: F.US}
+    - {id: VKTX.US,  kind: company, ticker: VKTX.US}
+    - {id: NVCR.US,  kind: company, ticker: NVCR.US}
+    - {id: 1211.HK,  kind: company, ticker: 1211.HK}
+    - {id: JPM.US,   kind: company, ticker: JPM.US}
+    - {id: MSFT.US,  kind: company, ticker: MSFT.US}
+    - {id: list_diversified_mining, kind: list, cohort: materials_diversified_mining}
+    - {id: list_nvda_msft_aapl,     kind: list, tickers: [NVDA, MSFT, AAPL]}
+    - {id: list_oil_6,              kind: list, tickers: [XOM, CVX, SHEL.L, TTE.PA, EQNR.OL, CNQ.TO]}
+    - {id: list_ko_1,               kind: list, tickers: [KO]}
