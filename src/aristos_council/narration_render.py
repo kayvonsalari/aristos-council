@@ -91,10 +91,18 @@ _SECTION_TITLES = {
 # the tests something exact to assert and give a live run something to surface.
 def _verdict_cell(verdict: str) -> str:
     """The lens table's Verdict cell. A verdict word is set in capitals (BUY / HOLD / SELL); a lens that
-    did not vote says so in ordinary case - "Does not apply", not "DOES NOT APPLY" (COUNCIL-CAPS-1)."""
+    did not vote says so in ordinary case - "Does not apply", not "DOES NOT APPLY" (COUNCIL-CAPS-1) - and a
+    check's mark stays in ordinary case too (COUNCIL-CAPS-2)."""
+    from .report_language import CHECK_WORDS
+
     raw = (verdict or "").strip()
     if "not apply" in raw.lower():
         return raw[:1].upper() + raw[1:].lower()
+    # COUNCIL-CAPS-2: a check's mark is a reading, not a verdict, so it is never set in capitals. Live,
+    # KO.US 2026-10-22: "NO CONCERN — 16TH OF 28 (A CHECK: MARKS, NEVER VOTES)". Any stray verdict word in
+    # it is removed afterwards by ``scrub_check_cell``.
+    if any(word in raw.lower() for word in CHECK_WORDS.values()):
+        return raw if any(c.islower() for c in raw) else raw.lower()
     return raw.upper()
 
 

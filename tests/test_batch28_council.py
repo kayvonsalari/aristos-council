@@ -179,3 +179,38 @@ def test_cohorts_status_no_longer_lists_the_retired_cohort(tmp_path):
     (bt / "quality_v1.csv").write_text("x", encoding="utf-8")
     slugs = [s for s, _ in missing_track_records(tmp_path, tmp_path / "bt")]
     assert "industrials_aerospace_defense" not in slugs and slugs == ["chemicals"]
+
+
+# --------------------------------------------------------------------------- #
+# COUNCIL-CAPS-2
+# --------------------------------------------------------------------------- #
+KO_FORENSIC = "no concern — 16th of 28 (a check: marks, never votes)"
+
+
+def test_the_ko_forensic_mark_is_printed_in_ordinary_case_in_the_council_lens_table():
+    """Live, KO.US 2026-10-22: '| Forensic | NO CONCERN — 16TH OF 28 (A CHECK: MARKS, NEVER VOTES) | — | — |'."""
+    from aristos_council.agents.schemas import LensVerdictItem
+    from aristos_council.narration_render import narration_html, narration_markdown
+    n = _well_formed()
+    n.lens_verdicts = [LensVerdictItem(lens="Earnings Power Value", verdict="hold", position=21, cohort_size=28),
+                       LensVerdictItem(lens="Forensic", verdict=KO_FORENSIC)]
+    md = narration_markdown(n)
+    assert f"| Forensic | {KO_FORENSIC} | — | — |" in md
+    assert "NO CONCERN" not in md and "16TH" not in md
+    assert "| Earnings Power Value | HOLD | #21 of 28 |" in md                 # a verdict word keeps capitals
+    html = narration_html(n)
+    assert "no concern — 16th of 28 (a check: marks, never votes)" in html and "NO CONCERN" not in html
+    assert ">HOLD<" in html.replace(" ", "")
+
+
+@pytest.mark.parametrize("cell, expected", [
+    ("NO CONCERN", "no concern"),             # a shouted mark is brought down to ordinary case
+    ("Clean — 2nd of 24", "Clean — 2nd of 24"),
+    ("BUY — clean", "clean"),                  # a verdict word in a check cell is still scrubbed
+    ("hold", "HOLD"),
+    ("sell", "SELL"),
+])
+def test_only_a_verdict_word_is_set_in_capitals(cell, expected):
+    from aristos_council.narration_render import _verdict_cell
+    from aristos_council.report_language import scrub_check_cell
+    assert scrub_check_cell(_verdict_cell(cell)) == expected
