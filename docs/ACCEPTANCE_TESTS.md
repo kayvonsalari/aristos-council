@@ -329,3 +329,9 @@ Command line, not Council Station. None of these calls a model.
 | **AF1-T1** | (free) python -m pytest -q tests/test_asof_filing_27b.py. Then python -m aristos_council.backtest run --help. | The tests pass: a period filed early is visible earlier than lag 90, one filed late later, a missing or impossible filing date falls back and is counted, a name with no filing dates equals lag mode, and lag mode is unchanged. `--as-of-mode {lag,filing}` is listed, default `lag`. |
 | **AF1-T2** | (free) Open any file under `backtests/`, e.g. `backtests/materials_diversified_mining/quality_v1.csv`; python -m scripts.backtest_compare backtests-baseline-2026-10-20 backtests. | The committed files predate the header lines and read as lag mode (`as_of_mode` absent = lag); the compare output still reports 0 verdict changes. A freshly written CSV carries `# as_of_mode:` and `# filing_date_fallbacks:` lines. |
 
+## SWEEP-1
+
+| ID | How | Expect |
+| --- | --- | --- |
+| **SW1-T1** | (free) python -m pytest -q tests/test_sweep.py. Then python -m aristos_council.sweep run --no-judges --workers 3 and open the `summary.md` it prints. | The tests pass. The folder under `data/local/sweep/` holds `manifest.json`, `summary.md` and one folder per entry with `report.md`, `report.txt` and `report.html`. `summary.md` has one table per entry and either lists each finding as entry, section, line, rule or says "no findings". A failing entry shows `error.txt` and the sweep still finishes. |
+
