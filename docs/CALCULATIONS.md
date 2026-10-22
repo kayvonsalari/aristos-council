@@ -60,13 +60,19 @@ table, the markdown download, and Company mode:
   are not in it). Ties **share** a position (competition ranking) and are marked `(tied)`.
   On a Company Report the vote reads `19th of 27 (tied with 3)`: three other companies carry the same
   rank-sum, so all four are 19th.
-- **How a tie is broken.** Two names with the same rank-sum are the same distance from the top, so they
-  **share a position** (1, 2, 3, 3, 3, 3, 7: the next name is 7th, not 4th). The verdict cut, though,
-  is applied down the SORTED list, and the sort breaks a tie **alphabetically by ticker** (a fixed rule
-  that does not look at anything about the company). So tied names can land on either side of a
-  BUY/HOLD/SELL boundary, and the report then says so: `(=21.0 — tie broken alphabetically)`
-  (REPORT_MARKS.md). Example: on 2026-10-06 JPM, BAC, WFC and C all had a Financials rank-sum of 47.0
-  (genuine ties, not a bug); C, BAC and JPM sorted ahead of WFC and read HOLD, WFC read SELL.
+- **How a tie is voted (TIES-SELL-1).** Two names with the same rank-sum are the same distance from the
+  top, so they **share a position** (1, 2, 3, 3, 3, 3, 7: the next name is 7th, not 4th) and always share
+  ONE verdict. A tie that sits wholly inside one band keeps that band's verdict. A tie that straddles a
+  cut is resolved by the **same rule at both ends**: a tie that includes **first** place is BUY, a tie
+  that includes **last** place is SELL, and any other straddling tie is HOLD (a tie holding both first and
+  last place, e.g. every name tied, is HOLD). Examples: 5 ranked with three tied for last → 1 BUY, 1 HOLD,
+  3 SELL (KO's Defensive Income peers, 2026-10-22); 6 ranked with three tied 3rd and a 6th below them →
+  the tie is HOLD (MSFT, 2026-10-08). The setting is `TIE_VERDICT_RULE` in `rank_engine.py`
+  (`"extreme"`); `"best_position"` (B25-3, which gave a straddling tie its best position's verdict, so a
+  tie could take BUY at the top but never SELL at the bottom) and `"alphabetical"` (ticker order splits
+  the tie) remain for reproducing old runs. On Earnings Power Value, large ties at the bottom are the
+  names the lens could not value (normalised operating profit ≤ 0, no enterprise value, under 3 years of
+  margins), placed last together by `missing: worst`; there is no floor on the margin of safety itself.
 - **`score S`** — the combined rank-sum itself.
 - **`(best B · worst W)`** — the bounds that give the score its scale: `B` = number of factors
   (rank 1 on all of them), `W` = factors × cohort size. Without them, "score 11" says nothing.

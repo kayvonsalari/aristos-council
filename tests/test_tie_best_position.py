@@ -1,4 +1,6 @@
-"""B25-3 - a tie at a verdict boundary takes the verdict of the tie group's BEST position (TIE_VERDICT_RULE).
+"""B25-3 / TIES-SELL-1 - a tie at a verdict boundary (TIE_VERDICT_RULE). B25-3 gave it the tie group's BEST
+position's verdict; TIES-SELL-1 made the rule the same at both ends: a tie including first place is BUY, one
+including last place is SELL, any other straddling tie is HOLD. The B25-3 MSFT case below still holds.
 
 MSFT, Value + Momentum, 2026-10-08: AAPL 1, TSMC 1, MSFT/ASML/CSCO tied 3rd, NVDA 6th. The alphabet sent MSFT to
 SELL (and the company page read "SELL - 3rd of 6"), giving 2 BUY vs 4 SELL. 3rd of 6 is HOLD."""
@@ -18,8 +20,8 @@ def _run(values):
 MSFT_CASE = {"AAPL": 10, "TSMC": 10, "MSFT": 5, "ASML": 5, "CSCO": 5, "NVDA": 1}
 
 
-def test_the_setting_is_one_named_constant_defaulting_to_best_position():
-    assert rank_engine.TIE_VERDICT_RULE == "best_position"
+def test_the_setting_is_one_named_constant_defaulting_to_the_symmetric_extreme_rule():
+    assert rank_engine.TIE_VERDICT_RULE == "extreme"
 
 
 def test_the_msft_case_the_three_tied_names_are_hold_not_sell():
@@ -28,11 +30,19 @@ def test_the_msft_case_the_three_tied_names_are_hold_not_sell():
     assert list(v.values()).count("buy") == 2 and list(v.values()).count("sell") == 1
 
 
-def test_the_buy_end_a_tie_straddling_the_buy_cut_is_all_buy():
-    # 6 names: the top fifth rounds up to 2 BUYs. B, C, D tie from 2nd place, so all three take 2nd's verdict.
+def test_the_buy_end_a_tie_straddling_the_buy_cut_but_not_first_place_is_hold():
+    # 6 names: the top fifth rounds up to 2 BUYs. B, C, D tie from 2nd place: the mirror of the MSFT case
+    # (a tie from 3rd that does not reach last place is HOLD), so HOLD. Under B25-3 they were all BUY.
+    v = _run({"A": 10, "B": 8, "C": 8, "D": 8, "E": 4, "F": 1})
+    assert v["A"] == "buy"
+    assert v["B"] == v["C"] == v["D"] == "hold"
+    assert v["E"] == v["F"] == "sell"
+
+
+@pytest.mark.tie_rule("best_position")
+def test_the_b25_3_best_position_rule_is_still_available():
     v = _run({"A": 10, "B": 8, "C": 8, "D": 8, "E": 4, "F": 1})
     assert v["A"] == v["B"] == v["C"] == v["D"] == "buy"
-    assert v["E"] == v["F"] == "sell"
 
 
 @pytest.mark.tie_rule("alphabetical")

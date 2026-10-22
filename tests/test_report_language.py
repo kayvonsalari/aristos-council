@@ -209,10 +209,11 @@ def _close(rendered: str, raw: float) -> bool:
 
 
 def test_the_reformat_moved_no_verdict_rank_or_exclusion(result):
-    """The whole point: same names ranked, same names excluded. (B25-3: the two ranked names are TIED, so they
-    share the tie group's best-position verdict - BUY - where the old alphabetical tie-break gave BUY, HOLD.)"""
+    """The whole point: same names ranked, same names excluded. (The two ranked names are TIED. B25-3 gave both
+    the best position's BUY; TIES-SELL-1's symmetric rule makes a tie that holds both first AND last place
+    HOLD - it is tied for first and for last at once, so neither end's verdict is earned.)"""
     assert [r.ticker for r in result.ranked] == ["GOOD", "UNTESTABLE"]
-    assert [r.verdict for r in result.ranked] == ["buy", "buy"]
+    assert [r.verdict for r in result.ranked] == ["hold", "hold"]
     assert {t for t, _ in result.excluded} == {"THIN", "BROKEN"}
 
 
