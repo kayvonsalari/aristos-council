@@ -311,6 +311,8 @@ def _epv_margin_of_safety_source(fi: FactorInputs) -> str:
         return f"{SRC_ABSTAINED}: no fundamentals"
     if r.margin_of_safety is None:
         return f"{SRC_ABSTAINED}: {r.note}"
+    if r.epv is not None and r.epv <= 0:            # EPV-TIES-1: ranked, and the reason is kept
+        return f"{SRC_COMPUTED}, {r.note}"
     return f"{SRC_COMPUTED}, tax {r.tax_source}"
 
 

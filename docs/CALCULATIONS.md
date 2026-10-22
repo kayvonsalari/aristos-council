@@ -571,9 +571,14 @@ conversion on a foreign listing; a failed FX fetch abstains rather than mix curr
 market-cap stand-in: EPV is an enterprise value and is compared with one. **Abstains** — ranks last,
 reason shown — when fewer than 3 years of margin exist or when no positive enterprise value can be
 formed. A company whose **latest operating profit is zero or negative** no longer reaches the factor
-at all: since 18A the lens says "does not apply - no operating profit" (§2.9). (The factor still
-carries its own note for a normalised profit that is zero or negative while the latest year is
-positive.) **Never gating**: a ranked lens with no
+at all: since 18A the lens says "does not apply - no operating profit" (§2.9). A company whose latest
+year is positive but whose **five-year average margin is negative** (EPV-TIES-1) is valued with the
+same formula, untaxed (a loss pays no tax): its no-growth value is below zero and its margin of safety
+below -100%, so it ranks below every company with positive earning power, ordered by how far below
+zero, with the reason shown. It used to abstain, and `missing: worst` then put every such company on
+one shared last rank (NVCR's peers, 2026-10-22: 6 tied 18th of 23; VKTX's: 5 tied 3rd of 7). Only
+the true gaps above (under 3 years, no positive enterprise value) still share the last rank.
+**Never gating**: a ranked lens with no
 veto. Weakest on deep cyclicals at a peak or trough (hence the 5-year average); the constants are blunt
 by design.
 
