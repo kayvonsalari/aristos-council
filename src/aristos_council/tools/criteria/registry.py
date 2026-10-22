@@ -422,6 +422,10 @@ def _min_altman_z(ev: Evidence, threshold: float) -> CriterionResult:
                            observed=r.value, threshold=threshold, note=r.note)
 
 
+_MINOR_TO_MAJOR = {"GBp": "GBP", "GBX": "GBP", "GBPENCE": "GBP", "GBP_PENCE": "GBP", "ZAc": "ZAR",
+                   "ZAC": "ZAR", "ILA": "ILS"}
+
+
 def _max_debt_to_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
     """Balance-sheet leverage as total_debt / market_cap (a yield-trap separator:
     VZ ~1.2x fails). Chosen over debt-to-equity BECAUSE it is ROBUST TO NEGATIVE
@@ -435,6 +439,19 @@ def _max_debt_to_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
             name="max_debt_to_market_cap", passed=None, observed=None,
             threshold=threshold,
             note="leverage unavailable (total_debt or market_cap missing)")
+    # VALE-EVEBIT-1: debt is in the ACCOUNTS currency, market cap in the QUOTE currency. A secondary line
+    # whose quote currency differs from its accounts (Vale's Madrid line: euros against reais; Shell's
+    # London line: pounds against dollars) compared two different monies - Vale read "total debt 2.2x of
+    # market value". House rule 8: a screen criterion abstains rather than converts. The same money in a
+    # minor unit (London GBp quote, GBP accounts: the cap is in pounds) is not a mismatch; a missing
+    # currency evaluates normally.
+    quote, accounts = (f.currency or "").strip(), (f.financial_currency or "").strip()
+    quote_major = _MINOR_TO_MAJOR.get(quote, quote)
+    if quote and accounts and quote_major.upper() != accounts.upper():
+        return CriterionResult(
+            name="max_debt_to_market_cap", passed=None, observed=None, threshold=threshold,
+            note=(f"NOT EVALUATED: debt is in {accounts} and market value in {quote}; the two are "
+                  f"not compared without an exchange rate (house rule 8)"))
     ratio = debt / cap
     return CriterionResult(
         name="max_debt_to_market_cap", passed=ratio <= threshold, observed=ratio,
